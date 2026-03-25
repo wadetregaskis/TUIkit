@@ -116,20 +116,16 @@ struct ANSIRendererStyleTests {
         #expect(result.contains("\u{1B}[44m"))
     }
 
-    @Test("RGB foreground uses 38;2;r;g;b format")
+    @Test("RGB foreground uses 38;2;r;g;b format at truecolor depth")
     func rgbForeground() {
-        var style = TextStyle()
-        style.foregroundColor = Color.rgb(255, 128, 0)
-        let result = ANSIRenderer.render("RGB", with: style)
-        #expect(result.contains("38;2;255;128;0"))
+        let codes = ANSIRenderer.foregroundCodes(for: Color.rgb(255, 128, 0), depth: .truecolor)
+        #expect(codes == ["38", "2", "255", "128", "0"])
     }
 
-    @Test("RGB background uses 48;2;r;g;b format")
+    @Test("RGB background uses 48;2;r;g;b format at truecolor depth")
     func rgbBackground() {
-        var style = TextStyle()
-        style.backgroundColor = Color.rgb(0, 255, 128)
-        let result = ANSIRenderer.render("RGB", with: style)
-        #expect(result.contains("48;2;0;255;128"))
+        let codes = ANSIRenderer.backgroundCodes(for: Color.rgb(0, 255, 128), depth: .truecolor)
+        #expect(codes == ["48", "2", "0", "255", "128"])
     }
 
     @Test("Palette256 foreground uses 38;5;n format")

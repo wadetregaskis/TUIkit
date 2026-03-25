@@ -418,9 +418,9 @@ public extension Color {
     }
 }
 
-// MARK: - Private Helpers
+// MARK: - Internal Helpers
 
-private extension Color {
+extension Color {
     /// Converts a 256-color palette index to RGB values.
     ///
     /// - Indices 0–7: standard ANSI colors
@@ -449,7 +449,11 @@ private extension Color {
             return (gray, gray, gray)
         }
     }
+}
 
+// MARK: - Private Helpers
+
+private extension Color {
     /// Adjusts a color's lightness by a relative percentage in HSL space.
     ///
     /// Positive values lighten (move toward 100), negative values darken

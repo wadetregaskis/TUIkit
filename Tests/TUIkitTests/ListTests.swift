@@ -127,8 +127,13 @@ struct ListRenderingTests {
         let buffer = renderToBuffer(list, context: context)
         let content = buffer.lines.joined()
 
-        // Selected item should have a background color (ANSI 48;2 = RGB background)
-        #expect(content.contains("[48;2;"))
+        // Selected item should have a background color.
+        // The exact format depends on ColorDepth: 48;2;r;g;b (truecolor),
+        // 48;5;n (256-color), or 4x (16-color).
+        let hasBackgroundColor = content.contains("[48;2;")
+            || content.contains("[48;5;")
+            || content.contains("[4") // standard background codes 40-47, 100-107
+        #expect(hasBackgroundColor)
     }
 
     @Test("Scroll indicators appear when needed")
