@@ -36,7 +36,7 @@ extension ASCIIConverter {
         if rDiff < 10, gDiff < 10 {
             let gray = Int(pixel.r)
             if gray < 8 { return 16 }
-            if gray > 248 { return 231 }
+            if gray >= 248 { return 231 }
             return UInt8(232 + (gray - 8) / 10)
         }
 
