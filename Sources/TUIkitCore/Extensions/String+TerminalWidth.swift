@@ -28,6 +28,7 @@ extension Character {
         if (0x20D0...0x20FF).contains(scalarValue) { return 0 } // combining marks for symbols
         if (0xFE20...0xFE2F).contains(scalarValue) { return 0 } // combining half marks
         if (0xE0000...0xE007F).contains(scalarValue) { return 0 } // tags block
+        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 0 } // emoji skin-tone modifiers (Fitzpatrick types 1–6, always combine with preceding emoji)
 
         // Multi-scalar grapheme clusters (emoji sequences with ZWJ, skin tones,
         // flag sequences, keycap sequences) are typically 2 cells wide.

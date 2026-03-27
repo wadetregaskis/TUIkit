@@ -109,6 +109,34 @@ struct StringANSITests {
         #expect(result == "   ")
     }
 
+    // MARK: - Emoji width
+
+    @Test("strippedLength of base emoji is 2")
+    func baseEmojiWidth() {
+        #expect("🤙".strippedLength == 2, "Base emoji should be 2 terminal cells wide")
+    }
+
+    @Test("strippedLength of skin-tone emoji equals base emoji width")
+    func skinToneEmojiWidth() {
+        // 🤙🏽 = base emoji + skin-tone modifier. The modifier should not add
+        // extra width — the combined glyph is still 2 terminal cells wide.
+        #expect("🤙🏽".strippedLength == 2, "Skin-tone emoji should be 2 terminal cells wide, same as the base")
+    }
+
+    @Test("strippedLength of skin-tone emoji matches base emoji across all tones")
+    func allSkinToneEmojiWidths() {
+        let tones = ["🤙🏻", "🤙🏼", "🤙🏽", "🤙🏾", "🤙🏿"]
+        for tone in tones {
+            #expect(tone.strippedLength == 2, "\(tone) should be 2 terminal cells wide")
+        }
+    }
+
+    @Test("strippedLength of ANSI-styled skin-tone emoji is 2")
+    func styledSkinToneEmojiWidth() {
+        let styled = "\u{1B}[38;2;200;100;50m🤙🏽\u{1B}[0m"
+        #expect(styled.strippedLength == 2, "ANSI-styled skin-tone emoji should still be 2 terminal cells wide")
+    }
+
     // MARK: - strippedLength vs manual filtering
 
     @Test("strippedLength correctly handles ANSI-colored content")
