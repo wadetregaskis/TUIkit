@@ -251,7 +251,7 @@ private struct _MenuCore: View, Renderable {
             let fullText = " " + labelText
 
             // Pad to full width for selection bar
-            let visibleLength = fullText.count
+            let visibleLength = fullText.strippedLength
             let padding = max(0, contentWidth - visibleLength)
             let paddedText = fullText + String(repeating: " ", count: padding)
 
@@ -344,7 +344,7 @@ private struct _MenuCore: View, Renderable {
     private var maxItemWidth: Int {
         items.map { item -> Int in
             let shortcutPart = 4  // "[x] " or "    " — always 4 characters wide
-            return shortcutPart + item.label.count
+            return shortcutPart + item.label.strippedLength
         }.max() ?? 0
     }
 
