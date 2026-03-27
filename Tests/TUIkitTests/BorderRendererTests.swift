@@ -238,6 +238,49 @@ struct BorderRendererFocusIndicatorTests {
         #expect(withIndicator.stripped.count == without.stripped.count)
     }
 
+    @Test("focusIndicatorPrefix returns 2-char width when focused")
+    func focusIndicatorPrefixFocusedWidth() {
+        let palette = SystemPalette(.green)
+        let result = BorderRenderer.focusIndicatorPrefix(
+            isFocused: true,
+            pulsePhase: 0.5,
+            palette: palette
+        )
+        #expect(result.strippedLength == BorderRenderer.focusIndicatorWidth,
+                "Focused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (indicator + space)")
+        #expect(result.stripped.hasPrefix("●"), "Should start with focus indicator character")
+    }
+
+    @Test("focusIndicatorPrefix returns 2-char width when not focused")
+    func focusIndicatorPrefixUnfocusedWidth() {
+        let palette = SystemPalette(.green)
+        let result = BorderRenderer.focusIndicatorPrefix(
+            isFocused: false,
+            pulsePhase: 0.0,
+            palette: palette
+        )
+        #expect(result.strippedLength == BorderRenderer.focusIndicatorWidth,
+                "Unfocused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (spaces)")
+        #expect(result == "  ", "Unfocused prefix should be 2 spaces")
+    }
+
+    @Test("focusIndicatorPrefix has consistent width between focused and unfocused")
+    func focusIndicatorPrefixConsistentWidth() {
+        let palette = SystemPalette(.green)
+        let focused = BorderRenderer.focusIndicatorPrefix(
+            isFocused: true,
+            pulsePhase: 0.5,
+            palette: palette
+        )
+        let unfocused = BorderRenderer.focusIndicatorPrefix(
+            isFocused: false,
+            pulsePhase: 0.0,
+            palette: palette
+        )
+        #expect(focused.strippedLength == unfocused.strippedLength,
+                "Focused and unfocused prefix should have the same visible width")
+    }
+
     @Test("Title border with focus indicator contains both")
     func titleBorderWithIndicator() {
         let result = BorderRenderer.standardTopBorder(

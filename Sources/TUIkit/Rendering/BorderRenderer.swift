@@ -43,14 +43,14 @@ extension BorderRenderer {
         palette: any Palette
     ) -> String {
         guard isFocused else {
-            return " "  // 1 space for alignment
+            return "  "  // 2 spaces for alignment (matches focusIndicatorWidth)
         }
 
         let accentColor = palette.accent
         let dimColor = accentColor.opacity(ViewConstants.focusBorderDim)
         let interpolatedColor = Color.lerp(dimColor, accentColor, phase: pulsePhase)
 
-        return ANSIRenderer.colorize(String(focusIndicator), foreground: interpolatedColor)
+        return ANSIRenderer.colorize(String(focusIndicator), foreground: interpolatedColor) + " "
     }
 }
 
