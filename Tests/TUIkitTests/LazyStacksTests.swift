@@ -187,6 +187,70 @@ struct LazyHStackTests {
 
         #expect(buffer.isEmpty)
     }
+
+    @Test("LazyHStack top-aligns children of different heights")
+    func topAlignment() {
+        // Tall (3 lines) and Short (1 line) side by side, top-aligned
+        let tall = LazyVStack {
+            Text("T1")
+            Text("T2")
+            Text("T3")
+        }
+        let stack = LazyHStack(alignment: .top, spacing: 1) {
+            tall
+            Text("S")
+        }
+        let context = testContext()
+        let buffer = renderToBuffer(stack, context: context)
+
+        #expect(buffer.height == 3)
+        // Row 0: both T1 and S appear
+        #expect(buffer.lines[0].stripped.contains("S"), "Short item should appear on row 0 when top-aligned")
+    }
+
+    @Test("LazyHStack bottom-aligns children of different heights")
+    func bottomAlignment() {
+        let tall = LazyVStack {
+            Text("T1")
+            Text("T2")
+            Text("T3")
+        }
+        let stack = LazyHStack(alignment: .bottom, spacing: 1) {
+            tall
+            Text("S")
+        }
+        let context = testContext()
+        let buffer = renderToBuffer(stack, context: context)
+
+        #expect(buffer.height == 3)
+        // Row 2 (last): both T3 and S appear
+        #expect(buffer.lines[2].stripped.contains("S"), "Short item should appear on last row when bottom-aligned")
+        // Row 0: S should NOT appear when bottom-aligned
+        #expect(!buffer.lines[0].stripped.contains("S"), "Short item should not appear on row 0 when bottom-aligned")
+    }
+
+    @Test("LazyHStack center-aligns children of different heights")
+    func centerAlignment() {
+        let tall = LazyVStack {
+            Text("T1")
+            Text("T2")
+            Text("T3")
+            Text("T4")
+        }
+        let stack = LazyHStack(alignment: .center, spacing: 1) {
+            tall
+            Text("S")
+        }
+        let context = testContext()
+        let buffer = renderToBuffer(stack, context: context)
+
+        #expect(buffer.height == 4)
+        // topPadding = (4 - 1) / 2 = 1, so "S" lands on row 1
+        #expect(buffer.lines[1].stripped.contains("S"), "Short item should appear on row 1 when center-aligned with 4-row tall item")
+        // Rows 0 and 3 should not contain "S"
+        #expect(!buffer.lines[0].stripped.contains("S"), "Short item should not appear on row 0 when center-aligned")
+        #expect(!buffer.lines[3].stripped.contains("S"), "Short item should not appear on row 3 when center-aligned")
+    }
 }
 
 // MARK: - Equatable Tests

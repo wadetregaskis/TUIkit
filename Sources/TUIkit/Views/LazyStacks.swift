@@ -240,7 +240,10 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
         let spacerWidth = spacerCount > 0 ? availableForSpacers / spacerCount : 0
         let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
 
-        var result = FrameBuffer()
+        // === PASS 1: Collect visible items and compute max height ===
+        // Each entry: (buffer, spacingBefore, isSpacer)
+        var collected: [(FrameBuffer, Int, Bool)] = []
+        var maxHeight = 1
         var currentWidth = 0
         var spacerIndex = 0
 
@@ -250,29 +253,51 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
             if info.isSpacer {
                 let extraWidth = spacerIndex < spacerRemainder ? 1 : 0
                 let width = max(info.spacerMinLength ?? 0, spacerWidth + extraWidth)
-
-                // Lazy: check if spacer fits
-                if currentWidth + spacingToApply + width > availableWidth {
-                    break
-                }
-
-                let maxHeight = infos.compactMap(\.buffer).map(\.height).max() ?? 1
-                let spacerBuffer = FrameBuffer(emptyWithWidth: width, height: maxHeight)
-                result.appendHorizontally(spacerBuffer, spacing: spacingToApply)
+                if currentWidth + spacingToApply + width > availableWidth { break }
+                // Spacer height is set to maxHeight in pass 2
+                collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, true))
                 currentWidth += spacingToApply + width
                 spacerIndex += 1
             } else if let buffer = info.buffer {
-                // Lazy: check if item fits
-                if currentWidth + spacingToApply + buffer.width > availableWidth {
-                    break
-                }
-
-                result.appendHorizontally(buffer, spacing: spacingToApply)
+                if currentWidth + spacingToApply + buffer.width > availableWidth { break }
+                maxHeight = max(maxHeight, buffer.height)
+                collected.append((buffer, spacingToApply, false))
                 currentWidth += spacingToApply + buffer.width
             }
         }
 
+        // === PASS 2: Apply vertical alignment and build result ===
+        var result = FrameBuffer()
+        for (buffer, spacingToApply, isSpacer) in collected {
+            let aligned: FrameBuffer
+            if isSpacer {
+                aligned = FrameBuffer(emptyWithWidth: buffer.width, height: maxHeight)
+            } else {
+                aligned = alignBufferVertically(buffer, toHeight: maxHeight)
+            }
+            result.appendHorizontally(aligned, spacing: spacingToApply)
+        }
+
         return result
+    }
+
+    /// Pads a buffer with empty rows to reach `height`, positioning content
+    /// according to the stack's vertical alignment.
+    private func alignBufferVertically(_ buffer: FrameBuffer, toHeight height: Int) -> FrameBuffer {
+        guard buffer.height < height else { return buffer }
+        let padding = height - buffer.height
+        let topPadding: Int
+        switch alignment {
+        case .top:    topPadding = 0
+        case .center: topPadding = padding / 2
+        case .bottom: topPadding = padding
+        }
+        let bottomPadding = padding - topPadding
+        let emptyLine = String(repeating: " ", count: buffer.width)
+        var lines = Array(repeating: emptyLine, count: topPadding)
+        lines += buffer.lines
+        lines += Array(repeating: emptyLine, count: bottomPadding)
+        return FrameBuffer(lines: lines)
     }
 }
 
