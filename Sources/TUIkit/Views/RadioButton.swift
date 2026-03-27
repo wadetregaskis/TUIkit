@@ -395,6 +395,11 @@ extension RadioButtonGroupHandler {
 
 extension RadioButtonGroupHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        guard !itemValues.isEmpty else { return false }
+
+        // Clamp focusedIndex to valid range in case items changed
+        focusedIndex = min(focusedIndex, itemValues.count - 1)
+
         switch event.key {
         case .up:
             // Vertical: navigate focus up (don't change selection); Horizontal: consume but do nothing

@@ -417,6 +417,57 @@ struct RadioButtonGroupHandlerTests {
         #expect(selection == AnyHashable("opt1"))  // Selection unchanged
     }
 
+    @Test("Handler handles empty items without crashing")
+    func handleEmptyItems() {
+        var selection = AnyHashable("a")
+        let binding = Binding(
+            get: { selection },
+            set: { selection = $0 }
+        )
+
+        let handler = RadioButtonGroupHandler(
+            focusID: "test",
+            selection: binding,
+            itemValues: [],
+            orientation: .vertical,
+            canBeFocused: true
+        )
+
+        // All key events should return false and not crash
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == false)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == false)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == false)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == false)
+        #expect(selection == AnyHashable("a"))  // Selection unchanged
+    }
+
+    @Test("Handler clamps focusedIndex when items shrink")
+    func clampsFocusedIndexOnItemShrink() {
+        var selection = AnyHashable("opt1")
+        let binding = Binding(
+            get: { selection },
+            set: { selection = $0 }
+        )
+
+        let handler = RadioButtonGroupHandler(
+            focusID: "test",
+            selection: binding,
+            itemValues: [AnyHashable("opt1"), AnyHashable("opt2"), AnyHashable("opt3")],
+            orientation: .vertical,
+            canBeFocused: true
+        )
+        handler.focusedIndex = 2  // Focused on third item
+
+        // Simulate items shrinking to 2
+        handler.itemValues = [AnyHashable("opt1"), AnyHashable("opt2")]
+
+        // Navigate - should clamp focusedIndex to 1 (last valid index)
+        let handled = handler.handleKeyEvent(KeyEvent(key: .enter))
+        #expect(handled == true)
+        #expect(handler.focusedIndex == 1)
+        #expect(selection == AnyHashable("opt2"))  // Selected the clamped item
+    }
+
     @Test("Handler respects canBeFocused property")
     func respectsCanBeFocused() {
         var selection = AnyHashable("a")
