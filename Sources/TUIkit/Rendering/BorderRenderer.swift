@@ -135,7 +135,7 @@ extension BorderRenderer {
             usedLeftWidth = 1  // only the ─ after corner
         }
 
-        let rightPartLength = max(0, innerWidth - usedLeftWidth - title.count - 2)
+        let rightPartLength = max(0, innerWidth - usedLeftWidth - title.strippedLength - 2)
         let rightPart = ANSIRenderer.colorize(
             String(repeating: style.horizontal, count: rightPartLength) + String(style.topRight),
             foreground: color

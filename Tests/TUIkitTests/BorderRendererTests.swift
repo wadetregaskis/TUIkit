@@ -52,6 +52,30 @@ struct BorderRendererStandardTests {
         #expect(stripped.hasSuffix("┐"))
     }
 
+    @Test("standardTopBorder with CJK title preserves total width")
+    func topBorderWithCJKTitle() {
+        let asciiResult = BorderRenderer.standardTopBorder(
+            style: .line,
+            innerWidth: 20,
+            color: .white,
+            title: "AB",        // 2 terminal cells
+            titleColor: .green
+        )
+        let cjkResult = BorderRenderer.standardTopBorder(
+            style: .line,
+            innerWidth: 20,
+            color: .white,
+            title: "你好",      // 4 terminal cells (2 CJK chars × 2 cells each)
+            titleColor: .green
+        )
+        // Both borders should have the same total visual width
+        // (corners + innerWidth = 22)
+        #expect(asciiResult.strippedLength == 22,
+                "ASCII title border should be 22 wide, got \(asciiResult.strippedLength)")
+        #expect(cjkResult.strippedLength == 22,
+                "CJK title border should be 22 wide, got \(cjkResult.strippedLength)")
+    }
+
     @Test("standardBottomBorder uses correct corner characters")
     func bottomBorderCorners() {
         let result = BorderRenderer.standardBottomBorder(
