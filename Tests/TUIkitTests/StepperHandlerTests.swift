@@ -312,6 +312,42 @@ struct StepperHandlerTests {
         #expect(decrementCalled == true)
     }
 
+    // MARK: - Out-of-range value clamping
+
+    @Test("Increment clamps out-of-range value below lower bound")
+    func incrementClampsValueBelowLowerBound() {
+        var value = -5  // Below lower bound of 0...10
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let handler = StepperHandler(
+            focusID: "test",
+            value: binding,
+            bounds: 0...10,
+            step: 1
+        )
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right))
+
+        // newValue = -4 → clamped to [0, 10] → 0
+        #expect(value == 0, "Increment from below lower bound should clamp the resulting value to bounds")
+    }
+
+    @Test("Decrement clamps out-of-range value above upper bound")
+    func decrementClampsValueAboveUpperBound() {
+        var value = 15  // Above upper bound of 0...10
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let handler = StepperHandler(
+            focusID: "test",
+            value: binding,
+            bounds: 0...10,
+            step: 1
+        )
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left))
+
+        // newValue = 14 → clamped to [0, 10] → 10
+        #expect(value == 10, "Decrement from above upper bound should clamp the resulting value to bounds")
+    }
+
     // MARK: - Clamp Value
 
     @Test("clampValue fixes out-of-range value")

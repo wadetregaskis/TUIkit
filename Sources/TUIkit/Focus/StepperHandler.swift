@@ -145,7 +145,7 @@ extension StepperHandler {
         } else {
             let newValue = value.wrappedValue.advanced(by: step)
             if let bounds {
-                value.wrappedValue = min(bounds.upperBound, newValue)
+                value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, newValue))
             } else {
                 value.wrappedValue = newValue
             }
@@ -161,7 +161,7 @@ extension StepperHandler {
             let negativeStep = V.Stride.zero - step
             let newValue = value.wrappedValue.advanced(by: negativeStep)
             if let bounds {
-                value.wrappedValue = max(bounds.lowerBound, newValue)
+                value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, newValue))
             } else {
                 value.wrappedValue = newValue
             }
