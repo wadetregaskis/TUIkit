@@ -393,7 +393,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let badgeText = badge.displayText
         let styledBadge = ANSIRenderer.colorize(badgeText, foreground: palette.foregroundTertiary)
 
-        let badgeWidth = badgeText.count
+        let badgeWidth = badgeText.strippedLength
         let usedWidth = 1 + lineLength + badgeWidth + 1
         let fillPadding = max(1, rowWidth - usedWidth)
         let paddedLine = " " + line + String(repeating: " ", count: fillPadding) + styledBadge + " "

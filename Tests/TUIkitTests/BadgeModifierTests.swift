@@ -156,4 +156,21 @@ struct BadgeModifierTests {
         let badge = BadgeValue.int(5)
         let _: BadgeValue = badge  // Type check
     }
+
+    @Test("Badge displayText terminal width differs from count for wide characters")
+    func testBadgeWideCharacterWidth() {
+        // CJK characters occupy 2 terminal cells each
+        let badge = BadgeValue.string("新着")
+        let displayText = badge.displayText
+        #expect(displayText.count == 2, "Character count should be 2")
+        #expect(displayText.strippedLength == 4, "Terminal width should be 4 (2 cells per CJK character)")
+    }
+
+    @Test("Badge displayText terminal width equals count for ASCII")
+    func testBadgeASCIIWidth() {
+        let badge = BadgeValue.string("New")
+        let displayText = badge.displayText
+        #expect(displayText.count == displayText.strippedLength,
+                "ASCII text should have equal count and terminal width")
+    }
 }
