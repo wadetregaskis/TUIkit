@@ -353,7 +353,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         }
 
         // Calculate inner width using shared helper
-        let titleWidth = title.map { $0.count + 4 } ?? 0  // " Title " + borders
+        let titleWidth = title.map { $0.strippedLength + 4 } ?? 0  // " Title " + borders
         let footerNaturalWidth = initialFooterBuffer?.width ?? 0
         let contentBasedWidth = max(titleWidth, bodyBuffer.width, footerNaturalWidth)
         let innerWidth = context.resolveContainerWidth(
