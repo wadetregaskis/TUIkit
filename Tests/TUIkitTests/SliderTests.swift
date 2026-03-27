@@ -157,6 +157,32 @@ struct SliderTests {
         #expect(buffer.height == 1)
         #expect(buffer.lines[0].contains("50%"))
     }
+
+    @Test("Slider clamps percentage when value exceeds upper bound")
+    func clampsPercentageAboveUpperBound() {
+        var value = 1.5  // Above the default 0...1 range
+        let view = Slider(value: Binding(get: { value }, set: { value = $0 }))
+        let context = testContext()
+        let buffer = renderToBuffer(view, context: context)
+
+        // Should show 100%, not 150%
+        #expect(buffer.lines[0].contains("100%"),
+                "Slider should clamp to 100% when value exceeds upper bound")
+        #expect(!buffer.lines[0].contains("150%"),
+                "Slider should not show 150%")
+    }
+
+    @Test("Slider clamps percentage when value is below lower bound")
+    func clampsPercentageBelowLowerBound() {
+        var value = -0.5  // Below the default 0...1 range
+        let view = Slider(value: Binding(get: { value }, set: { value = $0 }))
+        let context = testContext()
+        let buffer = renderToBuffer(view, context: context)
+
+        // Should show 0%, not -50%
+        #expect(buffer.lines[0].contains("0%"),
+                "Slider should clamp to 0% when value is below lower bound")
+    }
 }
 
 @MainActor

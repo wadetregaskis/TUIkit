@@ -320,9 +320,9 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
-        // Calculate fraction
+        // Calculate fraction, clamped to [0, 1] to handle out-of-bounds values
         let range = bounds.upperBound - bounds.lowerBound
-        let fraction = range > 0 ? (value.wrappedValue - bounds.lowerBound) / range : 0
+        let fraction = range > 0 ? min(1.0, max(0.0, (value.wrappedValue - bounds.lowerBound) / range)) : 0
 
         // Build the slider content
         let content = buildContent(

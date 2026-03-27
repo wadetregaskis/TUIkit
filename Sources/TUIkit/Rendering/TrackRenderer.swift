@@ -45,6 +45,9 @@ enum TrackRenderer {
     ) -> String {
         guard width > 0 else { return "" }
 
+        // Clamp fraction to [0, 1] to prevent track overflow
+        let fraction = min(1.0, max(0.0, fraction))
+
         switch style {
         case .block:
             return renderSimpleStyle(
