@@ -108,4 +108,18 @@ struct StringANSITests {
         let result = "".padToVisibleWidth(3)
         #expect(result == "   ")
     }
+
+    // MARK: - strippedLength vs manual filtering
+
+    @Test("strippedLength correctly handles ANSI-colored content")
+    func strippedLengthWithANSI() {
+        // Simulate ANSI-colored image output: "XX" in red
+        let colored = "\u{1B}[38;2;255;0;0mXX\u{1B}[0m"
+        #expect(colored.strippedLength == 2,
+                "strippedLength should count only visible characters, not ANSI codes")
+        // The old manual filter approach would have included ANSI digits/letters in the count
+        let manualWidth = colored.filter { !$0.isASCII || ($0.asciiValue ?? 0) >= 32 }.count
+        #expect(manualWidth != 2,
+                "Manual filter incorrectly includes ANSI sequence characters in the count")
+    }
 }

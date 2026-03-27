@@ -251,8 +251,8 @@ extension _ImageCore {
             let y = startY + i
             guard y < height else { break }
 
-            // Calculate visible width of content (excluding ANSI codes)
-            let visibleWidth = content.filter { !$0.isASCII || ($0.asciiValue ?? 0) >= 32 }.count
+            // Calculate visible width of content (excluding ANSI codes, accounting for wide chars)
+            let visibleWidth = content.strippedLength
             let padding = max(0, (width - visibleWidth) / 2)
             let padded = String(repeating: " ", count: padding) + content
             lines[y] = padded
