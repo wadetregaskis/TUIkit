@@ -179,6 +179,69 @@ struct ItemListHandlerNavigationTests {
         #expect(handler.focusedIndex == 0)  // Clamped to first
     }
 
+    @Test("PageDown with selectableIndices lands on nearest selectable index")
+    func pageDownWithSelectableIndices() {
+        // 10 items: indices 0,2,3,5,6,8,9 are selectable; 1,4,7 are headers
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 10,
+            viewportHeight: 3,
+            selectionMode: .single
+        )
+        handler.selectableIndices = [0, 2, 3, 5, 6, 8, 9]
+        handler.focusedIndex = 0
+
+        // PageDown by 3: target is index 3, which is selectable
+        let event = KeyEvent(key: .pageDown)
+        _ = handler.handleKeyEvent(event)
+        #expect(handler.focusedIndex == 3)
+
+        // Now at 3, PageDown by 3: target is index 6, which is selectable
+        _ = handler.handleKeyEvent(event)
+        #expect(handler.focusedIndex == 6)
+    }
+
+    @Test("PageDown landing on header finds nearest selectable")
+    func pageDownLandingOnHeader() {
+        // 10 items: indices 1,4,7 are headers (non-selectable)
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 10,
+            viewportHeight: 4,
+            selectionMode: .single
+        )
+        handler.selectableIndices = [0, 2, 3, 5, 6, 8, 9]
+        handler.focusedIndex = 0
+
+        // PageDown by 4: target is index 4, which is a header
+        // Should land on index 5 (next selectable), not skip to index 8
+        let event = KeyEvent(key: .pageDown)
+        _ = handler.handleKeyEvent(event)
+        #expect(handler.focusedIndex == 5)
+    }
+
+    @Test("PageUp landing on header finds nearest selectable")
+    func pageUpLandingOnHeader() {
+        // 10 items: indices 1,4,7 are headers (non-selectable)
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 10,
+            viewportHeight: 3,
+            selectionMode: .single
+        )
+        handler.selectableIndices = [0, 2, 3, 5, 6, 8, 9]
+        handler.focusedIndex = 8
+
+        // PageUp by 3: target is index 5, which is selectable
+        let event = KeyEvent(key: .pageUp)
+        _ = handler.handleKeyEvent(event)
+        #expect(handler.focusedIndex == 5)
+
+        // Now at 5, PageUp by 3: target is index 2, which is selectable
+        _ = handler.handleKeyEvent(event)
+        #expect(handler.focusedIndex == 2)
+    }
+
     @Test("Empty list handles navigation gracefully")
     func emptyListNavigation() {
         let handler = ItemListHandler<String>(

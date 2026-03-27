@@ -210,12 +210,13 @@ extension ItemListHandler {
     ///   - delta: The number of items to move (negative = up, positive = down).
     ///   - wrap: Whether to wrap around at boundaries.
     func moveFocus(by delta: Int, wrap: Bool) {
-        guard itemCount > 0 else { return }
+        guard itemCount > 0, delta != 0 else { return }
 
         var newIndex = focusedIndex + delta
 
         // If selectableIndices is populated, skip non-selectable rows
         if !selectableIndices.isEmpty {
+            let step = delta > 0 ? 1 : -1
             let maxAttempts = itemCount + 1
             var attempts = 0
 
@@ -236,7 +237,7 @@ extension ItemListHandler {
                     break
                 }
 
-                newIndex += delta
+                newIndex += step
                 attempts += 1
             }
 
