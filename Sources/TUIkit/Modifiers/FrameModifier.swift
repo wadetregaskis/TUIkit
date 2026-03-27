@@ -132,10 +132,10 @@ extension FlexibleFrameView: Renderable {
 
         // Apply maximum constraints (expand to fill if infinity)
         if let maximumWidth = maxWidth, case .infinity = maximumWidth {
-            finalWidth = context.availableWidth
+            finalWidth = max(finalWidth, context.availableWidth)
         }
         if let maximumHeight = maxHeight, case .infinity = maximumHeight {
-            finalHeight = context.availableHeight
+            finalHeight = max(finalHeight, context.availableHeight)
         }
 
         // If size matches buffer, return as-is

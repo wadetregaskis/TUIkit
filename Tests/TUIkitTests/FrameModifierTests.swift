@@ -94,6 +94,45 @@ struct FrameModifierTests {
         #expect(buffer.height >= 5)
     }
 
+    @Test("FlexibleFrameView with minWidth and maxWidth infinity respects minWidth when availableWidth is smaller")
+    func frameMinWidthWithInfinityRespected() {
+        // When availableWidth (5) < minWidth (20), the infinity expansion should
+        // not violate the minWidth constraint — final width must be >= minWidth.
+        let frame = FlexibleFrameView(
+            content: Text("Hi"),
+            minWidth: 20,
+            idealWidth: nil,
+            maxWidth: .infinity,
+            minHeight: nil,
+            idealHeight: nil,
+            maxHeight: nil,
+            alignment: .leading
+        )
+        let context = testContext(width: 5)
+        let buffer = frame.renderToBuffer(context: context)
+
+        #expect(buffer.width >= 20, "minWidth should be respected even when maxWidth is .infinity and availableWidth < minWidth")
+    }
+
+    @Test("FlexibleFrameView with minHeight and maxHeight infinity respects minHeight when availableHeight is smaller")
+    func frameMinHeightWithInfinityRespected() {
+        let frame = FlexibleFrameView(
+            content: Text("Hi"),
+            minWidth: nil,
+            idealWidth: nil,
+            maxWidth: nil,
+            minHeight: 10,
+            idealHeight: nil,
+            maxHeight: .infinity,
+            alignment: .top
+        )
+        var context = testContext()
+        context.availableHeight = 3
+        let buffer = frame.renderToBuffer(context: context)
+
+        #expect(buffer.height >= 10, "minHeight should be respected even when maxHeight is .infinity and availableHeight < minHeight")
+    }
+
     @Test("FlexibleFrameView alignment center")
     func frameCenterAlignment() {
         let frame = FlexibleFrameView(
