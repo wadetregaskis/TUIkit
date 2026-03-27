@@ -110,6 +110,17 @@ struct NotificationTests {
         #expect(lines == [""])
     }
 
+    @Test("CJK text wraps at correct terminal width boundary")
+    func wordWrapCJKText() {
+        // "你好 世界" = "你好" (4 cells) + space + "世界" (4 cells) = 9 cells
+        // With maxWidth 6, "你好 世界" won't fit on one line (9 > 6)
+        // but each word alone fits (4 <= 6), so should wrap to 2 lines
+        let lines = NotificationTiming.wordWrap("你好 世界", maxWidth: 6)
+        #expect(lines.count == 2, "CJK text should wrap to 2 lines at width 6, got \(lines.count)")
+        #expect(lines[0] == "你好")
+        #expect(lines[1] == "世界")
+    }
+
     // MARK: - NotificationService
 
     @Test("Post adds an entry to the service")

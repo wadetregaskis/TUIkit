@@ -48,14 +48,16 @@ enum NotificationTiming {
         return 0.0
     }
 
-    /// Wraps text into lines that fit a maximum character width.
+    /// Wraps text into lines that fit a maximum terminal cell width.
     ///
     /// Splits on word boundaries (spaces). Words longer than `maxWidth`
     /// are placed on their own line without further splitting.
+    /// Uses terminal-aware width measurement so wide characters (CJK, emoji)
+    /// that occupy 2 cells are counted correctly.
     ///
     /// - Parameters:
     ///   - text: The text to wrap.
-    ///   - maxWidth: Maximum characters per line.
+    ///   - maxWidth: Maximum terminal cells per line.
     /// - Returns: An array of wrapped lines (never empty).
     static func wordWrap(_ text: String, maxWidth: Int) -> [String] {
         guard maxWidth > 0 else { return [text] }
@@ -63,16 +65,21 @@ enum NotificationTiming {
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var lines: [String] = []
         var currentLine = ""
+        var currentLineWidth = 0
 
         for word in words {
             let wordStr = String(word)
+            let wordWidth = wordStr.strippedLength
             if currentLine.isEmpty {
                 currentLine = wordStr
-            } else if currentLine.count + 1 + wordStr.count <= maxWidth {
+                currentLineWidth = wordWidth
+            } else if currentLineWidth + 1 + wordWidth <= maxWidth {
                 currentLine += " " + wordStr
+                currentLineWidth += 1 + wordWidth
             } else {
                 lines.append(currentLine)
                 currentLine = wordStr
+                currentLineWidth = wordWidth
             }
         }
 
