@@ -95,6 +95,7 @@ struct MainMenuPage: View {
                     FeatureBox("Pure Swift", "No ncurses").equatable()
                     FeatureBox("Declarative", "SwiftUI-like").equatable()
                     FeatureBox("Composable", "View protocol").equatable()
+                    FeatureBox("Unicode compatible", "所有语言 🥳🤙🏽").equatable()
                 }
                 Spacer()
             }
@@ -103,8 +104,8 @@ struct MainMenuPage: View {
         }
         .appHeader {
             DemoAppHeader(
-                "TUIkit Example App",
-                subtitle: "A SwiftUI-like framework for Terminal User Interfaces"
+                "🖥️ TUIkit Example App 💫",
+                subtitle: "A SwiftUI-like framework for Terminal User Interfaces 😎"
             )
         }
     }

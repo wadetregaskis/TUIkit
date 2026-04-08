@@ -382,7 +382,10 @@ private extension RenderLoop {
         diffWriter.writeContentDiff(
             newLines: outputLines,
             terminal: terminal,
-            startRow: 1 + headerHeight
+            startRow: 1 + headerHeight,
+            terminalWidth: terminalWidth,
+            bgCode: backgroundCodes.content,
+            reset: reset
         )
 
         if statusBar.hasItems {

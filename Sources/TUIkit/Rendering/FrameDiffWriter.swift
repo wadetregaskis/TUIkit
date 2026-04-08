@@ -70,19 +70,14 @@ extension FrameDiffWriter {
         var lines: [String] = []
         lines.reserveCapacity(terminalHeight)
 
-        // ESC[2K erases the entire line using the current background color.
-        // Placed after bgCode so the erase uses the app background, not the
-        // terminal default. This acts as a safety net for any strippedLength
-        // inaccuracies in the padding calculation.
         let eraseLine = "\u{1B}[2K"
         let emptyLine = bgCode + eraseLine + reset
 
         for row in 0..<terminalHeight {
             if row < buffer.height {
                 let line = buffer.lines[row]
-                let visibleWidth = line.strippedLength
-                let padding = max(0, terminalWidth - visibleWidth)
                 let lineWithBg = line.replacingOccurrences(of: reset, with: reset + bgCode)
+                let padding = max(0, terminalWidth - line.strippedLength)
                 let paddedLine = bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset
                 lines.append(paddedLine)
             } else {
@@ -94,8 +89,34 @@ extension FrameDiffWriter {
     }
 
     /// Compares new content lines with the previous frame and writes only changed lines.
-    func writeContentDiff(newLines: [String], terminal: Terminal, startRow: Int) {
+    func writeContentDiff(
+        newLines: [String],
+        terminal: Terminal,
+        startRow: Int,
+        terminalWidth: Int,
+        bgCode: String,
+        reset: String
+    ) {
         writeDiff(newLines: newLines, previousLines: previousContentLines, terminal: terminal, startRow: startRow)
+
+        // Workaround for a Terminal.app rendering quirk: when a skin-tone-
+        // modified emoji (e.g. 🤙🏽 = U+1F919 U+1F3FD) appears on a content
+        // line that fills to the terminal's right edge, Terminal.app leaves
+        // the last 2 cells of that row at the default terminal background,
+        // and they cannot be repainted by any in-line output (because the
+        // emoji apparently consumes 2 phantom cells of line budget that
+        // strippedLength doesn't track, causing the line to wrap and the
+        // cursor to end up on the next row). The fix is to reposition the
+        // cursor by absolute (row, column) afterwards and explicitly emit
+        // ESC[K with the background colour active. We do this for every
+        // changed content row — it's only 2 cells of overdraw per row and
+        // avoids having to detect skin-tone emoji in line content.
+        let repaintCol = max(1, terminalWidth - 1)
+        for row in 0..<newLines.count {
+            terminal.moveCursor(toRow: startRow + row, column: repaintCol)
+            terminal.write(bgCode + "\u{1B}[K" + reset)
+        }
+
         previousContentLines = newLines
     }
 
