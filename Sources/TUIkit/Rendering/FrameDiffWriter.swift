@@ -75,7 +75,7 @@ extension FrameDiffWriter {
 
         for row in 0..<terminalHeight {
             if row < buffer.height {
-                let line = buffer.lines[row]
+                let line = buffer.lines[row].withTerminalAppCursorCompensation()
                 let lineWithBg = line.replacingOccurrences(of: reset, with: reset + bgCode)
                 let padding = max(0, terminalWidth - line.strippedLength)
                 let paddedLine = bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset

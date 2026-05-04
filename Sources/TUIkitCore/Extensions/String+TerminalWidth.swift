@@ -72,6 +72,97 @@ extension Character {
     }
 }
 
+// MARK: - Terminal.app Cursor-Advance Quirks
+
+extension Character {
+    /// The number of columns Terminal.app actually advances the text cursor
+    /// by when this character is printed, which may differ from
+    /// ``terminalWidth`` (the number of visual cells the character occupies).
+    ///
+    /// Terminal.app has a cluster of bugs around emoji presentation where
+    /// certain grapheme clusters render visually at one width but advance
+    /// the cursor by a different (smaller) amount. The classic examples are
+    /// emoji with the U+FE0F emoji presentation selector whose base scalar
+    /// lies in the 0x1F000–0x1FBFF pictographic block (e.g. 🖥️ = U+1F5A5 +
+    /// U+FE0F): the glyph paints 2 cells wide but the cursor only advances
+    /// by 1, so subsequent characters overlap the right half of the emoji.
+    ///
+    /// When ``terminalWidth`` and ``terminalAppCursorAdvance`` disagree,
+    /// callers can emit a CUF (cursor forward) escape after the character
+    /// to push the cursor to the visually-correct column. See
+    /// ``String/withTerminalAppCursorCompensation()``.
+    public var terminalAppCursorAdvance: Int {
+        let scalars = unicodeScalars
+        guard scalars.count > 1 else { return terminalWidth }
+
+        // VS-16 (U+FE0F) emoji presentation selector on a pictographic base
+        // in the 0x1F000–0x1FBFF block: Terminal.app renders the glyph as a
+        // 2-cell wide emoji but only advances the cursor by 1.
+        let hasVS16 = scalars.contains { $0.value == 0xFE0F }
+        let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
+            let sv = scalar.value
+            return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
+        }
+        if hasVS16 && !hasNonVariationExtras {
+            if let first = scalars.first, (0x1F000...0x1FBFF).contains(first.value) {
+                return 1
+            }
+        }
+
+        return terminalWidth
+    }
+}
+
+extension String {
+    /// Returns a copy of this string with CUF (cursor forward) escapes
+    /// injected after each grapheme cluster whose Terminal.app cursor
+    /// advance is smaller than the layout width we've reserved for it.
+    ///
+    /// This compensates for Terminal.app rendering bugs (see
+    /// ``Character/terminalAppCursorAdvance``) so that characters drawn
+    /// after a problematic emoji land at the visually-correct column
+    /// instead of overlapping its right-hand cells.
+    ///
+    /// ANSI escape sequences in the input are preserved untouched.
+    public func withTerminalAppCursorCompensation() -> String {
+        var result = ""
+        result.reserveCapacity(self.count + 8)
+        var index = startIndex
+
+        while index < endIndex {
+            let c = self[index]
+
+            if c == "\u{1B}" {
+                // Preserve an entire ANSI escape sequence: ESC [ params letter
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        index = self.index(after: index)
+                    }
+                }
+                result += self[seqStart..<index]
+                continue
+            }
+
+            result.append(c)
+            index = self.index(after: index)
+
+            let claimed = c.terminalWidth
+            let actual = c.terminalAppCursorAdvance
+            if claimed > actual {
+                result += "\u{1B}[\(claimed - actual)C"
+            }
+        }
+
+        return result
+    }
+}
+
 // MARK: - ANSI String Helpers
 
 extension String {
