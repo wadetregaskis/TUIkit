@@ -37,7 +37,8 @@ public protocol StorageBackend: Sendable {
 /// - Parameter name: The raw process name.
 /// - Returns: A sanitized string safe for use as a directory name.
 func sanitizedProcessName(_ name: String) -> String {
-    var sanitized = name
+    var sanitized =
+        name
         .replacingOccurrences(of: "/", with: "")
         .replacingOccurrences(of: "\0", with: "")
         .replacingOccurrences(of: "..", with: "")
@@ -105,8 +106,8 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
 
 // MARK: - Public API
 
-public extension JSONFileStorage {
-    func value<T: Codable>(forKey key: String) -> T? {
+extension JSONFileStorage {
+    public func value<T: Codable>(forKey key: String) -> T? {
         lock.lock()
         defer { lock.unlock() }
 
@@ -119,7 +120,7 @@ public extension JSONFileStorage {
         }
     }
 
-    func setValue<T: Codable>(_ value: T, forKey key: String) {
+    public func setValue<T: Codable>(_ value: T, forKey key: String) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -132,7 +133,7 @@ public extension JSONFileStorage {
         }
     }
 
-    func removeValue(forKey key: String) {
+    public func removeValue(forKey key: String) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -140,7 +141,7 @@ public extension JSONFileStorage {
         saveToDiskAsync()
     }
 
-    func synchronize() {
+    public func synchronize() {
         lock.lock()
         defer { lock.unlock() }
 
@@ -150,8 +151,8 @@ public extension JSONFileStorage {
 
 // MARK: - Private Helpers
 
-private extension JSONFileStorage {
-    func loadFromDisk() {
+extension JSONFileStorage {
+    fileprivate func loadFromDisk() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
@@ -169,13 +170,13 @@ private extension JSONFileStorage {
         }
     }
 
-    func saveToDiskAsync() {
+    fileprivate func saveToDiskAsync() {
         Task.detached(priority: .utility) { [weak self] in
             self?.saveToDiskSync()
         }
     }
 
-    func saveToDiskSync() {
+    fileprivate func saveToDiskSync() {
         // Convert Data values to base64 strings for JSON compatibility
         var serializable: [String: String] = [:]
         for (key, data) in cache {

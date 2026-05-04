@@ -203,7 +203,8 @@ extension RenderLoop {
 
         let scene = evaluateAppBody(environment: environment)
         if let paletteOverrideScene = scene as? any RootPaletteOverrideProvidingScene,
-           let paletteOverride = paletteOverrideScene.rootPaletteOverride() {
+            let paletteOverride = paletteOverrideScene.rootPaletteOverride()
+        {
             environment.palette = paletteOverride
         }
         invalidateCacheIfEnvironmentChanged(environment: environment)
@@ -306,9 +307,9 @@ extension RenderLoop {
 
 // MARK: - Private Helpers
 
-private extension RenderLoop {
+extension RenderLoop {
     /// Clears all per-frame state and begins lifecycle/state/cache tracking.
-    func beginRenderPass() {
+    fileprivate func beginRenderPass() {
         tuiContext.keyEventDispatcher.clearHandlers()
         tuiContext.preferences.beginRenderPass()
         focusManager.beginRenderPass()
@@ -325,7 +326,7 @@ private extension RenderLoop {
     /// Sets up ``StateRegistration`` so `@State` self-hydrates from `StateStorage`
     /// and `@Environment` reads from the current environment. Clears both
     /// contexts after body evaluation.
-    func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
+    fileprivate func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
         let rootIdentity = ViewIdentity(rootType: A.self)
         StateRegistration.activeContext = HydrationContext(
             identity: rootIdentity,
@@ -347,7 +348,7 @@ private extension RenderLoop {
     ///
     /// Builds terminal-ready output lines, then writes app header, content,
     /// and status bar inside a single buffered frame (one `write()` syscall).
-    func writeFrame(
+    fileprivate func writeFrame(
         buffer: FrameBuffer,
         environment: EnvironmentValues,
         terminalWidth: Int,
@@ -405,7 +406,7 @@ private extension RenderLoop {
     ///
     /// Fires `onDisappear` for removed views and removes state/cache
     /// entries for views no longer in the tree.
-    func endRenderPass() {
+    fileprivate func endRenderPass() {
         tuiContext.lifecycle.endRenderPass()
         tuiContext.stateStorage.endRenderPass()
         tuiContext.renderCache.removeInactive()
@@ -420,7 +421,7 @@ private extension RenderLoop {
     ///
     /// This runs once per frame (two string comparisons) and ensures
     /// developers never need to manually invalidate the cache after theme changes.
-    func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {
+    fileprivate func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {
         let currentSnapshot = EnvironmentSnapshot(from: environment)
         if let lastSnapshot = lastEnvironmentSnapshot, lastSnapshot != currentSnapshot {
             tuiContext.renderCache.clearAll()
@@ -429,7 +430,7 @@ private extension RenderLoop {
     }
 
     /// Renders a scene by delegating to `SceneRenderable`.
-    func renderScene<S: Scene>(_ scene: S, context: RenderContext) -> FrameBuffer {
+    fileprivate func renderScene<S: Scene>(_ scene: S, context: RenderContext) -> FrameBuffer {
         if let renderable = scene as? SceneRenderable {
             return renderable.renderScene(context: context)
         }
@@ -437,7 +438,7 @@ private extension RenderLoop {
     }
 
     /// Renders the app header at the specified terminal row.
-    func renderAppHeader(
+    fileprivate func renderAppHeader(
         atRow row: Int,
         terminalWidth: Int,
         environment: EnvironmentValues,
@@ -474,7 +475,7 @@ private extension RenderLoop {
     }
 
     /// Renders the status bar at the specified terminal row.
-    func renderStatusBar(
+    fileprivate func renderStatusBar(
         atRow row: Int,
         terminalWidth: Int,
         environment: EnvironmentValues,

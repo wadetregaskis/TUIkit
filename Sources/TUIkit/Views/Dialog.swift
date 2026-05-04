@@ -109,10 +109,7 @@ public struct Dialog<Content: View, Footer: View>: View {
 
 extension Dialog: @preconcurrency Equatable where Content: Equatable, Footer: Equatable {
     public static func == (lhs: Dialog<Content, Footer>, rhs: Dialog<Content, Footer>) -> Bool {
-        lhs.title == rhs.title &&
-        lhs.content == rhs.content &&
-        lhs.footer == rhs.footer &&
-        lhs.config == rhs.config
+        lhs.title == rhs.title && lhs.content == rhs.content && lhs.footer == rhs.footer && lhs.config == rhs.config
     }
 }
 

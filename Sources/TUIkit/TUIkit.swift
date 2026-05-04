@@ -15,7 +15,7 @@ import Foundation
 /// Update the `VERSION` file to change the version number.
 public let tuiKitVersion: String = {
     guard let url = Bundle.module.url(forResource: "VERSION", withExtension: nil),
-          let content = try? String(contentsOf: url, encoding: .utf8)
+        let content = try? String(contentsOf: url, encoding: .utf8)
     else {
         return "unknown"
     }

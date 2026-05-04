@@ -104,8 +104,8 @@ public struct Environment<Value> {
             guard let object = lookup(env) else {
                 fatalError(
                     "@Environment(\(Value.self).self): "
-                    + "No object of type \(Value.self) found in the environment. "
-                    + "Did you forget to call .environment(model)?"
+                        + "No object of type \(Value.self) found in the environment. "
+                        + "Did you forget to call .environment(model)?"
                 )
             }
             return object

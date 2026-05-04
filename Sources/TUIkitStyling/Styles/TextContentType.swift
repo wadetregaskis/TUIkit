@@ -75,11 +75,11 @@ public enum TextContentType: Sendable, Equatable {
 
 // MARK: - Character Filtering
 
-public extension TextContentType {
+extension TextContentType {
     /// The set of Unicode scalars allowed for this content type.
     ///
     /// `.password` returns `nil` to indicate no filtering.
-    var allowedCharacters: CharacterSet? {
+    public var allowedCharacters: CharacterSet? {
         switch self {
         case .url:
             return Self.urlCharacters
@@ -105,7 +105,7 @@ public extension TextContentType {
     /// - Parameter character: The character to check.
     /// - Returns: `true` if the character passes the filter, or if this type
     ///   has no filter (`.password`).
-    func isAllowed(_ character: Character) -> Bool {
+    public func isAllowed(_ character: Character) -> Bool {
         guard let allowed = allowedCharacters else { return true }
         return character.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
@@ -114,7 +114,7 @@ public extension TextContentType {
     ///
     /// - Parameter string: The input string to filter.
     /// - Returns: A new string containing only the allowed characters.
-    func filterString(_ string: String) -> String {
+    public func filterString(_ string: String) -> String {
         guard allowedCharacters != nil else { return string }
         return String(string.filter { isAllowed($0) })
     }
@@ -122,23 +122,23 @@ public extension TextContentType {
 
 // MARK: - Character Set Definitions
 
-private extension TextContentType {
+extension TextContentType {
     /// URL-safe characters per RFC 3986.
-    static let urlCharacters: CharacterSet = {
+    fileprivate static let urlCharacters: CharacterSet = {
         var set = CharacterSet.alphanumerics
         set.insert(charactersIn: ":/.?#[]@!$&'()*+,;=-_~%")
         return set
     }()
 
     /// Email address characters.
-    static let emailCharacters: CharacterSet = {
+    fileprivate static let emailCharacters: CharacterSet = {
         var set = CharacterSet.alphanumerics
         set.insert(charactersIn: "@._+-")
         return set
     }()
 
     /// Telephone number characters.
-    static let phoneCharacters: CharacterSet = {
+    fileprivate static let phoneCharacters: CharacterSet = {
         var set = CharacterSet(charactersIn: "0123456789")
         set.insert(charactersIn: "+()-. #*")
         set.insert(charactersIn: " ")
@@ -146,18 +146,18 @@ private extension TextContentType {
     }()
 
     /// Username characters.
-    static let usernameCharacters: CharacterSet = {
+    fileprivate static let usernameCharacters: CharacterSet = {
         var set = CharacterSet.alphanumerics
         set.insert(charactersIn: "._-@")
         return set
     }()
 
     /// Digits only.
-    static let digitCharacters = CharacterSet(charactersIn: "0123456789")
+    fileprivate static let digitCharacters = CharacterSet(charactersIn: "0123456789")
 
     /// Integer characters (digits and minus sign).
-    static let integerCharacters = CharacterSet(charactersIn: "0123456789-")
+    fileprivate static let integerCharacters = CharacterSet(charactersIn: "0123456789-")
 
     /// Decimal characters (digits, minus sign, and decimal point).
-    static let decimalCharacters = CharacterSet(charactersIn: "0123456789-.")
+    fileprivate static let decimalCharacters = CharacterSet(charactersIn: "0123456789-.")
 }

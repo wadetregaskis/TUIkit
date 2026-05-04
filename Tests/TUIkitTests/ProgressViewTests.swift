@@ -333,8 +333,10 @@ struct TrackRendererClampingTests {
             emptyColor: .white,
             accentColor: .cyan
         )
-        #expect(track.strippedLength == 10,
-                "Track with fraction > 1.0 should clamp to width 10, got \(track.strippedLength)")
+        #expect(
+            track.strippedLength == 10,
+            "Track with fraction > 1.0 should clamp to width 10, got \(track.strippedLength)"
+        )
     }
 
     @Test("TrackRenderer clamps negative fraction to prevent underflow")
@@ -347,8 +349,10 @@ struct TrackRendererClampingTests {
             emptyColor: .white,
             accentColor: .cyan
         )
-        #expect(track.strippedLength == 10,
-                "Track with negative fraction should clamp to width 10, got \(track.strippedLength)")
+        #expect(
+            track.strippedLength == 10,
+            "Track with negative fraction should clamp to width 10, got \(track.strippedLength)"
+        )
     }
 
     @Test("TrackRenderer all styles handle out-of-range fraction safely")
@@ -357,18 +361,30 @@ struct TrackRendererClampingTests {
 
         for style in styles {
             let overTrack = TrackRenderer.render(
-                fraction: 2.0, width: 10, style: style,
-                filledColor: .white, emptyColor: .white, accentColor: .cyan
+                fraction: 2.0,
+                width: 10,
+                style: style,
+                filledColor: .white,
+                emptyColor: .white,
+                accentColor: .cyan
             )
-            #expect(overTrack.strippedLength == 10,
-                    "Style \(style) with fraction 2.0 should render width 10, got \(overTrack.strippedLength)")
+            #expect(
+                overTrack.strippedLength == 10,
+                "Style \(style) with fraction 2.0 should render width 10, got \(overTrack.strippedLength)"
+            )
 
             let underTrack = TrackRenderer.render(
-                fraction: -1.0, width: 10, style: style,
-                filledColor: .white, emptyColor: .white, accentColor: .cyan
+                fraction: -1.0,
+                width: 10,
+                style: style,
+                filledColor: .white,
+                emptyColor: .white,
+                accentColor: .cyan
             )
-            #expect(underTrack.strippedLength == 10,
-                    "Style \(style) with fraction -1.0 should render width 10, got \(underTrack.strippedLength)")
+            #expect(
+                underTrack.strippedLength == 10,
+                "Style \(style) with fraction -1.0 should render width 10, got \(underTrack.strippedLength)"
+            )
         }
     }
 }

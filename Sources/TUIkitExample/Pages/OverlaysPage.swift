@@ -217,7 +217,7 @@ struct OverlaysPage: View {
     private func overlayContent(for demo: OverlayDemo) -> some View {
         switch demo {
         case .alertStandard, .alertWarning, .alertError,
-             .alertInfo, .alertSuccess:
+            .alertInfo, .alertSuccess:
             alertContent(for: demo)
 
         case .dialog:
@@ -268,7 +268,8 @@ struct OverlaysPage: View {
             Alert(
                 title: "Standard Alert",
                 message: "This is a standard alert with default theme colors.",
-                borderColor: .palette.border, titleColor: .palette.accent
+                borderColor: .palette.border,
+                titleColor: .palette.accent
             ) { dismissButton }.frame(width: 50)
         case .alertWarning:
             Alert(

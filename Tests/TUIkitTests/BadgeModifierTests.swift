@@ -5,6 +5,7 @@
 //  License: MIT
 
 import Testing
+
 @testable import TUIkit
 
 @Suite("Badge Modifier Tests")
@@ -170,7 +171,9 @@ struct BadgeModifierTests {
     func testBadgeASCIIWidth() {
         let badge = BadgeValue.string("New")
         let displayText = badge.displayText
-        #expect(displayText.count == displayText.strippedLength,
-                "ASCII text should have equal count and terminal width")
+        #expect(
+            displayText.count == displayText.strippedLength,
+            "ASCII text should have equal count and terminal width"
+        )
     }
 }

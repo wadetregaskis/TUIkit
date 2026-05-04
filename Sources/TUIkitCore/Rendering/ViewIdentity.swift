@@ -58,7 +58,7 @@ public struct ViewIdentity: Hashable, CustomStringConvertible {
 
 // MARK: - Public API
 
-public extension ViewIdentity {
+extension ViewIdentity {
     /// Returns a child identity by appending a type name and child index.
     ///
     /// Used by container views (`TupleView`, `ViewArray`) to assign
@@ -68,7 +68,7 @@ public extension ViewIdentity {
     ///   - type: The child view's type.
     ///   - index: The child's position within the container.
     /// - Returns: A new `ViewIdentity` for the child.
-    func child<V>(type: V.Type, index: Int) -> ViewIdentity {
+    public func child<V>(type: V.Type, index: Int) -> ViewIdentity {
         ViewIdentity(path: "\(path)/\(String(describing: type)).\(index)")
     }
 
@@ -79,7 +79,7 @@ public extension ViewIdentity {
     ///
     /// - Parameter type: The child view's type.
     /// - Returns: A new `ViewIdentity` for the child.
-    func child<V>(type: V.Type) -> ViewIdentity {
+    public func child<V>(type: V.Type) -> ViewIdentity {
         ViewIdentity(path: "\(path)/\(String(describing: type))")
     }
 
@@ -90,7 +90,7 @@ public extension ViewIdentity {
     ///
     /// - Parameter label: The branch label (`"true"` or `"false"`).
     /// - Returns: A new `ViewIdentity` for the branch.
-    func branch(_ label: String) -> ViewIdentity {
+    public func branch(_ label: String) -> ViewIdentity {
         ViewIdentity(path: "\(path)#\(label)")
     }
 
@@ -101,7 +101,7 @@ public extension ViewIdentity {
     ///
     /// - Parameter descendant: The path to check.
     /// - Returns: `true` if `descendant` starts with this identity's path.
-    func isAncestor(of descendant: ViewIdentity) -> Bool {
+    public func isAncestor(of descendant: ViewIdentity) -> Bool {
         descendant.path.hasPrefix(path + "/") || descendant.path.hasPrefix(path + "#")
     }
 }

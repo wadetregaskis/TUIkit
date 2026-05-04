@@ -22,7 +22,7 @@ extension EnvironmentValues {
     /// WindowGroup {
     ///     ContentView()
     /// }
-     /// .environment(\.palette, SystemPalette(.green))
+    /// .environment(\.palette, SystemPalette(.green))
     /// ```
     ///
     /// Access the palette in `renderToBuffer(context:)`:

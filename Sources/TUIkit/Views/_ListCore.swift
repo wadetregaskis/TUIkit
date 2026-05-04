@@ -42,7 +42,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         } else {
             // Calculate viewport height (reserve space for scroll indicators if needed)
             let availableHeight = context.availableHeight
-            let viewportHeight = max(1, availableHeight - 4) // Reserve for border + indicators
+            let viewportHeight = max(1, availableHeight - 4)  // Reserve for border + indicators
 
             let persistedFocusID = FocusRegistration.persistFocusID(
                 context: context,
@@ -339,12 +339,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return row.buffer.lines.enumerated().map { lineIndex, line in
             if shouldRenderBadge && lineIndex == 0 {
                 return renderLineWithBadge(
-                    line: line, badge: badge!, rowWidth: rowWidth,
-                    backgroundColor: backgroundColor, palette: palette
+                    line: line,
+                    badge: badge!,
+                    rowWidth: rowWidth,
+                    backgroundColor: backgroundColor,
+                    palette: palette
                 )
             } else {
                 return renderPlainLine(
-                    line: line, rowWidth: rowWidth, backgroundColor: backgroundColor
+                    line: line,
+                    rowWidth: rowWidth,
+                    backgroundColor: backgroundColor
                 )
             }
         }

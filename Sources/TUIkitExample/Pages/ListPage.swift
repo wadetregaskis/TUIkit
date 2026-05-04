@@ -85,13 +85,16 @@ struct ListPage: View {
                 EmptyView()
             }
 
-            KeyboardHelpSection("Navigation", shortcuts: [
-                "Use [↑/↓] to navigate items",
-                "Use [Home/End] to jump to first/last",
-                "Use [PageUp/PageDown] for fast scrolling",
-                "Use [Enter/Space] to select/deselect",
-                "Use [Tab] to switch between lists",
-            ])
+            KeyboardHelpSection(
+                "Navigation",
+                shortcuts: [
+                    "Use [↑/↓] to navigate items",
+                    "Use [Home/End] to jump to first/last",
+                    "Use [PageUp/PageDown] for fast scrolling",
+                    "Use [Enter/Space] to select/deselect",
+                    "Use [Tab] to switch between lists",
+                ]
+            )
 
             Spacer()
         }

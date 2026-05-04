@@ -212,7 +212,7 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         } else {
             // Calculate viewport height
             let availableHeight = context.availableHeight
-            let viewportHeight = max(1, availableHeight - 6) // Reserve for border + header + indicators
+            let viewportHeight = max(1, availableHeight - 6)  // Reserve for border + header + indicators
 
             // Focus registration via shared helper
             let persistedFocusID = FocusRegistration.persistFocusID(
@@ -267,15 +267,17 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
                 let isFocused = handler.isFocused(at: rowIndex) && tableHasFocus
                 let isSelected = handler.isSelected(at: rowIndex)
 
-                lines.append(renderRow(
-                    item: item,
-                    columnWidths: columnWidths,
-                    isFocused: isFocused,
-                    isSelected: isSelected,
-                    rowWidth: innerWidth,
-                    context: context,
-                    palette: palette
-                ))
+                lines.append(
+                    renderRow(
+                        item: item,
+                        columnWidths: columnWidths,
+                        isFocused: isFocused,
+                        isSelected: isSelected,
+                        rowWidth: innerWidth,
+                        context: context,
+                        palette: palette
+                    )
+                )
             }
 
             // Bottom scroll indicator
@@ -373,12 +375,15 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
     ) -> String {
         let spacing = String(repeating: " ", count: columnSpacing)
         let visualState = rowVisualState(
-            isFocused: isFocused, isSelected: isSelected,
-            context: context, palette: palette
+            isFocused: isFocused,
+            isSelected: isSelected,
+            context: context,
+            palette: palette
         )
 
         let styledIndicator = ANSIRenderer.colorize(
-            visualState.indicator, foreground: visualState.indicatorColor
+            visualState.indicator,
+            foreground: visualState.indicatorColor
         )
 
         // Build cells using environment foreground color

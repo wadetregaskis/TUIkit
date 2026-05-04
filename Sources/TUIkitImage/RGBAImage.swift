@@ -173,13 +173,28 @@ extension RGBAImage {
                 let p11 = pixel(at: x1, y1)
 
                 let r = bilinearInterpolate(
-                    Double(p00.r), Double(p10.r), Double(p01.r), Double(p11.r), xFrac, yFrac
+                    Double(p00.r),
+                    Double(p10.r),
+                    Double(p01.r),
+                    Double(p11.r),
+                    xFrac,
+                    yFrac
                 )
                 let g = bilinearInterpolate(
-                    Double(p00.g), Double(p10.g), Double(p01.g), Double(p11.g), xFrac, yFrac
+                    Double(p00.g),
+                    Double(p10.g),
+                    Double(p01.g),
+                    Double(p11.g),
+                    xFrac,
+                    yFrac
                 )
                 let b = bilinearInterpolate(
-                    Double(p00.b), Double(p10.b), Double(p01.b), Double(p11.b), xFrac, yFrac
+                    Double(p00.b),
+                    Double(p10.b),
+                    Double(p01.b),
+                    Double(p11.b),
+                    xFrac,
+                    yFrac
                 )
 
                 result[y * targetWidth + x] = RGBA(
@@ -199,8 +214,12 @@ extension RGBAImage {
 extension RGBAImage {
 
     private func bilinearInterpolate(
-        _ v00: Double, _ v10: Double, _ v01: Double, _ v11: Double,
-        _ xFrac: Double, _ yFrac: Double
+        _ v00: Double,
+        _ v10: Double,
+        _ v01: Double,
+        _ v11: Double,
+        _ xFrac: Double,
+        _ yFrac: Double
     ) -> Double {
         let top = v00 * (1.0 - xFrac) + v10 * xFrac
         let bottom = v01 * (1.0 - xFrac) + v11 * xFrac

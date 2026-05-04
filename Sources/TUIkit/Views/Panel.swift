@@ -129,10 +129,7 @@ public struct Panel<Content: View, Footer: View>: View {
 
 extension Panel: @preconcurrency Equatable where Content: Equatable, Footer: Equatable {
     public static func == (lhs: Panel<Content, Footer>, rhs: Panel<Content, Footer>) -> Bool {
-        lhs.title == rhs.title &&
-        lhs.content == rhs.content &&
-        lhs.footer == rhs.footer &&
-        lhs.config == rhs.config
+        lhs.title == rhs.title && lhs.content == rhs.content && lhs.footer == rhs.footer && lhs.config == rhs.config
     }
 }
 

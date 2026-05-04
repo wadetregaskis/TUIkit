@@ -181,24 +181,32 @@ struct TupleViewEquatableTests {
 
         // Render inner
         let innerContext = RenderContext(
-            availableWidth: 80, availableHeight: 24,
-            environment: env, identity: innerIdentity
+            availableWidth: 80,
+            availableHeight: 24,
+            environment: env,
+            identity: innerIdentity
         )
-        let inner = EquatableView(content: HStack {
-            Text("Left")
-            Text("Right")
-        })
+        let inner = EquatableView(
+            content: HStack {
+                Text("Left")
+                Text("Right")
+            }
+        )
         _ = renderToBuffer(inner, context: innerContext)
 
         // Render outer
         let outerContext = RenderContext(
-            availableWidth: 80, availableHeight: 24,
-            environment: env, identity: outerIdentity
+            availableWidth: 80,
+            availableHeight: 24,
+            environment: env,
+            identity: outerIdentity
         )
-        let outer = EquatableView(content: VStack {
-            Text("Top")
-            Text("Bottom")
-        })
+        let outer = EquatableView(
+            content: VStack {
+                Text("Top")
+                Text("Bottom")
+            }
+        )
         _ = renderToBuffer(outer, context: outerContext)
 
         #expect(cache.count == 2)

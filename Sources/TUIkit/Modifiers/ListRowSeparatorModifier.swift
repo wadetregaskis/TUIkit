@@ -77,9 +77,7 @@ public enum VerticalEdge: Sendable {
 
 extension ListRowSeparatorModifier: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: ListRowSeparatorModifier<Content>, rhs: ListRowSeparatorModifier<Content>) -> Bool {
-        lhs.content == rhs.content &&
-        lhs.visibility == rhs.visibility &&
-        lhs.edges == rhs.edges
+        lhs.content == rhs.content && lhs.visibility == rhs.visibility && lhs.edges == rhs.edges
     }
 }
 
@@ -92,6 +90,6 @@ extension ListRowSeparatorModifier: Renderable {
         // This is a stub modifier for SwiftUI API compatibility.
         // List row separators are not supported in terminal UIs.
         // We silently return content unchanged (no warning to avoid noise).
-        return TUIkit.renderToBuffer(content, context: context)
+        TUIkit.renderToBuffer(content, context: context)
     }
 }

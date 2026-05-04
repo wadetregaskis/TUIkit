@@ -93,30 +93,12 @@ extension TextFieldHandler {
 
 // MARK: - Clipboard Helpers
 
-private extension TextFieldHandler {
+extension TextFieldHandler {
     /// Copies text to the system clipboard using platform-specific command.
-    func copyToClipboard(_ text: String) {
+    fileprivate func copyToClipboard(_ text: String) {
         #if os(macOS)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pbcopy")
-
-        let pipe = Pipe()
-        process.standardInput = pipe
-
-        do {
-            try process.run()
-            pipe.fileHandleForWriting.write(Data(text.utf8))
-            pipe.fileHandleForWriting.closeFile()
-            process.waitUntilExit()
-        } catch {
-            // Silently fail if clipboard is unavailable
-        }
-        #elseif os(Linux)
-        // Try xclip first, then xsel
-        for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: command)
-            process.arguments = command.contains("xclip") ? ["-selection", "clipboard"] : ["--clipboard", "--input"]
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/pbcopy")
 
             let pipe = Pipe()
             process.standardInput = pipe
@@ -126,43 +108,37 @@ private extension TextFieldHandler {
                 pipe.fileHandleForWriting.write(Data(text.utf8))
                 pipe.fileHandleForWriting.closeFile()
                 process.waitUntilExit()
-                return
             } catch {
-                continue
+                // Silently fail if clipboard is unavailable
             }
-        }
+        #elseif os(Linux)
+            // Try xclip first, then xsel
+            for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: command)
+                process.arguments = command.contains("xclip") ? ["-selection", "clipboard"] : ["--clipboard", "--input"]
+
+                let pipe = Pipe()
+                process.standardInput = pipe
+
+                do {
+                    try process.run()
+                    pipe.fileHandleForWriting.write(Data(text.utf8))
+                    pipe.fileHandleForWriting.closeFile()
+                    process.waitUntilExit()
+                    return
+                } catch {
+                    continue
+                }
+            }
         #endif
     }
 
     /// Pastes text from the system clipboard using platform-specific command.
-    func pasteFromClipboard() -> String? {
+    fileprivate func pasteFromClipboard() -> String? {
         #if os(macOS)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/pbpaste")
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            // Strip trailing newline that pbpaste adds
-            var result = String(data: data, encoding: .utf8) ?? ""
-            if result.hasSuffix("\n") {
-                result.removeLast()
-            }
-            return result
-        } catch {
-            return nil
-        }
-        #elseif os(Linux)
-        // Try xclip first, then xsel
-        for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: command)
-            process.arguments = command.contains("xclip") ? ["-selection", "clipboard", "-o"] : ["--clipboard", "--output"]
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/pbpaste")
 
             let pipe = Pipe()
             process.standardOutput = pipe
@@ -172,18 +148,42 @@ private extension TextFieldHandler {
                 process.waitUntilExit()
 
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                // Strip trailing newline that pbpaste adds
                 var result = String(data: data, encoding: .utf8) ?? ""
                 if result.hasSuffix("\n") {
                     result.removeLast()
                 }
                 return result
             } catch {
-                continue
+                return nil
             }
-        }
-        return nil
+        #elseif os(Linux)
+            // Try xclip first, then xsel
+            for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: command)
+                process.arguments = command.contains("xclip") ? ["-selection", "clipboard", "-o"] : ["--clipboard", "--output"]
+
+                let pipe = Pipe()
+                process.standardOutput = pipe
+
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    var result = String(data: data, encoding: .utf8) ?? ""
+                    if result.hasSuffix("\n") {
+                        result.removeLast()
+                    }
+                    return result
+                } catch {
+                    continue
+                }
+            }
+            return nil
         #else
-        return nil
+            return nil
         #endif
     }
 }

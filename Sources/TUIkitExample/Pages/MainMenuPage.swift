@@ -50,39 +50,39 @@ struct MainMenuPage: View {
 
             HStack {
                 Spacer()
-                  Menu(
-                      title: "Select a Demo",
-                      items: [
-                          MenuItem(label: "Text Styles", shortcut: "1"),
-                          MenuItem(label: "Colors", shortcut: "2"),
-                          MenuItem(label: "Container Views", shortcut: "3"),
-                          MenuItem(label: "Overlays & Modals", shortcut: "4"),
-                          MenuItem(label: "Layout System", shortcut: "5"),
-                          MenuItem(label: "Buttons & Focus", shortcut: "6"),
-                          MenuItem(label: "Toggles", shortcut: "7"),
-                          MenuItem(label: "Text Fields", shortcut: "8"),
-                          MenuItem(label: "Secure Fields", shortcut: "\\"),
-                          MenuItem(label: "Radio Buttons", shortcut: "9"),
-                          MenuItem(label: "Spinners", shortcut: "0"),
-                          MenuItem(label: "Lists", shortcut: "-"),
-                          MenuItem(label: "Tables", shortcut: "="),
-                          MenuItem(label: "Sliders", shortcut: "["),
-                          MenuItem(label: "Steppers", shortcut: "]"),
-                          MenuItem(label: "Split View", shortcut: ";"),
-                          MenuItem(label: "Image (File)", shortcut: "'"),
-                          MenuItem(label: "Image (URL)", shortcut: ","),
-                      ],
-                     selection: $menuSelection,
-                     onSelect: { index in
-                         // Navigate to the selected page
-                         if let page = DemoPage(rawValue: index + 1) {
-                             currentPage = page
-                         }
-                     },
-                     selectedColor: .palette.accent,
-                     // borderStyle uses appearance default
-                     borderColor: .palette.border
-                 )
+                Menu(
+                    title: "Select a Demo",
+                    items: [
+                        MenuItem(label: "Text Styles", shortcut: "1"),
+                        MenuItem(label: "Colors", shortcut: "2"),
+                        MenuItem(label: "Container Views", shortcut: "3"),
+                        MenuItem(label: "Overlays & Modals", shortcut: "4"),
+                        MenuItem(label: "Layout System", shortcut: "5"),
+                        MenuItem(label: "Buttons & Focus", shortcut: "6"),
+                        MenuItem(label: "Toggles", shortcut: "7"),
+                        MenuItem(label: "Text Fields", shortcut: "8"),
+                        MenuItem(label: "Secure Fields", shortcut: "\\"),
+                        MenuItem(label: "Radio Buttons", shortcut: "9"),
+                        MenuItem(label: "Spinners", shortcut: "0"),
+                        MenuItem(label: "Lists", shortcut: "-"),
+                        MenuItem(label: "Tables", shortcut: "="),
+                        MenuItem(label: "Sliders", shortcut: "["),
+                        MenuItem(label: "Steppers", shortcut: "]"),
+                        MenuItem(label: "Split View", shortcut: ";"),
+                        MenuItem(label: "Image (File)", shortcut: "'"),
+                        MenuItem(label: "Image (URL)", shortcut: ","),
+                    ],
+                    selection: $menuSelection,
+                    onSelect: { index in
+                        // Navigate to the selected page
+                        if let page = DemoPage(rawValue: index + 1) {
+                            currentPage = page
+                        }
+                    },
+                    selectedColor: .palette.accent,
+                    // borderStyle uses appearance default
+                    borderColor: .palette.border
+                )
                 Spacer()
             }
 

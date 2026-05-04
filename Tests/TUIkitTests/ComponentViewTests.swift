@@ -30,7 +30,7 @@ struct BorderViaContainerViewTests {
         // border = top + content + bottom = 3 lines minimum
         #expect(buffer.height >= 3)
         // Width = content width + 2 (left + right border) + 2 (padding)
-        #expect(buffer.width >= 6) // "Hi" (2) + borders (2) + padding (2)
+        #expect(buffer.width >= 6)  // "Hi" (2) + borders (2) + padding (2)
     }
 
     @Test(".border() with empty content renders empty")
@@ -75,7 +75,7 @@ struct CardTests {
         #expect(buffer.height >= 3)
         let allContent = buffer.lines.joined()
         #expect(allContent.contains("Hello"))
-        #expect(allContent.contains("Test")) // title
+        #expect(allContent.contains("Test"))  // title
     }
 
     @Test("Card without title renders")
@@ -127,7 +127,7 @@ struct PanelTests {
         // Top border (with title) + content + bottom border
         #expect(buffer.height >= 3)
         let allContent = buffer.lines.joined()
-        #expect(allContent.contains("Test Panel")) // title
+        #expect(allContent.contains("Test Panel"))  // title
         #expect(allContent.contains("Hello"))
     }
 
@@ -166,7 +166,7 @@ struct ContainerViewDirectTests {
 
         #expect(buffer.height >= 3)
         let allContent = buffer.lines.joined()
-        #expect(allContent.contains("Test")) // title
+        #expect(allContent.contains("Test"))  // title
         #expect(allContent.contains("Content"))
     }
 }

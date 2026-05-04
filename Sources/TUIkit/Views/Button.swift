@@ -339,7 +339,11 @@ private struct _ButtonCore: View, Renderable {
             if isDisabled {
                 resolvedCapColor = buttonBg
             } else if isFocused {
-                resolvedCapColor = Color.lerp(buttonBg, palette.accent.opacity(ViewConstants.buttonCapPulseBright), phase: context.environment.pulsePhase)
+                resolvedCapColor = Color.lerp(
+                    buttonBg,
+                    palette.accent.opacity(ViewConstants.buttonCapPulseBright),
+                    phase: context.environment.pulsePhase
+                )
             } else {
                 resolvedCapColor = buttonBg
             }

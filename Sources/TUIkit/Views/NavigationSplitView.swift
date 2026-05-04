@@ -278,9 +278,9 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
 
 // MARK: - Private Helpers
 
-private extension _NavigationSplitViewCore {
+extension _NavigationSplitViewCore {
     /// Resolves the effective visibility from the binding or defaults to `.all`.
-    func resolveVisibility() -> NavigationSplitViewVisibility {
+    fileprivate func resolveVisibility() -> NavigationSplitViewVisibility {
         if let binding = columnVisibility {
             let value = binding.wrappedValue
             // Resolve .automatic to .all
@@ -293,7 +293,7 @@ private extension _NavigationSplitViewCore {
     }
 
     /// Calculates which columns should be visible based on visibility setting.
-    func calculateVisibleColumns(visibility: NavigationSplitViewVisibility) -> [NavigationSplitViewColumn] {
+    fileprivate func calculateVisibleColumns(visibility: NavigationSplitViewVisibility) -> [NavigationSplitViewColumn] {
         if isThreeColumn {
             switch visibility {
             case .all, .automatic:
@@ -325,7 +325,7 @@ private extension _NavigationSplitViewCore {
 
     /// Calculates the width for each visible column.
     /// TUI-specific: Left columns have fixed widths, only the rightmost column is flexible.
-    func calculateColumnWidths(
+    fileprivate func calculateColumnWidths(
         visibleColumns: [NavigationSplitViewColumn],
         style: any NavigationSplitViewStyle,
         availableWidth: Int
@@ -368,7 +368,7 @@ private extension _NavigationSplitViewCore {
     }
 
     /// Returns the focus section ID for a column.
-    func focusSectionID(for column: NavigationSplitViewColumn) -> String {
+    fileprivate func focusSectionID(for column: NavigationSplitViewColumn) -> String {
         switch column {
         case .sidebar:
             return "nav-split-sidebar"
@@ -382,7 +382,7 @@ private extension _NavigationSplitViewCore {
     }
 
     /// Renders a single column.
-    func renderColumn(_ column: NavigationSplitViewColumn, context: RenderContext) -> FrameBuffer {
+    fileprivate func renderColumn(_ column: NavigationSplitViewColumn, context: RenderContext) -> FrameBuffer {
         switch column {
         case .sidebar:
             return TUIkit.renderToBuffer(sidebar, context: context.withChildIdentity(type: type(of: sidebar)))
@@ -396,7 +396,7 @@ private extension _NavigationSplitViewCore {
     }
 
     /// Combines column buffers horizontally with separators.
-    func combineColumns(
+    fileprivate func combineColumns(
         buffers: [FrameBuffer],
         columnWidths: [Int],
         separator: String,
@@ -430,7 +430,7 @@ private extension _NavigationSplitViewCore {
     }
 
     /// Pads a buffer to the specified width and height.
-    func padToSize(_ buffer: FrameBuffer, width: Int, height: Int) -> FrameBuffer {
+    fileprivate func padToSize(_ buffer: FrameBuffer, width: Int, height: Int) -> FrameBuffer {
         var lines = buffer.lines
 
         // Pad each line to the target width
@@ -457,9 +457,6 @@ private extension _NavigationSplitViewCore {
 
 extension NavigationSplitView: @preconcurrency Equatable where Sidebar: Equatable, Content: Equatable, Detail: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.sidebar == rhs.sidebar &&
-        lhs.content == rhs.content &&
-        lhs.detail == rhs.detail &&
-        lhs.isThreeColumn == rhs.isThreeColumn
+        lhs.sidebar == rhs.sidebar && lhs.content == rhs.content && lhs.detail == rhs.detail && lhs.isThreeColumn == rhs.isThreeColumn
     }
 }

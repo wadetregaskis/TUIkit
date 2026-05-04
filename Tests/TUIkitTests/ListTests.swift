@@ -35,10 +35,12 @@ struct ListRenderingTests {
         let context = createTestContext()
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             EmptyView()
         }
 
@@ -80,14 +82,16 @@ struct ListRenderingTests {
         let items = [
             Item(id: "1", name: "First"),
             Item(id: "2", name: "Second"),
-            Item(id: "3", name: "Third")
+            Item(id: "3", name: "Third"),
         ]
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             ForEach(items) { item in
                 Text(item.name)
             }
@@ -111,14 +115,16 @@ struct ListRenderingTests {
         }
         let items = [
             Item(id: "1", name: "First"),
-            Item(id: "2", name: "Second")
+            Item(id: "2", name: "Second"),
         ]
 
         var selection: String? = "2"
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             ForEach(items) { item in
                 Text(item.name)
             }
@@ -130,9 +136,10 @@ struct ListRenderingTests {
         // Selected item should have a background color.
         // The exact format depends on ColorDepth: 48;2;r;g;b (truecolor),
         // 48;5;n (256-color), or 4x (16-color).
-        let hasBackgroundColor = content.contains("[48;2;")
+        let hasBackgroundColor =
+            content.contains("[48;2;")
             || content.contains("[48;5;")
-            || content.contains("[4") // standard background codes 40-47, 100-107
+            || content.contains("[4")  // standard background codes 40-47, 100-107
         #expect(hasBackgroundColor)
     }
 
@@ -169,10 +176,12 @@ struct ListRenderingTests {
     @Test("Disabled list modifier works")
     func disabledListModifier() {
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             EmptyView()
         }.disabled()
 
@@ -182,10 +191,12 @@ struct ListRenderingTests {
     @Test("Multi-selection list can be created")
     func multiSelectionListCreation() {
         var selection: Set<String> = []
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Text("Item")
         }
 
@@ -195,10 +206,12 @@ struct ListRenderingTests {
     @Test("Single-selection list can be created")
     func singleSelectionListCreation() {
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Text("Item")
         }
 
@@ -210,10 +223,13 @@ struct ListRenderingTests {
         let context = createTestContext(width: 80)
 
         var selection: String?
-        let list = List("Items", selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            "Items",
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             ForEach(["Alpha", "Beta", "Gamma"], id: \.self) { item in
                 Text(item)
             }
@@ -278,7 +294,9 @@ struct ListRenderingTests {
         let lineWidths = buffer.lines.map { $0.strippedLength }
         let maxLineWidth = lineWidths.max() ?? 0
         let minLineWidth = lineWidths.filter { $0 > 0 }.min() ?? 0
-        #expect(minLineWidth == maxLineWidth,
-                "All lines should have same width but min=\(minLineWidth) max=\(maxLineWidth)")
+        #expect(
+            minLineWidth == maxLineWidth,
+            "All lines should have same width but min=\(minLineWidth) max=\(maxLineWidth)"
+        )
     }
 }

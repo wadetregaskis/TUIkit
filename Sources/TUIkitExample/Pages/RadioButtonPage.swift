@@ -62,11 +62,14 @@ struct RadioButtonPage: View {
                 }
             }
 
-            KeyboardHelpSection("Focus Navigation", shortcuts: [
-                "Use [↑/↓] to navigate vertically",
-                "Use [←/→] to navigate horizontally",
-                "Use [Enter] or [Space] to select",
-            ])
+            KeyboardHelpSection(
+                "Focus Navigation",
+                shortcuts: [
+                    "Use [↑/↓] to navigate vertically",
+                    "Use [←/→] to navigate horizontally",
+                    "Use [Enter] or [Space] to select",
+                ]
+            )
 
             Spacer()
         }

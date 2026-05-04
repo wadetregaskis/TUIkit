@@ -23,7 +23,7 @@ struct KeyEnumTests {
     @Test("Key is Hashable")
     func keyHashable() {
         let set: Set<Key> = [.enter, .tab, .escape, .enter]
-        #expect(set.count == 3) // .enter deduped
+        #expect(set.count == 3)  // .enter deduped
     }
 
     @Test("Character keys with different characters are not equal")
@@ -40,9 +40,11 @@ struct KeyEnumTests {
 
     @Test("Special keys are distinct")
     func specialKeysDistinct() {
-        let keys: [Key] = [.escape, .enter, .tab, .backspace, .delete,
-                           .up, .down, .left, .right,
-                           .home, .end, .pageUp, .pageDown]
+        let keys: [Key] = [
+            .escape, .enter, .tab, .backspace, .delete,
+            .up, .down, .left, .right,
+            .home, .end, .pageUp, .pageDown,
+        ]
         let set = Set(keys)
         #expect(set.count == 13)
     }
@@ -132,14 +134,14 @@ struct KeyEventParseTests {
 
     @Test("Parse printable character")
     func parsePrintable() {
-        let event = KeyEvent.parse([0x41]) // 'A'
+        let event = KeyEvent.parse([0x41])  // 'A'
         #expect(event?.key == .character("A"))
         #expect(event?.shift == true)
     }
 
     @Test("Parse lowercase character")
     func parseLowercase() {
-        let event = KeyEvent.parse([0x61]) // 'a'
+        let event = KeyEvent.parse([0x61])  // 'a'
         #expect(event?.key == .character("a"))
         #expect(event?.shift == false)
     }
@@ -253,14 +255,14 @@ struct KeyEventParseTests {
 
     @Test("Parse Alt+a")
     func parseAltA() {
-        let event = KeyEvent.parse([0x1B, 0x61]) // ESC + 'a'
+        let event = KeyEvent.parse([0x1B, 0x61])  // ESC + 'a'
         #expect(event?.key == .character("a"))
         #expect(event?.alt == true)
     }
 
     @Test("Parse Alt+Enter")
     func parseAltEnter() {
-        let event = KeyEvent.parse([0x1B, 0x0D]) // ESC + CR
+        let event = KeyEvent.parse([0x1B, 0x0D])  // ESC + CR
         #expect(event?.key == .enter)
         #expect(event?.alt == true)
     }

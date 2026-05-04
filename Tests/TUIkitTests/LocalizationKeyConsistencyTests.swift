@@ -6,6 +6,7 @@
 
 import Foundation
 import Testing
+
 @testable import TUIkit
 
 // MARK: - Localization Key Consistency Tests
@@ -51,10 +52,11 @@ final class LocalizationKeyConsistencyTests {
 
         do {
             let data = try Data(contentsOf: url)
-            let dict = try JSONSerialization.jsonObject(
-                with: data,
-                options: .fragmentsAllowed
-            ) as? [String: String]
+            let dict =
+                try JSONSerialization.jsonObject(
+                    with: data,
+                    options: .fragmentsAllowed
+                ) as? [String: String]
             return dict ?? [:]
         } catch {
             return [:]
@@ -324,7 +326,10 @@ final class LocalizationKeyConsistencyTests {
     @Test("All enum keys are covered in translations")
     func allEnumKeysCovered() {
         let expectedKeyCount = 21 + 17 + 11 + 6 + 8 + 7 + 4
-        #expect(englishTranslations.count == expectedKeyCount, "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)")
+        #expect(
+            englishTranslations.count == expectedKeyCount,
+            "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)"
+        )
     }
 
     @Test("Translation file is valid JSON")

@@ -80,11 +80,11 @@ public struct PreferenceValues: @unchecked Sendable {
 
 // MARK: - Public API
 
-public extension PreferenceValues {
+extension PreferenceValues {
     /// Merges another set of preference values into this one.
     ///
     /// - Parameter other: The other preference values to merge.
-    mutating func merge(_ other: Self) {
+    public mutating func merge(_ other: Self) {
         for (key, value) in other.storage {
             storage[key] = value
         }
@@ -119,14 +119,14 @@ public final class PreferenceStorage: @unchecked Sendable {
 
 // MARK: - Public API
 
-public extension PreferenceStorage {
+extension PreferenceStorage {
     /// Pushes a new preference context.
-    func push() {
+    public func push() {
         stack.append(PreferenceValues())
     }
 
     /// Pops the current preference context and merges into parent.
-    func pop() -> PreferenceValues {
+    public func pop() -> PreferenceValues {
         guard stack.count > 1 else {
             return stack.last ?? PreferenceValues()
         }
@@ -142,7 +142,7 @@ public extension PreferenceStorage {
     }
 
     /// Sets a preference value.
-    func setValue<K: PreferenceKey>(_ value: K.Value, forKey key: K.Type) {
+    public func setValue<K: PreferenceKey>(_ value: K.Value, forKey key: K.Type) {
         var currentValues = current
         K.reduce(value: &currentValues[key]) { value }
         current = currentValues
@@ -157,7 +157,7 @@ public extension PreferenceStorage {
     }
 
     /// Registers a callback for preference changes.
-    func onPreferenceChange<K: PreferenceKey>(
+    public func onPreferenceChange<K: PreferenceKey>(
         _ key: K.Type,
         callback: @escaping (K.Value) -> Void
     ) {
@@ -179,7 +179,7 @@ public extension PreferenceStorage {
     /// Clears all accumulated callbacks and resets the value stack
     /// to a single empty context. Called at the start of each frame
     /// by `RenderLoop.render()` to prevent callback accumulation.
-    func beginRenderPass() {
+    public func beginRenderPass() {
         callbacks.removeAll()
         stack = [PreferenceValues()]
     }
@@ -187,7 +187,7 @@ public extension PreferenceStorage {
     /// Resets all preference state.
     ///
     /// Called once during app shutdown by `TUIContext.reset()`.
-    func reset() {
+    public func reset() {
         stack = [PreferenceValues()]
         callbacks.removeAll()
     }

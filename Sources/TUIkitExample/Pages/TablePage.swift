@@ -84,13 +84,16 @@ struct TablePage: View {
                 }
             }
 
-            KeyboardHelpSection("Navigation", shortcuts: [
-                "Use [Up/Down] to navigate rows",
-                "Use [Home/End] to jump to first/last",
-                "Use [PageUp/PageDown] for fast scrolling",
-                "Use [Enter/Space] to select/deselect",
-                "Use [Tab] to switch between tables",
-            ])
+            KeyboardHelpSection(
+                "Navigation",
+                shortcuts: [
+                    "Use [Up/Down] to navigate rows",
+                    "Use [Home/End] to jump to first/last",
+                    "Use [PageUp/PageDown] for fast scrolling",
+                    "Use [Enter/Space] to select/deselect",
+                    "Use [Tab] to switch between tables",
+                ]
+            )
 
             Spacer()
         }

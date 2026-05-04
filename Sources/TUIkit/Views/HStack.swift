@@ -166,8 +166,6 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
 
 extension HStack: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: HStack<Content>, rhs: HStack<Content>) -> Bool {
-        lhs.alignment == rhs.alignment &&
-        lhs.spacing == rhs.spacing &&
-        lhs.content == rhs.content
+        lhs.alignment == rhs.alignment && lhs.spacing == rhs.spacing && lhs.content == rhs.content
     }
 }

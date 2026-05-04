@@ -274,7 +274,7 @@ struct ButtonRowTests {
         let buffer = renderToBuffer(row, context: context)
 
         // Both buttons should be present
-        #expect(buffer.height == 1) // plain buttons without border
+        #expect(buffer.height == 1)  // plain buttons without border
         let allContent = buffer.lines.joined()
         #expect(allContent.contains("A"))
         #expect(allContent.contains("B"))

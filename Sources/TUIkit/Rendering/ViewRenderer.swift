@@ -59,9 +59,9 @@ extension ViewRenderer {
 
 // MARK: - Private Helpers
 
-private extension ViewRenderer {
+extension ViewRenderer {
     /// Flushes a FrameBuffer to the terminal at the specified position.
-    func flush(_ buffer: FrameBuffer, atRow row: Int, column: Int) {
+    fileprivate func flush(_ buffer: FrameBuffer, atRow row: Int, column: Int) {
         for (index, line) in buffer.lines.enumerated() {
             terminal.moveCursor(toRow: row + index, column: column)
             terminal.write(line)

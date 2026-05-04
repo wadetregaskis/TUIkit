@@ -199,8 +199,6 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
 extension VStack: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: VStack<Content>, rhs: VStack<Content>) -> Bool {
-        lhs.alignment == rhs.alignment &&
-        lhs.spacing == rhs.spacing &&
-        lhs.content == rhs.content
+        lhs.alignment == rhs.alignment && lhs.spacing == rhs.spacing && lhs.content == rhs.content
     }
 }

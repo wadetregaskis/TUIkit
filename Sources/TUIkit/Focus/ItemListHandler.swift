@@ -125,13 +125,15 @@ extension ItemListHandler {
         switch selectionMode {
         case .single:
             if let selection = singleSelection?.wrappedValue,
-               let index = itemIDs.firstIndex(of: selection) {
+                let index = itemIDs.firstIndex(of: selection)
+            {
                 focusedIndex = index
             }
         case .multi:
             if let selection = multiSelection?.wrappedValue,
-               let firstSelected = selection.first,
-               let index = itemIDs.firstIndex(of: firstSelected) {
+                let firstSelected = selection.first,
+                let index = itemIDs.firstIndex(of: firstSelected)
+            {
                 focusedIndex = index
             }
         }
@@ -286,7 +288,8 @@ extension ItemListHandler {
     /// Toggles the selection state at the focused index.
     func toggleSelectionAtFocusedIndex() {
         guard focusedIndex >= 0 && focusedIndex < itemIDs.count,
-              let itemID = itemIDs[focusedIndex] else { return }
+            let itemID = itemIDs[focusedIndex]
+        else { return }
 
         switch selectionMode {
         case .single:
@@ -316,7 +319,8 @@ extension ItemListHandler {
     /// - Returns: True if the item is selected.
     func isSelected(at index: Int) -> Bool {
         guard index >= 0 && index < itemIDs.count,
-              let itemID = itemIDs[index] else { return false }
+            let itemID = itemIDs[index]
+        else { return false }
 
         switch selectionMode {
         case .single:

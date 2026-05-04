@@ -5,6 +5,7 @@
 //  License: MIT
 
 import TUIkitCore
+
 // MARK: - EquatableView
 
 /// A wrapper that enables subtree memoization for views conforming to `Equatable`.
@@ -119,20 +120,20 @@ extension EquatableView: Renderable {
 
 // MARK: - Private Helpers
 
-private extension EquatableView {
+extension EquatableView {
     /// Marks the content's identity as active in StateStorage for GC.
     ///
     /// When returning a cached buffer, the subtree's views aren't visited.
     /// Their state identities must still be marked active to prevent
     /// StateStorage from garbage-collecting them.
-    func markSubtreeActive(context: RenderContext) {
+    fileprivate func markSubtreeActive(context: RenderContext) {
         context.environment.stateStorage!.markActive(context.identity)
     }
 }
 
 // MARK: - View Extension
 
-public extension View where Self: Equatable {
+extension View where Self: Equatable {
     /// Wraps this view in an ``EquatableView`` for subtree memoization.
     ///
     /// When the view's properties are unchanged between frames, the entire
@@ -148,7 +149,7 @@ public extension View where Self: Equatable {
     /// ```
     ///
     /// - Returns: An ``EquatableView`` wrapping this view.
-    func equatable() -> EquatableView<Self> {
+    public func equatable() -> EquatableView<Self> {
         EquatableView(content: self)
     }
 }

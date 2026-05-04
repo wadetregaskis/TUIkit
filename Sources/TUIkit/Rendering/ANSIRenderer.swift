@@ -144,12 +144,12 @@ extension ANSIRenderer {
 
 // MARK: - Private Helpers
 
-private extension ANSIRenderer {
+extension ANSIRenderer {
     /// Builds the ANSI codes for a TextStyle.
     ///
     /// - Parameter style: The TextStyle to convert.
     /// - Returns: An array of ANSI code strings.
-    static func buildStyleCodes(_ style: TextStyle) -> [String] {
+    fileprivate static func buildStyleCodes(_ style: TextStyle) -> [String] {
         var codes: [String] = []
 
         // Text attributes

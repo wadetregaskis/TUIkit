@@ -237,14 +237,14 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
 
 // MARK: - Public API
 
-public extension StatusBarItem {
+extension StatusBarItem {
     /// Executes the item's action.
-    func execute() {
+    public func execute() {
         action?()
     }
 
     /// Override matching for special cases.
-    func matches(_ event: KeyEvent) -> Bool {
+    public func matches(_ event: KeyEvent) -> Bool {
         // Handle arrow key combinations like "↑↓"
         if shortcut.contains("↑") && event.key == .up { return true }
         if shortcut.contains("↓") && event.key == .down { return true }
@@ -268,9 +268,9 @@ public extension StatusBarItem {
 
 // MARK: - Private Helpers
 
-private extension StatusBarItem {
+extension StatusBarItem {
     /// Maps common shortcut symbols to Key values.
-    static func keyFromShortcut(_ shortcut: String) -> Key? {
+    fileprivate static func keyFromShortcut(_ shortcut: String) -> Key? {
         switch shortcut {
         // Special keys
         case Shortcut.escape, "esc", "escape":

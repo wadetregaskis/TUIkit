@@ -345,14 +345,14 @@ extension Terminal {
 
 // MARK: - Private Helpers
 
-private extension Terminal {
+extension Terminal {
     /// Appends a string's UTF-8 bytes to the frame buffer.
-    func appendToBuffer(_ string: String) {
+    fileprivate func appendToBuffer(_ string: String) {
         frameBuffer.append(contentsOf: string.utf8)
     }
 
     /// Writes all buffered bytes to `STDOUT_FILENO` in a single syscall.
-    func flushBuffer() {
+    fileprivate func flushBuffer() {
         guard !frameBuffer.isEmpty else { return }
         frameBuffer.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
@@ -368,7 +368,7 @@ private extension Terminal {
     }
 
     /// Writes a string directly to `STDOUT_FILENO` without buffering.
-    func writeImmediate(_ string: String) {
+    fileprivate func writeImmediate(_ string: String) {
         // Safe: UTF8 string is valid UInt8 sequence; rebinding preserves memory layout.
         string.utf8CString.withUnsafeBufferPointer { buffer in
             let count = buffer.count - 1

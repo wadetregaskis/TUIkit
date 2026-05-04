@@ -53,7 +53,7 @@ extension StatusBarSystemItemsModifier: Renderable {
 
 // MARK: - View Extension
 
-public extension View {
+extension View {
     /// Configures which system items are shown in the status bar.
     ///
     /// System items are the built-in shortcuts:
@@ -75,7 +75,7 @@ public extension View {
     ///   - theme: Whether to show the theme switcher (`t theme`). Default is `false`.
     ///   - appearance: Whether to show the appearance switcher (`a appearance`). Default is `false`.
     /// - Returns: A view with the configured system items.
-    func statusBarSystemItems(
+    public func statusBarSystemItems(
         theme: Bool = false,
         appearance: Bool = false
     ) -> some View {

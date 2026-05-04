@@ -213,7 +213,8 @@ extension Text: Renderable, Layoutable {
         // inherit from the environment (set by .foregroundStyle() on parent views),
         // or fall back to the palette's default foreground color
         if effectiveStyle.foregroundColor == nil {
-            effectiveStyle.foregroundColor = context.environment.foregroundStyle
+            effectiveStyle.foregroundColor =
+                context.environment.foregroundStyle
                 ?? context.environment.palette.foreground
         }
 

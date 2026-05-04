@@ -38,36 +38,76 @@ private struct Message: Identifiable {
         switch folder {
         case "inbox":
             return [
-                Self(id: "1", from: "Alice", subject: "Meeting Tomorrow",
-                     body: "Hi,\n\nJust wanted to confirm our meeting tomorrow at 2pm.\n\nBest,\nAlice",
-                     date: "10:30", isRead: false),
-                Self(id: "2", from: "Bob", subject: "Code Review",
-                     body: "Hey,\n\nI've reviewed your PR and left some comments.\n\nLooks good overall!",
-                     date: "09:15", isRead: false),
-                Self(id: "3", from: "Carol", subject: "Project Update",
-                     body: "Team,\n\nHere's the latest status on the project.\n\nWe're on track for launch.",
-                     date: "Yesterday", isRead: true),
-                Self(id: "4", from: "David", subject: "Quick Question",
-                     body: "Hi,\n\nDo you have a moment to discuss the API design?\n\nThanks!",
-                     date: "Yesterday", isRead: true),
-                Self(id: "5", from: "Eve", subject: "New Feature Idea",
-                     body: "Hello,\n\nI was thinking we could add dark mode support.\n\nThoughts?",
-                     date: "Monday", isRead: true),
+                Self(
+                    id: "1",
+                    from: "Alice",
+                    subject: "Meeting Tomorrow",
+                    body: "Hi,\n\nJust wanted to confirm our meeting tomorrow at 2pm.\n\nBest,\nAlice",
+                    date: "10:30",
+                    isRead: false
+                ),
+                Self(
+                    id: "2",
+                    from: "Bob",
+                    subject: "Code Review",
+                    body: "Hey,\n\nI've reviewed your PR and left some comments.\n\nLooks good overall!",
+                    date: "09:15",
+                    isRead: false
+                ),
+                Self(
+                    id: "3",
+                    from: "Carol",
+                    subject: "Project Update",
+                    body: "Team,\n\nHere's the latest status on the project.\n\nWe're on track for launch.",
+                    date: "Yesterday",
+                    isRead: true
+                ),
+                Self(
+                    id: "4",
+                    from: "David",
+                    subject: "Quick Question",
+                    body: "Hi,\n\nDo you have a moment to discuss the API design?\n\nThanks!",
+                    date: "Yesterday",
+                    isRead: true
+                ),
+                Self(
+                    id: "5",
+                    from: "Eve",
+                    subject: "New Feature Idea",
+                    body: "Hello,\n\nI was thinking we could add dark mode support.\n\nThoughts?",
+                    date: "Monday",
+                    isRead: true
+                ),
             ]
         case "starred":
             return [
-                Self(id: "s1", from: "Frank", subject: "Important: Deadline",
-                     body: "Reminder:\n\nThe deadline is next Friday.\n\nPlease submit your work.",
-                     date: "Tuesday", isRead: true),
-                Self(id: "s2", from: "Grace", subject: "Contract Review",
-                     body: "Hi,\n\nPlease review the attached contract.\n\nLet me know if you have questions.",
-                     date: "Last week", isRead: true),
+                Self(
+                    id: "s1",
+                    from: "Frank",
+                    subject: "Important: Deadline",
+                    body: "Reminder:\n\nThe deadline is next Friday.\n\nPlease submit your work.",
+                    date: "Tuesday",
+                    isRead: true
+                ),
+                Self(
+                    id: "s2",
+                    from: "Grace",
+                    subject: "Contract Review",
+                    body: "Hi,\n\nPlease review the attached contract.\n\nLet me know if you have questions.",
+                    date: "Last week",
+                    isRead: true
+                ),
             ]
         case "drafts":
             return [
-                Self(id: "d1", from: "Me", subject: "Re: Meeting",
-                     body: "Thanks for the invite.\n\nI'll be there at 2pm.\n\nSee you then!",
-                     date: "Draft", isRead: true),
+                Self(
+                    id: "d1",
+                    from: "Me",
+                    subject: "Re: Meeting",
+                    body: "Thanks for the invite.\n\nI'll be there at 2pm.\n\nSee you then!",
+                    date: "Draft",
+                    isRead: true
+                )
             ]
         default:
             return []
@@ -118,9 +158,9 @@ struct SplitViewPage: View {
 
 // MARK: - Column Views
 
-private extension SplitViewPage {
+extension SplitViewPage {
     @ViewBuilder
-    var messageListContent: some View {
+    fileprivate var messageListContent: some View {
         let messages = Message.samples(for: selectedFolder ?? "inbox")
         if messages.isEmpty {
             VStack {
@@ -150,7 +190,7 @@ private extension SplitViewPage {
         }
     }
 
-    var detailColumn: some View {
+    fileprivate var detailColumn: some View {
         VStack(alignment: .leading, spacing: 1) {
             if let message = currentMessage {
                 // Header
@@ -185,17 +225,17 @@ private extension SplitViewPage {
 
 // MARK: - Private Helpers
 
-private extension SplitViewPage {
-    var folderTitle: String {
+extension SplitViewPage {
+    fileprivate var folderTitle: String {
         Folder.samples.first { $0.id == selectedFolder }?.name ?? "Messages"
     }
 
-    var currentMessage: Message? {
+    fileprivate var currentMessage: Message? {
         guard let messageId = selectedMessage else { return nil }
         return Message.samples(for: selectedFolder ?? "inbox").first { $0.id == messageId }
     }
 
-    var visibilityLabel: String {
+    fileprivate var visibilityLabel: String {
         switch visibility {
         case .all: return "All"
         case .doubleColumn: return "Double"

@@ -111,11 +111,14 @@ struct TextFieldPage: View {
                     "[Tab] Move to next field",
                 ])
 
-                KeyboardHelpSection("Cursor Settings", shortcuts: [
-                    "[F1] Shape: Block, Bar, Underscore",
-                    "[F2] Animation: Static, Blink, Pulse",
-                    "[F3] Speed: Slow, Regular, Fast",
-                ])
+                KeyboardHelpSection(
+                    "Cursor Settings",
+                    shortcuts: [
+                        "[F1] Shape: Block, Bar, Underscore",
+                        "[F2] Animation: Static, Blink, Pulse",
+                        "[F3] Speed: Slow, Regular, Fast",
+                    ]
+                )
             }
 
             Spacer()

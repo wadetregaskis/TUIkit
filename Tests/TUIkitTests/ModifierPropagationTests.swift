@@ -144,7 +144,7 @@ struct ModifierPropagationTests {
             title: "Test Menu",
             items: [
                 MenuItem(label: "Item 1"),
-                MenuItem(label: "Item 2")
+                MenuItem(label: "Item 2"),
             ]
         )
 

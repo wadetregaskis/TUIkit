@@ -132,7 +132,7 @@ struct RenderPerformanceTests {
             items: [
                 MenuItem(label: "Item 1"),
                 MenuItem(label: "Item 2"),
-                MenuItem(label: "Item 3")
+                MenuItem(label: "Item 3"),
             ]
         )
 
@@ -265,7 +265,7 @@ struct RenderPerformanceTests {
             }
         }
 
-        let context = testContext(height: 5) // Only 5 lines visible
+        let context = testContext(height: 5)  // Only 5 lines visible
         let regularTime = measureRenderTime(regularStack, iterations: 500, context: context)
         let lazyTime = measureRenderTime(lazyStack, iterations: 500, context: context)
 
@@ -295,13 +295,25 @@ struct RenderPerformanceStatistics {
         // Measure each view type
         let start1 = Date()
         for _ in 0..<iterations {
-            _ = renderToBuffer(VStack { Text("A"); Text("B") }, context: context)
+            _ = renderToBuffer(
+                VStack {
+                    Text("A")
+                    Text("B")
+                },
+                context: context
+            )
         }
         results.append(("VStack (2 children)", Date().timeIntervalSince(start1)))
 
         let start2 = Date()
         for _ in 0..<iterations {
-            _ = renderToBuffer(HStack { Text("A"); Text("B") }, context: context)
+            _ = renderToBuffer(
+                HStack {
+                    Text("A")
+                    Text("B")
+                },
+                context: context
+            )
         }
         results.append(("HStack (2 children)", Date().timeIntervalSince(start2)))
 
@@ -323,7 +335,7 @@ struct RenderPerformanceStatistics {
         print("Iterations: \(iterations)")
         print("")
         for (name, time) in results {
-            let perIteration = (time / Double(iterations)) * 1000 // ms
+            let perIteration = (time / Double(iterations)) * 1000  // ms
             print("\(name): \(String(format: "%.3f", time))s total, \(String(format: "%.3f", perIteration))ms per render")
         }
         print("=====================================\n")

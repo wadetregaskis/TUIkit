@@ -120,7 +120,7 @@ extension Spacer: Renderable, Layoutable {
 extension Divider: Renderable, Layoutable {
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Divider has height 1 and expands to fill width
-        return ViewSize.flexibleWidth(minWidth: 1, height: 1)
+        ViewSize.flexibleWidth(minWidth: 1, height: 1)
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {

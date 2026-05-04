@@ -180,7 +180,8 @@ extension AppRunner {
             var eventsProcessed = 0
             let maxEventsPerFrame = 128
             while eventsProcessed < maxEventsPerFrame,
-                  let keyEvent = terminal.readKeyEvent() {
+                let keyEvent = terminal.readKeyEvent()
+            {
                 inputHandler.handle(keyEvent)
                 eventsProcessed += 1
             }
@@ -201,8 +202,8 @@ extension AppRunner {
 
 // MARK: - Private Helpers
 
-private extension AppRunner {
-    func cleanup() {
+extension AppRunner {
+    fileprivate func cleanup() {
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()

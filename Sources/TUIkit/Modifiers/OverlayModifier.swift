@@ -28,9 +28,7 @@ public struct OverlayModifier<Base: View, Overlay: View>: View {
 
 extension OverlayModifier: @preconcurrency Equatable where Base: Equatable, Overlay: Equatable {
     public static func == (lhs: OverlayModifier<Base, Overlay>, rhs: OverlayModifier<Base, Overlay>) -> Bool {
-        lhs.base == rhs.base &&
-        lhs.overlay == rhs.overlay &&
-        lhs.alignment == rhs.alignment
+        lhs.base == rhs.base && lhs.overlay == rhs.overlay && lhs.alignment == rhs.alignment
     }
 }
 

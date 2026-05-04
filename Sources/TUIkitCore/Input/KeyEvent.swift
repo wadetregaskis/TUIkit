@@ -278,7 +278,7 @@ extension KeyEvent {
         // Extract modifier number after semicolon (before final byte)
         let modifierBytes = params[(semicolonIndex + 1)..<(params.count - 1)]
         guard let string = String(bytes: modifierBytes, encoding: .ascii),
-              let modifier = Int(string)
+            let modifier = Int(string)
         else {
             return (shift: false, alt: false, ctrl: false)
         }
@@ -313,7 +313,7 @@ extension KeyEvent {
         }
 
         guard let string = String(bytes: numberBytes, encoding: .ascii),
-              let number = Int(string)
+            let number = Int(string)
         else {
             return nil
         }

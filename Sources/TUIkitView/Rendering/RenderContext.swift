@@ -206,7 +206,7 @@ public struct RenderContext {
     ///   - innerAvailableWidth: The available width inside the container (unused).
     /// - Returns: The content width.
     public func resolveContainerWidth(contentWidth: Int, innerAvailableWidth: Int) -> Int {
-        return contentWidth
+        contentWidth
     }
 
     /// Calculates the inner height for a container based on content.
@@ -219,6 +219,6 @@ public struct RenderContext {
     ///   - borderOverhead: Lines used by borders/title/footer (unused, kept for API compatibility).
     /// - Returns: The content height.
     public func resolveContainerHeight(contentHeight: Int, borderOverhead: Int = 0) -> Int {
-        return contentHeight
+        contentHeight
     }
 }

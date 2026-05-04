@@ -123,7 +123,8 @@ public final class LocalizationService: @unchecked Sendable {
 
         // Fall back to English
         if currentLanguage != .english,
-           let value = _translationValue(key, in: .english) {
+            let value = _translationValue(key, in: .english)
+        {
             return value
         }
 
@@ -163,20 +164,23 @@ public final class LocalizationService: @unchecked Sendable {
 
     /// Loads translations from bundled JSON file.
     private func loadTranslationsFromBundle(language: String) -> [String: String]? {
-        guard let url = Bundle.module.url(
-            forResource: language,
-            withExtension: "json",
-            subdirectory: "translations"
-        ) else {
+        guard
+            let url = Bundle.module.url(
+                forResource: language,
+                withExtension: "json",
+                subdirectory: "translations"
+            )
+        else {
             return nil
         }
 
         do {
             let data = try Data(contentsOf: url)
-            let dict = try JSONSerialization.jsonObject(
-                with: data,
-                options: .fragmentsAllowed
-            ) as? [String: String]
+            let dict =
+                try JSONSerialization.jsonObject(
+                    with: data,
+                    options: .fragmentsAllowed
+                ) as? [String: String]
             return dict
         } catch {
             return nil
@@ -254,15 +258,17 @@ public final class LocalizationService: @unchecked Sendable {
     /// Returns the XDG-compatible default config directory path.
     static func defaultConfigDirectoryPath() -> String {
         #if os(macOS)
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first?.path ?? NSHomeDirectory()
-        return (appSupport as NSString).appendingPathComponent("tuikit")
+            let appSupport =
+                FileManager.default.urls(
+                    for: .applicationSupportDirectory,
+                    in: .userDomainMask
+                ).first?.path ?? NSHomeDirectory()
+            return (appSupport as NSString).appendingPathComponent("tuikit")
         #else
-        let configHome = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
-            ?? ((NSHomeDirectory() as NSString).appendingPathComponent(".config"))
-        return (configHome as NSString).appendingPathComponent("tuikit")
+            let configHome =
+                ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
+                ?? ((NSHomeDirectory() as NSString).appendingPathComponent(".config"))
+            return (configHome as NSString).appendingPathComponent("tuikit")
         #endif
     }
 }

@@ -208,7 +208,7 @@ public enum Shortcut {
 
 // MARK: - Public API
 
-public extension Shortcut {
+extension Shortcut {
     /// Combines multiple shortcuts with a separator.
     ///
     /// - Parameters:
@@ -222,7 +222,7 @@ public extension Shortcut {
     /// Shortcut.combine(.control, "c") // "⌃c"
     /// Shortcut.combine(.shift, .tab)   // "⇧⇥"
     /// ```
-    static func combine(_ shortcuts: String..., separator: String = "") -> String {
+    public static func combine(_ shortcuts: String..., separator: String = "") -> String {
         shortcuts.joined(separator: separator)
     }
 
@@ -230,7 +230,7 @@ public extension Shortcut {
     ///
     /// - Parameter key: The key character.
     /// - Returns: The formatted shortcut (e.g., "^c").
-    static func ctrl(_ key: Character) -> String {
+    public static func ctrl(_ key: Character) -> String {
         "^\(key)"
     }
 
@@ -240,7 +240,7 @@ public extension Shortcut {
     ///   - start: The start of the range.
     ///   - end: The end of the range.
     /// - Returns: The formatted range (e.g., "1-9").
-    static func range(_ start: String, _ end: String) -> String {
+    public static func range(_ start: String, _ end: String) -> String {
         "\(start)-\(end)"
     }
 }

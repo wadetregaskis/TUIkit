@@ -228,8 +228,7 @@ extension TextFieldHandler {
             }
 
             // Ignore control characters except printable ones
-            if char.isLetter || char.isNumber || char.isPunctuation ||
-               char.isSymbol || char.isWhitespace {
+            if char.isLetter || char.isNumber || char.isPunctuation || char.isSymbol || char.isWhitespace {
                 insertCharacter(char)
                 return true
             }

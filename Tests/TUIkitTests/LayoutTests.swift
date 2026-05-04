@@ -136,7 +136,7 @@ struct LayoutableTests {
         let size = text.sizeThatFits(proposal: ProposedSize(width: 6, height: nil), context: context)
 
         #expect(size.width == 5)  // "Hello" or "World" (5 chars each)
-        #expect(size.height == 2) // Two lines after wrap
+        #expect(size.height == 2)  // Two lines after wrap
     }
 
     @Test("Spacer sizeThatFits is flexible")

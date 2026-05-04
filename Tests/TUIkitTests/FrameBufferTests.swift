@@ -125,7 +125,7 @@ struct OverlayTests {
         let stripped = buffer.lines[0].stripped
         #expect(stripped.contains("Modal"))
         // The visible text shows the overlay positioned over the base
-        #expect(buffer.width >= 5) // at least "Modal" width
+        #expect(buffer.width >= 5)  // at least "Modal" width
     }
 
     @Test("FrameBuffer compositing places overlay at correct position")

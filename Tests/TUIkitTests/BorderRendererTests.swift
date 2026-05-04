@@ -58,22 +58,26 @@ struct BorderRendererStandardTests {
             style: .line,
             innerWidth: 20,
             color: .white,
-            title: "AB",        // 2 terminal cells
+            title: "AB",  // 2 terminal cells
             titleColor: .green
         )
         let cjkResult = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 20,
             color: .white,
-            title: "你好",      // 4 terminal cells (2 CJK chars × 2 cells each)
+            title: "你好",  // 4 terminal cells (2 CJK chars × 2 cells each)
             titleColor: .green
         )
         // Both borders should have the same total visual width
         // (corners + innerWidth = 22)
-        #expect(asciiResult.strippedLength == 22,
-                "ASCII title border should be 22 wide, got \(asciiResult.strippedLength)")
-        #expect(cjkResult.strippedLength == 22,
-                "CJK title border should be 22 wide, got \(cjkResult.strippedLength)")
+        #expect(
+            asciiResult.strippedLength == 22,
+            "ASCII title border should be 22 wide, got \(asciiResult.strippedLength)"
+        )
+        #expect(
+            cjkResult.strippedLength == 22,
+            "CJK title border should be 22 wide, got \(cjkResult.strippedLength)"
+        )
     }
 
     @Test("standardBottomBorder uses correct corner characters")
@@ -95,7 +99,7 @@ struct BorderRendererStandardTests {
             innerWidth: 8,
             color: .white
         )
-        #expect(result.stripped.count == 10) // 8 + 2 corners
+        #expect(result.stripped.count == 10)  // 8 + 2 corners
     }
 
     @Test("standardDivider uses T-junction characters")
@@ -270,8 +274,10 @@ struct BorderRendererFocusIndicatorTests {
             pulsePhase: 0.5,
             palette: palette
         )
-        #expect(result.strippedLength == BorderRenderer.focusIndicatorWidth,
-                "Focused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (indicator + space)")
+        #expect(
+            result.strippedLength == BorderRenderer.focusIndicatorWidth,
+            "Focused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (indicator + space)"
+        )
         #expect(result.stripped.hasPrefix("●"), "Should start with focus indicator character")
     }
 
@@ -283,8 +289,10 @@ struct BorderRendererFocusIndicatorTests {
             pulsePhase: 0.0,
             palette: palette
         )
-        #expect(result.strippedLength == BorderRenderer.focusIndicatorWidth,
-                "Unfocused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (spaces)")
+        #expect(
+            result.strippedLength == BorderRenderer.focusIndicatorWidth,
+            "Unfocused prefix should be \(BorderRenderer.focusIndicatorWidth) visible chars (spaces)"
+        )
         #expect(result == "  ", "Unfocused prefix should be 2 spaces")
     }
 
@@ -301,8 +309,10 @@ struct BorderRendererFocusIndicatorTests {
             pulsePhase: 0.0,
             palette: palette
         )
-        #expect(focused.strippedLength == unfocused.strippedLength,
-                "Focused and unfocused prefix should have the same visible width")
+        #expect(
+            focused.strippedLength == unfocused.strippedLength,
+            "Focused and unfocused prefix should have the same visible width"
+        )
     }
 
     @Test("Title border with focus indicator contains both")

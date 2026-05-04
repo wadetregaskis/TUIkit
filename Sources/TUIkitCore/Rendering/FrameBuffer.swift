@@ -117,13 +117,13 @@ public struct FrameBuffer: Sendable, Equatable {
 
 // MARK: - Public API
 
-public extension FrameBuffer {
+extension FrameBuffer {
     /// Stacks another buffer below this one with optional spacing.
     ///
     /// - Parameters:
     ///   - other: The buffer to append below.
     ///   - spacing: Number of empty lines between the two buffers.
-    mutating func appendVertically(_ other: Self, spacing: Int = 0) {
+    public mutating func appendVertically(_ other: Self, spacing: Int = 0) {
         guard !other.isEmpty else { return }
 
         // Pre-compute the new width (avoids redundant computation in didSet)
@@ -145,7 +145,7 @@ public extension FrameBuffer {
     /// - Parameters:
     ///   - other: The buffer to append to the right.
     ///   - spacing: Number of space characters between the two buffers.
-    mutating func appendHorizontally(_ other: Self, spacing: Int = 0) {
+    public mutating func appendHorizontally(_ other: Self, spacing: Int = 0) {
         let maxHeight = max(height, other.height)
         let myWidth = width
         let spacer = String(repeating: " ", count: spacing)
@@ -175,7 +175,7 @@ public extension FrameBuffer {
     /// For simplicity, this just overlays line by line.
     ///
     /// - Parameter overlay: The buffer to overlay on top.
-    mutating func overlay(_ overlay: Self) {
+    public mutating func overlay(_ overlay: Self) {
         let maxHeight = max(height, overlay.height)
         var result: [String] = []
         for row in 0..<maxHeight {
@@ -199,7 +199,7 @@ public extension FrameBuffer {
     ///   - overlay: The buffer to composite on top.
     ///   - position: The (x, y) offset where the overlay should be placed.
     /// - Returns: A new buffer with the overlay composited.
-    func composited(with overlay: Self, at position: (x: Int, y: Int)) -> Self {
+    public func composited(with overlay: Self, at position: (x: Int, y: Int)) -> Self {
         guard !overlay.isEmpty else { return self }
 
         let resultWidth = max(width, position.x + overlay.width)
@@ -243,14 +243,14 @@ public extension FrameBuffer {
 
 // MARK: - Private Helpers
 
-private extension FrameBuffer {
+extension FrameBuffer {
 
     /// ANSI SGR reset sequence. Inlined to avoid depending on ANSIRenderer.
-    static let ansiReset = "\u{1B}[0m"
+    fileprivate static let ansiReset = "\u{1B}[0m"
     /// Recomputes the cached ``width`` from the current ``lines``.
     ///
     /// Called automatically by the `didSet` observer on ``lines``.
-    mutating func recomputeWidth() {
+    fileprivate mutating func recomputeWidth() {
         width = Self.computeWidth(lines)
     }
 
@@ -258,7 +258,7 @@ private extension FrameBuffer {
     ///
     /// - Parameter lines: The lines to measure.
     /// - Returns: The length of the longest line in visible characters.
-    static func computeWidth(_ lines: [String]) -> Int {
+    fileprivate static func computeWidth(_ lines: [String]) -> Int {
         lines.map { $0.strippedLength }.max() ?? 0
     }
 
@@ -279,7 +279,7 @@ private extension FrameBuffer {
     ///   - originalBase: The original base line before padding, used to extract
     ///     the active ANSI state. If `nil`, the state is extracted from `base`.
     /// - Returns: The composited line with base styling preserved around the overlay.
-    func insertOverlay(
+    fileprivate func insertOverlay(
         base: String,
         overlay: String,
         atColumn column: Int,

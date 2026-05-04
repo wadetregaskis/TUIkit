@@ -28,6 +28,6 @@ struct AnyViewTests {
         let buffer = renderToBuffer(anyView, context: context)
         #expect(buffer.height == 1)
         #expect(buffer.lines[0].stripped == "Test")
-        #expect(buffer.lines[0].contains("[1;")) // bold ANSI code (combined with color)
+        #expect(buffer.lines[0].contains("[1;"))  // bold ANSI code (combined with color)
     }
 }

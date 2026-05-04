@@ -5,6 +5,7 @@
 //  License: MIT
 
 import TUIkitCore
+
 /// A modifier that transforms a view's rendered output.
 ///
 /// `ViewModifier` works on the `FrameBuffer` level: it takes a rendered

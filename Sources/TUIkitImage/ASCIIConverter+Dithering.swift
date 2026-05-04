@@ -74,27 +74,39 @@ extension ASCIIConverter {
 
                 // Distribute error to neighbors
                 if x + 1 < image.width {
-                    result.addError(at: x + 1, y,
-                                    rError: rErr * 7.0 / 16.0,
-                                    gError: gErr * 7.0 / 16.0,
-                                    bError: bErr * 7.0 / 16.0)
+                    result.addError(
+                        at: x + 1,
+                        y,
+                        rError: rErr * 7.0 / 16.0,
+                        gError: gErr * 7.0 / 16.0,
+                        bError: bErr * 7.0 / 16.0
+                    )
                 }
                 if y + 1 < image.height {
                     if x > 0 {
-                        result.addError(at: x - 1, y + 1,
-                                        rError: rErr * 3.0 / 16.0,
-                                        gError: gErr * 3.0 / 16.0,
-                                        bError: bErr * 3.0 / 16.0)
+                        result.addError(
+                            at: x - 1,
+                            y + 1,
+                            rError: rErr * 3.0 / 16.0,
+                            gError: gErr * 3.0 / 16.0,
+                            bError: bErr * 3.0 / 16.0
+                        )
                     }
-                    result.addError(at: x, y + 1,
-                                    rError: rErr * 5.0 / 16.0,
-                                    gError: gErr * 5.0 / 16.0,
-                                    bError: bErr * 5.0 / 16.0)
+                    result.addError(
+                        at: x,
+                        y + 1,
+                        rError: rErr * 5.0 / 16.0,
+                        gError: gErr * 5.0 / 16.0,
+                        bError: bErr * 5.0 / 16.0
+                    )
                     if x + 1 < image.width {
-                        result.addError(at: x + 1, y + 1,
-                                        rError: rErr * 1.0 / 16.0,
-                                        gError: gErr * 1.0 / 16.0,
-                                        bError: bErr * 1.0 / 16.0)
+                        result.addError(
+                            at: x + 1,
+                            y + 1,
+                            rError: rErr * 1.0 / 16.0,
+                            gError: gErr * 1.0 / 16.0,
+                            bError: bErr * 1.0 / 16.0
+                        )
                     }
                 }
             }

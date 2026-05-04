@@ -4,6 +4,9 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+import TUIkit
+
 #if canImport(Darwin)
     import Darwin
 #elseif canImport(Glibc)
@@ -11,9 +14,6 @@
 #elseif canImport(Musl)
     import Musl
 #endif
-
-import Foundation
-import TUIkit
 
 /// Reusable app header for all Example App pages.
 ///
@@ -99,35 +99,35 @@ extension DemoAppHeader {
 // MARK: - Linux Distro Detection
 
 #if os(Linux)
-extension DemoAppHeader {
-    /// Reads a value from /etc/os-release.
-    private func osReleaseValue(for key: String) -> String? {
-        guard let contents = try? String(contentsOfFile: "/etc/os-release", encoding: .utf8) else {
+    extension DemoAppHeader {
+        /// Reads a value from /etc/os-release.
+        private func osReleaseValue(for key: String) -> String? {
+            guard let contents = try? String(contentsOfFile: "/etc/os-release", encoding: .utf8) else {
+                return nil
+            }
+            for line in contents.split(separator: "\n") where line.hasPrefix("\(key)=") {
+                let value = line.dropFirst(key.count + 1)
+                return value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            }
             return nil
         }
-        for line in contents.split(separator: "\n") where line.hasPrefix("\(key)=") {
-            let value = line.dropFirst(key.count + 1)
-            return value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+
+        private var linuxDistroName: String {
+            osReleaseValue(for: "NAME") ?? "Linux"
         }
-        return nil
-    }
 
-    private var linuxDistroName: String {
-        osReleaseValue(for: "NAME") ?? "Linux"
-    }
+        private var linuxDistroVersion: String {
+            osReleaseValue(for: "VERSION_ID") ?? kernelVersion
+        }
 
-    private var linuxDistroVersion: String {
-        osReleaseValue(for: "VERSION_ID") ?? kernelVersion
-    }
-
-    private var kernelVersion: String {
-        var uts = utsname()
-        uname(&uts)
-        return withUnsafePointer(to: &uts.release) {
-            $0.withMemoryRebound(to: CChar.self, capacity: Int(SYS_NMLN)) {
-                String(cString: $0)
+        private var kernelVersion: String {
+            var uts = utsname()
+            uname(&uts)
+            return withUnsafePointer(to: &uts.release) {
+                $0.withMemoryRebound(to: CChar.self, capacity: Int(SYS_NMLN)) {
+                    String(cString: $0)
+                }
             }
         }
     }
-}
 #endif

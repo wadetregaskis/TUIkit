@@ -4,7 +4,10 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import Testing
+
+@testable import TUIkit
 
 #if canImport(Glibc)
     import Glibc
@@ -13,10 +16,6 @@ import Testing
 #elseif canImport(Darwin)
     import Darwin
 #endif
-
-import Foundation
-
-@testable import TUIkit
 
 // MARK: - Output Capture Helper
 

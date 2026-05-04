@@ -98,7 +98,14 @@ extension FrameDiffWriter {
         reset: String
     ) {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousContentLines, terminal: terminal, startRow: startRow)
-        repaintRightEdge(changedRows: changedRows, terminal: terminal, startRow: startRow, terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        repaintRightEdge(
+            changedRows: changedRows,
+            terminal: terminal,
+            startRow: startRow,
+            terminalWidth: terminalWidth,
+            bgCode: bgCode,
+            reset: reset
+        )
         previousContentLines = newLines
     }
 
@@ -112,7 +119,14 @@ extension FrameDiffWriter {
         reset: String
     ) {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousStatusBarLines, terminal: terminal, startRow: startRow)
-        repaintRightEdge(changedRows: changedRows, terminal: terminal, startRow: startRow, terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        repaintRightEdge(
+            changedRows: changedRows,
+            terminal: terminal,
+            startRow: startRow,
+            terminalWidth: terminalWidth,
+            bgCode: bgCode,
+            reset: reset
+        )
         previousStatusBarLines = newLines
     }
 
@@ -126,7 +140,14 @@ extension FrameDiffWriter {
         reset: String
     ) {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousAppHeaderLines, terminal: terminal, startRow: startRow)
-        repaintRightEdge(changedRows: changedRows, terminal: terminal, startRow: startRow, terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        repaintRightEdge(
+            changedRows: changedRows,
+            terminal: terminal,
+            startRow: startRow,
+            terminalWidth: terminalWidth,
+            bgCode: bgCode,
+            reset: reset
+        )
         previousAppHeaderLines = newLines
     }
 
@@ -153,7 +174,7 @@ extension FrameDiffWriter {
 
 // MARK: - Private Helpers
 
-private extension FrameDiffWriter {
+extension FrameDiffWriter {
     /// Writes only the lines that differ between two frames.
     ///
     /// - Returns: The row indices that were actually written (needed by

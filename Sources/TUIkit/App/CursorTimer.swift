@@ -138,18 +138,18 @@ extension TextCursorStyle.Speed {
     /// The blink cycle duration in milliseconds (on + off).
     var blinkCycleMs: Int {
         switch self {
-        case .slow: 1000     // 500ms on, 500ms off
-        case .regular: 660   // 330ms on, 330ms off
-        case .fast: 400      // 200ms on, 200ms off
+        case .slow: 1000  // 500ms on, 500ms off
+        case .regular: 660  // 330ms on, 330ms off
+        case .fast: 400  // 200ms on, 200ms off
         }
     }
 
     /// The pulse cycle duration in milliseconds (dim → bright → dim).
     var pulseCycleMs: Int {
         switch self {
-        case .slow: 1200     // 1.2 second breathing cycle
-        case .regular: 800   // 0.8 second breathing cycle
-        case .fast: 500      // 0.5 second breathing cycle
+        case .slow: 1200  // 1.2 second breathing cycle
+        case .regular: 800  // 0.8 second breathing cycle
+        case .fast: 500  // 0.5 second breathing cycle
         }
     }
 }

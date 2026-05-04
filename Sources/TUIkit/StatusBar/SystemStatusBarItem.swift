@@ -52,7 +52,7 @@ public enum SystemStatusBarItem {
 
 // MARK: - Public API
 
-public extension SystemStatusBarItem {
+extension SystemStatusBarItem {
     /// Creates system items with custom actions.
     ///
     /// - Parameters:
@@ -60,7 +60,7 @@ public extension SystemStatusBarItem {
     ///   - onAppearance: Action for appearance cycling (optional).
     ///   - onTheme: Action for theme cycling (optional).
     /// - Returns: Array of configured system items.
-    static func items(
+    public static func items(
         onQuit: (@Sendable () -> Void)? = nil,
         onAppearance: (@Sendable () -> Void)? = nil,
         onTheme: (@Sendable () -> Void)? = nil

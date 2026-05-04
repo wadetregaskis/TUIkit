@@ -73,11 +73,11 @@ struct ContentView: View {
         switch page {
         case .menu:
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
-                 .statusBarItems {
-                     StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
-                     StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
-                     StatusBarItem(shortcut: Shortcut.range("1", "9") + ", 0", label: "jump")
-                 }
+                .statusBarItems {
+                    StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
+                    StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
+                    StatusBarItem(shortcut: Shortcut.range("1", "9") + ", 0", label: "jump")
+                }
         case .textStyles:
             TextStylesPage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))

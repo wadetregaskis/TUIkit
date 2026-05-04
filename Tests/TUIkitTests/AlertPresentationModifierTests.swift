@@ -67,10 +67,15 @@ struct AlertPresentationModifierTests {
     func alertWithActions() {
         let isPresented = Binding.constant(true)
         let view = Text("Base")
-            .alert("Warning", isPresented: isPresented, actions: {
-                Button("Yes") { }
-                Button("No") { }
-            }, message: { Text("Are you sure?") })
+            .alert(
+                "Warning",
+                isPresented: isPresented,
+                actions: {
+                    Button("Yes") {}
+                    Button("No") {}
+                },
+                message: { Text("Are you sure?") }
+            )
 
         let buffer = render(view)
         let content = buffer.lines.joined(separator: "\n").stripped
@@ -85,9 +90,13 @@ struct AlertPresentationModifierTests {
     func alertWithoutMessage() {
         let isPresented = Binding.constant(true)
         let view = Text("Base")
-            .alert("Just Title", isPresented: isPresented, actions: {
-                Button("OK") { }
-            })
+            .alert(
+                "Just Title",
+                isPresented: isPresented,
+                actions: {
+                    Button("OK") {}
+                }
+            )
 
         let buffer = render(view)
         let content = buffer.lines.joined(separator: "\n").stripped

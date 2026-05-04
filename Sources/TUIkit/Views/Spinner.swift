@@ -154,7 +154,7 @@ extension SpinnerStyle {
 
 // MARK: - Private Helpers
 
-private extension SpinnerStyle {
+extension SpinnerStyle {
     /// Calculates the trail distance from the highlight to a track position.
     ///
     /// Returns `nil` if the position is not in the trail (ahead of the highlight
@@ -165,7 +165,7 @@ private extension SpinnerStyle {
     ///   - target: The track position to check.
     ///   - movingForward: Whether the highlight is moving left→right.
     /// - Returns: The trail distance, or `nil` if not in the trail.
-    static func trailDistance(
+    fileprivate static func trailDistance(
         from highlight: Int,
         to target: Int,
         movingForward: Bool

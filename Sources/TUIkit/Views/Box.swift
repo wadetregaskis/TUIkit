@@ -168,8 +168,6 @@ struct BufferView: View, Renderable {
 
 extension Box: @preconcurrency Equatable where Content: Equatable {
     static func == (lhs: Box<Content>, rhs: Box<Content>) -> Bool {
-        lhs.content == rhs.content &&
-        lhs.borderStyle == rhs.borderStyle &&
-        lhs.borderColor == rhs.borderColor
+        lhs.content == rhs.content && lhs.borderStyle == rhs.borderStyle && lhs.borderColor == rhs.borderColor
     }
 }

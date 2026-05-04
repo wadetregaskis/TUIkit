@@ -6,7 +6,7 @@
 
 // MARK: - Public API
 
-public extension Color {
+extension Color {
     /// Converts this color to the nearest 256-color palette entry.
     ///
     /// - `.standard` and `.bright` already map to palette indices 0–15;
@@ -15,7 +15,7 @@ public extension Color {
     /// - `.rgb` is quantized to the nearest 6×6×6 cube color (16–231)
     ///   or grayscale ramp entry (232–255), whichever is closer.
     /// - `.semantic` must be resolved before calling this method.
-    func downsampledToPalette256() -> Color {
+    public func downsampledToPalette256() -> Color {
         switch value {
         case .standard, .bright, .palette256:
             return self
@@ -35,7 +35,7 @@ public extension Color {
     /// - `.rgb` is matched to the closest of the 16 standard/bright
     ///   ANSI colors using Euclidean distance in RGB space.
     /// - `.semantic` must be resolved before calling this method.
-    func downsampledToANSI16() -> Color {
+    public func downsampledToANSI16() -> Color {
         switch value {
         case .standard, .bright:
             return self
@@ -51,15 +51,15 @@ public extension Color {
 
 // MARK: - Private Helpers
 
-private extension Color {
+extension Color {
     /// The 6 channel levels used by the 256-color RGB cube (indices 16–231).
-    static let cubeChannelLevels: [UInt8] = [0, 95, 135, 175, 215, 255]
+    fileprivate static let cubeChannelLevels: [UInt8] = [0, 95, 135, 175, 215, 255]
 
     /// Finds the nearest 256-color palette index for an RGB color.
     ///
     /// Compares the RGB value against both the 6×6×6 cube (16–231)
     /// and the grayscale ramp (232–255), returning whichever is closer.
-    static func nearestPalette256Index(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
+    fileprivate static func nearestPalette256Index(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
         let cubeIndex = nearestCubeIndex(red: red, green: green, blue: blue)
         let cubeRGB = palette256ToRGB(cubeIndex)
         let cubeDistance = rgbDistanceSquared(
@@ -78,15 +78,17 @@ private extension Color {
     }
 
     /// Finds the nearest 6×6×6 cube index (16–231) for an RGB color.
-    static func nearestCubeIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
-        UInt8(16
-              + 36 * nearestCubeChannelLevel(red)
-              + 6 * nearestCubeChannelLevel(green)
-              + nearestCubeChannelLevel(blue))
+    fileprivate static func nearestCubeIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
+        UInt8(
+            16
+                + 36 * nearestCubeChannelLevel(red)
+                + 6 * nearestCubeChannelLevel(green)
+                + nearestCubeChannelLevel(blue)
+        )
     }
 
     /// Finds the nearest channel level index (0–5) for a single component.
-    static func nearestCubeChannelLevel(_ value: UInt8) -> Int {
+    fileprivate static func nearestCubeChannelLevel(_ value: UInt8) -> Int {
         var bestIndex = 0
         var bestDistance = Int.max
 
@@ -104,7 +106,7 @@ private extension Color {
     /// Finds the nearest grayscale ramp index (232–255) for an RGB color.
     ///
     /// The grayscale ramp covers values 8, 18, 28, …, 238.
-    static func nearestGrayscaleIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
+    fileprivate static func nearestGrayscaleIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
         let gray = (Int(red) + Int(green) + Int(blue)) / 3
         // Grayscale ramp: index N → gray level 8 + (N - 232) * 10
         // Inverse: N = 232 + (gray - 8) / 10, clamped to 232–255
@@ -114,8 +116,10 @@ private extension Color {
 
     /// Squared Euclidean distance between two RGB colors.
 
-    static func rgbDistanceSquared(_ colourA: (UInt8, UInt8, UInt8),
-                                   _ colourB: (UInt8, UInt8, UInt8)) -> Int {
+    fileprivate static func rgbDistanceSquared(
+        _ colourA: (UInt8, UInt8, UInt8),
+        _ colourB: (UInt8, UInt8, UInt8)
+    ) -> Int {
         let deltaRed = Int(colourA.0) - Int(colourB.0)
         let deltaGreen = Int(colourA.1) - Int(colourB.1)
         let deltaBlue = Int(colourA.2) - Int(colourB.2)
@@ -124,7 +128,7 @@ private extension Color {
     }
 
     /// Converts a 256-color palette index to the nearest ANSI 16-color.
-    static func palette256ToANSI16(_ index: UInt8) -> Color {
+    fileprivate static func palette256ToANSI16(_ index: UInt8) -> Color {
         switch index {
         case 0...7:
             guard let ansi = ANSIColor(rawValue: index) else { return .white }
@@ -139,7 +143,7 @@ private extension Color {
     }
 
     /// All 16 ANSI colors with their RGB values for nearest-neighbor matching.
-    static let ansi16Table: [(color: Color, red: UInt8, green: UInt8, blue: UInt8)] = {
+    fileprivate static let ansi16Table: [(color: Color, red: UInt8, green: UInt8, blue: UInt8)] = {
         var table: [(Color, UInt8, UInt8, UInt8)] = []
 
         // Standard colors (indices 0–7)
@@ -160,7 +164,7 @@ private extension Color {
     }()
 
     /// Finds the nearest ANSI 16-color for an RGB value.
-    static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {
+    fileprivate static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {
         var bestColor = Color.white
         var bestDistance = Int.max
 

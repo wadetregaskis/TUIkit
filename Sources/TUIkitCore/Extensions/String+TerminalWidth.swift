@@ -18,17 +18,17 @@ extension Character {
         let scalarValue = first.value
 
         // Zero-width characters
-        if scalarValue == 0x200B || scalarValue == 0x200C || scalarValue == 0x200D || scalarValue == 0xFEFF { return 0 } // ZW space/NJ/J/BOM
-        if scalarValue == 0x00AD { return 0 } // soft hyphen
-        if (0xFE00...0xFE0F).contains(scalarValue) { return 0 } // variation selectors
-        if (0xE0100...0xE01EF).contains(scalarValue) { return 0 } // variation selectors supplement
-        if (0x0300...0x036F).contains(scalarValue) { return 0 } // combining diacritical marks
-        if (0x1AB0...0x1AFF).contains(scalarValue) { return 0 } // combining diacritical marks extended
-        if (0x1DC0...0x1DFF).contains(scalarValue) { return 0 } // combining diacritical marks supplement
-        if (0x20D0...0x20FF).contains(scalarValue) { return 0 } // combining marks for symbols
-        if (0xFE20...0xFE2F).contains(scalarValue) { return 0 } // combining half marks
-        if (0xE0000...0xE007F).contains(scalarValue) { return 0 } // tags block
-        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 0 } // emoji skin-tone modifiers (Fitzpatrick types 1–6, always combine with preceding emoji)
+        if scalarValue == 0x200B || scalarValue == 0x200C || scalarValue == 0x200D || scalarValue == 0xFEFF { return 0 }  // ZW space/NJ/J/BOM
+        if scalarValue == 0x00AD { return 0 }  // soft hyphen
+        if (0xFE00...0xFE0F).contains(scalarValue) { return 0 }  // variation selectors
+        if (0xE0100...0xE01EF).contains(scalarValue) { return 0 }  // variation selectors supplement
+        if (0x0300...0x036F).contains(scalarValue) { return 0 }  // combining diacritical marks
+        if (0x1AB0...0x1AFF).contains(scalarValue) { return 0 }  // combining diacritical marks extended
+        if (0x1DC0...0x1DFF).contains(scalarValue) { return 0 }  // combining diacritical marks supplement
+        if (0x20D0...0x20FF).contains(scalarValue) { return 0 }  // combining marks for symbols
+        if (0xFE20...0xFE2F).contains(scalarValue) { return 0 }  // combining half marks
+        if (0xE0000...0xE007F).contains(scalarValue) { return 0 }  // tags block
+        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 0 }  // emoji skin-tone modifiers (Fitzpatrick types 1–6, always combine with preceding emoji)
 
         // Multi-scalar grapheme clusters (emoji sequences with ZWJ, skin tones,
         // flag sequences, keycap sequences) are typically 2 cells wide.
@@ -49,24 +49,24 @@ extension Character {
         }
 
         // East Asian Wide and Fullwidth characters (2 cells)
-        if (0x1100...0x115F).contains(scalarValue) { return 2 } // Hangul Jamo
-        if (0x2329...0x232A).contains(scalarValue) { return 2 } // angle brackets
-        if (0x2E80...0x303E).contains(scalarValue) { return 2 } // CJK radicals, Kangxi, ideographic
-        if (0x3041...0x33BF).contains(scalarValue) { return 2 } // Hiragana, Katakana, Bopomofo, Hangul compat, Kanbun, CJK
-        if (0x33D0...0x33FF).contains(scalarValue) { return 2 } // CJK compatibility
-        if (0x3400...0x4DBF).contains(scalarValue) { return 2 } // CJK unified ext A
-        if (0x4E00...0x9FFF).contains(scalarValue) { return 2 } // CJK unified
-        if (0xA000...0xA4CF).contains(scalarValue) { return 2 } // Yi
-        if (0xA960...0xA97F).contains(scalarValue) { return 2 } // Hangul Jamo extended A
-        if (0xAC00...0xD7AF).contains(scalarValue) { return 2 } // Hangul syllables
-        if (0xF900...0xFAFF).contains(scalarValue) { return 2 } // CJK compatibility ideographs
-        if (0xFE10...0xFE19).contains(scalarValue) { return 2 } // vertical forms
-        if (0xFE30...0xFE6F).contains(scalarValue) { return 2 } // CJK compatibility forms, small forms
-        if (0xFF01...0xFF60).contains(scalarValue) { return 2 } // fullwidth forms
-        if (0xFFE0...0xFFE6).contains(scalarValue) { return 2 } // fullwidth signs
-        if (0x1F000...0x1FBFF).contains(scalarValue) { return 2 } // emoji and symbols (Mahjong, Dominos, Playing Cards, Emoji, etc.)
-        if (0x20000...0x2FA1F).contains(scalarValue) { return 2 } // CJK unified extensions B-F, compatibility supplement
-        if (0x30000...0x3134F).contains(scalarValue) { return 2 } // CJK unified extension G
+        if (0x1100...0x115F).contains(scalarValue) { return 2 }  // Hangul Jamo
+        if (0x2329...0x232A).contains(scalarValue) { return 2 }  // angle brackets
+        if (0x2E80...0x303E).contains(scalarValue) { return 2 }  // CJK radicals, Kangxi, ideographic
+        if (0x3041...0x33BF).contains(scalarValue) { return 2 }  // Hiragana, Katakana, Bopomofo, Hangul compat, Kanbun, CJK
+        if (0x33D0...0x33FF).contains(scalarValue) { return 2 }  // CJK compatibility
+        if (0x3400...0x4DBF).contains(scalarValue) { return 2 }  // CJK unified ext A
+        if (0x4E00...0x9FFF).contains(scalarValue) { return 2 }  // CJK unified
+        if (0xA000...0xA4CF).contains(scalarValue) { return 2 }  // Yi
+        if (0xA960...0xA97F).contains(scalarValue) { return 2 }  // Hangul Jamo extended A
+        if (0xAC00...0xD7AF).contains(scalarValue) { return 2 }  // Hangul syllables
+        if (0xF900...0xFAFF).contains(scalarValue) { return 2 }  // CJK compatibility ideographs
+        if (0xFE10...0xFE19).contains(scalarValue) { return 2 }  // vertical forms
+        if (0xFE30...0xFE6F).contains(scalarValue) { return 2 }  // CJK compatibility forms, small forms
+        if (0xFF01...0xFF60).contains(scalarValue) { return 2 }  // fullwidth forms
+        if (0xFFE0...0xFFE6).contains(scalarValue) { return 2 }  // fullwidth signs
+        if (0x1F000...0x1FBFF).contains(scalarValue) { return 2 }  // emoji and symbols (Mahjong, Dominos, Playing Cards, Emoji, etc.)
+        if (0x20000...0x2FA1F).contains(scalarValue) { return 2 }  // CJK unified extensions B-F, compatibility supplement
+        if (0x30000...0x3134F).contains(scalarValue) { return 2 }  // CJK unified extension G
 
         return 1
     }

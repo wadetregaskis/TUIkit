@@ -45,9 +45,9 @@ public class FocusState {
 
 // MARK: - Public API
 
-public extension FocusState {
+extension FocusState {
     /// Requests focus for this element.
-    func requestFocus() {
+    public func requestFocus() {
         focusManager.focus(id: id)
     }
 }

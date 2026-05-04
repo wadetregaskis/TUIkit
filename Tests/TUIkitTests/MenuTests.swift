@@ -26,7 +26,7 @@ struct MenuTerminalWidthTests {
         let menu = Menu(
             items: [
                 MenuItem(label: "文件"),  // 4 terminal cells
-                MenuItem(label: "AB"),    // 2 terminal cells
+                MenuItem(label: "AB"),  // 2 terminal cells
             ],
             selectedIndex: 0
         )
@@ -37,8 +37,10 @@ struct MenuTerminalWidthTests {
         let contentLines = buffer.lines.dropFirst().dropLast()
         let lineWidths = contentLines.map { $0.strippedLength }
         let uniqueWidths = Set(lineWidths)
-        #expect(uniqueWidths.count == 1,
-                "All menu content lines should have the same visible width, got widths: \(lineWidths)")
+        #expect(
+            uniqueWidths.count == 1,
+            "All menu content lines should have the same visible width, got widths: \(lineWidths)"
+        )
     }
 
     @Test("MenuItem label terminal width differs from count for CJK")

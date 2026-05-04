@@ -6,6 +6,7 @@
 
 import Foundation
 import Testing
+
 @testable import TUIkit
 
 // MARK: - Test Helpers
@@ -64,7 +65,7 @@ struct NavigationSplitViewVisibilityTests {
         var set: Set<NavigationSplitViewVisibility> = []
         set.insert(.all)
         set.insert(.detailOnly)
-        set.insert(.all) // Duplicate
+        set.insert(.all)  // Duplicate
         #expect(set.count == 2)
     }
 
@@ -115,7 +116,7 @@ struct NavigationSplitViewColumnTests {
         set.insert(.sidebar)
         set.insert(.content)
         set.insert(.detail)
-        set.insert(.sidebar) // Duplicate
+        set.insert(.sidebar)  // Duplicate
         #expect(set.count == 3)
     }
 }

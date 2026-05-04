@@ -76,10 +76,13 @@ struct ButtonsPage: View {
                 }
             }
 
-            KeyboardHelpSection("Focus Navigation", shortcuts: [
-                "Use [Tab] to move focus between buttons",
-                "Use [Enter] or [Space] to press the focused button",
-            ])
+            KeyboardHelpSection(
+                "Focus Navigation",
+                shortcuts: [
+                    "Use [Tab] to move focus between buttons",
+                    "Use [Enter] or [Space] to press the focused button",
+                ]
+            )
 
             Spacer()
         }

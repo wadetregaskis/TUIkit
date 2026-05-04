@@ -150,7 +150,7 @@ extension ASCIIConverter {
 
         for y in 0..<height {
             var line = ""
-            line.reserveCapacity(width * 20) // Reserve for ANSI codes
+            line.reserveCapacity(width * 20)  // Reserve for ANSI codes
             var lastColor = ""
 
             for x in 0..<width {
@@ -222,10 +222,11 @@ extension ASCIIConverter {
         contentMode: ContentMode = .fit,
         overrideAspectRatio: Double? = nil
     ) -> (width: Int, height: Int) {
-        let terminalAspect = 2.0 // Terminal chars are ~2x taller than wide
+        let terminalAspect = 2.0  // Terminal chars are ~2x taller than wide
 
         // Use override ratio or compute from source dimensions.
-        let sourceRatio = overrideAspectRatio
+        let sourceRatio =
+            overrideAspectRatio
             ?? (Double(imageWidth) / Double(imageHeight))
 
         // correctedRatio accounts for terminal character aspect (tall cells).

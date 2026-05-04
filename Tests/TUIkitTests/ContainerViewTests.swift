@@ -59,8 +59,10 @@ struct ContainerViewCJKTitleTests {
         // All lines in the rendered panel should have the same visual width
         let lineWidths = buffer.lines.map(\.strippedLength)
         let uniqueWidths = Set(lineWidths)
-        #expect(uniqueWidths.count == 1,
-                "All panel lines should have uniform width, got widths: \(lineWidths)")
+        #expect(
+            uniqueWidths.count == 1,
+            "All panel lines should have uniform width, got widths: \(lineWidths)"
+        )
     }
 
     @Test("Panel border is wide enough for CJK title")
@@ -75,8 +77,10 @@ struct ContainerViewCJKTitleTests {
         let buffer = renderToBuffer(panel, context: context)
 
         let topLine = buffer.lines.first!
-        #expect(topLine.stripped.contains("你好世界"),
-                "Top border should contain the CJK title")
+        #expect(
+            topLine.stripped.contains("你好世界"),
+            "Top border should contain the CJK title"
+        )
     }
 }
 
@@ -125,7 +129,7 @@ struct MenuTests {
         )
         let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
         let buffer = renderToBuffer(menu, context: context)
-        #expect(buffer.height >= 3) // border + items + border
+        #expect(buffer.height >= 3)  // border + items + border
         let allContent = buffer.lines.joined()
         // Title should be present
         #expect(allContent.contains("My Menu"))

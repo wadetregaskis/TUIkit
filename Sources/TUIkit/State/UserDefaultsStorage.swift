@@ -29,8 +29,8 @@ import Foundation
 
     // MARK: - Public API
 
-    public extension UserDefaultsStorage {
-        func value<T: Codable>(forKey key: String) -> T? {
+    extension UserDefaultsStorage {
+        public func value<T: Codable>(forKey key: String) -> T? {
             guard let data = defaults.data(forKey: key) else { return nil }
 
             do {
@@ -40,7 +40,7 @@ import Foundation
             }
         }
 
-        func setValue<T: Codable>(_ value: T, forKey key: String) {
+        public func setValue<T: Codable>(_ value: T, forKey key: String) {
             do {
                 let data = try JSONEncoder().encode(value)
                 defaults.set(data, forKey: key)
@@ -49,11 +49,11 @@ import Foundation
             }
         }
 
-        func removeValue(forKey key: String) {
+        public func removeValue(forKey key: String) {
             defaults.removeObject(forKey: key)
         }
 
-        func synchronize() {
+        public func synchronize() {
             defaults.synchronize()
         }
     }
@@ -89,62 +89,62 @@ import Foundation
 
     // MARK: - Public API
 
-    public extension UserDefaultsStorage {
-        func value<T: Codable>(forKey key: String) -> T? {
+    extension UserDefaultsStorage {
+        public func value<T: Codable>(forKey key: String) -> T? {
             storage.value(forKey: key)
         }
 
-        func setValue<T: Codable>(_ value: T, forKey key: String) {
+        public func setValue<T: Codable>(_ value: T, forKey key: String) {
             storage.setValue(value, forKey: key)
         }
 
-        func removeValue(forKey key: String) {
+        public func removeValue(forKey key: String) {
             storage.removeValue(forKey: key)
         }
 
-        func synchronize() {
+        public func synchronize() {
             storage.synchronize()
         }
 
         // MARK: - UserDefaults-compatible convenience methods
 
         /// Returns the string value for the given key.
-        func string(forKey key: String) -> String? {
+        public func string(forKey key: String) -> String? {
             value(forKey: key)
         }
 
         /// Returns the integer value for the given key.
-        func integer(forKey key: String) -> Int {
+        public func integer(forKey key: String) -> Int {
             value(forKey: key) ?? 0
         }
 
         /// Returns the double value for the given key.
-        func double(forKey key: String) -> Double {
+        public func double(forKey key: String) -> Double {
             value(forKey: key) ?? 0.0
         }
 
         /// Returns the boolean value for the given key.
-        func bool(forKey key: String) -> Bool {
+        public func bool(forKey key: String) -> Bool {
             value(forKey: key) ?? false
         }
 
         /// Returns the data value for the given key.
-        func data(forKey key: String) -> Data? {
+        public func data(forKey key: String) -> Data? {
             value(forKey: key)
         }
 
         /// Returns the array value for the given key.
-        func array<T: Codable>(forKey key: String) -> [T]? {
+        public func array<T: Codable>(forKey key: String) -> [T]? {
             value(forKey: key)
         }
 
         /// Returns the dictionary value for the given key.
-        func dictionary<K: Codable & Hashable, V: Codable>(forKey key: String) -> [K: V]? {
+        public func dictionary<K: Codable & Hashable, V: Codable>(forKey key: String) -> [K: V]? {
             value(forKey: key)
         }
 
         /// Sets a string value for the given key.
-        func set(_ value: String?, forKey key: String) {
+        public func set(_ value: String?, forKey key: String) {
             if let value {
                 setValue(value, forKey: key)
             } else {
@@ -153,22 +153,22 @@ import Foundation
         }
 
         /// Sets an integer value for the given key.
-        func set(_ value: Int, forKey key: String) {
+        public func set(_ value: Int, forKey key: String) {
             setValue(value, forKey: key)
         }
 
         /// Sets a double value for the given key.
-        func set(_ value: Double, forKey key: String) {
+        public func set(_ value: Double, forKey key: String) {
             setValue(value, forKey: key)
         }
 
         /// Sets a boolean value for the given key.
-        func set(_ value: Bool, forKey key: String) {
+        public func set(_ value: Bool, forKey key: String) {
             setValue(value, forKey: key)
         }
 
         /// Sets a data value for the given key.
-        func set(_ value: Data?, forKey key: String) {
+        public func set(_ value: Data?, forKey key: String) {
             if let value {
                 setValue(value, forKey: key)
             } else {
@@ -179,8 +179,8 @@ import Foundation
 
     // MARK: - Private Helpers
 
-    private extension UserDefaultsStorage {
-        static func createStorage(suiteName: String?) -> JSONFileStorage {
+    extension UserDefaultsStorage {
+        fileprivate static func createStorage(suiteName: String?) -> JSONFileStorage {
             let appName = sanitizedProcessName(ProcessInfo.processInfo.processName)
 
             // Use XDG Base Directory: ~/.local/share/[appName]/

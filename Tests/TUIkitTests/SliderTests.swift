@@ -166,10 +166,14 @@ struct SliderTests {
         let buffer = renderToBuffer(view, context: context)
 
         // Should show 100%, not 150%
-        #expect(buffer.lines[0].contains("100%"),
-                "Slider should clamp to 100% when value exceeds upper bound")
-        #expect(!buffer.lines[0].contains("150%"),
-                "Slider should not show 150%")
+        #expect(
+            buffer.lines[0].contains("100%"),
+            "Slider should clamp to 100% when value exceeds upper bound"
+        )
+        #expect(
+            !buffer.lines[0].contains("150%"),
+            "Slider should not show 150%"
+        )
     }
 
     @Test("Slider clamps percentage when value is below lower bound")
@@ -180,8 +184,10 @@ struct SliderTests {
         let buffer = renderToBuffer(view, context: context)
 
         // Should show 0%, not -50%
-        #expect(buffer.lines[0].contains("0%"),
-                "Slider should clamp to 0% when value is below lower bound")
+        #expect(
+            buffer.lines[0].contains("0%"),
+            "Slider should clamp to 0% when value is below lower bound"
+        )
     }
 }
 

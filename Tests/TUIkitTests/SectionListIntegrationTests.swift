@@ -40,14 +40,16 @@ struct SectionListIntegrationTests {
         }
         let items = [
             Item(id: "1", name: "Item One"),
-            Item(id: "2", name: "Item Two")
+            Item(id: "2", name: "Item Two"),
         ]
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Section("Recent") {
                 ForEach(items) { item in
                     Text(item.name)
@@ -73,10 +75,12 @@ struct SectionListIntegrationTests {
         let items = [Item(id: "1")]
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Section("Header") {
                 ForEach(items) { item in
                     Text("Content \(item.id)")
@@ -105,10 +109,12 @@ struct SectionListIntegrationTests {
         let items = [Item(id: "1")]
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Section {
                 ForEach(items) { item in
                     Text("Content \(item.id)")
@@ -134,10 +140,12 @@ struct SectionListIntegrationTests {
         let items = [Item(id: "1")]
 
         var selection: String?
-        let list = List(selection: Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )) {
+        let list = List(
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
             Section {
                 ForEach(items) { _ in
                     Text("Content")
@@ -199,7 +207,7 @@ struct SectionListRowExtractorTests {
         }
         let items = [
             Item(id: "1", name: "First"),
-            Item(id: "2", name: "Second")
+            Item(id: "2", name: "Second"),
         ]
 
         let section = Section("Header") {

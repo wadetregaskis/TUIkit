@@ -51,32 +51,48 @@ enum TrackRenderer {
         switch style {
         case .block:
             return renderSimpleStyle(
-                fraction: fraction, width: width,
-                filledChar: "█", emptyChar: "░",
-                filledColor: filledColor, emptyColor: emptyColor
+                fraction: fraction,
+                width: width,
+                filledChar: "█",
+                emptyChar: "░",
+                filledColor: filledColor,
+                emptyColor: emptyColor
             )
         case .blockFine:
             return renderBlockFineStyle(
-                fraction: fraction, width: width,
-                filledColor: filledColor, emptyColor: emptyColor
+                fraction: fraction,
+                width: width,
+                filledColor: filledColor,
+                emptyColor: emptyColor
             )
         case .shade:
             return renderSimpleStyle(
-                fraction: fraction, width: width,
-                filledChar: "▓", emptyChar: "░",
-                filledColor: filledColor, emptyColor: emptyColor
+                fraction: fraction,
+                width: width,
+                filledChar: "▓",
+                emptyChar: "░",
+                filledColor: filledColor,
+                emptyColor: emptyColor
             )
         case .bar:
             return renderSimpleStyle(
-                fraction: fraction, width: width,
-                filledChar: "▌", emptyChar: "─",
-                filledColor: filledColor, emptyColor: emptyColor
+                fraction: fraction,
+                width: width,
+                filledChar: "▌",
+                emptyChar: "─",
+                filledColor: filledColor,
+                emptyColor: emptyColor
             )
         case .dot:
             return renderHeadStyle(
-                fraction: fraction, width: width,
-                filledChar: "▬", headChar: "●", emptyChar: "─",
-                filledColor: filledColor, headColor: accentColor, emptyColor: emptyColor
+                fraction: fraction,
+                width: width,
+                filledChar: "▬",
+                headChar: "●",
+                emptyChar: "─",
+                filledColor: filledColor,
+                headColor: accentColor,
+                emptyColor: emptyColor
             )
         }
     }

@@ -127,14 +127,14 @@ extension NotificationHostModifier: Renderable {
 
 // MARK: - Private Helpers
 
-private extension NotificationHostModifier {
+extension NotificationHostModifier {
     /// Calculates the screen offset for the notification stack (always top-right).
     ///
     /// - Parameters:
     ///   - stackSize: The width and height of the stacked notification buffer.
     ///   - screenSize: The available terminal width and height.
     /// - Returns: The (x, y) position to place the stack.
-    func notificationOffset(
+    fileprivate func notificationOffset(
         stackSize: (width: Int, height: Int),
         screenSize: (width: Int, height: Int)
     ) -> (x: Int, y: Int) {
@@ -147,7 +147,7 @@ private extension NotificationHostModifier {
     ///
     /// Uses a single shared token so only one animation task runs at a time.
     /// The task stops automatically when no notifications are active.
-    func startAnimationTask(
+    fileprivate func startAnimationTask(
         entries: [NotificationEntry],
         lifecycle: LifecycleManager
     ) {
@@ -158,7 +158,8 @@ private extension NotificationHostModifier {
 
         // Calculate the latest expiration time across all entries.
         let totalOverhead = NotificationTiming.fadeInDuration + NotificationTiming.fadeOutDuration
-        let latestExpiry = entries.map { $0.postedAt + $0.duration + totalOverhead }
+        let latestExpiry =
+            entries.map { $0.postedAt + $0.duration + totalOverhead }
             .max() ?? 0
 
         lifecycle.startTask(token: token, priority: .medium) { [lifecycle] in

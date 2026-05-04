@@ -42,7 +42,7 @@ public final class AppState: Sendable {
 
 // MARK: - Public API
 
-public extension AppState {
+extension AppState {
     /// Marks state as changed and notifies observers.
     ///
     /// This method is thread-safe and can be called from any thread.
@@ -51,7 +51,7 @@ public extension AppState {
     /// **not** need to manually clear the render cache. `RenderLoop`
     /// automatically detects environment changes via `EnvironmentSnapshot`
     /// comparison and clears the cache when needed.
-    func setNeedsRender() {
+    public func setNeedsRender() {
         let observers = lock.withLock { state -> [@Sendable () -> Void] in
             state.needsRender = true
             return state.observers
@@ -70,7 +70,7 @@ public extension AppState {
     /// `EquatableView` subtrees re-render with the new model data.
     ///
     /// Thread-safe: can be called from any thread.
-    func setNeedsRenderWithCacheClear() {
+    public func setNeedsRenderWithCacheClear() {
         let observers = lock.withLock { state -> [@Sendable () -> Void] in
             state.needsRender = true
             state.needsCacheClear = true

@@ -383,8 +383,10 @@ struct RenderingTests {
                 .bold()
                 .padding(.bottom)
 
-            Text("You just created your first TUIkit app. This is a SwiftUI-like framework for building terminal user interfaces in pure Swift.")
-                .frame(width: 40)
+            Text(
+                "You just created your first TUIkit app. This is a SwiftUI-like framework for building terminal user interfaces in pure Swift."
+            )
+            .frame(width: 40)
 
             Spacer()
         }
@@ -442,8 +444,10 @@ struct RenderingTests {
 
         // "End" should be near the right edge
         let stripped = contentLine.stripped
-        #expect(stripped.hasSuffix("End│") || stripped.hasSuffix("End ") || stripped.contains("End"),
-                "End should be at right side: '\(stripped)'")
+        #expect(
+            stripped.hasSuffix("End│") || stripped.hasSuffix("End ") || stripped.contains("End"),
+            "End should be at right side: '\(stripped)'"
+        )
     }
 
     @Test("HStack with Spacer inside VStack with border respects width")

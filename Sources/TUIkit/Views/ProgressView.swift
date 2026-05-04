@@ -114,7 +114,8 @@ extension ProgressView where CurrentValueLabel == EmptyView {
     ///   - total: The total amount (default: 1.0).
     ///   - label: A view that describes the task in progress.
     public init<V: BinaryFloatingPoint>(
-        value: V?, total: V = 1.0,
+        value: V?,
+        total: V = 1.0,
         @ViewBuilder label: () -> Label
     ) {
         self.fractionCompleted = ProgressView.normalizedFraction(value: value, total: total)
@@ -133,7 +134,8 @@ extension ProgressView {
     ///   - label: A view that describes the task in progress.
     ///   - currentValueLabel: A view showing the current progress value.
     public init<V: BinaryFloatingPoint>(
-        value: V?, total: V = 1.0,
+        value: V?,
+        total: V = 1.0,
         @ViewBuilder label: () -> Label,
         @ViewBuilder currentValueLabel: () -> CurrentValueLabel
     ) {
@@ -154,7 +156,9 @@ extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
     ///   - value: The completed amount (nil for indeterminate).
     ///   - total: The total amount (default: 1.0).
     public init<S: StringProtocol, V: BinaryFloatingPoint>(
-        _ title: S, value: V?, total: V = 1.0
+        _ title: S,
+        value: V?,
+        total: V = 1.0
     ) {
         self.fractionCompleted = ProgressView.normalizedFraction(value: value, total: total)
         self.style = .block
@@ -196,10 +200,8 @@ extension ProgressView {
 
 extension ProgressView: @preconcurrency Equatable where Label: Equatable, CurrentValueLabel: Equatable {
     public static func == (lhs: ProgressView<Label, CurrentValueLabel>, rhs: ProgressView<Label, CurrentValueLabel>) -> Bool {
-        lhs.fractionCompleted == rhs.fractionCompleted &&
-        lhs.style == rhs.style &&
-        lhs.label == rhs.label &&
-        lhs.currentValueLabel == rhs.currentValueLabel
+        lhs.fractionCompleted == rhs.fractionCompleted && lhs.style == rhs.style && lhs.label == rhs.label
+            && lhs.currentValueLabel == rhs.currentValueLabel
     }
 }
 

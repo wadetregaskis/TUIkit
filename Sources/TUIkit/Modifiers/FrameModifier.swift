@@ -58,14 +58,9 @@ public struct FlexibleFrameView<Content: View>: View {
 
 extension FlexibleFrameView: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: FlexibleFrameView<Content>, rhs: FlexibleFrameView<Content>) -> Bool {
-        lhs.content == rhs.content &&
-        lhs.minWidth == rhs.minWidth &&
-        lhs.idealWidth == rhs.idealWidth &&
-        lhs.maxWidth == rhs.maxWidth &&
-        lhs.minHeight == rhs.minHeight &&
-        lhs.idealHeight == rhs.idealHeight &&
-        lhs.maxHeight == rhs.maxHeight &&
-        lhs.alignment == rhs.alignment
+        lhs.content == rhs.content && lhs.minWidth == rhs.minWidth && lhs.idealWidth == rhs.idealWidth && lhs.maxWidth == rhs.maxWidth
+            && lhs.minHeight == rhs.minHeight && lhs.idealHeight == rhs.idealHeight && lhs.maxHeight == rhs.maxHeight
+            && lhs.alignment == rhs.alignment
     }
 }
 

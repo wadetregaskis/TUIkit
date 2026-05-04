@@ -70,9 +70,17 @@ struct RenderBottleneckTests {
         }
 
         // Depth 10
-        let depth10 = VStack { VStack { VStack { VStack { VStack {
-            VStack { VStack { VStack { VStack { VStack { Text("A") } } } } }
-        } } } } }
+        let depth10 = VStack {
+            VStack {
+                VStack {
+                    VStack {
+                        VStack {
+                            VStack { VStack { VStack { VStack { VStack { Text("A") } } } } }
+                        }
+                    }
+                }
+            }
+        }
         let time10 = measure("Depth 10", iterations: iterations) {
             _ = renderToBuffer(depth10, context: context)
         }
@@ -109,7 +117,11 @@ struct RenderBottleneckTests {
 
         // 5 children
         let children5 = VStack {
-            Text("A"); Text("B"); Text("C"); Text("D"); Text("E")
+            Text("A")
+            Text("B")
+            Text("C")
+            Text("D")
+            Text("E")
         }
         _ = measure("5 children", iterations: iterations) {
             _ = renderToBuffer(children5, context: context)
@@ -117,8 +129,16 @@ struct RenderBottleneckTests {
 
         // 10 children
         let children10 = VStack {
-            Text("A"); Text("B"); Text("C"); Text("D"); Text("E")
-            Text("F"); Text("G"); Text("H"); Text("I"); Text("J")
+            Text("A")
+            Text("B")
+            Text("C")
+            Text("D")
+            Text("E")
+            Text("F")
+            Text("G")
+            Text("H")
+            Text("I")
+            Text("J")
         }
         let time10 = measure("10 children", iterations: iterations) {
             _ = renderToBuffer(children10, context: context)
@@ -268,7 +288,7 @@ struct RenderBottleneckTests {
             items: [
                 MenuItem(label: "A"),
                 MenuItem(label: "B"),
-                MenuItem(label: "C")
+                MenuItem(label: "C"),
             ]
         )
         _ = measure("Menu (3 items)", iterations: iterations) {

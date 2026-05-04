@@ -182,7 +182,7 @@ public struct Color: Sendable, Equatable {
 
 // MARK: - Public API
 
-public extension Color {
+extension Color {
     /// Resolves this color against a palette.
     ///
     /// Non-semantic colors are returned unchanged. Semantic colors
@@ -190,7 +190,7 @@ public extension Color {
     ///
     /// - Parameter palette: The palette to resolve against.
     /// - Returns: A concrete (non-semantic) color.
-    func resolve(with palette: any Palette) -> Color {
+    public func resolve(with palette: any Palette) -> Color {
         guard case .semantic(let token) = value else { return self }
         return token.resolve(with: palette)
     }
@@ -199,7 +199,7 @@ public extension Color {
     ///
     /// - Parameter index: The palette index (0-255).
     /// - Returns: The corresponding color.
-    static func palette(_ index: UInt8) -> Self {
+    public static func palette(_ index: UInt8) -> Self {
         Self(value: .palette256(index))
     }
 
@@ -210,7 +210,7 @@ public extension Color {
     ///   - green: The green component (0-255).
     ///   - blue: The blue component (0-255).
     /// - Returns: The RGB color.
-    static func rgb(_ red: UInt8, _ green: UInt8, _ blue: UInt8) -> Self {
+    public static func rgb(_ red: UInt8, _ green: UInt8, _ blue: UInt8) -> Self {
         Self(value: .rgb(red: red, green: green, blue: blue))
     }
 
@@ -218,7 +218,7 @@ public extension Color {
     ///
     /// - Parameter hex: The hex value (e.g., 0xFF5500).
     /// - Returns: The corresponding RGB color.
-    static func hex(_ hex: UInt32) -> Self {
+    public static func hex(_ hex: UInt32) -> Self {
         let red = UInt8((hex >> 16) & 0xFF)
         let green = UInt8((hex >> 8) & 0xFF)
         let blue = UInt8(hex & 0xFF)
@@ -231,7 +231,7 @@ public extension Color {
     ///
     /// - Parameter hex: The hex string (e.g., "#FF5500", "F50", "#abc").
     /// - Returns: The corresponding RGB color, or nil if invalid.
-    static func hex(_ hex: String) -> Self? {
+    public static func hex(_ hex: String) -> Self? {
         var hexString = hex.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Remove # prefix if present
@@ -261,7 +261,7 @@ public extension Color {
     ///   - saturation: The saturation component (0-100).
     ///   - lightness: The lightness component (0-100).
     /// - Returns: The corresponding RGB color.
-    static func hsl(_ hue: Double, _ saturation: Double, _ lightness: Double) -> Self {
+    public static func hsl(_ hue: Double, _ saturation: Double, _ lightness: Double) -> Self {
         let normalizedHue = hue / 360.0
         let normalizedSaturation = saturation / 100.0
         let normalizedLightness = lightness / 100.0
@@ -303,7 +303,7 @@ public extension Color {
     ///
     /// - Parameter percentage: The fraction to lighten (0–1, default 0.2 = 20%).
     /// - Returns: A lighter color with preserved hue and saturation.
-    func lighter(by percentage: Double = 0.2) -> Self {
+    public func lighter(by percentage: Double = 0.2) -> Self {
         adjusted(by: percentage)
     }
 
@@ -315,7 +315,7 @@ public extension Color {
     ///
     /// - Parameter percentage: The fraction to darken (0–1, default 0.2 = 20%).
     /// - Returns: A darker color with preserved hue and saturation.
-    func darker(by percentage: Double = 0.2) -> Self {
+    public func darker(by percentage: Double = 0.2) -> Self {
         adjusted(by: -percentage)
     }
 
@@ -327,7 +327,7 @@ public extension Color {
     ///
     /// - Parameter opacity: The opacity (0-1).
     /// - Returns: A color simulating the given opacity, or self if semantic.
-    func opacity(_ opacity: Double) -> Self {
+    public func opacity(_ opacity: Double) -> Self {
         guard let (red, green, blue) = rgbComponents else {
             return self
         }
@@ -352,7 +352,7 @@ public extension Color {
     ///   - to: The end color (returned when `phase` is 1).
     ///   - phase: The interpolation factor (0–1, clamped).
     /// - Returns: The interpolated RGB color.
-    static func lerp(_ from: Color, _ to: Color, phase: Double) -> Color {
+    public static func lerp(_ from: Color, _ to: Color, phase: Double) -> Color {
         guard let fromRGB = from.rgbComponents,
             let toRGB = to.rgbComponents
         else {
@@ -362,9 +362,11 @@ public extension Color {
         let clamped = min(1, max(0, phase))
         let red = UInt8(Double(fromRGB.red) + (Double(toRGB.red) - Double(fromRGB.red)) * clamped)
         let green = UInt8(
-            Double(fromRGB.green) + (Double(toRGB.green) - Double(fromRGB.green)) * clamped)
+            Double(fromRGB.green) + (Double(toRGB.green) - Double(fromRGB.green)) * clamped
+        )
         let blue = UInt8(
-            Double(fromRGB.blue) + (Double(toRGB.blue) - Double(fromRGB.blue)) * clamped)
+            Double(fromRGB.blue) + (Double(toRGB.blue) - Double(fromRGB.blue)) * clamped
+        )
 
         return .rgb(red, green, blue)
     }
@@ -372,7 +374,7 @@ public extension Color {
 
 // MARK: - Internal API
 
-public extension Color {
+extension Color {
     /// Converts RGB components to HSL (hue 0–360, saturation 0–100, lightness 0–100).
     ///
     /// - Parameters:
@@ -380,7 +382,7 @@ public extension Color {
     ///   - green: Green component (0–255).
     ///   - blue: Blue component (0–255).
     /// - Returns: A tuple of (hue, saturation, lightness) in their standard ranges.
-    static func rgbToHSL(red: UInt8, green: UInt8, blue: UInt8) -> (hue: Double, saturation: Double, lightness: Double) {
+    public static func rgbToHSL(red: UInt8, green: UInt8, blue: UInt8) -> (hue: Double, saturation: Double, lightness: Double) {
         let normalizedRed = Double(red) / 255.0
         let normalizedGreen = Double(green) / 255.0
         let normalizedBlue = Double(blue) / 255.0
@@ -453,7 +455,7 @@ extension Color {
 
 // MARK: - Private Helpers
 
-private extension Color {
+extension Color {
     /// Adjusts a color's lightness by a relative percentage in HSL space.
     ///
     /// Positive values lighten (move toward 100), negative values darken
@@ -467,7 +469,7 @@ private extension Color {
     ///
     /// - Parameter percentage: The relative adjustment (−1 to 1).
     /// - Returns: The adjusted color as HSL, or self if semantic (unresolved).
-    func adjusted(by percentage: Double) -> Self {
+    fileprivate func adjusted(by percentage: Double) -> Self {
         guard let (red, green, blue) = rgbComponents else {
             return self
         }

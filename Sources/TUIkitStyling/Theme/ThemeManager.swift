@@ -102,12 +102,12 @@ public final class ThemeManager: @unchecked Sendable {
 
 // MARK: - Public API
 
-public extension ThemeManager {
+extension ThemeManager {
     /// Cycles to the next item.
     ///
     /// Wraps around to the first item after the last.
     /// Updates the environment and triggers a re-render.
-    func cycleNext() {
+    public func cycleNext() {
         currentIndex = (currentIndex + 1) % items.count
         applyCurrentItem()
     }
@@ -116,7 +116,7 @@ public extension ThemeManager {
     ///
     /// Wraps around to the last item before the first.
     /// Updates the environment and triggers a re-render.
-    func cyclePrevious() {
+    public func cyclePrevious() {
         currentIndex = (currentIndex - 1 + items.count) % items.count
         applyCurrentItem()
     }
@@ -128,7 +128,7 @@ public extension ThemeManager {
     /// Updates the environment and triggers a re-render.
     ///
     /// - Parameter item: The item to select.
-    func setCurrent(_ item: any Cyclable) {
+    public func setCurrent(_ item: any Cyclable) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             currentIndex = index
         }
@@ -138,9 +138,9 @@ public extension ThemeManager {
 
 // MARK: - Private Helpers
 
-private extension ThemeManager {
+extension ThemeManager {
     /// Triggers a re-render so the `RenderLoop` picks up the new current item.
-    func applyCurrentItem() {
+    fileprivate func applyCurrentItem() {
         renderTrigger()
     }
 }

@@ -40,7 +40,9 @@ extension ASCIIConverter {
                 let pixelY = charY * 4
 
                 var pattern: UInt8 = 0
-                var totalR = 0, totalG = 0, totalB = 0
+                var totalR = 0
+                var totalG = 0
+                var totalB = 0
                 var count = 0
 
                 for dy in 0..<4 {
@@ -66,7 +68,7 @@ extension ASCIIConverter {
 
                 // Average color for this cell
                 let avgPixel: RGBA
-                if count > 0 { // swiftlint:disable:this empty_count
+                if count > 0 {  // swiftlint:disable:this empty_count
                     avgPixel = RGBA(
                         r: UInt8(clamping: totalR / count),
                         g: UInt8(clamping: totalG / count),

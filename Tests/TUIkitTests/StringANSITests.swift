@@ -90,7 +90,7 @@ struct StringANSITests {
 
     @Test("padToVisibleWidth with ANSI codes pads to visible width")
     func padWithANSI() {
-        let styled = "\u{1B}[31mHi\u{1B}[0m" // "Hi" in red
+        let styled = "\u{1B}[31mHi\u{1B}[0m"  // "Hi" in red
         let result = styled.padToVisibleWidth(5)
         // Should pad based on visible width (2), not string length
         #expect(result.strippedLength == 5)
@@ -100,7 +100,7 @@ struct StringANSITests {
     @Test("padToVisibleWidth with zero target")
     func padZeroTarget() {
         let result = "Hi".padToVisibleWidth(0)
-        #expect(result == "Hi") // unchanged, already wider
+        #expect(result == "Hi")  // unchanged, already wider
     }
 
     @Test("padToVisibleWidth on empty string")
@@ -143,11 +143,15 @@ struct StringANSITests {
     func strippedLengthWithANSI() {
         // Simulate ANSI-colored image output: "XX" in red
         let colored = "\u{1B}[38;2;255;0;0mXX\u{1B}[0m"
-        #expect(colored.strippedLength == 2,
-                "strippedLength should count only visible characters, not ANSI codes")
+        #expect(
+            colored.strippedLength == 2,
+            "strippedLength should count only visible characters, not ANSI codes"
+        )
         // The old manual filter approach would have included ANSI digits/letters in the count
         let manualWidth = colored.filter { !$0.isASCII || ($0.asciiValue ?? 0) >= 32 }.count
-        #expect(manualWidth != 2,
-                "Manual filter incorrectly includes ANSI sequence characters in the count")
+        #expect(
+            manualWidth != 2,
+            "Manual filter incorrectly includes ANSI sequence characters in the count"
+        )
     }
 }

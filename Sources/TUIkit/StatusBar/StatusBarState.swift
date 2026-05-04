@@ -158,11 +158,13 @@ public final class StatusBarState: @unchecked Sendable {
 
         var items: [StatusBarItem] = []
         if isQuitAllowed {
-            items.append(StatusBarItem(
-                shortcut: quitShortcut.shortcutSymbol,
-                label: quitShortcut.label,
-                order: .quit
-            ))
+            items.append(
+                StatusBarItem(
+                    shortcut: quitShortcut.shortcutSymbol,
+                    label: quitShortcut.label,
+                    order: .quit
+                )
+            )
         }
         if showAppearanceItem { items.append(SystemStatusBarItem.appearance) }
         if showThemeItem { items.append(SystemStatusBarItem.theme) }
@@ -204,51 +206,51 @@ public final class StatusBarState: @unchecked Sendable {
 
 // MARK: - Public API
 
-public extension StatusBarState {
+extension StatusBarState {
     /// Sets the global user items. Triggers a re-render.
-    func setItems(_ items: [any StatusBarItemProtocol]) {
+    public func setItems(_ items: [any StatusBarItemProtocol]) {
         userGlobalItems = items
         appState.setNeedsRender()
     }
 
     /// Sets the global user items using a builder. Triggers a re-render.
-    func setItems(@StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]) {
+    public func setItems(@StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]) {
         userGlobalItems = builder()
         appState.setNeedsRender()
     }
 
     /// Pushes a new user context with its items onto the stack. Triggers a re-render.
-    func push(context: String, items: [any StatusBarItemProtocol]) {
+    public func push(context: String, items: [any StatusBarItemProtocol]) {
         userContextStack.removeAll { $0.context == context }
         userContextStack.append((context, items))
         appState.setNeedsRender()
     }
 
     /// Pushes a new user context using a builder. Triggers a re-render.
-    func push(context: String, @StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]) {
+    public func push(context: String, @StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]) {
         push(context: context, items: builder())
     }
 
     /// Pops a user context from the stack. Triggers a re-render.
-    func pop(context: String) {
+    public func pop(context: String) {
         userContextStack.removeAll { $0.context == context }
         appState.setNeedsRender()
     }
 
     /// Clears all user contexts (keeps global user items and system items). Triggers a re-render.
-    func clearContexts() {
+    public func clearContexts() {
         userContextStack.removeAll()
         appState.setNeedsRender()
     }
 
     /// Clears all user items (global and contexts). System items remain.
-    func clearUserItems() {
+    public func clearUserItems() {
         userContextStack.removeAll()
         userGlobalItems.removeAll()
     }
 
     /// Clears everything including user items and hides system items.
-    func clear() {
+    public func clear() {
         userContextStack.removeAll()
         userGlobalItems.removeAll()
         showSystemItems = false
@@ -256,7 +258,7 @@ public extension StatusBarState {
 
     /// Handles a key event, checking if any current item matches.
     @discardableResult
-    func handleKeyEvent(_ event: KeyEvent) -> Bool {
+    public func handleKeyEvent(_ event: KeyEvent) -> Bool {
         for item in currentItems where item.matches(event) {
             if let statusBarItem = item as? StatusBarItem {
                 if statusBarItem.hasAction {
@@ -301,9 +303,9 @@ extension StatusBarState {
 
 // MARK: - Private Helpers
 
-private extension StatusBarState {
+extension StatusBarState {
     /// Resolves items for a given section using its composition strategy.
-    func resolvedSectionItems(for sectionID: String) -> [any StatusBarItemProtocol] {
+    fileprivate func resolvedSectionItems(for sectionID: String) -> [any StatusBarItemProtocol] {
         guard let entry = sectionItems.first(where: { $0.sectionID == sectionID }) else {
             return userGlobalItems
         }

@@ -84,11 +84,11 @@ struct LifecycleManagerRenderPassTests {
         // Pass 1: view appears
         manager.beginRenderPass()
         _ = manager.recordAppear(token: "view-1") {}
-        manager.endRenderPass() // sets visibleTokens = {"view-1"}
+        manager.endRenderPass()  // sets visibleTokens = {"view-1"}
 
         // Pass 2: view does NOT appear
-        manager.beginRenderPass() // clears currentRenderTokens
-        manager.endRenderPass() // disappeared = {"view-1"}, removes from appearedTokens
+        manager.beginRenderPass()  // clears currentRenderTokens
+        manager.endRenderPass()  // disappeared = {"view-1"}, removes from appearedTokens
 
         #expect(manager.hasAppeared(token: "view-1") == false)
     }
@@ -105,13 +105,13 @@ struct LifecycleManagerRenderPassTests {
             disappeared = true
         }
         manager.endRenderPass()
-        #expect(disappeared == false) // Still visible
+        #expect(disappeared == false)  // Still visible
 
         // Render pass 2: view is NOT rendered
         manager.beginRenderPass()
         // view-1 not recorded
         manager.endRenderPass()
-        #expect(disappeared == true) // Now disappeared
+        #expect(disappeared == true)  // Now disappeared
     }
 
     @Test("endRenderPass does not trigger for views still visible")
@@ -131,7 +131,7 @@ struct LifecycleManagerRenderPassTests {
         manager.beginRenderPass()
         _ = manager.recordAppear(token: "view-1") {}
         manager.endRenderPass()
-        #expect(disappeared == false) // Still visible, no disappear
+        #expect(disappeared == false)  // Still visible, no disappear
     }
 
     @Test("View can reappear after disappearing")
@@ -191,7 +191,7 @@ struct LifecycleManagerDisappearTests {
         manager.beginRenderPass()
         // view-1 not rendered
         manager.endRenderPass()
-        #expect(called == false) // Callback was unregistered
+        #expect(called == false)  // Callback was unregistered
     }
 }
 

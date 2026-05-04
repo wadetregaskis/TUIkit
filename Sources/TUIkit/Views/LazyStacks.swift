@@ -288,7 +288,7 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
         let padding = height - buffer.height
         let topPadding: Int
         switch alignment {
-        case .top:    topPadding = 0
+        case .top: topPadding = 0
         case .center: topPadding = padding / 2
         case .bottom: topPadding = padding
         }
@@ -305,16 +305,12 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
 
 extension LazyVStack: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: LazyVStack<Content>, rhs: LazyVStack<Content>) -> Bool {
-        lhs.alignment == rhs.alignment &&
-        lhs.spacing == rhs.spacing &&
-        lhs.content == rhs.content
+        lhs.alignment == rhs.alignment && lhs.spacing == rhs.spacing && lhs.content == rhs.content
     }
 }
 
 extension LazyHStack: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: LazyHStack<Content>, rhs: LazyHStack<Content>) -> Bool {
-        lhs.alignment == rhs.alignment &&
-        lhs.spacing == rhs.spacing &&
-        lhs.content == rhs.content
+        lhs.alignment == rhs.alignment && lhs.spacing == rhs.spacing && lhs.content == rhs.content
     }
 }

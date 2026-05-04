@@ -43,7 +43,7 @@ struct KeyEventDispatcherTests {
         }
         dispatcher.addHandler { _ in
             callOrder.append("second")
-            return true // consume
+            return true  // consume
         }
 
         dispatcher.dispatch(KeyEvent(key: .enter))
@@ -58,11 +58,11 @@ struct KeyEventDispatcherTests {
 
         dispatcher.addHandler { _ in
             callOrder.append("first")
-            return true // consume
+            return true  // consume
         }
         dispatcher.addHandler { _ in
             callOrder.append("second")
-            return false // pass through
+            return false  // pass through
         }
 
         dispatcher.dispatch(KeyEvent(key: .enter))

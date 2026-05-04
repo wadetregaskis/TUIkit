@@ -5,7 +5,6 @@
 //  License: MIT
 
 import Foundation
-
 import TUIkitCore
 
 // MARK: - Render Cache
@@ -195,7 +194,8 @@ extension RenderCache {
             return nil
         }
         guard entry.contextWidth == contextWidth,
-              entry.contextHeight == contextHeight else {
+            entry.contextHeight == contextHeight
+        else {
             stats.misses += 1
             logDebug("MISS (size changed) \(identity.path)")
             return nil
@@ -318,7 +318,8 @@ extension RenderCache {
     public func logFrameStats() {
         guard Self.debugEnabled else { return }
         let frame = stats.delta(since: statsAtFrameStart)
-        let rate = frame.lookups > 0
+        let rate =
+            frame.lookups > 0
             ? String(format: "%.0f%%", frame.hitRate * 100)
             : "n/a"
         logDebug(
@@ -332,12 +333,12 @@ extension RenderCache {
 
 // MARK: - Private Helpers
 
-private extension RenderCache {
+extension RenderCache {
     /// Writes a debug message to stderr when `TUIKIT_DEBUG_RENDER=1` is set.
     ///
     /// Uses stderr so debug output never interferes with the terminal UI
     /// rendered on stdout. Redirect with `2>render.log` to capture.
-    func logDebug(_ message: @autoclosure () -> String) {
+    fileprivate func logDebug(_ message: @autoclosure () -> String) {
         guard Self.debugEnabled else { return }
         FileHandle.standardError.write(
             Data("[RenderCache] \(message())\n".utf8)

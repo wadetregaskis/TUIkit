@@ -5,6 +5,7 @@
 //  License: MIT
 
 import Testing
+
 @testable import TUIkit
 
 // MARK: - RGBA Tests
@@ -69,7 +70,7 @@ struct RGBAImageTests {
     @Test("Pixel access returns correct values")
     func pixelAccess() {
         var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 4)
-        pixels[3] = RGBA(r: 255, g: 0, b: 0) // (1, 1) in a 2x2 image
+        pixels[3] = RGBA(r: 255, g: 0, b: 0)  // (1, 1) in a 2x2 image
         let image = RGBAImage(width: 2, height: 2, pixels: pixels)
 
         let topLeft = image.pixel(at: 0, 0)
@@ -100,7 +101,7 @@ struct RGBAImageTests {
         image.addError(at: 0, 0, rError: 20.0, gError: -10.0, bError: 0.0)
         let pixel = image.pixel(at: 0, 0)
         #expect(pixel.r == 255)  // 250 + 20 -> clamped to 255
-        #expect(pixel.g == 0)    // 5 - 10 -> clamped to 0
+        #expect(pixel.g == 0)  // 5 - 10 -> clamped to 0
         #expect(pixel.b == 128)  // unchanged
     }
 

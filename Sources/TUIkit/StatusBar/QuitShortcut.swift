@@ -106,7 +106,8 @@ extension QuitShortcut {
 
         // Case-insensitive matching for character keys
         if case .character(let expected) = key,
-           case .character(let actual) = event.key {
+            case .character(let actual) = event.key
+        {
             return !event.ctrl && actual.lowercased() == expected.lowercased()
         }
 

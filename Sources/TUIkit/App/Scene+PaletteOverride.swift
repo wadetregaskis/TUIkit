@@ -40,7 +40,8 @@ extension WindowGroup: RootPaletteOverrideProvidingScene {
 
         while let modifier = current as? any AnyEnvironmentModifierNode {
             if modifier.anyEnvironmentKeyPath == \EnvironmentValues.palette,
-               let palette = modifier.anyEnvironmentValue as? any Palette {
+                let palette = modifier.anyEnvironmentValue as? any Palette
+            {
                 return palette
             }
             current = modifier.anyEnvironmentContent

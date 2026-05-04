@@ -248,12 +248,8 @@ struct ContainerView<Content: View, Footer: View>: View {
 
 extension ContainerView: @preconcurrency Equatable where Content: Equatable, Footer: Equatable {
     static func == (lhs: ContainerView<Content, Footer>, rhs: ContainerView<Content, Footer>) -> Bool {
-        lhs.title == rhs.title &&
-        lhs.titleColor == rhs.titleColor &&
-        lhs.content == rhs.content &&
-        lhs.footer == rhs.footer &&
-        lhs.style == rhs.style &&
-        lhs.padding == rhs.padding
+        lhs.title == rhs.title && lhs.titleColor == rhs.titleColor && lhs.content == rhs.content && lhs.footer == rhs.footer
+            && lhs.style == rhs.style && lhs.padding == rhs.padding
     }
 }
 
@@ -476,11 +472,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
 
 extension _ContainerViewCore: @preconcurrency Equatable where Content: Equatable, Footer: Equatable {
     static func == (lhs: _ContainerViewCore<Content, Footer>, rhs: _ContainerViewCore<Content, Footer>) -> Bool {
-        lhs.title == rhs.title &&
-        lhs.titleColor == rhs.titleColor &&
-        lhs.content == rhs.content &&
-        lhs.footer == rhs.footer &&
-        lhs.style == rhs.style &&
-        lhs.padding == rhs.padding
+        lhs.title == rhs.title && lhs.titleColor == rhs.titleColor && lhs.content == rhs.content && lhs.footer == rhs.footer
+            && lhs.style == rhs.style && lhs.padding == rhs.padding
     }
 }

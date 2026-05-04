@@ -46,34 +46,34 @@ public struct StatusBarItemBuilder {
 
 // MARK: - Public API
 
-public extension StatusBarItemBuilder {
+extension StatusBarItemBuilder {
     /// Combines multiple item arrays into a single flat array.
-    static func buildBlock(_ components: [any StatusBarItemProtocol]...) -> [any StatusBarItemProtocol] {
+    public static func buildBlock(_ components: [any StatusBarItemProtocol]...) -> [any StatusBarItemProtocol] {
         components.flatMap { $0 }
     }
 
     /// Combines an array of item arrays (from `for` loops).
-    static func buildArray(_ components: [[any StatusBarItemProtocol]]) -> [any StatusBarItemProtocol] {
+    public static func buildArray(_ components: [[any StatusBarItemProtocol]]) -> [any StatusBarItemProtocol] {
         components.flatMap { $0 }
     }
 
     /// Handles optional item arrays (from `if` without `else`).
-    static func buildOptional(_ component: [any StatusBarItemProtocol]?) -> [any StatusBarItemProtocol] {
+    public static func buildOptional(_ component: [any StatusBarItemProtocol]?) -> [any StatusBarItemProtocol] {
         component ?? []
     }
 
     /// Handles the first branch of an `if`/`else`.
-    static func buildEither(first component: [any StatusBarItemProtocol]) -> [any StatusBarItemProtocol] {
+    public static func buildEither(first component: [any StatusBarItemProtocol]) -> [any StatusBarItemProtocol] {
         component
     }
 
     /// Handles the second branch of an `if`/`else`.
-    static func buildEither(second component: [any StatusBarItemProtocol]) -> [any StatusBarItemProtocol] {
+    public static func buildEither(second component: [any StatusBarItemProtocol]) -> [any StatusBarItemProtocol] {
         component
     }
 
     /// Wraps a single item into an array.
-    static func buildExpression(_ expression: any StatusBarItemProtocol) -> [any StatusBarItemProtocol] {
+    public static func buildExpression(_ expression: any StatusBarItemProtocol) -> [any StatusBarItemProtocol] {
         [expression]
     }
 }

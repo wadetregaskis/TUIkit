@@ -9,9 +9,9 @@ import Testing
 @testable import TUIkit
 
 #if os(Linux)
-private let isLinux = true
+    private let isLinux = true
 #else
-private let isLinux = false
+    private let isLinux = false
 #endif
 
 @MainActor
