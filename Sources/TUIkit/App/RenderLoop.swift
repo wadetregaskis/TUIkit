@@ -463,7 +463,14 @@ private extension RenderLoop {
             bgCode: bgCode,
             reset: reset
         )
-        diffWriter.writeAppHeaderDiff(newLines: outputLines, terminal: terminal, startRow: row)
+        diffWriter.writeAppHeaderDiff(
+            newLines: outputLines,
+            terminal: terminal,
+            startRow: row,
+            terminalWidth: terminalWidth,
+            bgCode: bgCode,
+            reset: reset
+        )
     }
 
     /// Renders the status bar at the specified terminal row.
@@ -506,6 +513,13 @@ private extension RenderLoop {
             bgCode: bgCode,
             reset: reset
         )
-        diffWriter.writeStatusBarDiff(newLines: outputLines, terminal: terminal, startRow: row)
+        diffWriter.writeStatusBarDiff(
+            newLines: outputLines,
+            terminal: terminal,
+            startRow: row,
+            terminalWidth: terminalWidth,
+            bgCode: bgCode,
+            reset: reset
+        )
     }
 }
