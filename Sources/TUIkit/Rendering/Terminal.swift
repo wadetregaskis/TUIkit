@@ -66,6 +66,11 @@ final class Terminal: TerminalProtocol {
     /// Initial capacity of 16 KB covers typical frames without reallocation.
     private var frameBuffer: [UInt8] = []
 
+    /// A copy of the last fully-assembled frame, saved just before it is
+    /// flushed to the terminal.  Used by ``dumpLastFrame(to:)`` so that a
+    /// debugging snapshot can be written without re-rendering.
+    private(set) var lastFrameData: [UInt8] = []
+
     /// Creates a new terminal instance.
     init() {
         frameBuffer.reserveCapacity(16_384)
@@ -173,7 +178,33 @@ extension Terminal {
     func endFrame() {
         guard isBuffering else { return }
         isBuffering = false
+        lastFrameData = frameBuffer          // snapshot before flush
         flushBuffer()
+    }
+
+    /// Writes the raw ANSI bytes of the last completed frame to a file.
+    ///
+    /// Triggered by the F9 key during a running app. The file can be opened
+    /// in a hex viewer or piped through `cat` in another terminal to inspect
+    /// the exact sequences sent for a given frame.
+    ///
+    /// - Parameter path: Destination file path.  Defaults to `tuikit-frame.ansi`.
+    func dumpLastFrame() {
+        guard !lastFrameData.isEmpty else {
+            writeImmediate("\u{1B}[s\u{1B}[1;1H\u{1B}[7m[TUIkit] No frame data to dump\u{1B}[0m\u{1B}[u")
+            return
+        }
+
+        let url  = URL(fileURLWithPath: "tuikit-frame (\(Date().formatted(date: .abbreviated, time: .standard))).ansi")
+
+        do {
+            try Data(lastFrameData).write(to: url)
+            writeImmediate("\u{1B}[s\u{1B}[1;1H\u{1B}[7mFrame dumped → \(url.path)\u{1B}[0m\u{1B}[u")
+        } catch {
+            // Show the error on-screen rather than crashing (a crash would leave
+            // the terminal in raw-mode / alternate-screen).
+            writeImmediate("\u{1B}[s\u{1B}[1;1H\u{1B}[7m[TUIkit] Dump failed: \(error)\u{1B}[0m\u{1B}[u")
+        }
     }
 
     /// Writes a string to the terminal.

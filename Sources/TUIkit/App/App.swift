@@ -182,6 +182,19 @@ extension AppRunner {
             while eventsProcessed < maxEventsPerFrame,
                 let keyEvent = terminal.readKeyEvent()
             {
+                // "`": dump the current frame to ~/tuikit-frame.ansi.
+                // Permanent debug shortcut — does not consume the event so
+                // view-level "`" handlers can still respond if needed.
+                //
+                // lastFrameData only contains what the *diff* wrote, which is
+                // empty on a static screen.  Force a full repaint first so the
+                // frame buffer captures every line, then dump that snapshot.
+                if keyEvent.key == .character("`") {
+                    renderer.invalidateDiffCache()
+                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                    terminal.dumpLastFrame()
+                }
+
                 inputHandler.handle(keyEvent)
                 eventsProcessed += 1
             }
