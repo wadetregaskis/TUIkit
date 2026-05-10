@@ -657,18 +657,19 @@ struct RepaintRightEdgeColumnTests {
             "ESC[K should NOT be emitted at column \(wrongCol) (would overdraw 4 cells)")
     }
 
-    @Test("Row without skin-tone emoji: ESC[K is still emitted (all changed rows are repainted)")
-    func allChangedRowsGetRepainted() {
+    @Test("Row without cursor-advance quirk: right-edge repaint is skipped")
+    func plainRowNotRepainted() {
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        // Plain line: no emoji at all — should still get the right-edge repaint
-        // because Terminal.app's right-edge bug can be triggered by any line.
+        // Plain line: no cursor-advance quirk — Terminal.app's right-edge
+        // phantom-cell bug isn't triggered, so the repaint is skipped to
+        // preserve content (including wide chars) at the boundary.
         let line = makePaddedLine(text: "Hello World!", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
-        #expect(!line.containsSkinToneEmoji, "Prerequisite: line has no skin-tone emoji")
+        #expect(!line.containsTerminalAppCursorAdvanceQuirk, "Prerequisite: plain ASCII has no quirk")
 
         writer.writeContentDiff(
             newLines: [line], terminal: terminal, startRow: 1,
@@ -678,10 +679,10 @@ struct RepaintRightEdgeColumnTests {
         let output = terminal.allOutput
         let repaintCol = terminalWidth - 1
         let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
-        #expect(output.contains(repaintCursorSeq),
-            "Cursor should move to repaintCol even for non-emoji rows")
-        #expect(output.contains("\u{1B}[K"),
-            "ESC[K should be emitted for every changed row")
+        #expect(!output.contains(repaintCursorSeq),
+            "Cursor should NOT move to repaintCol for non-quirky rows")
+        #expect(!output.contains("\u{1B}[K"),
+            "ESC[K should NOT be emitted for non-quirky rows")
     }
 
     @Test("VS-16 emoji row: right-edge repaint IS applied")
@@ -819,8 +820,8 @@ struct RepaintRightEdgeColumnTests {
         _ = eraseCount1 // suppress unused-variable warning
     }
 
-    @Test("Multi-row frame: all changed rows get repainted")
-    func multiRowAllRowsRepainted() {
+    @Test("Multi-row frame: only quirky rows get repainted")
+    func multiRowOnlyQuirkyRepainted() {
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 20
@@ -840,15 +841,14 @@ struct RepaintRightEdgeColumnTests {
         let eraseToEOL = "\u{1B}[K"
         let eraseCount = output.components(separatedBy: eraseToEOL).count - 1
 
-        // All 3 rows are changed → all 3 get the right-edge repaint (one ESC[K each)
-        #expect(eraseCount == 3, "All 3 changed rows should be repainted, got \(eraseCount)")
+        // Only row 1 (the skin-tone row) gets repainted; row 0 and row 2 do not.
+        #expect(eraseCount == 1, "Only the quirky row should be repainted, got \(eraseCount)")
 
-        // Each row should have a cursor move to repaintCol
         let repaintAtRow1 = ANSIRenderer.moveCursor(toRow: 1, column: terminalWidth - 1)
         let repaintAtRow2 = ANSIRenderer.moveCursor(toRow: 2, column: terminalWidth - 1)
         let repaintAtRow3 = ANSIRenderer.moveCursor(toRow: 3, column: terminalWidth - 1)
-        #expect(output.contains(repaintAtRow1), "Row 1 should be repainted")
-        #expect(output.contains(repaintAtRow2), "Row 2 should be repainted")
-        #expect(output.contains(repaintAtRow3), "Row 3 should be repainted")
+        #expect(!output.contains(repaintAtRow1), "Row 1 (plain) should not be repainted")
+        #expect(output.contains(repaintAtRow2), "Row 2 (skin-tone) should be repainted")
+        #expect(!output.contains(repaintAtRow3), "Row 3 (plain) should not be repainted")
     }
 }

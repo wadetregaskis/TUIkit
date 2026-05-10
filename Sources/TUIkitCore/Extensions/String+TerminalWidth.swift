@@ -128,6 +128,42 @@ extension Character {
 }
 
 extension String {
+    /// Returns `true` if any character in this string has a Terminal.app cursor
+    /// advance that differs from its terminal width — i.e. the line contains
+    /// at least one emoji whose presence will trip Terminal.app's right-edge
+    /// phantom-cell bug.
+    ///
+    /// Used by ``FrameDiffWriter/repaintRightEdge`` to scope the repaint to
+    /// rows that actually need it.  Applying the repaint unconditionally is
+    /// destructive: at narrower widths the line is clipped and a 2-cell-wide
+    /// character (a CJK glyph, an emoji like 🥳) may straddle the boundary,
+    /// and erasing the last 2 cells destroys its right half.
+    public var containsTerminalAppCursorAdvanceQuirk: Bool {
+        var index = startIndex
+        while index < endIndex {
+            if self[index] == "\u{1B}" {
+                // Skip ANSI escape sequences.
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        index = self.index(after: index)
+                    }
+                }
+                continue
+            }
+            let c = self[index]
+            if c.terminalAppCursorAdvance != c.terminalWidth {
+                return true
+            }
+            index = self.index(after: index)
+        }
+        return false
+    }
+
     /// Returns `true` if this string contains at least one skin-tone-modified
     /// emoji (a grapheme cluster whose scalars include a Fitzpatrick modifier,
     /// U+1F3FB–U+1F3FF, combined with a base emoji scalar).

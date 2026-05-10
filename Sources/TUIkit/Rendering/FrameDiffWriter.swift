@@ -238,10 +238,17 @@ extension FrameDiffWriter {
         // Terminal.app has a cluster of right-edge rendering bugs triggered by
         // any emoji whose glyph width and cursor advance differ — skin-tone
         // sequences (phantom-cell budget) and VS-16 pictographic emoji (cursor
-        // under-advance compensated by CUF) both leave the last 2 cells at the
-        // default terminal background. Applying the fix only to rows that are
-        // known to contain problematic emoji would miss edge cases, so we repaint
-        // the right edge of every changed row.
+        // under-advance).  Both produce phantom cells at the right edge that
+        // sit at the default terminal background instead of the app's.
+        //
+        // Cursor compensation in `withTerminalAppCursorCompensation` (CUF for
+        // VS-16, CUB for skin-tone) keeps the post-emoji cursor in sync, so on
+        // rows that don't contain such emoji the right edge is already painted
+        // correctly and a blanket repaint would be destructive — at narrower
+        // widths the line is clipped and a wide character (e.g. CJK or a 2-cell
+        // emoji like 🥳) often straddles the boundary, and erasing the last 2
+        // cells destroys its right half.  So we restrict the repaint to rows
+        // whose cursor compensation actually injected a sequence.
         //
         // Two passes are used so that borders and right-aligned text written by
         // the view system are not permanently destroyed:
@@ -254,6 +261,8 @@ extension FrameDiffWriter {
         let splitAt    = terminalWidth - 2  // visible-cell offset of repaintCol
 
         for row in changedRows where row < lines.count {
+            guard lines[row].containsTerminalAppCursorAdvanceQuirk else { continue }
+
             // Pass 1: erase with bg to unlock any phantom cells.
             terminal.moveCursor(toRow: startRow + row, column: repaintCol)
             terminal.write(bgCode + "\u{1B}[K" + reset)
