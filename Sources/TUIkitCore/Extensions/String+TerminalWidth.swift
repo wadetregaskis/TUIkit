@@ -109,6 +109,20 @@ extension Character {
             }
         }
 
+        // Fitzpatrick skin-tone modifier (U+1F3FB–U+1F3FF) on a pictographic
+        // base in the 0x1F000–0x1FBFF block: Terminal.app renders the glyph
+        // 2 cells wide but advances the cursor by 4. Anything written after
+        // such an emoji on the same row lands 2 columns to the right of the
+        // intended position, even after an absolute CUP. Compensated for by
+        // injecting a CUB(2) after the emoji in `withTerminalAppCursorCompensation`.
+        let skinToneRange: ClosedRange<UInt32> = 0x1F3FB...0x1F3FF
+        let hasSkinTone = scalars.contains { skinToneRange.contains($0.value) }
+        if hasSkinTone {
+            if let first = scalars.first, (0x1F000...0x1FBFF).contains(first.value) {
+                return 4
+            }
+        }
+
         return terminalWidth
     }
 }
@@ -176,7 +190,13 @@ extension String {
             let claimed = c.terminalWidth
             let actual = c.terminalAppCursorAdvance
             if claimed > actual {
+                // Cursor under-advance (e.g. VS-16 emoji): push it forward.
                 result += "\u{1B}[\(claimed - actual)C"
+            } else if actual > claimed {
+                // Cursor over-advance (e.g. skin-tone emoji): pull it back so
+                // subsequent characters land in the columns we reserved for
+                // them in layout.
+                result += "\u{1B}[\(actual - claimed)D"
             }
         }
 

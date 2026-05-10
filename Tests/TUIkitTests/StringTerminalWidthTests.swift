@@ -80,12 +80,14 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(Character(" ").terminalAppCursorAdvance == 1)
     }
 
-    @Test("Skin-tone emoji: cursor advance equals terminal width (no under-advance)")
+    @Test("Skin-tone emoji: cursor over-advances by 2 in Terminal.app")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 is NOT a VS-16 emoji — Terminal.app does not under-advance for it
+        // 🤙🏽 = U+1F919 + U+1F3FD — Terminal.app renders the glyph 2 cells
+        // wide but advances the cursor by 4. Compensated for by injecting
+        // CUB(2) in withTerminalAppCursorCompensation.
         let ch = Character("🤙🏽")
-        #expect(ch.terminalAppCursorAdvance == ch.terminalWidth)
-        #expect(ch.terminalAppCursorAdvance == 2)
+        #expect(ch.terminalWidth == 2, "Renders 2 cells")
+        #expect(ch.terminalAppCursorAdvance == 4, "But cursor advances by 4 in Terminal.app")
     }
 
     @Test("VS-16 pictographic emoji: cursor advance is 1 (Terminal.app under-advance bug)")
@@ -117,12 +119,12 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: no CUF injected (only VS-16 triggers it)")
-    func skinToneNoCUF() {
+    @Test("Skin-tone emoji: CUB(2) injected to compensate for cursor over-advance")
+    func skinToneCUB() {
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == s, "Skin-tone emoji should not trigger CUF injection")
-        #expect(!result.contains("\u{1B}[1C"))
+        #expect(result == "Call 🤙🏽\u{1B}[2D now", "Skin-tone emoji should trigger CUB(2) injection")
+        #expect(!result.contains("\u{1B}[1C"), "No CUF should be injected (over-advance, not under-advance)")
     }
 
     @Test("VS-16 pictographic emoji: CUF(1) injected after it")
