@@ -119,12 +119,17 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: CUB(2) injected to compensate for cursor over-advance")
-    func skinToneCUB() {
+    @Test("Skin-tone emoji: no CUB injected (would suppress Terminal.app skin-tone combining)")
+    func skinToneNoCUB() {
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == "Call 🤙🏽\u{1B}[2D now", "Skin-tone emoji should trigger CUB(2) injection")
-        #expect(!result.contains("\u{1B}[1C"), "No CUF should be injected (over-advance, not under-advance)")
+        // Even though Terminal.app over-advances the cursor on a skin-tone
+        // emoji, we cannot inject CUB to compensate — any backward cursor
+        // movement after the cluster causes Terminal.app to drop the
+        // Fitzpatrick modifier.  The string is therefore returned unchanged.
+        #expect(result == s, "Skin-tone emoji must not trigger any cursor-movement injection")
+        #expect(!result.contains("\u{1B}[2D"))
+        #expect(!result.contains("\u{1B}[1C"))
     }
 
     @Test("VS-16 pictographic emoji: CUF(1) injected after it")

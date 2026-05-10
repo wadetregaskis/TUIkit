@@ -228,12 +228,19 @@ extension String {
             if claimed > actual {
                 // Cursor under-advance (e.g. VS-16 emoji): push it forward.
                 result += "\u{1B}[\(claimed - actual)C"
-            } else if actual > claimed {
-                // Cursor over-advance (e.g. skin-tone emoji): pull it back so
-                // subsequent characters land in the columns we reserved for
-                // them in layout.
-                result += "\u{1B}[\(actual - claimed)D"
             }
+            // No compensation for over-advance (e.g. skin-tone emoji): any
+            // backward cursor movement after a skin-tone grapheme cluster
+            // (CUB, CHA, CUP, even backspace) causes Terminal.app to drop
+            // the Fitzpatrick modifier and render the base emoji with the
+            // default tone.  Pulling the cursor back to keep subsequent
+            // content visually aligned therefore costs the skin tone.  We
+            // leave the cursor at the over-advanced position; the right-
+            // edge repaint in `FrameDiffWriter` re-writes the rightmost 2
+            // cells from an absolute CUP so the border still lands where
+            // the layout reserved it, and the over-advanced gap (a 2-cell
+            // run of background) is visually indistinguishable from the
+            // padding the layout already places there.
         }
 
         return result
