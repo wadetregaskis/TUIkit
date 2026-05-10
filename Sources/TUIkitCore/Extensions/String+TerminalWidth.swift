@@ -114,6 +114,27 @@ extension Character {
 }
 
 extension String {
+    /// Returns `true` if this string contains at least one skin-tone-modified
+    /// emoji (a grapheme cluster whose scalars include a Fitzpatrick modifier,
+    /// U+1F3FB–U+1F3FF, combined with a base emoji scalar).
+    ///
+    /// Used by ``FrameDiffWriter`` to scope Terminal.app's phantom-cell
+    /// right-edge repaint to only rows that actually need it.
+    public var containsSkinToneEmoji: Bool {
+        let skinToneRange: ClosedRange<UInt32> = 0x1F3FB...0x1F3FF
+        for char in self {
+            let scalars = char.unicodeScalars
+            guard scalars.count > 1 else { continue }
+            guard scalars.first?.value != 0x1B else { continue }
+            if scalars.contains(where: { skinToneRange.contains($0.value) }) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+extension String {
     /// Returns a copy of this string with CUF (cursor forward) escapes
     /// injected after each grapheme cluster whose Terminal.app cursor
     /// advance is smaller than the layout width we've reserved for it.
@@ -297,6 +318,134 @@ extension String {
         }
 
         return result
+    }
+
+    /// Returns the accumulated SGR (colour/style) state as of `visibleOffset`
+    /// visible cells into the string, concatenated with all remaining content
+    /// from that offset onward.
+    ///
+    /// This is used by ``FrameDiffWriter`` to re-emit the last few cells of a
+    /// line with the correct SGR context, compensating for Terminal.app's
+    /// phantom-cell bug that leaves the right edge at the default terminal
+    /// background (see `repaintRightEdge`).
+    ///
+    /// - Non-SGR ANSI sequences (cursor movement, erase, etc.) before the
+    ///   split are dropped from the context — only `m`-terminated SGR
+    ///   sequences are replayed.
+    /// - Non-SGR sequences that appear *at or after* the split are included
+    ///   verbatim in the returned content.
+    ///
+    /// - Parameter visibleOffset: The number of visible terminal cells to skip.
+    /// - Returns: Accumulated SGR state + content from `visibleOffset` onward,
+    ///   or `nil` if the string has fewer than `visibleOffset` visible cells.
+    public func ansiSGRContextAndSuffix(from visibleOffset: Int) -> String? {
+        var sgrContext = ""
+        var index = startIndex
+        var visible = 0
+
+        while index < endIndex && visible < visibleOffset {
+            if self[index] == "\u{1B}" {
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        if self[index] == "m" {
+                            // SGR sequence — accumulate for context replay
+                            sgrContext += String(self[seqStart...index])
+                        }
+                        // Non-SGR sequences (CUF, ED, EL, …) are consumed but not kept
+                        index = self.index(after: index)
+                    }
+                }
+            } else {
+                visible += self[index].terminalWidth
+                index = self.index(after: index)
+            }
+        }
+
+        guard visible >= visibleOffset else { return nil }
+        return sgrContext + String(self[index...])
+    }
+
+    /// Returns the accumulated SGR (colour/style) state as of `visibleOffset` visible cells,
+    /// concatenated with the remaining visible content and SGR sequences — but with all
+    /// non-SGR ANSI sequences (cursor movement, erase, etc.) stripped from both the
+    /// context scan *and* the returned suffix.
+    ///
+    /// Use this instead of ``ansiSGRContextAndSuffix(from:)`` when you are about to
+    /// position the terminal cursor explicitly before writing the result. Any CUF,
+    /// EL, or other cursor-movement sequence left in the string would displace the
+    /// cursor from where you positioned it, writing subsequent characters in the wrong
+    /// terminal column.
+    ///
+    /// - Parameter visibleOffset: The number of visible terminal cells to skip.
+    /// - Returns: Accumulated SGR state + visible content from `visibleOffset` onward
+    ///   (all non-SGR sequences stripped), or `nil` if the string has fewer than
+    ///   `visibleOffset` visible cells.
+    public func ansiSGRContextAndCleanSuffix(from visibleOffset: Int) -> String? {
+        var sgrContext = ""
+        var index = startIndex
+        var visible = 0
+
+        // Phase 1: scan to visibleOffset, accumulate only SGR sequences.
+        while index < endIndex && visible < visibleOffset {
+            if self[index] == "\u{1B}" {
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        if self[index] == "m" {
+                            sgrContext += String(self[seqStart...index])
+                        }
+                        // Non-SGR sequences (CUF, EL, …) consumed but not kept
+                        index = self.index(after: index)
+                    }
+                }
+            } else {
+                visible += self[index].terminalWidth
+                index = self.index(after: index)
+            }
+        }
+
+        guard visible >= visibleOffset else { return nil }
+
+        // Phase 2: build suffix keeping visible chars and SGR sequences only.
+        // Non-SGR ANSI sequences (CUF, ESC[2K, etc.) are dropped so they
+        // cannot displace the cursor when the caller writes at a fixed column.
+        var suffix = ""
+        while index < endIndex {
+            if self[index] == "\u{1B}" {
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        if self[index] == "m" {
+                            // SGR — keep it
+                            suffix += String(self[seqStart...index])
+                        }
+                        // Non-SGR — drop it entirely
+                        index = self.index(after: index)
+                    }
+                }
+            } else {
+                suffix.append(self[index])
+                index = self.index(after: index)
+            }
+        }
+
+        return sgrContext + suffix
     }
 
     /// Returns everything after the first `dropCount` terminal cells of visible characters,

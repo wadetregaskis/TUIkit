@@ -39,6 +39,7 @@ final class FrameDiffWriter {
 
     /// The previous frame's app header lines.
     private var previousAppHeaderLines: [String] = []
+
 }
 
 // MARK: - Internal API
@@ -91,7 +92,7 @@ extension FrameDiffWriter {
     /// Compares new content lines with the previous frame and writes only changed lines.
     func writeContentDiff(
         newLines: [String],
-        terminal: Terminal,
+        terminal: any TerminalProtocol,
         startRow: Int,
         terminalWidth: Int,
         bgCode: String,
@@ -100,6 +101,7 @@ extension FrameDiffWriter {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousContentLines, terminal: terminal, startRow: startRow)
         repaintRightEdge(
             changedRows: changedRows,
+            in: newLines,
             terminal: terminal,
             startRow: startRow,
             terminalWidth: terminalWidth,
@@ -112,7 +114,7 @@ extension FrameDiffWriter {
     /// Compares new status bar lines with the previous frame and writes only changed lines.
     func writeStatusBarDiff(
         newLines: [String],
-        terminal: Terminal,
+        terminal: any TerminalProtocol,
         startRow: Int,
         terminalWidth: Int,
         bgCode: String,
@@ -121,6 +123,7 @@ extension FrameDiffWriter {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousStatusBarLines, terminal: terminal, startRow: startRow)
         repaintRightEdge(
             changedRows: changedRows,
+            in: newLines,
             terminal: terminal,
             startRow: startRow,
             terminalWidth: terminalWidth,
@@ -133,7 +136,7 @@ extension FrameDiffWriter {
     /// Compares new app header lines with the previous frame and writes only changed lines.
     func writeAppHeaderDiff(
         newLines: [String],
-        terminal: Terminal,
+        terminal: any TerminalProtocol,
         startRow: Int,
         terminalWidth: Int,
         bgCode: String,
@@ -142,6 +145,7 @@ extension FrameDiffWriter {
         let changedRows = writeDiff(newLines: newLines, previousLines: previousAppHeaderLines, terminal: terminal, startRow: startRow)
         repaintRightEdge(
             changedRows: changedRows,
+            in: newLines,
             terminal: terminal,
             startRow: startRow,
             terminalWidth: terminalWidth,
@@ -180,7 +184,7 @@ extension FrameDiffWriter {
     /// - Returns: The row indices that were actually written (needed by
     ///   ``repaintRightEdge`` to scope its workaround to only changed rows).
     @discardableResult
-    fileprivate func writeDiff(newLines: [String], previousLines: [String], terminal: Terminal, startRow: Int) -> [Int] {
+    fileprivate func writeDiff(newLines: [String], previousLines: [String], terminal: any TerminalProtocol, startRow: Int) -> [Int] {
         let changedRows = Self.computeChangedRows(newLines: newLines, previousLines: previousLines)
 
         for row in changedRows {
@@ -217,18 +221,47 @@ extension FrameDiffWriter {
     /// per changed row.
     fileprivate func repaintRightEdge(
         changedRows: [Int],
-        terminal: Terminal,
+        in lines: [String],
+        terminal: any TerminalProtocol,
         startRow: Int,
         terminalWidth: Int,
         bgCode: String,
         reset: String
     ) {
         guard terminalWidth > 1 else { return }
-        let repaintCol = terminalWidth - 1
-        let repaintSequence = bgCode + "\u{1B}[K" + reset
-        for row in changedRows {
+        // Terminal.app has a cluster of right-edge rendering bugs triggered by
+        // any emoji whose glyph width and cursor advance differ — skin-tone
+        // sequences (phantom-cell budget) and VS-16 pictographic emoji (cursor
+        // under-advance compensated by CUF) both leave the last 2 cells at the
+        // default terminal background. Applying the fix only to rows that are
+        // known to contain problematic emoji would miss edge cases, so we repaint
+        // the right edge of every changed row.
+        //
+        // Two passes are used so that borders and right-aligned text written by
+        // the view system are not permanently destroyed:
+        //   1. ESC[K to erase/unlock the cells (with the bg colour active so
+        //      they at least land on the correct background if step 2 fails).
+        //   2. Re-write the actual content that belongs there (border, text,
+        //      or background space) using the accumulated SGR context so the
+        //      colours and styles are correct.
+        let repaintCol = terminalWidth - 1  // 1-indexed; covers last 2 cells
+        let splitAt    = terminalWidth - 2  // visible-cell offset of repaintCol
+
+        for row in changedRows where row < lines.count {
+            // Pass 1: erase with bg to unlock any phantom cells.
             terminal.moveCursor(toRow: startRow + row, column: repaintCol)
-            terminal.write(repaintSequence)
+            terminal.write(bgCode + "\u{1B}[K" + reset)
+
+            // Pass 2: re-write the correct content now that the cells are unlocked.
+            // Use ansiSGRContextAndCleanSuffix (not ansiSGRContextAndSuffix) so that
+            // any CUF sequences injected by withTerminalAppCursorCompensation are
+            // stripped from the suffix — writing a CUF at repaintCol would push the
+            // cursor past the terminal edge, wrapping subsequent characters to the
+            // next row and causing content to appear in the wrong place.
+            if let suffix = lines[row].ansiSGRContextAndCleanSuffix(from: splitAt) {
+                terminal.moveCursor(toRow: startRow + row, column: repaintCol)
+                terminal.write(suffix)
+            }
         }
     }
 }
