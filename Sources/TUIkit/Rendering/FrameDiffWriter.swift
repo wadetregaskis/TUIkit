@@ -76,7 +76,13 @@ extension FrameDiffWriter {
 
         for row in 0..<terminalHeight {
             if row < buffer.height {
-                let line = buffer.lines[row].withTerminalAppCursorCompensation()
+                // Clip first so over-wide content (a layout that does not
+                // shrink to fit a narrower terminal) cannot wrap past the
+                // right edge.  Cursor compensation is applied AFTER clipping
+                // so any CUF/CUB sequences are scoped to characters that
+                // actually survive the clip.
+                let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
+                let line = clipped.withTerminalAppCursorCompensation()
                 let lineWithBg = line.replacingOccurrences(of: reset, with: reset + bgCode)
                 let padding = max(0, terminalWidth - line.strippedLength)
                 let paddedLine = bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset

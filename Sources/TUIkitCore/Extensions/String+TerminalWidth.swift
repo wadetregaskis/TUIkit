@@ -340,6 +340,61 @@ extension String {
         return result
     }
 
+    /// Like ``ansiAwarePrefix(visibleCount:)`` but additionally drops any
+    /// trailing character whose Terminal.app cursor advance would push the
+    /// cursor past the right edge.
+    ///
+    /// Skin-tone-modified emoji visually paint 2 cells but advance the cursor
+    /// by 4.  At a normal interior position the over-advance is compensated
+    /// by `withTerminalAppCursorCompensation`'s injected CUB, so the emoji
+    /// can be included.  At the right edge there is no room to over-advance:
+    /// Terminal.app splits the grapheme cluster across the wrap and renders
+    /// the skin-tone modifier as a placeholder character at the start of the
+    /// next row.  Dropping the offending character here prevents the wrap.
+    ///
+    /// - Parameter visibleCount: The number of terminal cells to include.
+    /// - Returns: A substring with ANSI codes intact up to the visible
+    ///   boundary, with no trailing over-advancing character.
+    public func ansiAwarePrefixForTerminalApp(visibleCount: Int) -> String {
+        guard visibleCount > 0 else { return "" }
+
+        var result = ""
+        var visible = 0
+        var index = startIndex
+
+        while index < endIndex && visible < visibleCount {
+            if self[index] == "\u{1B}" {
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        index = self.index(after: index)
+                    }
+                }
+                result += String(self[seqStart..<index])
+            } else {
+                let c = self[index]
+                let charWidth = c.terminalWidth
+                if visible + charWidth > visibleCount { break }
+                // The cursor advance for an over-advancing emoji must also
+                // fit before the right edge; otherwise Terminal.app wraps
+                // the trailing modifier scalar onto the next row as a
+                // placeholder.
+                let advance = c.terminalAppCursorAdvance
+                if visible + advance > visibleCount { break }
+                result.append(c)
+                visible += charWidth
+                index = self.index(after: index)
+            }
+        }
+
+        return result
+    }
+
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset`
     /// visible cells into the string, concatenated with all remaining content
     /// from that offset onward.

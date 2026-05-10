@@ -222,6 +222,58 @@ struct ContainsSkinToneEmojiTests {
     }
 }
 
+// MARK: - String.ansiAwarePrefixForTerminalApp
+
+@Suite("String.ansiAwarePrefixForTerminalApp")
+struct AnsiAwarePrefixForTerminalAppTests {
+
+    @Test("Plain ASCII: same as ansiAwarePrefix")
+    func plainASCII() {
+        let s = "Hello, World!"
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 5) == "Hello")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
+    }
+
+    @Test("Skin-tone emoji at right edge is dropped")
+    func skinToneAtRightEdge() {
+        // 8 cells of content + 🤙🏽 (2 visible cells, advance 4) at the end.
+        let s = "12345678🤙🏽"
+        // visibleCount=10 leaves 2 cells of room — but the emoji's cursor
+        // advance is 4, so it cannot fit and must be dropped.
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678")
+    }
+
+    @Test("Skin-tone emoji with room for over-advance is included")
+    func skinToneWithRoom() {
+        let s = "12345678🤙🏽"
+        // visibleCount=12 leaves 4 cells of room, enough for the over-advance.
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 12) == "12345678🤙🏽")
+    }
+
+    @Test("Mid-line skin-tone emoji is preserved (cursor compensation handles it)")
+    func midLineSkinTone() {
+        let s = "Call 🤙🏽 now"
+        // Plenty of room for everything; over-advance compensated by CUB later.
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 12) == "Call 🤙🏽 now")
+    }
+
+    @Test("Wide CJK character respects the visible boundary (not over-advancing)")
+    func cjkBoundary() {
+        let s = "Hi 所有"
+        // 'Hi ' = 3 cells, '所' = 2 cells — fits in 5.
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 5) == "Hi 所")
+        // visibleCount=4 cannot fit '所' (would need cells 4-5, only cell 4 left).
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 4) == "Hi ")
+    }
+
+    @Test("ANSI sequences are preserved through truncation")
+    func ansiPreserved() {
+        let s = "\u{1B}[31mAB\u{1B}[0mCDE"
+        let result = s.ansiAwarePrefixForTerminalApp(visibleCount: 3)
+        #expect(result == "\u{1B}[31mAB\u{1B}[0mC")
+    }
+}
+
 // MARK: - String.ansiSGRContextAndSuffix
 
 @Suite("String.ansiSGRContextAndSuffix")
