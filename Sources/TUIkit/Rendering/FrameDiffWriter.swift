@@ -79,12 +79,24 @@ extension FrameDiffWriter {
                 // Clip first so over-wide content (a layout that does not
                 // shrink to fit a narrower terminal) cannot wrap past the
                 // right edge.  Cursor compensation is applied AFTER clipping
-                // so any CUF/CUB sequences are scoped to characters that
+                // so any CUF sequences are scoped to characters that
                 // actually survive the clip.
                 let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
                 let line = clipped.withTerminalAppCursorCompensation()
                 let lineWithBg = line.replacingOccurrences(of: reset, with: reset + bgCode)
-                let padding = max(0, terminalWidth - line.strippedLength)
+                // Pad only when Terminal.app's cursor is still inside the
+                // line after writing the content.  If an over-advancing
+                // emoji has already pushed the cursor past the right margin,
+                // appending more spaces would wrap them onto the next row
+                // and (because the wrap commits the modifier cluster against
+                // a different cell) destroy the skin-tone combining.
+                let cursorAfter = line.terminalAppCursorAfter
+                let padding: Int
+                if cursorAfter > terminalWidth {
+                    padding = 0
+                } else {
+                    padding = max(0, terminalWidth - line.strippedLength)
+                }
                 let paddedLine = bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset
                 lines.append(paddedLine)
             } else {

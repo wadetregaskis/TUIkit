@@ -383,29 +383,39 @@ extension String {
         return result
     }
 
-    /// Like ``ansiAwarePrefix(visibleCount:)`` but additionally drops any
-    /// trailing character whose Terminal.app cursor advance would push the
-    /// cursor past the right edge.
+    /// Like ``ansiAwarePrefix(visibleCount:)`` but uses Terminal.app's cursor
+    /// advance (not the visible cell count) as the line budget.
     ///
-    /// Skin-tone-modified emoji visually paint 2 cells but advance the cursor
-    /// by 4.  At a normal interior position the over-advance is compensated
-    /// by `withTerminalAppCursorCompensation`'s injected CUB, so the emoji
-    /// can be included.  At the right edge there is no room to over-advance:
-    /// Terminal.app splits the grapheme cluster across the wrap and renders
-    /// the skin-tone modifier as a placeholder character at the start of the
-    /// next row.  Dropping the offending character here prevents the wrap.
+    /// Some emoji — skin-tone-modified clusters in particular — render 2
+    /// cells wide but advance Terminal.app's cursor by 4.  An over-advancing
+    /// emoji written at an interior position is fine: the trailing chars
+    /// land 2 columns right of where the layout reserved them, but the right
+    /// edge is fixed up afterwards by `FrameDiffWriter.repaintRightEdge`.
+    /// An over-advancing emoji written near the right edge is different:
+    /// once cursor advances past the right margin, every subsequent
+    /// character on the same row wraps onto the next row.  The first
+    /// wrapped character splits the grapheme cluster and Terminal.app
+    /// renders the skin-tone modifier as a placeholder square.
+    ///
+    /// The clip therefore stops before any character whose `cursor_before`
+    /// position would already be past the right margin (i.e. the previous
+    /// character's over-advance pushed the cursor off-edge).  This means an
+    /// over-advancing emoji is allowed to be the LAST visible character on
+    /// the row — its over-advance just sets the pending-wrap flag, which is
+    /// harmless if nothing else is written before the next absolute CUP.
     ///
     /// - Parameter visibleCount: The number of terminal cells to include.
-    /// - Returns: A substring with ANSI codes intact up to the visible
-    ///   boundary, with no trailing over-advancing character.
+    /// - Returns: A substring with ANSI codes intact, clipped so that no
+    ///   character wraps off the right edge.
     public func ansiAwarePrefixForTerminalApp(visibleCount: Int) -> String {
         guard visibleCount > 0 else { return "" }
 
         var result = ""
-        var visible = 0
+        var visible = 0      // visible cells used so far
+        var cursor = 1       // Terminal.app's cursor column (1-indexed) — next write target
         var index = startIndex
 
-        while index < endIndex && visible < visibleCount {
+        while index < endIndex {
             if self[index] == "\u{1B}" {
                 let seqStart = index
                 index = self.index(after: index)
@@ -419,23 +429,57 @@ extension String {
                     }
                 }
                 result += String(self[seqStart..<index])
-            } else {
-                let c = self[index]
-                let charWidth = c.terminalWidth
-                if visible + charWidth > visibleCount { break }
-                // The cursor advance for an over-advancing emoji must also
-                // fit before the right edge; otherwise Terminal.app wraps
-                // the trailing modifier scalar onto the next row as a
-                // placeholder.
-                let advance = c.terminalAppCursorAdvance
-                if visible + advance > visibleCount { break }
-                result.append(c)
-                visible += charWidth
-                index = self.index(after: index)
+                continue
             }
+            let c = self[index]
+            let charWidth = c.terminalWidth
+            // Stop if the visible cells don't fit.
+            if visible + charWidth > visibleCount { break }
+            // Stop if the cursor is already past the right margin — any
+            // further character would wrap onto the next row (which, when
+            // it follows an over-advancing emoji, breaks the modifier
+            // combining of the cluster we just wrote).  An over-advancing
+            // emoji written AT the boundary is still allowed: it advances
+            // the cursor past the margin, but no subsequent character
+            // tries to write there.
+            if cursor > visibleCount { break }
+            result.append(c)
+            visible += charWidth
+            cursor += c.terminalAppCursorAdvance
+            index = self.index(after: index)
         }
 
         return result
+    }
+
+    /// Returns Terminal.app's cursor column after writing this string
+    /// starting at column 1, accounting for skin-tone-modified emoji and
+    /// other clusters whose cursor advance exceeds their visible width.
+    ///
+    /// Used by `FrameDiffWriter` to decide whether to add padding spaces to
+    /// the right of the line: if the cursor is already past the right
+    /// margin, any padding would wrap onto the next row.
+    public var terminalAppCursorAfter: Int {
+        var cursor = 1
+        var index = startIndex
+        while index < endIndex {
+            if self[index] == "\u{1B}" {
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        index = self.index(after: index)
+                    }
+                }
+                continue
+            }
+            cursor += self[index].terminalAppCursorAdvance
+            index = self.index(after: index)
+        }
+        return cursor
     }
 
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset`
