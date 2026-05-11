@@ -411,11 +411,10 @@ extension String {
         guard visibleCount > 0 else { return "" }
 
         var result = ""
-        var visible = 0      // visible cells used so far
-        var cursor = 1       // Terminal.app's cursor column (1-indexed) — next write target
+        var visible = 0
         var index = startIndex
 
-        while index < endIndex {
+        while index < endIndex && visible < visibleCount {
             if self[index] == "\u{1B}" {
                 let seqStart = index
                 index = self.index(after: index)
@@ -433,53 +432,23 @@ extension String {
             }
             let c = self[index]
             let charWidth = c.terminalWidth
-            // Stop if the visible cells don't fit.
             if visible + charWidth > visibleCount { break }
-            // Stop if the cursor is already past the right margin — any
-            // further character would wrap onto the next row (which, when
-            // it follows an over-advancing emoji, breaks the modifier
-            // combining of the cluster we just wrote).  An over-advancing
-            // emoji written AT the boundary is still allowed: it advances
-            // the cursor past the margin, but no subsequent character
-            // tries to write there.
-            if cursor > visibleCount { break }
+            // An over-advancing character (e.g. a skin-tone-modified emoji
+            // whose cursor advance exceeds its visible width) at the right
+            // edge is unsafe: Terminal.app wraps the trailing modifier
+            // scalar — or any subsequent character — onto the next row,
+            // and the wrap leaves an unattributed placeholder that cannot
+            // be overdrawn by later writes.  Drop the offending character
+            // (and any trailing content) when the over-advance would push
+            // the cursor at or past the right margin.
+            let advance = c.terminalAppCursorAdvance
+            if advance > charWidth && visible + advance >= visibleCount - 1 { break }
             result.append(c)
             visible += charWidth
-            cursor += c.terminalAppCursorAdvance
             index = self.index(after: index)
         }
 
         return result
-    }
-
-    /// Returns Terminal.app's cursor column after writing this string
-    /// starting at column 1, accounting for skin-tone-modified emoji and
-    /// other clusters whose cursor advance exceeds their visible width.
-    ///
-    /// Used by `FrameDiffWriter` to decide whether to add padding spaces to
-    /// the right of the line: if the cursor is already past the right
-    /// margin, any padding would wrap onto the next row.
-    public var terminalAppCursorAfter: Int {
-        var cursor = 1
-        var index = startIndex
-        while index < endIndex {
-            if self[index] == "\u{1B}" {
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
-                continue
-            }
-            cursor += self[index].terminalAppCursorAdvance
-            index = self.index(after: index)
-        }
-        return cursor
     }
 
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset`

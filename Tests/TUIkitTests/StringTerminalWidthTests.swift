@@ -239,38 +239,30 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge is kept (it can be the last char)")
-    func skinToneAtRightEdge() {
-        // 8 cells of content + 🤙🏽 (2 visible cells, advance 4) at the end.
+    @Test("Skin-tone emoji at right edge is dropped (no room for over-advance)")
+    func skinToneAtEdgeDropped() {
+        // 8 cells of content + 🤙🏽 at the end.  visibleCount=10 fits the
+        // emoji visually, but the over-advance (cursor lands at col 13)
+        // would wrap any subsequent character — including padding spaces
+        // added later — onto the next row, splitting the modifier from
+        // the base.  So the emoji is dropped.
         let s = "12345678🤙🏽"
-        // visibleCount=10 fits the emoji visually exactly.  Its over-advance
-        // pushes the cursor past the right margin, but since nothing else
-        // follows that's harmless (no character to wrap).
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678")
     }
 
-    @Test("Characters after an edge over-advancing emoji are dropped")
-    func dropAfterEdgeOverAdvance() {
-        // Emoji at cells 9-10 in a 10-cell budget pushes cursor to col 13.
-        // Any further char would wrap onto the next row, breaking the cluster.
-        let s = "12345678🤙🏽extra"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
+    @Test("Skin-tone emoji kept when there's room for the over-advance")
+    func skinToneKeptWithHeadroom() {
+        let s = "12345678🤙🏽"
+        // visibleCount=14: cursor after the emoji = 1+8+4 = 13 ≤ 14, with
+        // at least 1 cell of headroom for the next char.  Emoji kept.
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 14) == "12345678🤙🏽")
     }
 
     @Test("Mid-line skin-tone emoji is preserved with trailing content")
     func midLineSkinTone() {
-        // 5 + 2 + 4 = 11 visible cells; cursor after = 1+5+4+4 = 14.
-        // visibleCount=14 fits both visibly and by cursor budget.
+        // Plenty of headroom for the over-advance — emoji kept.
         let s = "Call 🤙🏽 now"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 14) == "Call 🤙🏽 now")
-    }
-
-    @Test("Mid-line skin-tone emoji: trailing content past cursor budget is clipped")
-    func midLineSkinToneClip() {
-        let s = "Call 🤙🏽 now"
-        // visibleCount=12: cursor budget is exceeded after "Call 🤙🏽 no"
-        // (cursor reaches 13), so "w" is dropped.
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 12) == "Call 🤙🏽 no")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 20) == "Call 🤙🏽 now")
     }
 
     @Test("Wide CJK character respects the visible boundary (not over-advancing)")
