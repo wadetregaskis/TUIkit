@@ -80,14 +80,16 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(Character(" ").terminalAppCursorAdvance == 1)
     }
 
-    @Test("Skin-tone emoji: cursor over-advances by 2 in Terminal.app")
+    @Test("Skin-tone emoji: cursor advance equals visible width after compensation")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 = U+1F919 + U+1F3FD — Terminal.app renders the glyph 2 cells
-        // wide but advances the cursor by 4. Compensated for by injecting
-        // CUB(2) in withTerminalAppCursorCompensation.
+        // 🤙🏽 raw would over-advance Terminal.app's cursor by 4, but
+        // `withTerminalAppCursorCompensation` strips the Fitzpatrick
+        // modifier before the line ever reaches the terminal — so the
+        // EFFECTIVE advance the framework reports here matches the
+        // visible width.
         let ch = Character("🤙🏽")
         #expect(ch.terminalWidth == 2, "Renders 2 cells")
-        #expect(ch.terminalAppCursorAdvance == 4, "But cursor advances by 4 in Terminal.app")
+        #expect(ch.terminalAppCursorAdvance == 2, "After modifier stripping the cursor advances by 2")
     }
 
     @Test("VS-16 pictographic emoji: cursor advance is 1 (Terminal.app under-advance bug)")
@@ -119,17 +121,18 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: no CUB injected (would suppress Terminal.app skin-tone combining)")
-    func skinToneNoCUB() {
+    @Test("Skin-tone modifier is stripped to the base emoji")
+    func skinToneStripped() {
+        // Leaving the over-advance intact shifts every cell after the emoji
+        // by 2 columns, which corrupts the box border at most widths.
+        // Pulling the cursor back with CUB causes Terminal.app to drop the
+        // modifier anyway.  Stripping is the only path that yields a clean
+        // layout, so 🤙🏽 → 🤙 at compensation time.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        // Even though Terminal.app over-advances the cursor on a skin-tone
-        // emoji, we cannot inject CUB to compensate — any backward cursor
-        // movement after the cluster causes Terminal.app to drop the
-        // Fitzpatrick modifier.  The string is therefore returned unchanged.
-        #expect(result == s, "Skin-tone emoji must not trigger any cursor-movement injection")
-        #expect(!result.contains("\u{1B}[2D"))
-        #expect(!result.contains("\u{1B}[1C"))
+        #expect(result == "Call 🤙 now", "Fitzpatrick modifier should be removed")
+        #expect(!result.contains("\u{1B}[2D"), "No CUB injected")
+        #expect(!result.contains("\u{1B}[1C"), "No CUF injected")
     }
 
     @Test("VS-16 pictographic emoji: CUF(1) injected after it")
@@ -239,28 +242,18 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge is dropped (no room for over-advance)")
-    func skinToneAtEdgeDropped() {
-        // 8 cells of content + 🤙🏽 at the end.  visibleCount=10 fits the
-        // emoji visually, but the over-advance (cursor lands at col 13)
-        // would wrap any subsequent character — including padding spaces
-        // added later — onto the next row, splitting the modifier from
-        // the base.  So the emoji is dropped.
+    @Test("Skin-tone emoji at right edge is kept by the clip (modifier is stripped later)")
+    func skinToneAtEdgeKept() {
+        // The clip itself only deals with visible width; the modifier is
+        // stripped later in `withTerminalAppCursorCompensation`, so the
+        // emoji is allowed through the clip even when it sits exactly at
+        // the right edge.
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
     }
 
-    @Test("Skin-tone emoji kept when there's room for the over-advance")
-    func skinToneKeptWithHeadroom() {
-        let s = "12345678🤙🏽"
-        // visibleCount=14: cursor after the emoji = 1+8+4 = 13 ≤ 14, with
-        // at least 1 cell of headroom for the next char.  Emoji kept.
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 14) == "12345678🤙🏽")
-    }
-
-    @Test("Mid-line skin-tone emoji is preserved with trailing content")
+    @Test("Mid-line skin-tone emoji is preserved")
     func midLineSkinTone() {
-        // Plenty of headroom for the over-advance — emoji kept.
         let s = "Call 🤙🏽 now"
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 20) == "Call 🤙🏽 now")
     }
@@ -611,58 +604,33 @@ struct RepaintRightEdgeColumnTests {
         return bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset
     }
 
-    @Test("Skin-tone emoji row: ESC[K emitted at column terminalWidth-1")
-    func eraseAtCorrectColumn() {
+    @Test("Skin-tone emoji row: no repaint (modifier is stripped before output)")
+    func skinToneRowNotRepainted() {
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        // Line with skin-tone emoji, padded to terminalWidth
-        let line = makePaddedLine(text: "Hello 🤙🏽 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
-        #expect(line.containsSkinToneEmoji, "Test prerequisite: line must contain skin-tone emoji")
+        // The padded output line shown here is what would land in writeContentDiff
+        // AFTER `buildOutputLines` has applied cursor compensation, which strips
+        // the Fitzpatrick modifier — so the line no longer has the cursor-advance
+        // quirk and the right-edge repaint is unnecessary.
+        let line = makePaddedLine(text: "Hello 🤙 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        #expect(!line.containsTerminalAppCursorAdvanceQuirk, "Base 🤙 has no advance quirk")
 
-        writer.writeContentDiff(
-            newLines: [line],
-            terminal: terminal,
-            startRow: 1,
-            terminalWidth: terminalWidth,
-            bgCode: bgCode,
-            reset: reset
-        )
-
-        let output = terminal.allOutput
-        let repaintCol = terminalWidth - 1   // 1-indexed, covers last 2 cells
-        let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
-        let eraseToEOL = "\u{1B}[K"
-
-        #expect(output.contains(repaintCursorSeq),
-            "Cursor should be positioned at column \(repaintCol) (terminalWidth-1)")
-        #expect(output.contains(eraseToEOL),
-            "ESC[K should be emitted to unlock phantom cells")
-    }
-
-    @Test("Skin-tone emoji row: repaint does NOT start 4 cells from right")
-    func repaintDoesNotStart4CellsFromRight() {
-        let writer = FrameDiffWriter()
-        let terminal = MockTerminal()
-        let terminalWidth = 20
-        let bgCode = "\u{1B}[48;2;5;9;5m"
-        let reset  = "\u{1B}[0m"
-
-        let line = makePaddedLine(text: "Hello 🤙🏽 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         writer.writeContentDiff(
             newLines: [line], terminal: terminal, startRow: 1,
             terminalWidth: terminalWidth, bgCode: bgCode, reset: reset
         )
 
         let output = terminal.allOutput
-        // If repaint started 4 cells from the right, the cursor would be at terminalWidth-3
-        let wrongCol = terminalWidth - 3
-        let wrongCursorWithErase = ANSIRenderer.moveCursor(toRow: 1, column: wrongCol) + bgCode + "\u{1B}[K"
-        #expect(!output.contains(wrongCursorWithErase),
-            "ESC[K should NOT be emitted at column \(wrongCol) (would overdraw 4 cells)")
+        let repaintCol = terminalWidth - 1
+        let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
+        #expect(!output.contains(repaintCursorSeq),
+            "Repaint should NOT fire on a stripped-emoji row")
+        #expect(!output.contains("\u{1B}[K"),
+            "ESC[K should NOT be emitted on a stripped-emoji row")
     }
 
     @Test("Row without cursor-advance quirk: right-edge repaint is skipped")
@@ -719,17 +687,16 @@ struct RepaintRightEdgeColumnTests {
             "ESC[K should be emitted for VS-16 emoji rows")
     }
 
-    @Test("Repaint suffix covers exactly 2 visible cells")
+    @Test("VS-16 repaint suffix covers at most 2 visible cells")
     func repaintSuffixExactly2Cells() {
-        // Verify that whatever is written after the second moveCursor(to repaintCol)
-        // has a visible width of at most 2 cells.
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        let line = makePaddedLine(text: "Hello 🤙🏽 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        // VS-16 emoji 🖥️ — still triggers the quirk after compensation.
+        let line = makePaddedLine(text: "Hello 🖥️ World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         writer.writeContentDiff(
             newLines: [line], terminal: terminal, startRow: 1,
             terminalWidth: terminalWidth, bgCode: bgCode, reset: reset
@@ -739,21 +706,16 @@ struct RepaintRightEdgeColumnTests {
         let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
         let allOutput = terminal.allOutput
 
-        // Find the second occurrence of the repaint cursor sequence (pass 2)
         let range1 = allOutput.range(of: repaintCursorSeq)
         let suffixAfterPass1 = range1.map { allOutput[allOutput.index($0.upperBound, offsetBy: 0)...] } ?? allOutput[...]
         let range2 = suffixAfterPass1.range(of: repaintCursorSeq)
 
         if let range2 {
-            // Content written after the second moveCursor to repaintCol
             let writtenAfterPass2 = String(suffixAfterPass1[range2.upperBound...])
-            // Strip ANSI and check visible width is ≤ 2
             let visibleWidth = writtenAfterPass2.strippedLength
             #expect(visibleWidth <= 2,
-                "Pass-2 suffix should write at most 2 visible cells, wrote \(visibleWidth): \(writtenAfterPass2.debugDescription)")
+                "Pass-2 suffix should write at most 2 visible cells, wrote \(visibleWidth)")
         }
-        // If there's no second cursor move to repaintCol, pass 2 was skipped (nil suffix),
-        // which is also acceptable (pass 1 already wrote the background).
     }
 
     @Test("Pass-2 suffix contains no CUF sequences (regression: 4-cell overdraw)")
@@ -761,23 +723,15 @@ struct RepaintRightEdgeColumnTests {
         // Regression test for the bug where ansiSGRContextAndSuffix was used in
         // repaintRightEdge instead of ansiSGRContextAndCleanSuffix.  A CUF in the
         // suffix displaced the cursor past the terminal edge, wrapping characters
-        // to the next row — manifesting as "4 cells overdrawn" in the wrong place.
-        //
-        // This test uses a VS-16 emoji at the right edge so CUF is injected by
-        // withTerminalAppCursorCompensation, then checks the repaint output.
+        // to the next row.  Uses a VS-16 emoji at the right edge so CUF is
+        // injected by withTerminalAppCursorCompensation.
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 12
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        // "Hello 🤙🏽 X": 9 cells + skin-tone emoji (2) + space + "X" = 12 cells exactly
-        // This ensures the content fills the terminal width so padding puts nothing between
-        // the emoji and the right edge — a CUF that overflows would be visible.
-        let text = "Hi 🤙🏽 ABC"  // 3 + 2 + 5 = wait, let me count: H(1)i(1) (1)🤙🏽(2) (1)A(1)B(1)C(1) = 9
-        // Use a padded line reaching terminalWidth
-        let line = makePaddedLine(text: text, terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
-        #expect(line.containsSkinToneEmoji, "Test requires a skin-tone emoji line")
+        let line = makePaddedLine(text: "Hi 🖥️ ABC", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
 
         writer.writeContentDiff(
             newLines: [line], terminal: terminal, startRow: 1,
@@ -787,14 +741,13 @@ struct RepaintRightEdgeColumnTests {
         let cuf = "\u{1B}[1C"
         let allOutput = terminal.allOutput
 
-        // Find the second moveCursor to repaintCol (pass-2 write)
         let repaintCol = terminalWidth - 1
         let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
         if let range1 = allOutput.range(of: repaintCursorSeq),
            let range2 = allOutput[range1.upperBound...].range(of: repaintCursorSeq) {
             let pass2Content = String(allOutput[range2.upperBound...])
             #expect(!pass2Content.contains(cuf),
-                "Pass-2 suffix must not contain CUF; found in: \(pass2Content.debugDescription)")
+                "Pass-2 suffix must not contain CUF")
         }
     }
 
@@ -806,26 +759,23 @@ struct RepaintRightEdgeColumnTests {
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        let emojiLine  = makePaddedLine(text: "Hello 🤙🏽 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        let vs16Line   = makePaddedLine(text: "Hello 🖥️ World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         let plainLine  = makePaddedLine(text: "Hello World     ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
 
-        // First frame: write both lines; both are "new" so both are written
         writer.writeContentDiff(
-            newLines: [emojiLine, plainLine], terminal: terminal, startRow: 1,
+            newLines: [vs16Line, plainLine], terminal: terminal, startRow: 1,
             terminalWidth: terminalWidth, bgCode: bgCode, reset: reset
         )
-        let eraseCount1 = terminal.allOutput.components(separatedBy: "\u{1B}[K").count - 1
         terminal.reset()
 
         // Second frame: identical lines → diff finds 0 changed rows → no repaint
         writer.writeContentDiff(
-            newLines: [emojiLine, plainLine], terminal: terminal, startRow: 1,
+            newLines: [vs16Line, plainLine], terminal: terminal, startRow: 1,
             terminalWidth: terminalWidth, bgCode: bgCode, reset: reset
         )
         let eraseCount2 = terminal.allOutput.components(separatedBy: "\u{1B}[K").count - 1
         #expect(eraseCount2 == 0,
             "No repaint should occur when no rows changed (was \(eraseCount2) ESC[K)")
-        _ = eraseCount1 // suppress unused-variable warning
     }
 
     @Test("Multi-row frame: only quirky rows get repainted")
@@ -837,7 +787,7 @@ struct RepaintRightEdgeColumnTests {
         let reset  = "\u{1B}[0m"
 
         let row0 = makePaddedLine(text: "Normal line     ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
-        let row1 = makePaddedLine(text: "Has 🤙🏽 emoji  ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        let row1 = makePaddedLine(text: "Has 🖥️ emoji  ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         let row2 = makePaddedLine(text: "Another normal  ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
 
         writer.writeContentDiff(
@@ -849,14 +799,14 @@ struct RepaintRightEdgeColumnTests {
         let eraseToEOL = "\u{1B}[K"
         let eraseCount = output.components(separatedBy: eraseToEOL).count - 1
 
-        // Only row 1 (the skin-tone row) gets repainted; row 0 and row 2 do not.
+        // Only the VS-16 row (row 1, written at terminal row 2) triggers repaint.
         #expect(eraseCount == 1, "Only the quirky row should be repainted, got \(eraseCount)")
 
         let repaintAtRow1 = ANSIRenderer.moveCursor(toRow: 1, column: terminalWidth - 1)
         let repaintAtRow2 = ANSIRenderer.moveCursor(toRow: 2, column: terminalWidth - 1)
         let repaintAtRow3 = ANSIRenderer.moveCursor(toRow: 3, column: terminalWidth - 1)
         #expect(!output.contains(repaintAtRow1), "Row 1 (plain) should not be repainted")
-        #expect(output.contains(repaintAtRow2), "Row 2 (skin-tone) should be repainted")
+        #expect(output.contains(repaintAtRow2), "Row 2 (VS-16) should be repainted")
         #expect(!output.contains(repaintAtRow3), "Row 3 (plain) should not be repainted")
     }
 }
