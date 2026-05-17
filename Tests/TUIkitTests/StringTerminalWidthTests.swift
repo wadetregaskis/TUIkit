@@ -80,16 +80,15 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(Character(" ").terminalAppCursorAdvance == 1)
     }
 
-    @Test("Skin-tone emoji: cursor advance equals visible width after compensation")
+    @Test("Skin-tone emoji: cursor over-advances by 4 in Terminal.app")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 raw would over-advance Terminal.app's cursor by 4, but
-        // `withTerminalAppCursorCompensation` strips the Fitzpatrick
-        // modifier before the line ever reaches the terminal — so the
-        // EFFECTIVE advance the framework reports here matches the
-        // visible width.
+        // 🤙🏽 paints 2 cells but advances Terminal.app's cursor by 4;
+        // `withTerminalAppCursorCompensation` resynchronises by emitting a
+        // dummy space (which commits the grapheme cluster) and a CUB that
+        // rewinds the cursor.
         let ch = Character("🤙🏽")
         #expect(ch.terminalWidth == 2, "Renders 2 cells")
-        #expect(ch.terminalAppCursorAdvance == 2, "After modifier stripping the cursor advances by 2")
+        #expect(ch.terminalAppCursorAdvance == 4, "But cursor advances by 4 in Terminal.app")
     }
 
     @Test("VS-16 pictographic emoji: cursor advance is 1 (Terminal.app under-advance bug)")
@@ -121,18 +120,19 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone modifier is stripped to the base emoji")
-    func skinToneStripped() {
-        // Leaving the over-advance intact shifts every cell after the emoji
-        // by 2 columns, which corrupts the box border at most widths.
-        // Pulling the cursor back with CUB causes Terminal.app to drop the
-        // modifier anyway.  Stripping is the only path that yields a clean
-        // layout, so 🤙🏽 → 🤙 at compensation time.
+    @Test("Skin-tone emoji: dummy space + CUB(3) injected after the cluster")
+    func skinToneResync() {
+        // Terminal.app's cursor over-advances by 2 on a skin-tone emoji.
+        // Compensation: emit a space immediately after (which commits the
+        // grapheme cluster, preserving the skin tone) and then CUB(3) to
+        // rewind the cursor past the dummy space and back to the logical
+        // position.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == "Call 🤙 now", "Fitzpatrick modifier should be removed")
-        #expect(!result.contains("\u{1B}[2D"), "No CUB injected")
-        #expect(!result.contains("\u{1B}[1C"), "No CUF injected")
+        #expect(result == "Call 🤙🏽 \u{1B}[3D now",
+            "Should append dummy space + CUB(3) after the over-advancing emoji")
+        // Sanity check: the visible characters of the result match the input.
+        #expect(result.stripped.contains("🤙🏽"), "Modifier should be preserved")
     }
 
     @Test("VS-16 pictographic emoji: CUF(1) injected after it")
@@ -242,14 +242,21 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge is kept by the clip (modifier is stripped later)")
-    func skinToneAtEdgeKept() {
-        // The clip itself only deals with visible width; the modifier is
-        // stripped later in `withTerminalAppCursorCompensation`, so the
-        // emoji is allowed through the clip even when it sits exactly at
-        // the right edge.
+    @Test("Skin-tone emoji at right edge is dropped (over-advance has no room to resync)")
+    func skinToneAtEdgeDropped() {
+        // 8 cells + 🤙🏽 in a 10-cell budget: the emoji visually fits but
+        // the over-advance pushes the cursor past the margin, leaving no
+        // room for the resync dummy space.  So the emoji is dropped.
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678")
+    }
+
+    @Test("Skin-tone emoji kept when there's room for the over-advance + resync")
+    func skinToneKeptWithHeadroom() {
+        // visible_before+advance < visibleCount → emoji kept; resync dummy
+        // space has somewhere to land.
+        let s = "12345678🤙🏽"
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 14) == "12345678🤙🏽")
     }
 
     @Test("Mid-line skin-tone emoji is preserved")
