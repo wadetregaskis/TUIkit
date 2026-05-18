@@ -120,22 +120,17 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: deferred to end-of-line via CUF + CHA")
+    @Test("Skin-tone emoji: deferred to end-of-line via 2 spaces + CHA")
     func skinToneDeferred() {
-        // Terminal.app's cursor over-advances by 2 on a skin-tone emoji
-        // AND drops the modifier if any backward cursor movement follows
-        // the cluster on the same row.  Compensation defers the cluster:
-        // a CUF skips its cells in place, and the cluster itself is
-        // emitted after everything else on the line with a CHA pointing
-        // back to its column.  By the time the cluster is written there
-        // is no more output on the row, so the modifier is preserved.
+        // Compensation reserves the cluster's cells with spaces in the
+        // main pass and emits the cluster itself at the end of the line
+        // with a CHA pointing back to its column.  Writing the cluster
+        // last avoids backward cursor movement after the cluster (which
+        // would cause Terminal.app to drop the Fitzpatrick modifier).
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        // Expected layout: "Call " + CUF(2) over the emoji's cells +
-        // " now", followed by CHA(6) + 🤙🏽 (the cluster starts at col 6
-        // — after "Call ").
-        #expect(result == "Call \u{1B}[2C now\u{1B}[6G🤙🏽",
-            "Should defer the cluster with CUF in place and CHA + cluster at end")
+        #expect(result == "Call    now\u{1B}[6G🤙🏽",
+            "Should reserve the cluster's cells with spaces and append CHA + cluster")
         #expect(result.stripped.contains("🤙🏽"), "Modifier should be preserved")
     }
 

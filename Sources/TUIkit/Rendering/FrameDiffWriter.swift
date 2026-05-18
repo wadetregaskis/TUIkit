@@ -93,7 +93,12 @@ extension FrameDiffWriter {
                 // deferred trailing writes (CHA + over-advancing cluster).
                 // The trailing writes go after padding so the padding spaces
                 // land in the correct cells before any over-advance happens.
-                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset + parts.deferred
+                // The deferred section gets `bgCode` re-emitted before its
+                // CHA so the cluster's cells render with the app's
+                // background (otherwise they keep the default terminal
+                // background left active by the preceding `reset`).
+                let deferredWithBg = parts.deferred.isEmpty ? "" : bgCode + parts.deferred + reset
+                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset + deferredWithBg
                 lines.append(paddedLine)
             } else {
                 lines.append(emptyLine)

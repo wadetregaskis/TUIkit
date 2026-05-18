@@ -248,8 +248,13 @@ extension String {
             let claimed = c.terminalWidth
             let actual = c.terminalAppCursorAdvance
             if actual > claimed {
+                // Reserve the cluster's cells with spaces (they'll be
+                // overwritten by the deferred CHA + cluster at the end of
+                // the line, but writing real spaces here keeps the cells
+                // bg-painted in case the deferred write fails to land
+                // correctly).
                 if claimed > 0 {
-                    main += "\u{1B}[\(claimed)C"
+                    main.append(String(repeating: " ", count: claimed))
                 }
                 deferredItems.append((col: col, bytes: String(c)))
                 col += claimed
