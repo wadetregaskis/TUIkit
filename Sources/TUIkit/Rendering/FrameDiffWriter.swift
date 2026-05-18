@@ -79,13 +79,21 @@ extension FrameDiffWriter {
                 // Clip first so over-wide content (a layout that does not
                 // shrink to fit a narrower terminal) cannot wrap past the
                 // right edge.  Cursor compensation is applied AFTER clipping
-                // so any CUF sequences are scoped to characters that
-                // actually survive the clip.
+                // so any CUF/deferred sequences are scoped to characters
+                // that actually survive the clip.
                 let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
-                let line = clipped.withTerminalAppCursorCompensation()
-                let lineWithBg = line.replacingOccurrences(of: reset, with: reset + bgCode)
-                let padding = max(0, terminalWidth - line.strippedLength)
-                let paddedLine = bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset
+                let parts = clipped.withTerminalAppCursorCompensationParts()
+                let mainWithBg = parts.main.replacingOccurrences(of: reset, with: reset + bgCode)
+                // Padding count must use the cursor position the compensated
+                // line leaves us at, NOT just its visible width — the CUF
+                // sequences emitted by deferred-cluster handling advance the
+                // cursor without contributing visible cells.
+                let padding = max(0, terminalWidth - parts.mainCursorEnd + 1)
+                // Order: bg + erase-line + main content + padding + reset +
+                // deferred trailing writes (CHA + over-advancing cluster).
+                // The trailing writes go after padding so the padding spaces
+                // land in the correct cells before any over-advance happens.
+                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset + parts.deferred
                 lines.append(paddedLine)
             } else {
                 lines.append(emptyLine)

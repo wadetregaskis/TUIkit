@@ -120,18 +120,22 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: dummy space + CUB(3) injected after the cluster")
-    func skinToneResync() {
-        // Terminal.app's cursor over-advances by 2 on a skin-tone emoji.
-        // Compensation: emit a space immediately after (which commits the
-        // grapheme cluster, preserving the skin tone) and then CUB(3) to
-        // rewind the cursor past the dummy space and back to the logical
-        // position.
+    @Test("Skin-tone emoji: deferred to end-of-line via CUF + CHA")
+    func skinToneDeferred() {
+        // Terminal.app's cursor over-advances by 2 on a skin-tone emoji
+        // AND drops the modifier if any backward cursor movement follows
+        // the cluster on the same row.  Compensation defers the cluster:
+        // a CUF skips its cells in place, and the cluster itself is
+        // emitted after everything else on the line with a CHA pointing
+        // back to its column.  By the time the cluster is written there
+        // is no more output on the row, so the modifier is preserved.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == "Call 🤙🏽 \u{1B}[3D now",
-            "Should append dummy space + CUB(3) after the over-advancing emoji")
-        // Sanity check: the visible characters of the result match the input.
+        // Expected layout: "Call " + CUF(2) over the emoji's cells +
+        // " now", followed by CHA(6) + 🤙🏽 (the cluster starts at col 6
+        // — after "Call ").
+        #expect(result == "Call \u{1B}[2C now\u{1B}[6G🤙🏽",
+            "Should defer the cluster with CUF in place and CHA + cluster at end")
         #expect(result.stripped.contains("🤙🏽"), "Modifier should be preserved")
     }
 
@@ -242,21 +246,14 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge is dropped (over-advance has no room to resync)")
-    func skinToneAtEdgeDropped() {
-        // 8 cells + 🤙🏽 in a 10-cell budget: the emoji visually fits but
-        // the over-advance pushes the cursor past the margin, leaving no
-        // room for the resync dummy space.  So the emoji is dropped.
+    @Test("Skin-tone emoji at right edge is kept (over-advance is harmless after deferral)")
+    func skinToneAtEdgeKept() {
+        // The over-advance is now harmless because the cluster is deferred
+        // to end-of-line by `withTerminalAppCursorCompensation` — nothing
+        // else is written on the row after the cluster.  The clip only
+        // checks visible cells.
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678")
-    }
-
-    @Test("Skin-tone emoji kept when there's room for the over-advance + resync")
-    func skinToneKeptWithHeadroom() {
-        // visible_before+advance < visibleCount → emoji kept; resync dummy
-        // space has somewhere to land.
-        let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 14) == "12345678🤙🏽")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
     }
 
     @Test("Mid-line skin-tone emoji is preserved")

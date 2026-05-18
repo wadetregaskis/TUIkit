@@ -128,16 +128,18 @@ extension Character {
 }
 
 extension String {
-    /// Returns `true` if any character in this string has a Terminal.app cursor
-    /// advance that differs from its terminal width — i.e. the line contains
-    /// at least one emoji whose presence will trip Terminal.app's right-edge
-    /// phantom-cell bug.
+    /// Returns `true` if any character in this string under-advances
+    /// Terminal.app's cursor (e.g. a VS-16 pictographic emoji) — these
+    /// trigger Terminal.app's right-edge phantom-cell bug and need the
+    /// two-pass repaint to land the last two cells at the app's background.
     ///
-    /// Used by ``FrameDiffWriter/repaintRightEdge`` to scope the repaint to
-    /// rows that actually need it.  Applying the repaint unconditionally is
-    /// destructive: at narrower widths the line is clipped and a 2-cell-wide
-    /// character (a CJK glyph, an emoji like 🥳) may straddle the boundary,
-    /// and erasing the last 2 cells destroys its right half.
+    /// Over-advancing characters (Fitzpatrick skin-tone clusters) are
+    /// handled by the deferred-write path in
+    /// ``withTerminalAppCursorCompensationParts()`` — they write at their
+    /// proper column AFTER the rest of the row, so the right edge is
+    /// already correctly painted and the repaint must be skipped (otherwise
+    /// `ansiSGRContextAndCleanSuffix` would pull the deferred cluster's
+    /// bytes into the suffix and re-emit them at the wrong column).
     public var containsTerminalAppCursorAdvanceQuirk: Bool {
         var index = startIndex
         while index < endIndex {
@@ -156,7 +158,7 @@ extension String {
                 continue
             }
             let c = self[index]
-            if c.terminalAppCursorAdvance != c.terminalWidth {
+            if c.terminalWidth > c.terminalAppCursorAdvance {
                 return true
             }
             index = self.index(after: index)
@@ -186,27 +188,42 @@ extension String {
 
 extension String {
     /// Returns a copy of this string with Terminal.app cursor-advance quirks
-    /// compensated for:
+    /// compensated for.  Convenience over
+    /// ``withTerminalAppCursorCompensationParts()`` that concatenates the
+    /// main content and the trailing deferred-cluster writes.
+    public func withTerminalAppCursorCompensation() -> String {
+        let parts = withTerminalAppCursorCompensationParts()
+        return parts.main + parts.deferred
+    }
+
+    /// Returns the string in two pieces: the `main` content that should be
+    /// written in place, and a `deferred` trailing section that must be
+    /// written AFTER any padding the caller appends to the line.
+    ///
+    /// Terminal.app's cursor-advance quirks are handled like this:
     ///
     /// - **VS-16 pictographic emoji under-advance** (e.g. 🖥️):  a CUF
     ///   (cursor-forward) is injected after the cluster to push the cursor
-    ///   to its visual end.
-    /// - **Fitzpatrick skin-tone over-advance** (e.g. 🤙🏽):  a single space
-    ///   followed by a CUB (cursor-back) is injected after the cluster.
-    ///   The space serves two purposes: it lands at the over-advanced
-    ///   cursor position (committing Terminal.app's pending grapheme
-    ///   cluster, which preserves the skin tone) and it is then overwritten
-    ///   in-place by the layout's next character.  The CUB then brings the
-    ///   cursor back to the logical position the layout expects.  Without
-    ///   the space the CUB alone would cause Terminal.app to drop the
-    ///   Fitzpatrick modifier and render the base emoji with the default
-    ///   tone.
+    ///   to its visual end.  Emitted in `main` next to the cluster.
+    /// - **Fitzpatrick skin-tone over-advance** (e.g. 🤙🏽):  the cluster is
+    ///   deferred — the main pass emits a CUF over its visible width
+    ///   (leaving the cells unwritten by content), and the cluster itself
+    ///   is emitted in `deferred` as a CHA (cursor horizontal absolute) +
+    ///   the cluster's bytes.  Writing the cluster after everything else
+    ///   on the row avoids the broken state Terminal.app gets into when
+    ///   any backward cursor movement follows a skin-tone cluster on the
+    ///   same row: with no further character output after the cluster,
+    ///   Terminal.app keeps the Fitzpatrick modifier and renders the skin
+    ///   tone correctly.
     ///
-    /// ANSI escape sequences in the input are preserved untouched.
-    public func withTerminalAppCursorCompensation() -> String {
-        var result = ""
-        result.reserveCapacity(self.count + 8)
+    /// `deferred` assumes the line is written starting at column 1.  ANSI
+    /// escape sequences in the input are preserved.
+    public func withTerminalAppCursorCompensationParts() -> (main: String, deferred: String, mainCursorEnd: Int) {
+        var main = ""
+        main.reserveCapacity(self.count + 8)
         var index = startIndex
+        var col = 1   // 1-indexed cursor column after the most recent main write
+        var deferredItems: [(col: Int, bytes: String)] = []
 
         while index < endIndex {
             let c = self[index]
@@ -224,33 +241,35 @@ extension String {
                         index = self.index(after: index)
                     }
                 }
-                result += self[seqStart..<index]
+                main += self[seqStart..<index]
                 continue
             }
 
-            result.append(c)
-            index = self.index(after: index)
-
             let claimed = c.terminalWidth
             let actual = c.terminalAppCursorAdvance
-            if claimed > actual {
-                // Cursor under-advance (e.g. VS-16 emoji): push it forward.
-                result += "\u{1B}[\(claimed - actual)C"
-            } else if actual > claimed {
-                // Cursor over-advance (e.g. skin-tone emoji): emit a single
-                // space to commit the pending grapheme cluster (preserving
-                // the skin tone), then a CUB to rewind the cursor to the
-                // logical position.  The CUB jumps by `actual - claimed + 1`
-                // — the over-advance amount plus one (the cell occupied by
-                // the dummy space we just wrote).  The layout's next
-                // character will overwrite that space in-place.
-                let overAdvance = actual - claimed
-                result += " "
-                result += "\u{1B}[\(overAdvance + 1)D"
+            if actual > claimed {
+                if claimed > 0 {
+                    main += "\u{1B}[\(claimed)C"
+                }
+                deferredItems.append((col: col, bytes: String(c)))
+                col += claimed
+            } else if claimed > actual {
+                main.append(c)
+                main += "\u{1B}[\(claimed - actual)C"
+                col += claimed
+            } else {
+                main.append(c)
+                col += claimed
             }
+            index = self.index(after: index)
         }
 
-        return result
+        var deferred = ""
+        for d in deferredItems {
+            deferred += "\u{1B}[\(d.col)G"
+            deferred += d.bytes
+        }
+        return (main: main, deferred: deferred, mainCursorEnd: col)
     }
 }
 
@@ -398,18 +417,11 @@ extension String {
     /// emoji written at an interior position is fine: the trailing chars
     /// land 2 columns right of where the layout reserved them, but the right
     /// edge is fixed up afterwards by `FrameDiffWriter.repaintRightEdge`.
-    /// Like ``ansiAwarePrefix(visibleCount:)`` but also drops an over-
-    /// advancing character (e.g. a Fitzpatrick skin-tone emoji) at the
-    /// right edge when its cursor advance would push the cursor at or past
-    /// the margin.
-    ///
-    /// `withTerminalAppCursorCompensation` resyncs over-advancing emoji by
-    /// writing a dummy space at the over-advanced position and then issuing
-    /// a CUB to bring the cursor back.  That technique requires room for
-    /// the dummy space: if the over-advance has already wrapped the cursor
-    /// past the margin, the dummy space lands on the wrapped row and the
-    /// resync breaks.  Dropping the emoji at those widths avoids the
-    /// problem at the cost of not rendering the emoji at all.
+    /// Like ``ansiAwarePrefix(visibleCount:)``.  Over-advancing characters
+    /// (e.g. Fitzpatrick skin-tone emoji) are kept whenever their VISIBLE
+    /// cells fit — `withTerminalAppCursorCompensation` defers them to the
+    /// end of the line, so the cursor over-advance happens after every
+    /// other character on the row has been written and is harmless.
     ///
     /// - Parameter visibleCount: The number of terminal cells to include.
     /// - Returns: A substring with ANSI codes intact, clipped so that no
@@ -440,12 +452,6 @@ extension String {
             let c = self[index]
             let charWidth = c.terminalWidth
             if visible + charWidth > visibleCount { break }
-            let advance = c.terminalAppCursorAdvance
-            // If the character over-advances the cursor and the over-advance
-            // would push us past the right margin (no room for the resync
-            // dummy space + CUB injected by `withTerminalAppCursorCompensation`),
-            // drop the character and stop.
-            if advance > charWidth && visible + advance >= visibleCount { break }
             result.append(c)
             visible += charWidth
             index = self.index(after: index)
