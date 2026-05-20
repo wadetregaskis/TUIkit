@@ -112,9 +112,13 @@ extension Character {
         // Fitzpatrick skin-tone modifiers (U+1F3FB–U+1F3FF) on a pictographic
         // base in the 0x1F000–0x1FBFF block: Terminal.app renders the glyph
         // 2 cells wide but advances the cursor by 4.
-        // `withTerminalAppCursorCompensation` compensates by emitting a
-        // dummy space (which commits the grapheme cluster) followed by a
-        // CUB(3) — moving the cursor back to the logical position.
+        // `withTerminalAppCursorCompensation` emits the cluster inline and
+        // leaves the cursor over-advanced; `FrameDiffWriter.repaintRightEdge`
+        // re-writes the row's right edge via absolute cursor positioning so
+        // the border still lands where the layout reserved it.  Any cursor
+        // escape that would undo the over-advance directly (CUB / CHA /
+        // DECRC after the cluster) makes Terminal.app drop the Fitzpatrick
+        // scalar.
         let skinToneRange: ClosedRange<UInt32> = 0x1F3FB...0x1F3FF
         let hasSkinTone = scalars.contains { skinToneRange.contains($0.value) }
         if hasSkinTone {
@@ -128,18 +132,12 @@ extension Character {
 }
 
 extension String {
-    /// Returns `true` if any character in this string under-advances
-    /// Terminal.app's cursor (e.g. a VS-16 pictographic emoji) — these
-    /// trigger Terminal.app's right-edge phantom-cell bug and need the
-    /// two-pass repaint to land the last two cells at the app's background.
-    ///
-    /// Over-advancing characters (Fitzpatrick skin-tone clusters) are
-    /// handled by the deferred-write path in
-    /// ``withTerminalAppCursorCompensationParts()`` — they write at their
-    /// proper column AFTER the rest of the row, so the right edge is
-    /// already correctly painted and the repaint must be skipped (otherwise
-    /// `ansiSGRContextAndCleanSuffix` would pull the deferred cluster's
-    /// bytes into the suffix and re-emit them at the wrong column).
+    /// Returns `true` if any character in this string differs in claimed
+    /// visible width vs Terminal.app cursor advance (VS-16 emoji under-
+    /// advancing by 1, Fitzpatrick skin-tone clusters over-advancing by 2).
+    /// Both quirks trigger Terminal.app's right-edge phantom-cell bug and
+    /// need the two-pass repaint to land the last two cells at the app's
+    /// background.
     public var containsTerminalAppCursorAdvanceQuirk: Bool {
         var index = startIndex
         while index < endIndex {
@@ -158,7 +156,7 @@ extension String {
                 continue
             }
             let c = self[index]
-            if c.terminalWidth > c.terminalAppCursorAdvance {
+            if c.terminalAppCursorAdvance != c.terminalWidth {
                 return true
             }
             index = self.index(after: index)
@@ -205,25 +203,29 @@ extension String {
     /// - **VS-16 pictographic emoji under-advance** (e.g. 🖥️):  a CUF
     ///   (cursor-forward) is injected after the cluster to push the cursor
     ///   to its visual end.  Emitted in `main` next to the cluster.
-    /// - **Fitzpatrick skin-tone over-advance** (e.g. 🤙🏽):  the cluster is
-    ///   deferred — the main pass emits a CUF over its visible width
-    ///   (leaving the cells unwritten by content), and the cluster itself
-    ///   is emitted in `deferred` as a CHA (cursor horizontal absolute) +
-    ///   the cluster's bytes.  Writing the cluster after everything else
-    ///   on the row avoids the broken state Terminal.app gets into when
-    ///   any backward cursor movement follows a skin-tone cluster on the
-    ///   same row: with no further character output after the cluster,
-    ///   Terminal.app keeps the Fitzpatrick modifier and renders the skin
-    ///   tone correctly.
+    /// - **Fitzpatrick skin-tone over-advance** (e.g. 🤙🏽):  emitted
+    ///   inline with **no** compensation.  Terminal.app's cursor counter
+    ///   ends up 2 columns past where the layout reserved cells, which
+    ///   would normally push subsequent content right — but the
+    ///   per-row right-edge repaint in `FrameDiffWriter` (driven by
+    ///   ``containsTerminalAppCursorAdvanceQuirk``) re-writes the right-
+    ///   most 2 cells via absolute cursor positioning, putting the box's
+    ///   right border back where the layout intended.
     ///
-    /// `deferred` assumes the line is written starting at column 1.  ANSI
-    /// escape sequences in the input are preserved.
+    ///   Any cursor escape that would undo the over-advance directly
+    ///   (CUB / CHA / DECRC after the cluster) makes Terminal.app drop
+    ///   the Fitzpatrick modifier — so we explicitly do not emit one.
+    ///
+    /// `deferred` is currently always empty — the field is retained for
+    /// API compatibility with callers that destructure the tuple, and so
+    /// the deferred-write path can be reinstated for any future Terminal.app
+    /// quirk that genuinely needs end-of-row positioning.  ANSI escape
+    /// sequences in the input are preserved.
     public func withTerminalAppCursorCompensationParts() -> (main: String, deferred: String, mainCursorEnd: Int) {
         var main = ""
         main.reserveCapacity(self.count + 8)
         var index = startIndex
         var col = 1   // 1-indexed cursor column after the most recent main write
-        var deferredItems: [(col: Int, bytes: String)] = []
 
         while index < endIndex {
             let c = self[index]
@@ -247,20 +249,44 @@ extension String {
 
             let claimed = c.terminalWidth
             let actual = c.terminalAppCursorAdvance
-            if actual > claimed {
-                // Reserve the cluster's cells with spaces (they'll be
-                // overwritten by the deferred CHA + cluster at the end of
-                // the line, but writing real spaces here keeps the cells
-                // bg-painted in case the deferred write fails to land
-                // correctly).
-                if claimed > 0 {
-                    main.append(String(repeating: " ", count: claimed))
-                }
-                deferredItems.append((col: col, bytes: String(c)))
-                col += claimed
-            } else if claimed > actual {
+            if claimed > actual {
+                // Under-advancer (e.g. VS-16 pictographic emoji): push
+                // the cursor forward to the visual end of the glyph.
                 main.append(c)
                 main += "\u{1B}[\(claimed - actual)C"
+                col += claimed
+            } else if actual > claimed {
+                // Over-advancer (Fitzpatrick skin-tone cluster).
+                // Terminal.app applies a row-wide LEFT shift to any row
+                // containing the cluster — every cell painted by the
+                // line ends up ~2 columns left of where its bytes
+                // placed it.  When the cluster is followed by inline
+                // content on the same line (e.g. trailing padding +
+                // a box border), that border falls into the shifted-
+                // away cells at the right edge and the rightmost 2
+                // cells are unpainted.  Empirically, no compensating
+                // cursor escape recovers this — CUB/CHA/DECRC after
+                // the cluster strip the modifier, CUP past the edge
+                // clamps, and inline overdraw past the edge wraps.
+                //
+                // So when there's visible content after the cluster
+                // on the same line, sacrifice the Fitzpatrick scalar
+                // (emit only the base emoji's scalars).  Terminal.app
+                // then renders the cluster as a normal 2-cell emoji
+                // with no over-advance and no row-wide shift, keeping
+                // the layout intact.  When the cluster IS the last
+                // visible content on the line we keep the modifier —
+                // the over-advance happens after the row is done so
+                // it can't push anything out of place.
+                if Self.hasVisibleContentAfter(string: self, after: self.index(after: index)) {
+                    for scalar in c.unicodeScalars {
+                        if !(0x1F3FB...0x1F3FF).contains(scalar.value) {
+                            main.unicodeScalars.append(scalar)
+                        }
+                    }
+                } else {
+                    main.append(c)
+                }
                 col += claimed
             } else {
                 main.append(c)
@@ -269,12 +295,38 @@ extension String {
             index = self.index(after: index)
         }
 
-        var deferred = ""
-        for d in deferredItems {
-            deferred += "\u{1B}[\(d.col)G"
-            deferred += d.bytes
+        return (main: main, deferred: "", mainCursorEnd: col)
+    }
+
+    /// Returns `true` if any character at or after `start` in `string`
+    /// contributes a visible cell to the rendered output (i.e. would
+    /// occupy a terminal column).  Plain ASCII, CJK, emoji etc. all
+    /// count; ANSI escape sequences are skipped.  Used by
+    /// ``withTerminalAppCursorCompensationParts()`` to decide whether
+    /// an over-advancing cluster has anything following it on the row
+    /// that would suffer the row-wide LEFT shift.
+    fileprivate static func hasVisibleContentAfter(string: String, after start: String.Index) -> Bool {
+        var index = start
+        while index < string.endIndex {
+            if string[index] == "\u{1B}" {
+                index = string.index(after: index)
+                if index < string.endIndex && string[index] == "[" {
+                    index = string.index(after: index)
+                    while index < string.endIndex && (string[index].isNumber || string[index] == ";") {
+                        index = string.index(after: index)
+                    }
+                    if index < string.endIndex && string[index].isLetter {
+                        index = string.index(after: index)
+                    }
+                }
+                continue
+            }
+            if string[index].terminalWidth > 0 {
+                return true
+            }
+            index = string.index(after: index)
         }
-        return (main: main, deferred: deferred, mainCursorEnd: col)
+        return false
     }
 }
 
@@ -414,19 +466,17 @@ extension String {
         return result
     }
 
-    /// Like ``ansiAwarePrefix(visibleCount:)`` but uses Terminal.app's cursor
-    /// advance (not the visible cell count) as the line budget.
+    /// Like ``ansiAwarePrefix(visibleCount:)`` but cursor-aware — clips so
+    /// that no character's Terminal.app cursor advance would push past the
+    /// right edge.
     ///
-    /// Some emoji — skin-tone-modified clusters in particular — render 2
-    /// cells wide but advance Terminal.app's cursor by 4.  An over-advancing
-    /// emoji written at an interior position is fine: the trailing chars
-    /// land 2 columns right of where the layout reserved them, but the right
-    /// edge is fixed up afterwards by `FrameDiffWriter.repaintRightEdge`.
-    /// Like ``ansiAwarePrefix(visibleCount:)``.  Over-advancing characters
-    /// (e.g. Fitzpatrick skin-tone emoji) are kept whenever their VISIBLE
-    /// cells fit — `withTerminalAppCursorCompensation` defers them to the
-    /// end of the line, so the cursor over-advance happens after every
-    /// other character on the row has been written and is harmless.
+    /// An over-advancing emoji (e.g. Fitzpatrick skin-tone 🤙🏽: claims 2
+    /// cells, advances cursor by 4) whose VISIBLE cells fit but whose
+    /// advance overflows the right edge is REPLACED with plain spaces of
+    /// its claimed visible width.  If we let Terminal.app see the cluster
+    /// in this case it wraps the glyph to the next row (because it can't
+    /// reserve the 4 cells of buffer it wants), corrupting the layout
+    /// of the row below.
     ///
     /// - Parameter visibleCount: The number of terminal cells to include.
     /// - Returns: A substring with ANSI codes intact, clipped so that no
@@ -436,7 +486,8 @@ extension String {
 
         var result = ""
         var visible = 0
-        var index = startIndex
+        var cursor  = 0   // Terminal.app cursor advance from start of line
+        var index   = startIndex
 
         while index < endIndex && visible < visibleCount {
             if self[index] == "\u{1B}" {
@@ -457,8 +508,23 @@ extension String {
             let c = self[index]
             let charWidth = c.terminalWidth
             if visible + charWidth > visibleCount { break }
+            let advance = c.terminalAppCursorAdvance
+            if advance > charWidth && cursor + advance > visibleCount {
+                // Over-advancer that would push Terminal.app's cursor past
+                // the right edge.  Replace with `charWidth` plain spaces
+                // to preserve the layout but avoid the wrap-to-next-row
+                // bug.  Skin tone is sacrificed in this narrow case.
+                if charWidth > 0 {
+                    result.append(String(repeating: " ", count: charWidth))
+                }
+                visible += charWidth
+                cursor  += charWidth
+                index = self.index(after: index)
+                continue
+            }
             result.append(c)
             visible += charWidth
+            cursor  += advance
             index = self.index(after: index)
         }
 

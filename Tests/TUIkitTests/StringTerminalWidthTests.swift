@@ -120,18 +120,31 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji: deferred to end-of-line via 2 spaces + CHA")
-    func skinToneDeferred() {
-        // Compensation reserves the cluster's cells with spaces in the
-        // main pass and emits the cluster itself at the end of the line
-        // with a CHA pointing back to its column.  Writing the cluster
-        // last avoids backward cursor movement after the cluster (which
-        // would cause Terminal.app to drop the Fitzpatrick modifier).
+    @Test("Skin-tone emoji followed by content: Fitzpatrick scalar stripped")
+    func skinToneFollowedByContentStripsModifier() {
+        // When the cluster is followed by inline content on the same
+        // line, Terminal.app applies a row-wide LEFT shift that pushes
+        // the rightmost 2 cells off the visible row.  No ANSI sequence
+        // can recover both the modifier AND the layout — so the
+        // Fitzpatrick scalar is stripped and the base emoji is rendered
+        // alone.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == "Call    now\u{1B}[6G🤙🏽",
-            "Should reserve the cluster's cells with spaces and append CHA + cluster")
-        #expect(result.stripped.contains("🤙🏽"), "Modifier should be preserved")
+        #expect(result == "Call 🤙 now",
+            "Modifier stripped when cluster has visible content after it")
+        #expect(!result.stripped.contains("🤙🏽"), "Fitzpatrick scalar dropped")
+        #expect(result.contains("🤙"), "Base emoji preserved")
+    }
+
+    @Test("Skin-tone emoji at end of input: modifier preserved")
+    func skinToneAtEndPreservesModifier() {
+        // No content after the cluster — the over-advance happens after
+        // the row is otherwise written, so the row-wide shift bug has
+        // nothing to push.  Keep the modifier.
+        let s = "Call 🤙🏽"
+        let result = s.withTerminalAppCursorCompensation()
+        #expect(result == s, "Modifier preserved when cluster is last visible content")
+        #expect(result.stripped.contains("🤙🏽"), "Fitzpatrick scalar kept")
     }
 
     @Test("VS-16 pictographic emoji: CUF(1) injected after it")
@@ -241,18 +254,23 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge is kept (over-advance is harmless after deferral)")
-    func skinToneAtEdgeKept() {
-        // The over-advance is now harmless because the cluster is deferred
-        // to end-of-line by `withTerminalAppCursorCompensation` — nothing
-        // else is written on the row after the cluster.  The clip only
-        // checks visible cells.
+    @Test("Skin-tone emoji at right edge: replaced with bg-spaces to prevent wrap")
+    func skinToneAtEdgeReplaced() {
+        // The cluster's visible width fits in the remaining cells, but
+        // its 4-cell cursor advance would push Terminal.app's cursor
+        // past the right edge — at which point Terminal.app wraps the
+        // glyph to the next row.  Replace it with plain spaces to keep
+        // the layout intact (skin tone is sacrificed in this case).
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678🤙🏽")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678  ")
     }
 
-    @Test("Mid-line skin-tone emoji is preserved")
-    func midLineSkinTone() {
+    @Test("Mid-line skin-tone emoji is preserved (over-advance fits)")
+    func midLineSkinTonePreserved() {
+        // With plenty of room (visibleCount=20), the cluster's 4-cell
+        // advance stays well within the line — it's kept verbatim and
+        // the modifier-stripping decision is left to the compensation
+        // function downstream.
         let s = "Call 🤙🏽 now"
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 20) == "Call 🤙🏽 now")
     }
@@ -603,18 +621,16 @@ struct RepaintRightEdgeColumnTests {
         return bgCode + eraseLine + lineWithBg + String(repeating: " ", count: padding) + reset
     }
 
-    @Test("Skin-tone emoji row: no repaint (modifier is stripped before output)")
-    func skinToneRowNotRepainted() {
+    @Test("Bare emoji row (no modifier): no repaint")
+    func bareEmojiRowNotRepainted() {
         let writer = FrameDiffWriter()
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
         let reset  = "\u{1B}[0m"
 
-        // The padded output line shown here is what would land in writeContentDiff
-        // AFTER `buildOutputLines` has applied cursor compensation, which strips
-        // the Fitzpatrick modifier — so the line no longer has the cursor-advance
-        // quirk and the right-edge repaint is unnecessary.
+        // 🤙 with no Fitzpatrick modifier: claimed width and Terminal.app
+        // cursor advance both equal 2 — no quirk, no repaint needed.
         let line = makePaddedLine(text: "Hello 🤙 World", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         #expect(!line.containsTerminalAppCursorAdvanceQuirk, "Base 🤙 has no advance quirk")
 
@@ -627,9 +643,39 @@ struct RepaintRightEdgeColumnTests {
         let repaintCol = terminalWidth - 1
         let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: repaintCol)
         #expect(!output.contains(repaintCursorSeq),
-            "Repaint should NOT fire on a stripped-emoji row")
+            "Repaint should NOT fire on a row without a cursor-advance quirk")
         #expect(!output.contains("\u{1B}[K"),
-            "ESC[K should NOT be emitted on a stripped-emoji row")
+            "ESC[K should NOT be emitted on a non-quirky row")
+    }
+
+    @Test("Skin-tone-stripped row: right-edge repaint targets baseRepaintCol")
+    func skinToneStrippedRowRepainted() {
+        let writer = FrameDiffWriter()
+        let terminal = MockTerminal()
+        let terminalWidth = 20
+        let bgCode = "\u{1B}[48;2;5;9;5m"
+        let reset  = "\u{1B}[0m"
+
+        // The pre-rendered line emitted by `buildOutputLines` has already
+        // had the Fitzpatrick scalar stripped (since the cluster is
+        // followed by content here).  The remaining base emoji is a
+        // normal 2-cell glyph with no over-advance — the line therefore
+        // has no quirk and the repaint is skipped.
+        let line = makePaddedLine(text: "Hi 🤙 X         ", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        #expect(!line.containsTerminalAppCursorAdvanceQuirk,
+            "Stripped cluster has no quirk")
+
+        writer.writeContentDiff(
+            newLines: [line], terminal: terminal, startRow: 1,
+            terminalWidth: terminalWidth, bgCode: bgCode, reset: reset
+        )
+
+        let output = terminal.allOutput
+        let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: terminalWidth - 1)
+        #expect(!output.contains(repaintCursorSeq),
+            "Repaint should NOT fire after Fitzpatrick stripping")
+        #expect(!output.contains("\u{1B}[K"),
+            "ESC[K should NOT be emitted on a stripped-cluster row")
     }
 
     @Test("Row without cursor-advance quirk: right-edge repaint is skipped")
