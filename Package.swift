@@ -24,6 +24,10 @@ let package = Package(
 
         // ── App ─────────────────────────────────────────────────────────────────────────────────────────
         .executable(name: "TUIkitExample", targets: ["TUIkitExample"]),
+
+        // ── Tools ───────────────────────────────────────────────────────────────────────────────────────
+        .executable(name: "EmojiBugScanner", targets: ["EmojiBugScanner"]),
+        .executable(name: "EmojiBenchmark",  targets: ["EmojiBenchmark"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
@@ -52,5 +56,17 @@ let package = Package(
             resources: [.copy("Resources")]
         ),
         .testTarget(name: "TUIkitTests", dependencies: ["TUIkit"]),
+
+        // ── Tools ───────────────────────────────────────────────────────────────────────────────────────
+        .executableTarget(
+            name: "EmojiBugScanner",
+            dependencies: ["TUIkitCore"],
+            path: "Tools/EmojiBugScanner"
+        ),
+        .executableTarget(
+            name: "EmojiBenchmark",
+            dependencies: ["TUIkitCore"],
+            path: "Tools/EmojiBenchmark"
+        ),
     ]
 )
