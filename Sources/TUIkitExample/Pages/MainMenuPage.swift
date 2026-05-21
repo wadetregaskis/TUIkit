@@ -71,6 +71,7 @@ struct MainMenuPage: View {
                         MenuItem(label: "Split View", shortcut: ";"),
                         MenuItem(label: "Image (File)", shortcut: "'"),
                         MenuItem(label: "Image (URL)", shortcut: ","),
+                        MenuItem(label: "Emoji", shortcut: "."),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in
