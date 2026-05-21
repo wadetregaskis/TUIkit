@@ -79,26 +79,13 @@ extension FrameDiffWriter {
                 // Clip first so over-wide content (a layout that does not
                 // shrink to fit a narrower terminal) cannot wrap past the
                 // right edge.  Cursor compensation is applied AFTER clipping
-                // so any CUF/deferred sequences are scoped to characters
-                // that actually survive the clip.
+                // so any CUF sequences are scoped to characters that actually
+                // survive the clip.
                 let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
-                let parts = clipped.withTerminalAppCursorCompensationParts()
-                let mainWithBg = parts.main.replacingOccurrences(of: reset, with: reset + bgCode)
-                // Padding count must use the cursor position the compensated
-                // line leaves us at, NOT just its visible width — the CUF
-                // sequences emitted by deferred-cluster handling advance the
-                // cursor without contributing visible cells.
-                let padding = max(0, terminalWidth - parts.mainCursorEnd + 1)
-                // Order: bg + erase-line + main content + padding + reset +
-                // deferred trailing writes (CHA + over-advancing cluster).
-                // The trailing writes go after padding so the padding spaces
-                // land in the correct cells before any over-advance happens.
-                // The deferred section gets `bgCode` re-emitted before its
-                // CHA so the cluster's cells render with the app's
-                // background (otherwise they keep the default terminal
-                // background left active by the preceding `reset`).
-                let deferredWithBg = parts.deferred.isEmpty ? "" : bgCode + parts.deferred + reset
-                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset + deferredWithBg
+                let compensated = clipped.withTerminalAppCursorCompensation()
+                let mainWithBg = compensated.replacingOccurrences(of: reset, with: reset + bgCode)
+                let padding = max(0, terminalWidth - clipped.strippedLength)
+                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
                 lines.append(paddedLine)
             } else {
                 lines.append(emptyLine)
@@ -248,28 +235,23 @@ extension FrameDiffWriter {
         reset: String
     ) {
         guard terminalWidth > 1 else { return }
-        // Terminal.app has a cluster of right-edge rendering bugs triggered by
-        // any emoji whose glyph width and cursor advance differ — skin-tone
-        // sequences (phantom-cell budget) and VS-16 pictographic emoji (cursor
-        // under-advance).  Both produce phantom cells at the right edge that
-        // sit at the default terminal background instead of the app's.
+        // Terminal.app leaves the rightmost 2 cells of a row at the default
+        // terminal background whenever the row contains an emoji whose glyph
+        // width and cursor advance disagree — VS-16 pictographic emoji
+        // (under-advance), or a Fitzpatrick skin-tone cluster whose modifier
+        // survived ``withTerminalAppCursorCompensation`` (i.e. it was the
+        // last visible character on the line).  ``containsTerminalAppCursorAdvanceQuirk``
+        // identifies those rows; everything else has its right edge painted
+        // correctly by the main pass.  A blanket repaint would be destructive
+        // at narrower widths where a wide character (CJK, 🥳, etc.) straddles
+        // the boundary — erasing the last 2 cells would destroy its right half.
         //
-        // Cursor compensation in `withTerminalAppCursorCompensation` (CUF for
-        // VS-16, CUB for skin-tone) keeps the post-emoji cursor in sync, so on
-        // rows that don't contain such emoji the right edge is already painted
-        // correctly and a blanket repaint would be destructive — at narrower
-        // widths the line is clipped and a wide character (e.g. CJK or a 2-cell
-        // emoji like 🥳) often straddles the boundary, and erasing the last 2
-        // cells destroys its right half.  So we restrict the repaint to rows
-        // whose cursor compensation actually injected a sequence.
-        //
-        // Two passes are used so that borders and right-aligned text written by
-        // the view system are not permanently destroyed:
-        //   1. ESC[K to erase/unlock the cells (with the bg colour active so
-        //      they at least land on the correct background if step 2 fails).
-        //   2. Re-write the actual content that belongs there (border, text,
-        //      or background space) using the accumulated SGR context so the
-        //      colours and styles are correct.
+        // Two passes so borders and right-aligned text from the view system
+        // are not permanently destroyed:
+        //   1. ESC[K to erase the cells (with the bg colour active so they
+        //      land on the app's background if step 2 fails).
+        //   2. Re-write the actual content that belongs there using the
+        //      accumulated SGR context so colours and styles are correct.
         let repaintCol = terminalWidth - 1  // 1-indexed; covers last 2 cells
         let splitAt    = terminalWidth - 2  // visible-cell offset of repaintCol
 
