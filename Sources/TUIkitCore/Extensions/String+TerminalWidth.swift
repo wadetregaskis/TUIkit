@@ -34,9 +34,12 @@ extension Character {
         // flag sequences, keycap sequences) are typically 2 cells wide.
         if scalars.count > 1 {
             // If the only extra scalars are variation selectors (U+FE0F/U+FE0E),
-            // fall through to the base character width check. Many terminals
-            // don't widen characters just because of a presentation selector
-            // (e.g. ⚙️ = U+2699 + U+FE0F is still 1 cell in most terminals).
+            // check whether the variation selector promotes the base to emoji
+            // presentation.  A `<base>+U+FE0F` cluster where the base has the
+            // Emoji property paints 2 cells in Terminal.app — this catches
+            // BMP emoji like ❤️ (U+2764+FE0F), ✏️ (U+270F+FE0F), ⚙️ (U+2699+FE0F)
+            // that the historical range checks below would otherwise have
+            // reported as 1 cell wide.
             let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
                 let sv = scalar.value
                 return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
@@ -45,7 +48,21 @@ extension Character {
                 // True multi-character sequence (ZWJ, flags, keycaps, skin tones)
                 return 2
             }
-            // Just base + variation selector(s): fall through to base char width
+            // Base + variation selector(s).  If the selector is U+FE0F and
+            // the base can be rendered as emoji, the cluster is 2 cells.
+            // Otherwise fall through to the base character width check.
+            if scalars.contains(where: { $0.value == 0xFE0F }) && first.properties.isEmoji {
+                return 2
+            }
+        }
+
+        // Single-scalar codepoints that default to colour emoji presentation
+        // are painted as 2-cell glyphs by Terminal.app (and most modern
+        // terminal emulators) regardless of whether they're in any of the
+        // East Asian Wide ranges below.  This catches BMP codepoints like
+        // ⌚ (U+231A), ⌛ (U+231B), ⏩ (U+23E9) that the range checks miss.
+        if first.properties.isEmojiPresentation {
+            return 2
         }
 
         // East Asian Wide and Fullwidth characters (2 cells)
@@ -93,35 +110,40 @@ extension Character {
     /// ``String/withTerminalAppCursorCompensation()``.
     public var terminalAppCursorAdvance: Int {
         let scalars = unicodeScalars
-        guard scalars.count > 1 else { return terminalWidth }
+        guard scalars.count > 1, let first = scalars.first else { return terminalWidth }
 
-        // VS-16 (U+FE0F) emoji presentation selector on a pictographic base
-        // in the 0x1F000–0x1FBFF block: Terminal.app renders the glyph as a
-        // 2-cell wide emoji but only advances the cursor by 1.
         let hasVS16 = scalars.contains { $0.value == 0xFE0F }
         let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
             let sv = scalar.value
             return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
         }
-        if hasVS16 && !hasNonVariationExtras {
-            if let first = scalars.first, (0x1F000...0x1FBFF).contains(first.value) {
-                return 1
-            }
+
+        // `<base>+U+FE0F` where the base is a default-text-presentation
+        // emoji (e.g. ❤️ = U+2764+FE0F, ✏️ = U+270F+FE0F, 🖥️ = U+1F5A5+FE0F):
+        // Terminal.app paints the glyph 2 cells wide (matching `terminalWidth`)
+        // but only advances the cursor by 1.  Using `Unicode.Scalar.Properties`
+        // catches BMP bases too, not just the `0x1F000-0x1FBFF` block.
+        if hasVS16 && !hasNonVariationExtras
+            && first.properties.isEmoji
+            && !first.properties.isEmojiPresentation
+        {
+            return 1
         }
 
-        // Fitzpatrick skin-tone modifiers (U+1F3FB–U+1F3FF) on a pictographic
-        // base in the 0x1F000–0x1FBFF block: Terminal.app renders the glyph
-        // 2 cells wide but advances the cursor by 4.  See
-        // ``String/withTerminalAppCursorCompensation()`` for how this is
-        // handled at the line level — there is no per-character escape that
-        // works (any backward cursor movement after the cluster strips the
-        // Fitzpatrick scalar).
-        let skinToneRange: ClosedRange<UInt32> = 0x1F3FB...0x1F3FF
-        let hasSkinTone = scalars.contains { skinToneRange.contains($0.value) }
-        if hasSkinTone {
-            if let first = scalars.first, (0x1F000...0x1FBFF).contains(first.value) {
-                return 4
-            }
+        // Fitzpatrick skin-tone modifier (U+1F3FB–U+1F3FF) on an emoji-
+        // modifier-base codepoint: Terminal.app paints 2 cells but advances
+        // the cursor by 4 (or 3 if the base also under-advances bare —
+        // a few BMP bases like ☝ U+261D, ✌ U+270C do this).  We can't
+        // distinguish 3 from 4 without empirical measurement; both are
+        // `> terminalWidth`, so `withTerminalAppCursorCompensation` will
+        // strip the modifier when there's content after the cluster either
+        // way.  Returning 4 unconditionally is therefore both simpler and
+        // correct enough — the exact value matters only when the cluster
+        // is the last visible char on the line, in which case the over-
+        // advance happens after the row is done and is harmless.
+        let hasSkinTone = scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+        if hasSkinTone && first.properties.isEmojiModifierBase {
+            return 4
         }
 
         return terminalWidth
