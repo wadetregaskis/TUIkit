@@ -77,19 +77,8 @@ Prefer pure composition (combining existing Views + modifiers) over `_*Core` + `
 
 ### Directory Structure
 
-```
-Sources/TUIkit/
-├── App/           App lifecycle, Scene, WindowGroup
-├── Core/          View protocol, ViewBuilder, TupleViews
-├── Environment/   EnvironmentValues, @Environment
-├── State/         @State, StateStorage, @AppStorage
-├── Rendering/     FrameBuffer, Renderable, Terminal, ANSIRenderer
-├── Modifiers/     Border, Frame, Padding, Overlay, Lifecycle
-├── Views/         Text, Stacks, Button, Menu, Alert, Dialog, etc.
-├── Focus/         FocusManager, focus sections
-├── Styling/       Color, Palette, Theme
-└── StatusBar/     StatusBar, StatusBarItem
-```
+See the "Project Structure" section of [README.md](../README.md) for the
+authoritative module and directory layout.
 
 ## SwiftUI API Parity (non-negotiable)
 
