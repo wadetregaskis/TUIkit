@@ -238,6 +238,10 @@ Sources/
 
 Tests/
 └── TUIkitTests/          1172+ tests across 93 test files (including i18n consistency & localization tests)
+
+Tools/
+├── EmojiBugScanner/      Probes Terminal.app for emoji cursor-advance quirks
+└── EmojiBenchmark/       Benchmarks emoji classification strategies
 ```
 
 ## Requirements
