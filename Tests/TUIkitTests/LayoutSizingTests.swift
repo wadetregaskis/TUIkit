@@ -514,3 +514,41 @@ struct ListSizingTests {
         #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
     }
 }
+
+// MARK: - Text-input sizing
+
+@MainActor
+@Suite("Text-input field sizing")
+struct TextInputSizingTests {
+
+    @Test("TextField never overflows")
+    func textFieldNeverOverflows() {
+        var text = "some typed content here"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        assertNeverOverflows("TextField", TextField("Label", text: binding))
+    }
+
+    @Test("SecureField never overflows")
+    func secureFieldNeverOverflows() {
+        var text = "password"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        assertNeverOverflows("SecureField", SecureField("Password", text: binding))
+    }
+
+    @Test("TextField sizeThatFits matches its rendered width")
+    func sizeMatchesRender() {
+        var text = ""
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let field = TextField("Field", text: binding)
+        for proposedWidth in [12, 20, 40, 80] {
+            let context = RenderContext(
+                availableWidth: proposedWidth, availableHeight: 1, tuiContext: TUIContext())
+            let measured = measureChild(
+                field, proposal: ProposedSize(width: proposedWidth, height: 1), context: context)
+            let rendered = renderToBuffer(field, context: context)
+            #expect(
+                measured.width == rendered.width,
+                "measured \(measured.width) but rendered \(rendered.width) at proposal \(proposedWidth)")
+        }
+    }
+}

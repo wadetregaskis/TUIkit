@@ -242,9 +242,13 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     /// TextField is width-flexible: it has a minimum width but expands
     /// to fill available horizontal space in HStack.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let width = proposal.width ?? defaultContentWidth
+        // The rendered field is `openCap + content + closeCap`, so the total
+        // width is the content width plus the two caps. Report that total so a
+        // parent (e.g. HStack) allocates the field accurately.
+        let capWidth = 2
+        let proposedTotal = proposal.width ?? (defaultContentWidth + capWidth)
         return ViewSize(
-            width: max(minContentWidth, width),
+            width: max(minContentWidth + capWidth, proposedTotal),
             height: 1,
             isWidthFlexible: true,
             isHeightFlexible: false

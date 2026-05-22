@@ -202,7 +202,7 @@ struct LayoutableTests {
         let size = measureChild(textField, proposal: .unspecified, context: context)
 
         #expect(size.isWidthFlexible == true, "TextField should report flexible width through body traversal")
-        #expect(size.width == 20, "TextField default width should be 20, got \(size.width)")
+        #expect(size.width == 22, "TextField default width should be 22 (20 content + 2 caps), got \(size.width)")
     }
 
     @Test("measureChild sets up hydration context for @Environment(Observable.self)")
