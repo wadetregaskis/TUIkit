@@ -50,7 +50,7 @@ struct ContentView: View {
         VStack {
             Text("Welcome to TUIkit!")
                 .bold()
-                .foregroundColor(.cyan)
+                .foregroundStyle(.cyan)
 
             Spacer()
 
@@ -92,7 +92,7 @@ renderOnce {
     VStack {
         Text("Hello, TUIkit!")
             .bold()
-            .foregroundColor(.green)
+            .foregroundStyle(.green)
         Divider()
         Text("Version \(tuiKitVersion)")
             .dim()

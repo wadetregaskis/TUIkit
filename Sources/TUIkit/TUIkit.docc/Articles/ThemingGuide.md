@@ -55,7 +55,7 @@ Use ``Color/palette`` to access the current palette's colors:
 
 ```swift
 Text("Styled text")
-    .foregroundColor(.palette.foreground)
+    .foregroundStyle(.palette.foreground)
     .background(.palette.background)
 ```
 
@@ -64,7 +64,7 @@ Or read the palette directly from the environment:
 ```swift
 @Environment(\.palette) var palette
 
-Text("Hello").foregroundColor(palette.accent)
+Text("Hello").foregroundStyle(palette.accent)
 ```
 
 ## Creating Custom Palettes

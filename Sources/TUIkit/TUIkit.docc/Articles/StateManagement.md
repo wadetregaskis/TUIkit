@@ -56,7 +56,7 @@ struct MyView: View {
 
     var body: some View {
         Text("Themed text")
-            .foregroundColor(theme.foreground)
+            .foregroundStyle(theme.foreground)
     }
 }
 ```

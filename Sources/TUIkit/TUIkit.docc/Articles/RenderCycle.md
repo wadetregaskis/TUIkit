@@ -367,8 +367,8 @@ struct FeatureBox: View, Equatable {
 
     var body: some View {
         VStack {
-            Text(title).bold().foregroundColor(.palette.accent)
-            Text(subtitle).foregroundColor(.palette.foregroundSecondary)
+            Text(title).bold().foregroundStyle(.palette.accent)
+            Text(subtitle).foregroundStyle(.palette.foregroundSecondary)
         }
         .padding(EdgeInsets(horizontal: 2, vertical: 1))
         .border(color: .palette.border)

@@ -20,7 +20,7 @@ struct MyApp: App {
             VStack {
                 Text("Hello, TUIkit!")
                     .bold()
-                    .foregroundColor(.cyan)
+                    .foregroundStyle(.cyan)
                 Button("Press me") {
                     // handle action
                 }

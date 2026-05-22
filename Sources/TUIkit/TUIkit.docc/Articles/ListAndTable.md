@@ -234,7 +234,7 @@ List("Items", selection: $selected) {
         Text(item.name)  // Inherits red foreground
     }
 }
-.foregroundColor(.red)
+.foregroundStyle(.red)
 ```
 
 ## See Also

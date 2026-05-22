@@ -10,7 +10,7 @@ Users access palette colors via `Color.palette.*`:
 
 ```swift
 Text("Hello")
-    .foregroundColor(.palette.accent)
+    .foregroundStyle(.palette.accent)
     .background(.palette.background)
 ```
 
@@ -230,7 +230,7 @@ When pressing `t` to cycle themes, palettes rotate in this order:
 
 ## Color Resolution Flow
 
-When you write `.foregroundColor(.palette.accent)`, TUIkit resolves the actual color at render time:
+When you write `.foregroundStyle(.palette.accent)`, TUIkit resolves the actual color at render time:
 
 1. **Declaration**: `Color.palette.accent` creates a `Color` with a semantic token (`.accent`)
 2. **Render pass**: The current palette is read from `context.environment.palette`

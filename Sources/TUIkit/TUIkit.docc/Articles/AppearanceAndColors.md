@@ -105,7 +105,7 @@ Use `Color.palette.*`: these return semantic tokens:
 
 ```swift
 Text("Hello")
-    .foregroundColor(.palette.accent)    // resolves to palette's accent color
+    .foregroundStyle(.palette.accent)    // resolves to palette's accent color
     .background(.palette.background)
 ```
 

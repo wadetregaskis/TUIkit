@@ -27,10 +27,10 @@ struct StatusHeader: View {
             HStack {
                 Text(title)
                     .bold()
-                    .foregroundColor(.palette.accent)
+                    .foregroundStyle(.palette.accent)
                 Spacer()
                 Text("v\(version)")
-                    .foregroundColor(.palette.foregroundTertiary)
+                    .foregroundStyle(.palette.foregroundTertiary)
             }
             Divider()
         }
@@ -50,7 +50,7 @@ struct UserCard: View {
             Text(name).bold()
             if let role {
                 Text(role)
-                    .foregroundColor(.palette.foregroundSecondary)
+                    .foregroundStyle(.palette.foregroundSecondary)
                     .italic()
             }
         }
