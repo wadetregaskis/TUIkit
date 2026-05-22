@@ -15,7 +15,13 @@
 //  replies to determine where Terminal.app's cursor counter ended up
 //  after writing each cluster.
 
-import Darwin
+#if canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#elseif canImport(Darwin)
+    import Darwin
+#endif
 import Foundation
 import TUIkitCore
 
@@ -54,7 +60,7 @@ struct RawMode {
 // MARK: - Low-level I/O
 
 func writeBytes(_ bytes: [UInt8]) {
-    _ = bytes.withUnsafeBytes { Darwin.write(STDOUT_FILENO, $0.baseAddress, $0.count) }
+    _ = bytes.withUnsafeBytes { write(STDOUT_FILENO, $0.baseAddress, $0.count) }
 }
 
 func writeString(_ s: String) {
@@ -68,7 +74,7 @@ func readUntil(terminator: UInt8, maxBytes: Int = 32) -> [UInt8]? {
     var buf: [UInt8] = []
     while buf.count < maxBytes {
         var b: UInt8 = 0
-        let n = Darwin.read(STDIN_FILENO, &b, 1)
+        let n = read(STDIN_FILENO, &b, 1)
         if n <= 0 { return nil }
         buf.append(b)
         if b == terminator { return buf }
