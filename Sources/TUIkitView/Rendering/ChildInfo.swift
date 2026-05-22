@@ -229,7 +229,9 @@ public func renderChild<V: View>(_ view: V, width: Int, height: Int, context: Re
     var renderContext = context
     renderContext.availableWidth = width
     renderContext.availableHeight = height
-    return renderToBuffer(view, context: renderContext)
+    // Safety net: a child must never exceed the space allocated to it,
+    // otherwise it would overwrite a sibling or overflow the stack.
+    return renderToBuffer(view, context: renderContext).clamped(toWidth: width, height: height)
 }
 
 // MARK: - Child Info Resolution

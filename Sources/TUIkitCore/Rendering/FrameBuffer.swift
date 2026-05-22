@@ -239,6 +239,40 @@ extension FrameBuffer {
 
         return Self(lines: result)
     }
+
+    /// Returns a copy of this buffer guaranteed to fit within the given bounds.
+    ///
+    /// Lines wider than `width` are truncated to `width` visible cells
+    /// (ANSI-aware — a wide character is dropped rather than split in half);
+    /// lines beyond `height` are discarded.
+    ///
+    /// This is the layout system's safety net: a view that mistakenly
+    /// produces an oversized buffer cannot overwrite a sibling or overflow
+    /// the terminal — at worst its own content is truncated.
+    ///
+    /// - Parameters:
+    ///   - width: The maximum visible width in cells. Values below 0 are treated as 0.
+    ///   - height: The maximum number of lines. Values below 0 are treated as 0.
+    /// - Returns: A buffer with `width <= max(0, width)` and `height <= max(0, height)`.
+    public func clamped(toWidth width: Int, height: Int) -> FrameBuffer {
+        let maxWidth = max(0, width)
+        let maxHeight = max(0, height)
+
+        // Fast path: already within bounds.
+        if self.width <= maxWidth && self.height <= maxHeight {
+            return self
+        }
+
+        var clippedLines = self.height > maxHeight ? Array(lines.prefix(maxHeight)) : lines
+        var resultWidth = 0
+        for index in clippedLines.indices {
+            if clippedLines[index].strippedLength > maxWidth {
+                clippedLines[index] = clippedLines[index].ansiAwarePrefix(visibleCount: maxWidth)
+            }
+            resultWidth = max(resultWidth, clippedLines[index].strippedLength)
+        }
+        return FrameBuffer(lines: clippedLines, width: resultWidth)
+    }
 }
 
 // MARK: - Private Helpers
