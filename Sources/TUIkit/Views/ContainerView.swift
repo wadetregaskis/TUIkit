@@ -316,7 +316,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let palette = context.environment.palette
         let borderColor = style.borderColor?.resolve(with: palette) ?? palette.border
 
-        // Create inner context for content inside borders using shared helper.
+        // Inner context for content between the side borders (width − 2).
         // Padding width reduction is handled by PaddingModifier.adjustContext.
         var innerContext = context.forBorderedContent()
 
@@ -324,52 +324,66 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let indicatorColor = context.environment.focusIndicatorColor
         innerContext.environment.focusIndicatorColor = nil
 
-        // Render body content first to determine its natural width.
-        let paddedContent = content.padding(padding)
-        let bodyBuffer = TUIkit.renderToBuffer(paddedContent, context: innerContext)
+        // Vertical chrome: top + bottom border, plus the optional footer
+        // separator. The body and footer must share whatever is left so the
+        // assembled container never grows taller than `availableHeight`.
+        let hasFooter = footer != nil
+        let chromeHeight = 2 + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
+        let innerAvailableHeight = max(0, context.availableHeight - chromeHeight)
 
-        // If body is empty and there's no footer, return empty buffer.
-        // This preserves the convention that bordering empty content
-        // produces nothing (e.g. `EmptyView().border()`).
+        // Measure the footer first (without side-effects) so the body knows
+        // how much vertical space is left. Real focus registration happens in
+        // the constrained re-render below, after the body — preserving Tab order.
+        let footerPadding = EdgeInsets(horizontal: 1, vertical: 0)
+        let measuredFooter: FrameBuffer?
+        if let footerView = footer {
+            var measureContext = innerContext
+            measureContext.isMeasuring = true
+            measureContext.availableHeight = innerAvailableHeight
+            measuredFooter = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: measureContext)
+                .clamped(toWidth: innerContext.availableWidth, height: innerAvailableHeight)
+        } else {
+            measuredFooter = nil
+        }
+        let footerHeight = measuredFooter?.height ?? 0
+
+        // Render the body into the space the chrome and footer leave.
+        let bodyAvailableHeight = max(0, innerAvailableHeight - footerHeight)
+        var bodyContext = innerContext
+        bodyContext.availableHeight = bodyAvailableHeight
+        let bodyBuffer = TUIkit.renderToBuffer(content.padding(padding), context: bodyContext)
+            .clamped(toWidth: innerContext.availableWidth, height: bodyAvailableHeight)
+
+        // Bordering empty content with no footer produces nothing
+        // (e.g. `EmptyView().border()`).
         if bodyBuffer.isEmpty && footer == nil {
             return bodyBuffer
         }
 
-        // Render footer with full available width for initial measurement.
-        // This ensures the footer's natural width is included in the
-        // innerWidth calculation, preventing truncation when footer content
-        // (e.g. HStack with Spacer + Button) is wider than the body.
-        let footerPadding = EdgeInsets(horizontal: 1, vertical: 0)
-        let initialFooterBuffer: FrameBuffer?
-        if let footerView = footer {
-            let paddedFooter = footerView.padding(footerPadding)
-            initialFooterBuffer = TUIkit.renderToBuffer(paddedFooter, context: innerContext)
-        } else {
-            initialFooterBuffer = nil
-        }
-
-        // Calculate inner width using shared helper
+        // Inner width: the widest of title / body / footer, capped at the
+        // space available between the side borders.
         let titleWidth = title.map { $0.strippedLength + 4 } ?? 0  // " Title " + borders
-        let footerNaturalWidth = initialFooterBuffer?.width ?? 0
+        let footerNaturalWidth = measuredFooter?.width ?? 0
         let contentBasedWidth = max(titleWidth, bodyBuffer.width, footerNaturalWidth)
         let innerWidth = context.resolveContainerWidth(
             contentWidth: contentBasedWidth,
             innerAvailableWidth: innerContext.availableWidth
         )
 
-        // Re-render footer constrained to the final innerWidth so that
-        // Spacer() fills exactly the container's inner width.
+        // Re-render the footer constrained to the final inner width — this is
+        // the real render and registers focus, after the body.
         let footerBuffer: FrameBuffer?
         if let footerView = footer {
             var footerContext = innerContext
-            footerContext.availableWidth = innerWidth - footerPadding.leading - footerPadding.trailing
-            let paddedFooter = footerView.padding(footerPadding)
-            footerBuffer = TUIkit.renderToBuffer(paddedFooter, context: footerContext)
+            footerContext.availableWidth = max(0, innerWidth - footerPadding.leading - footerPadding.trailing)
+            footerContext.availableHeight = innerAvailableHeight
+            footerBuffer = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: footerContext)
+                .clamped(toWidth: innerWidth, height: innerAvailableHeight)
         } else {
             footerBuffer = nil
         }
 
-        return renderStandardStyle(
+        let assembled = renderStandardStyle(
             bodyBuffer: bodyBuffer,
             footerBuffer: footerBuffer,
             innerWidth: innerWidth,
@@ -378,6 +392,8 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             context: context,
             focusIndicatorColor: indicatorColor
         )
+        // Final guard: never exceed the space the container was given.
+        return assembled.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     // MARK: - Standard Style Rendering

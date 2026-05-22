@@ -327,3 +327,69 @@ struct VStackSizingTests {
         #expect(buffer.lines.first?.contains("row 1") == true, "the first row should stay visible")
     }
 }
+
+// MARK: - Container sizing
+
+@MainActor
+@Suite("Container sizing")
+struct ContainerSizingTests {
+
+    @Test("Box never overflows")
+    func boxNeverOverflows() {
+        assertNeverOverflows("Box around text", Box { Text("Hello, world") })
+    }
+
+    @Test("Box around long text never overflows")
+    func boxLongTextNeverOverflows() {
+        assertNeverOverflows("Box around long text", Box { Text(String(repeating: "X", count: 120)) })
+    }
+
+    @Test("Box around a tall stack never overflows")
+    func boxTallStackNeverOverflows() {
+        assertNeverOverflows(
+            "Box around tall VStack",
+            Box {
+                VStack {
+                    Text("1"); Text("2"); Text("3"); Text("4")
+                    Text("5"); Text("6"); Text("7"); Text("8")
+                }
+            })
+    }
+
+    @Test("Box around a misbehaving child never overflows")
+    func boxMisbehavingChildNeverOverflows() {
+        assertNeverOverflows(
+            "Box around OversizedView",
+            Box { OversizedView(renderWidth: 250, renderHeight: 40) })
+    }
+
+    @Test("A container with a long title never overflows")
+    func longTitleNeverOverflows() {
+        assertNeverOverflows(
+            "ContainerView long title",
+            ContainerView(title: String(repeating: "T", count: 100)) { Text("body") })
+    }
+
+    @Test("Box shrinks to wrap short content")
+    func boxWrapsContentTightly() {
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let buffer = renderToBuffer(Box { Text("Hi") }, context: context)
+        #expect(buffer.width == 6, "Box should shrink to content width, got \(buffer.width)")
+        #expect(buffer.height == 3, "Box should be content height plus borders, got \(buffer.height)")
+    }
+
+    @Test("Box stays within a terminal smaller than its content")
+    func boxClampsToSmallTerminal() {
+        let view = Box {
+            VStack {
+                Text("line one")
+                Text("line two")
+                Text("line three")
+            }
+        }
+        let context = RenderContext(availableWidth: 8, availableHeight: 4, tuiContext: TUIContext())
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.width <= 8)
+        #expect(buffer.height <= 4)
+    }
+}

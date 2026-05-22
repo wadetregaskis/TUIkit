@@ -116,26 +116,32 @@ extension BorderRenderer {
         titleColor: Color,
         focusIndicatorColor: Color? = nil
     ) -> String {
-        let titleStyled = ANSIRenderer.colorize(" \(title) ", foreground: titleColor, bold: true)
+        // The decoration after the corner (─ or ●) occupies one inner cell
+        // and the title display adds two spaces of padding. Truncate the title
+        // so the whole top border fits exactly within `innerWidth`.
+        let usedLeftWidth = 1
+        let maxTitleWidth = max(0, innerWidth - usedLeftWidth - 2)
+        let fittedTitle =
+            title.strippedLength > maxTitleWidth
+            ? title.ansiAwarePrefix(visibleCount: maxTitleWidth)
+            : title
+        let titleStyled = ANSIRenderer.colorize(" \(fittedTitle) ", foreground: titleColor, bold: true)
 
         let leftPart: String
-        let usedLeftWidth: Int
         if let indicatorColor = focusIndicatorColor {
             // ╭● Title
             let corner = ANSIRenderer.colorize(String(style.topLeft), foreground: color)
             let indicator = ANSIRenderer.colorize(String(focusIndicator), foreground: indicatorColor)
             leftPart = corner + indicator
-            usedLeftWidth = 1  // only the ● (corner is outside innerWidth)
         } else {
             // ╭─ Title
             leftPart = ANSIRenderer.colorize(
                 String(style.topLeft) + String(style.horizontal),
                 foreground: color
             )
-            usedLeftWidth = 1  // only the ─ after corner
         }
 
-        let rightPartLength = max(0, innerWidth - usedLeftWidth - title.strippedLength - 2)
+        let rightPartLength = max(0, innerWidth - usedLeftWidth - fittedTitle.strippedLength - 2)
         let rightPart = ANSIRenderer.colorize(
             String(repeating: style.horizontal, count: rightPartLength) + String(style.topRight),
             foreground: color
@@ -206,8 +212,13 @@ extension BorderRenderer {
         color: Color,
         backgroundColor: Color? = nil
     ) -> String {
-        let paddedLine = content.padToVisibleWidth(innerWidth)
-        let styledContent = paddedLine.withPersistentBackground(backgroundColor)
+        // Fit the content to exactly `innerWidth`: truncate if it is wider
+        // (ANSI-aware) so it cannot displace the right border, pad if narrower.
+        let fittedLine =
+            content.strippedLength > innerWidth
+            ? content.ansiAwarePrefix(visibleCount: innerWidth)
+            : content.padToVisibleWidth(innerWidth)
+        let styledContent = fittedLine.withPersistentBackground(backgroundColor)
         let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
         return vertical + styledContent + ANSIRenderer.reset + vertical
     }

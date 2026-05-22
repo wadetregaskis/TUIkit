@@ -198,15 +198,15 @@ public struct RenderContext {
 
     /// Calculates the inner width for a container based on content.
     ///
-    /// Containers (borders, panels, cards) size to fit their content.
-    /// They do not auto-expand beyond the content width.
+    /// Containers (borders, panels, cards) size to fit their content, but
+    /// never wider than the space available between their borders.
     ///
     /// - Parameters:
     ///   - contentWidth: The natural width of the content.
-    ///   - innerAvailableWidth: The available width inside the container (unused).
-    /// - Returns: The content width.
+    ///   - innerAvailableWidth: The width available inside the container.
+    /// - Returns: The content width, capped at `innerAvailableWidth`.
     public func resolveContainerWidth(contentWidth: Int, innerAvailableWidth: Int) -> Int {
-        contentWidth
+        max(0, min(contentWidth, innerAvailableWidth))
     }
 
     /// Calculates the inner height for a container based on content.
