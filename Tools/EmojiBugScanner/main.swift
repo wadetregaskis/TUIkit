@@ -429,7 +429,7 @@ func main() {
     // Write the report.
     let outHandle: FileHandle
     if let path = opts.outputPath {
-        FileManager.default.createFile(atPath: path, contents: nil)
+        _ = FileManager.default.createFile(atPath: path, contents: nil)
         guard let h = FileHandle(forWritingAtPath: path) else {
             FileHandle.standardError.write("could not open \(path)\n".data(using: .utf8)!)
             exit(1)
