@@ -4,14 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-#if canImport(Glibc)
-    import Glibc
-#elseif canImport(Musl)
-    import Musl
-#elseif canImport(Darwin)
-    import Darwin
-#endif
-
 // MARK: - App Protocol
 
 /// The base protocol for TUIkit applications.
@@ -50,15 +42,16 @@ extension App {
     /// This method is called by the `@main` attribute and starts
     /// the main run loop of the application.
     ///
-    /// Since TUIKit runs on the main thread and `@main` entry points
-    /// execute on the main thread, we use `MainActor.assumeIsolated`
-    /// to access MainActor-isolated types synchronously.
-    public static func main() {
-        MainActor.assumeIsolated {
-            let app = Self()
-            let runner = AppRunner<Self>(app: app)
-            runner.run()
-        }
+    /// `main()` is `async` so the run loop can suspend once per frame
+    /// (via `Task.sleep`) instead of blocking the thread. Each suspension
+    /// releases the main actor, so work scheduled with `Task { @MainActor }`,
+    /// `MainActor.run`, or `DispatchQueue.main` runs interleaved with
+    /// rendering — rather than being starved until the app exits.
+    @MainActor
+    public static func main() async {
+        let app = Self()
+        let runner = AppRunner<Self>(app: app)
+        await runner.run()
     }
 }
 
@@ -102,7 +95,7 @@ internal final class AppRunner<A: App> {
 // MARK: - Internal API
 
 extension AppRunner {
-    func run() {
+    func run() async {
         // Create run-loop dependencies (previously IUOs, now local variables)
         let inputHandler = InputHandler(
             statusBar: statusBar,
@@ -199,10 +192,12 @@ extension AppRunner {
                 eventsProcessed += 1
             }
 
-            // Sleep ~24ms to yield CPU.
-            // This sets the maximum frame rate to ~42 FPS.
-            //
-            usleep(23_800)
+            // Suspend ~24ms before the next frame. Unlike a blocking sleep,
+            // `Task.sleep` is a real suspension point: it releases the main
+            // actor, so work queued with `Task { @MainActor }`, `MainActor.run`,
+            // or `DispatchQueue.main` runs between frames instead of being
+            // starved until the app exits. Also caps the frame rate at ~42 FPS.
+            try? await Task.sleep(nanoseconds: 23_800_000)
         }
 
         // Stop pulse timer before cleanup

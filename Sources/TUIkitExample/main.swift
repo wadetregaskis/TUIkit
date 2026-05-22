@@ -21,4 +21,4 @@ struct ExampleApp: App {
 }
 
 // Run the app
-ExampleApp.main()
+await ExampleApp.main()

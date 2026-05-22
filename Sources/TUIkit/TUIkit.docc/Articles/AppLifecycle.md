@@ -69,7 +69,7 @@ The original terminal settings are saved and restored during cleanup.
 
 ## Main Loop
 
-The main loop is synchronous and runs until shutdown:
+`AppRunner.run()` is `async`. Each iteration renders and processes input synchronously, then suspends ~24 ms via `Task.sleep` — a real suspension point that releases the main actor so `Task`, `MainActor.run`, and `DispatchQueue.main` work runs interleaved between frames. The loop runs until shutdown:
 
 @Image(source: "lifecycle-main-loop.png", alt: "Flowchart of the main loop: run() performs terminal setup, registers observers, starts timers, renders first frame, then loops checking shouldShutdown, consumeResizeFlag to invalidate diff cache, rerenderFlag or needsRender to conditionally render, reads key events non-blocking up to 128 per frame, dispatches through 5 layers, and sleeps 28ms. On shouldShutdown, cleanup restores the terminal and exits.")
 
