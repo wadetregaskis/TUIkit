@@ -34,7 +34,7 @@ struct MyApp: App {
 
 - **Declarative syntax**: Build UIs with `VStack`, `HStack`, `Text`, `Button`, and more
 - **SwiftUI-like API**: `@State`, `@ViewBuilder`, environment values, modifiers
-- **Theming system**: 5 built-in phosphor themes with full RGB color support
+- **Theming system**: 6 built-in palettes with full RGB color support
 - **Focus management**: Keyboard-driven navigation between interactive elements
 - **Status bar**: Configurable shortcut bar with context stack
 - **No dependencies**: Pure Swift, no ncurses or other C libraries
