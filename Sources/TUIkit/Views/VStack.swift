@@ -89,13 +89,16 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 hasFlexibleHeight = true
             }
         }
+        totalHeight += max(0, children.count - 1) * spacing
 
-        let totalSpacing = max(0, children.count - 1) * spacing
-        totalHeight += totalSpacing
-
+        // Never advertise a size larger than the constraint we were given —
+        // an over-report would make the parent reserve space that does not
+        // exist and let content overlap.
+        let widthLimit = proposal.width ?? context.availableWidth
+        let heightLimit = proposal.height ?? context.availableHeight
         return ViewSize(
-            width: maxWidth,
-            height: totalHeight,
+            width: min(maxWidth, max(0, widthLimit)),
+            height: min(totalHeight, max(0, heightLimit)),
             isWidthFlexible: false,
             isHeightFlexible: hasFlexibleHeight
         )
@@ -105,65 +108,69 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
-        // === PASS 1: Measure all children ===
+        // === PASS 1: Measure every child's natural size ===
         var childSizes: [ViewSize] = []
-        var totalMinHeight = 0
-        var flexibleCount = 0
-        var maxWidth = 0
-
+        childSizes.reserveCapacity(children.count)
         for child in children {
-            let size = child.measure(proposal: .unspecified, context: context)
-            childSizes.append(size)
-
-            if child.isSpacer || size.isHeightFlexible {
-                flexibleCount += 1
-                totalMinHeight += size.height  // minimum height for flexible views
-            } else {
-                totalMinHeight += size.height
-            }
-            maxWidth = max(maxWidth, size.width)
+            childSizes.append(child.measure(proposal: .unspecified, context: context))
         }
 
-        // Calculate spacing
         let totalSpacing = max(0, children.count - 1) * spacing
+        let contentHeight = max(0, context.availableHeight - totalSpacing)
 
-        // Calculate remaining space for flexible views
-        let remainingHeight = max(0, context.availableHeight - totalMinHeight - totalSpacing)
-        let flexibleHeight = flexibleCount > 0 ? remainingHeight / flexibleCount : 0
-        let flexibleRemainder = flexibleCount > 0 ? remainingHeight % flexibleCount : 0
-
-        // Use available width for alignment when spacers are present
-        let alignmentWidth = flexibleCount > 0 ? context.availableWidth : maxWidth
-
-        // === PASS 2: Render with final sizes ===
-        var result = FrameBuffer()
-        var flexibleIndex = 0
-
+        var naturalHeight = [Int](repeating: 0, count: children.count)
+        var isFlexible = [Bool](repeating: false, count: children.count)
         for (index, child) in children.enumerated() {
-            let childSize = childSizes[index]
-            let spacingToApply = index > 0 ? spacing : 0
-
-            // Determine final height for this child
-            let finalHeight: Int
-            if child.isSpacer || childSize.isHeightFlexible {
-                let extraHeight = flexibleIndex < flexibleRemainder ? 1 : 0
-                finalHeight = max(child.spacerMinLength ?? childSize.height, childSize.height + flexibleHeight + extraHeight)
-                flexibleIndex += 1
-            } else {
-                finalHeight = childSize.height
-            }
-
-            // Handle spacers specially (just empty space)
             if child.isSpacer {
-                result.appendVertically(FrameBuffer(emptyWithHeight: finalHeight), spacing: spacingToApply)
+                naturalHeight[index] = child.spacerMinLength ?? 0
+                isFlexible[index] = true
             } else {
-                let buffer = child.render(width: context.availableWidth, height: finalHeight, context: context)
+                naturalHeight[index] = childSizes[index].height
+                isFlexible[index] = childSizes[index].isHeightFlexible
+            }
+        }
+
+        let finalHeights = distributeLinearSpace(
+            naturalSizes: naturalHeight,
+            isFlexible: isFlexible,
+            available: contentHeight
+        )
+        let hasFlexible = isFlexible.contains(true)
+
+        // === PASS 2: Render each child into its allocated height ===
+        var buffers: [FrameBuffer?] = []
+        buffers.reserveCapacity(children.count)
+        var maxChildWidth = 0
+        for (index, child) in children.enumerated() {
+            if child.isSpacer {
+                buffers.append(nil)
+            } else {
+                let buffer = child.render(
+                    width: context.availableWidth, height: finalHeights[index], context: context)
+                maxChildWidth = max(maxChildWidth, buffer.width)
+                buffers.append(buffer)
+            }
+        }
+
+        // With a flexible child present the stack fills the available width;
+        // otherwise it shrinks to its widest child.
+        let alignmentWidth = hasFlexible ? context.availableWidth : maxChildWidth
+
+        // === PASS 3: Assemble vertically ===
+        var result = FrameBuffer()
+        for (index, child) in children.enumerated() {
+            let spacingToApply = index > 0 ? spacing : 0
+            if child.isSpacer {
+                result.appendVertically(
+                    FrameBuffer(emptyWithHeight: finalHeights[index]), spacing: spacingToApply)
+            } else if let buffer = buffers[index] {
                 let alignedBuffer = alignBuffer(buffer, toWidth: alignmentWidth, alignment: alignment)
                 result.appendVertically(alignedBuffer, spacing: spacingToApply)
             }
         }
 
-        return result
+        // Final guard against overflow on a terminal smaller than the content.
+        return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     /// Aligns a buffer horizontally within the given width.

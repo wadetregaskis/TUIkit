@@ -251,3 +251,79 @@ struct HStackSizingTests {
             widths: [0, 1, 2, 3, 4, 6, 10])
     }
 }
+
+// MARK: - VStack sizing
+
+@MainActor
+@Suite("VStack sizing")
+struct VStackSizingTests {
+
+    @Test("A tall VStack never overflows")
+    func tallStackNeverOverflows() {
+        assertNeverOverflows(
+            "VStack of 8 rows",
+            VStack {
+                Text("Row 1"); Text("Row 2"); Text("Row 3"); Text("Row 4")
+                Text("Row 5"); Text("Row 6"); Text("Row 7"); Text("Row 8")
+            })
+    }
+
+    @Test("VStack of long lines never overflows")
+    func longLinesNeverOverflow() {
+        assertNeverOverflows(
+            "VStack of long texts",
+            VStack {
+                Text(String(repeating: "A", count: 60))
+                Text(String(repeating: "B", count: 60))
+            })
+    }
+
+    @Test("VStack containing a misbehaving child never overflows")
+    func misbehavingChildNeverOverflows() {
+        assertNeverOverflows(
+            "VStack with OversizedView",
+            VStack {
+                Text("top")
+                OversizedView(renderWidth: 300, renderHeight: 50)
+                Text("bottom")
+            })
+    }
+
+    @Test("VStack with a Spacer never overflows")
+    func spacerNeverOverflows() {
+        assertNeverOverflows(
+            "VStack with Spacer",
+            VStack {
+                Text("top")
+                Spacer()
+                Text("bottom")
+            })
+    }
+
+    @Test("VStack expands a Spacer to fill the available height")
+    func spacerFillsHeight() {
+        let view = VStack(spacing: 0) {
+            Text("top")
+            Spacer()
+            Text("bottom")
+        }
+        let context = RenderContext(availableWidth: 20, availableHeight: 15, tuiContext: TUIContext())
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.height == 15, "VStack with a Spacer should fill the height, got \(buffer.height)")
+    }
+
+    @Test("VStack keeps the topmost rows when the terminal is too short")
+    func tooShortTerminalClamps() {
+        let view = VStack(spacing: 0) {
+            Text("row 1")
+            Text("row 2")
+            Text("row 3")
+            Text("row 4")
+            Text("row 5")
+        }
+        let context = RenderContext(availableWidth: 20, availableHeight: 3, tuiContext: TUIContext())
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.height <= 3)
+        #expect(buffer.lines.first?.contains("row 1") == true, "the first row should stay visible")
+    }
+}
