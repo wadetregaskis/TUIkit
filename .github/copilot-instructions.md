@@ -16,7 +16,7 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 # Build
 swift build
 
-# Run all tests (1037+ tests, Swift Testing framework)
+# Run all tests (1172+ tests, Swift Testing framework)
 swift test
 
 # Run a single test suite
