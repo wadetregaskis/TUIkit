@@ -134,3 +134,120 @@ struct StackChildClampingTests {
         #expect(buffer.height == 1)
     }
 }
+
+// MARK: - Size-Matrix Harness
+
+/// Terminal widths probed by ``assertNeverOverflows`` — deliberately includes
+/// degenerate sizes (0, 1, 2) and sizes far below/above what a view wants.
+private let probeWidths = [0, 1, 2, 3, 5, 8, 13, 21, 40, 80, 200]
+
+/// Terminal heights probed by ``assertNeverOverflows``.
+private let probeHeights = [0, 1, 2, 3, 5, 12, 24, 60]
+
+/// Renders `view` across a matrix of terminal sizes and asserts the universal
+/// layout invariant: the rendered buffer never exceeds the space it was given,
+/// and no individual line is wider than the available width.
+@MainActor
+private func assertNeverOverflows(
+    _ name: String,
+    _ view: some View,
+    widths: [Int] = probeWidths,
+    heights: [Int] = probeHeights,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    for width in widths {
+        for height in heights {
+            let context = RenderContext(
+                availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+            let buffer = renderToBuffer(view, context: context)
+            #expect(
+                buffer.height <= height,
+                "\(name): height \(buffer.height) exceeds available \(height) at width \(width)",
+                sourceLocation: sourceLocation)
+            for line in buffer.lines {
+                #expect(
+                    line.strippedLength <= width,
+                    "\(name): a line is \(line.strippedLength) cells wide, exceeds available \(width) at height \(height)",
+                    sourceLocation: sourceLocation)
+            }
+        }
+    }
+}
+
+// MARK: - HStack sizing
+
+@MainActor
+@Suite("HStack sizing")
+struct HStackSizingTests {
+
+    @Test("HStack of long texts never overflows")
+    func longTextsNeverOverflow() {
+        assertNeverOverflows(
+            "HStack of 3 long texts",
+            HStack {
+                Text(String(repeating: "A", count: 40))
+                Text(String(repeating: "B", count: 40))
+                Text(String(repeating: "C", count: 40))
+            })
+    }
+
+    @Test("HStack containing a misbehaving child never overflows")
+    func misbehavingChildNeverOverflows() {
+        assertNeverOverflows(
+            "HStack with OversizedView",
+            HStack {
+                Text("left")
+                OversizedView(renderWidth: 300, renderHeight: 40)
+                Text("right")
+            })
+    }
+
+    @Test("HStack with a Spacer never overflows")
+    func spacerNeverOverflows() {
+        assertNeverOverflows(
+            "HStack with Spacer",
+            HStack {
+                Text("left")
+                Spacer()
+                Text("right")
+            })
+    }
+
+    @Test("HStack expands a Spacer to fill the available width")
+    func spacerFillsWidth() {
+        let view = HStack(spacing: 0) {
+            Text("AB")
+            Spacer()
+            Text("YZ")
+        }
+        let context = RenderContext(availableWidth: 40, availableHeight: 3, tuiContext: TUIContext())
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.width == 40, "HStack with a Spacer should fill the width, got \(buffer.width)")
+    }
+
+    @Test("HStack keeps a fixed label readable when space is short")
+    func fixedContentPrioritised() {
+        var text = ""
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let view = HStack(spacing: 1) {
+            Text("Name:")
+            TextField("field", text: binding)
+        }
+        let context = RenderContext(availableWidth: 12, availableHeight: 3, tuiContext: TUIContext())
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.width <= 12)
+        #expect(buffer.lines.first?.contains("Name:") == true, "the fixed label should not be truncated")
+    }
+
+    @Test("HStack does not overflow when spacing alone exceeds the width")
+    func spacingHeavyNeverOverflows() {
+        assertNeverOverflows(
+            "HStack spacing 5",
+            HStack(spacing: 5) {
+                Text("one")
+                Text("two")
+                Text("three")
+            },
+            widths: [0, 1, 2, 3, 4, 6, 10])
+    }
+}
