@@ -80,15 +80,32 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(Character(" ").terminalAppCursorAdvance == 1)
     }
 
-    @Test("Skin-tone emoji: cursor over-advances by 4 in Terminal.app")
+    @Test("Skin-tone emoji on emoji-default base: cursor over-advances by 4 in Terminal.app")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 paints 2 cells but advances Terminal.app's cursor by 4;
-        // `withTerminalAppCursorCompensation` resynchronises by emitting a
-        // dummy space (which commits the grapheme cluster) and a CUB that
-        // rewinds the cursor.
+        // 🤙🏽 paints 2 cells but advances Terminal.app's cursor by 4.
+        // Bug B proper — base is in the pictographic block with default
+        // emoji presentation.
         let ch = Character("🤙🏽")
         #expect(ch.terminalWidth == 2, "Renders 2 cells")
-        #expect(ch.terminalAppCursorAdvance == 4, "But cursor advances by 4 in Terminal.app")
+        #expect(ch.terminalAppCursorAdvance == 4, "Cursor advances 4 in Terminal.app")
+    }
+
+    @Test("Skin-tone emoji on text-default base: cursor over-advances by 3 (Bug B variant)")
+    func textDefaultSkinToneCursorAdvance() {
+        // ☝ (U+261D) is `isEmoji && !isEmojiPresentation` — its bare-base
+        // rendering is a 1-cell text glyph, so the Fitzpatrick over-advance
+        // is by 2 from a 1-cell baseline → cursor lands at column 3, not 4.
+        // Catalogued empirically for ☝ ✌ ✍ ⛹ 🏋 🏌 🕴 🕵 🖐 in the doc.
+        for s in ["☝🏻", "✌🏼", "✍🏽", "⛹🏾"] {
+            let ch = Character(s)
+            #expect(ch.terminalWidth == 2, "\(s) renders 2 cells")
+            #expect(ch.terminalAppCursorAdvance == 3, "\(s) cursor advances 3 (not 4)")
+        }
+        // ✊ (U+270A) is `isEmojiPresentation` — same plane as the others
+        // but its bare base is already a 2-cell emoji, so the over-advance
+        // lands at 4, like the supplementary-plane Bug B clusters.
+        let fist = Character("✊🏿")
+        #expect(fist.terminalAppCursorAdvance == 4, "✊🏿 cursor advances 4")
     }
 
     @Test("VS-16 pictographic emoji: cursor advance is 1 (Terminal.app under-advance bug)")
@@ -134,6 +151,58 @@ struct WithTerminalAppCursorCompensationTests {
             "Modifier stripped when cluster has visible content after it")
         #expect(!result.stripped.contains("🤙🏽"), "Fitzpatrick scalar dropped")
         #expect(result.contains("🤙"), "Base emoji preserved")
+    }
+
+    @Test("Text-default base + skin-tone + content: VS-16 inserted, CUF(1) emitted")
+    func textDefaultSkinToneStripsButKeepsWidth() {
+        // ☝🏻 (U+261D + U+1F3FB) is 2 cells wide as a cluster, but the bare
+        // base ☝ (U+261D) is only 1 cell — a 1-cell text glyph in Terminal.app.
+        // If we just stripped the Fitzpatrick we'd shrink the cluster from
+        // 2 cells → 1, dropping every later character one cell to the left.
+        // The fix appends U+FE0F (VS-16) so the base still renders as a
+        // 2-cell coloured emoji, plus CUF(1) to compensate for VS-16's
+        // under-advance.
+        let s = "go ☝🏻 now"
+        let result = s.withTerminalAppCursorCompensation()
+        #expect(result.unicodeScalars.contains(Unicode.Scalar(0xFE0F)!),
+                "VS-16 should be inserted to preserve 2-cell width")
+        #expect(!result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
+                "Fitzpatrick scalar should be stripped")
+        #expect(result.contains("\u{1B}[1C"),
+                "CUF(1) should be emitted for VS-16 under-advance")
+        // The visible width must be unchanged from the original (2 cells
+        // per cluster) — that's the whole point of the VS-16 promotion.
+        #expect(result.strippedLength == s.strippedLength,
+                "Visible width must be preserved")
+    }
+
+    @Test("Emoji-default base + skin-tone + content: simple strip, no VS-16")
+    func emojiDefaultSkinToneStripsCleanly() {
+        // ✊ (U+270A) is `isEmojiPresentation` — bare base is already 2
+        // cells, so stripping the Fitzpatrick alone preserves the width
+        // and no VS-16 / CUF is needed.
+        let s = "raise ✊🏿 high"
+        let result = s.withTerminalAppCursorCompensation()
+        #expect(!result.unicodeScalars.contains(Unicode.Scalar(0xFE0F)!),
+                "VS-16 should NOT be inserted for emoji-default base")
+        #expect(!result.unicodeScalars.contains(Unicode.Scalar(0x1F3FF)!),
+                "Fitzpatrick scalar should be stripped")
+        #expect(!result.contains("\u{1B}[1C"),
+                "CUF should NOT be emitted (no under-advance to compensate)")
+        #expect(result.strippedLength == s.strippedLength,
+                "Visible width must be preserved")
+    }
+
+    @Test("Text-default base with both VS-16 and Fitzpatrick: no double VS-16")
+    func textDefaultSkinToneNoDoubleVS16() {
+        // ☝️🏻 (U+261D + U+FE0F + U+1F3FB) already has VS-16 in the cluster.
+        // After stripping the Fitzpatrick we have U+261D + U+FE0F; the fix
+        // must NOT append another U+FE0F.
+        let s = "go \u{261D}\u{FE0F}\u{1F3FB} now"
+        let result = s.withTerminalAppCursorCompensation()
+        let vs16Count = result.unicodeScalars.filter { $0.value == 0xFE0F }.count
+        #expect(vs16Count == 1, "Exactly one VS-16, not two (got \(vs16Count))")
+        #expect(result.contains("\u{1B}[1C"), "CUF still emitted for the under-advance")
     }
 
     @Test("Skin-tone emoji at end of input: modifier preserved")

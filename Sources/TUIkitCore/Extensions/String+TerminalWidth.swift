@@ -132,18 +132,15 @@ extension Character {
 
         // Fitzpatrick skin-tone modifier (U+1F3FB–U+1F3FF) on an emoji-
         // modifier-base codepoint: Terminal.app paints 2 cells but advances
-        // the cursor by 4 (or 3 if the base also under-advances bare —
-        // a few BMP bases like ☝ U+261D, ✌ U+270C do this).  We can't
-        // distinguish 3 from 4 without empirical measurement; both are
-        // `> terminalWidth`, so `withTerminalAppCursorCompensation` will
-        // strip the modifier when there's content after the cluster either
-        // way.  Returning 4 unconditionally is therefore both simpler and
-        // correct enough — the exact value matters only when the cluster
-        // is the last visible char on the line, in which case the over-
-        // advance happens after the row is done and is harmless.
+        // the cursor by either 4 (default-emoji-presentation bases like
+        // 🤙 ✊ 👍) or 3 (default-text-presentation bases like ☝ ✌ ✍ ⛹
+        // 🏋 🏌 🕴 🕵 🖐 — the "BMP-style" variant catalogued empirically).
+        // The split tracks the bare-base width: emoji-presentation bases
+        // are 2-cell bare and over-advance by 2; text-presentation bases
+        // are 1-cell bare and over-advance by 2 from that baseline → 3.
         let hasSkinTone = scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
         if hasSkinTone && first.properties.isEmojiModifierBase {
-            return 4
+            return first.properties.isEmojiPresentation ? 4 : 3
         }
 
         return terminalWidth
@@ -244,8 +241,29 @@ extension String {
                 // Over-advancer followed by content — strip the
                 // Fitzpatrick scalar so Terminal.app doesn't apply the
                 // row-wide LEFT shift.
+                var baseScalar: Unicode.Scalar?
+                var keptVS16 = false
                 for scalar in c.unicodeScalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
+                    if baseScalar == nil { baseScalar = scalar }
+                    if scalar.value == 0xFE0F { keptVS16 = true }
                     result.unicodeScalars.append(scalar)
+                }
+                // Text-default emoji bases (☝ U+261D, ✌ U+270C, 🖐 U+1F590…)
+                // render bare as a 1-cell text glyph in Terminal.app — so
+                // simply dropping the Fitzpatrick would shrink the cluster
+                // from 2 cells to 1, displacing every subsequent character
+                // on the row left by 1 cell.  Restore the 2-cell coloured-
+                // emoji rendering by appending U+FE0F (a no-op for default-
+                // emoji-presentation bases like ✊, so we only do it for
+                // text-default bases), then emit CUF(1) to compensate for
+                // the VS-16 under-advance (Bug A).
+                if let base = baseScalar,
+                   base.properties.isEmoji && !base.properties.isEmojiPresentation
+                {
+                    if !keptVS16 {
+                        result.unicodeScalars.append(Unicode.Scalar(0xFE0F)!)
+                    }
+                    result += "\u{1B}[1C"
                 }
             } else {
                 // Normal char, or an over-advancer at the very end of

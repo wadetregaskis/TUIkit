@@ -86,7 +86,8 @@ in chronological order, and the failure mode that drove the next attempt.
 | 15 | (working tree, abandoned) | Absorb the over-advance by consuming subsequent skippable spaces from the input without emitting them | ✅ (some widths) | ❌ | Compressed the row by 2 cells visually → `│` ended up 2 cells *further* left, not aligned |
 | 16 | (working tree, abandoned) | `+2` bump to `repaintRightEdge` CUP target on skin-tone rows                                  | ✅                  | partial         | `│` appeared at the right column in some screenshots; rightmost 2 cells still left at default bg |
 | 17 | (working tree, abandoned) | Append 2 overdraw `bg`-spaces past the line's logical end on skin-tone rows                  | ✅                  | ❌               | Bytes past terminal width either wrap or clamp; right-edge cells stay at default bg |
-| 18 | **Shipping fix** (working tree) | Combine **cursor-aware clip** (Bug B3) + **followed-by-content strip** (Bug B2)         | ✅ when last on row | ✅              | Trade-off accepted: when the cluster is *the last visible character on the line*, the modifier is preserved; otherwise the Fitzpatrick scalar is stripped (base emoji renders alone). Skin tone is lost in the FeatureBox case; the layout never breaks. |
+| 18 | (superseded by #19 for text-default bases) | Combine **cursor-aware clip** (Bug B3) + **followed-by-content strip** (Bug B2)         | ✅ when last on row | ✅ for emoji-default bases; ❌ for text-default bases | Worked for emoji-default-presentation bases (🤙 ✊ 👍 etc.) — base emoji renders at the cluster's 2-cell width.  Broke for **text-default-presentation** bases (☝ ✌ ✍ ⛹ 🏋 🏌 🕴 🕵 🖐): their bare base is a 1-cell text glyph, so stripping the Fitzpatrick shrank the cluster from 2 cells to 1 and pushed every following cell on the row 1 column LEFT.  A row of 4 such clusters (the EmojiPage `BugCaseRow`) left its rightmost 4 cells at default bg. |
+| 19 | **Shipping fix** (working tree) | Same as #18, plus: when the stripped base is `isEmoji && !isEmojiPresentation`, append U+FE0F (VS-16) and inject CUF(1)         | ✅ when last on row | ✅              | VS-16 promotes the base back to a 2-cell coloured-emoji glyph so the row layout is preserved.  The resulting `<base>+FE0F` cluster is a VS-16 under-advancer (Bug A) but the existing CUF(1)-after-the-cluster compensation handles that.  Also: `terminalAppCursorAdvance` now returns **3** (not 4) for text-default-base + Fitzpatrick clusters — the empirical over-advance is +2 from the 1-cell baseline, not the 4 we previously assumed.  Skin tone is still lost in the followed-by-content case; the layout never breaks. |
 
 ## Detail on selected approaches
 
@@ -164,9 +165,9 @@ inconsistent — Terminal.app sometimes clamps `CUP` to `terminalWidth`,
 sometimes wraps inline writes that overflow, and either way the
 rightmost 2 cells stayed at the default terminal background.
 
-### Shipping fix (#18, current working tree)
+### Shipping fix (#18/#19, current working tree)
 
-Two coordinated changes that *don't* try to undo the bug, only avoid
+Three coordinated changes that *don't* try to undo the bug, only avoid
 provoking it:
 
 1. **`ansiAwarePrefixForTerminalApp` — cursor-aware clip.** When an
@@ -176,7 +177,7 @@ provoking it:
    prevents Bug B3 (cluster wraps to next row) at widths where the
    advance overflows.
 
-2. **`withTerminalAppCursorCompensationParts` — followed-by-content
+2. **`withTerminalAppCursorCompensation` — followed-by-content
    strip.** When an over-advancing cluster has *any* visible
    character following it on the same input line, strip the
    Fitzpatrick scalar and emit only the base pictographic scalar(s).
@@ -184,6 +185,17 @@ provoking it:
    no row-wide shift, and no white phantom cells. When the cluster
    is the line's last visible character, the modifier is kept —
    nothing follows the cluster for the shift to displace.
+
+3. **VS-16 promotion for text-default bases (#19).** Stripping the
+   Fitzpatrick from a text-default base (`isEmoji &&
+   !isEmojiPresentation` — ☝ ✌ ✍ ⛹ 🏋 🏌 🕴 🕵 🖐) leaves a 1-cell
+   text glyph in place of what the layout reserved 2 cells for. To
+   keep the row layout intact, the strip path also appends U+FE0F
+   (VS-16), promoting the bare base back to a 2-cell coloured-emoji
+   glyph. The resulting `<base>+FE0F` cluster is then a Bug A
+   under-advancer; a `CUF(1)` is emitted right after it to compensate.
+   Emoji-default bases (✊ U+270A, 🤙 U+1F919) don't need this — their
+   bare base is already 2 cells.
 
 VS-16 emoji (Bug A) continue to be handled with `CUF(claimed − actual)`
 plus the existing two-pass `repaintRightEdge` for the phantom-cell
