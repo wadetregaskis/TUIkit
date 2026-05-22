@@ -160,9 +160,17 @@ extension Layoutable {
 /// - Returns: A ``FrameBuffer`` containing the rendered terminal output.
 @MainActor
 public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
-    // Priority 1: Direct rendering via Renderable protocol
+    // Priority 1: Direct rendering via Renderable protocol.
+    //
+    // The result is clamped to the available space — the universal layout
+    // safety net. A view that mis-sizes itself can never overwrite a sibling
+    // or overflow the terminal; at worst its own content is truncated.
+    // Correctly-sized views hit `clamped`'s fast path, which is a no-op.
+    // The composite `body` path below is covered transitively: it recurses
+    // through this same function, whose base case is a `Renderable`.
     if let renderable = view as? Renderable {
         return renderable.renderToBuffer(context: context)
+            .clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     // Priority 2: Composite view — set up hydration context and recurse into body.

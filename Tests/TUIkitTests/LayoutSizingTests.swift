@@ -393,3 +393,34 @@ struct ContainerSizingTests {
         #expect(buffer.height <= 4)
     }
 }
+
+// MARK: - Universal render clamp
+
+@MainActor
+@Suite("Universal render clamp")
+struct UniversalClampTests {
+
+    @Test("Any view rendered directly is clamped to its available space")
+    func directRenderClamped() {
+        for width in [0, 1, 5, 30, 80] {
+            for height in [0, 1, 3, 24] {
+                let context = RenderContext(
+                    availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+                let buffer = renderToBuffer(
+                    OversizedView(renderWidth: 500, renderHeight: 200), context: context)
+                #expect(buffer.width <= width, "width \(buffer.width) exceeds \(width)")
+                #expect(buffer.height <= height, "height \(buffer.height) exceeds \(height)")
+            }
+        }
+    }
+
+    @Test("A bouncing Spinner never overflows")
+    func bouncingSpinnerNeverOverflows() {
+        assertNeverOverflows("Spinner bouncing", Spinner("Processing", style: .bouncing))
+    }
+
+    @Test("Divider never overflows")
+    func dividerNeverOverflows() {
+        assertNeverOverflows("Divider", Divider())
+    }
+}
