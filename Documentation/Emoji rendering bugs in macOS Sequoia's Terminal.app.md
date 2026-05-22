@@ -137,7 +137,7 @@ done — restore the cursor with `\e8` and write the cluster bytes last.
 Worked in isolated test scripts. In TUIkit's `FrameDiffWriter` context
 the modifier was stripped — most likely because the longer SGR-rich
 content path between the DECSC and DECRC counts as backward movement
-once `\e8` fires. Inconclusive but unrelable.
+once `\e8` fires. Inconclusive but unreliable.
 
 ### Absorb-by-skipping (#15, abandoned in working tree)
 
