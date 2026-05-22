@@ -210,9 +210,19 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
         } else {
-            // Calculate viewport height
+            // Viewport height. The fixed chrome is 3 lines: the top border,
+            // the bottom border, and the column-header line. Scroll indicators
+            // cost a further 2 lines — but only when the rows actually
+            // overflow. So when every row fits, use the full available height
+            // instead of reserving space for indicators that never appear and
+            // scrolling unnecessarily.
             let availableHeight = context.availableHeight
-            let viewportHeight = max(1, availableHeight - 6)  // Reserve for border + header + indicators
+            let chromeRows = 3
+            let fitViewport = max(1, availableHeight - chromeRows)
+            let viewportHeight =
+                data.count <= fitViewport
+                ? fitViewport
+                : max(1, availableHeight - chromeRows - 2)
 
             // Focus registration via shared helper
             let persistedFocusID = FocusRegistration.persistFocusID(

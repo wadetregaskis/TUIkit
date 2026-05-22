@@ -424,3 +424,50 @@ struct UniversalClampTests {
         assertNeverOverflows("Divider", Divider())
     }
 }
+
+// MARK: - Table sizing
+
+private struct SizingRow: Identifiable, Sendable {
+    let id: Int
+    let name: String
+}
+
+@MainActor
+@Suite("Table sizing")
+struct TableSizingTests {
+
+    private func table(rowCount: Int) -> some View {
+        let rows = (0..<rowCount).map { SizingRow(id: $0, name: "Item \($0)") }
+        var selection: Int?
+        let binding = Binding<Int?>(get: { selection }, set: { selection = $0 })
+        return Table(rows, selection: binding) {
+            TableColumn("Name", value: \SizingRow.name)
+        }
+    }
+
+    @Test("Table never overflows")
+    func tableNeverOverflows() {
+        assertNeverOverflows("Table of 30 rows", table(rowCount: 30))
+    }
+
+    @Test("Table shows every row when they all fit, without scrolling")
+    func tableUsesAvailableHeightOpportunistically() {
+        // 8 rows need 8 + 3 chrome = 11 lines; 12 are available, so all 8
+        // rows must be visible and no scroll indicator should appear.
+        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext())
+        let buffer = renderToBuffer(table(rowCount: 8), context: context)
+        let content = buffer.lines.joined(separator: "\n")
+        #expect(content.contains("Item 0"), "first row should be visible")
+        #expect(content.contains("Item 7"), "last row should be visible without scrolling")
+        #expect(buffer.height <= 12)
+    }
+
+    @Test("Table scrolls gracefully when rows genuinely exceed the height")
+    func tableScrollsWhenTooTall() {
+        // 30 rows cannot fit in 10 lines — the table must stay within bounds.
+        let context = RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext())
+        let buffer = renderToBuffer(table(rowCount: 30), context: context)
+        #expect(buffer.height <= 10)
+        #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
+    }
+}
