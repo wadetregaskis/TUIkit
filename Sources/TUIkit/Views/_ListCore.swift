@@ -32,6 +32,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Extract rows from content
         let rows = extractRows(from: content, context: context)
 
+        // Vertical chrome around the scrollable content; reserve only what is
+        // actually present.
+        let footerHeight = footer != nil ? 2 : 0  // footer line + separator
+        let borderOverhead = style.showsBorder ? 2 : 0  // top + bottom border
+        let titleOverhead = title != nil ? 1 : 0
+        let targetContentHeight = max(1, context.availableHeight - borderOverhead - titleOverhead - footerHeight)
+
         // Handle empty state
         let contentLines: [String]
         let listHasFocus: Bool
@@ -40,9 +47,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             contentLines = [emptyPlaceholder]
             listHasFocus = false
         } else {
-            // Calculate viewport height (reserve space for scroll indicators if needed)
-            let availableHeight = context.availableHeight
-            let viewportHeight = max(1, availableHeight - 4)  // Reserve for border + indicators
+            // Use the full content height when every row fits; only reserve
+            // the 2 scroll-indicator lines when the rows genuinely overflow,
+            // so a list with room to spare never scrolls unnecessarily.
+            let totalRowLines = rows.reduce(0) { $0 + $1.buffer.height }
+            let viewportHeight =
+                totalRowLines <= targetContentHeight
+                ? targetContentHeight
+                : max(1, targetContentHeight - 2)
 
             let persistedFocusID = FocusRegistration.persistFocusID(
                 context: context,
@@ -160,13 +172,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             contentLines = lines
         }
 
-        // Pad content to fill available height (SwiftUI behavior: List is greedy)
-        // Reserve space for: title line (1) + top border (1) + bottom border (1) + footer if present
-        let footerHeight = footer != nil ? 2 : 0  // footer line + separator
-        let borderOverhead = style.showsBorder ? 2 : 0  // top + bottom border
-        let titleOverhead = title != nil ? 1 : 0
-        let targetContentHeight = max(1, context.availableHeight - borderOverhead - titleOverhead - footerHeight)
-
+        // Pad content to fill the available height (SwiftUI behavior: List is greedy).
         var paddedContentLines = contentLines
         if paddedContentLines.count < targetContentHeight {
             let emptyLinesToAdd = targetContentHeight - paddedContentLines.count

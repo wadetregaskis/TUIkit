@@ -471,3 +471,46 @@ struct TableSizingTests {
         #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
     }
 }
+
+// MARK: - List sizing
+
+@MainActor
+@Suite("List sizing")
+struct ListSizingTests {
+
+    private func list(rowCount: Int) -> some View {
+        let rows = (0..<rowCount).map { SizingRow(id: $0, name: "Item \($0)") }
+        var selection: Int?
+        let binding = Binding<Int?>(get: { selection }, set: { selection = $0 })
+        return List(selection: binding) {
+            ForEach(rows) { row in
+                Text(row.name)
+            }
+        }
+    }
+
+    @Test("List never overflows")
+    func listNeverOverflows() {
+        assertNeverOverflows("List of 30 rows", list(rowCount: 30))
+    }
+
+    @Test("List shows every row when they all fit, without scrolling")
+    func listUsesAvailableHeightOpportunistically() {
+        // 9 rows + 2 border lines = 11; 12 are available, so all 9 rows must
+        // be visible with no scroll indicator.
+        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext())
+        let buffer = renderToBuffer(list(rowCount: 9), context: context)
+        let content = buffer.lines.joined(separator: "\n")
+        #expect(content.contains("Item 0"))
+        #expect(content.contains("Item 8"), "all rows should be visible without scrolling")
+        #expect(buffer.height <= 12)
+    }
+
+    @Test("List scrolls gracefully when rows exceed the height")
+    func listScrollsWhenTooTall() {
+        let context = RenderContext(availableWidth: 40, availableHeight: 8, tuiContext: TUIContext())
+        let buffer = renderToBuffer(list(rowCount: 40), context: context)
+        #expect(buffer.height <= 8)
+        #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
+    }
+}
