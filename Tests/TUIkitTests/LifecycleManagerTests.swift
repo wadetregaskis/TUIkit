@@ -215,11 +215,9 @@ struct LifecycleManagerTaskTests {
     @Test("cancelTask sets cancellation flag")
     func cancelTask() async throws {
         let manager = LifecycleManager()
-        nonisolated(unsafe) var wasCancelled = false
         manager.startTask(token: "task-1", priority: .medium) {
-            // Long-running task that checks cancellation
+            // Long-running task; cancelTask() should interrupt the sleep.
             try? await Task.sleep(for: .seconds(10))
-            wasCancelled = Task.isCancelled
         }
         // Cancel immediately
         manager.cancelTask(token: "task-1")
