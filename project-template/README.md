@@ -37,7 +37,7 @@ MyApp/
 ## Features
 
 - Creates native Swift Packages (not .xcodeproj)
-- Optional SQLite.swift integration
+- Optional GRDB (SQLite) integration
 - Optional Swift Testing or XCTest
 - Pre-configured Xcode scheme
 - Cross-platform (macOS, Linux)
