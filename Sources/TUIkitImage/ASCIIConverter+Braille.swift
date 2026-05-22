@@ -13,7 +13,7 @@ extension ASCIIConverter {
     /// Each Braille character (U+2800-U+28FF) represents a 2x4 pixel grid.
     /// The dot pattern encodes which pixels are "on" based on a luminance threshold.
     /// Color is taken from the average of the cell's pixels.
-    func convertBraille(_ image: RGBAImage, width: Int, height: Int) -> [String] {
+    func convertBraille(_ image: RGBAImage, width: Int, height: Int, mode: ASCIIColorMode) -> [String] {
         // Braille dot positions (column, row) -> bit index
         // ⠁ = bit 0 (0,0)  ⠈ = bit 3 (1,0)
         // ⠂ = bit 1 (0,1)  ⠐ = bit 4 (1,1)
@@ -78,7 +78,7 @@ extension ASCIIConverter {
                     avgPixel = RGBA(r: 0, g: 0, b: 0)
                 }
 
-                let colorCode = foregroundColorCode(for: avgPixel)
+                let colorCode = foregroundColorCode(for: avgPixel, mode: mode)
                 if colorCode != lastColor {
                     if !lastColor.isEmpty {
                         line += ANSIEscape.reset

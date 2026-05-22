@@ -9,8 +9,12 @@
 extension ASCIIConverter {
 
     /// Returns the ANSI foreground color escape code for a pixel.
-    func foregroundColorCode(for pixel: RGBA) -> String {
-        switch colorMode {
+    ///
+    /// Callers must pass the *effective* color mode (the requested mode
+    /// downsampled to one the terminal can actually render). See
+    /// ``ASCIIColorMode/effective(for:)``.
+    func foregroundColorCode(for pixel: RGBA, mode: ASCIIColorMode) -> String {
+        switch mode {
         case .trueColor:
             return "\(ANSIEscape.csi)38;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
 
@@ -59,13 +63,16 @@ extension ASCIIConverter {
     /// - Bottom-left: 3/16
     /// - Bottom:      5/16
     /// - Bottom-right: 1/16
-    func applyFloydSteinbergDithering(_ image: RGBAImage) -> RGBAImage {
+    ///
+    /// Quantizes against the *effective* color mode so dithering matches
+    /// what will actually be emitted. See ``ASCIIColorMode/effective(for:)``.
+    func applyFloydSteinbergDithering(_ image: RGBAImage, mode: ASCIIColorMode) -> RGBAImage {
         var result = image
 
         for y in 0..<image.height {
             for x in 0..<image.width {
                 let oldPixel = result.pixel(at: x, y)
-                let newPixel = quantizePixel(oldPixel)
+                let newPixel = quantizePixel(oldPixel, mode: mode)
                 result.setPixel(at: x, y, value: newPixel)
 
                 let rErr = Double(oldPixel.r) - Double(newPixel.r)
@@ -115,9 +122,9 @@ extension ASCIIConverter {
         return result
     }
 
-    /// Quantizes a pixel to its nearest representative value for the current color mode.
-    private func quantizePixel(_ pixel: RGBA) -> RGBA {
-        switch colorMode {
+    /// Quantizes a pixel to its nearest representative value for the given color mode.
+    private func quantizePixel(_ pixel: RGBA, mode: ASCIIColorMode) -> RGBA {
+        switch mode {
         case .trueColor:
             return pixel
 

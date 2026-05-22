@@ -93,6 +93,36 @@ public struct ASCIIConverter: Sendable {
     }
 }
 
+// MARK: - Color Mode Capability
+
+extension ASCIIColorMode {
+
+    /// Returns the closest color mode the given terminal depth can render correctly.
+    ///
+    /// Emitting a mode the terminal does not support produces corrupt
+    /// output — for example, a `\e[38;2;R;G;B m` sequence on a 256-color
+    /// terminal is partially interpreted and garbles the image. This
+    /// helper downgrades the requested mode to one the terminal can
+    /// handle, mirroring the downsampling that ``ANSIRenderer`` performs
+    /// for non-image colors.
+    public func effective(for depth: ColorDepth) -> ASCIIColorMode {
+        switch (self, depth) {
+        case (_, .noColor):
+            return .mono
+        case (.trueColor, .truecolor):
+            return .trueColor
+        case (.trueColor, .palette256):
+            return .ansi256
+        case (.trueColor, .basic16),
+            (.ansi256, .basic16),
+            (.grayscale, .basic16):
+            return .mono
+        default:
+            return self
+        }
+    }
+}
+
 // MARK: - Conversion
 
 extension ASCIIConverter {
@@ -109,6 +139,11 @@ extension ASCIIConverter {
             return []
         }
 
+        // Downsample the requested color mode to one the terminal can
+        // actually render. Otherwise a `.trueColor` request on a 256-color
+        // terminal produces garbled output.
+        let effectiveMode = colorMode.effective(for: ColorDepth.current)
+
         // For braille, each character cell covers 2x4 pixels.
         let pixelWidth: Int
         let pixelHeight: Int
@@ -124,16 +159,16 @@ extension ASCIIConverter {
         var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight)
 
         // Apply dithering if requested (only meaningful for non-trueColor modes)
-        if dithering == .floydSteinberg, colorMode != .trueColor {
-            scaled = applyFloydSteinbergDithering(scaled)
+        if dithering == .floydSteinberg, effectiveMode != .trueColor {
+            scaled = applyFloydSteinbergDithering(scaled, mode: effectiveMode)
         }
 
         // Convert to ASCII lines
         if characterSet == .braille {
-            return convertBraille(scaled, width: width, height: height)
+            return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
         }
 
-        return convertCharacterBased(scaled, width: width, height: height)
+        return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
     }
 }
 
@@ -142,7 +177,12 @@ extension ASCIIConverter {
 extension ASCIIConverter {
 
     /// Converts using character brightness mapping (ascii, blocks).
-    private func convertCharacterBased(_ image: RGBAImage, width: Int, height: Int) -> [String] {
+    private func convertCharacterBased(
+        _ image: RGBAImage,
+        width: Int,
+        height: Int,
+        mode: ASCIIColorMode
+    ) -> [String] {
         let ramp = characterRamp
 
         var lines = [String]()
@@ -162,7 +202,7 @@ extension ASCIIConverter {
                 let char = ramp[clampedIndex]
 
                 // Colorize
-                let colorCode = foregroundColorCode(for: pixel)
+                let colorCode = foregroundColorCode(for: pixel, mode: mode)
                 if colorCode != lastColor {
                     if !lastColor.isEmpty {
                         line += ANSIEscape.reset
