@@ -231,18 +231,47 @@ extension Text: Renderable, Layoutable {
 
     /// Wraps text into lines that fit a maximum terminal cell width.
     ///
-    /// Splits on word boundaries (spaces). Words longer than `maxWidth`
-    /// are placed on their own line without further splitting.
-    /// Uses terminal-aware width measurement so wide characters (CJK, emoji)
-    /// that occupy 2 cells are counted correctly.
+    /// Explicit line breaks (`\n`, `\r\n`, `\r`) split the text into
+    /// independent paragraphs, each wrapped on its own. This is essential:
+    /// a raw newline left inside a buffer line would be interpreted by the
+    /// terminal as a real row break, corrupting every row below it.
+    ///
+    /// Within a paragraph, wrapping happens on word boundaries (spaces).
+    /// Words longer than `maxWidth` are placed on their own line without
+    /// further splitting. Uses terminal-aware width measurement so wide
+    /// characters (CJK, emoji) that occupy 2 cells are counted correctly.
     ///
     /// - Parameters:
     ///   - text: The text to wrap.
     ///   - maxWidth: Maximum terminal cells per line.
     /// - Returns: An array of wrapped lines (never empty).
     private func wordWrap(_ text: String, maxWidth: Int) -> [String] {
-        guard maxWidth > 0 else { return [text] }
+        // Split on explicit line breaks first so embedded newlines never
+        // survive into a rendered buffer line.
+        let paragraphs = text.split(
+            omittingEmptySubsequences: false,
+            whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" }
+        )
 
+        guard maxWidth > 0 else {
+            return paragraphs.isEmpty ? [""] : paragraphs.map(String.init)
+        }
+
+        var lines: [String] = []
+        for paragraph in paragraphs {
+            lines.append(contentsOf: wrapParagraph(String(paragraph), maxWidth: maxWidth))
+        }
+        return lines.isEmpty ? [""] : lines
+    }
+
+    /// Wraps a single paragraph (with no embedded line breaks) on word
+    /// boundaries so each returned line fits `maxWidth` terminal cells.
+    ///
+    /// - Parameters:
+    ///   - text: A single paragraph of text.
+    ///   - maxWidth: Maximum terminal cells per line.
+    /// - Returns: An array of wrapped lines (never empty).
+    private func wrapParagraph(_ text: String, maxWidth: Int) -> [String] {
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var lines: [String] = []
         var currentLine = ""

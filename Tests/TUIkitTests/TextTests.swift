@@ -57,3 +57,54 @@ struct TextTerminalWidthTests {
         #expect(size.width == 4, "Each line should be 4 cells wide, got \(size.width)")
     }
 }
+
+// MARK: - Explicit Line Break Tests
+
+@MainActor
+@Suite("Text Explicit Line Break Tests")
+struct TextLineBreakTests {
+
+    private func context(width: Int, height: Int = 24) -> RenderContext {
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+    }
+
+    @Test("Embedded newlines split into separate buffer lines")
+    func newlineSplitsLines() {
+        // A raw "\n" left inside a buffer line would be interpreted by the
+        // terminal as a real row break, corrupting the rows below it.
+        let text = Text("Hi,\n\nBest,\nAlice")
+        let buffer = renderToBuffer(text, context: context(width: 80))
+
+        #expect(buffer.height == 4, "Expected 4 lines, got \(buffer.height)")
+        #expect(buffer.lines.allSatisfy { !$0.contains("\n") }, "No buffer line may contain a raw newline")
+        #expect(buffer.lines[0].stripped == "Hi,")
+        #expect(buffer.lines[1].stripped == "")
+        #expect(buffer.lines[2].stripped == "Best,")
+        #expect(buffer.lines[3].stripped == "Alice")
+    }
+
+    @Test("Each paragraph wraps independently")
+    func paragraphsWrapIndependently() {
+        // First paragraph is long enough to wrap; second is short.
+        let text = Text("one two three four five\n\ndone")
+        let buffer = renderToBuffer(text, context: context(width: 10))
+
+        #expect(buffer.lines.allSatisfy { !$0.contains("\n") })
+        #expect(buffer.lines.last?.stripped == "done", "Final paragraph must not be merged into the wrap of the first")
+    }
+
+    @Test("sizeThatFits accounts for explicit newlines")
+    func sizeAccountsForNewlines() {
+        let text = Text("a\nb\nc")
+        let size = text.sizeThatFits(proposal: .unspecified, context: context(width: 80))
+        #expect(size.height == 3, "Three newline-separated lines should report height 3, got \(size.height)")
+    }
+
+    @Test("Carriage returns are treated as line breaks")
+    func carriageReturnsSplit() {
+        let text = Text("first\r\nsecond")
+        let buffer = renderToBuffer(text, context: context(width: 80))
+        #expect(buffer.height == 2, "CRLF should split into 2 lines, got \(buffer.height)")
+        #expect(buffer.lines.allSatisfy { !$0.contains("\r") && !$0.contains("\n") })
+    }
+}
