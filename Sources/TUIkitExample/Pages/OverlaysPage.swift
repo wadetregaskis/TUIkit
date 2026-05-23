@@ -270,31 +270,31 @@ struct OverlaysPage: View {
                 message: "This is a standard alert with default theme colors.",
                 borderColor: .palette.border,
                 titleColor: .palette.accent
-            ) { dismissButton }.frame(width: 50)
+            ) { dismissButton }.frame(width: 60)
         case .alertWarning:
             Alert(
                 title: "Warning",
                 message: "Something might go wrong. Please check your input.",
                 titleColor: .palette.warning
-            ) { dismissButton }.frame(width: 50)
+            ) { dismissButton }.frame(width: 60)
         case .alertError:
             Alert(
                 title: "Error",
                 message: "An unexpected error occurred. Please try again.",
                 titleColor: .palette.error
-            ) { dismissButton }.frame(width: 50)
+            ) { dismissButton }.frame(width: 60)
         case .alertInfo:
             Alert(
                 title: "Info",
                 message: "This is an informational message for the user.",
                 titleColor: .palette.info
-            ) { dismissButton }.frame(width: 50)
+            ) { dismissButton }.frame(width: 60)
         case .alertSuccess:
             Alert(
                 title: "Success",
                 message: "Operation completed successfully!",
                 titleColor: .palette.success
-            ) { dismissButton }.frame(width: 50)
+            ) { dismissButton }.frame(width: 60)
         default:
             EmptyView()
         }
