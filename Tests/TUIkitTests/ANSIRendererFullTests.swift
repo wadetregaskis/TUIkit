@@ -132,16 +132,20 @@ struct ANSIRendererStyleTests {
     func palette256Foreground() {
         var style = TextStyle()
         style.foregroundColor = Color.palette(42)
-        let result = ANSIRenderer.render("Pal", with: style)
-        #expect(result.contains("38;5;42"))
+        withColorDepth(.palette256) {
+            let result = ANSIRenderer.render("Pal", with: style)
+            #expect(result.contains("38;5;42"))
+        }
     }
 
     @Test("Palette256 background uses 48;5;n format")
     func palette256Background() {
         var style = TextStyle()
         style.backgroundColor = Color.palette(200)
-        let result = ANSIRenderer.render("Pal", with: style)
-        #expect(result.contains("48;5;200"))
+        withColorDepth(.palette256) {
+            let result = ANSIRenderer.render("Pal", with: style)
+            #expect(result.contains("48;5;200"))
+        }
     }
 
     @Test("Bright foreground uses correct code")

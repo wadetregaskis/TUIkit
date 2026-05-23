@@ -231,10 +231,9 @@ struct ColorDepthTests {
 
     @Test("Current is settable for override")
     func settable() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .palette256
-        #expect(ColorDepth.current == .palette256)
+        withColorDepth(.palette256) {
+            #expect(ColorDepth.current == .palette256)
+        }
     }
 }
 

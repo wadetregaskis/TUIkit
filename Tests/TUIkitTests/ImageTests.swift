@@ -212,19 +212,16 @@ struct ASCIIConverterTests {
 
     @Test("True color output contains ANSI RGB codes")
     func trueColorOutput() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .truecolor
-
         let pixels = [RGBA(r: 255, g: 0, b: 0)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
 
-        #expect(lines.count == 1)
-        // Should contain 38;2; (foreground true color escape)
-        #expect(lines[0].contains("38;2;"))
+        withColorDepth(.truecolor) {
+            let lines = converter.convert(image, width: 1, height: 1)
+            #expect(lines.count == 1)
+            // Should contain 38;2; (foreground true color escape)
+            #expect(lines[0].contains("38;2;"))
+        }
     }
 
     @Test("Mono output contains no ANSI codes")
@@ -268,89 +265,75 @@ struct ASCIIConverterTests {
 
     @Test("ANSI 256 output contains palette codes")
     func ansi256Output() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .palette256
-
         let pixels = [RGBA(r: 255, g: 0, b: 0)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .ansi256, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
 
-        #expect(lines.count == 1)
-        // Should contain 38;5; (256-color escape)
-        #expect(lines[0].contains("38;5;"))
+        withColorDepth(.palette256) {
+            let lines = converter.convert(image, width: 1, height: 1)
+            #expect(lines.count == 1)
+            // Should contain 38;5; (256-color escape)
+            #expect(lines[0].contains("38;5;"))
+        }
     }
 
     @Test("Grayscale output contains palette codes")
     func grayscaleOutput() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .palette256
-
         let pixels = [RGBA(r: 128, g: 128, b: 128)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .grayscale, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
 
-        #expect(lines.count == 1)
-        #expect(lines[0].contains("38;5;"))
+        withColorDepth(.palette256) {
+            let lines = converter.convert(image, width: 1, height: 1)
+            #expect(lines.count == 1)
+            #expect(lines[0].contains("38;5;"))
+        }
     }
 
     @Test("True color requested on 256-color terminal falls back to palette codes")
     func trueColorDownsamplesOnPalette256() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .palette256
-
         let pixels = [RGBA(r: 255, g: 0, b: 0)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
 
-        #expect(lines.count == 1)
-        // Must NOT emit 24-bit codes — they corrupt 256-color terminals.
-        #expect(!lines[0].contains("38;2;"))
-        // Should emit 256-color codes instead.
-        #expect(lines[0].contains("38;5;"))
+        withColorDepth(.palette256) {
+            let lines = converter.convert(image, width: 1, height: 1)
+            #expect(lines.count == 1)
+            // Must NOT emit 24-bit codes — they corrupt 256-color terminals.
+            #expect(!lines[0].contains("38;2;"))
+            // Should emit 256-color codes instead.
+            #expect(lines[0].contains("38;5;"))
+        }
     }
 
     @Test("True color requested on basic16 terminal falls back to mono")
     func trueColorDownsamplesOnBasic16() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .basic16
-
         let pixels = [RGBA(r: 255, g: 0, b: 0)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
 
-        #expect(lines.count == 1)
-        #expect(!lines[0].contains("38;2;"))
-        #expect(!lines[0].contains("38;5;"))
+        withColorDepth(.basic16) {
+            let lines = converter.convert(image, width: 1, height: 1)
+            #expect(lines.count == 1)
+            #expect(!lines[0].contains("38;2;"))
+            #expect(!lines[0].contains("38;5;"))
+        }
     }
 
     @Test("All color modes emit no color codes on noColor terminal")
     func noColorTerminalSuppressesEscapes() {
-        let saved = ColorDepth.current
-        defer { ColorDepth.current = saved }
-        ColorDepth.current = .noColor
-
         let pixels = [RGBA(r: 200, g: 100, b: 50)]
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
 
-        for mode in [ASCIIColorMode.trueColor, .ansi256, .grayscale, .mono] {
-            let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
-            let lines = converter.convert(image, width: 1, height: 1)
+        withColorDepth(.noColor) {
+            for mode in [ASCIIColorMode.trueColor, .ansi256, .grayscale, .mono] {
+                let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
+                let lines = converter.convert(image, width: 1, height: 1)
 
-            #expect(lines.count == 1)
-            #expect(!lines[0].contains("38;2;"))
-            #expect(!lines[0].contains("38;5;"))
+                #expect(lines.count == 1)
+                #expect(!lines[0].contains("38;2;"))
+                #expect(!lines[0].contains("38;5;"))
+            }
         }
     }
 }
