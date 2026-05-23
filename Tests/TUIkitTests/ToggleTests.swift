@@ -188,6 +188,42 @@ struct ToggleTests {
         let content = buffer.lines.joined()
         #expect(content.contains("Disabled"))
     }
+
+    @Test("Unfocused enabled toggle draws brackets in the normal foreground")
+    func unfocusedEnabledBracketColor() {
+        let context = createTestContext()
+
+        var first = false
+        var second = false
+        let bindingFirst = Binding(get: { first }, set: { first = $0 })
+        let bindingSecond = Binding(get: { second }, set: { second = $0 })
+
+        // Two toggles in a stack: the first registers focus, leaving the
+        // second one genuinely unfocused (but still enabled).
+        let stack = VStack(spacing: 0) {
+            Toggle("First", isOn: bindingFirst)
+            Toggle("Second", isOn: bindingSecond)
+        }
+        let buffer = renderToBuffer(stack, context: context)
+        #expect(buffer.height == 2, "Expected one line per toggle, got \(buffer.height)")
+        let unfocusedLine = buffer.lines[1]
+
+        let palette = context.environment.palette
+        let foregroundBracket = ANSIRenderer.colorize("[", foreground: palette.foreground)
+        let disabledBracket = ANSIRenderer.colorize(
+            "[",
+            foreground: palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        )
+
+        #expect(
+            unfocusedLine.contains(foregroundBracket),
+            "An unfocused, enabled toggle must draw '[' in the normal foreground colour, got: \(unfocusedLine)"
+        )
+        #expect(
+            !unfocusedLine.contains(disabledBracket),
+            "An unfocused, enabled toggle must not reuse the dim disabled bracket colour"
+        )
+    }
 }
 
 // MARK: - Toggle Handler Tests

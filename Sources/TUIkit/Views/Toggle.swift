@@ -264,7 +264,11 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         let labelBuffer = TUIkit.renderToBuffer(label, context: context)
         let labelText = labelBuffer.lines.joined(separator: " ").stripped
 
-        // Bracket color: pulsing accent when focused, dimmed otherwise
+        // Bracket color: pulsing accent when focused, the normal foreground
+        // when simply unfocused, and dimmed only when actually disabled.
+        // (An unfocused-but-enabled control must stay readable — dimming it
+        // to the disabled style made the brackets almost invisible against
+        // the terminal background.)
         let bracketColor: Color
         if isDisabled {
             bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
@@ -272,20 +276,22 @@ private struct _ToggleCore<Label: View>: View, Renderable {
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
             bracketColor = Color.lerp(dimAccent, palette.accent, phase: context.environment.pulsePhase)
         } else {
-            bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            bracketColor = palette.foreground
         }
 
         let openBracket = ANSIRenderer.colorize("[", foreground: bracketColor)
         let closeBracket = ANSIRenderer.colorize("]", foreground: bracketColor)
 
-        // Content: [ ] (OFF) or [x] (ON)
+        // Content: [ ] (OFF) or [x] (ON). The OFF mark is a space, so its
+        // colour is moot; the ON mark uses the accent so a checked box
+        // reads clearly, and a disabled toggle dims throughout.
         let contentColor: Color
         if isDisabled {
             contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
         } else if isOnValue {
             contentColor = palette.accent
         } else {
-            contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            contentColor = palette.foreground
         }
 
         let content = isOnValue ? "x" : " "
