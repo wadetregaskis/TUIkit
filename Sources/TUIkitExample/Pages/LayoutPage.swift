@@ -62,6 +62,24 @@ struct LayoutPage: View {
                 }
             }
 
+            DemoSection("ViewThatFits (Adaptive)") {
+                // A single row when there is room; the same items stacked
+                // vertically when the terminal is too narrow for the row.
+                ViewThatFits {
+                    HStack(spacing: 2) {
+                        Text("[ Profile ]")
+                        Text("[ Settings ]")
+                        Text("[ Sign Out ]")
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("[ Profile ]")
+                        Text("[ Settings ]")
+                        Text("[ Sign Out ]")
+                    }
+                }
+                .border(color: .brightBlack)
+            }
+
             Spacer()
         }
         .appHeader {
