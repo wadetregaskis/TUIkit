@@ -344,3 +344,89 @@ struct TableDisabledTests {
         #expect(table.isDisabled == false)
     }
 }
+
+// MARK: - Table Column Alignment Tests
+
+@Suite("Table Column Alignment Tests")
+@MainActor
+struct TableColumnAlignmentTests {
+
+    private struct Row: Identifiable, Sendable {
+        let id: String
+        let name: String
+        let tag: String
+    }
+
+    /// Returns the index of the first occurrence of `needle` in `haystack`,
+    /// measured in characters (stdlib only — no Foundation).
+    private func offset(of needle: String, in haystack: String) -> Int? {
+        let h = Array(haystack)
+        let n = Array(needle)
+        guard !n.isEmpty, h.count >= n.count else { return nil }
+        for i in 0...(h.count - n.count) where Array(h[i..<(i + n.count)]) == n {
+            return i
+        }
+        return nil
+    }
+
+    @Test("Columns stay aligned when a flexible column is too narrow for its content")
+    func columnsStayAligned() {
+        // Two rows whose first-column values differ wildly in length. Before
+        // the fix the longer value overflowed its column and shoved the Tag
+        // column out of alignment relative to the shorter row and the header.
+        let rows = [
+            Row(id: "1", name: "x", tag: "AAA"),
+            Row(id: "2", name: "a-very-long-file-name-indeed", tag: "BBB"),
+        ]
+        var selection: String?
+        let table = Table(rows, selection: Binding(get: { selection }, set: { selection = $0 })) {
+            TableColumn("Name", value: \Row.name)
+            TableColumn("Tag", value: \Row.tag).width(.fixed(5))
+        }
+        let buffer = renderToBuffer(table, context: createTestContext(width: 32, height: 10))
+        let plain = buffer.lines.map { $0.stripped }
+
+        guard let lineA = plain.first(where: { $0.contains("AAA") }),
+            let lineB = plain.first(where: { $0.contains("BBB") })
+        else {
+            Issue.record("Both data rows should be rendered")
+            return
+        }
+
+        let offsetA = offset(of: "AAA", in: lineA)
+        let offsetB = offset(of: "BBB", in: lineB)
+        #expect(
+            offsetA == offsetB,
+            "Tag column misaligned: 'AAA' at \(String(describing: offsetA)), 'BBB' at \(String(describing: offsetB))"
+        )
+    }
+
+    @Test("An over-long cell is truncated with an ellipsis")
+    func overlongCellTruncates() {
+        let rows = [Row(id: "1", name: "this-name-is-far-too-long-to-fit", tag: "T")]
+        var selection: String?
+        let table = Table(rows, selection: Binding(get: { selection }, set: { selection = $0 })) {
+            TableColumn("Name", value: \Row.name).width(.fixed(10))
+            TableColumn("Tag", value: \Row.tag).width(.fixed(5))
+        }
+        let buffer = renderToBuffer(table, context: createTestContext(width: 40, height: 10))
+        let truncated = buffer.lines.contains { $0.stripped.contains("…") }
+        #expect(truncated, "An over-long cell must be truncated with a visible ellipsis")
+    }
+
+    @Test("Per-column truncation mode keeps the requested end of the value")
+    func perColumnTruncationMode() {
+        let rows = [Row(id: "1", name: "/usr/local/bin/swift", tag: "T")]
+        var selection: String?
+        let table = Table(rows, selection: Binding(get: { selection }, set: { selection = $0 })) {
+            TableColumn("Path", value: \Row.name)
+                .width(.fixed(10))
+                .truncationMode(.head)
+            TableColumn("Tag", value: \Row.tag).width(.fixed(5))
+        }
+        let buffer = renderToBuffer(table, context: createTestContext(width: 40, height: 10))
+        // .head truncation keeps the END of the path, so "swift" must survive.
+        let keptTail = buffer.lines.contains { $0.stripped.contains("swift") }
+        #expect(keptTail, ".head truncation must keep the end of the path value")
+    }
+}

@@ -57,6 +57,13 @@ public struct TableColumn<Value>: Sendable {
     /// The width mode for this column.
     public var width: ColumnWidth
 
+    /// How a cell value is shortened when it is wider than the column.
+    ///
+    /// A cell is always clipped to its column's width so the columns stay
+    /// aligned; this controls *which* part of an over-long value is kept.
+    /// Defaults to `.tail` (keep the start, drop the end).
+    public var truncationMode: TruncationMode = .tail
+
     /// Extracts the display value from a data item.
     let valueExtractor: @Sendable (Value) -> String
 
@@ -105,6 +112,21 @@ extension TableColumn {
     public func width(_ width: ColumnWidth) -> TableColumn {
         var copy = self
         copy.width = width
+        return copy
+    }
+
+    /// Sets how cell values in this column are shortened when they exceed
+    /// the column's width.
+    ///
+    /// Cells are always clipped to the column width so the table stays
+    /// aligned; this chooses which part of an over-long value survives —
+    /// for example `.head` keeps the end of a long file path.
+    ///
+    /// - Parameter mode: The truncation mode for this column's cells.
+    /// - Returns: A modified column with the specified truncation mode.
+    public func truncationMode(_ mode: TruncationMode) -> TableColumn {
+        var copy = self
+        copy.truncationMode = mode
         return copy
     }
 }

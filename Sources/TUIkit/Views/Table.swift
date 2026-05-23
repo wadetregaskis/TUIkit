@@ -365,7 +365,12 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         let spacing = String(repeating: " ", count: columnSpacing)
 
         let cells = zip(columns, columnWidths).map { column, width -> String in
-            let aligned = alignText(column.title, width: width, alignment: column.alignment)
+            let aligned = alignText(
+                column.title,
+                width: width,
+                alignment: column.alignment,
+                truncationMode: column.truncationMode
+            )
             return ANSIRenderer.colorize(aligned, foreground: palette.foregroundSecondary, bold: true)
         }
 
@@ -400,7 +405,12 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
         let cells = zip(columns, columnWidths).map { column, width -> String in
             let value = column.value(for: item)
-            let aligned = alignText(value, width: width, alignment: column.alignment)
+            let aligned = alignText(
+                value,
+                width: width,
+                alignment: column.alignment,
+                truncationMode: column.truncationMode
+            )
             return ANSIRenderer.colorize(aligned, foreground: foregroundColor)
         }
 
@@ -438,19 +448,29 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
     // MARK: - Text Alignment
 
-    private func alignText(_ text: String, width: Int, alignment: HorizontalAlignment) -> String {
-        let visibleLength = text.strippedLength
+    private func alignText(
+        _ text: String,
+        width: Int,
+        alignment: HorizontalAlignment,
+        truncationMode: TruncationMode
+    ) -> String {
+        // Clip the value to the column width *first*: a cell that is wider
+        // than its column would otherwise shove every column to its right
+        // out of alignment. An over-long value is shown truncated with an
+        // ellipsis so the loss of content is visible.
+        let clipped = text.truncatedToWidth(width, mode: truncationMode)
+        let visibleLength = clipped.strippedLength
         let padding = max(0, width - visibleLength)
 
         switch alignment {
         case .leading:
-            return text + String(repeating: " ", count: padding)
+            return clipped + String(repeating: " ", count: padding)
         case .center:
             let leftPad = padding / 2
             let rightPad = padding - leftPad
-            return String(repeating: " ", count: leftPad) + text + String(repeating: " ", count: rightPad)
+            return String(repeating: " ", count: leftPad) + clipped + String(repeating: " ", count: rightPad)
         case .trailing:
-            return String(repeating: " ", count: padding) + text
+            return String(repeating: " ", count: padding) + clipped
         }
     }
 }
