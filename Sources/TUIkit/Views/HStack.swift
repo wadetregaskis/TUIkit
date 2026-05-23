@@ -137,16 +137,22 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         )
 
         // === PASS 2: Render each child into its allocated width ===
+        // The row is as tall as the tallest child, bounded by the space the
+        // stack itself was given. Children render into exactly this height
+        // so a child squeezed narrow enough to wrap truncates (with an
+        // ellipsis) instead of silently spilling an extra row that the
+        // parent — which measured the stack as shorter — then clips.
+        let rowHeight = max(1, min(maxHeight, context.availableHeight))
         var result = FrameBuffer()
         for (index, child) in children.enumerated() {
             let spacingToApply = index > 0 ? spacing : 0
             let finalWidth = finalWidths[index]
 
             if child.isSpacer {
-                let spacerBuffer = FrameBuffer(emptyWithWidth: finalWidth, height: maxHeight)
+                let spacerBuffer = FrameBuffer(emptyWithWidth: finalWidth, height: rowHeight)
                 result.appendHorizontally(spacerBuffer, spacing: spacingToApply)
             } else {
-                let buffer = child.render(width: finalWidth, height: context.availableHeight, context: context)
+                let buffer = child.render(width: finalWidth, height: rowHeight, context: context)
                 result.appendHorizontally(buffer, spacing: spacingToApply)
             }
         }

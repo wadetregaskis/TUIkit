@@ -108,3 +108,79 @@ struct TextLineBreakTests {
         #expect(buffer.lines.allSatisfy { !$0.contains("\r") && !$0.contains("\n") })
     }
 }
+
+// MARK: - Text Truncation Tests
+
+@MainActor
+@Suite("Text Truncation Tests")
+struct TextTruncationTests {
+
+    private func context(width: Int, height: Int = 24) -> RenderContext {
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+    }
+
+    @Test("A word longer than the width truncates with a tail ellipsis")
+    func longWordTailTruncates() {
+        let buffer = renderToBuffer(Text("Supercalifragilistic"), context: context(width: 10))
+        let line = buffer.lines[0].stripped
+        #expect(line.strippedLength == 10, "Truncated line must fill exactly the width, got \(line.strippedLength)")
+        #expect(line.hasSuffix("…"), "Tail truncation must end with an ellipsis, got \(line)")
+        #expect(line == "Supercali…")
+    }
+
+    @Test("Head truncation keeps the end of the text")
+    func headTruncation() {
+        let text = Text("Supercalifragilistic").truncationMode(.head)
+        let line = renderToBuffer(text, context: context(width: 10)).lines[0].stripped
+        #expect(line.hasPrefix("…"), "Head truncation must start with an ellipsis, got \(line)")
+        #expect(line.hasSuffix("c"), "Head truncation keeps the end of the text, got \(line)")
+        #expect(line.strippedLength == 10)
+    }
+
+    @Test("Middle truncation keeps both ends")
+    func middleTruncation() {
+        let text = Text("Supercalifragilistic").truncationMode(.middle)
+        let line = renderToBuffer(text, context: context(width: 11)).lines[0].stripped
+        #expect(line.contains("…"))
+        #expect(line.hasPrefix("Supe"), "Middle truncation keeps the start, got \(line)")
+        #expect(line.hasSuffix("istic"), "Middle truncation keeps the end, got \(line)")
+    }
+
+    @Test("Text that fits is not truncated")
+    func fittingTextUnchanged() {
+        let line = renderToBuffer(Text("Hello"), context: context(width: 40)).lines[0].stripped
+        #expect(line == "Hello")
+        #expect(!line.contains("…"))
+    }
+
+    @Test("Height-constrained text marks the final visible line")
+    func heightTruncationMarksLastLine() {
+        // Four explicit lines rendered into two rows of space.
+        let buffer = renderToBuffer(Text("a\nb\nc\nd"), context: context(width: 40, height: 2))
+        #expect(buffer.height == 2, "Expected the text clipped to 2 rows, got \(buffer.height)")
+        #expect(buffer.lines[0].stripped == "a")
+        #expect(buffer.lines[1].stripped == "b…", "Final visible line must show a continuation ellipsis, got \(buffer.lines[1].stripped)")
+    }
+
+    @Test("truncatedToWidth respects terminal cell width of wide characters")
+    func truncateWideCharacters() {
+        // Four CJK characters = 8 cells; truncate to 5 cells.
+        let result = "你好世界".truncatedToWidth(5)
+        #expect(result.strippedLength <= 5, "Must not exceed 5 cells, got \(result.strippedLength)")
+        #expect(result.hasSuffix("…"))
+        #expect(result == "你好…")
+    }
+
+    @Test("truncatedToWidth forceEllipsis appends to a fitting string")
+    func truncateForceEllipsis() {
+        #expect("Best,".truncatedToWidth(40, forceEllipsis: true) == "Best,…")
+        #expect("Best,".truncatedToWidth(5, forceEllipsis: true) == "Best…")
+    }
+
+    @Test("truncatedToWidth degrades gracefully at tiny widths")
+    func truncateTinyWidths() {
+        #expect("Hello".truncatedToWidth(1) == "…")
+        #expect("Hello".truncatedToWidth(0) == "")
+        #expect("Hello".truncatedToWidth(-3) == "")
+    }
+}

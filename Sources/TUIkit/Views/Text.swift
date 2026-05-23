@@ -133,6 +133,25 @@ extension Text {
         copy.style.isInverted = true
         return copy
     }
+
+    /// Sets how the text is shortened when it cannot fit its available space.
+    ///
+    /// When the text is wider than the space it is given (or a word is
+    /// longer than the wrap boundary), it is truncated and the truncation
+    /// point is marked with an ellipsis (`…`). The default is `.tail`.
+    ///
+    /// ```swift
+    /// Text("/very/long/path/to/file.txt")
+    ///     .truncationMode(.head)   // "…/to/file.txt"
+    /// ```
+    ///
+    /// - Parameter mode: Which part of the text to keep when truncating.
+    /// - Returns: A new text with the truncation mode applied.
+    public func truncationMode(_ mode: TruncationMode) -> Text {
+        var copy = self
+        copy.style.truncationMode = mode
+        return copy
+    }
 }
 
 // MARK: - TextStyle
@@ -168,6 +187,9 @@ public struct TextStyle: Sendable, Equatable {
     /// Whether foreground and background colors are inverted.
     public var isInverted: Bool = false
 
+    /// How the text is shortened when it cannot fit its available space.
+    public var truncationMode: TruncationMode = .tail
+
     /// Creates a default TextStyle with no formatting.
     public init() {}
 }
@@ -199,7 +221,11 @@ extension Text: Renderable, Layoutable {
         let maxWidth = proposal.width ?? context.availableWidth
         let wrappedLines = wordWrap(content, maxWidth: maxWidth)
 
-        let width = wrappedLines.map(\.strippedLength).max() ?? 0
+        let naturalWidth = wrappedLines.map(\.strippedLength).max() ?? 0
+        // Never advertise a width wider than the wrap boundary: a word
+        // longer than `maxWidth` is truncated at render time, so claiming
+        // its full width would make the parent reserve unusable space.
+        let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : naturalWidth
         let height = wrappedLines.count
 
         // Text is never flexible - it has a fixed size
@@ -220,11 +246,33 @@ extension Text: Renderable, Layoutable {
 
         let resolvedStyle = effectiveStyle.resolved(with: context.environment.palette)
 
-        // Word-wrap text to fit available width
-        let wrappedLines = wordWrap(content, maxWidth: context.availableWidth)
+        // Word-wrap text to fit available width.
+        let maxWidth = context.availableWidth
+        var lines = wordWrap(content, maxWidth: maxWidth)
+
+        // Height constraint: if the wrapped text is taller than the space
+        // it was given, keep only what fits and flag the final kept line
+        // so the loss of content is shown rather than silently clipped by
+        // the layout safety net.
+        let maxHeight = context.availableHeight
+        var continuationOnLastLine = false
+        if maxHeight >= 1 && lines.count > maxHeight {
+            lines = Array(lines.prefix(maxHeight))
+            continuationOnLastLine = true
+        }
+
+        // Width constraint: a word longer than the wrap boundary leaves a
+        // line wider than `maxWidth`; truncate it (and the final line when
+        // content was dropped below it) with a visible ellipsis.
+        let mode = style.truncationMode
+        let lastIndex = lines.count - 1
+        let truncated = lines.enumerated().map { index, line -> String in
+            let forceEllipsis = continuationOnLastLine && index == lastIndex
+            return line.truncatedToWidth(maxWidth, mode: mode, forceEllipsis: forceEllipsis)
+        }
 
         // Apply styling to each line
-        let styledLines = wrappedLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+        let styledLines = truncated.map { ANSIRenderer.render($0, with: resolvedStyle) }
 
         return FrameBuffer(lines: styledLines)
     }
