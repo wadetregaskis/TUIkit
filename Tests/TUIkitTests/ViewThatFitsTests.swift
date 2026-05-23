@@ -19,8 +19,16 @@ struct ViewThatFitsTests {
     @Test("Picks the first candidate when it fits the available space")
     func picksFirstWhenItFits() {
         let view = ViewThatFits {
-            HStack(spacing: 1) { Text("Alpha"); Text("Beta"); Text("Gamma") }
-            VStack(spacing: 0) { Text("Alpha"); Text("Beta"); Text("Gamma") }
+            HStack(spacing: 1) {
+                Text("Alpha")
+                Text("Beta")
+                Text("Gamma")
+            }
+            VStack(spacing: 0) {
+                Text("Alpha")
+                Text("Beta")
+                Text("Gamma")
+            }
         }
         let buffer = renderToBuffer(view, context: context(width: 60))
         #expect(
@@ -32,8 +40,16 @@ struct ViewThatFitsTests {
     @Test("Falls back to a later candidate when the first does not fit")
     func fallsBackWhenFirstDoesNotFit() {
         let view = ViewThatFits {
-            HStack(spacing: 1) { Text("Alpha"); Text("Beta"); Text("Gamma") }
-            VStack(spacing: 0) { Text("Alpha"); Text("Beta"); Text("Gamma") }
+            HStack(spacing: 1) {
+                Text("Alpha")
+                Text("Beta")
+                Text("Gamma")
+            }
+            VStack(spacing: 0) {
+                Text("Alpha")
+                Text("Beta")
+                Text("Gamma")
+            }
         }
         let buffer = renderToBuffer(view, context: context(width: 8))
         #expect(
