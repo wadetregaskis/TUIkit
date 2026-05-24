@@ -61,16 +61,6 @@ extension Text {
         return copy
     }
 
-    /// Sets the background color.
-    ///
-    /// - Parameter color: The desired background color.
-    /// - Returns: A new text with the applied background color.
-    public func backgroundColor(_ color: Color) -> Text {
-        var copy = self
-        copy.style.backgroundColor = color
-        return copy
-    }
-
     /// Makes the text bold.
     ///
     /// - Returns: A new text with bold formatting.
