@@ -24,11 +24,11 @@
 ///
 /// ## Styles
 ///
-/// Set the style via the `trackStyle(_:)` modifier or pass it directly:
+/// Set the style via the `progressViewStyle(_:)` modifier:
 ///
 /// ```swift
 /// ProgressView(value: 0.5)
-///     .trackStyle(.shade)
+///     .progressViewStyle(.shade)
 /// ```
 ///
 /// See ``TrackStyle`` for all available styles.
@@ -170,29 +170,39 @@ extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
 // MARK: - Style Modifier
 
 extension ProgressView {
-    /// Sets the visual style of the progress bar.
+    /// Sets the visual style of the progress view.
     ///
     /// ```swift
     /// ProgressView(value: 0.5)
-    ///     .trackStyle(.shade)
+    ///     .progressViewStyle(.shade)
     /// ```
     ///
-    /// - Parameter style: The track style.
+    /// - Parameter style: The progress view style.
     /// - Returns: A progress view with the specified style.
-    public func trackStyle(_ style: TrackStyle) -> ProgressView {
+    public func progressViewStyle(_ style: TrackStyle) -> ProgressView {
         var copy = self
         copy.style = style
         return copy
     }
 
-    /// Sets the visual style of the progress bar.
+    /// Sets the visual style of the progress view.
     ///
-    /// - Parameter style: The progress bar style.
+    /// - Parameter style: The progress view style.
     /// - Returns: A progress view with the specified style.
-    /// - Note: Scheduled for removal in the next major version.
-    @available(*, deprecated, renamed: "trackStyle(_:)")
+    /// - Note: Renamed to ``progressViewStyle(_:)`` for SwiftUI parity.
+    @available(*, deprecated, renamed: "progressViewStyle(_:)")
+    public func trackStyle(_ style: TrackStyle) -> ProgressView {
+        progressViewStyle(style)
+    }
+
+    /// Sets the visual style of the progress view.
+    ///
+    /// - Parameter style: The progress view style.
+    /// - Returns: A progress view with the specified style.
+    /// - Note: Renamed to ``progressViewStyle(_:)`` for SwiftUI parity.
+    @available(*, deprecated, renamed: "progressViewStyle(_:)")
     public func progressBarStyle(_ style: TrackStyle) -> ProgressView {
-        trackStyle(style)
+        progressViewStyle(style)
     }
 }
 
