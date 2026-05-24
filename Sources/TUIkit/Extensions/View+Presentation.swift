@@ -166,6 +166,25 @@ extension View {
             modal: content()
         )
     }
+
+    /// Presents content modally when a binding to a Boolean value is true.
+    ///
+    /// A SwiftUI-compatible spelling of ``modal(isPresented:content:)``: the
+    /// terminal presents the content as a centred overlay that dims the
+    /// background rather than as a sliding sheet, but a call site written
+    /// against SwiftUI's `.sheet(isPresented:content:)` works unchanged.
+    ///
+    /// - Parameters:
+    ///   - isPresented: A binding to a Boolean value that determines whether
+    ///     to present the sheet.
+    ///   - content: A ViewBuilder returning the sheet content.
+    /// - Returns: A view that presents the content modally.
+    public func sheet<Content: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        modal(isPresented: isPresented, content: content)
+    }
 }
 
 // MARK: - Notification Host
