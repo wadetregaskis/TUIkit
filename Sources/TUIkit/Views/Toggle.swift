@@ -260,9 +260,18 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         let isOnValue = isOn.wrappedValue
 
-        // Render the label to get its text
-        let labelBuffer = TUIkit.renderToBuffer(label, context: context)
-        let labelText = labelBuffer.lines.joined(separator: " ").stripped
+        // Render the label, keeping its colour styling. Stripping the ANSI
+        // here left the label with no foreground colour at all, so it drew
+        // in the terminal's default — unreadable against the themed
+        // background. A disabled toggle dims its label; otherwise the label
+        // inherits the normal foreground colour.
+        var labelContext = context
+        if isDisabled {
+            labelContext.environment.foregroundStyle =
+                palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        }
+        let labelBuffer = TUIkit.renderToBuffer(label, context: labelContext)
+        let labelText = labelBuffer.lines.joined(separator: " ")
 
         // Bracket color: pulsing accent when focused, the normal foreground
         // when simply unfocused, and dimmed only when actually disabled.

@@ -224,6 +224,40 @@ struct ToggleTests {
             "An unfocused, enabled toggle must not reuse the dim disabled bracket colour"
         )
     }
+
+    @Test("Toggle label is drawn in the normal foreground colour")
+    func toggleLabelIsColored() {
+        let context = createTestContext()
+        var isOn = false
+        let binding = Binding(get: { isOn }, set: { isOn = $0 })
+
+        let line = renderToBuffer(Toggle("Readable", isOn: binding), context: context).lines.joined()
+
+        // The label must carry foreground styling — exactly what a
+        // standalone Text produces — rather than being stripped to a
+        // colourless run that renders in the terminal's default colour.
+        let styledLabel = renderToBuffer(Text("Readable"), context: context).lines.joined()
+        #expect(
+            line.contains(styledLabel),
+            "Toggle label must be drawn in the foreground colour, got: \(line)"
+        )
+    }
+
+    @Test("Disabled toggle dims its label")
+    func disabledToggleLabelDimmed() {
+        let context = createTestContext()
+        let line = renderToBuffer(
+            Toggle("Dimmed", isOn: .constant(false)).disabled(),
+            context: context
+        ).lines.joined()
+
+        let palette = context.environment.palette
+        let dimLabel = ANSIRenderer.colorize(
+            "Dimmed",
+            foreground: palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        )
+        #expect(line.contains(dimLabel), "A disabled toggle's label should be dimmed, got: \(line)")
+    }
 }
 
 // MARK: - Toggle Handler Tests
