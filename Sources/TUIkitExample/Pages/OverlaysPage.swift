@@ -304,9 +304,10 @@ struct OverlaysPage: View {
     private var dismissButton: some View {
         HStack {
             Spacer()
-            Button("Dismiss", style: .primary) {
+            Button("Dismiss") {
                 showOverlay = false
             }
+            .buttonStyle(.primary)
         }
     }
 }

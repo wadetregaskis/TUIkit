@@ -82,7 +82,7 @@ struct ButtonTests {
     func defaultButtonSingleLine() {
         let context = createTestContext()
 
-        let button = Button("Test", style: .default) {}
+        let button = Button("Test") {}
         let buffer = renderToBuffer(button, context: context)
 
         #expect(buffer.height == 1)
@@ -92,7 +92,7 @@ struct ButtonTests {
     func plainButtonSingleLine() {
         let context = createTestContext()
 
-        let button = Button("Test", style: .plain) {}
+        let button = Button("Test") {}.buttonStyle(.plain)
         let buffer = renderToBuffer(button, context: context)
 
         #expect(buffer.height == 1)
@@ -138,7 +138,7 @@ struct ButtonTests {
     func destructiveButtonUsesPaletteColor() {
         let context = createTestContext()
 
-        let button = Button("Delete", style: .destructive) {}
+        let button = Button("Delete") {}.buttonStyle(.destructive)
         let buffer = renderToBuffer(button, context: context)
 
         let allContent = buffer.lines.joined()
@@ -151,12 +151,46 @@ struct ButtonTests {
     func primaryButtonIsBold() {
         let context = createTestContext()
 
-        let button = Button("Submit", style: .primary) {}
+        let button = Button("Submit") {}.buttonStyle(.primary)
         let buffer = renderToBuffer(button, context: context)
 
         let allContent = buffer.lines.joined()
         // Primary style sets isBold = true, rendered as bold ANSI
         #expect(allContent.contains("\u{1b}[1;"))
+    }
+
+    @Test("Destructive role renders via the style without an explicit buttonStyle")
+    func destructiveRoleRendersViaStyle() {
+        let context = createTestContext()
+
+        // No .buttonStyle() — the default style colours destructive roles.
+        let button = Button("Delete", role: .destructive) {}
+        let buffer = renderToBuffer(button, context: context)
+
+        let allContent = buffer.lines.joined()
+        #expect(allContent.contains("Delete"))
+        #expect(allContent.contains("\u{1b}["))
+    }
+
+    @Test("buttonStyle propagates through a container to nested buttons")
+    func buttonStylePropagatesThroughContainer() {
+        let context = createTestContext()
+
+        let styled = VStack {
+            Button("A") {}
+            Button("B") {}
+        }
+        .buttonStyle(.plain)
+
+        let buffer = renderToBuffer(styled, context: context)
+        let visible = buffer.lines.joined().stripped
+
+        // The plain style draws no bracket caps — proof the environment
+        // value reached both nested buttons.
+        #expect(!visible.contains("\u{2590}"))
+        #expect(!visible.contains("\u{258C}"))
+        #expect(visible.contains("A"))
+        #expect(visible.contains("B"))
     }
 }
 
@@ -267,9 +301,10 @@ struct ButtonRowTests {
         let context = createTestContext()
 
         let row = ButtonRow(spacing: 5) {
-            Button("A", style: .plain) {}
-            Button("B", style: .plain) {}
+            Button("A") {}
+            Button("B") {}
         }
+        .buttonStyle(.plain)
 
         let buffer = renderToBuffer(row, context: context)
 
@@ -295,9 +330,10 @@ struct ButtonRowTests {
         let context = createTestContext()
 
         let row = ButtonRow {
-            Button("First", style: .plain) {}
-            Button("Second", style: .plain) {}
+            Button("First") {}
+            Button("Second") {}
         }
+        .buttonStyle(.plain)
 
         let buffer = renderToBuffer(row, context: context)
 
@@ -312,7 +348,7 @@ struct ButtonRowTests {
 
         let row = ButtonRow {
             Button("Default") {}
-            Button("Plain", style: .plain) {}
+            Button("Plain") {}
         }
 
         let buffer = renderToBuffer(row, context: context)

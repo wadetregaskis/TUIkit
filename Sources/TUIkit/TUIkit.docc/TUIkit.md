@@ -162,6 +162,12 @@ struct MyApp: App {
 ### Styles
 
 - ``ButtonStyle``
+- ``ButtonStyleConfiguration``
+- ``DefaultButtonStyle``
+- ``PrimaryButtonStyle``
+- ``DestructiveButtonStyle``
+- ``SuccessButtonStyle``
+- ``PlainButtonStyle``
 - ``ToggleStyle``
 - ``DefaultToggleStyle``
 - ``CheckboxToggleStyle``

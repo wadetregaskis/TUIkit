@@ -34,74 +34,6 @@ public struct ButtonRole: Equatable, Sendable {
     public static let destructive = Self("destructive")
 }
 
-// MARK: - Button Style
-
-/// Defines the visual style of a button.
-public struct ButtonStyle: Sendable {
-    /// The foreground color for the label.
-    ///
-    /// Uses a semantic color reference so the actual value is resolved
-    /// at render time from the active palette. Set to `nil` to use the
-    /// palette's accent color.
-    public var foregroundColor: Color?
-
-    /// The background color (reserved for future use).
-    public var backgroundColor: Color?
-
-    /// Whether the label is bold.
-    public var isBold: Bool
-
-    /// Horizontal padding inside the button.
-    public var horizontalPadding: Int
-
-    /// Creates a button style.
-    ///
-    /// - Parameters:
-    ///   - foregroundColor: The label color (default: theme accent).
-    ///   - backgroundColor: The background color.
-    ///   - isBold: Whether the label is bold.
-    ///   - horizontalPadding: Horizontal padding inside the button.
-    public init(
-        foregroundColor: Color? = nil,
-        backgroundColor: Color? = nil,
-        isBold: Bool = false,
-        horizontalPadding: Int = 1
-    ) {
-        self.foregroundColor = foregroundColor
-        self.backgroundColor = backgroundColor
-        self.isBold = isBold
-        self.horizontalPadding = horizontalPadding
-    }
-
-    // MARK: - Preset Styles
-
-    /// Default button style — dimmed foreground, not bold.
-    public static let `default` = Self(
-        foregroundColor: .palette.foregroundSecondary
-    )
-
-    /// Primary button style — bold, uses palette accent.
-    public static let primary = Self(
-        foregroundColor: .palette.accent,
-        isBold: true
-    )
-
-    /// Destructive button style — uses palette error color.
-    public static let destructive = Self(
-        foregroundColor: .palette.error
-    )
-
-    /// Success button style — uses palette success color.
-    public static let success = Self(
-        foregroundColor: .palette.success
-    )
-
-    /// Plain button style — no brackets, no border, no padding.
-    public static let plain = Self(
-        horizontalPadding: 0
-    )
-}
-
 // MARK: - Button
 
 /// An interactive button that triggers an action when pressed.
@@ -109,12 +41,19 @@ public struct ButtonStyle: Sendable {
 /// Buttons can receive focus and respond to keyboard input (Enter or Space).
 /// They display differently when focused to indicate the current selection.
 ///
-/// ## Rendering
+/// ## Styling
 ///
-/// - **Standard appearances** (line, rounded, doubleLine, heavy):
-///   Rendered as single-line `[ Label ]` with bracket delimiters.
+/// A button's appearance is controlled by its ``ButtonStyle``, applied with
+/// the ``View/buttonStyle(_:)`` modifier rather than an initializer argument —
+/// mirroring SwiftUI:
 ///
-/// - **Plain style**: No brackets, no background — just the label text.
+/// ```swift
+/// Button("Submit") { handleSubmit() }
+///     .buttonStyle(.primary)
+/// ```
+///
+/// The default style renders a single-line bracketed button, `▐ Label ▌`.
+/// The ``PlainButtonStyle`` renders just the label with no brackets.
 ///
 /// # Basic Example
 ///
@@ -124,10 +63,10 @@ public struct ButtonStyle: Sendable {
 /// }
 /// ```
 ///
-/// # Styled Button
+/// # Destructive Button
 ///
 /// ```swift
-/// Button("Delete", style: .destructive) {
+/// Button("Delete", role: .destructive) {
 ///     handleDelete()
 /// }
 /// ```
@@ -145,12 +84,6 @@ public struct Button: View {
     /// buttons use error coloring.
     let role: ButtonRole?
 
-    /// The normal (unfocused) style.
-    let style: ButtonStyle
-
-    /// The focused style.
-    let focusedStyle: ButtonStyle
-
     /// The unique focus identifier.
     ///
     /// If `nil`, automatically generated from the view's identity path.
@@ -158,40 +91,25 @@ public struct Button: View {
     var focusID: String?
 
     /// Whether the button is disabled.
+    ///
+    /// Set with the ``disabled(_:)`` modifier.
     var isDisabled: Bool
 
     /// Creates a button with a label and action.
     ///
     /// - Parameters:
     ///   - label: The button's label text.
-    ///   - style: The button style (default: `.default`).
-    ///   - focusedStyle: The style when focused (default: bold variant).
-    ///   - isDisabled: Whether the button is disabled (default: false).
     ///   - action: The action to perform when pressed.
     public init(
         _ label: String,
-        style: ButtonStyle = .default,
-        focusedStyle: ButtonStyle? = nil,
-        isDisabled: Bool = false,
         action: @escaping () -> Void
     ) {
         self.label = label
         self.action = action
         self.role = nil
-        self.style = style
         // Auto-generated focusID from view identity (collision-free)
         self.focusID = nil
-        self.isDisabled = isDisabled
-
-        // Default focused style: bold version of the normal style
-        self.focusedStyle =
-            focusedStyle
-            ?? ButtonStyle(
-                foregroundColor: style.foregroundColor,
-                backgroundColor: style.backgroundColor,
-                isBold: true,
-                horizontalPadding: style.horizontalPadding
-            )
+        self.isDisabled = false
     }
 
     /// Creates a button with an optional role for semantic meaning.
@@ -217,27 +135,6 @@ public struct Button: View {
         // Auto-generated focusID from view identity (collision-free)
         self.focusID = nil
         self.isDisabled = false
-
-        // Style based on role
-        switch role {
-        case .destructive:
-            self.style = .destructive
-            self.focusedStyle = ButtonStyle(
-                foregroundColor: .palette.error,
-                isBold: true,
-                horizontalPadding: 1
-            )
-        case .cancel:
-            self.style = .default
-            self.focusedStyle = ButtonStyle(
-                foregroundColor: nil,
-                isBold: true,
-                horizontalPadding: 1
-            )
-        default:
-            self.style = .default
-            self.focusedStyle = ButtonStyle(isBold: true, horizontalPadding: 1)
-        }
     }
 
     public var body: some View {
@@ -245,8 +142,6 @@ public struct Button: View {
             label: label,
             action: action,
             role: role,
-            style: style,
-            focusedStyle: focusedStyle,
             focusID: focusID,
             isDisabled: isDisabled
         )
@@ -256,12 +151,14 @@ public struct Button: View {
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering of Button.
+///
+/// `_ButtonCore` owns the interactive behaviour — focus registration and
+/// keyboard handling — and delegates all visual appearance to the active
+/// ``ButtonStyle`` read from the environment.
 private struct _ButtonCore: View, Renderable {
     let label: String
     let action: () -> Void
     let role: ButtonRole?
-    let style: ButtonStyle
-    let focusedStyle: ButtonStyle
     let focusID: String?
     let isDisabled: Bool
 
@@ -287,79 +184,16 @@ private struct _ButtonCore: View, Renderable {
         )
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        let currentStyle = isFocused ? focusedStyle : style
-        let palette = context.environment.palette
-        let isPlainStyle = currentStyle.horizontalPadding == 0 && style.foregroundColor == nil && !style.isBold
 
-        // Build the label with padding
-        let padding = String(repeating: " ", count: currentStyle.horizontalPadding)
-        let paddedLabel = padding + label + padding
-
-        // Resolve foreground color
-        let foregroundColor: Color
-        if isDisabled {
-            // Use tertiary at 50% opacity for clearly disabled appearance
-            foregroundColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-        } else {
-            foregroundColor = currentStyle.foregroundColor?.resolve(with: palette) ?? palette.accent
-        }
-
-        // Build text style
-        var textStyle = TextStyle()
-        textStyle.foregroundColor = foregroundColor
-        textStyle.isBold = currentStyle.isBold && !isDisabled
-
-        // Determine rendering mode
-        if isPlainStyle {
-            // Plain: pulsing dot prefix + label, no brackets
-            let focusPrefix = BorderRenderer.focusIndicatorPrefix(
-                isFocused: isFocused && !isDisabled,
-                pulsePhase: context.environment.pulsePhase,
-                palette: palette
-            )
-            let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
-            let fullLine = focusPrefix + styledLabel
-            return FrameBuffer(lines: [fullLine])
-        } else {
-            // Standard: half-block caps with accent-tinted background
-            let buttonBg = palette.accent.opacity(ViewConstants.focusBorderDim)
-
-            // Label foreground: primary = accent/highlight, others = dimmed foreground
-            let labelFg: Color
-            if isDisabled {
-                labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-            } else if currentStyle.isBold {
-                labelFg = currentStyle.foregroundColor?.resolve(with: palette) ?? palette.accent
-            } else {
-                labelFg = palette.foregroundSecondary
-            }
-
-            // Caps: match button background normally, pulse to accent when focused
-            let resolvedCapColor: Color
-            if isDisabled {
-                resolvedCapColor = buttonBg
-            } else if isFocused {
-                resolvedCapColor = Color.lerp(
-                    buttonBg,
-                    palette.accent.opacity(ViewConstants.buttonCapPulseBright),
-                    phase: context.environment.pulsePhase
-                )
-            } else {
-                resolvedCapColor = buttonBg
-            }
-
-            let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: resolvedCapColor)
-            let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: resolvedCapColor)
-            let styledLabel = ANSIRenderer.colorize(
-                paddedLabel,
-                foreground: labelFg,
-                background: buttonBg,
-                bold: currentStyle.isBold && !isDisabled
-            )
-
-            let line = openCap + styledLabel + closeCap
-            return FrameBuffer(lines: [line])
-        }
+        let style = context.environment.buttonStyle
+        let configuration = ButtonStyleConfiguration(
+            label: label,
+            role: role,
+            isPressed: false,
+            isFocused: isFocused && !isDisabled,
+            isEnabled: !isDisabled
+        )
+        return style.makeBuffer(configuration: configuration, context: context)
     }
 }
 

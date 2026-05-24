@@ -14,8 +14,8 @@
 ///
 /// ```swift
 /// ButtonRow {
-///     Button("Cancel", style: .plain) { dismiss() }
-///     Button("OK", style: .primary) { confirm() }
+///     Button("Cancel") { dismiss() }
+///     Button("OK") { confirm() }
 /// }
 /// ```
 public struct ButtonRow: View {
@@ -52,8 +52,8 @@ public struct ButtonRow: View {
 ///
 /// ```swift
 /// ButtonRow {
-///     Button("Cancel", style: .plain) { dismiss() }
-///     Button("OK", style: .primary) { confirm() }
+///     Button("Cancel") { dismiss() }
+///     Button("OK") { confirm() }
 /// }
 /// ```
 ///

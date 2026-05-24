@@ -23,7 +23,7 @@ extension View {
     /// }
     /// .alert("Warning", isPresented: $showAlert) {
     ///     Button("Yes") { showAlert = false }
-    ///     Button("Cancel", style: .secondary) { showAlert = false }
+    ///     Button("Cancel", role: .cancel) { showAlert = false }
     /// } message: {
     ///     Text("Are you sure?")
     /// }

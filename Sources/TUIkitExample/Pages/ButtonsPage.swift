@@ -23,15 +23,18 @@ struct ButtonsPage: View {
 
             DemoSection("Interactive Counter (@State)") {
                 HStack(spacing: 2) {
-                    Button("+1", style: .primary) {
+                    Button("+1") {
                         clickCount += 1
                     }
-                    Button("+10", style: .success) {
+                    .buttonStyle(.primary)
+                    Button("+10") {
                         clickCount += 10
                     }
-                    Button("Reset", style: .destructive) {
+                    .buttonStyle(.success)
+                    Button("Reset") {
                         clickCount = 0
                     }
+                    .buttonStyle(.destructive)
                     Text("Clicks: \(clickCount)")
                         .bold()
                         .foregroundStyle(.palette.accent)
@@ -43,15 +46,18 @@ struct ButtonsPage: View {
                     Button("Default") {
                         clickCount += 1
                     }
-                    Button("Primary", style: .primary) {
+                    Button("Primary") {
                         clickCount += 1
                     }
-                    Button("Success", style: .success) {
+                    .buttonStyle(.primary)
+                    Button("Success") {
                         clickCount += 1
                     }
-                    Button("Destructive", style: .destructive) {
+                    .buttonStyle(.success)
+                    Button("Destructive") {
                         clickCount += 1
                     }
+                    .buttonStyle(.destructive)
                 }
             }
 
@@ -64,16 +70,19 @@ struct ButtonsPage: View {
 
             DemoSection("Plain Style (No Border)") {
                 HStack(spacing: 2) {
-                    Button("Link 1", style: .plain) { clickCount += 1 }
-                    Button("Link 2", style: .plain) { clickCount += 1 }
+                    Button("Link 1") { clickCount += 1 }
+                        .buttonStyle(.plain)
+                    Button("Link 2") { clickCount += 1 }
+                        .buttonStyle(.plain)
                 }
             }
 
             DemoSection("ButtonRow (Horizontal Group)") {
                 ButtonRow(spacing: 3) {
                     Button("Cancel") { clickCount += 1 }
-                    Button("Save", style: .primary) { clickCount += 1 }
+                    Button("Save") { clickCount += 1 }
                 }
+                .buttonStyle(.primary)
             }
 
             KeyboardHelpSection(
