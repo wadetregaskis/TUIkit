@@ -221,4 +221,32 @@ struct TextTruncationTests {
         #expect("Hello".truncatedToWidth(0) == "")
         #expect("Hello".truncatedToWidth(-3) == "")
     }
+
+    @Test("lineLimit caps the number of rendered lines")
+    func lineLimitCapsLines() {
+        let text = Text("one two three four five six seven eight").lineLimit(2)
+        let buffer = renderToBuffer(text, context: context(width: 12, height: 24))
+        #expect(buffer.height == 2, "lineLimit(2) must cap the text at 2 lines, got \(buffer.height)")
+        #expect(
+            buffer.lines.last?.stripped.contains("…") == true,
+            "The final line must show a truncation ellipsis"
+        )
+    }
+
+    @Test("lineLimit caps the measured height")
+    func lineLimitCapsMeasuredHeight() {
+        let text = Text("one two three four five six").lineLimit(1)
+        let size = text.sizeThatFits(
+            proposal: ProposedSize(width: 10, height: nil),
+            context: context(width: 10)
+        )
+        #expect(size.height == 1, "lineLimit(1) must report height 1, got \(size.height)")
+    }
+
+    @Test("lineLimit(nil) imposes no limit")
+    func lineLimitNilNoLimit() {
+        let text = Text("one two three four five six").lineLimit(nil)
+        let buffer = renderToBuffer(text, context: context(width: 10, height: 24))
+        #expect(buffer.height > 2, "lineLimit(nil) should not cap the lines, got \(buffer.height)")
+    }
 }

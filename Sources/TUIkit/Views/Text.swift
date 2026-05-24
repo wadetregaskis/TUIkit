@@ -163,6 +163,25 @@ extension Text {
         copy.style.truncatesAtWordBoundary = enabled
         return copy
     }
+
+    /// Sets the maximum number of lines the text may occupy.
+    ///
+    /// When the wrapped text would exceed the limit, the final visible line
+    /// absorbs the remaining content and is truncated with an ellipsis.
+    /// Passing `nil` removes the limit.
+    ///
+    /// ```swift
+    /// Text(longParagraph)
+    ///     .lineLimit(2)
+    /// ```
+    ///
+    /// - Parameter limit: The maximum number of lines, or `nil` for no limit.
+    /// - Returns: A new text with the line limit applied.
+    public func lineLimit(_ limit: Int?) -> Text {
+        var copy = self
+        copy.style.lineLimit = limit
+        return copy
+    }
 }
 
 // MARK: - TextStyle
@@ -205,6 +224,9 @@ public struct TextStyle: Sendable, Equatable {
     /// character position.
     public var truncatesAtWordBoundary: Bool = false
 
+    /// The maximum number of lines the text may occupy, or `nil` for no limit.
+    public var lineLimit: Int?
+
     /// Creates a default TextStyle with no formatting.
     public init() {}
 }
@@ -241,7 +263,9 @@ extension Text: Renderable, Layoutable {
         // longer than `maxWidth` is truncated at render time, so claiming
         // its full width would make the parent reserve unusable space.
         let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : naturalWidth
-        let height = wrappedLines.count
+        // A line limit caps the reported height so a parent allocates only
+        // the rows the text is allowed to occupy.
+        let height = min(wrappedLines.count, style.lineLimit.map { max(1, $0) } ?? wrappedLines.count)
 
         // Text is never flexible - it has a fixed size
         return ViewSize.fixed(width, height)
@@ -268,10 +292,12 @@ extension Text: Renderable, Layoutable {
         var lines = wordWrap(content, maxWidth: maxWidth)
 
         // Height constraint: if the wrapped text is taller than the space
-        // it was given, keep the lines that fit in full and let the final
-        // visible line absorb all the remaining content, truncated with an
-        // ellipsis — so the loss is shown rather than silently clipped.
-        let maxHeight = context.availableHeight
+        // it was given — or than an explicit line limit — keep the lines
+        // that fit in full and let the final visible line absorb all the
+        // remaining content, truncated with an ellipsis, so the loss is
+        // shown rather than silently clipped.
+        let lineLimit = style.lineLimit.map { max(1, $0) }
+        let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
         if maxHeight >= 1 && lines.count > maxHeight {
             let keptCount = max(0, maxHeight - 1)
             var kept = Array(lines.prefix(keptCount))
