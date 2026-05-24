@@ -199,7 +199,6 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     measureContext.isMeasuring = true
     // Clear hasExplicitWidth so views report their natural (minimum) size
     // instead of expanding to fill the full available width.
-    let wasExplicitWidth = measureContext.hasExplicitWidth
     measureContext.hasExplicitWidth = false
     if let width = proposal.width {
         measureContext.availableWidth = width
@@ -208,12 +207,24 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
         measureContext.availableHeight = height
     }
     let buffer = renderToBuffer(view, context: measureContext)
-    // If the view had explicit width, report it as width-flexible so the
-    // parent stack can distribute remaining space to it.
-    if wasExplicitWidth {
-        return ViewSize.flexibleWidth(minWidth: buffer.width, height: buffer.height)
+    let naturalWidth = buffer.width
+
+    // Determine width-flexibility by observation rather than by guessing
+    // from the parent's `hasExplicitWidth`. Render again with more room
+    // and see whether the view actually grows: a fixed view (a `Text`, or
+    // a size-preserving modifier such as `.background()` wrapped around
+    // one) renders the same width, while a genuinely flexible view
+    // expands. The old heuristic flagged *every* modified view in an
+    // explicit-width context as flexible, which made a backgrounded
+    // `Text` get shrunk ahead of its fixed siblings in a stack.
+    var probeContext = measureContext
+    probeContext.availableWidth = naturalWidth + 8
+    let probedWidth = renderToBuffer(view, context: probeContext).width
+
+    if probedWidth > naturalWidth {
+        return ViewSize.flexibleWidth(minWidth: naturalWidth, height: buffer.height)
     }
-    return ViewSize.fixed(buffer.width, buffer.height)
+    return ViewSize.fixed(naturalWidth, buffer.height)
 }
 
 /// Renders a child view with a specific size allocation.

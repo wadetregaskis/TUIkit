@@ -221,4 +221,39 @@ struct LayoutableTests {
         let size = measureChild(view, proposal: .unspecified, context: context)
         #expect(size.width > 0)
     }
+
+    @Test("Backgrounded child measures as fixed, not flexible")
+    func backgroundedChildIsFixed() {
+        // A `.background()` does not change a Text's size, so a backgrounded
+        // Text must still measure as a fixed-width view — otherwise a stack
+        // treats it as the flexible child and shrinks it ahead of siblings.
+        let view = Text("Black").foregroundStyle(.black).background(.white)
+        var context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        context.hasExplicitWidth = true
+
+        let size = measureChild(view, proposal: .unspecified, context: context)
+        #expect(size.width == 5, "Backgrounded \"Black\" should measure width 5, got \(size.width)")
+        #expect(size.isWidthFlexible == false, "A backgrounded Text must not be width-flexible")
+    }
+
+    @Test("HStack truncates rightmost-first even with a backgrounded child")
+    func hstackBackgroundedChildTruncatesRightmost() {
+        // Total natural width (25) exceeds the 24 available, so one view
+        // must lose a character. The leftmost view happens to carry a
+        // background; truncation must still start from the right.
+        let hstack = HStack(spacing: 2) {
+            Text("Black").foregroundStyle(.black).background(.white)
+            Text("Red")
+            Text("Green")
+            Text("Yellow")
+        }
+        var context = RenderContext(availableWidth: 24, availableHeight: 1, tuiContext: TUIContext())
+        context.hasExplicitWidth = true
+
+        let line = renderToBuffer(hstack, context: context).lines[0].stripped
+        #expect(line.contains("Black"), "Leftmost (backgrounded) view must stay intact, got: \(line)")
+        #expect(line.contains("Green"), "Interior views must stay intact, got: \(line)")
+        #expect(!line.contains("Yellow"), "The rightmost view should be the one truncated, got: \(line)")
+        #expect(line.contains("…"), "Truncation must be marked with an ellipsis, got: \(line)")
+    }
 }
