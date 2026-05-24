@@ -49,38 +49,56 @@ public struct EdgeInsets: Sendable, Equatable {
     }
 }
 
-/// The edges of a view.
-public struct Edge: OptionSet, Sendable {
-    /// The raw bitmask value for this edge set.
-    public let rawValue: UInt8
-
-    /// Creates an edge set from a raw bitmask value.
-    ///
-    /// - Parameter rawValue: The bitmask value.
-    public init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
-
+/// An edge of a view.
+///
+/// Mirrors SwiftUI's `Edge`: the type itself is a single edge, and the
+/// nested ``Edge/Set-swift.struct`` is an efficient set of edges.
+public enum Edge: Int8, Sendable, CaseIterable {
     /// The top edge.
-    public static let top = Self(rawValue: 1 << 0)
+    case top
 
     /// The leading (left) edge.
-    public static let leading = Self(rawValue: 1 << 1)
+    case leading
 
     /// The bottom edge.
-    public static let bottom = Self(rawValue: 1 << 2)
+    case bottom
 
     /// The trailing (right) edge.
-    public static let trailing = Self(rawValue: 1 << 3)
+    case trailing
 
-    /// All edges.
-    public static let all: Edge = [.top, .leading, .bottom, .trailing]
+    /// An efficient set of edges.
+    public struct Set: OptionSet, Sendable {
+        /// The raw bitmask value for this edge set.
+        public let rawValue: UInt8
 
-    /// Horizontal edges (leading and trailing).
-    public static let horizontal: Edge = [.leading, .trailing]
+        /// Creates an edge set from a raw bitmask value.
+        ///
+        /// - Parameter rawValue: The bitmask value.
+        public init(rawValue: UInt8) {
+            self.rawValue = rawValue
+        }
 
-    /// Vertical edges (top and bottom).
-    public static let vertical: Edge = [.top, .bottom]
+        /// The top edge.
+        public static let top = Set(rawValue: 1 << 0)
+
+        /// The leading (left) edge.
+        public static let leading = Set(rawValue: 1 << 1)
+
+        /// The bottom edge.
+        public static let bottom = Set(rawValue: 1 << 2)
+
+        /// The trailing (right) edge.
+        public static let trailing = Set(rawValue: 1 << 3)
+
+        /// All four edges.
+        public static let all: Set = [.top, .leading, .bottom, .trailing]
+
+        /// The leading and trailing edges.
+        public static let horizontal: Set = [.leading, .trailing]
+
+        /// The top and bottom edges.
+        public static let vertical: Set = [.top, .bottom]
+    }
 }
 
 /// A modifier that adds padding around a view.

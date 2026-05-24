@@ -224,18 +224,15 @@ extension View {
     /// - **Vertical (top/bottom):** 1 line
     /// - **Horizontal (leading/trailing):** 1 character
     ///
-    /// When called without arguments, `.padding()` adds 1 unit on all sides.
-    ///
     /// ```swift
     /// Text("Hello")
-    ///     .padding()    // 1 line top/bottom, 1 char left/right
     ///     .padding(2)   // 2 lines top/bottom, 2 chars left/right
     /// ```
     ///
-    /// - Parameter amount: The padding amount on all sides (default: 1).
+    /// - Parameter length: The padding amount on all sides.
     /// - Returns: A padded view.
-    public func padding(_ amount: Int = 1) -> some View {
-        modifier(PaddingModifier(insets: EdgeInsets(all: amount)))
+    public func padding(_ length: Int) -> some View {
+        modifier(PaddingModifier(insets: EdgeInsets(all: length)))
     }
 
     /// Adds padding on specific edges.
@@ -244,22 +241,25 @@ extension View {
     /// - **Vertical (top/bottom):** 1 line
     /// - **Horizontal (leading/trailing):** 1 character
     ///
+    /// When called without arguments, `.padding()` adds 1 unit on all sides.
+    ///
     /// ```swift
     /// Text("Hello")
+    ///     .padding()                // 1 unit on all sides
     ///     .padding(.horizontal, 4)  // 4 chars left and right
     ///     .padding(.vertical, 2)    // 2 lines top and bottom
     /// ```
     ///
     /// - Parameters:
-    ///   - edges: The edges to pad.
-    ///   - amount: The padding amount (default: 1).
+    ///   - edges: The edges to pad (default: `.all`).
+    ///   - length: The padding amount (default: 1).
     /// - Returns: A padded view.
-    public func padding(_ edges: Edge, _ amount: Int = 1) -> some View {
+    public func padding(_ edges: Edge.Set = .all, _ length: Int = 1) -> some View {
         let insets = EdgeInsets(
-            top: edges.contains(.top) ? amount : 0,
-            leading: edges.contains(.leading) ? amount : 0,
-            bottom: edges.contains(.bottom) ? amount : 0,
-            trailing: edges.contains(.trailing) ? amount : 0
+            top: edges.contains(.top) ? length : 0,
+            leading: edges.contains(.leading) ? length : 0,
+            bottom: edges.contains(.bottom) ? length : 0,
+            trailing: edges.contains(.trailing) ? length : 0
         )
         return modifier(PaddingModifier(insets: insets))
     }
