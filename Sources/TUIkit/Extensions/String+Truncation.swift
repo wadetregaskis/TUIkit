@@ -41,6 +41,11 @@ extension String {
     ///   - width: The maximum width in terminal cells. Values below 1
     ///     yield an empty string.
     ///   - mode: Which part of the string to keep (default: `.tail`).
+    ///   - atWordBoundary: When `true`, the cut is pulled back to the
+    ///     nearest word boundary so a partial word is never left dangling.
+    ///     A single word longer than the available width still has to be
+    ///     cut mid-word — there is no boundary to honour. Has no effect on
+    ///     `.middle`. Defaults to `false` (cut at any position).
     ///   - forceEllipsis: When `true`, append an ellipsis even if the
     ///     string already fits — used to signal that content continues
     ///     past a hard boundary (e.g. a row clipped by its container).
@@ -48,6 +53,7 @@ extension String {
     func truncatedToWidth(
         _ width: Int,
         mode: TruncationMode = .tail,
+        atWordBoundary: Bool = false,
         forceEllipsis: Bool = false
     ) -> String {
         let visible = strippedLength
@@ -65,15 +71,78 @@ extension String {
         let keep = width - 1
         switch mode {
         case .tail:
-            return ansiAwarePrefix(visibleCount: keep) + ellipsis
+            let prefix = ansiAwarePrefix(visibleCount: keep)
+            if atWordBoundary, let trimmed = Self.keepingLeadingWords(of: prefix) {
+                return trimmed + ellipsis
+            }
+            // Drop a trailing space so the ellipsis never dangles after a gap.
+            return Self.droppingTrailingSpaces(prefix) + ellipsis
         case .head:
-            return ellipsis + ansiAwareSuffix(droppingVisible: max(0, visible - keep))
+            let suffix = ansiAwareSuffix(droppingVisible: max(0, visible - keep))
+            if atWordBoundary, let trimmed = Self.keepingTrailingWords(of: suffix) {
+                return ellipsis + trimmed
+            }
+            return ellipsis + Self.droppingLeadingSpaces(suffix)
         case .middle:
+            // A word-boundary cut in the middle is ill-defined; `.middle`
+            // always cuts by character.
             let leftKeep = keep / 2
             let rightKeep = keep - leftKeep
             return ansiAwarePrefix(visibleCount: leftKeep)
                 + ellipsis
                 + ansiAwareSuffix(droppingVisible: max(0, visible - rightKeep))
         }
+    }
+
+    /// Drops a trailing partial word from a tail-truncation prefix.
+    ///
+    /// Returns the prefix cut back to (and excluding) the final space, with
+    /// trailing spaces removed — or `nil` when there is no space to cut at
+    /// (a single over-long word), so the caller falls back to a mid-word cut.
+    private static func keepingLeadingWords(of prefix: String) -> String? {
+        guard let lastSpace = prefix.lastIndex(of: " ") else { return nil }
+        var end = lastSpace
+        while end > prefix.startIndex {
+            let previous = prefix.index(before: end)
+            guard prefix[previous] == " " else { break }
+            end = previous
+        }
+        let result = String(prefix[prefix.startIndex..<end])
+        return result.isEmpty ? nil : result
+    }
+
+    /// Drops a leading partial word from a head-truncation suffix.
+    ///
+    /// Returns the suffix advanced past the first space — or `nil` when
+    /// there is no space to cut at, so the caller falls back to a mid-word
+    /// cut.
+    private static func keepingTrailingWords(of suffix: String) -> String? {
+        guard let firstSpace = suffix.firstIndex(of: " ") else { return nil }
+        var start = suffix.index(after: firstSpace)
+        while start < suffix.endIndex, suffix[start] == " " {
+            start = suffix.index(after: start)
+        }
+        let result = String(suffix[start..<suffix.endIndex])
+        return result.isEmpty ? nil : result
+    }
+
+    /// Returns `s` with any trailing spaces removed.
+    private static func droppingTrailingSpaces(_ s: String) -> String {
+        var end = s.endIndex
+        while end > s.startIndex {
+            let previous = s.index(before: end)
+            guard s[previous] == " " else { break }
+            end = previous
+        }
+        return String(s[s.startIndex..<end])
+    }
+
+    /// Returns `s` with any leading spaces removed.
+    private static func droppingLeadingSpaces(_ s: String) -> String {
+        var start = s.startIndex
+        while start < s.endIndex, s[start] == " " {
+            start = s.index(after: start)
+        }
+        return String(s[start..<s.endIndex])
     }
 }

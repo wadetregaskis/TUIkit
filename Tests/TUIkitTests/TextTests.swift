@@ -153,13 +153,51 @@ struct TextTruncationTests {
         #expect(!line.contains("…"))
     }
 
-    @Test("Height-constrained text marks the final visible line")
-    func heightTruncationMarksLastLine() {
-        // Four explicit lines rendered into two rows of space.
+    @Test("Height-constrained text fills and marks the final visible line")
+    func heightTruncationFillsLastLine() {
+        // Four explicit lines rendered into two rows of space: the first
+        // row shows the first line, the last row absorbs the remaining
+        // content rather than dropping it behind a bare ellipsis.
         let buffer = renderToBuffer(Text("a\nb\nc\nd"), context: context(width: 40, height: 2))
         #expect(buffer.height == 2, "Expected the text clipped to 2 rows, got \(buffer.height)")
         #expect(buffer.lines[0].stripped == "a")
-        #expect(buffer.lines[1].stripped == "b…", "Final visible line must show a continuation ellipsis, got \(buffer.lines[1].stripped)")
+        #expect(
+            buffer.lines[1].stripped == "b c d…",
+            "Final visible line must absorb the remaining content, got \(buffer.lines[1].stripped)"
+        )
+    }
+
+    @Test("Default truncation cuts at any character position")
+    func defaultTruncationCutsAnywhere() {
+        let line = "Hello Wonderful Day".truncatedToWidth(13)
+        #expect(line == "Hello Wonder…", "Default truncation fills the line, got \(line)")
+    }
+
+    @Test("Word-boundary truncation cuts back to a whole word")
+    func wordBoundaryTruncation() {
+        let line = "Hello Wonderful Day".truncatedToWidth(13, atWordBoundary: true)
+        #expect(line == "Hello…", "Word-boundary truncation keeps whole words, got \(line)")
+    }
+
+    @Test("Word-boundary truncation falls back to mid-word for a single long word")
+    func wordBoundarySingleLongWord() {
+        let line = "Supercalifragilistic".truncatedToWidth(10, atWordBoundary: true)
+        #expect(line == "Supercali…", "A single over-long word must still be cut, got \(line)")
+    }
+
+    @Test("Text honours the word-boundary truncation modifier")
+    func textWordBoundaryModifier() {
+        let anyPosition = renderToBuffer(
+            Text("Hello Wonderful Day"),
+            context: context(width: 13, height: 1)
+        ).lines[0].stripped
+        let wordBoundary = renderToBuffer(
+            Text("Hello Wonderful Day").truncatesAtWordBoundary(),
+            context: context(width: 13, height: 1)
+        ).lines[0].stripped
+
+        #expect(anyPosition == "Hello Wonder…", "Default should fill the line, got \(anyPosition)")
+        #expect(wordBoundary == "Hello…", "Word-boundary mode should keep whole words, got \(wordBoundary)")
     }
 
     @Test("truncatedToWidth respects terminal cell width of wide characters")

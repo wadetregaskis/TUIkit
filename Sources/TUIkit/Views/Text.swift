@@ -152,6 +152,27 @@ extension Text {
         copy.style.truncationMode = mode
         return copy
     }
+
+    /// Sets whether truncation cuts only at word boundaries.
+    ///
+    /// By default an over-long line is cut at any character position
+    /// (`"Hello Wor…"`). Enable this to pull the cut back to the nearest
+    /// word boundary so a partial word is never left dangling
+    /// (`"Hello…"`). A single word longer than the available width is
+    /// still cut mid-word — there is no boundary to honour.
+    ///
+    /// ```swift
+    /// Text("Hello World Foo")
+    ///     .truncatesAtWordBoundary()
+    /// ```
+    ///
+    /// - Parameter enabled: Whether to truncate only at word boundaries.
+    /// - Returns: A new text with the word-boundary truncation setting.
+    public func truncatesAtWordBoundary(_ enabled: Bool = true) -> Text {
+        var copy = self
+        copy.style.truncatesAtWordBoundary = enabled
+        return copy
+    }
 }
 
 // MARK: - TextStyle
@@ -189,6 +210,10 @@ public struct TextStyle: Sendable, Equatable {
 
     /// How the text is shortened when it cannot fit its available space.
     public var truncationMode: TruncationMode = .tail
+
+    /// Whether truncation cuts only at word boundaries rather than at any
+    /// character position.
+    public var truncatesAtWordBoundary: Bool = false
 
     /// Creates a default TextStyle with no formatting.
     public init() {}
@@ -248,27 +273,34 @@ extension Text: Renderable, Layoutable {
 
         // Word-wrap text to fit available width.
         let maxWidth = context.availableWidth
+        let mode = style.truncationMode
+        let atWordBoundary = style.truncatesAtWordBoundary
         var lines = wordWrap(content, maxWidth: maxWidth)
 
         // Height constraint: if the wrapped text is taller than the space
-        // it was given, keep only what fits and flag the final kept line
-        // so the loss of content is shown rather than silently clipped by
-        // the layout safety net.
+        // it was given, keep the lines that fit in full and let the final
+        // visible line absorb all the remaining content, truncated with an
+        // ellipsis — so the loss is shown rather than silently clipped.
         let maxHeight = context.availableHeight
-        var continuationOnLastLine = false
         if maxHeight >= 1 && lines.count > maxHeight {
-            lines = Array(lines.prefix(maxHeight))
-            continuationOnLastLine = true
+            let keptCount = max(0, maxHeight - 1)
+            var kept = Array(lines.prefix(keptCount))
+            let remainder = lines[keptCount...].joined(separator: " ")
+            kept.append(
+                remainder.truncatedToWidth(
+                    maxWidth,
+                    mode: mode,
+                    atWordBoundary: atWordBoundary,
+                    forceEllipsis: true
+                )
+            )
+            lines = kept
         }
 
         // Width constraint: a word longer than the wrap boundary leaves a
-        // line wider than `maxWidth`; truncate it (and the final line when
-        // content was dropped below it) with a visible ellipsis.
-        let mode = style.truncationMode
-        let lastIndex = lines.count - 1
-        let truncated = lines.enumerated().map { index, line -> String in
-            let forceEllipsis = continuationOnLastLine && index == lastIndex
-            return line.truncatedToWidth(maxWidth, mode: mode, forceEllipsis: forceEllipsis)
+        // line wider than `maxWidth`; truncate it with a visible ellipsis.
+        let truncated = lines.map { line in
+            line.truncatedToWidth(maxWidth, mode: mode, atWordBoundary: atWordBoundary)
         }
 
         // Apply styling to each line
