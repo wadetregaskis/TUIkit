@@ -273,15 +273,18 @@ struct ProgressViewEdgeCaseTests {
         #expect(filledCount == 0)
     }
 
-    @Test("nil value renders empty bar (indeterminate fallback)")
-    func nilValueRendersEmptyBar() {
+    @Test("nil value renders an animated indeterminate bar")
+    func nilValueRendersIndeterminateBar() {
         let view = ProgressView<EmptyView, EmptyView>(value: Optional<Double>.none)
         let context = testContext(width: 10)
         let buffer = renderToBuffer(view, context: context)
 
         let barLine = buffer.lines[0].stripped
+        // An indeterminate bar shows a sweeping highlighted segment — it is
+        // never empty — and still fills exactly the available width.
         let filledCount = barLine.filter { $0 == "█" }.count
-        #expect(filledCount == 0)
+        #expect(filledCount > 0, "Indeterminate bar must show a highlighted segment")
+        #expect(barLine.strippedLength == 10)
     }
 
     @Test("Custom total works correctly")
@@ -386,5 +389,35 @@ struct TrackRendererClampingTests {
                 "Style \(style) with fraction -1.0 should render width 10, got \(underTrack.strippedLength)"
             )
         }
+    }
+}
+
+// MARK: - Indeterminate ProgressView Tests
+
+@MainActor
+@Suite("Indeterminate ProgressView Tests")
+struct IndeterminateProgressViewTests {
+
+    @Test("ProgressView() is indeterminate")
+    func noArgInitIsIndeterminate() {
+        #expect(ProgressView().fractionCompleted == nil)
+    }
+
+    @Test("ProgressView(_:) is indeterminate with a label")
+    func titleInitIsIndeterminate() {
+        let view = ProgressView("Loading")
+        #expect(view.fractionCompleted == nil)
+        let buffer = renderToBuffer(view, context: testContext())
+        #expect(buffer.height == 2, "A titled indeterminate view has a label line and a bar")
+        #expect(buffer.lines[0].stripped.contains("Loading"))
+    }
+
+    @Test("Indeterminate bar fills the width with a highlighted segment")
+    func indeterminateBarRenders() {
+        let buffer = renderToBuffer(ProgressView(), context: testContext(width: 30))
+        #expect(buffer.height == 1)
+        #expect(buffer.lines[0].strippedLength == 30, "The bar fills the available width")
+        #expect(buffer.lines[0].contains("█"), "The sweeping segment is always present")
+        #expect(buffer.lines[0].contains("░"), "The remainder of the track is visible")
     }
 }

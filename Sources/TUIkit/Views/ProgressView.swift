@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 // MARK: - ProgressView
 
 /// A view that shows the progress toward completion of a task.
@@ -87,6 +89,45 @@ public struct ProgressView<Label: View, CurrentValueLabel: View>: View {
             label: label,
             currentValueLabel: currentValueLabel
         )
+    }
+}
+
+// MARK: - Indeterminate Initializers
+
+extension ProgressView where Label == EmptyView, CurrentValueLabel == EmptyView {
+    /// Creates an indeterminate progress view.
+    ///
+    /// Use this when a task's progress cannot be measured. The bar shows a
+    /// highlighted segment sweeping continuously across the track.
+    public init() {
+        self.fractionCompleted = nil
+        self.style = .block
+        self.label = nil
+        self.currentValueLabel = nil
+    }
+}
+
+extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
+    /// Creates an indeterminate progress view with a string title.
+    ///
+    /// - Parameter title: A string that describes the task in progress.
+    public init<S: StringProtocol>(_ title: S) {
+        self.fractionCompleted = nil
+        self.style = .block
+        self.label = Text(String(title))
+        self.currentValueLabel = nil
+    }
+}
+
+extension ProgressView where CurrentValueLabel == EmptyView {
+    /// Creates an indeterminate progress view with a custom label.
+    ///
+    /// - Parameter label: A view that describes the task in progress.
+    public init(@ViewBuilder label: () -> Label) {
+        self.fractionCompleted = nil
+        self.style = .block
+        self.label = label()
+        self.currentValueLabel = nil
     }
 }
 
@@ -294,15 +335,51 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
     // MARK: - Bar Line Rendering
 
-    /// Renders the progress bar line using the shared TrackRenderer.
+    /// Renders the progress bar line — a determinate track, or an animated
+    /// indeterminate sweep when there is no measurable progress.
     private func renderBarLine(width: Int, palette: any Palette) -> String {
-        TrackRenderer.render(
-            fraction: fractionCompleted ?? 0.0,
+        guard let fraction = fractionCompleted else {
+            return renderIndeterminateBar(width: width, palette: palette)
+        }
+        return TrackRenderer.render(
+            fraction: fraction,
             width: width,
             style: style,
             filledColor: palette.foregroundSecondary,
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent
         )
+    }
+
+    /// Renders an animated indeterminate bar: a highlighted segment with a
+    /// fading trail that sweeps continuously across the track, echoing the
+    /// barber-pole motion of an AppKit indeterminate progress indicator.
+    private func renderIndeterminateBar(width: Int, palette: any Palette) -> String {
+        guard width > 0 else { return "" }
+
+        // A phase in 0..<1 that advances with wall-clock time, completing
+        // one full traversal of the track every `period` seconds.
+        let period = 1.6
+        let now = Date().timeIntervalSinceReferenceDate
+        let phase = now.truncatingRemainder(dividingBy: period) / period
+
+        let segment = max(1, width / 3)
+        let head = Int(phase * Double(width))
+
+        var result = ""
+        for index in 0..<width {
+            // How far this cell sits behind the segment's head, wrapping the
+            // track so the highlight scrolls round without ever emptying.
+            let behind = (index - head + width) % width
+            if behind < segment {
+                // The head is brightest; the trail fades back into the track.
+                let intensity = 1.0 - Double(behind) / Double(segment)
+                let color = Color.lerp(palette.foregroundTertiary, palette.accent, phase: intensity)
+                result += ANSIRenderer.colorize("█", foreground: color)
+            } else {
+                result += ANSIRenderer.colorize("░", foreground: palette.foregroundTertiary)
+            }
+        }
+        return result
     }
 }
