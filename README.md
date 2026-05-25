@@ -5,7 +5,6 @@
     <img alt="i18n" src="https://img.shields.io/badge/i18n-5%20Languages-00d900">
     <img alt="License" src="https://img.shields.io/badge/License-MIT-00b300?style=flat">
     <a href="https://github.com/wadetregaskis/TUIkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/wadetregaskis/TUIkit/ci.yml?branch=main&label=CI&color=009900"></a>
-    <img alt="Tests" src="https://img.shields.io/badge/Tests-1172%2B_passing-005c00">
 </p>
 
 <img width="1200" height="630" alt="og-image@1x" src="https://github.com/user-attachments/assets/8bf99da8-e87c-4447-b3cb-a6f3f52c6d18" />
