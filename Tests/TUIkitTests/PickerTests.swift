@@ -130,8 +130,8 @@ struct PickerTests {
         #expect(visible.contains("Banana"))
     }
 
-    @Test("Menu picker expands into a multi-line drop-down when opened")
-    func menuPickerExpandsWhenOpen() {
+    @Test("Menu picker emits the drop-down as an overlay layer when opened")
+    func menuPickerOpensAsOverlay() throws {
         let context = createTestContext()
         var choice: AnyHashable = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
@@ -150,6 +150,7 @@ struct PickerTests {
         // First render creates and registers the persistent handler.
         let closed = renderToBuffer(core, context: context)
         #expect(closed.height == 1)
+        #expect(closed.overlays.isEmpty)
 
         // Reach the persisted handler and open the drop-down.
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
@@ -166,13 +167,26 @@ struct PickerTests {
         box.value.isOpen = true
 
         let open = renderToBuffer(core, context: context)
-        #expect(open.height > closed.height)
-        #expect(open.lines.joined().stripped.contains("Banana"))
 
-        // The collapsed control and every drop-down line share one width,
-        // so the bordered popup is a clean rectangle.
-        let lineWidths = Set(open.lines.map(\.strippedLength))
-        #expect(lineWidths.count == 1)
+        // The in-flow control stays a single line — opening the picker never
+        // disturbs the layout of sibling views.
+        #expect(open.height == 1)
+
+        // The drop-down rides as a single popover overlay layer, anchored one
+        // row below the collapsed control.
+        #expect(open.overlays.count == 1)
+        let layer = try #require(open.overlays.first)
+        #expect(layer.level == .popover)
+        #expect(layer.offsetX == 0)
+        #expect(layer.offsetY == 1)
+        #expect(layer.anchorHeight == 1)
+        #expect(layer.content.lines.joined().stripped.contains("Banana"))
+
+        // The collapsed control and every drop-down line share one width, so
+        // the bordered popup aligns cleanly under the control.
+        let popupWidths = Set(layer.content.lines.map(\.strippedLength))
+        #expect(popupWidths.count == 1)
+        #expect(popupWidths.first == open.width)
     }
 }
 

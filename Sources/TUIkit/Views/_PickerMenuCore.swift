@@ -33,9 +33,10 @@ private enum PickerMenuConstants {
 /// The rendering core for a ``Picker`` using the menu style.
 ///
 /// Draws a collapsed single-line control showing the current selection and
-/// a caret. When activated it expands in place into a bordered drop-down
-/// list of options, pushing any sibling views below it down — the terminal
-/// equivalent of a pop-up menu.
+/// a caret. When activated the bordered drop-down list of options is emitted
+/// as a free-floating ``OverlayLayer`` anchored directly below the control,
+/// so opening the picker never disturbs the layout of sibling views — the
+/// terminal equivalent of a pop-up menu.
 ///
 /// - Important: Framework infrastructure. ``Picker`` returns this from its
 ///   `body` for the menu style; it is never used directly.
@@ -139,7 +140,22 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             context: context,
             palette: palette
         )
-        return FrameBuffer(lines: [collapsed] + popup)
+
+        // The drop-down floats as an overlay layer anchored one row below the
+        // collapsed control. The in-flow control stays a single line, so
+        // opening the picker never disturbs the layout of sibling views and
+        // the list draws on top of whatever sits beneath it.
+        var buffer = FrameBuffer(lines: [collapsed])
+        buffer.overlays = [
+            OverlayLayer(
+                offsetX: 0,
+                offsetY: 1,
+                content: FrameBuffer(lines: popup),
+                level: .popover,
+                anchorHeight: 1
+            )
+        ]
+        return buffer
     }
 
     // MARK: Collapsed Control
