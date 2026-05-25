@@ -179,6 +179,24 @@ public struct RadioButtonGroup<Value: Hashable>: View {
         self.isDisabled = isDisabled
     }
 
+    /// Creates a radio button group from a pre-built array of items.
+    ///
+    /// Framework-internal: used by ``Picker`` to build a group from options
+    /// it has already extracted, bypassing the result builder (which only
+    /// accepts statically-listed items).
+    init(
+        selection: Binding<Value>,
+        orientation: RadioButtonOrientation = .vertical,
+        isDisabled: Bool = false,
+        items: [RadioButtonItem<Value>]
+    ) {
+        self.selection = selection
+        self.items = items
+        self.orientation = orientation
+        self.focusID = nil
+        self.isDisabled = isDisabled
+    }
+
     public var body: some View {
         _RadioButtonGroupCore(
             selection: selection,

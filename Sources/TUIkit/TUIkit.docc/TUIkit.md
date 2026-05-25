@@ -92,6 +92,7 @@ struct MyApp: App {
 - ``Slider``
 - ``Stepper``
 - ``RadioButtonGroup``
+- ``Picker``
 - ``RadioButtonItem``
 - ``Menu``
 - ``MenuItem``
@@ -180,6 +181,11 @@ struct MyApp: App {
 - ``TextCursorStyle``
 - ``TextContentType``
 - ``NavigationSplitViewStyle``
+- ``PickerStyle``
+- ``AutomaticPickerStyle``
+- ``MenuPickerStyle``
+- ``InlinePickerStyle``
+- ``RadioGroupPickerStyle``
 
 ### View Composition
 
