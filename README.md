@@ -1,24 +1,16 @@
 <p align="center">
     <img alt="Platforms" src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux-005c00">
-    <a href="https://github.com/phranck/TUIkit/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/phranck/TUIkit?label=Release&color=009900"></a>
+    <a href="https://github.com/wadetregaskis/TUIkit/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/wadetregaskis/TUIkit?label=Release&color=009900"></a>
     <img alt="Swift 6.0" src="https://img.shields.io/badge/Swift-6.0-00b300?logo=swift&logoColor=white">
     <img alt="i18n" src="https://img.shields.io/badge/i18n-5%20Languages-00d900">
     <img alt="License" src="https://img.shields.io/badge/License-MIT-00b300?style=flat">
-    <a href="https://github.com/phranck/TUIkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/phranck/TUIkit/ci.yml?branch=main&label=CI&color=009900"></a>
+    <a href="https://github.com/wadetregaskis/TUIkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/wadetregaskis/TUIkit/ci.yml?branch=main&label=CI&color=009900"></a>
     <img alt="Tests" src="https://img.shields.io/badge/Tests-1172%2B_passing-005c00">
 </p>
 
 <img width="1200" height="630" alt="og-image@1x" src="https://github.com/user-attachments/assets/8bf99da8-e87c-4447-b3cb-a6f3f52c6d18" />
 
 # TUIkit
-
-> [!TIP]
-> **☕ Support TUIkit Development**
->
-> If you enjoy TUIkit and find it useful, consider supporting its development! Your donations help cover ongoing costs like hosting, tooling, and the countless cups of coffee that fuel late-night coding sessions. Every contribution, big or small, is greatly appreciated and keeps this project alive. Thank you! 💙
->
-> [![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal&logoColor=white)](https://paypal.me/LAYEREDwork)
-> [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/LAYEREDwork)
 
 > [!IMPORTANT]
 > **This project is currently a WORK IN PROGRESS! I strongly advise against using it in a production environment because APIs are subject to change at any time.**
@@ -128,7 +120,7 @@ Press `q` or `ESC` to exit.
 Install the `tuikit` command and create a new project:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/phranck/TUIkit/main/project-template/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wadetregaskis/TUIkit/main/project-template/install.sh | bash
 tuikit init MyApp
 cd MyApp && swift run
 ```
@@ -141,7 +133,7 @@ Add TUIkit to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/phranck/TUIkit.git", branch: "main")
+    .package(url: "https://github.com/wadetregaskis/TUIkit.git", branch: "main")
 ]
 ```
 
@@ -205,7 +197,7 @@ struct MyView: View {
 
 **Supported languages**: English, Deutsch, Français, Italiano, Español
 
-For complete documentation, see [Localization Guide](https://github.com/phranck/TUIkit/blob/main/Sources/TUIkit/TUIkit.docc/Articles/Localization.md) in the DocC documentation.
+For complete documentation, see [Localization Guide](https://github.com/wadetregaskis/TUIkit/blob/main/Sources/TUIkit/TUIkit.docc/Articles/Localization.md) in the DocC documentation.
 
 ## Architecture
 
@@ -237,7 +229,7 @@ Sources/
 └── TUIkitExample/        Example app (executable target)
 
 Tests/
-└── TUIkitTests/          1172+ tests across 93 test files (including i18n consistency & localization tests)
+└── TUIkitTests/          Over a thousand tests across over a hundred test files (including i18n consistency & localization tests)
 
 Tools/
 ├── EmojiBugScanner/      Probes Terminal.app for emoji cursor-advance quirks
@@ -252,7 +244,7 @@ Tools/
 ## Developer Notes
 
 - Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`
-- All 1172 tests run in parallel
+- Most tests run in parallel (some mutate global state and so must be serialised, but they're a tiny subset) and executing them takes only a few seconds.
 - The `Terminal` class handles raw mode and cursor control via POSIX `termios`
 
 ## License
