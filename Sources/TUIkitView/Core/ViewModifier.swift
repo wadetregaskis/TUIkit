@@ -95,6 +95,16 @@ extension ModifiedView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let adjustedContext = modifier.adjustContext(context)
         let childBuffer = TUIkitView.renderToBuffer(content, context: adjustedContext)
-        return modifier.modify(buffer: childBuffer, context: context)
+        var result = modifier.modify(buffer: childBuffer, context: context)
+
+        // Overlay-layer safety net: if the modifier produced a buffer without
+        // overlay layers but the wrapped content carried some, re-attach them.
+        // Modifiers that reposition content (padding, …) attach their own
+        // shifted layers, so this only fires for transform-in-place modifiers
+        // (background, foreground colour, …) that leave content where it is.
+        if result.overlays.isEmpty && !childBuffer.overlays.isEmpty {
+            result.overlays = childBuffer.overlays
+        }
+        return result
     }
 }

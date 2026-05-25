@@ -141,6 +141,9 @@ public struct PaddingModifier: ViewModifier {
             result.append(emptyLine)
         }
 
-        return FrameBuffer(lines: result)
+        // Content shifted right by `leading` and down by `top`; carry any
+        // overlay layers by the same amount so they stay anchored.
+        return buffer.replacingLines(
+            result, overlayShiftX: insets.leading, overlayShiftY: insets.top)
     }
 }

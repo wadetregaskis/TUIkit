@@ -256,6 +256,14 @@ extension RenderLoop {
 
         focusManager.endRenderPass()
 
+        // Composite any free-floating overlay layers (Picker drop-downs,
+        // popovers, …) emitted during rendering onto the content buffer.
+        if !buffer.overlays.isEmpty {
+            let overlayContentHeight = terminalHeight - statusBarHeight - appHeader.height
+            buffer = compositeOverlays(
+                buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight)
+        }
+
         writeFrame(
             buffer: buffer,
             environment: environment,
@@ -435,6 +443,79 @@ extension RenderLoop {
             return renderable.renderScene(context: context)
         }
         return FrameBuffer()
+    }
+
+    /// Composites every free-floating overlay layer onto the content buffer.
+    ///
+    /// Layers are drawn in ascending order of ``OverlayLevel`` and then
+    /// ``OverlayLayer/zIndex`` (ties keep emission order). Compositing a layer
+    /// lifts any layers nested inside *its* content back onto the result, so
+    /// the loop repeats until none remain — nesting therefore works for free.
+    ///
+    /// - Parameters:
+    ///   - base: The rendered content buffer, carrying overlay layers.
+    ///   - maxWidth: The width of the content area in columns.
+    ///   - maxHeight: The height of the content area in rows.
+    /// - Returns: The content buffer with all overlay layers composited in.
+    fileprivate func compositeOverlays(
+        _ base: FrameBuffer, maxWidth: Int, maxHeight: Int
+    ) -> FrameBuffer {
+        var result = base
+        // A small pass cap guards against a pathological layer that somehow
+        // keeps re-emitting itself; 16 levels of nesting is far beyond real use.
+        var passesRemaining = 16
+        while !result.overlays.isEmpty && passesRemaining > 0 {
+            passesRemaining -= 1
+            let layers = result.overlays
+            result.overlays = []
+
+            let ordered = layers.enumerated().sorted { lhs, rhs in
+                if lhs.element.level != rhs.element.level {
+                    return lhs.element.level < rhs.element.level
+                }
+                if lhs.element.zIndex != rhs.element.zIndex {
+                    return lhs.element.zIndex < rhs.element.zIndex
+                }
+                return lhs.offset < rhs.offset
+            }.map(\.element)
+
+            for layer in ordered {
+                let placed = placeOverlay(layer, maxWidth: maxWidth, maxHeight: maxHeight)
+                result = result.composited(
+                    with: placed.content, at: (x: placed.x, y: placed.y))
+            }
+        }
+        return result
+    }
+
+    /// Resolves an overlay layer's on-screen position.
+    ///
+    /// The layer is clamped to the content area. If it would overflow the
+    /// bottom edge it is flipped to sit above its anchor (when
+    /// ``OverlayLayer/anchorHeight`` allows); otherwise it is nudged back
+    /// on screen.
+    fileprivate func placeOverlay(
+        _ layer: OverlayLayer, maxWidth: Int, maxHeight: Int
+    ) -> (content: FrameBuffer, x: Int, y: Int) {
+        let content = layer.content.clamped(toWidth: maxWidth, height: maxHeight)
+        let height = content.height
+        let width = content.width
+
+        var y = layer.offsetY
+        if y + height > maxHeight {
+            // Try flipping above the anchoring control.
+            let flipped = layer.offsetY - layer.anchorHeight - height
+            y = flipped >= 0 ? flipped : max(0, maxHeight - height)
+        }
+        y = max(0, y)
+
+        var x = layer.offsetX
+        if x + width > maxWidth {
+            x = max(0, maxWidth - width)
+        }
+        x = max(0, x)
+
+        return (content, x, y)
     }
 
     /// Renders the app header at the specified terminal row.

@@ -171,7 +171,20 @@ extension FlexibleFrameView: Renderable {
             result.append(aligned)
         }
 
-        return FrameBuffer(lines: result)
+        // The content shifted within the frame; carry overlay layers by the
+        // same amount. The horizontal shift matches the widest line — exact
+        // for the common uniform-width buffer.
+        let horizontalOffset: Int
+        switch alignment.horizontal {
+        case .leading:
+            horizontalOffset = 0
+        case .center:
+            horizontalOffset = max(0, (targetWidth - buffer.width) / 2)
+        case .trailing:
+            horizontalOffset = max(0, targetWidth - buffer.width)
+        }
+        return buffer.replacingLines(
+            result, overlayShiftX: horizontalOffset, overlayShiftY: verticalOffset)
     }
 
     /// Aligns a single line within the given width.

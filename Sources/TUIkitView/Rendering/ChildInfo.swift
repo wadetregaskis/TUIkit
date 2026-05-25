@@ -79,6 +79,17 @@ public struct ChildView {
     }
 }
 
+/// A view that carries an explicit z-index for sibling draw ordering.
+///
+/// Implemented by the wrapper produced by `View.zIndex(_:)`. Container views
+/// that overlap their children — notably `ZStack` — read this to decide the
+/// order in which children are drawn.
+@MainActor
+public protocol ZIndexProviding {
+    /// The z-index of the view. Higher values draw later (on top).
+    var zIndexValue: Double { get }
+}
+
 /// Describes a child view within a stack for layout purposes.
 public struct ChildInfo {
     /// The rendered buffer of this child (nil for spacers, computed later).
@@ -94,12 +105,25 @@ public struct ChildInfo {
     /// Only available when using two-pass layout.
     public let size: ViewSize?
 
+    /// The child's explicit z-index (`0` unless set via `View.zIndex(_:)`).
+    ///
+    /// Overlapping containers like `ZStack` draw children in ascending order
+    /// of this value; ties keep their original tree order.
+    public let zIndex: Double
+
     /// Creates a new child info.
-    public init(buffer: FrameBuffer?, isSpacer: Bool, spacerMinLength: Int?, size: ViewSize?) {
+    public init(
+        buffer: FrameBuffer?,
+        isSpacer: Bool,
+        spacerMinLength: Int?,
+        size: ViewSize?,
+        zIndex: Double = 0
+    ) {
         self.buffer = buffer
         self.isSpacer = isSpacer
         self.spacerMinLength = spacerMinLength
         self.size = size
+        self.zIndex = zIndex
     }
 }
 
@@ -142,14 +166,22 @@ public protocol ChildViewProvider {
 /// - Returns: A ``ChildInfo`` describing the view.
 @MainActor
 public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> ChildInfo {
+    let zIndex = (view as? ZIndexProviding)?.zIndexValue ?? 0
     if let spacer = view as? SpacerProtocol {
-        return ChildInfo(buffer: nil, isSpacer: true, spacerMinLength: spacer.spacerMinLength, size: nil)
+        return ChildInfo(
+            buffer: nil,
+            isSpacer: true,
+            spacerMinLength: spacer.spacerMinLength,
+            size: nil,
+            zIndex: zIndex
+        )
     }
     return ChildInfo(
         buffer: renderToBuffer(view, context: context),
         isSpacer: false,
         spacerMinLength: nil,
-        size: nil
+        size: nil,
+        zIndex: zIndex
     )
 }
 

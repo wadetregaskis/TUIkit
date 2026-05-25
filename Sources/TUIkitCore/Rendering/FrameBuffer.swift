@@ -37,9 +37,22 @@ public struct FrameBuffer: Sendable, Equatable {
     }
 
     /// Whether the buffer is empty.
+    ///
+    /// - Note: Reflects only the in-flow ``lines``. A buffer with no visible
+    ///   lines may still carry ``overlays``; combining operations check for
+    ///   that case explicitly so overlay layers are never silently dropped.
     public var isEmpty: Bool {
         lines.isEmpty || lines.allSatisfy { $0.isEmpty }
     }
+
+    /// Free-floating layers composited above the content at render time.
+    ///
+    /// Most buffers carry none. A view emits a layer to draw outside its own
+    /// bounds — for example a `Picker` drop-down — without disturbing sibling
+    /// layout. Each layer's offset is relative to this buffer's top-left and
+    /// is shifted by every combining operation, so it becomes absolute by the
+    /// time the buffer reaches the root. See ``OverlayLayer``.
+    public var overlays: [OverlayLayer] = []
 
     /// Creates an empty buffer.
     public init() {
@@ -124,7 +137,20 @@ extension FrameBuffer {
     ///   - other: The buffer to append below.
     ///   - spacing: Number of empty lines between the two buffers.
     public mutating func appendVertically(_ other: Self, spacing: Int = 0) {
-        guard !other.isEmpty else { return }
+        let priorHeight = lines.count
+
+        guard !other.isEmpty else {
+            // `other` contributes no visible lines, but may still carry
+            // overlay layers that must not be lost.
+            if !other.overlays.isEmpty {
+                overlays.append(contentsOf: other.shiftedOverlays(byX: 0, y: priorHeight))
+            }
+            return
+        }
+
+        // `other`'s content lands below the current lines (plus spacing).
+        let spacingApplied = priorHeight > 0 ? spacing : 0
+        let verticalShift = priorHeight + spacingApplied
 
         // Pre-compute the new width (avoids redundant computation in didSet)
         let newWidth = max(width, other.width)
@@ -136,8 +162,11 @@ extension FrameBuffer {
         }
         combined.append(contentsOf: other.lines)
 
+        let carriedOverlays = overlays + other.shiftedOverlays(byX: 0, y: verticalShift)
+
         // Replace self with new buffer using pre-computed width
         self = FrameBuffer(lines: combined, width: newWidth)
+        overlays = carriedOverlays
     }
 
     /// Places another buffer to the right of this one with optional spacing.
@@ -165,8 +194,12 @@ extension FrameBuffer {
             result.append(leftPadded + spacer + right)
         }
 
+        // `other`'s content lands to the right, past this buffer + spacing.
+        let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacing, y: 0)
+
         // Replace self with new buffer using pre-computed width
         self = FrameBuffer(lines: result, width: newWidth)
+        overlays = carriedOverlays
     }
 
     /// Layers another buffer on top of this one (ZStack behavior).
@@ -188,6 +221,8 @@ extension FrameBuffer {
             }
         }
         lines = result
+        // The overlay is placed flush at (0, 0), so its layers need no shift.
+        overlays.append(contentsOf: overlay.overlays)
     }
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
@@ -200,7 +235,15 @@ extension FrameBuffer {
     ///   - position: The (x, y) offset where the overlay should be placed.
     /// - Returns: A new buffer with the overlay composited.
     public func composited(with overlay: Self, at position: (x: Int, y: Int)) -> Self {
-        guard !overlay.isEmpty else { return self }
+        guard !overlay.isEmpty else {
+            // Nothing visible to draw, but the overlay may still carry its
+            // own nested layers that need to be lifted into the result.
+            guard !overlay.overlays.isEmpty else { return self }
+            var result = self
+            result.overlays.append(
+                contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
+            return result
+        }
 
         let resultWidth = max(width, position.x + overlay.width)
         let resultHeight = max(height, position.y + overlay.height)
@@ -237,7 +280,12 @@ extension FrameBuffer {
             result.append(baseLine)
         }
 
-        return Self(lines: result)
+        var composited = Self(lines: result)
+        // Keep this buffer's own layers; lift the overlay's nested layers,
+        // shifted to where the overlay was placed.
+        composited.overlays =
+            overlays + overlay.shiftedOverlays(byX: position.x, y: position.y)
+        return composited
     }
 
     /// Returns a copy of this buffer guaranteed to fit within the given bounds.
@@ -271,7 +319,55 @@ extension FrameBuffer {
             }
             resultWidth = max(resultWidth, clippedLines[index].strippedLength)
         }
-        return FrameBuffer(lines: clippedLines, width: resultWidth)
+        var result = FrameBuffer(lines: clippedLines, width: resultWidth)
+        // Overlay layers are free-floating and composited separately at the
+        // root — clamping the in-flow content must never discard them.
+        result.overlays = overlays
+        return result
+    }
+}
+
+// MARK: - Overlay Layer Propagation
+
+extension FrameBuffer {
+    /// Returns this buffer's ``overlays``, each shifted by `(dx, dy)`.
+    ///
+    /// Combining operations call this to keep an overlay layer pinned to the
+    /// content it was emitted alongside: the layer moves by exactly the same
+    /// amount as the lines it accompanies.
+    ///
+    /// - Parameters:
+    ///   - dx: The horizontal shift in columns.
+    ///   - dy: The vertical shift in rows.
+    /// - Returns: The shifted overlay layers (empty if there are none).
+    public func shiftedOverlays(byX dx: Int, y dy: Int) -> [OverlayLayer] {
+        guard !overlays.isEmpty else { return [] }
+        guard dx != 0 || dy != 0 else { return overlays }
+        return overlays.map { $0.shifted(byX: dx, y: dy) }
+    }
+
+    /// Returns a buffer with `newLines` as its content, carrying this buffer's
+    /// overlay layers shifted by `(overlayShiftX, overlayShiftY)`.
+    ///
+    /// Use this in place of `FrameBuffer(lines:)` whenever a view or modifier
+    /// rebuilds its line content from a child buffer (padding, borders,
+    /// alignment, …). The shift should match however far the child's content
+    /// moved within `newLines` — for example, padding shifts by its leading /
+    /// top insets, a border by `(1, 1)`.
+    ///
+    /// - Parameters:
+    ///   - newLines: The rebuilt line content.
+    ///   - overlayShiftX: How far the content moved horizontally.
+    ///   - overlayShiftY: How far the content moved vertically.
+    /// - Returns: A buffer with the new lines and shifted overlay layers.
+    public func replacingLines(
+        _ newLines: [String],
+        overlayShiftX: Int = 0,
+        overlayShiftY: Int = 0
+    ) -> FrameBuffer {
+        var result = FrameBuffer(lines: newLines)
+        result.overlays = shiftedOverlays(byX: overlayShiftX, y: overlayShiftY)
+        return result
     }
 }
 

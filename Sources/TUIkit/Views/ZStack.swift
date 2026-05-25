@@ -57,8 +57,18 @@ private struct _ZStackCore<Content: View>: View, Renderable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let infos = resolveChildInfos(from: content, context: context)
+
+        // Draw children in ascending z-index. Ties keep their tree order, so
+        // the sort is made stable by using the original index as a tiebreaker.
+        let ordered = infos.enumerated().sorted { lhs, rhs in
+            if lhs.element.zIndex != rhs.element.zIndex {
+                return lhs.element.zIndex < rhs.element.zIndex
+            }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+
         var result = FrameBuffer()
-        for info in infos {
+        for info in ordered {
             if let buffer = info.buffer {
                 result.overlay(buffer)
             }

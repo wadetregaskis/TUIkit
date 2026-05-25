@@ -198,7 +198,9 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             alignedLines.append(leftPadding + paddedLine + String(repeating: " ", count: max(0, rightPaddingCount)))
         }
 
-        return FrameBuffer(lines: alignedLines)
+        // The content shifted right by `bufferOffset`; carry overlay layers
+        // (e.g. a Picker drop-down) by the same amount so they stay anchored.
+        return buffer.replacingLines(alignedLines, overlayShiftX: bufferOffset, overlayShiftY: 0)
     }
 }
 
