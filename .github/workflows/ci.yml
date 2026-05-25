@@ -61,63 +61,63 @@ jobs:
         run: swift test
 
   # ── DocC Documentation (→ docs.tuikit.dev) ───────────────────
-  deploy-docs:
-    name: Build & Deploy DocC
-    needs: build
-    runs-on: macos-15
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+  # deploy-docs:
+  #   name: Build & Deploy DocC
+  #   needs: build
+  #   runs-on: macos-15
+  #   if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
 
-      - name: Build DocC documentation
-        env:
-          DISABLE_SWIFTLINT: "1"
-        run: |
-          swift package --allow-writing-to-directory docc-output \
-            generate-documentation \
-            --target TUIkit \
-            --output-path docc-output \
-            --transform-for-static-hosting
+  #     - name: Build DocC documentation
+  #       env:
+  #         DISABLE_SWIFTLINT: "1"
+  #       run: |
+  #         swift package --allow-writing-to-directory docc-output \
+  #           generate-documentation \
+  #           --target TUIkit \
+  #           --output-path docc-output \
+  #           --transform-for-static-hosting
 
-      - name: Add routing support for GitHub Pages
-        run: |
-          cp Sources/TUIkit/TUIkit.docc/theme-overrides.css docc-output/theme-overrides.css
+  #     - name: Add routing support for GitHub Pages
+  #       run: |
+  #         cp Sources/TUIkit/TUIkit.docc/theme-overrides.css docc-output/theme-overrides.css
 
-          python3 - <<'PY'
-          from pathlib import Path
+  #         python3 - <<'PY'
+  #         from pathlib import Path
 
-          link = '<link rel="stylesheet" href="/theme-overrides.css">'
-          for path in Path("docc-output").rglob("*.html"):
-              content = path.read_text(encoding="utf-8")
-              if link in content or "</head>" not in content:
-                  continue
-              path.write_text(content.replace("</head>", f"  {link}\n</head>"), encoding="utf-8")
-          PY
+  #         link = '<link rel="stylesheet" href="/theme-overrides.css">'
+  #         for path in Path("docc-output").rglob("*.html"):
+  #             content = path.read_text(encoding="utf-8")
+  #             if link in content or "</head>" not in content:
+  #                 continue
+  #             path.write_text(content.replace("</head>", f"  {link}\n</head>"), encoding="utf-8")
+  #         PY
 
-          # 404.html = copy of SPA index so all deep-link paths route through DocC
-          cp docc-output/index.html docc-output/404.html
-          # Root redirect: docs.tuikit.dev/ -> docs.tuikit.dev/documentation/tuikit/
-          cat > docc-output/index.html << 'REDIRECT'
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta http-equiv="refresh" content="0; url=/documentation/tuikit/">
-            <link rel="canonical" href="/documentation/tuikit/">
-            <title>Redirecting to TUIkit Documentation</title>
-          </head>
-          <body>
-            <p>Redirecting to <a href="/documentation/tuikit/">TUIkit Documentation</a>...</p>
-          </body>
-          </html>
-          REDIRECT
+  #         # 404.html = copy of SPA index so all deep-link paths route through DocC
+  #         cp docc-output/index.html docc-output/404.html
+  #         # Root redirect: docs.tuikit.dev/ -> docs.tuikit.dev/documentation/tuikit/
+  #         cat > docc-output/index.html << 'REDIRECT'
+  #         <!DOCTYPE html>
+  #         <html lang="en">
+  #         <head>
+  #           <meta charset="utf-8">
+  #           <meta http-equiv="refresh" content="0; url=/documentation/tuikit/">
+  #           <link rel="canonical" href="/documentation/tuikit/">
+  #           <title>Redirecting to TUIkit Documentation</title>
+  #         </head>
+  #         <body>
+  #           <p>Redirecting to <a href="/documentation/tuikit/">TUIkit Documentation</a>...</p>
+  #         </body>
+  #         </html>
+  #         REDIRECT
 
-      - name: Deploy to tuikit-docs
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          deploy_key: ${{ secrets.DOCS_DEPLOY_KEY }}
-          external_repository: phranck/tuikit-docs
-          publish_branch: gh-pages
-          publish_dir: docc-output
-          cname: docs.tuikit.dev
+  #     - name: Deploy to tuikit-docs
+  #       uses: peaceiris/actions-gh-pages@v4
+  #       with:
+  #         deploy_key: ${{ secrets.DOCS_DEPLOY_KEY }}
+  #         external_repository: phranck/tuikit-docs
+  #         publish_branch: gh-pages
+  #         publish_dir: docc-output
+  #         cname: docs.tuikit.dev
