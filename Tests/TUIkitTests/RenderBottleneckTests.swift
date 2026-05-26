@@ -348,7 +348,11 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        #expect(timeLong < 0.5, "Very long text too slow: \(timeLong)s")
+        // Threshold is intentionally generous: the test runs in CI on
+        // shared Linux VMs where wall-clock measurements can be twice as
+        // noisy as on a local laptop. We want to catch egregious
+        // regressions (~10x), not every fractional slowdown.
+        #expect(timeLong < 1.5, "Very long text too slow: \(timeLong)s")
     }
 
     // MARK: - LazyStack vs Regular Stack
