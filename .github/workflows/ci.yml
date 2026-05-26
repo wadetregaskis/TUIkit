@@ -34,7 +34,7 @@ jobs:
             container: swift:6.0
             install-swiftlint: |
               apt-get update && apt-get install -y curl unzip
-              SWIFTLINT_VERSION="0.58.2"
+              SWIFTLINT_VERSION="0.63.2"
               curl -fsSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux.zip" -o swiftlint.zip
               unzip -o swiftlint.zip -d /usr/local/bin
               chmod +x /usr/local/bin/swiftlint
