@@ -300,6 +300,10 @@ extension KeyEvent {
     /// - 11-15=F1-F5, 17-21=F6-F10, 23-24=F11-F12
     ///
     /// With modifiers: `ESC [ 3 ; 2 ~` = Shift+Delete
+    ///
+    /// - Note: The complexity is the VT-key switch itself; splitting it
+    ///   into per-group helpers fragments the table without simplifying.
+    // swiftlint:disable:next cyclomatic_complexity
     private static func parseExtendedKey(
         _ params: [UInt8],
         modifiers: (shift: Bool, alt: Bool, ctrl: Bool) = (false, false, false)

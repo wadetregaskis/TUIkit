@@ -71,6 +71,9 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    // The complexity is one case per demo page — exactly what you'd
+    // want to see when adding or removing a page; splitting fragments it.
+    // swiftlint:disable:next cyclomatic_complexity
     private func pageContent(for page: DemoPage, pageSetter: Binding<DemoPage>) -> some View {
         switch page {
         case .menu:

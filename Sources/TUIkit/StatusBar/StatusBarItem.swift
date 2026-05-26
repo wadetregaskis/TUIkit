@@ -270,6 +270,10 @@ extension StatusBarItem {
 
 extension StatusBarItem {
     /// Maps common shortcut symbols to Key values.
+    ///
+    /// - Note: The complexity is the shortcut-alias switch itself; the
+    ///   alternative — multiple smaller lookups — fragments the table.
+    // swiftlint:disable:next cyclomatic_complexity
     fileprivate static func keyFromShortcut(_ shortcut: String) -> Key? {
         switch shortcut {
         // Special keys
