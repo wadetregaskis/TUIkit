@@ -250,6 +250,36 @@ struct HStackSizingTests {
             },
             widths: [0, 1, 2, 3, 4, 6, 10])
     }
+
+    @Test("HStack allocates row height for text that wraps at the allocated width")
+    func wrappedTextStaysVisible() {
+        // Each flex child is allocated roughly half of the available width.
+        // The 34-character first text wraps to two lines at that allocation,
+        // so the HStack must measure its row height at the *allocated* width
+        // rather than at the natural (unspecified) width — otherwise the
+        // wrapped "(foregroundTertiary)" portion is silently clipped, as the
+        // Settings panel in the example used to demonstrate at width 40.
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 10, tuiContext: TUIContext())
+        let view = HStack(spacing: 2) {
+            Text("Tertiary text (foregroundTertiary)")
+                .frame(maxWidth: .infinity)
+            Text("Other")
+                .frame(maxWidth: .infinity)
+        }
+        let buffer = renderToBuffer(view, context: context)
+        // The row must be tall enough for the wrapped first child — the
+        // primary symptom of the original bug was a single-line row that
+        // silently dropped the wrapped tail.
+        #expect(
+            buffer.height >= 2,
+            "wrapped tail was clipped — the row was sized at the natural width (got height \(buffer.height))")
+        // The wrapped tail appears on the second line. The long parenthetical
+        // word itself gets ellipsis-truncated to the allocated width, so we
+        // check the prefix that survives.
+        let stripped = buffer.lines.joined(separator: "\n").stripped
+        #expect(stripped.contains("foregroundTertiar"))
+    }
 }
 
 // MARK: - VStack sizing

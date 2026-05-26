@@ -136,13 +136,25 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             available: contentWidth
         )
 
+        // === PASS 1.5: Re-measure heights at the allocated widths ===
+        // PASS 1 measured each child at its natural (unspecified) width, but a
+        // child that wraps text is taller at a narrow allocated width than at
+        // its natural width. Without this pass the row would size to the
+        // natural-width heights and PASS 2 would clip whatever wrapped over.
+        var allocatedHeight = maxHeight
+        for (index, child) in children.enumerated() where !child.isSpacer {
+            let proposed = ProposedSize(width: finalWidths[index], height: nil)
+            let size = child.measure(proposal: proposed, context: context)
+            allocatedHeight = max(allocatedHeight, size.height)
+        }
+
         // === PASS 2: Render each child into its allocated width ===
         // The row is as tall as the tallest child, bounded by the space the
         // stack itself was given. Children render into exactly this height
         // so a child squeezed narrow enough to wrap truncates (with an
         // ellipsis) instead of silently spilling an extra row that the
         // parent — which measured the stack as shorter — then clips.
-        let rowHeight = max(1, min(maxHeight, context.availableHeight))
+        let rowHeight = max(1, min(allocatedHeight, context.availableHeight))
         var result = FrameBuffer()
         for (index, child) in children.enumerated() {
             let spacingToApply = index > 0 ? spacing : 0
