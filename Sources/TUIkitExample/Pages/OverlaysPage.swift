@@ -125,7 +125,6 @@ struct OverlaysPage: View {
                 StatusBarItem(shortcut: Shortcut.escape, label: "close") {
                     showOverlay = false
                 },
-                StatusBarItem(shortcut: Shortcut.enter, label: "dismiss"),
             ]
         } else {
             return [
