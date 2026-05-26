@@ -95,6 +95,29 @@ identifier_name:
   excluded:
     - id
     - to
+    # Idiomatic single-letter math / graphics / loop names: keeping
+    # them short matches the surrounding domain (coordinates,
+    # colour channels, dimensions, indices) better than renaming.
+    - a
+    - b
+    - c
+    - d
+    - g
+    - h
+    - i
+    - j
+    - k
+    - m
+    - n
+    - p
+    - q
+    - r
+    - s
+    - t
+    - w
+    - x
+    - y
+    - z
 
 large_tuple:
   warning: 6
@@ -118,3 +141,11 @@ type_name:
     - _ListContentView
     - _TableCore
     - _ImageCore
+    # Internal _-prefixed helper views and value types created by view
+    # modifiers, following the same SwiftUI convention.
+    - _TaggedView
+    - _ZIndexView
+    - _PickerEntry
+    - _PickerMenuCore
+    - _PickerMenuHandler
+    - _RawPickerOption

@@ -105,7 +105,7 @@ public struct OverlayLayer: Sendable, Equatable {
     ///   - dx: The horizontal shift in columns.
     ///   - dy: The vertical shift in rows.
     /// - Returns: A shifted copy of the layer.
-    public func shifted(byX dx: Int, y dy: Int) -> OverlayLayer {
+    public func shifted(byX dx: Int, y dy: Int) -> Self {
         var copy = self
         copy.offsetX += dx
         copy.offsetY += dy

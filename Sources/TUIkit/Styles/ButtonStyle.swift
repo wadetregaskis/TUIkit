@@ -48,23 +48,9 @@ public struct ButtonStyleConfiguration {
     ///   environment value. A disabled button renders dimmed.
     public let isEnabled: Bool
 
-    /// Creates a button style configuration.
-    ///
-    /// Framework-internal: configurations are produced by ``Button`` during
-    /// rendering, never by client code.
-    init(
-        label: String,
-        role: ButtonRole?,
-        isPressed: Bool,
-        isFocused: Bool,
-        isEnabled: Bool
-    ) {
-        self.label = label
-        self.role = role
-        self.isPressed = isPressed
-        self.isFocused = isFocused
-        self.isEnabled = isEnabled
-    }
+    // Configurations are produced by ``Button`` during rendering, never by
+    // client code — the compiler-synthesized memberwise initializer
+    // (internal access level) is exactly what's needed.
 }
 
 // MARK: - ButtonStyle
@@ -261,7 +247,7 @@ private struct _ButtonAppearance {
     var isPlain: Bool
 
     /// The default appearance — dimmed foreground, not bold.
-    static let `default` = _ButtonAppearance(
+    static let `default` = Self(
         foregroundColor: Color.palette.foregroundSecondary,
         isBold: false,
         horizontalPadding: 1,
@@ -269,7 +255,7 @@ private struct _ButtonAppearance {
     )
 
     /// The primary appearance — bold, accent-coloured.
-    static let primary = _ButtonAppearance(
+    static let primary = Self(
         foregroundColor: Color.palette.accent,
         isBold: true,
         horizontalPadding: 1,
@@ -277,7 +263,7 @@ private struct _ButtonAppearance {
     )
 
     /// The destructive appearance — error-coloured.
-    static let destructive = _ButtonAppearance(
+    static let destructive = Self(
         foregroundColor: Color.palette.error,
         isBold: false,
         horizontalPadding: 1,
@@ -285,7 +271,7 @@ private struct _ButtonAppearance {
     )
 
     /// The success appearance — success-coloured.
-    static let success = _ButtonAppearance(
+    static let success = Self(
         foregroundColor: Color.palette.success,
         isBold: false,
         horizontalPadding: 1,
@@ -293,7 +279,7 @@ private struct _ButtonAppearance {
     )
 
     /// The plain appearance — no brackets, no background, no padding.
-    static let plain = _ButtonAppearance(
+    static let plain = Self(
         foregroundColor: nil,
         isBold: false,
         horizontalPadding: 0,

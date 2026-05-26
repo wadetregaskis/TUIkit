@@ -25,7 +25,7 @@ import TUIkit
 ///      shown alongside its name and hex codepoint.
 struct EmojiPage: View {
     @State private var filter: String = ""
-    @State private var selectedID: UInt32? = nil
+    @State private var selectedID: UInt32?
 
     // The corpus is small (~1.9k entries) and immutable, so building it
     // once at page load and filtering inline is fine — no need for a

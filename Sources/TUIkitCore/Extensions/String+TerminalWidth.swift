@@ -506,13 +506,13 @@ extension String {
                     result.append(String(repeating: " ", count: charWidth))
                 }
                 visible += charWidth
-                cursor  += charWidth
+                cursor += charWidth
                 index = self.index(after: index)
                 continue
             }
             result.append(c)
             visible += charWidth
-            cursor  += advance
+            cursor += advance
             index = self.index(after: index)
         }
 

@@ -195,7 +195,7 @@ extension Terminal {
             return
         }
 
-        let url  = URL(fileURLWithPath: "tuikit-frame (\(Date().formatted(date: .abbreviated, time: .standard))).ansi")
+        let url = URL(fileURLWithPath: "tuikit-frame (\(Date().formatted(date: .abbreviated, time: .standard))).ansi")
 
         do {
             try Data(lastFrameData).write(to: url)

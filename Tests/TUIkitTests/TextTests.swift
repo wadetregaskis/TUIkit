@@ -78,7 +78,7 @@ struct TextLineBreakTests {
         #expect(buffer.height == 4, "Expected 4 lines, got \(buffer.height)")
         #expect(buffer.lines.allSatisfy { !$0.contains("\n") }, "No buffer line may contain a raw newline")
         #expect(buffer.lines[0].stripped == "Hi,")
-        #expect(buffer.lines[1].stripped == "")
+        #expect(buffer.lines[1].stripped.isEmpty)
         #expect(buffer.lines[2].stripped == "Best,")
         #expect(buffer.lines[3].stripped == "Alice")
     }
@@ -218,8 +218,8 @@ struct TextTruncationTests {
     @Test("truncatedToWidth degrades gracefully at tiny widths")
     func truncateTinyWidths() {
         #expect("Hello".truncatedToWidth(1) == "…")
-        #expect("Hello".truncatedToWidth(0) == "")
-        #expect("Hello".truncatedToWidth(-3) == "")
+        #expect("Hello".truncatedToWidth(0).isEmpty)
+        #expect("Hello".truncatedToWidth(-3).isEmpty)
     }
 
     @Test("lineLimit caps the number of rendered lines")

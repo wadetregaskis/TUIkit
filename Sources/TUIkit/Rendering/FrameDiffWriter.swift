@@ -39,7 +39,6 @@ final class FrameDiffWriter {
 
     /// The previous frame's app header lines.
     private var previousAppHeaderLines: [String] = []
-
 }
 
 // MARK: - Internal API

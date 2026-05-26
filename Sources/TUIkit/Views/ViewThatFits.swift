@@ -23,10 +23,10 @@ public enum Axis: Sendable, CaseIterable, Equatable {
         }
 
         /// The horizontal axis.
-        public static let horizontal = Set(rawValue: 1 << 0)
+        public static let horizontal = Self(rawValue: 1 << 0)
 
         /// The vertical axis.
-        public static let vertical = Set(rawValue: 1 << 1)
+        public static let vertical = Self(rawValue: 1 << 1)
     }
 }
 

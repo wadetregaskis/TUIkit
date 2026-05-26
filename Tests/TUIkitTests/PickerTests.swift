@@ -133,7 +133,7 @@ struct PickerTests {
     @Test("Menu picker emits the drop-down as an overlay layer when opened")
     func menuPickerOpensAsOverlay() throws {
         let context = createTestContext()
-        var choice: AnyHashable = AnyHashable("a")
+        var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
 
         let entries = [

@@ -79,16 +79,16 @@ public enum Edge: Int8, Sendable, CaseIterable {
         }
 
         /// The top edge.
-        public static let top = Set(rawValue: 1 << 0)
+        public static let top = Self(rawValue: 1 << 0)
 
         /// The leading (left) edge.
-        public static let leading = Set(rawValue: 1 << 1)
+        public static let leading = Self(rawValue: 1 << 1)
 
         /// The bottom edge.
-        public static let bottom = Set(rawValue: 1 << 2)
+        public static let bottom = Self(rawValue: 1 << 2)
 
         /// The trailing (right) edge.
-        public static let trailing = Set(rawValue: 1 << 3)
+        public static let trailing = Self(rawValue: 1 << 3)
 
         /// All four edges.
         public static let all: Set = [.top, .leading, .bottom, .trailing]

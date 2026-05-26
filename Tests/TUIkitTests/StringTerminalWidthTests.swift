@@ -371,7 +371,7 @@ struct AnsiSGRContextAndCleanSuffixTests {
     @Test("Plain string: offset equal to length returns empty string")
     func offsetEqualLength() {
         let s = "ABC"
-        #expect(s.ansiSGRContextAndCleanSuffix(from: 3) == "")
+        #expect(s.ansiSGRContextAndCleanSuffix(from: 3)?.isEmpty == true)
     }
 
     @Test("Plain string: offset beyond length returns nil")
@@ -381,7 +381,7 @@ struct AnsiSGRContextAndCleanSuffixTests {
 
     @Test("Empty string: offset 0 returns empty")
     func emptyStringOffset0() {
-        #expect("".ansiSGRContextAndCleanSuffix(from: 0) == "")
+        #expect("".ansiSGRContextAndCleanSuffix(from: 0)?.isEmpty == true)
     }
 
     @Test("Empty string: any positive offset returns nil")
