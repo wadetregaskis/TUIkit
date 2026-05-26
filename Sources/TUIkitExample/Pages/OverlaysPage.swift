@@ -17,6 +17,7 @@ private enum OverlayDemo: Int, CaseIterable {
     case alertSuccess
     case dialog
     case dialogWithFooter
+    case dialogAuth
     case modalCustom
     case notification
 
@@ -30,6 +31,7 @@ private enum OverlayDemo: Int, CaseIterable {
         case .alertSuccess: "Alert (Success)"
         case .dialog: "Dialog"
         case .dialogWithFooter: "Dialog with Footer"
+        case .dialogAuth: "Dialog (Authentication)"
         case .modalCustom: "Modal (Custom)"
         case .notification: "Notification"
         }
@@ -52,6 +54,8 @@ private enum OverlayDemo: Int, CaseIterable {
             "A Dialog view with custom content. More flexible than Alert — accepts any views."
         case .dialogWithFooter:
             "A Dialog with a footer section for action buttons, separated by a divider line."
+        case .dialogAuth:
+            "A Dialog with TextField + SecureField and Sign-in / Cancel buttons, demonstrating how to host interactive form input inside a modal."
         case .modalCustom:
             "A custom modal overlay using .modal(isPresented:). Accepts any view as content."
         case .notification:
@@ -76,6 +80,8 @@ private enum OverlayDemo: Int, CaseIterable {
             ".modal(isPresented: $show) { Dialog(title: \"...\") { content } }"
         case .dialogWithFooter:
             ".modal(isPresented: $show) { Dialog(title: \"...\") { content } footer: { buttons } }"
+        case .dialogAuth:
+            ".modal(isPresented: $show) { Dialog(\"Sign in\") { TextField/SecureField } footer: { Cancel; Sign in } }"
         case .modalCustom:
             ".modal(isPresented: $show) { VStack { ... } }"
         case .notification:
@@ -99,6 +105,8 @@ private enum OverlayDemo: Int, CaseIterable {
 struct OverlaysPage: View {
     @State var menuSelection: Int = 0
     @State var showOverlay: Bool = false
+    @State var authUsername: String = ""
+    @State var authPassword: String = ""
 
     /// Callback to navigate back to the main menu.
     let onBack: () -> Void
@@ -239,6 +247,32 @@ struct OverlaysPage: View {
                 dismissButton
             }
             .frame(width: 50)
+
+        case .dialogAuth:
+            Dialog(title: "Sign in", borderColor: .palette.border, titleColor: .palette.accent) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Please enter your credentials.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    TextField("Username", text: $authUsername, prompt: Text("e.g. admin"))
+                    SecureField("Password", text: $authPassword, prompt: Text("required"))
+                }
+            } footer: {
+                HStack {
+                    Spacer()
+                    Button("Cancel") {
+                        authUsername = ""
+                        authPassword = ""
+                        showOverlay = false
+                    }
+                    Button("Sign in") {
+                        // Demo only — clear the password for safety.
+                        authPassword = ""
+                        showOverlay = false
+                    }
+                    .buttonStyle(.primary)
+                }
+            }
+            .frame(width: 55)
 
         case .modalCustom:
             VStack(alignment: .leading, spacing: 1) {
