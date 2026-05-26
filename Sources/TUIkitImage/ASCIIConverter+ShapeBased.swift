@@ -198,6 +198,32 @@ private struct ShapeEntry {
 /// integer operations) but the work is constant per process.
 private let shapeTable: [ShapeEntry] = computeShapeTable()
 
+/// Parallel-array view of ``shapeTable``: each of the six shape dimensions
+/// laid out contiguously, plus the characters themselves.
+///
+/// The hot ``pickCharacter`` loop reads each dimension separately, so a
+/// per-dimension flat array gives better locality than indirecting through
+/// a struct-of-arrays. Materialised once on first access, then reused —
+/// the previous code materialised these six maps + the characters array
+/// on every call, costing seven allocations per `convertShapeBased` even
+/// before the loop ran.
+private let shapeTableColumns: (
+    t0: [Double], t1: [Double], t2: [Double],
+    t3: [Double], t4: [Double], t5: [Double],
+    characters: [Character]
+) = {
+    let table = shapeTable
+    return (
+        t0: table.map { $0.vector[0] },
+        t1: table.map { $0.vector[1] },
+        t2: table.map { $0.vector[2] },
+        t3: table.map { $0.vector[3] },
+        t4: table.map { $0.vector[4] },
+        t5: table.map { $0.vector[5] },
+        characters: table.map { $0.character }
+    )
+}()
+
 private func computeShapeTable() -> [ShapeEntry] {
     // Raw vectors before normalisation.
     var raw: [(Character, [Double])] = []
@@ -301,86 +327,107 @@ extension ASCIIConverter {
         let cellPixelHeight = max(1, image.height / max(1, height))
 
         // Precompute pixel offsets for every (centre, sample) pair once.
-        // The same offsets are reused for every cell, eliminating the
-        // per-cell sin/cos work that used to dominate the renderer.
+        // We collapse the 6 × 16 nested layout into a single flat array of
+        // *linear* pixel-buffer offsets — each entry already includes the
+        // image's row stride, so the per-sample work in the hot path is
+        // just one add and one array read.
         let offsets = SampleOffsets.compute(
-            cellPixelWidth: cellPixelWidth, cellPixelHeight: cellPixelHeight)
+            cellPixelWidth: cellPixelWidth,
+            cellPixelHeight: cellPixelHeight,
+            imageWidth: image.width
+        )
         let sampleCount = ShapeRegion.samplesPerCircle
         let centreCount = ShapeRegion.centres.count
         let inverseSampleCount = 1.0 / Double(sampleCount)
         let inverseAllSamples = 1.0 / Double(sampleCount * centreCount)
+        let imageWidth = image.width
 
-        // Hoist the shape table once; the property fetches a global each call.
-        let table = shapeTable
-        let table0 = table.map { $0.vector[0] }
-        let table1 = table.map { $0.vector[1] }
-        let table2 = table.map { $0.vector[2] }
-        let table3 = table.map { $0.vector[3] }
-        let table4 = table.map { $0.vector[4] }
-        let table5 = table.map { $0.vector[5] }
-        let characters = table.map { $0.character }
+        // Pull the shape table's parallel-array columns once. These are
+        // global, immutable, and materialised on first access — see
+        // ``shapeTableColumns``.
+        let columns = shapeTableColumns
+        let table0 = columns.t0
+        let table1 = columns.t1
+        let table2 = columns.t2
+        let table3 = columns.t3
+        let table4 = columns.t4
+        let table5 = columns.t5
+        let characters = columns.characters
 
         var lines = [String]()
         lines.reserveCapacity(height)
 
-        // Scratch storage reused per cell.
-        var sampling = [Double](repeating: 0, count: centreCount)
+        // Render through an unsafe pointer to the pixel array — the hot
+        // path makes 96 reads per cell, and we know all the indices are
+        // in-bounds because the sample offsets were clamped during their
+        // precomputation. Skipping bounds checks here lifts the renderer
+        // a long way out of "noticeably slow" territory.
+        lines = image.pixels.withUnsafeBufferPointer { pixelBuffer -> [String] in
+            var lines = [String]()
+            lines.reserveCapacity(height)
 
-        for cellY in 0..<height {
-            let baseY = cellY * cellPixelHeight
-            var line = ""
-            line.reserveCapacity(width * 20)
-            var lastColor = ""
+            // Scratch storage reused per cell.
+            var sampling = [Double](repeating: 0, count: centreCount)
 
-            for cellX in 0..<width {
-                let baseX = cellX * cellPixelWidth
+            for cellY in 0..<height {
+                let baseY = cellY * cellPixelHeight
+                var line = ""
+                line.reserveCapacity(width * 20)
+                var lastColor = ""
 
-                // Sample the cell, accumulating per-circle darkness and a
-                // global RGB sum (for the foreground colour) in one pass.
-                var sumR = 0
-                var sumG = 0
-                var sumB = 0
-                for centreIndex in 0..<centreCount {
-                    var totalDarkness: Double = 0
-                    let xs = offsets.x[centreIndex]
-                    let ys = offsets.y[centreIndex]
-                    for sampleIndex in 0..<sampleCount {
-                        let pixel = image.pixel(
-                            at: baseX + xs[sampleIndex], baseY + ys[sampleIndex])
-                        totalDarkness += 1.0 - (pixel.luminance / 255.0)
-                        sumR += Int(pixel.r)
-                        sumG += Int(pixel.g)
-                        sumB += Int(pixel.b)
+                for cellX in 0..<width {
+                    let baseX = cellX * cellPixelWidth
+                    let baseLinearIndex = baseY * imageWidth + baseX
+
+                    // Sample the cell, accumulating per-circle darkness and
+                    // a global RGB sum (for the foreground colour) in one
+                    // pass over the precomputed flat offset table.
+                    var sumR = 0
+                    var sumG = 0
+                    var sumB = 0
+                    for centreIndex in 0..<centreCount {
+                        var totalDarkness: Double = 0
+                        let centreBase = centreIndex * sampleCount
+                        for sampleIndex in 0..<sampleCount {
+                            let pixel = pixelBuffer[
+                                baseLinearIndex + offsets[centreBase + sampleIndex]
+                            ]
+                            totalDarkness += 1.0 - (pixel.luminance / 255.0)
+                            sumR += Int(pixel.r)
+                            sumG += Int(pixel.g)
+                            sumB += Int(pixel.b)
+                        }
+                        sampling[centreIndex] = totalDarkness * inverseSampleCount
                     }
-                    sampling[centreIndex] = totalDarkness * inverseSampleCount
-                }
 
-                let character = Self.pickCharacter(
-                    sampling: sampling,
-                    t0: table0, t1: table1, t2: table2, t3: table3, t4: table4, t5: table5,
-                    characters: characters)
+                    let character = Self.pickCharacter(
+                        sampling: sampling,
+                        t0: table0, t1: table1, t2: table2, t3: table3, t4: table4, t5: table5,
+                        characters: characters)
 
-                // Use the sampled pixels' average as the foreground colour;
-                // the 96 samples cover the cell densely enough that a
-                // separate full-cell scan would be near-identical.
-                let averageColor = RGBA(
-                    r: UInt8(Double(sumR) * inverseAllSamples),
-                    g: UInt8(Double(sumG) * inverseAllSamples),
-                    b: UInt8(Double(sumB) * inverseAllSamples))
-                let colorCode = foregroundColorCode(for: averageColor, mode: mode)
-                if colorCode != lastColor {
-                    if !lastColor.isEmpty {
-                        line += ANSIEscape.reset
+                    // Use the sampled pixels' average as the foreground colour;
+                    // the 96 samples cover the cell densely enough that a
+                    // separate full-cell scan would be near-identical.
+                    let averageColor = RGBA(
+                        r: UInt8(Double(sumR) * inverseAllSamples),
+                        g: UInt8(Double(sumG) * inverseAllSamples),
+                        b: UInt8(Double(sumB) * inverseAllSamples))
+                    let colorCode = foregroundColorCode(for: averageColor, mode: mode)
+                    if colorCode != lastColor {
+                        if !lastColor.isEmpty {
+                            line += ANSIEscape.reset
+                        }
+                        line += colorCode
+                        lastColor = colorCode
                     }
-                    line += colorCode
-                    lastColor = colorCode
+                    line.append(character)
                 }
-                line.append(character)
+                if !lastColor.isEmpty {
+                    line += ANSIEscape.reset
+                }
+                lines.append(line)
             }
-            if !lastColor.isEmpty {
-                line += ANSIEscape.reset
-            }
-            lines.append(line)
+            return lines
         }
         return lines
     }
@@ -422,17 +469,24 @@ extension ASCIIConverter {
 
 // MARK: - Precomputed Sample Offsets
 
-/// Per-circle pixel-space sample offsets, precomputed once per call to
-/// `convertShapeBased`. The offsets only depend on the cell's pixel
-/// footprint and the (constant) sampling-circle geometry, so the same
-/// table is reused for every cell — eliminating ~96 sin/cos calls per cell.
-private struct SampleOffsets {
-    /// `x[centreIndex][sampleIndex]` — pixel-space X offset within the cell.
-    let x: [[Int]]
-    /// `y[centreIndex][sampleIndex]` — pixel-space Y offset within the cell.
-    let y: [[Int]]
-
-    static func compute(cellPixelWidth: Int, cellPixelHeight: Int) -> SampleOffsets {
+/// Per-call pixel-space sample offsets, precomputed once per call to
+/// `convertShapeBased`.
+///
+/// The renderer's hot path reads 96 (= 6 centres × 16 samples) pixels per
+/// cell. With the source image stored as a flat row-major buffer, each
+/// per-sample offset reduces to a single linear index relative to the
+/// cell's top-left pixel — i.e. `sy * imageWidth + sx`. Precomputing those
+/// linear indices once and laying them out as a single contiguous
+/// `[Int]` (centre-major, sample-minor) means the inner loop is one array
+/// fetch per sample, no nested array indirection or repeated multiplies.
+private enum SampleOffsets {
+    /// Computes the 96 linear offsets for the given cell footprint.
+    ///
+    /// The offsets only depend on the cell's pixel footprint, the image's
+    /// stride, and the (constant) sampling-circle geometry, so the same
+    /// table is reused for every cell — eliminating ~96 sin/cos calls per
+    /// cell and any per-sample multiply-by-width.
+    static func compute(cellPixelWidth: Int, cellPixelHeight: Int, imageWidth: Int) -> [Int] {
         let sampleCount = ShapeRegion.samplesPerCircle
         let denom = max(1, sampleCount - 1)
         let maxX = max(0, cellPixelWidth - 1)
@@ -440,29 +494,21 @@ private struct SampleOffsets {
         let widthD = Double(cellPixelWidth)
         let heightD = Double(cellPixelHeight)
 
-        var xs = [[Int]]()
-        var ys = [[Int]]()
-        xs.reserveCapacity(ShapeRegion.centres.count)
-        ys.reserveCapacity(ShapeRegion.centres.count)
-
+        var offsets = [Int]()
+        offsets.reserveCapacity(ShapeRegion.centres.count * sampleCount)
         for centre in ShapeRegion.centres {
-            var xRow = [Int]()
-            var yRow = [Int]()
-            xRow.reserveCapacity(sampleCount)
-            yRow.reserveCapacity(sampleCount)
             for sampleIndex in 0..<sampleCount {
                 let angle = Double(sampleIndex) * 2.39996  // golden angle
                 let r = ShapeRegion.radius
                     * (Double(sampleIndex) / Double(denom)).squareRoot()
                 let sx = centre.x + r * cos(angle)
                 let sy = centre.y + r * sin(angle)
-                xRow.append(min(maxX, max(0, Int(sx * widthD))))
-                yRow.append(min(maxY, max(0, Int(sy * heightD))))
+                let px = min(maxX, max(0, Int(sx * widthD)))
+                let py = min(maxY, max(0, Int(sy * heightD)))
+                offsets.append(py * imageWidth + px)
             }
-            xs.append(xRow)
-            ys.append(yRow)
         }
-        return SampleOffsets(x: xs, y: ys)
+        return offsets
     }
 }
 
