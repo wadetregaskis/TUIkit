@@ -121,38 +121,22 @@ private struct _ButtonRowCore: View, Renderable {
         // Find the maximum height
         let maxHeight = buttonBuffers.map { $0.height }.max() ?? 0
 
-        // Calculate total width needed (buttons + spacing)
-        let totalButtonWidth = buttonBuffers.reduce(0) { $0 + $1.width }
-        let totalSpacingWidth = max(0, buttonBuffers.count - 1) * spacing
-        let totalNeededWidth = totalButtonWidth + totalSpacingWidth
-
-        // Available width from context
-        let availableWidth = context.availableWidth
-
-        // Right-align: calculate left padding
-        let leftPadding = max(0, availableWidth - totalNeededWidth)
-
-        // Combine horizontally (right-aligned)
+        // Combine horizontally (left-aligned — buttons stack from the leading
+        // edge with `spacing` columns between them; any remaining width on
+        // the right is left empty for the parent to fill or ignore).
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
         let spacer = String(repeating: " ", count: spacing)
 
         for lineIndex in 0..<maxHeight {
-            // Add left padding
-            resultLines[lineIndex] = String(repeating: " ", count: leftPadding)
-
-            // Add buttons
             for (index, buffer) in buttonBuffers.enumerated() {
-                let buttonWidth = buffer.width
-
                 if index > 0 {
                     resultLines[lineIndex] += spacer
                 }
-
                 if lineIndex < buffer.height {
                     resultLines[lineIndex] += buffer.lines[lineIndex]
                 } else {
-                    // Pad with spaces if this button is shorter
-                    resultLines[lineIndex] += String(repeating: " ", count: buttonWidth)
+                    // Pad with spaces if this button is shorter than the row.
+                    resultLines[lineIndex] += String(repeating: " ", count: buffer.width)
                 }
             }
         }
