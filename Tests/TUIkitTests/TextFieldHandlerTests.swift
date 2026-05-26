@@ -359,7 +359,7 @@ struct TextFieldHandlerTests {
         let consumed = handler.handleKeyEvent(
             KeyEvent(key: .character("u"), ctrl: true))
         #expect(consumed)
-        #expect(text == "")
+        #expect(text.isEmpty)
         #expect(handler.cursorPosition == 0)
     }
 
