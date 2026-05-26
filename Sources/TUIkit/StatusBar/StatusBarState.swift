@@ -125,6 +125,22 @@ public final class StatusBarState: @unchecked Sendable {
     /// The label color.
     public var labelColor: Color?
 
+    // MARK: - Transient Modal Overrides
+
+    /// While non-nil, any rendered status-bar item bound to the escape key
+    /// (an item whose shortcut is ``Shortcut/escape``) displays this label
+    /// in place of its declared one.
+    ///
+    /// Useful for transient modes — an open drop-down menu, an inline
+    /// editor — where ESC should still fire the same handler the page set
+    /// up (`back`, `cancel`, …) but the user should be told that *right
+    /// now* the key closes the transient surface.
+    ///
+    /// Setting the property goes through this accessor so the active label
+    /// pulled by the renderer always reflects the most recent caller.
+    /// Clearing the modal (set to nil) restores the underlying item label.
+    public var escapeLabelOverride: String?
+
     /// Creates a new status bar state.
     ///
     /// - Parameter appState: The app state instance for triggering re-renders.

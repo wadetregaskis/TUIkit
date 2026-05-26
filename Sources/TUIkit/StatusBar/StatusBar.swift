@@ -189,6 +189,11 @@ private struct _StatusBarCore: View, Renderable {
             return FrameBuffer()
         }
 
+        // Pull the transient escape-label override (set by an open Picker
+        // drop-down, an inline editor, etc.) so the escape entry shows
+        // "close menu" or similar while the underlying handler is unchanged.
+        let escapeOverride = context.environment.statusBar.escapeLabelOverride
+
         // Build item strings
         let itemStrings = combinedItems.map { item -> String in
             let shortcutStyled = ANSIRenderer.render(
@@ -201,10 +206,19 @@ private struct _StatusBarCore: View, Renderable {
                 }()
             )
 
+            // Apply the modal escape-label override only to items bound to
+            // the escape key; everything else keeps its declared label.
+            let effectiveLabel: String
+            if item.shortcut == Shortcut.escape, let override = escapeOverride {
+                effectiveLabel = override
+            } else {
+                effectiveLabel = item.label
+            }
+
             let labelStyled: String
             if let color = labelColor {
                 labelStyled = ANSIRenderer.render(
-                    " " + item.label,
+                    " " + effectiveLabel,
                     with: {
                         var style = TextStyle()
                         style.foregroundColor = color
@@ -212,7 +226,7 @@ private struct _StatusBarCore: View, Renderable {
                     }()
                 )
             } else {
-                labelStyled = " " + item.label
+                labelStyled = " " + effectiveLabel
             }
 
             return shortcutStyled + labelStyled
