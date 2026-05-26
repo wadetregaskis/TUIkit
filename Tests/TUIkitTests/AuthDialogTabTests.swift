@@ -80,6 +80,41 @@ struct AuthDialogTabTests {
             """)
     }
 
+    @Test("Open modal registers ESC=dismiss in the status bar")
+    func modalRegistersEscapeDismissItem() {
+        let focusManager = FocusManager()
+        let context = makeContext(focusManager: focusManager)
+        context.environment.statusBar.escapeLabelOverride = nil
+        // In a real app the render loop wires StatusBarState to the focus
+        // manager so the bar knows which section's items to show. Mirror
+        // that here so currentItems picks up the modal's items.
+        context.environment.statusBar.focusManager = focusManager
+
+        var presented = true
+        let isPresented = Binding(get: { presented }, set: { presented = $0 })
+        let view = Text("background").modal(isPresented: isPresented) {
+            Dialog(title: "Confirm") {
+                Text("Sure?")
+            }
+        }
+
+        _ = renderToBuffer(view, context: context)
+
+        // The status bar should now carry an ESC item bound to the modal
+        // section, whose label says "dismiss" and whose action closes the
+        // modal by flipping the presentation binding back to false.
+        let items = context.environment.statusBar.currentItems
+        let escItem = items.first { $0.shortcut == Shortcut.escape }
+        #expect(escItem != nil, "expected an ESC item; items were: \(items.map(\.shortcut))")
+        #expect(escItem?.label == "dismiss",
+                "expected the ESC label to be 'dismiss', got \(escItem?.label ?? "nil")")
+
+        // Firing the ESC item should close the modal.
+        let handled = context.environment.statusBar.handleKeyEvent(KeyEvent(key: .escape))
+        #expect(handled, "ESC should have been handled by the status bar item")
+        #expect(presented == false, "ESC should have closed the modal")
+    }
+
     @Test("Re-activating an already-active section preserves the focused element")
     func reactivatingAlreadyActiveSectionPreservesFocus() {
         // FocusManager.activateSection used to unconditionally reset focus

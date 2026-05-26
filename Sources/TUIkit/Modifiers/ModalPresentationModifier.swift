@@ -68,6 +68,26 @@ extension ModalPresentationModifier: Renderable {
         if !context.isMeasuring {
             focusManager.registerSection(id: sectionID)
             focusManager.activateSection(id: sectionID)
+
+            // While the modal is on screen ESC should close it. Publish an
+            // ESC=dismiss item on the status bar tied to the modal section
+            // (composition: merge so non-ESC items the page declared still
+            // show), and have it flip the presentation binding back to
+            // false. The section items are cleared at the start of every
+            // render pass, so closing the modal naturally drops the
+            // override and restores the page's own ESC item.
+            let isPresented = self.isPresented
+            let dismissItem = StatusBarItem(
+                shortcut: Shortcut.escape,
+                label: "dismiss"
+            ) {
+                isPresented.wrappedValue = false
+            }
+            context.environment.statusBar.registerSectionItems(
+                sectionID: sectionID,
+                items: [dismissItem],
+                composition: .merge
+            )
         }
 
         // Set the modal section in the context so child focusables
