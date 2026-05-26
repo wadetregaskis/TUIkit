@@ -75,24 +75,58 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
 
-        var totalWidth = 0
-        var maxHeight = 0
+        // Pass 1 — natural sizes at the proposal we were given.
+        var naturalSizes: [ViewSize] = []
+        naturalSizes.reserveCapacity(children.count)
         var hasFlexibleWidth = false
-
+        var totalNaturalWidth = 0
+        var maxNaturalHeight = 0
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
-            totalWidth += size.width
-            maxHeight = max(maxHeight, size.height)
+            naturalSizes.append(size)
+            totalNaturalWidth += size.width
+            maxNaturalHeight = max(maxNaturalHeight, size.height)
             if child.isSpacer || size.isWidthFlexible {
                 hasFlexibleWidth = true
             }
         }
-        totalWidth += max(0, children.count - 1) * spacing
 
-        // Never advertise a width larger than the constraint we were given —
-        // an over-report would make the parent reserve space that does not
-        // exist and let siblings overlap.
+        // Pass 1.5 — re-measure heights at the widths children will actually
+        // be given. Without this, a child squeezed narrow enough to wrap
+        // text would report its natural (unconstrained) height during
+        // measurement, leaving the parent VStack/HStack reserving too few
+        // rows and clipping the wrapped content at render time. We mirror
+        // the same width-distribution logic the renderer uses.
         let widthLimit = proposal.width ?? context.availableWidth
+        let totalSpacing = max(0, children.count - 1) * spacing
+        let contentWidth = max(0, widthLimit - totalSpacing)
+        var naturalWidth = [Int](repeating: 0, count: children.count)
+        var isFlexible = [Bool](repeating: false, count: children.count)
+        for (index, child) in children.enumerated() {
+            if child.isSpacer {
+                naturalWidth[index] = child.spacerMinLength ?? 0
+                isFlexible[index] = true
+            } else {
+                naturalWidth[index] = naturalSizes[index].width
+                isFlexible[index] = naturalSizes[index].isWidthFlexible
+            }
+        }
+        let finalWidths = distributeLinearSpace(
+            naturalSizes: naturalWidth,
+            isFlexible: isFlexible,
+            available: contentWidth
+        )
+        var maxHeight = maxNaturalHeight
+        for (index, child) in children.enumerated() where !child.isSpacer {
+            // Avoid an unnecessary re-measure when the allocated width
+            // matches what we already measured — the height cannot change.
+            if finalWidths[index] == naturalSizes[index].width { continue }
+            let probe = ProposedSize(width: finalWidths[index], height: nil)
+            let size = child.measure(proposal: probe, context: context)
+            maxHeight = max(maxHeight, size.height)
+        }
+
+        let totalWidth = totalNaturalWidth + totalSpacing
         return ViewSize(
             width: min(totalWidth, max(0, widthLimit)),
             height: maxHeight,
