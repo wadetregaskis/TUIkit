@@ -188,6 +188,52 @@ struct PickerTests {
         #expect(popupWidths.count == 1)
         #expect(popupWidths.first == open.width)
     }
+
+    @Test("Open menu picker sets a transient ESC label on the status bar")
+    func menuPickerSetsEscapeLabelOverrideWhenOpen() {
+        let context = createTestContext()
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+
+        let entries = [
+            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries,
+            selection: binding,
+            focusID: "menu-picker",
+            isDisabled: false
+        )
+
+        // First render registers the handler; the picker is closed, so the
+        // override should stay unset.
+        _ = renderToBuffer(core, context: context)
+        #expect(context.environment.statusBar.escapeLabelOverride == nil)
+
+        // Flip the persisted handler open and re-render — the picker should
+        // post the override so a page-level ESC handler reads "close menu".
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummySelection = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker",
+                selection: dummySelection,
+                itemValues: [],
+                canBeFocused: true
+            )
+        )
+        box.value.isOpen = true
+        _ = renderToBuffer(core, context: context)
+        #expect(context.environment.statusBar.escapeLabelOverride == "close drop-down menu")
+
+        // Closing the picker again should clear our override but leave any
+        // other caller's override intact.
+        box.value.isOpen = false
+        _ = renderToBuffer(core, context: context)
+        #expect(context.environment.statusBar.escapeLabelOverride == nil)
+    }
 }
 
 // MARK: - Picker Menu Handler Tests

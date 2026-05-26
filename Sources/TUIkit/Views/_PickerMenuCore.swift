@@ -116,6 +116,23 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
 
         let isOpen = handler.isOpen && !entries.isEmpty
+
+        // While the drop-down is open the picker's own handler consumes ESC
+        // to close it (see `_PickerMenuHandler.handleKeyEvent`), so any
+        // page-level ESC handler stays inactive. Surfacing that fact in the
+        // status bar — by overriding the ESC item's label to "close menu" —
+        // makes the transient binding discoverable without changing which
+        // handler actually fires. The override is cleared on the next pass
+        // when the picker is no longer open.
+        if !context.isMeasuring {
+            let statusBar = context.environment.statusBar
+            if isOpen {
+                statusBar.escapeLabelOverride = "close drop-down menu"
+            } else if statusBar.escapeLabelOverride == "close drop-down menu" {
+                statusBar.escapeLabelOverride = nil
+            }
+        }
+
         let collapsed = collapsedLine(
             innerWidth: innerWidth,
             renderedLabels: renderedLabels,
@@ -236,8 +253,22 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         palette: any Palette
     ) -> [String] {
         let borderStyle = context.environment.appearance.borderStyle
-        let borderColor = palette.accent
-        let highlightBg = palette.accent.opacity(ViewConstants.selectedBackground)
+        // While the drop-down is open the picker holds keyboard focus, so we
+        // pulse the highlighted row's background between a dim and a bright
+        // accent — the same affordance ``List`` uses for its focused row —
+        // to make it visually obvious that arrow keys and Enter are driving
+        // the drop-down rather than whatever sits behind it.
+        let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+        let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax)
+        let highlightBg = Color.lerp(dimAccent, brightAccent, phase: context.environment.pulsePhase)
+        // The border colour echoes the highlight pulse at lower intensity so
+        // the drop-down's frame reads as part of the same active control,
+        // not as a static element with a moving inside.
+        let borderColor = Color.lerp(
+            palette.accent.opacity(ViewConstants.focusBorderDim),
+            palette.accent,
+            phase: context.environment.pulsePhase
+        )
 
         var lines: [String] = [
             BorderRenderer.standardTopBorder(
