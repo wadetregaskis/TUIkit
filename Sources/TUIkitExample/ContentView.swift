@@ -77,11 +77,14 @@ struct ContentView: View {
     private func pageContent(for page: DemoPage, pageSetter: Binding<DemoPage>) -> some View {
         switch page {
         case .menu:
+            // The 1–9 / 0 quick-jump shortcuts are still wired up via
+            // `handleMenuShortcut`, but the menu page already lists each
+            // page's shortcut next to its title — repeating them in the
+            // status bar would be noise.
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
                 .statusBarItems {
                     StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
                     StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
-                    StatusBarItem(shortcut: Shortcut.range("1", "9") + ", 0", label: "jump")
                 }
         case .textStyles:
             TextStylesPage()
