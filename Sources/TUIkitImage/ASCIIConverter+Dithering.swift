@@ -32,6 +32,30 @@ extension ASCIIConverter {
         }
     }
 
+    /// Returns the ANSI background color escape code for a pixel.
+    ///
+    /// Mirrors ``foregroundColorCode(for:mode:)`` but emits SGR 48 (background)
+    /// instead of SGR 38 (foreground). Used by half-block rendering, where the
+    /// cell's two image pixels are split between foreground and background.
+    func backgroundColorCode(for pixel: RGBA, mode: ASCIIColorMode) -> String {
+        switch mode {
+        case .trueColor:
+            return "\(ANSIEscape.csi)48;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
+
+        case .ansi256:
+            let index = quantizeToANSI256(pixel)
+            return "\(ANSIEscape.csi)48;5;\(index)m"
+
+        case .grayscale:
+            let gray = Int(pixel.luminance / 255.0 * 23.0)
+            let index = 232 + min(max(gray, 0), 23)
+            return "\(ANSIEscape.csi)48;5;\(index)m"
+
+        case .mono:
+            return ""
+        }
+    }
+
     /// Quantizes an RGB pixel to the nearest ANSI 256-color index.
     private func quantizeToANSI256(_ pixel: RGBA) -> UInt8 {
         // Check for near-grayscale

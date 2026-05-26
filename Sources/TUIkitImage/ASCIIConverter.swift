@@ -25,8 +25,21 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Standard ASCII characters (10 levels). Works in every terminal.
     case ascii
 
-    /// Unicode block elements (5 levels). Requires Unicode support.
+    /// Unicode block elements (5 levels), one shading per cell. Requires Unicode support.
     case blocks
+
+    /// Half-block cells (`▄`) with independent foreground / background colors,
+    /// doubling the effective vertical resolution.
+    ///
+    /// Each terminal cell encodes two image pixels — the top one is painted
+    /// as the cell's background, the bottom one as the foreground of the
+    /// lower-half block glyph. Because terminal characters are roughly twice
+    /// as tall as they are wide, the resulting sub-cell pixels are very
+    /// nearly square — vertical and horizontal resolutions match.
+    ///
+    /// Falls back gracefully on monochrome terminals: the two pixels are
+    /// thresholded against mid-luminance and drawn with space / `▀` / `▄` / `█`.
+    case halfBlocks
 
     /// Unicode Braille patterns (2x4 pixel cells, 256 patterns). Highest resolution.
     case braille
@@ -144,15 +157,22 @@ extension ASCIIConverter {
         // terminal produces garbled output.
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
-        // For braille, each character cell covers 2x4 pixels.
+        // Each character set has its own sub-cell pixel grid.
+        //   .ascii / .blocks  : 1×1 (one pixel per cell)
+        //   .halfBlocks       : 1×2 (two vertical pixels per cell)
+        //   .braille          : 2×4 (eight dots per cell)
         let pixelWidth: Int
         let pixelHeight: Int
-        if characterSet == .braille {
-            pixelWidth = width * 2
-            pixelHeight = height * 4
-        } else {
+        switch characterSet {
+        case .ascii, .blocks:
             pixelWidth = width
             pixelHeight = height
+        case .halfBlocks:
+            pixelWidth = width
+            pixelHeight = height * 2
+        case .braille:
+            pixelWidth = width * 2
+            pixelHeight = height * 4
         }
 
         // Scale image to target pixel dimensions
@@ -164,11 +184,14 @@ extension ASCIIConverter {
         }
 
         // Convert to ASCII lines
-        if characterSet == .braille {
+        switch characterSet {
+        case .braille:
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
+        case .halfBlocks:
+            return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .ascii, .blocks:
+            return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
-
-        return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
     }
 }
 
@@ -229,9 +252,9 @@ extension ASCIIConverter {
             return Array(" .:;+=xX$@")
         case .blocks:
             return Array(" ░▒▓█")
-        case .braille:
-            // Not used directly; braille has its own rendering path
-            return Array(" ⠁⠃⠇⡇⣇⣧⣷⣿")
+        case .halfBlocks, .braille:
+            // Unused — halfBlocks and braille have their own rendering paths.
+            return []
         }
     }
 }

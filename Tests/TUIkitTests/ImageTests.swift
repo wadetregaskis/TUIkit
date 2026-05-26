@@ -199,6 +199,50 @@ struct ASCIIConverterTests {
         #expect(lines.count == 5)
     }
 
+    @Test("Half-block conversion uses two vertical pixels per cell")
+    func halfBlocksUsesTwoPixelsPerCell() {
+        // Solid red image. With .halfBlocks the converter scales to
+        // (width, height*2) pixels and emits ▄ with a foreground = bottom
+        // pixel and a background = top pixel for each cell.
+        let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
+        let image = RGBAImage(width: 8, height: 8, pixels: pixels)
+        let converter = ASCIIConverter(
+            characterSet: .halfBlocks, colorMode: .trueColor, dithering: .none)
+
+        withColorDepth(.truecolor) {
+            let lines = converter.convert(image, width: 8, height: 4)
+            #expect(lines.count == 4, "Output height matches the requested cell count")
+            #expect(lines[0].contains("\u{2584}"), "Each cell uses the lower-half-block glyph")
+            // True-colour mode emits both 38;2; (fg) and 48;2; (bg) codes — bg is
+            // what makes the half-block effectively double the vertical resolution.
+            #expect(lines[0].contains("38;2;"), "Foreground colour is emitted")
+            #expect(lines[0].contains("48;2;"), "Background colour is emitted (top pixel)")
+        }
+    }
+
+    @Test("Half-block conversion in mono mode uses block glyphs only")
+    func halfBlocksMonoUsesBlockGlyphs() {
+        // Top half dark, bottom half bright → expect ▀ (Upper Half Block: dark
+        // ink on top, light below) for every cell.
+        var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 16)
+        for index in 8..<16 { pixels[index] = RGBA(r: 255, g: 255, b: 255) }
+        let image = RGBAImage(width: 4, height: 4, pixels: pixels)
+
+        let converter = ASCIIConverter(
+            characterSet: .halfBlocks, colorMode: .mono, dithering: .none)
+        let lines = converter.convert(image, width: 4, height: 2)
+
+        #expect(lines.count == 2)
+        // Row 0 of cells covers source rows 0–1 (dark top, dark bottom) → ▀? no,
+        // both rows are dark → █. Row 1 covers rows 2–3 (light top, light bottom)
+        // → space. So row 0 should be all ▀ when scaled... actually after
+        // bilinear scaling of (4×4 → 4×4 same size), the boundary mid-image,
+        // so cells in row 0 see rows 0–1 (both dark) → █, row 1 sees 2–3 (both
+        // light) → space.
+        #expect(lines[0].allSatisfy { $0 == "\u{2588}" }, "Top cell row: both halves dark → █")
+        #expect(lines[1].allSatisfy { $0 == " " }, "Bottom cell row: both halves light → space")
+    }
+
     @Test("Braille conversion produces output")
     func brailleConversion() {
         let pixels = [RGBA](repeating: RGBA(r: 255, g: 255, b: 255), count: 400)
