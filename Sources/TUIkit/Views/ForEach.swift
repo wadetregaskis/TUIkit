@@ -85,6 +85,29 @@ public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>
     }
 }
 
+// MARK: - ForEach as a ChildViewProvider
+
+extension ForEach: ChildViewProvider {
+    /// Emits one ``ChildView`` per element so containers (HStack/VStack/ZStack)
+    /// can lay each iteration out as its own sibling.
+    ///
+    /// Without this conformance ``resolveChildViews(from:context:)`` falls
+    /// back to wrapping the whole ForEach as a single child, then asks the
+    /// universal render pipeline to draw it — and `body: Never` plus no
+    /// `Renderable` conformance means the renderer reaches its silent
+    /// "no rendering path" branch and returns an empty buffer. With this
+    /// conformance the elements re-appear as expected.
+    ///
+    /// Each child carries its positional index as its `childIndex` so that
+    /// the per-child identity stays stable across passes — the same scheme
+    /// `TupleView` uses for its tuple of children.
+    public func childViews(context: RenderContext) -> [ChildView] {
+        data.enumerated().map { index, element in
+            ChildView(content(element), childIndex: index)
+        }
+    }
+}
+
 // MARK: - ForEach with Identifiable
 
 extension ForEach where Data.Element: Identifiable, ID == Data.Element.ID {
