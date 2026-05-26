@@ -382,6 +382,26 @@ struct KeyEventParseTests {
         #expect(event?.alt == false)
     }
 
+    @Test("Parse Shift+Alt+Left (ESC [ 1 ; 4 D) — word-select navigation")
+    func parseShiftAltLeft() {
+        // This is the form modifyCursorKeys=2 enables for Shift+Option+Left;
+        // the TextField handler routes it to word-boundary selection.
+        let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x34, 0x44])
+        #expect(event?.key == .left)
+        #expect(event?.shift == true)
+        #expect(event?.alt == true)
+        #expect(event?.ctrl == false)
+    }
+
+    @Test("Parse Shift+Alt+Right (ESC [ 1 ; 4 C) — word-select navigation")
+    func parseShiftAltRight() {
+        let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x34, 0x43])
+        #expect(event?.key == .right)
+        #expect(event?.shift == true)
+        #expect(event?.alt == true)
+        #expect(event?.ctrl == false)
+    }
+
     @Test("Parse Shift+Alt+Ctrl+Right (ESC [ 1 ; 8 C)")
     func parseShiftAltCtrlRight() {
         let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x38, 0x43])

@@ -150,11 +150,29 @@ extension Terminal {
         // application to detect pasted text and insert it as a single
         // bulk operation instead of processing each character individually.
         writeImmediate("\u{1B}[?2004h")
+
+        // Ask xterm-compatible terminals (iTerm2, Ghostty, kitty, wezterm,
+        // gnome-terminal, …) to report modified cursor keys in canonical
+        // `ESC[1;<mod><letter>` form so that combinations like
+        // Shift+Option+Left arrive with both modifier bits set. Without
+        // this, many terminals fall back to a stripped form that drops
+        // the Option modifier and reports only Shift.
+        //
+        //   `CSI > 1 ; 2 m`  — modifyCursorKeys = 2 (canonical reporting)
+        //
+        // macOS Terminal.app ignores this hint; users on Terminal.app who
+        // want word-level Shift+Option selection need to remap the key in
+        // its preferences (or use a terminal with full modifier support).
+        writeImmediate("\u{1B}[>1;2m")
     }
 
     /// Disables raw mode and restores normal terminal operation.
     func disableRawMode() {
         guard isRawMode, var original = originalTermios else { return }
+
+        // Reset modifyCursorKeys back to the terminal's default before
+        // restoring terminal state.
+        writeImmediate("\u{1B}[>1;0m")
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")
