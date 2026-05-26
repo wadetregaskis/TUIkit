@@ -222,70 +222,7 @@ extension TextFieldHandler {
             return true
 
         case .character(let char):
-            // Option/Alt + b / f are the historical readline word-navigation
-            // bindings, and the macOS Terminal sends them as `ESC b` / `ESC f`
-            // when the user holds Option with the arrow keys (in addition to
-            // the modified-arrow CSI sequences). Handle them up-front so the
-            // letter doesn't fall through to `insertCharacter`.
-            if event.alt {
-                switch char {
-                case "b", "B":
-                    if event.shift {
-                        extendSelectionToPreviousWordBoundary()
-                    } else {
-                        clearSelection()
-                        moveCursorToPreviousWordBoundary()
-                    }
-                    return true
-                case "f", "F":
-                    if event.shift {
-                        extendSelectionToNextWordBoundary()
-                    } else {
-                        clearSelection()
-                        moveCursorToNextWordBoundary()
-                    }
-                    return true
-                default:
-                    break
-                }
-            }
-            // Handle Ctrl+key shortcuts
-            if event.ctrl {
-                switch char {
-                case "a", "A":
-                    selectAll()
-                    return true
-                case "c", "C":
-                    copySelection()
-                    return true
-                case "x", "X":
-                    cutSelection()
-                    return true
-                case "v", "V":
-                    paste()
-                    return true
-                case "z", "Z":
-                    undo()
-                    return true
-                case "u", "U":
-                    let length = text.wrappedValue.count
-                    if length > 0 {
-                        deleteRange(0..<length)
-                    }
-                    clearSelection()
-                    cursorPosition = 0
-                    return true
-                default:
-                    return false
-                }
-            }
-
-            // Ignore control characters except printable ones
-            if char.isLetter || char.isNumber || char.isPunctuation || char.isSymbol || char.isWhitespace {
-                insertCharacter(char)
-                return true
-            }
-            return false
+            return handleCharacterEvent(char, event: event)
 
         case .backspace:
             deleteBackward()
@@ -296,34 +233,17 @@ extension TextFieldHandler {
             return true
 
         case .left:
-            if event.alt && event.shift {
-                extendSelectionToPreviousWordBoundary()
-            } else if event.alt {
-                clearSelection()
-                moveCursorToPreviousWordBoundary()
-            } else if event.shift {
-                extendSelectionLeft()
-            } else {
-                clearSelection()
-                moveCursorLeft()
-            }
+            handleHorizontalArrow(direction: .left, event: event)
             return true
 
         case .right:
-            if event.alt && event.shift {
-                extendSelectionToNextWordBoundary()
-            } else if event.alt {
-                clearSelection()
-                moveCursorToNextWordBoundary()
-            } else if event.shift {
-                extendSelectionRight()
-            } else {
-                clearSelection()
-                moveCursorRight()
-            }
+            handleHorizontalArrow(direction: .right, event: event)
             return true
 
-        case .up:
+        case .up, .home:
+            // A single-line text field has nowhere "up" to go, so Up and
+            // Home both jump to the start; Shift+Up / Shift+Home extend the
+            // selection there instead.
             if event.shift {
                 extendSelectionToStart()
             } else {
@@ -332,25 +252,8 @@ extension TextFieldHandler {
             }
             return true
 
-        case .down:
-            if event.shift {
-                extendSelectionToEnd()
-            } else {
-                clearSelection()
-                cursorPosition = text.wrappedValue.count
-            }
-            return true
-
-        case .home:
-            if event.shift {
-                extendSelectionToStart()
-            } else {
-                clearSelection()
-                cursorPosition = 0
-            }
-            return true
-
-        case .end:
+        case .down, .end:
+            // Symmetric: Down / End jump to the end; Shift extends.
             if event.shift {
                 extendSelectionToEnd()
             } else {
@@ -369,6 +272,125 @@ extension TextFieldHandler {
 
         default:
             return false
+        }
+    }
+
+    /// Direction enum for `handleHorizontalArrow`.
+    fileprivate enum ArrowDirection {
+        case left, right
+    }
+
+    /// Routes a `.character(c)` event through the Option- and Ctrl-modifier
+    /// shortcut tables before falling through to insertion.
+    ///
+    /// Extracted from ``handleKeyEvent(_:)`` to keep the top-level switch's
+    /// cyclomatic complexity manageable — the modifier shortcuts have their
+    /// own nested switches and pushed the parent function over the linter
+    /// threshold.
+    fileprivate func handleCharacterEvent(_ char: Character, event: KeyEvent) -> Bool {
+        // Option/Alt + b / f are the historical readline word-navigation
+        // bindings, and macOS Terminal sends them as `ESC b` / `ESC f` when
+        // the user holds Option with the arrow keys (in addition to the
+        // modified-arrow CSI sequences). Handle them up-front so the letter
+        // does not fall through to `insertCharacter`.
+        if event.alt, let handled = handleAltCharacter(char, shift: event.shift) {
+            return handled
+        }
+        if event.ctrl {
+            return handleCtrlCharacter(char)
+        }
+        // Ignore control characters except printable ones.
+        if char.isLetter || char.isNumber || char.isPunctuation
+            || char.isSymbol || char.isWhitespace
+        {
+            insertCharacter(char)
+            return true
+        }
+        return false
+    }
+
+    /// Handles Option/Alt + character shortcuts. Returns `nil` when the
+    /// character is not a recognised Alt shortcut so the caller can fall
+    /// through to Ctrl-handling / insertion.
+    fileprivate func handleAltCharacter(_ char: Character, shift: Bool) -> Bool? {
+        switch char {
+        case "b", "B":
+            if shift {
+                extendSelectionToPreviousWordBoundary()
+            } else {
+                clearSelection()
+                moveCursorToPreviousWordBoundary()
+            }
+            return true
+        case "f", "F":
+            if shift {
+                extendSelectionToNextWordBoundary()
+            } else {
+                clearSelection()
+                moveCursorToNextWordBoundary()
+            }
+            return true
+        default:
+            return nil
+        }
+    }
+
+    /// Handles Ctrl + character shortcuts. Always returns a `Bool` — `false`
+    /// when the character has no Ctrl binding, so the event is dropped.
+    fileprivate func handleCtrlCharacter(_ char: Character) -> Bool {
+        switch char {
+        case "a", "A":
+            selectAll()
+            return true
+        case "c", "C":
+            copySelection()
+            return true
+        case "x", "X":
+            cutSelection()
+            return true
+        case "v", "V":
+            paste()
+            return true
+        case "z", "Z":
+            undo()
+            return true
+        case "u", "U":
+            let length = text.wrappedValue.count
+            if length > 0 {
+                deleteRange(0..<length)
+            }
+            clearSelection()
+            cursorPosition = 0
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Handles `.left` / `.right` with the four modifier combinations
+    /// (Shift+Option, Option, Shift, plain).
+    fileprivate func handleHorizontalArrow(direction: ArrowDirection, event: KeyEvent) {
+        switch (direction, event.alt, event.shift) {
+        case (.left, true, true):
+            extendSelectionToPreviousWordBoundary()
+        case (.left, true, false):
+            clearSelection()
+            moveCursorToPreviousWordBoundary()
+        case (.left, false, true):
+            extendSelectionLeft()
+        case (.left, false, false):
+            clearSelection()
+            moveCursorLeft()
+        case (.right, true, true):
+            extendSelectionToNextWordBoundary()
+        case (.right, true, false):
+            clearSelection()
+            moveCursorToNextWordBoundary()
+        case (.right, false, true):
+            extendSelectionRight()
+        case (.right, false, false):
+            clearSelection()
+            moveCursorRight()
         }
     }
 }
