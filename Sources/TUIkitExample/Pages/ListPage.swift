@@ -60,6 +60,7 @@ struct ListPage: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
 
                 List(
                     "Multi Selection",
@@ -72,6 +73,7 @@ struct ListPage: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
             }
 
             DemoSection("Current Selections") {
