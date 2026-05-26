@@ -1,6 +1,5 @@
 <p align="center">
     <img alt="Platforms" src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux-005c00">
-    <a href="https://github.com/wadetregaskis/TUIkit/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/wadetregaskis/TUIkit?label=Release&color=009900"></a>
     <img alt="Swift 6.0" src="https://img.shields.io/badge/Swift-6.0-00b300?logo=swift&logoColor=white">
     <img alt="i18n" src="https://img.shields.io/badge/i18n-5%20Languages-00d900">
     <img alt="License" src="https://img.shields.io/badge/License-MIT-00b300?style=flat">
