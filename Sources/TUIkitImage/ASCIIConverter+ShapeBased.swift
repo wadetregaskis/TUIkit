@@ -14,6 +14,12 @@
 //  in the lower-left, `T` along the top, `^` in the upper middle — instead
 //  of treating each cell as a single pixel.
 
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
+
 // MARK: - Cell Shape Vector
 
 /// The 6 sampling-circle indices that make up a cell's shape vector.
@@ -511,11 +517,3 @@ private enum SampleOffsets {
         return offsets
     }
 }
-
-// MARK: - Trig (avoid pulling in Foundation just for sin/cos)
-
-#if canImport(Glibc)
-import Glibc
-#elseif canImport(Darwin)
-import Darwin
-#endif
