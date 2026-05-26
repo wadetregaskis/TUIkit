@@ -50,6 +50,31 @@ struct ListRenderingTests {
         #expect(content.contains("No items"))
     }
 
+    @Test("Empty list with explicit width fills the available width")
+    func emptyListFillsExplicitWidth() {
+        // SwiftUI's List is greedy on both axes. With a fixed frame width, an
+        // empty list should expand to that width instead of collapsing to the
+        // placeholder's natural size.
+        var context = createTestContext(width: 50, height: 10)
+        context.hasExplicitWidth = true
+
+        var selection: String?
+        let list = List(
+            "My short title",
+            selection: Binding(
+                get: { selection },
+                set: { selection = $0 }
+            )
+        ) {
+            EmptyView()
+        }
+
+        let buffer = renderToBuffer(list, context: context)
+        // The border lines should be the full 50 cells wide, not collapsed to
+        // the title (~18 cells) or the placeholder (~8 cells).
+        #expect(buffer.width == 50, "expected width 50, got \(buffer.width)")
+    }
+
     @Test("Custom empty placeholder is shown")
     func customEmptyPlaceholder() {
         let context = createTestContext()

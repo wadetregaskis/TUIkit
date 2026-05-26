@@ -44,7 +44,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus: Bool
 
         if rows.isEmpty {
-            contentLines = [emptyPlaceholder]
+            // SwiftUI's List is greedy along both axes. Padding the placeholder
+            // out to the available width keeps an empty list at full size
+            // instead of collapsing to the title's width — important when the
+            // title is short (e.g. "0 of 1900 emoji") or absent, where the
+            // bare placeholder would otherwise render a tiny box that the
+            // user could mistake for an unrelated control.
+            let placeholderWidth = emptyPlaceholder.strippedLength
+            let titleWidth = title.map { $0.strippedLength + 2 } ?? 0  // +2 for the "─ … ─" border decorations
+            let intrinsicWidth = max(placeholderWidth, titleWidth)
+            let targetWidth: Int
+            if context.hasExplicitWidth {
+                // The "−2" accounts for the two border characters; the empty
+                // placeholder occupies the interior between them.
+                targetWidth = max(intrinsicWidth, context.availableWidth - 2)
+            } else {
+                targetWidth = intrinsicWidth
+            }
+            let extra = max(0, targetWidth - placeholderWidth)
+            contentLines = [emptyPlaceholder + String(repeating: " ", count: extra)]
             listHasFocus = false
         } else {
             // Use the full content height when every row fits; only reserve
