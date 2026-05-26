@@ -219,6 +219,8 @@ struct MyApp: App {
 
 - ``FrameBuffer``
 - ``RenderContext``
+- ``OverlayLayer``
+- ``OverlayLevel``
 
 ### Persistence
 

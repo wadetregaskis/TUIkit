@@ -30,10 +30,15 @@
 /// | Any printable | Insert character at cursor |
 /// | Backspace | Delete character before cursor |
 /// | Delete | Delete character at cursor |
-/// | Left | Move cursor left |
-/// | Right | Move cursor right |
-/// | Home | Move cursor to start |
-/// | End | Move cursor to end |
+/// | Left / Right | Move cursor one character |
+/// | Option+Left | Move cursor to the start of the current (or previous) word |
+/// | Option+Right | Move cursor to the end of the current (or next) word |
+/// | Home / End | Move cursor to start / end of text |
+/// | Shift+Left / Shift+Right | Extend selection one character |
+/// | Ctrl+A | Select all |
+/// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
+/// | Ctrl+Z | Undo |
+/// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
 /// # Basic Example

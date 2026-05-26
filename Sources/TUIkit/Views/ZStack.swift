@@ -9,7 +9,8 @@
 /// A view that stacks its children on top of each other (z-axis).
 ///
 /// `ZStack` layers views on top of each other, with later views
-/// appearing above earlier ones.
+/// appearing above earlier ones. Apply ``View/zIndex(_:)`` to a child to
+/// override the tree order — higher z-index values draw on top.
 ///
 /// # Example
 ///
@@ -17,6 +18,13 @@
 /// ZStack {
 ///     Text("████████████████")
 ///     Text("    Overlay     ")
+/// }
+/// ```
+///
+/// ```swift
+/// ZStack {
+///     Text("BBB").zIndex(1)   // drawn on top despite appearing first
+///     Text("AAA")
 /// }
 /// ```
 public struct ZStack<Content: View>: View {

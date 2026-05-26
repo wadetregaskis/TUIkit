@@ -9,6 +9,10 @@
 /// A horizontal row of buttons.
 ///
 /// Use this to display multiple buttons side by side with consistent spacing.
+/// Each button receives its own focus identity so `Tab` cycles between them
+/// and only the focused button pulses. Buttons are laid out from the
+/// leading edge with `spacing` columns between them; any remaining width
+/// on the trailing side is left empty.
 ///
 /// # Example
 ///
