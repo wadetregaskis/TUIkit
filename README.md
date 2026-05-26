@@ -66,7 +66,7 @@ struct ContentView: View {
 
 ### Views & Components
 
-- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image` (ASCII art rendering with five character sets — block, half-block, shape-vector, ASCII and braille — and multiple color modes, async loading)
+- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image` (ASCII art rendering with five character sets — fine-block (the default, near-square subpixels), coarse-block, shape-vector, ASCII and braille — and multiple color modes, async loading)
 - **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack` with alignment and spacing
 - **Interactive**: `Button`, `ButtonRow`, `Toggle` (default, checkbox, switch styles), `Menu`, `Picker` (menu and inline styles), `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup` with keyboard navigation
 - **Data views**: `List`, `Table`, `Section`, `ForEach`, `NavigationSplitView`, `ContentUnavailableView`

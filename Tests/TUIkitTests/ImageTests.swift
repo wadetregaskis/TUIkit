@@ -193,21 +193,21 @@ struct ASCIIConverterTests {
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 100, b: 50), count: 100)
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
-        let converter = ASCIIConverter(characterSet: .blocks, colorMode: .trueColor, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .coarseBlocks, colorMode: .trueColor, dithering: .none)
         let lines = converter.convert(image, width: 10, height: 5)
 
         #expect(lines.count == 5)
     }
 
-    @Test("Half-block conversion uses two vertical pixels per cell")
-    func halfBlocksUsesTwoPixelsPerCell() {
-        // Solid red image. With .halfBlocks the converter scales to
+    @Test("Fine-block conversion uses two vertical pixels per cell")
+    func fineBlocksUsesTwoPixelsPerCell() {
+        // Solid red image. With .fineBlocks the converter scales to
         // (width, height*2) pixels and emits ▄ with a foreground = bottom
         // pixel and a background = top pixel for each cell.
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
         let image = RGBAImage(width: 8, height: 8, pixels: pixels)
         let converter = ASCIIConverter(
-            characterSet: .halfBlocks, colorMode: .trueColor, dithering: .none)
+            characterSet: .fineBlocks, colorMode: .trueColor, dithering: .none)
 
         withColorDepth(.truecolor) {
             let lines = converter.convert(image, width: 8, height: 4)
@@ -259,8 +259,8 @@ struct ASCIIConverterTests {
             "Picked '\(stripped.first!)', expected one of \(lowerHeavyChars)")
     }
 
-    @Test("Half-block conversion in mono mode uses block glyphs only")
-    func halfBlocksMonoUsesBlockGlyphs() {
+    @Test("Fine-block conversion in mono mode uses block glyphs only")
+    func fineBlocksMonoUsesBlockGlyphs() {
         // Top half dark, bottom half bright → expect ▀ (Upper Half Block: dark
         // ink on top, light below) for every cell.
         var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 16)
@@ -268,7 +268,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 4, height: 4, pixels: pixels)
 
         let converter = ASCIIConverter(
-            characterSet: .halfBlocks, colorMode: .mono, dithering: .none)
+            characterSet: .fineBlocks, colorMode: .mono, dithering: .none)
         let lines = converter.convert(image, width: 4, height: 2)
 
         #expect(lines.count == 2)
@@ -332,7 +332,7 @@ struct ASCIIConverterTests {
         }
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
-        let converter = ASCIIConverter(characterSet: .blocks, colorMode: .ansi256, dithering: .floydSteinberg)
+        let converter = ASCIIConverter(characterSet: .coarseBlocks, colorMode: .ansi256, dithering: .floydSteinberg)
         let lines = converter.convert(image, width: 10, height: 5)
 
         #expect(lines.count == 5)

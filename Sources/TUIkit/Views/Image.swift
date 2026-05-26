@@ -90,7 +90,7 @@ extension Image: @preconcurrency Equatable {
 
 /// Environment key for the ASCII character set used by Image.
 private struct ImageCharacterSetKey: EnvironmentKey {
-    static let defaultValue: ASCIICharacterSet = .blocks
+    static let defaultValue: ASCIICharacterSet = .fineBlocks
 }
 
 /// Environment key for the color mode used by Image.

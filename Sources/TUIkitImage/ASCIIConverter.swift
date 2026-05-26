@@ -25,11 +25,17 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Standard ASCII characters (10 levels). Works in every terminal.
     case ascii
 
-    /// Unicode block elements (5 levels), one shading per cell. Requires Unicode support.
-    case blocks
+    /// Unicode block elements (5 shading levels), one glyph per cell.
+    /// Requires Unicode support.
+    ///
+    /// This is the lower-resolution block mode — each terminal cell encodes
+    /// a single image pixel by luminance. For colour images where vertical
+    /// detail matters, prefer ``fineBlocks``.
+    case coarseBlocks
 
-    /// Half-block cells (`▄`) with independent foreground / background colors,
-    /// doubling the effective vertical resolution.
+    /// Half-block cells (`▄`) with independent foreground / background colours,
+    /// doubling the effective vertical resolution compared with
+    /// ``coarseBlocks``. This is the default character set.
     ///
     /// Each terminal cell encodes two image pixels — the top one is painted
     /// as the cell's background, the bottom one as the foreground of the
@@ -39,7 +45,7 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     ///
     /// Falls back gracefully on monochrome terminals: the two pixels are
     /// thresholded against mid-luminance and drawn with space / `▀` / `▄` / `█`.
-    case halfBlocks
+    case fineBlocks
 
     /// Shape-based character lookup, after Alex Harri's "ASCII characters
     /// are not pixels" (https://alexharri.com/blog/ascii-rendering).
@@ -109,7 +115,7 @@ public struct ASCIIConverter: Sendable {
 
     /// Creates a converter with the specified options.
     public init(
-        characterSet: ASCIICharacterSet = .blocks,
+        characterSet: ASCIICharacterSet = .fineBlocks,
         colorMode: ASCIIColorMode = .trueColor,
         dithering: DitheringMode = .none
     ) {
@@ -171,17 +177,17 @@ extension ASCIIConverter {
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
         // Each character set has its own sub-cell pixel grid.
-        //   .ascii / .blocks  : 1×1  (one pixel per cell)
-        //   .halfBlocks       : 1×2  (two vertical pixels per cell)
+        //   .ascii / .coarseBlocks : 1×1  (one pixel per cell)
+        //   .fineBlocks            : 1×2  (two vertical pixels per cell)
         //   .shapeBased       : 5×10 (sampled at six staggered circles per cell)
         //   .braille          : 2×4  (eight dots per cell)
         let pixelWidth: Int
         let pixelHeight: Int
         switch characterSet {
-        case .ascii, .blocks:
+        case .ascii, .coarseBlocks:
             pixelWidth = width
             pixelHeight = height
-        case .halfBlocks:
+        case .fineBlocks:
             pixelWidth = width
             pixelHeight = height * 2
         case .shapeBased:
@@ -204,11 +210,11 @@ extension ASCIIConverter {
         switch characterSet {
         case .braille:
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
-        case .halfBlocks:
-            return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .fineBlocks:
+            return convertFineBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .shapeBased:
             return convertShapeBased(scaled, width: width, height: height, mode: effectiveMode)
-        case .ascii, .blocks:
+        case .ascii, .coarseBlocks:
             return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
     }
@@ -269,9 +275,9 @@ extension ASCIIConverter {
         switch characterSet {
         case .ascii:
             return Array(" .:;+=xX$@")
-        case .blocks:
+        case .coarseBlocks:
             return Array(" ░▒▓█")
-        case .halfBlocks, .shapeBased, .braille:
+        case .fineBlocks, .shapeBased, .braille:
             // Unused — these character sets have their own rendering paths.
             return []
         }
