@@ -73,6 +73,7 @@ struct MainMenuPage: View {
                         MenuItem(label: "Image (URL)", shortcut: ","),
                         MenuItem(label: "Emoji", shortcut: "."),
                         MenuItem(label: "Picker", shortcut: "/"),
+                        MenuItem(label: "Progress", shortcut: "`"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in
