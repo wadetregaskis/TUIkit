@@ -321,10 +321,18 @@ private struct _ButtonStyleBody: View, Renderable {
         let isBold = appearance.isBold || isFocused
 
         let padding = String(repeating: " ", count: appearance.horizontalPadding)
-        let paddedLabel = padding + configuration.label + padding
 
         // Plain: focus indicator prefix + label, no brackets, no background.
         if appearance.isPlain {
+            // The plain variant has no caps; chrome is the focus-indicator
+            // prefix (which always reserves 2 cells — `BorderRenderer` pads
+            // with spaces when unfocused so things stay aligned) plus the
+            // horizontal padding either side of the label.
+            let chromeWidth = 2 + 2 * appearance.horizontalPadding
+            let labelText = Self.fitLabel(
+                configuration.label, into: context.availableWidth, chrome: chromeWidth)
+            let paddedLabel = padding + labelText + padding
+
             let foregroundColor: Color =
                 isDisabled
                 ? palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
@@ -342,6 +350,15 @@ private struct _ButtonStyleBody: View, Renderable {
             let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
             return FrameBuffer(lines: [focusPrefix + styledLabel])
         }
+
+        // The standard variant wraps the label in `▐ … ▌` end caps plus
+        // `horizontalPadding` cells of padding either side. If the cell
+        // can't fit the full label the label is ellipsis-truncated so
+        // the caps still align and the truncation is visible to the user.
+        let chromeWidth = 2 + 2 * appearance.horizontalPadding  // caps + paddings
+        let labelText = Self.fitLabel(
+            configuration.label, into: context.availableWidth, chrome: chromeWidth)
+        let paddedLabel = padding + labelText + padding
 
         // Standard: half-block caps around an accent-tinted background.
         let buttonBg = palette.accent.opacity(ViewConstants.focusBorderDim)
@@ -386,6 +403,25 @@ private struct _ButtonStyleBody: View, Renderable {
         )
 
         return FrameBuffer(lines: [openCap + styledLabel + closeCap])
+    }
+
+    /// Truncates a button label so it fits in `availableWidth` after
+    /// reserving `chrome` cells for the button's chrome (caps + padding).
+    ///
+    /// Labels that already fit are returned unchanged. Labels longer than
+    /// the available space are truncated to one less than their budget and
+    /// suffixed with `…` so the user can see the truncation. If the cell
+    /// is so narrow that even the chrome doesn't fit, the label is
+    /// dropped entirely — the parent's clamping safety net will then clip
+    /// the chrome itself.
+    fileprivate static func fitLabel(_ label: String, into availableWidth: Int, chrome: Int) -> String {
+        let labelBudget = availableWidth - chrome
+        guard labelBudget > 0 else { return "" }
+        let labelWidth = label.strippedLength
+        if labelWidth <= labelBudget { return label }
+        // truncatedToWidth places the ellipsis itself; with a tiny budget it
+        // returns just `…` which still keeps the chrome aligned.
+        return label.truncatedToWidth(labelBudget)
     }
 }
 

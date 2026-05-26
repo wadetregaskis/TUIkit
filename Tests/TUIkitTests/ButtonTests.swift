@@ -416,4 +416,29 @@ struct ButtonRowBuilderTests {
 
         #expect(result.count == 3)
     }
+
+    @Test("Standard button label truncates with an ellipsis when squeezed")
+    @MainActor
+    func standardLabelTruncatesWithEllipsis() {
+        // The standard chrome is 2 cells of caps + 2 cells of horizontal
+        // padding, so an availableWidth of 8 leaves 4 cells for the label.
+        let button = Button("Reticulate") {}
+        let context = RenderContext(
+            availableWidth: 8, availableHeight: 1, tuiContext: TUIContext())
+        let buffer = renderToBuffer(button, context: context)
+        let stripped = buffer.lines[0].stripped
+        #expect(stripped.contains("…"), "Truncated label should carry an ellipsis")
+        #expect(buffer.lines[0].strippedLength <= 8, "Button never overflows its allowance")
+    }
+
+    @Test("Plain button label truncates with an ellipsis when squeezed")
+    @MainActor
+    func plainLabelTruncatesWithEllipsis() {
+        let button = Button("Reticulate") {}.buttonStyle(.plain)
+        let context = RenderContext(
+            availableWidth: 5, availableHeight: 1, tuiContext: TUIContext())
+        let buffer = renderToBuffer(button, context: context)
+        let stripped = buffer.lines[0].stripped
+        #expect(stripped.contains("…"))
+    }
 }
