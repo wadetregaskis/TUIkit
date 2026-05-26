@@ -131,7 +131,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
             // Top scroll indicator
             if handler.hasContentAbove {
-                lines.append(renderScrollIndicator(direction: .up, width: rowWidth, palette: palette))
+                let rowsAbove = handler.scrollOffset
+                lines.append(
+                    renderScrollIndicator(
+                        direction: .up, count: rowsAbove, width: rowWidth, palette: palette))
             }
 
             // Render each visible row with alternating colors based on list style
@@ -166,7 +169,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
             // Bottom scroll indicator
             if handler.hasContentBelow {
-                lines.append(renderScrollIndicator(direction: .down, width: rowWidth, palette: palette))
+                let lastVisibleIndex = visibleRows.last?.0 ?? (handler.scrollOffset - 1)
+                let rowsBelow = max(0, handler.itemCount - lastVisibleIndex - 1)
+                lines.append(
+                    renderScrollIndicator(
+                        direction: .down, count: rowsBelow, width: rowWidth, palette: palette))
             }
 
             contentLines = lines

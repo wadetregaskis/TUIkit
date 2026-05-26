@@ -13,20 +13,31 @@ enum ScrollDirection {
 
 // MARK: - Scroll Indicator Rendering
 
-/// Renders a centered scroll indicator line with an arrow and label.
+/// Renders a centered scroll indicator line with an arrow, a row count and label.
 ///
-/// Used by `_ListCore` and `_TableCore` to show "more above" / "more below"
+/// Used by `_ListCore` and `_TableCore` to show "N more above" / "N more below"
 /// indicators when content extends beyond the visible viewport.
 ///
 /// - Parameters:
 ///   - direction: Whether the indicator points up or down.
+///   - count: The number of rows hidden in that direction. Omitted from the
+///     label when zero (in normal use the caller only renders the indicator
+///     when at least one row is hidden).
 ///   - width: The total width available for the indicator line.
 ///   - palette: The color palette for styling.
 /// - Returns: A styled string with a centered scroll indicator.
 @MainActor
-func renderScrollIndicator(direction: ScrollDirection, width: Int, palette: any Palette) -> String {
+func renderScrollIndicator(
+    direction: ScrollDirection,
+    count: Int,
+    width: Int,
+    palette: any Palette
+) -> String {
     let arrow = direction == .up ? "▲" : "▼"
-    let label = direction == .up ? " more above " : " more below "
+    let countPrefix = count > 0 ? "\(count) " : ""
+    let label = direction == .up
+        ? " \(countPrefix)more above "
+        : " \(countPrefix)more below "
 
     let styledArrow = ANSIRenderer.colorize(arrow, foreground: palette.foregroundTertiary)
     let styledLabel = ANSIRenderer.colorize(label, foreground: palette.foregroundTertiary)

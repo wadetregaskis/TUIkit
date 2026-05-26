@@ -267,7 +267,10 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
             // Top scroll indicator
             if handler.hasContentAbove {
-                lines.append(renderScrollIndicator(direction: .up, width: innerWidth, palette: palette))
+                let rowsAbove = handler.visibleRange.lowerBound
+                lines.append(
+                    renderScrollIndicator(
+                        direction: .up, count: rowsAbove, width: innerWidth, palette: palette))
             }
 
             // Data rows
@@ -292,7 +295,10 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
             // Bottom scroll indicator
             if handler.hasContentBelow {
-                lines.append(renderScrollIndicator(direction: .down, width: innerWidth, palette: palette))
+                let rowsBelow = handler.itemCount - handler.visibleRange.upperBound
+                lines.append(
+                    renderScrollIndicator(
+                        direction: .down, count: rowsBelow, width: innerWidth, palette: palette))
             }
 
             contentLines = lines
