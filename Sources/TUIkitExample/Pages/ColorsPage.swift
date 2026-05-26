@@ -59,10 +59,105 @@ struct ColorsPage: View {
                 }
             }
 
+            DemoSection("Gradients") {
+                VStack(alignment: .leading, spacing: 1) {
+                    GradientLine(label: "red → blue",
+                                 stops: [(255, 0, 0), (0, 0, 255)])
+                    GradientLine(label: "yellow → magenta",
+                                 stops: [(255, 220, 0), (255, 0, 200)])
+                    GradientLine(label: "teal → purple",
+                                 stops: [(0, 180, 180), (140, 0, 200)])
+                    GradientLine(label: "fire (red → yellow)",
+                                 stops: [(120, 0, 0), (255, 80, 0), (255, 220, 0)])
+                    GradientLine(label: "rainbow",
+                                 stops: [
+                                    (255, 0, 0), (255, 165, 0), (255, 255, 0),
+                                    (0, 200, 0), (0, 100, 255), (140, 0, 200),
+                                 ])
+                    GradientLine(label: "grayscale",
+                                 stops: [(0, 0, 0), (255, 255, 255)])
+                }
+            }
+
             Spacer()
         }
         .appHeader {
             DemoAppHeader("Colors Demo")
         }
+    }
+}
+
+// MARK: - Gradient Helpers
+
+/// A single labelled horizontal gradient strip.
+///
+/// Renders a fixed-length row of block glyphs whose colours interpolate
+/// smoothly between an arbitrary list of RGB stops. The interpolation is
+/// piecewise-linear in RGB space — good enough to read as "a gradient"
+/// at terminal resolution, and intentionally simple so the demo stays a
+/// readable reference rather than a colour-science primer.
+private struct GradientLine: View {
+    /// The label printed to the left of the gradient strip.
+    let label: String
+
+    /// The colour stops to interpolate between, in RGB.
+    let stops: [(r: UInt8, g: UInt8, b: UInt8)]
+
+    /// The number of cells of glyphs the strip occupies. 40 fills a
+    /// healthy chunk of the page while leaving room for the label.
+    private static var cells: Int { 40 }
+
+    /// The block glyph used to paint each gradient cell. ▇ is solid
+    /// across most terminal fonts and reads as a flat colour band.
+    private static var glyph: String { "▇" }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(label.padded(to: 22))
+                .foregroundStyle(.palette.foregroundSecondary)
+            HStack(spacing: 0) {
+                ForEach(0..<Self.cells, id: \.self) { index in
+                    let (r, g, b) = sampleStop(at: Double(index) / Double(Self.cells - 1))
+                    Text(Self.glyph).foregroundStyle(.rgb(r, g, b))
+                }
+            }
+        }
+    }
+
+    /// Interpolates between the configured stops at a parameter in `0...1`.
+    private func sampleStop(at parameter: Double) -> (UInt8, UInt8, UInt8) {
+        guard stops.count >= 2 else {
+            let stop = stops.first ?? (0, 0, 0)
+            return (stop.r, stop.g, stop.b)
+        }
+
+        // Map `parameter` into the [0, segments] range, where `segments`
+        // is one fewer than the number of stops, then split into the
+        // integer segment index and a local 0...1 mix factor.
+        let segments = Double(stops.count - 1)
+        let scaled = max(0.0, min(segments, parameter * segments))
+        let lowerIndex = min(Int(scaled), stops.count - 2)
+        let mix = scaled - Double(lowerIndex)
+
+        let lower = stops[lowerIndex]
+        let upper = stops[lowerIndex + 1]
+
+        func lerp(_ start: UInt8, _ end: UInt8) -> UInt8 {
+            let blended = Double(start) + (Double(end) - Double(start)) * mix
+            return UInt8(max(0, min(255, Int(blended.rounded()))))
+        }
+
+        return (lerp(lower.r, upper.r), lerp(lower.g, upper.g), lerp(lower.b, upper.b))
+    }
+}
+
+extension String {
+    /// Right-pads `self` with spaces so the resulting string has at least
+    /// `width` visible cells. Used to align the gradient labels into a
+    /// neat column without reaching for a stack of `Spacer`s.
+    fileprivate func padded(to width: Int) -> String {
+        let visible = self.count
+        guard visible < width else { return self }
+        return self + String(repeating: " ", count: width - visible)
     }
 }
