@@ -66,9 +66,9 @@ struct ContentView: View {
 
 ### Views & Components
 
-- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image` (ASCII art rendering, multiple color modes, async loading)
-- **Layout containers**: `VStack`, `HStack`, `ZStack`, `LazyVStack`, `LazyHStack` with alignment and spacing
-- **Interactive**: `Button`, `ButtonRow`, `Toggle` (default, checkbox, switch styles), `Menu`, `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup` with keyboard navigation
+- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image` (ASCII art rendering with five character sets — block, half-block, shape-vector, ASCII and braille — and multiple color modes, async loading)
+- **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack` with alignment and spacing
+- **Interactive**: `Button`, `ButtonRow`, `Toggle` (default, checkbox, switch styles), `Menu`, `Picker` (menu and inline styles), `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup` with keyboard navigation
 - **Data views**: `List`, `Table`, `Section`, `ForEach`, `NavigationSplitView`, `ContentUnavailableView`
 - **Containers**: `Alert`, `Dialog`, `Panel`, `Box`, `Card`
 - **Feedback**: `ProgressView` (5 bar styles), `Spinner` (animated)

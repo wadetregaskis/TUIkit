@@ -219,6 +219,30 @@ Layout containers combine child buffers using `FrameBuffer` methods:
 | `overlay(_:)` | `ZStack` | Line-by-line overlay, non-empty lines replace base |
 | `composited(with:at:)` | Overlay modifier | Character-level compositing at (x, y) position |
 
+Each of these combine operations also offset-shifts any free-floating
+``OverlayLayer`` rides along with the child buffer, so a view such as a
+``Picker`` drop-down can draw outside its own bounds without disturbing
+sibling layout. The layers travel with their parent buffer up to the root
+and are composited there in z-order; see [Overlay Layers](#Overlay-Layers)
+below.
+
+### Overlay Layers
+
+`ZStack` honours ``View/zIndex(_:)`` on its direct children: it sorts them
+in ascending z-index order (stable for ties), so a child with `.zIndex(1)`
+draws on top of an earlier sibling with the default `0`.
+
+Independent of that draw order, a view may emit an ``OverlayLayer`` —
+content tagged with a level (`.popover`, `.alert`, `.modal`, …) and an
+offset relative to the emitting buffer. Combine operations shift the
+offset by however far the underlying lines moved, so by the time the root
+``FrameBuffer`` reaches `RenderLoop.render()` every layer's offset is
+absolute on the content area. `RenderLoop` then composites the layers in
+ascending `(level, zIndex)` order, flipping a layer above its anchor when
+it would overflow the bottom edge. ``Picker``'s drop-down menu uses this
+mechanism — its in-flow control stays a single line whether the menu is
+open or closed.
+
 ### Diff-Based Output
 
 After the view tree produces a ``FrameBuffer``, the `FrameDiffWriter` prepares terminal-ready output:

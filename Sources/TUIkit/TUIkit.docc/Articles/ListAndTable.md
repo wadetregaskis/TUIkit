@@ -153,15 +153,16 @@ Both List and Table support the same keyboard shortcuts:
 
 ## Scroll Indicators
 
-When content extends beyond the viewport, scroll indicators appear:
+When content extends beyond the viewport, scroll indicators appear at the
+top and bottom, reporting the number of rows hidden in each direction:
 
 ```
 ┌─ My List ────────────────────┐
-│         ▲ more above         │
+│        ▲ 4 more above        │
 │ Item 5                       │
 │ Item 6                       │
 │ Item 7                       │
-│         ▼ more below         │
+│        ▼ 12 more below       │
 └──────────────────────────────┘
 ```
 

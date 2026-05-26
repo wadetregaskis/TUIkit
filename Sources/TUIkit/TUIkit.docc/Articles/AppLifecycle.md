@@ -97,6 +97,29 @@ All triggers set boolean flags. The actual rendering always happens on the main 
 
 Signal handlers only set `nonisolated(unsafe)` boolean flags: no allocations, no locks. The main loop reads these flags each iteration and acts accordingly.
 
+## Programmatic Exit
+
+A view can exit the application from inside its event handlers by calling
+the SwiftUI-parity ``DismissAction`` exposed at
+``EnvironmentValues/dismiss``:
+
+```swift
+struct ContentView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Button("Quit") { dismiss() }
+    }
+}
+```
+
+`dismiss()` sets a flag on the shared `AppState` that the main loop
+notices on its next iteration. The terminal is restored to its prior
+state and `App.main()` returns normally — exactly the same teardown path
+the built-in `q` key and `SIGINT` follow. This is the recommended way to
+exit; calling `exit(0)` skips the terminal-restore step and leaves the
+terminal in alternate-screen / raw mode.
+
 ## Key Event Dispatch
 
 When the terminal delivers a key event, the `InputHandler` dispatches it through five layers. Layer 0 and Layer 3 are mutually exclusive based on `focusManager.hasTextInputFocus`:

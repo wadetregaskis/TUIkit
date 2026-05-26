@@ -97,11 +97,16 @@ struct ChildView {
 
 ``VStack`` and ``HStack`` follow this algorithm:
 
-1. **Measure** all children with the parent's proposed size
+1. **Measure** all children with `.unspecified` to learn their natural sizes
 2. **Sum** the fixed sizes along the stack axis
 3. **Distribute** remaining space among flexible children (spacers, flexible text fields, etc.)
-4. **Render** each child with its allocated size
-5. **Compose** the rendered buffers with the specified spacing and alignment
+4. **Re-measure** each child along the *cross axis* at its allocated size,
+   so the row / column is tall (or wide) enough for any wrapping a narrow
+   allocated width forces. Without this step a long `Text` inside an
+   `HStack` would silently lose its wrapped lines when the stack squeezed
+   it under its natural width.
+5. **Render** each child with its allocated size
+6. **Compose** the rendered buffers with the specified spacing and alignment
 
 Flexible children share remaining space equally. If multiple spacers exist, they each get an equal portion of the leftover space.
 
