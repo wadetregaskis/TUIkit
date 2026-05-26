@@ -30,6 +30,7 @@ public final class AppState: Sendable {
     private struct StateData: Sendable {
         var needsRender = false
         var needsCacheClear = false
+        var shouldExit = false
         var observers: [@Sendable () -> Void] = []
     }
 
@@ -122,6 +123,36 @@ extension AppState {
         lock.withLock { state in
             let value = state.needsCacheClear
             state.needsCacheClear = false
+            return value
+        }
+    }
+
+    /// Requests that the application's run loop exit gracefully on the next
+    /// iteration.
+    ///
+    /// Backs the SwiftUI-parity `@Environment(\.dismiss)` action. Setting
+    /// this flag makes `AppRunner` fall out of its run loop, restore the
+    /// terminal to its prior state, and return from `App.main()` — exactly
+    /// the same shutdown path that the built-in quit key follows. Safe to
+    /// call from any thread.
+    public func requestExit() {
+        let observers = lock.withLock { state -> [@Sendable () -> Void] in
+            state.shouldExit = true
+            return state.observers
+        }
+        for observer in observers {
+            observer()
+        }
+    }
+
+    /// Consumes and returns the exit-requested flag.
+    ///
+    /// Returns `true` once after ``requestExit()`` has been called. Called by
+    /// `AppRunner` once per loop iteration.
+    public func consumeShouldExit() -> Bool {
+        lock.withLock { state in
+            let value = state.shouldExit
+            state.shouldExit = false
             return value
         }
     }

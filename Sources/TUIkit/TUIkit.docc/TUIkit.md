@@ -139,6 +139,7 @@ struct MyApp: App {
 
 - ``EnvironmentKey``
 - ``EnvironmentValues``
+- ``DismissAction``
 
 ### Preference System
 

@@ -154,6 +154,16 @@ extension AppRunner {
                 break
             }
 
+            // Check for an in-app `@Environment(\.dismiss)` call. Lets a
+            // view exit the run loop cleanly without resorting to `exit()`,
+            // which would skip the terminal-restore teardown below. Routed
+            // through the shared `AppState` because that's the singleton
+            // every other in-app trigger uses (`Spinner`, `AppStorage`, …).
+            if AppState.shared.consumeShouldExit() {
+                isRunning = false
+                break
+            }
+
             // Invalidate diff cache on terminal resize so every line
             // is rewritten with the new dimensions.
             if signals.consumeResizeFlag() {
