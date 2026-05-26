@@ -237,6 +237,51 @@ struct StatusBarStateTests {
         #expect(tracker.wasTriggered == true)
     }
 
+    @Test("Modal escape label override defers ESC to the focus chain")
+    func escapeLabelOverrideMakesEscapeFallThrough() {
+        // When some modal surface has published an escape-label override
+        // it has also claimed the ESC key for itself. The status bar must
+        // *not* execute its own ESC item in that frame — otherwise a
+        // page-level "ESC: back" would close the page out from under the
+        // open Picker / dialog / etc.
+        let state = StatusBarState()
+
+        final class TriggerTracker: @unchecked Sendable {
+            var wasTriggered = false
+        }
+        let tracker = TriggerTracker()
+
+        state.setItems([
+            StatusBarItem(shortcut: Shortcut.escape, label: "back") {
+                tracker.wasTriggered = true
+            }
+        ])
+
+        // Without an override, the page-level handler fires as normal.
+        let escapeEvent = KeyEvent(key: .escape)
+        #expect(state.handleKeyEvent(escapeEvent) == true)
+        #expect(tracker.wasTriggered == true)
+
+        // With an override, the status bar skips its ESC item so ESC can
+        // fall through to whoever set the override (a focused Picker, …).
+        tracker.wasTriggered = false
+        state.escapeLabelOverride = "close drop-down menu"
+        #expect(state.handleKeyEvent(escapeEvent) == false)
+        #expect(tracker.wasTriggered == false)
+
+        // Non-ESC items keep firing — the override only diverts ESC.
+        let stateNonEsc = StatusBarState()
+        let nonEscTracker = TriggerTracker()
+        stateNonEsc.setItems([
+            StatusBarItem(shortcut: "s", label: "save") {
+                nonEscTracker.wasTriggered = true
+            }
+        ])
+        stateNonEsc.escapeLabelOverride = "close drop-down menu"
+        #expect(stateNonEsc.handleKeyEvent(KeyEvent(key: .character("s"))) == true)
+        #expect(nonEscTracker.wasTriggered == true)
+    }
+
     @Test("Handle key event returns false for unmatched")
     func handleKeyEventUnmatched() {
         let state = StatusBarState()

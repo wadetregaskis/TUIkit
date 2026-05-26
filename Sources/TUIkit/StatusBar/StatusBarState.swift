@@ -275,7 +275,19 @@ extension StatusBarState {
     /// Handles a key event, checking if any current item matches.
     @discardableResult
     public func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // While a modal surface (open Picker drop-down, etc.) has claimed
+        // ESC via ``escapeLabelOverride``, leave that key to the focus
+        // dispatch chain so the surface's own handler actually fires —
+        // otherwise a page-level "ESC: back" would close the page out
+        // from under it. The label printed in the status bar already tells
+        // the user what ESC does *right now*; here we make the behaviour
+        // match.
+        let escapeIsClaimedByModal = escapeLabelOverride != nil && event.key == .escape
+
         for item in currentItems where item.matches(event) {
+            if escapeIsClaimedByModal && item.shortcut == Shortcut.escape {
+                continue
+            }
             if let statusBarItem = item as? StatusBarItem {
                 if statusBarItem.hasAction {
                     statusBarItem.execute()
