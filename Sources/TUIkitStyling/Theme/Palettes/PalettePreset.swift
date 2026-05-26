@@ -169,6 +169,10 @@ extension SystemPalette {
 // MARK: - Preset Tuning Values
 
 extension SystemPalette.Tuning {
+    // A flat registry of every bundled palette is much easier to scan
+    // (and to add a new preset to) than a tower of helper functions —
+    // there's no real complexity here, just a long table.
+    // swiftlint:disable function_body_length
     /// Returns the tuning parameters for a given preset.
     fileprivate static func `for`(_ preset: SystemPalette.Preset) -> SystemPalette.Tuning {
         switch preset {
@@ -395,6 +399,7 @@ extension SystemPalette.Tuning {
             )
         }
     }
+    // swiftlint:enable function_body_length
 
     /// Wraps a hue value to the 0–360 range.
     private static func wrapHue(_ hue: Double) -> Double {

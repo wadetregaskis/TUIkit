@@ -269,11 +269,11 @@ extension StatusBarItem {
 // MARK: - Private Helpers
 
 extension StatusBarItem {
+    // The complexity is the shortcut-alias switch itself; multiple smaller
+    // lookups would just fragment the table. Block-style suppression keeps
+    // the doc comment attached to the declaration.
+    // swiftlint:disable cyclomatic_complexity
     /// Maps common shortcut symbols to Key values.
-    ///
-    /// - Note: The complexity is the shortcut-alias switch itself; the
-    ///   alternative — multiple smaller lookups — fragments the table.
-    // swiftlint:disable:next cyclomatic_complexity
     fileprivate static func keyFromShortcut(_ shortcut: String) -> Key? {
         switch shortcut {
         // Special keys
@@ -340,4 +340,5 @@ extension StatusBarItem {
             return nil
         }
     }
+    // swiftlint:enable cyclomatic_complexity
 }
