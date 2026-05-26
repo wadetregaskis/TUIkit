@@ -373,11 +373,29 @@ extension FocusManager {
 
     /// Activates a specific section by ID.
     ///
-    /// The first focusable element in the section receives focus.
+    /// If the section was not previously active, focus moves to the section's
+    /// first focusable element. If the section is *already* the active one
+    /// and a focused element is still part of it, the focused element is
+    /// left alone — re-calling activate during a re-render (the picker
+    /// drop-down's open state, ``ModalPresentationModifier``'s every-frame
+    /// activate) must not collapse the user's focus back to the first
+    /// element each time.
     ///
     /// - Parameter id: The section identifier to activate.
     func activateSection(id: String) {
         guard sections.contains(where: { $0.id == id }) else { return }
+
+        // No-op when the requested section is already active *and* the
+        // currently focused element belongs to it. Otherwise Tab would never
+        // appear to move focus, because every re-render would snap focus
+        // back to the section's first child.
+        if activeSectionID == id,
+            let focusedID,
+            let section = section(id: id),
+            section.focusables.contains(where: { $0.focusID == focusedID })
+        {
+            return
+        }
 
         // Notify current focused element
         notifyFocusLost()
