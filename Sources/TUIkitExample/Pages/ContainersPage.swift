@@ -56,23 +56,33 @@ struct SettingsAndAlignmentRow: View, Equatable {
             }
 
             DemoSection("Content Alignment") {
+                // Each bordered box uses `.frame(maxWidth: .infinity)` so the
+                // three share the row evenly. When the terminal is wide they
+                // expand and you can see "short" pushed against the
+                // leading/center/trailing edge — which is the whole point of
+                // the demo. When the terminal is narrow they shrink together
+                // and the longer label wraps to a second line, but neither
+                // box ever disappears and "short" stays visible underneath.
                 HStack(spacing: 1) {
                     VStack(alignment: .leading) {
                         Text("Leading align").foregroundStyle(.palette.foreground)
                         Text("short").foregroundStyle(.palette.foregroundSecondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .border()
 
                     VStack(alignment: .center) {
                         Text("Center align").foregroundStyle(.palette.foreground)
                         Text("short").foregroundStyle(.palette.foregroundSecondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .border()
 
                     VStack(alignment: .trailing) {
                         Text("Trailing align").foregroundStyle(.palette.foreground)
                         Text("short").foregroundStyle(.palette.foregroundSecondary)
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                     .border()
                 }
             }
