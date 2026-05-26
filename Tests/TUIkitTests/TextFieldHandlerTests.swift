@@ -347,4 +347,85 @@ struct TextFieldHandlerTests {
 
         #expect(handler.cursorPosition == 2)  // Clamped to "Hi".count
     }
+
+    // MARK: - Ctrl-U: erase contents
+
+    @Test("Ctrl-U erases the text field contents and resets the cursor")
+    func ctrlUErasesContents() {
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 10)
+
+        let consumed = handler.handleKeyEvent(
+            KeyEvent(key: .character("u"), ctrl: true))
+        #expect(consumed)
+        #expect(text == "")
+        #expect(handler.cursorPosition == 0)
+    }
+
+    // MARK: - Option / Alt + arrow: word navigation
+
+    @Test("Option-Left moves to the start of the previous word")
+    func optionLeftMovesToPreviousWord() {
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(
+            focusID: "test", text: binding, cursorPosition: text.count)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(handler.cursorPosition == 16, "Cursor moved to start of 'fox'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(handler.cursorPosition == 10, "Cursor moved to start of 'brown'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(handler.cursorPosition == 4, "Cursor moved to start of 'quick'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(handler.cursorPosition == 0, "Cursor moved to start of 'the'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(handler.cursorPosition == 0, "At start: Option-Left is a no-op")
+    }
+
+    @Test("Option-Right moves to the end of the next word")
+    func optionRightMovesToNextWord() {
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(handler.cursorPosition == 3, "End of 'the'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(handler.cursorPosition == 9, "End of 'quick'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(handler.cursorPosition == 15, "End of 'brown'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(handler.cursorPosition == 19, "End of 'fox'")
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(handler.cursorPosition == 19, "At end: Option-Right is a no-op")
+    }
+
+    @Test("Option-b is a synonym for Option-Left (readline word-back)")
+    func optionBSynonymForOptionLeft() {
+        var text = "hello world"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(
+            focusID: "test", text: binding, cursorPosition: text.count)
+
+        let consumed = handler.handleKeyEvent(
+            KeyEvent(key: .character("b"), alt: true))
+        #expect(consumed)
+        #expect(handler.cursorPosition == 6, "Cursor at start of 'world'")
+        #expect(text == "hello world", "No 'b' was inserted")
+    }
+
+    @Test("Option-f is a synonym for Option-Right (readline word-forward)")
+    func optionFSynonymForOptionRight() {
+        var text = "hello world"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+
+        let consumed = handler.handleKeyEvent(
+            KeyEvent(key: .character("f"), alt: true))
+        #expect(consumed)
+        #expect(handler.cursorPosition == 5, "Cursor at end of 'hello'")
+        #expect(text == "hello world", "No 'f' was inserted")
+    }
 }

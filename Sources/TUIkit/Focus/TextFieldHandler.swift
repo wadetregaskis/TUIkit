@@ -204,6 +204,25 @@ extension TextFieldHandler {
             return true
 
         case .character(let char):
+            // Option/Alt + b / f are the historical readline word-navigation
+            // bindings, and the macOS Terminal sends them as `ESC b` / `ESC f`
+            // when the user holds Option with the arrow keys (in addition to
+            // the modified-arrow CSI sequences). Handle them up-front so the
+            // letter doesn't fall through to `insertCharacter`.
+            if event.alt {
+                switch char {
+                case "b", "B":
+                    clearSelection()
+                    moveCursorToPreviousWordBoundary()
+                    return true
+                case "f", "F":
+                    clearSelection()
+                    moveCursorToNextWordBoundary()
+                    return true
+                default:
+                    break
+                }
+            }
             // Handle Ctrl+key shortcuts
             if event.ctrl {
                 switch char {
@@ -221,6 +240,14 @@ extension TextFieldHandler {
                     return true
                 case "z", "Z":
                     undo()
+                    return true
+                case "u", "U":
+                    let length = text.wrappedValue.count
+                    if length > 0 {
+                        deleteRange(0..<length)
+                    }
+                    clearSelection()
+                    cursorPosition = 0
                     return true
                 default:
                     return false
@@ -243,7 +270,10 @@ extension TextFieldHandler {
             return true
 
         case .left:
-            if event.shift {
+            if event.alt {
+                clearSelection()
+                moveCursorToPreviousWordBoundary()
+            } else if event.shift {
                 extendSelectionLeft()
             } else {
                 clearSelection()
@@ -252,7 +282,10 @@ extension TextFieldHandler {
             return true
 
         case .right:
-            if event.shift {
+            if event.alt {
+                clearSelection()
+                moveCursorToNextWordBoundary()
+            } else if event.shift {
                 extendSelectionRight()
             } else {
                 clearSelection()
@@ -393,6 +426,48 @@ extension TextFieldHandler {
         if cursorPosition < text.wrappedValue.count {
             cursorPosition += 1
         }
+    }
+
+    /// Moves the cursor to the start of the current word, or, if the cursor is
+    /// already at the start of a word, to the start of the previous word.
+    ///
+    /// "Word" here matches the readline convention — runs of alphanumeric or
+    /// underscore characters separated by anything else.
+    func moveCursorToPreviousWordBoundary() {
+        let chars = Array(text.wrappedValue)
+        var pos = cursorPosition
+        // Skip back over inter-word (non-word) characters.
+        while pos > 0 && !TextFieldHandler.isWordCharacter(chars[pos - 1]) {
+            pos -= 1
+        }
+        // Skip back over the word itself.
+        while pos > 0 && TextFieldHandler.isWordCharacter(chars[pos - 1]) {
+            pos -= 1
+        }
+        cursorPosition = pos
+    }
+
+    /// Moves the cursor to the end of the current word, or, if the cursor is
+    /// already at the end of a word, to the end of the next word.
+    func moveCursorToNextWordBoundary() {
+        let chars = Array(text.wrappedValue)
+        var pos = cursorPosition
+        // Skip forward over inter-word (non-word) characters.
+        while pos < chars.count && !TextFieldHandler.isWordCharacter(chars[pos]) {
+            pos += 1
+        }
+        // Skip forward over the word itself.
+        while pos < chars.count && TextFieldHandler.isWordCharacter(chars[pos]) {
+            pos += 1
+        }
+        cursorPosition = pos
+    }
+
+    /// A "word" character for the purposes of Option+arrow navigation —
+    /// letters, digits, and underscore. Everything else is treated as a word
+    /// separator.
+    fileprivate static func isWordCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_"
     }
 
     /// Ensures the cursor position and selection anchor are within valid bounds.
