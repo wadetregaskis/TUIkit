@@ -220,6 +220,45 @@ struct ASCIIConverterTests {
         }
     }
 
+    @Test("Shape-based conversion picks upper-heavy chars for top-dark images")
+    func shapeBasedPicksUpperHeavyForTopDarkImage() {
+        // Top half black (dark), bottom half white (light) — the "darkness"
+        // sampling vector is heavy in the upper region, so the renderer
+        // should pick a character whose bitmap is also heavy in the upper
+        // region (e.g. ", T, ^, =).
+        let topHeavyChars: Set<Character> = ["\"", "T", "^", "=", "~", "'", "`"]
+        var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 100)
+        for index in 50..<100 { pixels[index] = RGBA(r: 255, g: 255, b: 255) }
+        let image = RGBAImage(width: 10, height: 10, pixels: pixels)
+        let converter = ASCIIConverter(
+            characterSet: .shapeBased, colorMode: .mono, dithering: .none)
+        let lines = converter.convert(image, width: 1, height: 1)
+        #expect(lines.count == 1)
+        let stripped = lines[0].stripped
+        #expect(stripped.count >= 1)
+        #expect(
+            topHeavyChars.contains(stripped.first!),
+            "Picked '\(stripped.first!)', expected one of \(topHeavyChars)")
+    }
+
+    @Test("Shape-based conversion picks lower-heavy chars for bottom-dark images")
+    func shapeBasedPicksLowerHeavyForBottomDarkImage() {
+        // Top half white, bottom half black — sampling vector heavy in lower
+        // region, character bitmap should also be heavy in lower region.
+        let lowerHeavyChars: Set<Character> = ["_", ".", ",", ";"]
+        var pixels = [RGBA](repeating: RGBA(r: 255, g: 255, b: 255), count: 100)
+        for index in 50..<100 { pixels[index] = RGBA(r: 0, g: 0, b: 0) }
+        let image = RGBAImage(width: 10, height: 10, pixels: pixels)
+        let converter = ASCIIConverter(
+            characterSet: .shapeBased, colorMode: .mono, dithering: .none)
+        let lines = converter.convert(image, width: 1, height: 1)
+        #expect(lines.count == 1)
+        let stripped = lines[0].stripped
+        #expect(
+            lowerHeavyChars.contains(stripped.first!),
+            "Picked '\(stripped.first!)', expected one of \(lowerHeavyChars)")
+    }
+
     @Test("Half-block conversion in mono mode uses block glyphs only")
     func halfBlocksMonoUsesBlockGlyphs() {
         // Top half dark, bottom half bright → expect ▀ (Upper Half Block: dark

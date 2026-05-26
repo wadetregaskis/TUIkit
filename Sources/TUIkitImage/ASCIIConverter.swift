@@ -41,6 +41,19 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// thresholded against mid-luminance and drawn with space / `▀` / `▄` / `█`.
     case halfBlocks
 
+    /// Shape-based character lookup, after Alex Harri's "ASCII characters
+    /// are not pixels" (https://alexharri.com/blog/ascii-rendering).
+    ///
+    /// Each ASCII character carries a 6-dimensional shape vector that
+    /// quantifies how much of its cell's six staggered sampling circles
+    /// the glyph occupies. For each output cell the converter samples the
+    /// image at the same six points and picks the character whose shape
+    /// vector is closest by Euclidean distance — the result follows
+    /// curved edges far better than the per-cell-luminance approach
+    /// because the picked character itself carries directional shape
+    /// information.
+    case shapeBased
+
     /// Unicode Braille patterns (2x4 pixel cells, 256 patterns). Highest resolution.
     case braille
 }
@@ -158,9 +171,10 @@ extension ASCIIConverter {
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
         // Each character set has its own sub-cell pixel grid.
-        //   .ascii / .blocks  : 1×1 (one pixel per cell)
-        //   .halfBlocks       : 1×2 (two vertical pixels per cell)
-        //   .braille          : 2×4 (eight dots per cell)
+        //   .ascii / .blocks  : 1×1  (one pixel per cell)
+        //   .halfBlocks       : 1×2  (two vertical pixels per cell)
+        //   .shapeBased       : 5×10 (sampled at six staggered circles per cell)
+        //   .braille          : 2×4  (eight dots per cell)
         let pixelWidth: Int
         let pixelHeight: Int
         switch characterSet {
@@ -170,6 +184,9 @@ extension ASCIIConverter {
         case .halfBlocks:
             pixelWidth = width
             pixelHeight = height * 2
+        case .shapeBased:
+            pixelWidth = width * 5
+            pixelHeight = height * 10
         case .braille:
             pixelWidth = width * 2
             pixelHeight = height * 4
@@ -189,6 +206,8 @@ extension ASCIIConverter {
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
         case .halfBlocks:
             return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .shapeBased:
+            return convertShapeBased(scaled, width: width, height: height, mode: effectiveMode)
         case .ascii, .blocks:
             return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
@@ -252,8 +271,8 @@ extension ASCIIConverter {
             return Array(" .:;+=xX$@")
         case .blocks:
             return Array(" ░▒▓█")
-        case .halfBlocks, .braille:
-            // Unused — halfBlocks and braille have their own rendering paths.
+        case .halfBlocks, .shapeBased, .braille:
+            // Unused — these character sets have their own rendering paths.
             return []
         }
     }
