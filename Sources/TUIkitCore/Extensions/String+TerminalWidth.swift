@@ -130,6 +130,20 @@ extension Character {
             return 1
         }
 
+        // Flag emoji — a pair of regional-indicator scalars
+        // (U+1F1E6…U+1F1FF), e.g. 🇺🇸 = U+1F1FA + U+1F1F8.
+        // Terminal.app paints 2 cells but advances the cursor by only 1,
+        // the same under-advance pattern as VS-16 pictographic emoji.
+        // Subsequent characters on the row would otherwise land one cell
+        // to the left of where the column accounting expects them.
+        if scalars.count == 2,
+            (0x1F1E6...0x1F1FF).contains(first.value),
+            let second = scalars.dropFirst().first,
+            (0x1F1E6...0x1F1FF).contains(second.value)
+        {
+            return 1
+        }
+
         // Fitzpatrick skin-tone modifier (U+1F3FB–U+1F3FF) on an emoji-
         // modifier-base codepoint: Terminal.app paints 2 cells but advances
         // the cursor by either 4 (default-emoji-presentation bases like

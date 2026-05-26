@@ -122,6 +122,21 @@ struct CharacterTerminalAppCursorAdvanceTests {
         let ch = Character("🎉")
         #expect(ch.terminalAppCursorAdvance == ch.terminalWidth)
     }
+
+    @Test("Flag emoji (regional-indicator pair): cursor advance is 1")
+    func flagEmojiCursorAdvance() {
+        // Flag emoji are formed by two regional-indicator scalars
+        // (U+1F1E6…U+1F1FF). Terminal.app paints the flag as a 2-cell
+        // glyph but only advances the cursor by 1, so subsequent
+        // characters on the row would otherwise land one cell to the left.
+        for flag in ["🇺🇸", "🇬🇧", "🇩🇪", "🇯🇵", "🇫🇷"] {
+            let ch = Character(flag)
+            #expect(ch.terminalWidth == 2, "\(flag) paints 2 cells")
+            #expect(
+                ch.terminalAppCursorAdvance == 1,
+                "\(flag) cursor advances by only 1 in Terminal.app")
+        }
+    }
 }
 
 // MARK: - String.withTerminalAppCursorCompensation
@@ -135,6 +150,34 @@ struct WithTerminalAppCursorCompensationTests {
         let result = s.withTerminalAppCursorCompensation()
         #expect(result == s, "Plain ASCII should be unchanged")
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
+    }
+
+    @Test("Skin-tone emoji followed by a box-drawing border: Fitzpatrick stripped")
+    func skinToneFollowedByBoxBorderStripsModifier() {
+        // A table row "│ 🤙🏽 │" must have the Fitzpatrick scalar stripped so
+        // that Terminal.app's over-advance doesn't push the trailing border
+        // character past where the column accounting expects it.
+        let s = "│ 🤙🏽 │"
+        let result = s.withTerminalAppCursorCompensation()
+        #expect(
+            !result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
+            "Fitzpatrick scalar dropped when followed by a box-border character")
+        #expect(result.contains("│"), "Both border characters preserved")
+        #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
+    }
+
+    @Test("Flag emoji followed by content: CUF(1) emitted")
+    func flagFollowedByContentEmitsCUF() {
+        // 🇺🇸 paints 2 cells but advances Terminal.app's cursor by only 1,
+        // so a CUF(1) must be injected after the cluster to push the cursor
+        // to the visual right edge of the flag — otherwise the next
+        // character on the row sits one cell to the left of where the
+        // column accounting expects it.
+        let s = "from 🇺🇸 today"
+        let result = s.withTerminalAppCursorCompensation()
+        #expect(
+            result.contains("\u{1B}[1C"),
+            "CUF(1) emitted after a flag emoji to compensate for the under-advance")
     }
 
     @Test("Skin-tone emoji followed by content: Fitzpatrick scalar stripped")
