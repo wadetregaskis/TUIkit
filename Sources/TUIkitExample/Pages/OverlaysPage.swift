@@ -275,9 +275,10 @@ struct OverlaysPage: View {
             .frame(width: 55)
 
         case .modalCustom:
-            // The .frame here matches the other Dialog examples — without it
-            // the inner `HStack { Spacer(); Button }` in `dismissButton` would
-            // stretch the modal to fill the entire screen width.
+            // No explicit frame — the modal sizes to its content. A plain
+            // leading-aligned Button replaces the shared `dismissButton`
+            // (HStack + Spacer + Button), because the Spacer in there
+            // would stretch the modal to fill the entire screen.
             VStack(alignment: .leading, spacing: 1) {
                 Text("Custom Modal Content").bold().foregroundStyle(.palette.accent)
                 Text("")
@@ -285,11 +286,13 @@ struct OverlaysPage: View {
                 Text("with completely custom view content.").foregroundStyle(.palette.foregroundSecondary)
                 Text("No Alert or Dialog — just any View!").foregroundStyle(.palette.foregroundSecondary)
                 Text("")
-                dismissButton
+                Button("Dismiss") {
+                    showOverlay = false
+                }
+                .buttonStyle(.primary)
             }
             .padding(EdgeInsets(horizontal: 2, vertical: 1))
             .border(color: .palette.border)
-            .frame(width: 50)
 
         case .notification:
             // Notifications are posted via NotificationService, not shown as modal content.
