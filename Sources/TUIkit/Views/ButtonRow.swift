@@ -111,10 +111,16 @@ private struct _ButtonRowCore: View, Renderable {
             return FrameBuffer(lines: [])
         }
 
-        // Render each button
+        // Render each button. Every button gets a unique child identity so
+        // they each receive their own auto-generated focus ID and persisted
+        // state — without that, every button in the row would resolve to the
+        // same focus ID, so the focus system would treat them as a single
+        // control: they would all pulse together and Tab could not move
+        // focus between them.
         var buttonBuffers: [FrameBuffer] = []
-        for button in buttons {
-            let buffer = TUIkit.renderToBuffer(button, context: context)
+        for (index, button) in buttons.enumerated() {
+            let childContext = context.withChildIdentity(type: Button.self, index: index)
+            let buffer = TUIkit.renderToBuffer(button, context: childContext)
             buttonBuffers.append(buffer)
         }
 
