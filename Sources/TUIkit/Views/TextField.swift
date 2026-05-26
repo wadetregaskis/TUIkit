@@ -35,6 +35,7 @@
 /// | Option+Right | Move cursor to the end of the current (or next) word |
 /// | Home / End | Move cursor to start / end of text |
 /// | Shift+Left / Shift+Right | Extend selection one character |
+/// | Shift+Option+Left / Right | Extend selection to the previous / next word boundary |
 /// | Ctrl+A | Select all |
 /// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
 /// | Ctrl+Z | Undo |

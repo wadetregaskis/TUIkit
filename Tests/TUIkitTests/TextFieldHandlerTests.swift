@@ -428,4 +428,77 @@ struct TextFieldHandlerTests {
         #expect(handler.cursorPosition == 5, "Cursor at end of 'hello'")
         #expect(text == "hello world", "No 'f' was inserted")
     }
+
+    @Test("Shift+Option+Left extends selection to the previous word boundary")
+    func shiftOptionLeftExtendsSelectionToPreviousWord() throws {
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(
+            focusID: "test", text: binding, cursorPosition: text.count)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true, shift: true))
+        #expect(handler.cursorPosition == 16, "Cursor at start of 'fox'")
+        #expect(handler.selectionAnchor == 19, "Anchor at original end")
+        let range1 = try #require(handler.selectionRange)
+        #expect(range1 == 16..<19, "Selection spans 'fox'")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true, shift: true))
+        #expect(handler.cursorPosition == 10, "Cursor at start of 'brown'")
+        let range2 = try #require(handler.selectionRange)
+        #expect(range2 == 10..<19, "Selection now spans 'brown fox'")
+    }
+
+    @Test("Shift+Option+Right extends selection to the next word boundary")
+    func shiftOptionRightExtendsSelectionToNextWord() throws {
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true, shift: true))
+        #expect(handler.cursorPosition == 3, "Cursor at end of 'the'")
+        let range1 = try #require(handler.selectionRange)
+        #expect(range1 == 0..<3, "Selection spans 'the'")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true, shift: true))
+        #expect(handler.cursorPosition == 9, "Cursor at end of 'quick'")
+        let range2 = try #require(handler.selectionRange)
+        #expect(range2 == 0..<9, "Selection now spans 'the quick'")
+    }
+
+    @Test("Shift+Option+Right shrinks an existing leftward selection")
+    func shiftOptionRightShrinksLeftwardSelection() throws {
+        // Start with cursor in the middle, extend leftward, then shrink
+        // back by stepping right one word at a time.
+        var text = "the quick brown fox"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 15)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true, shift: true))
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, alt: true, shift: true))
+        // Anchor stays at 15, cursor now at 4 (start of 'quick').
+        #expect(handler.cursorPosition == 4)
+        #expect(handler.selectionAnchor == 15)
+
+        // Stepping right with Shift+Option moves the cursor end without
+        // touching the anchor, so the selection contracts.
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, alt: true, shift: true))
+        #expect(handler.cursorPosition == 9, "Cursor at end of 'quick'")
+        #expect(handler.selectionAnchor == 15, "Anchor unchanged")
+        let range = try #require(handler.selectionRange)
+        #expect(range == 9..<15)
+    }
+
+    @Test("Shift+Option+b/f mirror Shift+Option+Left/Right")
+    func shiftOptionLetterSynonyms() throws {
+        var text = "hello world"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(
+            focusID: "test", text: binding, cursorPosition: text.count)
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .character("b"), alt: true, shift: true))
+        #expect(handler.cursorPosition == 6)
+        let range = try #require(handler.selectionRange)
+        #expect(range == 6..<11, "Selection spans 'world'")
+        #expect(text == "hello world", "No 'b' was inserted")
+    }
 }

@@ -192,6 +192,24 @@ extension TextFieldHandler {
         startOrExtendSelection()
         cursorPosition = text.wrappedValue.count
     }
+
+    /// Extends selection to the start of the current (or previous) word.
+    ///
+    /// Same boundary semantics as ``moveCursorToPreviousWordBoundary()`` —
+    /// the cursor moves to the start of the word it's inside, or, if it's
+    /// already at the start of a word, to the start of the word before.
+    func extendSelectionToPreviousWordBoundary() {
+        startOrExtendSelection()
+        moveCursorToPreviousWordBoundary()
+    }
+
+    /// Extends selection to the end of the current (or next) word.
+    ///
+    /// Same boundary semantics as ``moveCursorToNextWordBoundary()``.
+    func extendSelectionToNextWordBoundary() {
+        startOrExtendSelection()
+        moveCursorToNextWordBoundary()
+    }
 }
 
 // MARK: - Key Event Handling
@@ -212,12 +230,20 @@ extension TextFieldHandler {
             if event.alt {
                 switch char {
                 case "b", "B":
-                    clearSelection()
-                    moveCursorToPreviousWordBoundary()
+                    if event.shift {
+                        extendSelectionToPreviousWordBoundary()
+                    } else {
+                        clearSelection()
+                        moveCursorToPreviousWordBoundary()
+                    }
                     return true
                 case "f", "F":
-                    clearSelection()
-                    moveCursorToNextWordBoundary()
+                    if event.shift {
+                        extendSelectionToNextWordBoundary()
+                    } else {
+                        clearSelection()
+                        moveCursorToNextWordBoundary()
+                    }
                     return true
                 default:
                     break
@@ -270,7 +296,9 @@ extension TextFieldHandler {
             return true
 
         case .left:
-            if event.alt {
+            if event.alt && event.shift {
+                extendSelectionToPreviousWordBoundary()
+            } else if event.alt {
                 clearSelection()
                 moveCursorToPreviousWordBoundary()
             } else if event.shift {
@@ -282,7 +310,9 @@ extension TextFieldHandler {
             return true
 
         case .right:
-            if event.alt {
+            if event.alt && event.shift {
+                extendSelectionToNextWordBoundary()
+            } else if event.alt {
                 clearSelection()
                 moveCursorToNextWordBoundary()
             } else if event.shift {
