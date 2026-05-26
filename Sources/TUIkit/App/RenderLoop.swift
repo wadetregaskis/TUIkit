@@ -322,6 +322,12 @@ extension RenderLoop {
         tuiContext.preferences.beginRenderPass()
         focusManager.beginRenderPass()
         statusBar.clearSectionItems()
+        // The transient escape-label override is published by whichever
+        // open modal surface (Picker drop-down, etc.) renders in this
+        // frame; clearing it here makes the default the absence of any
+        // override, so a surface that disappeared on the previous frame
+        // never leaves its stale label behind on the next page.
+        statusBar.escapeLabelOverride = nil
         appHeader.beginRenderPass()
         statusBar.focusManager = focusManager
         tuiContext.lifecycle.beginRenderPass()

@@ -189,9 +189,13 @@ struct PickerTests {
         #expect(popupWidths.first == open.width)
     }
 
-    @Test("Open menu picker sets a transient ESC label on the status bar")
+    @Test("Open menu picker writes the transient ESC label on the status bar")
     func menuPickerSetsEscapeLabelOverrideWhenOpen() {
         let context = createTestContext()
+        // The default StatusBarState is shared across tests via the
+        // environment-key default value, so explicitly reset what we care
+        // about before checking it.
+        context.environment.statusBar.escapeLabelOverride = nil
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
 
@@ -206,8 +210,8 @@ struct PickerTests {
             isDisabled: false
         )
 
-        // First render registers the handler; the picker is closed, so the
-        // override should stay unset.
+        // First render registers the handler; the picker is closed, so it
+        // should leave the override untouched (nil by default).
         _ = renderToBuffer(core, context: context)
         #expect(context.environment.statusBar.escapeLabelOverride == nil)
 
@@ -227,12 +231,33 @@ struct PickerTests {
         box.value.isOpen = true
         _ = renderToBuffer(core, context: context)
         #expect(context.environment.statusBar.escapeLabelOverride == "close drop-down menu")
+    }
 
-        // Closing the picker again should clear our override but leave any
-        // other caller's override intact.
-        box.value.isOpen = false
+    @Test("A closed picker leaves the existing ESC label override alone")
+    func closedPickerDoesNotTouchEscapeLabelOverride() {
+        // The override is owned by the render loop: it clears it at the
+        // start of every frame, and any open modal surface writes the
+        // label it wants while rendering. A closed picker must therefore
+        // be a no-op so it does not stomp on whatever else is active —
+        // for example a Dialog further down the same frame.
+        let context = createTestContext()
+        context.environment.statusBar.escapeLabelOverride = "dismiss"
+
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries = [
+            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries,
+            selection: binding,
+            focusID: "menu-picker",
+            isDisabled: false
+        )
+
         _ = renderToBuffer(core, context: context)
-        #expect(context.environment.statusBar.escapeLabelOverride == nil)
+        #expect(context.environment.statusBar.escapeLabelOverride == "dismiss")
     }
 }
 

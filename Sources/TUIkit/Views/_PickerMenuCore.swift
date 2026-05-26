@@ -119,18 +119,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
 
         // While the drop-down is open the picker's own handler consumes ESC
         // to close it (see `_PickerMenuHandler.handleKeyEvent`), so any
-        // page-level ESC handler stays inactive. Surfacing that fact in the
-        // status bar — by overriding the ESC item's label to "close menu" —
-        // makes the transient binding discoverable without changing which
-        // handler actually fires. The override is cleared on the next pass
-        // when the picker is no longer open.
-        if !context.isMeasuring {
-            let statusBar = context.environment.statusBar
-            if isOpen {
-                statusBar.escapeLabelOverride = "close drop-down menu"
-            } else if statusBar.escapeLabelOverride == "close drop-down menu" {
-                statusBar.escapeLabelOverride = nil
-            }
+        // page-level ESC handler stays inactive. Posting the ESC label
+        // override here makes that fact discoverable in the status bar
+        // without changing which handler fires. The override is cleared
+        // at the start of each render pass by `RenderLoop.beginRenderPass`,
+        // so we only need to write it while the drop-down is actually open
+        // — closing or navigating away naturally restores the page's label.
+        if isOpen && !context.isMeasuring {
+            context.environment.statusBar.escapeLabelOverride = "close drop-down menu"
         }
 
         let collapsed = collapsedLine(
