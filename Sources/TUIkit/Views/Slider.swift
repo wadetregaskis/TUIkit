@@ -333,7 +333,93 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             trackWidth: trackWidth
         )
 
-        return FrameBuffer(text: content)
+        var buffer = FrameBuffer(text: content)
+
+        // Hit-test region. Three behaviours:
+        //   • Scroll up / down anywhere on the row → ± step
+        //   • Left-press / drag on the track portion → set fraction
+        //     directly from the x position
+        //   • Left-press on either arrow → ± step
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let captureValue = value
+            let captureBounds = bounds
+            let captureStep = step
+            let trackLeft = 2  // "◀ "
+            let trackRight = trackLeft + trackWidth  // exclusive
+            let handlerID = mouseDispatcher.register { event in
+                switch event.button {
+                case .scrollUp:
+                    let new = min(captureBounds.upperBound,
+                                  max(captureBounds.lowerBound,
+                                      captureValue.wrappedValue + captureStep))
+                    captureValue.wrappedValue = new
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                case .scrollDown:
+                    let new = min(captureBounds.upperBound,
+                                  max(captureBounds.lowerBound,
+                                      captureValue.wrappedValue - captureStep))
+                    captureValue.wrappedValue = new
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                case .left:
+                    switch event.phase {
+                    case .pressed, .dragged:
+                        if event.x < trackLeft {
+                            // Left arrow.
+                            if event.phase == .pressed {
+                                let new = min(captureBounds.upperBound,
+                                              max(captureBounds.lowerBound,
+                                                  captureValue.wrappedValue - captureStep))
+                                captureValue.wrappedValue = new
+                            }
+                        } else if event.x >= trackRight {
+                            // Right arrow.
+                            if event.phase == .pressed {
+                                let new = min(captureBounds.upperBound,
+                                              max(captureBounds.lowerBound,
+                                                  captureValue.wrappedValue + captureStep))
+                                captureValue.wrappedValue = new
+                            }
+                        } else {
+                            // Inside the track itself.
+                            let pos = max(0, min(trackWidth - 1, event.x - trackLeft))
+                            let f = trackWidth > 1
+                                ? Double(pos) / Double(trackWidth - 1)
+                                : 0
+                            let range = captureBounds.upperBound - captureBounds.lowerBound
+                            let raw = captureBounds.lowerBound + f * range
+                            captureValue.wrappedValue =
+                                min(captureBounds.upperBound,
+                                    max(captureBounds.lowerBound, raw))
+                        }
+                        focusManager.focus(id: captureFocusID)
+                        return true
+                    case .released:
+                        return true
+                    default:
+                        return false
+                    }
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: handlerID
+                )
+            )
+        }
+
+        return buffer
     }
 
     /// Builds the rendered slider content.

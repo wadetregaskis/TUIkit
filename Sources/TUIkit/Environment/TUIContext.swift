@@ -210,6 +210,9 @@ final class TUIContext: @unchecked Sendable {
     /// Key event handler registration and dispatch.
     let keyEventDispatcher: KeyEventDispatcher
 
+    /// Mouse event handler registration and hit-test dispatch.
+    let mouseEventDispatcher: MouseEventDispatcher
+
     /// Preference value collection during rendering.
     let preferences: PreferenceStorage
 
@@ -229,6 +232,7 @@ final class TUIContext: @unchecked Sendable {
     init() {
         self.lifecycle = LifecycleManager()
         self.keyEventDispatcher = KeyEventDispatcher()
+        self.mouseEventDispatcher = MouseEventDispatcher()
         self.preferences = PreferenceStorage()
         self.stateStorage = StateStorage()
         self.renderCache = RenderCache.shared
@@ -247,12 +251,14 @@ final class TUIContext: @unchecked Sendable {
     init(
         lifecycle: LifecycleManager,
         keyEventDispatcher: KeyEventDispatcher,
+        mouseEventDispatcher: MouseEventDispatcher = MouseEventDispatcher(),
         preferences: PreferenceStorage,
         stateStorage: StateStorage = StateStorage(),
         renderCache: RenderCache = RenderCache.shared
     ) {
         self.lifecycle = lifecycle
         self.keyEventDispatcher = keyEventDispatcher
+        self.mouseEventDispatcher = mouseEventDispatcher
         self.preferences = preferences
         self.stateStorage = stateStorage
         self.renderCache = renderCache

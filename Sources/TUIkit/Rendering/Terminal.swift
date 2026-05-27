@@ -164,6 +164,20 @@ extension Terminal {
         // want word-level Shift+Option selection need to remap the key in
         // its preferences (or use a terminal with full modifier support).
         writeImmediate("\u{1B}[>1;2m")
+
+        // Enable mouse tracking. We want everything — clicks, releases,
+        // drags, plain motion, and the wheel — and we want it in SGR
+        // extended encoding so the position is reported in decimal
+        // rather than the legacy byte-encoded form that caps at column
+        // 223.
+        //
+        // `?1003h` — any-event mouse mode: press / release / drag / move
+        // `?1006h` — SGR extended position reporting
+        //
+        // Terminals that do not understand these sequences simply ignore
+        // them, so there's no harm enabling both unconditionally.
+        writeImmediate("\u{1B}[?1003h")
+        writeImmediate("\u{1B}[?1006h")
     }
 
     /// Disables raw mode and restores normal terminal operation.
@@ -173,6 +187,13 @@ extension Terminal {
         // Reset modifyCursorKeys back to the terminal's default before
         // restoring terminal state.
         writeImmediate("\u{1B}[>1;0m")
+
+        // Turn off SGR mouse reporting and any-event tracking. The
+        // ordering doesn't matter to terminals that handle these, but
+        // we send the SGR-extended disable first so any unflushed
+        // pending report would still be parseable.
+        writeImmediate("\u{1B}[?1006l")
+        writeImmediate("\u{1B}[?1003l")
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")
@@ -347,6 +368,36 @@ extension Terminal {
         }
 
         return KeyEvent.parse(bytes)
+    }
+
+    /// Reads the next input event from the terminal, whether key or mouse.
+    ///
+    /// Recognises SGR-extended mouse reports (`CSI < … M/m`) and routes
+    /// them through ``MouseEvent.parseSGR(_:)``; everything else falls
+    /// through the same path as ``readKeyEvent()`` for key handling.
+    ///
+    /// - Returns: The next event, or nil on timeout/error.
+    func readEvent() -> TerminalInput? {
+        let bytes = readBytes()
+        guard !bytes.isEmpty else { return nil }
+
+        // SGR mouse report: ESC [ < … M / m
+        if bytes.count >= 9, bytes[0] == 0x1B, bytes[1] == 0x5B, bytes[2] == 0x3C {
+            if let mouse = MouseEvent.parseSGR(bytes) {
+                return .mouse(mouse)
+            }
+        }
+
+        // Bracketed paste start.
+        if bytes == [0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E] {
+            let pastedText = readBracketedPasteContent()
+            return .key(KeyEvent(key: .paste(pastedText)))
+        }
+
+        if let key = KeyEvent.parse(bytes) {
+            return .key(key)
+        }
+        return nil
     }
 
     /// Reads bytes until the bracketed paste end marker `ESC[201~` is found.

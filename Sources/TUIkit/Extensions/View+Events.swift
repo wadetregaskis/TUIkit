@@ -87,6 +87,144 @@ extension View {
     }
 }
 
+// MARK: - Mouse
+
+extension View {
+    /// Adds a handler for raw mouse events landing on this view.
+    ///
+    /// The handler is called with the event in screen coordinates
+    /// (relative to the terminal viewport) whenever a mouse event
+    /// lands inside this view's rendered bounds. Return `true` to
+    /// claim the event — for a `.pressed` event that also captures
+    /// the subsequent drag, so the modifier keeps receiving
+    /// `.dragged` and `.released` events for the same button even if
+    /// the cursor wanders off-view.
+    ///
+    /// ```swift
+    /// Text("Drag me")
+    ///     .onMouseEvent { event in
+    ///         switch event.phase {
+    ///         case .pressed: pressed = true
+    ///         case .released: pressed = false
+    ///         default: break
+    ///         }
+    ///         return true
+    ///     }
+    /// ```
+    ///
+    /// - Parameter handler: The handler. Returns `true` if consumed.
+    /// - Returns: A view that handles mouse events landing on it.
+    public func onMouseEvent(_ handler: @escaping (MouseEvent) -> Bool) -> some View {
+        OnMouseEventModifier(content: self, handler: handler)
+    }
+
+    /// Adds an action that fires on a left-click inside this view.
+    ///
+    /// Equivalent to listening for a `.released` event of the left
+    /// button after a matching `.pressed` event on the same view.
+    /// The action receives the absolute screen position of the click.
+    ///
+    /// ```swift
+    /// Text("Click me")
+    ///     .onTapGesture { _ in clicked() }
+    /// ```
+    ///
+    /// - Parameter action: The action to run on click. Receives the
+    ///   `(x, y)` of the release.
+    /// - Returns: A view that consumes left-click releases.
+    public func onTapGesture(_ action: @escaping (_ x: Int, _ y: Int) -> Void) -> some View {
+        onMouseEvent { event in
+            if event.button == .left, event.phase == .released {
+                action(event.x, event.y)
+                return true
+            }
+            // Still claim the press so the dispatcher routes the
+            // release back to us even if the cursor moves off-view
+            // during the drag.
+            if event.button == .left, event.phase == .pressed {
+                return true
+            }
+            return false
+        }
+    }
+
+    /// Adds an action that fires on a scroll wheel tick inside this
+    /// view's bounds.
+    ///
+    /// `delta` is `+1` for upward / leftward scrolls and `-1` for
+    /// downward / rightward, matching the sign convention scroll
+    /// widgets (Lists, Tables) already use.
+    ///
+    /// - Parameter action: The action to run on each tick. The
+    ///   `direction` argument tells you whether the wheel was scrolled
+    ///   `.up` (toward content moving down) or `.down` (toward
+    ///   content moving up), or sideways via `.left` / `.right`.
+    /// - Returns: A view that consumes scroll events landing on it.
+    public func onScrollGesture(
+        _ action: @escaping (_ direction: ScrollDirection) -> Void
+    ) -> some View {
+        onMouseEvent { event in
+            guard event.phase == .scrolled else { return false }
+            switch event.button {
+            case .scrollUp: action(.up)
+            case .scrollDown: action(.down)
+            case .scrollLeft: action(.left)
+            case .scrollRight: action(.right)
+            default: return false
+            }
+            return true
+        }
+    }
+
+    /// Adds an action that fires while the user drags the left mouse
+    /// button across this view.
+    ///
+    /// The action is invoked for every `.dragged` event between the
+    /// initial `.pressed` and the matching `.released`, so the
+    /// handler is in continuous control of whatever it's animating
+    /// (a slider's value, a moving cursor, …). The first call carries
+    /// `phase == .began`, intermediate calls carry `phase == .moved`,
+    /// and the final call carries `phase == .ended`.
+    public func onDragGesture(
+        _ action: @escaping (DragGestureEvent) -> Void
+    ) -> some View {
+        DragGestureModifier(content: self, action: action)
+    }
+}
+
+/// Direction of a scroll-wheel tick reported to ``View/onScrollGesture(_:)``.
+public enum ScrollDirection: Sendable, Equatable {
+    case up
+    case down
+    case left
+    case right
+}
+
+/// The state delivered to ``View/onDragGesture(_:)`` for each drag step.
+public struct DragGestureEvent: Sendable, Equatable {
+    /// Where the gesture is in its lifecycle.
+    public enum Phase: Sendable, Equatable {
+        case began
+        case moved
+        case ended
+    }
+
+    /// The current phase.
+    public let phase: Phase
+
+    /// The cursor's current absolute screen position.
+    public let x: Int
+    public let y: Int
+
+    /// The absolute screen position where the gesture began.
+    public let startX: Int
+    public let startY: Int
+
+    /// The displacement from the gesture's starting position.
+    public var translationX: Int { x - startX }
+    public var translationY: Int { y - startY }
+}
+
 // MARK: - Value Change
 
 extension View {

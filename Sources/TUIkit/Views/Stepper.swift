@@ -345,7 +345,57 @@ private struct _StepperCore<Label: View>: View, Renderable {
             pulsePhase: context.environment.pulsePhase
         )
 
-        return FrameBuffer(text: content)
+        var buffer = FrameBuffer(text: content)
+
+        // Hit-test region:
+        //   • Scroll wheel up/down anywhere → ± step
+        //   • Left-press on left half → decrement
+        //   • Left-press on right half → increment
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureHandler = handler
+            let captureFocusID = persistedFocusID
+            let valueDisplayWidth = " \(value.wrappedValue) ".count
+            let leftHalfEnd = 1 + valueDisplayWidth / 2  // "◀" + half of value
+            let handlerID = mouseDispatcher.register { event in
+                switch event.button {
+                case .scrollUp:
+                    captureHandler.increment()
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                case .scrollDown:
+                    captureHandler.decrement()
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                case .left:
+                    guard event.phase == .pressed else {
+                        return event.phase == .released
+                    }
+                    if event.x < leftHalfEnd {
+                        captureHandler.decrement()
+                    } else {
+                        captureHandler.increment()
+                    }
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: handlerID
+                )
+            )
+        }
+
+        return buffer
     }
 
     /// Builds the rendered stepper content.

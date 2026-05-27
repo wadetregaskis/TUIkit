@@ -7,7 +7,7 @@
 // MARK: - Scroll Direction
 
 /// The direction of a scroll indicator arrow.
-enum ScrollDirection {
+enum ScrollIndicatorDirection {
     case up, down
 }
 
@@ -28,7 +28,7 @@ enum ScrollDirection {
 /// - Returns: A styled string with a centered scroll indicator.
 @MainActor
 func renderScrollIndicator(
-    direction: ScrollDirection,
+    direction: ScrollIndicatorDirection,
     count: Int,
     width: Int,
     palette: any Palette

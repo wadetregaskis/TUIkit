@@ -42,6 +42,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Handle empty state
         let contentLines: [String]
         let listHasFocus: Bool
+        // Lives outside the else branch so the mouse hit-test region we
+        // emit at the end of this method can capture the handler.
+        var sharedListHandler: ItemListHandler<SelectionValue>? = nil
 
         if rows.isEmpty {
             // SwiftUI's List is greedy along both axes. Padding the placeholder
@@ -94,6 +97,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 )
             )
             let handler = handlerBox.value
+            sharedListHandler = handler
 
             // Update handler with current values
             handler.itemCount = rows.count
@@ -217,13 +221,44 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             showFooterSeparator: showFooterSeparator
         )
 
-        return renderContainer(
+        var buffer = renderContainer(
             title: title,
             config: config,
             content: listContent,
             footer: footer,
             context: context
         )
+
+        // Scroll-wheel support: scroll the list one row at a time. Only
+        // attach when the list actually has rows and is enabled — empty
+        // or disabled lists don't need to capture wheel input.
+        if let listHandler = sharedListHandler, !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let mouseHandlerID = mouseDispatcher.register { event in
+                switch event.button {
+                case .scrollUp:
+                    listHandler.moveFocus(by: -1, wrap: false)
+                    return true
+                case .scrollDown:
+                    listHandler.moveFocus(by: 1, wrap: false)
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
+
+        return buffer
     }
 
     // MARK: - Row Extraction

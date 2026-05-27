@@ -193,7 +193,47 @@ private struct _ButtonCore: View, Renderable {
             isFocused: isFocused && !isDisabled,
             isEnabled: !isDisabled
         )
-        return style.makeBuffer(configuration: configuration, context: context)
+        var buffer = style.makeBuffer(configuration: configuration, context: context)
+
+        // Hit-test region for mouse clicks. A left-button release inside
+        // the button's bounds counts as a click: it grants focus and
+        // fires the action exactly like Enter / Space do. Disabled
+        // buttons skip registration entirely so they neither steal
+        // focus nor swallow events.
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let captureAction = action
+            let handlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed:
+                    // Claim the press so the dispatcher routes the
+                    // matching release back here even if the cursor
+                    // drifts off the button before it lifts.
+                    return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    captureAction()
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: handlerID
+                )
+            )
+        }
+
+        return buffer
     }
 }
 

@@ -264,6 +264,13 @@ extension RenderLoop {
                 buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight)
         }
 
+        // Publish the now-composited hit-test regions so the dispatcher
+        // can route mouse events arriving between this frame and the
+        // next. Regions are kept in absolute content-area coordinates;
+        // the App input loop translates terminal coords to content
+        // coords before dispatching.
+        tuiContext.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+
         writeFrame(
             buffer: buffer,
             environment: environment,
@@ -305,6 +312,7 @@ extension RenderLoop {
         environment.stateStorage = tuiContext.stateStorage
         environment.lifecycle = tuiContext.lifecycle
         environment.keyEventDispatcher = tuiContext.keyEventDispatcher
+        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
         environment.renderCache = tuiContext.renderCache
         environment.preferenceStorage = tuiContext.preferences
         environment.localizationService = LocalizationService.shared
@@ -319,6 +327,7 @@ extension RenderLoop {
     /// Clears all per-frame state and begins lifecycle/state/cache tracking.
     fileprivate func beginRenderPass() {
         tuiContext.keyEventDispatcher.clearHandlers()
+        tuiContext.mouseEventDispatcher.beginRenderPass()
         tuiContext.preferences.beginRenderPass()
         focusManager.beginRenderPass()
         statusBar.clearSectionItems()

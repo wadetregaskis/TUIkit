@@ -54,6 +54,16 @@ public struct FrameBuffer: Sendable, Equatable {
     /// time the buffer reaches the root. See ``OverlayLayer``.
     public var overlays: [OverlayLayer] = []
 
+    /// Mouse hit-test rectangles that ride alongside this buffer's
+    /// content as parents combine it.
+    ///
+    /// Every combining operation shifts these regions by the same
+    /// amount it shifts the buffer's lines, so by the time the buffer
+    /// reaches the root each region's offset is in absolute screen
+    /// coordinates. The `MouseEventDispatcher` collects them at root
+    /// composite time and uses them for hit-testing.
+    public var hitTestRegions: [HitTestRegion] = []
+
     /// Creates an empty buffer.
     public init() {
         self.lines = []
@@ -141,9 +151,13 @@ extension FrameBuffer {
 
         guard !other.isEmpty else {
             // `other` contributes no visible lines, but may still carry
-            // overlay layers that must not be lost.
+            // overlay layers and hit-test regions that must not be lost.
             if !other.overlays.isEmpty {
                 overlays.append(contentsOf: other.shiftedOverlays(byX: 0, y: priorHeight))
+            }
+            if !other.hitTestRegions.isEmpty {
+                hitTestRegions.append(
+                    contentsOf: other.shiftedHitTestRegions(byX: 0, y: priorHeight))
             }
             return
         }
@@ -163,10 +177,13 @@ extension FrameBuffer {
         combined.append(contentsOf: other.lines)
 
         let carriedOverlays = overlays + other.shiftedOverlays(byX: 0, y: verticalShift)
+        let carriedRegions =
+            hitTestRegions + other.shiftedHitTestRegions(byX: 0, y: verticalShift)
 
         // Replace self with new buffer using pre-computed width
         self = FrameBuffer(lines: combined, width: newWidth)
         overlays = carriedOverlays
+        hitTestRegions = carriedRegions
     }
 
     /// Places another buffer to the right of this one with optional spacing.
@@ -196,10 +213,13 @@ extension FrameBuffer {
 
         // `other`'s content lands to the right, past this buffer + spacing.
         let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacing, y: 0)
+        let carriedRegions =
+            hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacing, y: 0)
 
         // Replace self with new buffer using pre-computed width
         self = FrameBuffer(lines: result, width: newWidth)
         overlays = carriedOverlays
+        hitTestRegions = carriedRegions
     }
 
     /// Layers another buffer on top of this one (ZStack behavior).
@@ -221,8 +241,10 @@ extension FrameBuffer {
             }
         }
         lines = result
-        // The overlay is placed flush at (0, 0), so its layers need no shift.
+        // The overlay is placed flush at (0, 0), so its layers + hit-test
+        // regions need no shift.
         overlays.append(contentsOf: overlay.overlays)
+        hitTestRegions.append(contentsOf: overlay.hitTestRegions)
     }
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
@@ -237,11 +259,16 @@ extension FrameBuffer {
     public func composited(with overlay: Self, at position: (x: Int, y: Int)) -> Self {
         guard !overlay.isEmpty else {
             // Nothing visible to draw, but the overlay may still carry its
-            // own nested layers that need to be lifted into the result.
-            guard !overlay.overlays.isEmpty else { return self }
+            // own nested layers / hit-test regions that need to be
+            // lifted into the result.
+            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty else {
+                return self
+            }
             var result = self
             result.overlays.append(
                 contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
+            result.hitTestRegions.append(
+                contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
             return result
         }
 
@@ -281,10 +308,13 @@ extension FrameBuffer {
         }
 
         var composited = Self(lines: result)
-        // Keep this buffer's own layers; lift the overlay's nested layers,
-        // shifted to where the overlay was placed.
+        // Keep this buffer's own layers + hit-test regions; lift the
+        // overlay's nested ones, shifted to where the overlay was placed.
         composited.overlays =
             overlays + overlay.shiftedOverlays(byX: position.x, y: position.y)
+        composited.hitTestRegions =
+            hitTestRegions
+            + overlay.shiftedHitTestRegions(byX: position.x, y: position.y)
         return composited
     }
 
@@ -320,9 +350,11 @@ extension FrameBuffer {
             resultWidth = max(resultWidth, clippedLines[index].strippedLength)
         }
         var result = FrameBuffer(lines: clippedLines, width: resultWidth)
-        // Overlay layers are free-floating and composited separately at the
-        // root — clamping the in-flow content must never discard them.
+        // Overlay layers and hit-test regions are free-floating and
+        // composited separately at the root — clamping the in-flow
+        // content must never discard them.
         result.overlays = overlays
+        result.hitTestRegions = hitTestRegions
         return result
     }
 }
@@ -359,7 +391,8 @@ extension FrameBuffer {
     ///   - newLines: The rebuilt line content.
     ///   - overlayShiftX: How far the content moved horizontally.
     ///   - overlayShiftY: How far the content moved vertically.
-    /// - Returns: A buffer with the new lines and shifted overlay layers.
+    /// - Returns: A buffer with the new lines, shifted overlay layers and
+    ///   shifted hit-test regions.
     public func replacingLines(
         _ newLines: [String],
         overlayShiftX: Int = 0,
@@ -367,7 +400,29 @@ extension FrameBuffer {
     ) -> FrameBuffer {
         var result = FrameBuffer(lines: newLines)
         result.overlays = shiftedOverlays(byX: overlayShiftX, y: overlayShiftY)
+        result.hitTestRegions = shiftedHitTestRegions(
+            byX: overlayShiftX, y: overlayShiftY)
         return result
+    }
+}
+
+// MARK: - Hit-Test Region Propagation
+
+extension FrameBuffer {
+    /// Returns this buffer's ``hitTestRegions``, each shifted by `(dx, dy)`.
+    ///
+    /// Mirrors ``shiftedOverlays(byX:y:)`` — combining operations call
+    /// this so a region tracks the lines it was emitted with as the
+    /// surrounding view tree composes its parent.
+    public func shiftedHitTestRegions(byX dx: Int, y dy: Int) -> [HitTestRegion] {
+        guard !hitTestRegions.isEmpty else { return [] }
+        guard dx != 0 || dy != 0 else { return hitTestRegions }
+        return hitTestRegions.map { region in
+            var shifted = region
+            shifted.offsetX += dx
+            shifted.offsetY += dy
+            return shifted
+        }
     }
 }
 

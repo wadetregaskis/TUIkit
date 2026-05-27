@@ -176,29 +176,55 @@ extension AppRunner {
                 renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
             }
 
-            // Read key events (non-blocking with VTIME=0)
-            // Process all available events per frame. A high limit prevents
-            // input buffering lag during paste operations while still avoiding
-            // infinite loops if input arrives faster than we can process.
+            // Read terminal events (non-blocking with VTIME=0).
+            // Process all available events per frame. A high limit
+            // prevents input buffering lag during paste operations while
+            // still avoiding infinite loops if input arrives faster than
+            // we can process.
             var eventsProcessed = 0
             let maxEventsPerFrame = 128
             while eventsProcessed < maxEventsPerFrame,
-                let keyEvent = terminal.readKeyEvent()
+                let input = terminal.readEvent()
             {
-                // "`": dump the current frame to ~/tuikit-frame.ansi.
-                // Permanent debug shortcut — does not consume the event so
-                // view-level "`" handlers can still respond if needed.
-                //
-                // lastFrameData only contains what the *diff* wrote, which is
-                // empty on a static screen.  Force a full repaint first so the
-                // frame buffer captures every line, then dump that snapshot.
-                if keyEvent.key == .character("`") {
-                    renderer.invalidateDiffCache()
-                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
-                    terminal.dumpLastFrame()
-                }
+                switch input {
+                case .key(let keyEvent):
+                    // "`": dump the current frame to ~/tuikit-frame.ansi.
+                    // Permanent debug shortcut — does not consume the
+                    // event so view-level "`" handlers can still
+                    // respond if needed.
+                    //
+                    // lastFrameData only contains what the *diff* wrote,
+                    // which is empty on a static screen.  Force a full
+                    // repaint first so the frame buffer captures every
+                    // line, then dump that snapshot.
+                    if keyEvent.key == .character("`") {
+                        renderer.invalidateDiffCache()
+                        renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                        terminal.dumpLastFrame()
+                    }
 
-                inputHandler.handle(keyEvent)
+                    inputHandler.handle(keyEvent)
+
+                case .mouse(let mouseEvent):
+                    // Mouse hit-test regions are in content-area
+                    // coordinates (origin = top-left of the content
+                    // area), so translate the terminal-space y by the
+                    // header height before dispatching. x is already
+                    // aligned since the header spans the full width.
+                    let translated = MouseEvent(
+                        button: mouseEvent.button,
+                        phase: mouseEvent.phase,
+                        x: mouseEvent.x,
+                        y: mouseEvent.y - appHeader.height,
+                        shift: mouseEvent.shift,
+                        ctrl: mouseEvent.ctrl,
+                        meta: mouseEvent.meta
+                    )
+                    tuiContext.mouseEventDispatcher.dispatch(translated)
+                    // Mouse events virtually always change something
+                    // (focus, selection, hover) so request a re-render.
+                    appState.setNeedsRender()
+                }
                 eventsProcessed += 1
             }
 

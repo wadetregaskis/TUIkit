@@ -310,6 +310,40 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         // Combine: [indicator] label
         let combinedLine = styledIndicator + " " + labelText
 
-        return FrameBuffer(lines: [combinedLine])
+        var buffer = FrameBuffer(lines: [combinedLine])
+
+        // Hit-test region: a left-button release anywhere on the toggle
+        // row flips its value, mirroring how Space / Enter activate it.
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let toggleBinding = isOn
+            let handlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed:
+                    return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    toggleBinding.wrappedValue.toggle()
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: handlerID
+                )
+            )
+        }
+
+        return buffer
     }
 }

@@ -25,6 +25,13 @@ private struct KeyEventDispatcherKey: EnvironmentKey {
     static let defaultValue: KeyEventDispatcher? = nil
 }
 
+// MARK: - Mouse Event Dispatcher
+
+/// EnvironmentKey for mouse event handler registration and dispatch.
+private struct MouseEventDispatcherKey: EnvironmentKey {
+    static let defaultValue: MouseEventDispatcher? = nil
+}
+
 // MARK: - Preference Storage
 
 /// EnvironmentKey for preference value collection during rendering.
@@ -85,6 +92,12 @@ extension EnvironmentValues {
     var keyEventDispatcher: KeyEventDispatcher? {
         get { self[KeyEventDispatcherKey.self] }
         set { self[KeyEventDispatcherKey.self] = newValue }
+    }
+
+    /// Mouse event handler registration and dispatch.
+    var mouseEventDispatcher: MouseEventDispatcher? {
+        get { self[MouseEventDispatcherKey.self] }
+        set { self[MouseEventDispatcherKey.self] = newValue }
     }
 
     /// Preference value collection during rendering.
