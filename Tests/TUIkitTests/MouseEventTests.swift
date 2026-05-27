@@ -234,6 +234,70 @@ struct MouseHitTestPropagationTests {
         #expect(a.wrappedValue == "")
     }
 
+    @Test("View .mouseSupport modifier overrides scene base config")
+    func viewMouseSupportOverride() {
+        let context = makeContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+
+        // Base = .standard (clicks + scrolling + drag, no motion).
+        // Modifier-set override = .full (everything).
+        let view = Text("Hi").mouseSupport(.full)
+        _ = renderToBuffer(view, context: context)
+
+        let effective = dispatcher.effectiveSupport(baseConfig: .standard)
+        #expect(effective.motion == true)
+    }
+
+    @Test("Innermost .mouseSupport wins when nested")
+    func innermostMouseSupportWins() {
+        let context = makeContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+
+        // Outer says .disabled, inner says .standard. Inner is
+        // evaluated last during a top-down render and wins.
+        let view = VStack {
+            Text("Inner")
+                .mouseSupport(.standard)
+        }
+        .mouseSupport(.disabled)
+        _ = renderToBuffer(view, context: context)
+
+        let effective = dispatcher.effectiveSupport(baseConfig: .full)
+        #expect(effective.clicks == true)
+        #expect(effective.scrolling == true)
+        #expect(effective.drag == true)
+        #expect(effective.motion == false)
+    }
+
+    @Test("No .mouseSupport modifier leaves scene base in effect")
+    func sceneBaseUntouchedWithoutOverride() {
+        let context = makeContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+
+        let view = Text("plain")
+        _ = renderToBuffer(view, context: context)
+
+        let effective = dispatcher.effectiveSupport(baseConfig: .standard)
+        #expect(effective == MouseSupport.standard)
+    }
+
+    @Test("Override is per-render-pass — beginRenderPass clears it")
+    func overrideClearedOnRenderPass() {
+        let context = makeContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+
+        let view = Text("once").mouseSupport(.disabled)
+        _ = renderToBuffer(view, context: context)
+        #expect(dispatcher.effectiveSupport(baseConfig: .standard) == .disabled)
+
+        // Frame turnover — without the modifier rendering again, the
+        // override should be gone.
+        dispatcher.beginRenderPass()
+        let plain = Text("again")
+        _ = renderToBuffer(plain, context: context)
+        #expect(dispatcher.effectiveSupport(baseConfig: .standard) == .standard)
+    }
+
     @Test("Click on TextField actually moves focus to it (end-to-end)")
     func clickMovesFocusToTextField() {
         let binding = State<String>(wrappedValue: "")

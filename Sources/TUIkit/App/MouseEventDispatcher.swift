@@ -79,6 +79,14 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// decide which terminal tracking mode to apply.
     private var requestedFeatures: MouseSupport = .disabled
 
+    /// An optional view-level override of the entire ``MouseSupport``
+    /// configuration. Set via the ``View/mouseSupport(_:)`` modifier
+    /// during a render pass; replaces (rather than unions) the
+    /// scene-level base config for that frame. Cleared every
+    /// `beginRenderPass`. The latest setter wins — innermost
+    /// `.mouseSupport(...)` in the view tree takes effect.
+    private var configOverride: MouseSupport? = nil
+
     /// The effective ``MouseSupport`` configuration in force for the
     /// dispatching of incoming events. Set by the AppRunner each
     /// frame before processing input. Determines which kinds of
@@ -104,6 +112,7 @@ extension MouseEventDispatcher {
         regions.removeAll(keepingCapacity: true)
         nextHandlerID = 0
         requestedFeatures = .disabled
+        configOverride = nil
     }
 
     /// Records that the rendering view tree wants `feature` reported
@@ -124,10 +133,26 @@ extension MouseEventDispatcher {
         }
     }
 
-    /// Returns the union of frame-level feature requests with the
-    /// supplied base configuration.
+    /// Returns the effective ``MouseSupport`` for the current frame.
+    ///
+    /// Resolution order:
+    /// 1. If a view-level override was posted this frame (via
+    ///    ``setConfigOverride(_:)``), it replaces the scene base.
+    /// 2. Otherwise, the scene base is used.
+    /// 3. Either way, per-frame feature requests are unioned on top,
+    ///    so a modifier that needs `motion` always gets it
+    ///    regardless of which level set the base.
     func effectiveSupport(baseConfig: MouseSupport) -> MouseSupport {
-        baseConfig.union(with: requestedFeatures)
+        let base = configOverride ?? baseConfig
+        return base.union(with: requestedFeatures)
+    }
+
+    /// Replaces the per-frame ``MouseSupport`` configuration with
+    /// `support`. Called by the ``View/mouseSupport(_:)`` view
+    /// modifier during render. Last setter wins; cleared at the
+    /// start of every render pass.
+    func setConfigOverride(_ support: MouseSupport) {
+        configOverride = support
     }
 
     /// Updates the effective configuration used to filter incoming
