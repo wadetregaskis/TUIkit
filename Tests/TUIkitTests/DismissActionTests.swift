@@ -30,8 +30,7 @@ struct DismissActionTests {
     @Test("The default environment dismiss action signals an exit")
     func defaultEnvironmentDismissSignalsExit() {
         drainExitFlag()
-        var environment = EnvironmentValues()
-        environment.dismiss()
+        EnvironmentValues().dismiss()
         #expect(AppState.shared.consumeShouldExit() == true)
     }
 
