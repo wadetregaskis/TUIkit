@@ -44,7 +44,7 @@ extension ASCIIConverter {
         height: Int,
         mode: ASCIIColorMode
     ) -> [String] {
-        let lowerHalfBlock: Character = "\u{2584}"
+        let lowerHalfBlock: Character = "▄"
 
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -106,11 +106,11 @@ extension ASCIIConverter {
                 case (false, false):
                     line.append(" ")
                 case (true, false):
-                    line.append("\u{2580}")  // ▀ Upper Half Block
+                    line.append("▀")
                 case (false, true):
-                    line.append("\u{2584}")  // ▄ Lower Half Block
+                    line.append("▄")
                 case (true, true):
-                    line.append("\u{2588}")  // █ Full Block
+                    line.append("█")
                 }
             }
             lines.append(line)
