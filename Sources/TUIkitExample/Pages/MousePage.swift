@@ -37,7 +37,7 @@ struct MousePage: View {
 
             DemoSection("Tap Counter") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Click the box. Each release counts as one tap.")
+                    Text("Click the box. Coordinates are local to the box's top-left.")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text("[ Click me ]")
                         .bold()
@@ -46,7 +46,14 @@ struct MousePage: View {
                         .border(color: .palette.border)
                         .onTapGesture { x, y in
                             tapCount += 1
-                            lastTapAt = "(\(x), \(y))"
+                            // Coordinates are local but the box's own
+                            // border + padding mean the reported x/y
+                            // can range up to the buffer's full width/
+                            // height. Clamp to the visible interior so
+                            // the readout is intuitive.
+                            let cx = max(0, min(tapBoxWidth - 1, x))
+                            let cy = max(0, min(tapBoxHeight - 1, y))
+                            lastTapAt = "(\(cx), \(cy))"
                         }
                     HStack(spacing: 2) {
                         ValueDisplayRow("Taps:", "\(tapCount)")
@@ -57,20 +64,41 @@ struct MousePage: View {
 
             DemoSection("Scroll Counter") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Scroll the wheel inside the box.")
+                    Text("Scroll inside the box. Hold Shift to scroll horizontally.")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(scrollBar())
-                        .foregroundStyle(.palette.accent)
-                        .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: .palette.border)
-                        .onScrollGesture { direction in
-                            switch direction {
-                            case .up: scrollDeltaY += 1
-                            case .down: scrollDeltaY -= 1
-                            case .left: scrollDeltaX -= 1
-                            case .right: scrollDeltaX += 1
-                            }
+                    // 2-D scroll position display. The vertical and
+                    // horizontal axes each get their own line so you
+                    // can see independent accumulation.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<scrollFieldHeight) { row in
+                            Text(scrollField(row: row))
+                                .foregroundStyle(.palette.accent)
                         }
+                    }
+                    .padding(EdgeInsets(horizontal: 2, vertical: 0))
+                    .border(color: .palette.border)
+                    .onMouseEvent { event in
+                        // Use the raw event stream so we can read
+                        // shift to route the wheel sideways.
+                        switch event.button {
+                        case .scrollUp:
+                            if event.shift { scrollDeltaX -= 1 }
+                            else { scrollDeltaY += 1 }
+                            return true
+                        case .scrollDown:
+                            if event.shift { scrollDeltaX += 1 }
+                            else { scrollDeltaY -= 1 }
+                            return true
+                        case .scrollLeft:
+                            scrollDeltaX -= 1
+                            return true
+                        case .scrollRight:
+                            scrollDeltaX += 1
+                            return true
+                        default:
+                            return false
+                        }
+                    }
                     HStack(spacing: 2) {
                         ValueDisplayRow("Vertical:", "\(scrollDeltaY)")
                         ValueDisplayRow("Horizontal:", "\(scrollDeltaX)")
@@ -80,7 +108,7 @@ struct MousePage: View {
 
             DemoSection("Drag Tracker") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Press and drag across the box — release outside it still tracks.")
+                    Text("Press and drag across the box. Coords are clamped to its visible area.")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text("┊  drag area  ┊")
                         .foregroundStyle(.palette.accent)
@@ -88,8 +116,13 @@ struct MousePage: View {
                         .border(color: .palette.border)
                         .onDragGesture { event in
                             dragPhase = describePhase(event.phase)
-                            dragX = event.x
-                            dragY = event.y
+                            // Clamp the drag position to the visible
+                            // box. Drag-capture lets the gesture
+                            // continue when the cursor leaves the
+                            // box, so without clamping the reported
+                            // coords can go negative or grow huge.
+                            dragX = max(0, min(dragBoxWidth - 1, event.x))
+                            dragY = max(0, min(dragBoxHeight - 1, event.y))
                             dragDeltaX = event.translationX
                             dragDeltaY = event.translationY
                         }
@@ -139,14 +172,43 @@ struct MousePage: View {
         }
     }
 
-    /// Renders a simple visual bar representing accumulated vertical scroll.
-    private func scrollBar() -> String {
-        let clampedDelta = max(-20, min(20, scrollDeltaY))
-        let position = clampedDelta + 20  // 0…40
-        let bar = String(repeating: "·", count: 41).enumerated().map { i, ch in
-            i == position ? "▲" : String(ch)
-        }.joined()
-        return bar
+    /// Visible interior dimensions of the tap target — used to clamp
+    /// reported tap coordinates. Width = label width plus the box's
+    /// 2-column horizontal padding on each side, plus the two border
+    /// characters. Height = 1 row of content plus the two border rows.
+    private var tapBoxWidth: Int { "[ Click me ]".count + 4 + 2 }
+    private var tapBoxHeight: Int { 3 }
+
+    /// Visible interior dimensions of the drag target.
+    private var dragBoxWidth: Int { "┊  drag area  ┊".count + 4 + 2 }
+    private var dragBoxHeight: Int { 3 }
+
+    /// Horizontal width of the 2-D scroll field, in cells.
+    private var scrollFieldWidth: Int { 41 }
+
+    /// Vertical height of the 2-D scroll field, in rows.
+    private var scrollFieldHeight: Int { 9 }
+
+    /// Renders one row of the 2-D scroll field. The cursor (`●`) is
+    /// placed at the position determined by accumulated scrollDeltaX
+    /// (horizontal) and scrollDeltaY (vertical), clamped to the field's
+    /// bounds so the indicator never wanders off the visible area.
+    private func scrollField(row: Int) -> String {
+        // Vertical position: 0 = top, scrollFieldHeight-1 = bottom.
+        // Up-scroll moves the cursor upward (lower y), down moves it
+        // downward (higher y). Centre is the rest position.
+        let centreY = scrollFieldHeight / 2
+        let posY = max(0, min(scrollFieldHeight - 1, centreY - scrollDeltaY))
+        let centreX = scrollFieldWidth / 2
+        let posX = max(0, min(scrollFieldWidth - 1, centreX + scrollDeltaX))
+        var chars = Array(repeating: Character("·"), count: scrollFieldWidth)
+        if row == posY {
+            chars[posX] = "●"
+        } else if row == centreY {
+            // Horizontal centre-line baseline for orientation.
+            chars[centreX] = "+"
+        }
+        return String(chars)
     }
 
     private func describePhase(_ phase: DragGestureEvent.Phase) -> String {
