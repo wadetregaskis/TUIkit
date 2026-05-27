@@ -69,10 +69,10 @@ extension ASCIIConverter {
         }
 
         // 6x6x6 color cube (indices 16-231)
-        let r = Int((Double(pixel.r) / 255.0 * 5.0).rounded())
-        let g = Int((Double(pixel.g) / 255.0 * 5.0).rounded())
-        let b = Int((Double(pixel.b) / 255.0 * 5.0).rounded())
-        return UInt8(16 + 36 * r + 6 * g + b)
+        let r = UInt8((Double(pixel.r) / 255.0 * 5.0).rounded())
+        let g = UInt8((Double(pixel.g) / 255.0 * 5.0).rounded())
+        let b = UInt8((Double(pixel.b) / 255.0 * 5.0).rounded())
+        return 16 + 36 * r + 6 * g + b
     }
 }
 
