@@ -126,6 +126,14 @@ extension AppRunner {
         terminal.hideCursor()
         terminal.enableRawMode()
 
+        // Apply the initial mouse-tracking mode based on the scene's
+        // configuration. We do this before the first render so the
+        // terminal is reporting the right events by the time any
+        // input is processed. The mode is re-evaluated each frame
+        // (and only re-emitted when it actually changes) — see the
+        // re-apply step inside the main loop below.
+        terminal.applyMouseSupport(.standard)
+
         // Register for state changes
         appState.observe { [signals] in
             signals.requestRerender()
@@ -174,6 +182,14 @@ extension AppRunner {
             if signals.consumeRerenderFlag() || appState.needsRender {
                 appState.didRender()
                 renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                // Re-evaluate the mouse-tracking mode now that
+                // modifiers have had a chance to elevate the base
+                // configuration this frame. The terminal only emits a
+                // mode-change escape if the effective mode actually
+                // changed.
+                let effective = renderer.effectiveMouseSupport()
+                terminal.applyMouseSupport(effective)
+                tuiContext.mouseEventDispatcher.setActiveSupport(effective)
             }
 
             // Read terminal events (non-blocking with VTIME=0).

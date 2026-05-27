@@ -141,6 +141,12 @@ internal final class RenderLoop<A: App> {
     /// callers to manually invalidate the cache.
     private var lastEnvironmentSnapshot: EnvironmentSnapshot?
 
+    /// The mouse-support configuration extracted from the scene this
+    /// frame. The effective configuration (after view modifiers add
+    /// per-frame requests) is `baseMouseSupport.union(with: requested)`.
+    /// AppRunner reads ``effectiveMouseSupport`` after each render.
+    private var baseMouseSupport: MouseSupport = .standard
+
     /// Whether the first frame has been rendered.
     ///
     /// On the first frame, we perform a "measurement pass" to determine
@@ -207,6 +213,20 @@ extension RenderLoop {
         {
             environment.palette = paletteOverride
         }
+        // Capture the scene's base ``MouseSupport`` configuration; the
+        // effective per-frame configuration is the union of this and
+        // any features requested by view modifiers during render. The
+        // AppRunner consults `effectiveMouseSupport` after the render
+        // pass completes to update the terminal tracking mode.
+        if let scene = scene as? MouseSupportProvidingScene {
+            baseMouseSupport = scene.resolvedMouseSupport()
+        } else {
+            baseMouseSupport = .standard
+        }
+        // Make the active support available to handlers right now so
+        // any events queued from the previous frame are filtered
+        // against the right config.
+        tuiContext.mouseEventDispatcher.setActiveSupport(baseMouseSupport)
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
         // Determine header height. On the first frame, we perform a measurement
@@ -288,6 +308,16 @@ extension RenderLoop {
     /// Call this when the terminal is resized (SIGWINCH).
     func invalidateDiffCache() {
         diffWriter.invalidate()
+    }
+
+    /// The effective ``MouseSupport`` configuration after combining
+    /// the scene-level base with per-frame feature requests from view
+    /// modifiers.
+    ///
+    /// Read by the AppRunner once per frame to bring the terminal
+    /// tracking mode in sync.
+    func effectiveMouseSupport() -> MouseSupport {
+        tuiContext.mouseEventDispatcher.effectiveSupport(baseConfig: baseMouseSupport)
     }
 
     /// Builds a complete ``EnvironmentValues`` with all managed subsystems.

@@ -23,6 +23,15 @@ import TUIkitCore
 /// `.dragged` and `.released` events to that same handler regardless of
 /// where the cursor ended up — exactly the way GUI toolkits treat a
 /// drag once it has captured a control.
+/// A single mouse feature that view modifiers can ask for on a
+/// per-frame basis (see ``MouseEventDispatcher/requestFeature(_:)``).
+public enum MouseFeature: Sendable {
+    case clicks
+    case scrolling
+    case drag
+    case motion
+}
+
 final class MouseEventDispatcher: @unchecked Sendable {
     /// Per-frame handlers keyed by ``HitTestRegion/HandlerID``.
     ///
@@ -62,6 +71,22 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// guarantees no carry-over between frames.
     private var nextHandlerID: UInt64 = 0
 
+    /// Per-frame feature requests posted by view modifiers that
+    /// genuinely need a higher mouse-tracking level than the base
+    /// configuration provides (e.g. an ``.onHover`` modifier asks
+    /// for motion). Cleared every `beginRenderPass`; the AppRunner
+    /// merges this with the base ``MouseSupport`` configuration to
+    /// decide which terminal tracking mode to apply.
+    private var requestedFeatures: MouseSupport = .disabled
+
+    /// The effective ``MouseSupport`` configuration in force for the
+    /// dispatching of incoming events. Set by the AppRunner each
+    /// frame before processing input. Determines which kinds of
+    /// events the dispatcher will forward to handlers — for example
+    /// if `clicks` is false, click events arriving from the
+    /// terminal are silently dropped.
+    private var activeSupport: MouseSupport = .standard
+
     init() {}
 }
 
@@ -78,6 +103,50 @@ extension MouseEventDispatcher {
         handlers.removeAll(keepingCapacity: true)
         regions.removeAll(keepingCapacity: true)
         nextHandlerID = 0
+        requestedFeatures = .disabled
+    }
+
+    /// Records that the rendering view tree wants `feature` reported
+    /// for the current frame, on top of whatever the base scene-level
+    /// ``MouseSupport`` configuration provides.
+    ///
+    /// Typical caller: an `.onHover` modifier asks for motion so it
+    /// can highlight while the cursor is over its content. The
+    /// modifier calls this every frame the view is rendered; the
+    /// AppRunner takes the union with the base config when deciding
+    /// which terminal tracking mode to apply.
+    func requestFeature(_ feature: MouseFeature) {
+        switch feature {
+        case .clicks: requestedFeatures.clicks = true
+        case .scrolling: requestedFeatures.scrolling = true
+        case .drag: requestedFeatures.drag = true
+        case .motion: requestedFeatures.motion = true
+        }
+    }
+
+    /// Returns the union of frame-level feature requests with the
+    /// supplied base configuration.
+    func effectiveSupport(baseConfig: MouseSupport) -> MouseSupport {
+        baseConfig.union(with: requestedFeatures)
+    }
+
+    /// Updates the effective configuration used to filter incoming
+    /// events. The AppRunner calls this each frame after computing
+    /// the union of base config and per-frame feature requests.
+    func setActiveSupport(_ support: MouseSupport) {
+        activeSupport = support
+    }
+
+    /// Returns whether an event of the given phase should be
+    /// forwarded to handlers, given the currently active
+    /// ``MouseSupport`` configuration.
+    private func eventIsAllowed(_ event: MouseEvent) -> Bool {
+        switch event.phase {
+        case .scrolled: return activeSupport.scrolling
+        case .pressed, .released: return activeSupport.clicks
+        case .dragged: return activeSupport.drag
+        case .moved: return activeSupport.motion
+        }
     }
 
     /// Records the hit-test regions extracted from the root buffer
@@ -113,6 +182,12 @@ extension MouseEventDispatcher {
     /// - Returns: `true` if a handler consumed the event.
     @discardableResult
     func dispatch(_ event: MouseEvent) -> Bool {
+        // Honour the active MouseSupport configuration: drop events
+        // whose category isn't enabled. The terminal may still send
+        // them (e.g. wheel events arrive even in click-only mode),
+        // but the user asked us not to surface them.
+        guard eventIsAllowed(event) else { return false }
+
         // Drag capture: when a button is currently held, route every
         // subsequent event for that button to the handler that took
         // the press, regardless of where the cursor sits now.

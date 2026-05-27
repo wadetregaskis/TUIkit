@@ -51,6 +51,13 @@ final class Terminal: TerminalProtocol {
     /// Whether raw mode is active.
     private var isRawMode = false
 
+    /// The mouse tracking mode last sent to the terminal.
+    ///
+    /// `applyMouseSupport` consults this to decide whether to emit a
+    /// new mode-set escape code; idempotency lets it be called every
+    /// frame at no cost.
+    private var appliedMouseMode: MouseTrackingMode = .none
+
     /// The original terminal settings.
     private var originalTermios: termios?
 
@@ -165,19 +172,11 @@ extension Terminal {
         // its preferences (or use a terminal with full modifier support).
         writeImmediate("\u{1B}[>1;2m")
 
-        // Enable mouse tracking. We want everything — clicks, releases,
-        // drags, plain motion, and the wheel — and we want it in SGR
-        // extended encoding so the position is reported in decimal
-        // rather than the legacy byte-encoded form that caps at column
-        // 223.
-        //
-        // `?1003h` — any-event mouse mode: press / release / drag / move
-        // `?1006h` — SGR extended position reporting
-        //
-        // Terminals that do not understand these sequences simply ignore
-        // them, so there's no harm enabling both unconditionally.
-        writeImmediate("\u{1B}[?1003h")
-        writeImmediate("\u{1B}[?1006h")
+        // Mouse tracking is now managed dynamically by
+        // ``applyMouseSupport(_:)`` — see ``MouseSupport`` for the
+        // selection of tracking modes. We always end up enabling SGR
+        // extended position reporting (?1006h) when any mouse feature
+        // is requested.
     }
 
     /// Disables raw mode and restores normal terminal operation.
@@ -188,18 +187,79 @@ extension Terminal {
         // restoring terminal state.
         writeImmediate("\u{1B}[>1;0m")
 
-        // Turn off SGR mouse reporting and any-event tracking. The
-        // ordering doesn't matter to terminals that handle these, but
-        // we send the SGR-extended disable first so any unflushed
-        // pending report would still be parseable.
+        // Turn off all mouse tracking modes we might have enabled.
+        // Sending all of them is safe: terminals ignore disables for
+        // modes that aren't currently active.
         writeImmediate("\u{1B}[?1006l")
         writeImmediate("\u{1B}[?1003l")
+        writeImmediate("\u{1B}[?1002l")
+        writeImmediate("\u{1B}[?1000l")
+        appliedMouseMode = .none
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")
 
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
         isRawMode = false
+    }
+
+    /// Updates the terminal's mouse-tracking mode to match the
+    /// effective mouse-support configuration.
+    ///
+    /// Picks the lowest-impact tracking mode that satisfies the
+    /// configuration (1000 → clicks only, 1002 → adds drag, 1003 →
+    /// adds motion). SGR extended coordinate reporting is enabled
+    /// whenever any tracking mode is active.
+    ///
+    /// Idempotent: only writes escape codes when the effective mode
+    /// differs from the last applied mode, so it's cheap to call
+    /// every frame.
+    func applyMouseSupport(_ support: MouseSupport) {
+        let target = trackingMode(for: support)
+        guard target != appliedMouseMode else { return }
+
+        // Turn off the previous mode (if any) before turning on the
+        // new one. Disabling a mode that isn't active is a no-op on
+        // every terminal we care about, so this also handles the
+        // "stale state from a crashed prior process" case.
+        if appliedMouseMode != .none {
+            writeImmediate("\u{1B}[?\(appliedMouseMode.escapeNumber)l")
+        }
+        if target != .none {
+            writeImmediate("\u{1B}[?\(target.escapeNumber)h")
+            // SGR coords are paired with whichever tracking mode is on.
+            writeImmediate("\u{1B}[?1006h")
+        } else {
+            writeImmediate("\u{1B}[?1006l")
+        }
+        appliedMouseMode = target
+    }
+
+    /// The tracking modes we know about. Higher values are strict
+    /// supersets of lower ones.
+    enum MouseTrackingMode: Equatable {
+        case none
+        case clicks       // ?1000h — press/release/scroll
+        case drag         // ?1002h — adds drag motion
+        case motion       // ?1003h — adds any-event motion
+
+        var escapeNumber: Int {
+            switch self {
+            case .none: return 0
+            case .clicks: return 1000
+            case .drag: return 1002
+            case .motion: return 1003
+            }
+        }
+    }
+
+    /// Picks the smallest tracking mode that satisfies the
+    /// requested feature set.
+    private func trackingMode(for support: MouseSupport) -> MouseTrackingMode {
+        if support.motion { return .motion }
+        if support.drag { return .drag }
+        if support.clicks || support.scrolling { return .clicks }
+        return .none
     }
 
     /// Begins a buffered frame.
