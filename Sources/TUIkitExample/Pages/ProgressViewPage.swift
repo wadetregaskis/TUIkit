@@ -47,32 +47,23 @@ struct ProgressViewPage: View {
 
             DemoSection("Styles (determinate)") {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Style       Determinate         Indeterminate").dim()
+                    // Header and data rows share the same HStack layout so
+                    // the columns line up. Each progress view gets an
+                    // explicit `.frame(width:)` because progress bars are
+                    // flexible by default — without a frame the two would
+                    // share whatever space is left after the label,
+                    // unevenly, and the "Indeterminate" header would land
+                    // on the wrong column.
                     HStack(spacing: 1) {
-                        Text("block    ").dim()
-                        ProgressView(value: 0.6).progressViewStyle(.block)
-                        ProgressView().progressViewStyle(.block)
+                        Text("Style    ").dim()
+                        Text("  Determinate     ").dim().frame(width: 20)
+                        Text(" Indeterminate    ").dim().frame(width: 20)
                     }
-                    HStack(spacing: 1) {
-                        Text("blockFine").dim()
-                        ProgressView(value: 0.6).progressViewStyle(.blockFine)
-                        ProgressView().progressViewStyle(.blockFine)
-                    }
-                    HStack(spacing: 1) {
-                        Text("shade    ").dim()
-                        ProgressView(value: 0.6).progressViewStyle(.shade)
-                        ProgressView().progressViewStyle(.shade)
-                    }
-                    HStack(spacing: 1) {
-                        Text("bar      ").dim()
-                        ProgressView(value: 0.6).progressViewStyle(.bar)
-                        ProgressView().progressViewStyle(.bar)
-                    }
-                    HStack(spacing: 1) {
-                        Text("dot      ").dim()
-                        ProgressView(value: 0.6).progressViewStyle(.dot)
-                        ProgressView().progressViewStyle(.dot)
-                    }
+                    styleRow(label: "block    ", style: .block)
+                    styleRow(label: "blockFine", style: .blockFine)
+                    styleRow(label: "shade    ", style: .shade)
+                    styleRow(label: "bar      ", style: .bar)
+                    styleRow(label: "dot      ", style: .dot)
                 }
             }
 
@@ -80,6 +71,17 @@ struct ProgressViewPage: View {
         }
         .appHeader {
             DemoAppHeader("Progress Views")
+        }
+    }
+
+    /// A `[label  | determinate bar | indeterminate bar]` row laid out at
+    /// fixed column widths so the header matches the data columns.
+    @ViewBuilder
+    private func styleRow(label: String, style: TrackStyle) -> some View {
+        HStack(spacing: 1) {
+            Text(label).dim()
+            ProgressView(value: 0.6).progressViewStyle(style).frame(width: 20)
+            ProgressView().progressViewStyle(style).frame(width: 20)
         }
     }
 }
