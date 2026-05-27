@@ -226,6 +226,7 @@ extension ProgressView {
         return copy
     }
 
+
     /// Sets the visual style of the progress view.
     ///
     /// - Parameter style: The progress view style.
@@ -300,7 +301,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         }
 
         // Progress bar line
-        lines.append(renderBarLine(width: width, palette: palette))
+        lines.append(renderBarLine(width: width, palette: palette, context: context))
 
         return FrameBuffer(lines: lines)
     }
@@ -337,9 +338,15 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
     /// Renders the progress bar line — a determinate track, or an animated
     /// indeterminate sweep when there is no measurable progress.
-    private func renderBarLine(width: Int, palette: any Palette) -> String {
+    private func renderBarLine(width: Int, palette: any Palette, context: RenderContext) -> String {
         guard let fraction = fractionCompleted else {
-            return renderIndeterminateBar(width: width, palette: palette)
+            return IndeterminateRenderer.render(
+                width: width,
+                style: context.environment.indeterminateStyle,
+                filledColor: palette.foregroundSecondary,
+                emptyColor: palette.foregroundTertiary,
+                accentColor: palette.accent
+            )
         }
         return TrackRenderer.render(
             fraction: fraction,
@@ -349,37 +356,5 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent
         )
-    }
-
-    /// Renders an animated indeterminate bar: a highlighted segment with a
-    /// fading trail that sweeps continuously across the track, echoing the
-    /// barber-pole motion of an AppKit indeterminate progress indicator.
-    private func renderIndeterminateBar(width: Int, palette: any Palette) -> String {
-        guard width > 0 else { return "" }
-
-        // A phase in 0..<1 that advances with wall-clock time, completing
-        // one full traversal of the track every `period` seconds.
-        let period = 1.6
-        let now = Date().timeIntervalSinceReferenceDate
-        let phase = now.truncatingRemainder(dividingBy: period) / period
-
-        let segment = max(1, width / 3)
-        let head = Int(phase * Double(width))
-
-        var result = ""
-        for index in 0..<width {
-            // How far this cell sits behind the segment's head, wrapping the
-            // track so the highlight scrolls round without ever emptying.
-            let behind = (index - head + width) % width
-            if behind < segment {
-                // The head is brightest; the trail fades back into the track.
-                let intensity = 1.0 - Double(behind) / Double(segment)
-                let color = Color.lerp(palette.foregroundTertiary, palette.accent, phase: intensity)
-                result += ANSIRenderer.colorize("█", foreground: color)
-            } else {
-                result += ANSIRenderer.colorize("░", foreground: palette.foregroundTertiary)
-            }
-        }
-        return result
     }
 }
