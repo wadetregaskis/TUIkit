@@ -102,6 +102,11 @@ extension NotificationHostModifier: Renderable {
 
         // Expand the base buffer to fullscreen so the notification stack
         // is positioned relative to the terminal, not the content size.
+        // Crucially, carry over the base buffer's overlay layers and
+        // hit-test regions — rebuilding `lines` from scratch would
+        // otherwise drop them, and any interactive control underneath
+        // the notification would silently stop responding to clicks
+        // until the notification finished fading out.
         let screenWidth = context.availableWidth
         let screenHeight = context.availableHeight
         var fullscreenLines: [String] = []
@@ -114,7 +119,9 @@ extension NotificationHostModifier: Renderable {
                 fullscreenLines.append(String(repeating: " ", count: screenWidth))
             }
         }
-        let fullscreenBuffer = FrameBuffer(lines: fullscreenLines)
+        // The fullscreen padding doesn't move any content, so overlays
+        // and hit-test regions carry across at the same coordinates.
+        let fullscreenBuffer = baseBuffer.replacingLines(fullscreenLines)
 
         let offset = notificationOffset(
             stackSize: (stackedBuffer.width, stackedBuffer.height),

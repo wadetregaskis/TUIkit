@@ -347,19 +347,28 @@ private struct _StepperCore<Label: View>: View, Renderable {
 
         var buffer = FrameBuffer(text: content)
 
-        // Hit-test region:
-        //   • Scroll wheel up/down anywhere → ± step
-        //   • Left-press on left half → decrement
-        //   • Left-press on right half → increment
+        // Hit-test regions:
+        //   • Scroll wheel up/down anywhere → ± step (+ focus)
+        //   • Click on ◀ (x = 0)             → decrement (+ focus)
+        //   • Click on ▶ (x = totalWidth-1)  → increment (+ focus)
+        //   • Click on the value in between  → focus only, no change
+        //
+        // Splitting the row into discrete left-arrow / value / right-arrow
+        // regions mirrors the macOS / SwiftUI behaviour: clicking the
+        // numeric area moves the keyboard caret into the control without
+        // perturbing its value.
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
             let focusManager = context.environment.focusManager
             let captureHandler = handler
             let captureFocusID = persistedFocusID
-            let valueDisplayWidth = " \(value.wrappedValue) ".count
-            let leftHalfEnd = 1 + valueDisplayWidth / 2  // "◀" + half of value
-            let handlerID = mouseDispatcher.register { event in
+            let totalWidth = buffer.width
+
+            // Whole-row region: handles scroll wheel anywhere on the
+            // stepper, and absorbs left clicks on the value area as
+            // focus-only.
+            let rowHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
                     captureHandler.increment()
@@ -370,13 +379,10 @@ private struct _StepperCore<Label: View>: View, Renderable {
                     focusManager.focus(id: captureFocusID)
                     return true
                 case .left:
-                    guard event.phase == .pressed else {
-                        return event.phase == .released
-                    }
-                    if event.x < leftHalfEnd {
-                        captureHandler.decrement()
-                    } else {
-                        captureHandler.increment()
+                    guard event.phase == .released else {
+                        // Press / drag: claim so subsequent release
+                        // routes here, but don't move the value.
+                        return event.phase == .pressed
                     }
                     focusManager.focus(id: captureFocusID)
                     return true
@@ -386,11 +392,50 @@ private struct _StepperCore<Label: View>: View, Renderable {
             }
             buffer.hitTestRegions.append(
                 HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: buffer.width,
-                    height: buffer.height,
-                    handlerID: handlerID
+                    offsetX: 0, offsetY: 0,
+                    width: totalWidth, height: buffer.height,
+                    handlerID: rowHandlerID
+                )
+            )
+
+            // Right-arrow click: increment + focus. Registered after
+            // the whole-row region so it wins for x = totalWidth-1.
+            let incrementID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    captureHandler.increment()
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default: return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: totalWidth - 1, offsetY: 0,
+                    width: 1, height: buffer.height,
+                    handlerID: incrementID
+                )
+            )
+
+            // Left-arrow click: decrement + focus.
+            let decrementID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    captureHandler.decrement()
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default: return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0, offsetY: 0,
+                    width: 1, height: buffer.height,
+                    handlerID: decrementID
                 )
             )
         }

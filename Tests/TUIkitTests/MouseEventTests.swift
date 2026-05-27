@@ -144,6 +144,57 @@ struct MouseEventSGRParsingTests {
     }
 }
 
+// MARK: - Integration: regions propagate through view trees
+
+@MainActor
+@Suite("Mouse hit-test region propagation")
+struct MouseHitTestPropagationTests {
+
+    private func makeContext(width: Int = 80, height: Int = 24) -> RenderContext {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.stateStorage = tuiContext.stateStorage
+        environment.lifecycle = tuiContext.lifecycle
+        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
+        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
+        environment.renderCache = tuiContext.renderCache
+        environment.preferenceStorage = tuiContext.preferences
+        return RenderContext(
+            availableWidth: width,
+            availableHeight: height,
+            environment: environment,
+            tuiContext: tuiContext
+        )
+    }
+
+    @Test("TextField inside HStack inside VStack carries hit-test region")
+    func textFieldRegionsPropagateThroughStacks() {
+        let binding = State<String>(wrappedValue: "")
+        let view = VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 1) {
+                Text("Input:")
+                TextField("Input", text: binding.projectedValue, prompt: Text("…"))
+            }
+        }
+
+        let buffer = renderToBuffer(view, context: makeContext())
+        #expect(!buffer.hitTestRegions.isEmpty)
+    }
+
+    @Test("TextField inside .padding still has hit-test region")
+    func textFieldRegionsPropagateThroughPadding() {
+        let binding = State<String>(wrappedValue: "")
+        let view = VStack(alignment: .leading) {
+            TextField("Field", text: binding.projectedValue)
+        }
+        .padding(.horizontal, 1)
+
+        let buffer = renderToBuffer(view, context: makeContext())
+        #expect(!buffer.hitTestRegions.isEmpty)
+    }
+}
+
 // MARK: - HitTestRegion
 
 @Suite("Hit Test Region")
