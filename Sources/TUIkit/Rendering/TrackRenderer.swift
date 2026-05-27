@@ -94,6 +94,32 @@ enum TrackRenderer {
                 headColor: accentColor,
                 emptyColor: emptyColor
             )
+        case .braille:
+            return renderBrailleStyle(
+                fraction: fraction,
+                width: width,
+                filledColor: filledColor,
+                emptyColor: emptyColor
+            )
+        case .shadeRamp(let gradient):
+            return renderShadeRampStyle(
+                fraction: fraction,
+                width: width,
+                filledColor: filledColor,
+                emptyColor: emptyColor,
+                gradient: gradient
+            )
+        case .threeSegment(let leading, let middle, let trailing, let emptyFill):
+            return renderThreeSegmentStyle(
+                fraction: fraction,
+                width: width,
+                leading: leading,
+                middle: middle,
+                trailing: trailing,
+                emptyFill: emptyFill,
+                filledColor: filledColor,
+                emptyColor: emptyColor
+            )
         }
     }
 }
@@ -164,6 +190,164 @@ extension TrackRenderer {
             result += ANSIRenderer.colorize(emptyBar, foreground: emptyColor)
         }
 
+        return result
+    }
+
+    /// Renders the `.braille` 8-step fill style.
+    ///
+    /// Each filled cell carries 8 steps of sub-cell precision via the
+    /// braille dot-density ramp `⣀⣄⣤⣦⣶⣷⣿`, so the boundary cell visually
+    /// communicates the fractional progress without needing
+    /// sub-character-width support from the terminal.
+    private static func renderBrailleStyle(
+        fraction: Double,
+        width: Int,
+        filledColor: Color,
+        emptyColor: Color
+    ) -> String {
+        let ramp: [Character] = ["⣀", "⣄", "⣤", "⣦", "⣶", "⣷", "⣿"]
+        let totalSteps = Int((fraction * Double(width) * Double(ramp.count + 1)).rounded())
+        let fullCells = totalSteps / (ramp.count + 1)
+        let partialStep = totalSteps % (ramp.count + 1)
+
+        var result = ""
+        if fullCells > 0 {
+            result += ANSIRenderer.colorize(
+                String(repeating: "⣿", count: fullCells),
+                foreground: filledColor
+            )
+        }
+        var cellsUsed = fullCells
+        if partialStep > 0 && fullCells < width {
+            let ch = ramp[partialStep - 1]
+            result += ANSIRenderer.colorize(String(ch), foreground: filledColor)
+            cellsUsed += 1
+        }
+        let emptyCount = width - cellsUsed
+        if emptyCount > 0 {
+            result += ANSIRenderer.colorize(
+                String(repeating: "⠀", count: emptyCount),
+                foreground: emptyColor
+            )
+        }
+        return result
+    }
+
+    /// Renders the `.shadeRamp` style.
+    ///
+    /// The four shade glyphs `░ ▒ ▓ █` give each cell two fractional
+    /// sub-steps inside its own footprint, which softens the appearance
+    /// of the boundary. When `gradient` is non-nil the filled portion
+    /// fades between the stops cell by cell — a richer look than the
+    /// flat `filledColor` of the other styles.
+    private static func renderShadeRampStyle(
+        fraction: Double,
+        width: Int,
+        filledColor: Color,
+        emptyColor: Color,
+        gradient: [Color]?
+    ) -> String {
+        let ramp: [Character] = ["░", "▒", "▓", "█"]
+        let totalSteps = Int((fraction * Double(width) * Double(ramp.count)).rounded())
+        let fullCells = totalSteps / ramp.count
+        let partialStep = totalSteps % ramp.count
+
+        var result = ""
+        let litCellCount = min(width, fullCells + (partialStep > 0 ? 1 : 0))
+
+        func colour(at index: Int) -> Color {
+            guard let gradient = gradient, gradient.count >= 2, litCellCount > 1 else {
+                return filledColor
+            }
+            let parameter = Double(index) / Double(litCellCount - 1)
+            let segments = Double(gradient.count - 1)
+            let scaled = max(0.0, min(segments, parameter * segments))
+            let lowerIndex = min(Int(scaled), gradient.count - 2)
+            let mix = scaled - Double(lowerIndex)
+            return Color.lerp(gradient[lowerIndex], gradient[lowerIndex + 1], phase: mix)
+        }
+
+        for cellIndex in 0..<fullCells {
+            result += ANSIRenderer.colorize(String(ramp.last!), foreground: colour(at: cellIndex))
+        }
+        if partialStep > 0 && fullCells < width {
+            let ch = ramp[partialStep - 1]
+            result += ANSIRenderer.colorize(String(ch), foreground: colour(at: fullCells))
+        }
+        let emptyCount = width - litCellCount
+        if emptyCount > 0 {
+            result += ANSIRenderer.colorize(
+                String(repeating: "·", count: emptyCount),
+                foreground: emptyColor
+            )
+        }
+        return result
+    }
+
+    /// Renders the `.threeSegment` style.
+    ///
+    /// `[leading][middle × N][trailing]` covers the filled region, with
+    /// `middle` repeated to span any gap. Each segment is coloured /
+    /// emitted as-is, so callers can pass already-styled strings (ANSI
+    /// codes embedded) and they'll render correctly.
+    private static func renderThreeSegmentStyle(
+        fraction: Double,
+        width: Int,
+        leading: String,
+        middle: String,
+        trailing: String,
+        emptyFill: String,
+        filledColor: Color,
+        emptyColor: Color
+    ) -> String {
+        let leadingWidth = leading.strippedLength
+        let trailingWidth = trailing.strippedLength
+        let middleWidth = max(1, middle.strippedLength)
+        let filledCount = Int((fraction * Double(width)).rounded())
+
+        var result = ""
+
+        if filledCount <= 0 {
+            // Nothing lit at all.
+        } else if filledCount < leadingWidth + trailingWidth {
+            // Not enough room for both endpoints; render whichever fits
+            // from the leading edge.
+            let truncated = leading + trailing
+            result += ANSIRenderer.colorize(
+                truncated.ansiAwarePrefix(visibleCount: filledCount),
+                foreground: filledColor
+            )
+        } else {
+            // Endpoints fit. Repeat `middle` to fill the gap, plus a
+            // partial trailing slice if needed.
+            let gap = filledCount - leadingWidth - trailingWidth
+            let reps = gap / middleWidth
+            let remainder = gap - reps * middleWidth
+            var lit = leading
+            if reps > 0 {
+                lit += String(repeating: middle, count: reps)
+            }
+            if remainder > 0 {
+                lit += middle.ansiAwarePrefix(visibleCount: remainder)
+            }
+            lit += trailing
+            result += ANSIRenderer.colorize(lit, foreground: filledColor)
+        }
+
+        let emptyCellCount = max(0, width - filledCount)
+        if emptyCellCount > 0 {
+            let emptyFillWidth = max(1, emptyFill.strippedLength)
+            let emptyReps = emptyCellCount / emptyFillWidth
+            let emptyRemainder = emptyCellCount - emptyReps * emptyFillWidth
+            var empty = ""
+            if emptyReps > 0 {
+                empty += String(repeating: emptyFill, count: emptyReps)
+            }
+            if emptyRemainder > 0 {
+                empty += emptyFill.ansiAwarePrefix(visibleCount: emptyRemainder)
+            }
+            result += ANSIRenderer.colorize(empty, foreground: emptyColor)
+        }
         return result
     }
 
