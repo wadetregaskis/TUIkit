@@ -4,7 +4,19 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
+
+/// Returns a value in `0...1` that ramps from 0 to 1 over `period`
+/// seconds and then wraps back to 0. The page's render is driven by
+/// ``PulseTimer`` (~10 Hz), so reading this on each render produces a
+/// smooth slow animation in the determinate bars without anything in
+/// the page having to remember state. The default `period` of 50 s
+/// is the user's requested "1% every half-second" pace.
+private func animatedFraction(period: Double = 50) -> Double {
+    let now = Date().timeIntervalSinceReferenceDate
+    return now.truncatingRemainder(dividingBy: period) / period
+}
 
 /// Progress-view demo page.
 ///
@@ -15,14 +27,20 @@ struct ProgressViewPage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection("Determinate") {
+                // Both bars animate slowly via `animatedFraction` — they
+                // share the same wall-clock phase so they stay in sync,
+                // and the PulseTimer's ~10 Hz re-render makes the
+                // animation look continuous despite being state-less.
                 VStack(alignment: .leading, spacing: 1) {
-                    ProgressView("Downloading files…", value: 0.73)
+                    let fraction = animatedFraction()
+                    ProgressView("Downloading files…", value: fraction)
 
-                    ProgressView(value: 0.4) {
+                    ProgressView(value: fraction) {
                         Text("Build progress")
                             .foregroundStyle(.palette.foreground)
                     } currentValueLabel: {
-                        Text("40%").foregroundStyle(.palette.foregroundSecondary)
+                        Text("\(Int((fraction * 100).rounded()))%")
+                            .foregroundStyle(.palette.foregroundSecondary)
                     }
                 }
             }
@@ -45,25 +63,49 @@ struct ProgressViewPage: View {
                 }
             }
 
-            DemoSection("Styles (determinate)") {
+            DemoSection("Determinate styles") {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Header and data rows share the same HStack layout so
-                    // the columns line up. Each progress view gets an
-                    // explicit `.frame(width:)` because progress bars are
-                    // flexible by default — without a frame the two would
-                    // share whatever space is left after the label,
-                    // unevenly, and the "Indeterminate" header would land
-                    // on the wrong column.
                     HStack(spacing: 1) {
-                        Text("Style    ").dim()
-                        Text("  Determinate     ").dim().frame(width: 20)
-                        Text(" Indeterminate    ").dim().frame(width: 20)
+                        Text("Style       ").dim()
+                        Text("    Progress       ").dim().frame(width: 24)
                     }
-                    styleRow(label: "block    ", style: .block)
-                    styleRow(label: "blockFine", style: .blockFine)
-                    styleRow(label: "shade    ", style: .shade)
-                    styleRow(label: "bar      ", style: .bar)
-                    styleRow(label: "dot      ", style: .dot)
+                    determinateRow(label: "block       ", style: .block)
+                    determinateRow(label: "blockFine   ", style: .blockFine)
+                    determinateRow(label: "shade       ", style: .shade)
+                    determinateRow(label: "bar         ", style: .bar)
+                    determinateRow(label: "dot         ", style: .dot)
+                    determinateRow(label: "braille     ", style: .braille)
+                    determinateRow(
+                        label: "shadeRamp   ",
+                        style: .shadeRamp(gradient: nil)
+                    )
+                    determinateRow(
+                        label: "shadeRamp(g)",
+                        style: .shadeRamp(gradient: [
+                            .rgb(255, 80, 80),
+                            .rgb(255, 200, 80),
+                            .rgb(80, 220, 120),
+                        ])
+                    )
+                    determinateRow(
+                        label: "threeSegment",
+                        style: .threeSegment(
+                            leading: "Sw",
+                            middle: "i",
+                            trailing: "ft",
+                            emptyFill: "·"
+                        )
+                    )
+                }
+            }
+
+            DemoSection("Indeterminate animations") {
+                VStack(alignment: .leading, spacing: 0) {
+                    indeterminateRow(label: "sweep       ", style: .sweep)
+                    indeterminateRow(label: "barberPole  ", style: .barberPole)
+                    indeterminateRow(label: "pulse       ", style: .pulse)
+                    indeterminateRow(label: "knightRider ", style: .knightRider)
+                    indeterminateRow(label: "gradient    ", style: .gradient)
                 }
             }
 
@@ -74,14 +116,27 @@ struct ProgressViewPage: View {
         }
     }
 
-    /// A `[label  | determinate bar | indeterminate bar]` row laid out at
-    /// fixed column widths so the header matches the data columns.
+    /// A `[label | determinate bar]` row at a fixed column width.
+    /// Uses the page's shared animated fraction so every determinate
+    /// example fills together — a single visual cue rather than a wall
+    /// of static-looking bars at different fixed values.
     @ViewBuilder
-    private func styleRow(label: String, style: TrackStyle) -> some View {
+    private func determinateRow(label: String, style: TrackStyle) -> some View {
         HStack(spacing: 1) {
             Text(label).dim()
-            ProgressView(value: 0.6).progressViewStyle(style).frame(width: 20)
-            ProgressView().progressViewStyle(style).frame(width: 20)
+            ProgressView(value: animatedFraction())
+                .progressViewStyle(style)
+                .frame(width: 24)
+        }
+    }
+
+    /// A `[label | indeterminate bar]` row at a fixed column width,
+    /// publishing the chosen indeterminate animation via the env modifier.
+    @ViewBuilder
+    private func indeterminateRow(label: String, style: IndeterminateStyle) -> some View {
+        HStack(spacing: 1) {
+            Text(label).dim()
+            ProgressView().frame(width: 36).indeterminateStyle(style)
         }
     }
 }
