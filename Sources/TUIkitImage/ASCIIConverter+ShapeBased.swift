@@ -414,10 +414,17 @@ extension ASCIIConverter {
                     // Use the sampled pixels' average as the foreground colour;
                     // the 96 samples cover the cell densely enough that a
                     // separate full-cell scan would be near-identical.
+                    //
+                    // Clamp the cast: `UInt8(_:)` on a Double traps when the
+                    // value lies even a hair above 255, which is exactly
+                    // what happens when every sample is at maximum (96 *
+                    // 255 multiplied by the inexact `1.0 / 96.0` can come
+                    // back as 255.000…001). Crashed the Image (File) demo
+                    // in the wild.
                     let averageColor = RGBA(
-                        r: UInt8(Double(sumR) * inverseAllSamples),
-                        g: UInt8(Double(sumG) * inverseAllSamples),
-                        b: UInt8(Double(sumB) * inverseAllSamples))
+                        r: UInt8(clamping: Int((Double(sumR) * inverseAllSamples).rounded())),
+                        g: UInt8(clamping: Int((Double(sumG) * inverseAllSamples).rounded())),
+                        b: UInt8(clamping: Int((Double(sumB) * inverseAllSamples).rounded())))
                     let colorCode = foregroundColorCode(for: averageColor, mode: mode)
                     if colorCode != lastColor {
                         if !lastColor.isEmpty {
