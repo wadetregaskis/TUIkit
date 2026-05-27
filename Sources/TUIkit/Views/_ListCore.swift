@@ -45,6 +45,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Lives outside the else branch so the mouse hit-test region we
         // emit at the end of this method can capture the handler.
         var sharedListHandler: ItemListHandler<SelectionValue>? = nil
+        // The persisted focus ID for the list itself; used by the
+        // mouse handler to grant focus on click.
+        var sharedListFocusID: String = ""
+        // y-ranges of visible rows within `contentLines`, used by the
+        // mouse hit-tester to translate clicks back to a row index.
+        var visibleRowYRanges: [(
+            rowIndex: Int, yStart: Int, height: Int, type: ListRowType<SelectionValue>
+        )] = []
 
         if rows.isEmpty {
             // SwiftUI's List is greedy along both axes. Padding the placeholder
@@ -83,6 +91,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 defaultPrefix: "list",
                 propertyIndex: 1  // focusID
             )
+            sharedListFocusID = persistedFocusID
 
             // Get or create persistent handler
             let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
@@ -148,7 +157,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 rowWidth = maxRowWidth
             }
 
-            // Build content lines
+            // Build content lines + track each row's y-offset within
+            // `lines` so the mouse hit-tester can map clicks back to
+            // a row index.
             var lines: [String] = []
 
             // Top scroll indicator
@@ -181,7 +192,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     context: context,
                     palette: palette
                 )
+                let yStart = lines.count
                 lines.append(contentsOf: styledLines)
+                visibleRowYRanges.append(
+                    (rowIndex: rowIndex, yStart: yStart, height: styledLines.count, type: row.type))
 
                 // Increment section content index only for content rows
                 if case .content = row.type {
@@ -229,19 +243,52 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             context: context
         )
 
-        // Scroll-wheel support: scroll the list one row at a time. Only
-        // attach when the list actually has rows and is enabled — empty
-        // or disabled lists don't need to capture wheel input.
-        if let listHandler = sharedListHandler, !isDisabled, !context.isMeasuring,
+        // Mouse: scroll-wheel, click-to-select-row, click-empty-area-
+        // grants-focus. Only attach when the list is enabled and we're
+        // doing a real render pass.
+        if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            // The list buffer is wrapped by renderContainer, which
+            // places content at (1, 1 + paddingTop). To translate a
+            // click's y back to an index in `lines`, subtract that.
+            let listFocusManager = context.environment.focusManager
+            let captureFocusID = sharedListFocusID
+            let paddingTop = style.rowPadding.top
+            let topInset = 1 + paddingTop
+            let scrollIndicatorOffset = sharedListHandler?.hasContentAbove == true ? 1 : 0
+            let rowRanges = visibleRowYRanges
+            let listHandler = sharedListHandler
+
             let mouseHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
-                    listHandler.moveFocus(by: -1, wrap: false)
+                    listHandler?.moveFocus(by: -1, wrap: false)
                     return true
                 case .scrollDown:
-                    listHandler.moveFocus(by: 1, wrap: false)
+                    listHandler?.moveFocus(by: 1, wrap: false)
+                    return true
+                case .left:
+                    guard event.phase == .released else {
+                        return event.phase == .pressed
+                    }
+                    // Translate event.y → row index by walking the
+                    // captured y-ranges. Clicks on a row select it
+                    // (and grant the list focus); clicks on the
+                    // border / padding / scroll-indicator / empty
+                    // area simply grant focus without changing
+                    // selection.
+                    let yInLines = event.y - topInset
+                    if let hit = rowRanges.first(where: { range in
+                        let yInRow = yInLines - range.yStart - scrollIndicatorOffset
+                        return yInRow >= 0 && yInRow < range.height
+                    }) {
+                        if case .content = hit.type {
+                            listHandler?.focusedIndex = hit.rowIndex
+                            listHandler?.toggleSelectionAtFocusedIndex()
+                        }
+                    }
+                    listFocusManager.focus(id: captureFocusID)
                     return true
                 default:
                     return false
