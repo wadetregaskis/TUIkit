@@ -31,12 +31,23 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// content renders.
     private var handlers: [HitTestRegion.HandlerID: (MouseEvent) -> Bool] = [:]
 
-    /// The id of the handler that most recently consumed a button-down
-    /// event for each tracked button. Populated when a `.pressed`
-    /// arrives, used to route subsequent `.dragged` / `.released`
-    /// events for the same button to the original handler, and cleared
-    /// on `.released`.
-    private var pressedHandlers: [MouseButton: HitTestRegion.HandlerID] = [:]
+    /// Tracks the in-progress press for each button: the handler that
+    /// claimed the press, plus the offset of the region it claimed it
+    /// from. The offset lets us keep delivering coordinates relative
+    /// to the original region even when the cursor wanders elsewhere
+    /// during the drag.
+    private struct PressCapture {
+        let handlerID: HitTestRegion.HandlerID
+        let regionOffsetX: Int
+        let regionOffsetY: Int
+    }
+
+    /// The handler that most recently consumed a button-down event for
+    /// each tracked button. Populated when a `.pressed` arrives, used
+    /// to route subsequent `.dragged` / `.released` events for the
+    /// same button to the original handler, and cleared on
+    /// `.released`.
+    private var pressedHandlers: [MouseButton: PressCapture] = [:]
 
     /// The list of hit-test regions in absolute screen coordinates for
     /// the current frame.
@@ -91,6 +102,14 @@ extension MouseEventDispatcher {
 
     /// Dispatches one mouse event to the appropriate handler.
     ///
+    /// Coordinates in the event passed to the handler are **localised
+    /// to the hit region** — `(0, 0)` is the region's top-left corner,
+    /// matching SwiftUI's tap-gesture convention. For drag-captured
+    /// handlers the same translation is applied (using the original
+    /// region's offset) so a drag that leaves the source view simply
+    /// produces negative or out-of-bounds local coordinates rather
+    /// than re-binding to a different region.
+    ///
     /// - Returns: `true` if a handler consumed the event.
     @discardableResult
     func dispatch(_ event: MouseEvent) -> Bool {
@@ -98,10 +117,11 @@ extension MouseEventDispatcher {
         // subsequent event for that button to the handler that took
         // the press, regardless of where the cursor sits now.
         if event.phase == .dragged || event.phase == .released {
-            if let capturedID = pressedHandlers[event.button],
-                let handler = handlers[capturedID]
+            if let capture = pressedHandlers[event.button],
+                let handler = handlers[capture.handlerID]
             {
-                _ = handler(event)
+                let localized = localize(event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
+                _ = handler(localized)
                 if event.phase == .released {
                     pressedHandlers[event.button] = nil
                 }
@@ -110,25 +130,44 @@ extension MouseEventDispatcher {
         }
 
         // Otherwise, find the innermost region containing the cursor.
-        guard let handlerID = topRegion(at: event.x, y: event.y) else {
+        guard let region = topRegion(at: event.x, y: event.y) else {
             return false
         }
-        guard let handler = handlers[handlerID] else { return false }
-        let consumed = handler(event)
+        guard let handler = handlers[region.handlerID] else { return false }
+        let localized = localize(event, byOffsetX: region.offsetX, offsetY: region.offsetY)
+        let consumed = handler(localized)
         if consumed, event.phase == .pressed {
-            pressedHandlers[event.button] = handlerID
+            pressedHandlers[event.button] = PressCapture(
+                handlerID: region.handlerID,
+                regionOffsetX: region.offsetX,
+                regionOffsetY: region.offsetY
+            )
         }
         return consumed
     }
 
-    /// Returns the handler id of the topmost region containing the
-    /// given point, or `nil` if no region matches.
-    private func topRegion(at x: Int, y: Int) -> HitTestRegion.HandlerID? {
+    /// Returns the topmost region containing the given point, or
+    /// `nil` if no region matches.
+    private func topRegion(at x: Int, y: Int) -> HitTestRegion? {
         // Last-registered region wins; modifier chains evaluate outside-in,
         // so the inner-most modifier registers last.
         for region in regions.reversed() where region.contains(x: x, y: y) {
-            return region.handlerID
+            return region
         }
         return nil
+    }
+
+    /// Translates the event's coordinates from absolute screen-space
+    /// into the local coordinate space of a hit region.
+    private func localize(_ event: MouseEvent, byOffsetX dx: Int, offsetY dy: Int) -> MouseEvent {
+        MouseEvent(
+            button: event.button,
+            phase: event.phase,
+            x: event.x - dx,
+            y: event.y - dy,
+            shift: event.shift,
+            ctrl: event.ctrl,
+            meta: event.meta
+        )
     }
 }

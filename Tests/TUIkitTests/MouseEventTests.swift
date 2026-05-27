@@ -182,8 +182,31 @@ struct MouseEventDispatcherTests {
 
         let event = MouseEvent(button: .left, phase: .pressed, x: 3, y: 2)
         #expect(dispatcher.dispatch(event) == true)
+        // Region offset is (0, 0) — localised coords equal absolute.
         #expect(receivedAt?.0 == 3)
         #expect(receivedAt?.1 == 2)
+    }
+
+    @Test("Handler receives coordinates local to the region")
+    func dispatchLocalizes() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.beginRenderPass()
+
+        var receivedAt: (Int, Int)? = nil
+        let id = dispatcher.register { event in
+            receivedAt = (event.x, event.y)
+            return true
+        }
+        // Region at screen offset (10, 5).
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 10, offsetY: 5, width: 20, height: 3, handlerID: id)
+        ])
+
+        // Click at absolute (12, 6) — should arrive as local (2, 1).
+        let event = MouseEvent(button: .left, phase: .pressed, x: 12, y: 6)
+        #expect(dispatcher.dispatch(event) == true)
+        #expect(receivedAt?.0 == 2)
+        #expect(receivedAt?.1 == 1)
     }
 
     @Test("Dispatch ignores events outside any region")
@@ -203,23 +226,28 @@ struct MouseEventDispatcherTests {
         let dispatcher = MouseEventDispatcher()
         dispatcher.beginRenderPass()
 
-        var captured: [MousePhase] = []
+        var captured: [(MousePhase, Int, Int)] = []
         let id = dispatcher.register { event in
-            captured.append(event.phase)
+            captured.append((event.phase, event.x, event.y))
             return true
         }
+        // Region at screen offset (10, 5) — drag coords stay relative
+        // to it even when the cursor leaves.
         dispatcher.setRegions([
-            HitTestRegion(offsetX: 0, offsetY: 0, width: 5, height: 5, handlerID: id)
+            HitTestRegion(offsetX: 10, offsetY: 5, width: 5, height: 5, handlerID: id)
         ])
 
-        // Press inside the region.
-        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 2))
-        // Drag to a point outside the region — still routes to original handler.
+        // Press inside the region at absolute (12, 7) → local (2, 2).
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 12, y: 7))
+        // Drag to a point outside the region → still local to original offset.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 100, y: 100))
         // Release outside — still routed.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 100, y: 100))
 
-        #expect(captured == [.pressed, .dragged, .released])
+        #expect(captured.map(\.0) == [.pressed, .dragged, .released])
+        #expect(captured[0].1 == 2 && captured[0].2 == 2)
+        #expect(captured[1].1 == 90 && captured[1].2 == 95)
+        #expect(captured[2].1 == 90 && captured[2].2 == 95)
     }
 
     @Test("Innermost region wins when regions nest")
