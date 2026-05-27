@@ -138,9 +138,45 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             palette: palette
         )
 
-        guard isOpen else {
-            return FrameBuffer(lines: [collapsed])
+        var buffer = FrameBuffer(lines: [collapsed])
+
+        // Mouse: a click on the collapsed control toggles the drop-down
+        // and grants focus. Width includes the two caps.
+        let collapsedWidth = collapsed.strippedLength
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let captureHandler = handler
+            let mouseHandlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    captureHandler.isOpen.toggle()
+                    if captureHandler.isOpen {
+                        captureHandler.highlightedIndex =
+                            captureHandler.itemValues.firstIndex(
+                                of: captureHandler.selection.wrappedValue) ?? 0
+                    }
+                    return true
+                default: return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: collapsedWidth,
+                    height: 1,
+                    handlerID: mouseHandlerID
+                )
+            )
         }
+
+        guard isOpen else { return buffer }
 
         handler.highlightedIndex = min(
             max(0, handler.highlightedIndex),
@@ -154,16 +190,54 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             palette: palette
         )
 
+        // Build the popup buffer with one hit-test region per option
+        // row. Items start at y=1 (after the top border); the row's
+        // local x ranges across the full inner width (excluding side
+        // borders → offsetX 1, width innerWidth).
+        var popupBuffer = FrameBuffer(lines: popup)
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let captureEntries = entries
+            let captureSelection = selection
+            let captureHandler = handler
+            for (index, _) in captureEntries.enumerated() {
+                let mouseHandlerID = mouseDispatcher.register { event in
+                    guard event.button == .left else { return false }
+                    switch event.phase {
+                    case .pressed: return true
+                    case .released:
+                        focusManager.focus(id: captureFocusID)
+                        captureSelection.wrappedValue = captureEntries[index].tag
+                        captureHandler.highlightedIndex = index
+                        captureHandler.isOpen = false
+                        return true
+                    default: return false
+                    }
+                }
+                popupBuffer.hitTestRegions.append(
+                    HitTestRegion(
+                        offsetX: 1,
+                        offsetY: 1 + index,
+                        width: innerWidth,
+                        height: 1,
+                        handlerID: mouseHandlerID
+                    )
+                )
+            }
+        }
+
         // The drop-down floats as an overlay layer anchored one row below the
         // collapsed control. The in-flow control stays a single line, so
         // opening the picker never disturbs the layout of sibling views and
         // the list draws on top of whatever sits beneath it.
-        var buffer = FrameBuffer(lines: [collapsed])
         buffer.overlays = [
             OverlayLayer(
                 offsetX: 0,
                 offsetY: 1,
-                content: FrameBuffer(lines: popup),
+                content: popupBuffer,
                 level: .popover,
                 anchorHeight: 1
             )

@@ -481,15 +481,19 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         )
 
         var result = FrameBuffer(lines: lines)
-        // Carry overlay layers from the body and footer. The body content sits
-        // one row below the top border and one column inside the left border;
-        // the footer follows the body and its optional separator.
-        var carried = bodyBuffer.shiftedOverlays(byX: 1, y: 1)
+        // Carry overlay layers and hit-test regions from the body and
+        // footer. The body content sits one row below the top border
+        // and one column inside the left border; the footer follows
+        // the body and its optional separator.
+        var carriedOverlays = bodyBuffer.shiftedOverlays(byX: 1, y: 1)
+        var carriedRegions = bodyBuffer.shiftedHitTestRegions(byX: 1, y: 1)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
-            carried += footerBuf.shiftedOverlays(byX: 1, y: footerRow)
+            carriedOverlays += footerBuf.shiftedOverlays(byX: 1, y: footerRow)
+            carriedRegions += footerBuf.shiftedHitTestRegions(byX: 1, y: footerRow)
         }
-        result.overlays = carried
+        result.overlays = carriedOverlays
+        result.hitTestRegions = carriedRegions
         return result
     }
 }

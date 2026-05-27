@@ -183,31 +183,41 @@ struct AlertButtonRow: View, Renderable {
         // Right-align: calculate left padding
         let leftPadding = max(0, availableWidth - totalNeededWidth)
 
-        // Combine horizontally (right-aligned)
+        // Combine horizontally (right-aligned). Each child Button
+        // already carries its own hit-test region; we lift those into
+        // the composed buffer by tracking the running x-offset so that
+        // clicks on dialog buttons reach the right handler.
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
+        var resultRegions: [HitTestRegion] = []
         let spacer = String(repeating: " ", count: spacing)
+        var xCursor = leftPadding
 
         for lineIndex in 0..<maxHeight {
-            // Add left padding
             resultLines[lineIndex] = String(repeating: " ", count: leftPadding)
+        }
 
-            // Add buttons
-            for (index, buffer) in buttonBuffers.enumerated() {
-                let buttonWidth = buffer.width
-
-                if index > 0 {
+        for (index, buffer) in buttonBuffers.enumerated() {
+            if index > 0 {
+                for lineIndex in 0..<maxHeight {
                     resultLines[lineIndex] += spacer
                 }
-
+                xCursor += spacing
+            }
+            for lineIndex in 0..<maxHeight {
                 if lineIndex < buffer.height {
                     resultLines[lineIndex] += buffer.lines[lineIndex]
                 } else {
-                    resultLines[lineIndex] += String(repeating: " ", count: buttonWidth)
+                    resultLines[lineIndex] += String(repeating: " ", count: buffer.width)
                 }
             }
+            resultRegions.append(
+                contentsOf: buffer.shiftedHitTestRegions(byX: xCursor, y: 0))
+            xCursor += buffer.width
         }
 
-        return FrameBuffer(lines: resultLines)
+        var result = FrameBuffer(lines: resultLines)
+        result.hitTestRegions = resultRegions
+        return result
     }
 }
 
