@@ -262,7 +262,38 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                 sectionContext.environment.focusIndicatorColor = nil
             }
 
-            let buffer = renderColumn(column, context: sectionContext)
+            var buffer = renderColumn(column, context: sectionContext)
+
+            // Click anywhere on a column activates that column's focus
+            // section. Registered last (= innermost), so any child
+            // controls' own hit-test regions still take precedence; this
+            // is the fall-through behaviour for clicking on the column's
+            // empty space, separators, or non-interactive content.
+            if !columnContext.isMeasuring,
+                let mouseDispatcher = columnContext.environment.mouseEventDispatcher
+            {
+                let captureManager = focusManager
+                let captureSectionID = sectionID
+                let columnHandlerID = mouseDispatcher.register { event in
+                    guard event.button == .left else { return false }
+                    switch event.phase {
+                    case .pressed: return true
+                    case .released:
+                        captureManager.activateSection(id: captureSectionID)
+                        return true
+                    default: return false
+                    }
+                }
+                // Place the region at the very back of the list so
+                // children win the hit-test.
+                buffer.hitTestRegions.insert(
+                    HitTestRegion(
+                        offsetX: 0, offsetY: 0,
+                        width: buffer.width, height: buffer.height,
+                        handlerID: columnHandlerID
+                    ), at: 0
+                )
+            }
             buffers.append(buffer)
         }
 

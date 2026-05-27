@@ -206,6 +206,12 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
         // Handle empty state
         let contentLines: [String]
+        // Captured for the mouse hit-tester so a click outside any
+        // specific row still focuses the table.
+        var sharedTableHandler: ItemListHandler<Value.ID>? = nil
+        var sharedTableFocusID: String = ""
+        var sharedTableVisibleRange: Range<Int> = 0..<0
+        var sharedTableScrollOffsetAbove: Int = 0
 
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
@@ -261,6 +267,11 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
             FocusRegistration.register(context: context, handler: handler)
             let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+
+            sharedTableHandler = handler
+            sharedTableFocusID = persistedFocusID
+            sharedTableVisibleRange = handler.visibleRange
+            sharedTableScrollOffsetAbove = handler.hasContentAbove ? 1 : 0
 
             // Build content lines
             var lines: [String] = []
@@ -322,7 +333,67 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             }
         }
 
-        return TUIkit.renderToBuffer(container, context: context)
+        var buffer = TUIkit.renderToBuffer(container, context: context)
+
+        // Mouse: same shape as List — scroll-wheel scrolls, click on a
+        // data row selects+focuses, click anywhere else inside the
+        // table grants focus without changing selection.
+        //
+        // Buffer layout from the container wrap:
+        //   y=0           top border
+        //   y=1           column header line
+        //   y=2           top scroll indicator (only when hasContentAbove)
+        //   y=2 + offset  first data row (offset = 1 when scroll indicator present)
+        //   …             data rows, one per line
+        //   y=N           bottom scroll indicator / bottom border
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let tableFocusManager = context.environment.focusManager
+            let captureFocusID = sharedTableFocusID
+            let captureHandler = sharedTableHandler
+            let visibleRange = sharedTableVisibleRange
+            let firstRowY = 2 + sharedTableScrollOffsetAbove
+
+            let mouseHandlerID = mouseDispatcher.register { event in
+                switch event.button {
+                case .scrollUp:
+                    captureHandler?.moveFocus(by: -1, wrap: false)
+                    return true
+                case .scrollDown:
+                    captureHandler?.moveFocus(by: 1, wrap: false)
+                    return true
+                case .left:
+                    guard event.phase == .released else {
+                        return event.phase == .pressed
+                    }
+                    // Each data row is one line tall.
+                    let dataRowIndex = event.y - firstRowY
+                    if dataRowIndex >= 0,
+                        dataRowIndex < visibleRange.count
+                    {
+                        let absoluteIndex = visibleRange.lowerBound + dataRowIndex
+                        if let handler = captureHandler {
+                            handler.focusedIndex = absoluteIndex
+                            handler.toggleSelectionAtFocusedIndex()
+                        }
+                    }
+                    tableFocusManager.focus(id: captureFocusID)
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0, offsetY: 0,
+                    width: buffer.width, height: buffer.height,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
+
+        return buffer
     }
 
     // MARK: - Column Width Calculation
