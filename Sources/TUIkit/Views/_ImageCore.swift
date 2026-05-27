@@ -13,6 +13,56 @@ private enum StateIndex {
 
     /// Stores the last loaded source for change detection (`ImageSource`).
     static let lastSource = 1
+
+    /// Stores the most recent ASCII conversion output and its parameters,
+    /// so the next render at the same size + settings reuses the cached
+    /// glyph buffer instead of re-running `ASCIIConverter.convert`.
+    static let renderCache = 2
+}
+
+// MARK: - Render Cache
+
+/// Cached ASCII conversion output along with the input parameters that
+/// produced it.
+///
+/// Re-using `ASCIIConverter` output across frames is safe whenever every
+/// input that influences the output is unchanged. The cache key spans the
+/// loaded image's pixel dimensions, the output cell footprint, and every
+/// styling environment value that the converter reads. A `_ImageCore`
+/// only keeps the most-recent entry because each instance hosts one
+/// image; on a hit the cached `[String]` is returned without touching
+/// `ASCIIConverter.convert`.
+private struct ImageRenderCache: Equatable {
+    var rawImageWidth: Int
+    var rawImageHeight: Int
+    var width: Int
+    var height: Int
+    var characterSet: ASCIICharacterSet
+    var colorMode: ASCIIColorMode
+    var dithering: DitheringMode
+    var contentMode: ContentMode
+    var aspectRatioOverride: Double?
+    var lines: [String]
+
+    /// Returns whether `self` was built from the same inputs as the
+    /// pending render. Compares everything except the cached `lines`.
+    func matches(
+        rawImageWidth: Int, rawImageHeight: Int,
+        width: Int, height: Int,
+        characterSet: ASCIICharacterSet, colorMode: ASCIIColorMode,
+        dithering: DitheringMode, contentMode: ContentMode,
+        aspectRatioOverride: Double?
+    ) -> Bool {
+        self.rawImageWidth == rawImageWidth
+            && self.rawImageHeight == rawImageHeight
+            && self.width == width
+            && self.height == height
+            && self.characterSet == characterSet
+            && self.colorMode == colorMode
+            && self.dithering == dithering
+            && self.contentMode == contentMode
+            && self.aspectRatioOverride == aspectRatioOverride
+    }
 }
 
 // MARK: - Image Core
@@ -145,7 +195,9 @@ struct _ImageCore: View, Renderable, Layoutable {
                 colorMode: colorMode,
                 dithering: dithering,
                 contentMode: contentMode,
-                aspectRatioOverride: aspectRatioOverride
+                aspectRatioOverride: aspectRatioOverride,
+                stateStorage: stateStorage,
+                identity: identity
             )
 
         case .failure(let message):
@@ -159,6 +211,18 @@ struct _ImageCore: View, Renderable, Layoutable {
 extension _ImageCore {
 
     /// Converts the raw image to ASCII art for the current frame dimensions and settings.
+    ///
+    /// The conversion is cached in `StateStorage`: if the next render is
+    /// passed the same image at the same target size with the same
+    /// styling, the previous conversion's `[String]` is returned without
+    /// re-running `ASCIIConverter.convert`. That converter is the
+    /// hot spot of the renderer (especially in the `.shapeBased` and
+    /// `.braille` modes), and the typical TUIkit redraw cadence —
+    /// spinner pulses, focus animations — re-renders an unchanged image
+    /// many times per second.
+    // The argument list is wide because every input that influences the
+    // ASCII output has to feed both the call and the cache key.
+    // swiftlint:disable:next function_parameter_count
     private func renderImage(
         _ rawImage: RGBAImage,
         width: Int,
@@ -167,7 +231,9 @@ extension _ImageCore {
         colorMode: ASCIIColorMode,
         dithering: DitheringMode,
         contentMode: ContentMode,
-        aspectRatioOverride: Double?
+        aspectRatioOverride: Double?,
+        stateStorage: StateStorage,
+        identity: ViewIdentity
     ) -> FrameBuffer {
         let targetSize = ASCIIConverter.targetSize(
             imageWidth: rawImage.width,
@@ -182,12 +248,44 @@ extension _ImageCore {
             return FrameBuffer()
         }
 
+        // Check the per-view cache; if every conversion input matches,
+        // skip the (potentially very expensive) re-conversion.
+        let cacheKey = StateStorage.StateKey(identity: identity, propertyIndex: StateIndex.renderCache)
+        let cacheBox: StateBox<ImageRenderCache?> = stateStorage.storage(for: cacheKey, default: nil)
+        if let cache = cacheBox.value, cache.matches(
+            rawImageWidth: rawImage.width,
+            rawImageHeight: rawImage.height,
+            width: targetSize.width,
+            height: targetSize.height,
+            characterSet: characterSet,
+            colorMode: colorMode,
+            dithering: dithering,
+            contentMode: contentMode,
+            aspectRatioOverride: aspectRatioOverride
+        ) {
+            return FrameBuffer(lines: cache.lines)
+        }
+
         let converter = ASCIIConverter(
             characterSet: characterSet,
             colorMode: colorMode,
             dithering: dithering
         )
         let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
+
+        cacheBox.value = ImageRenderCache(
+            rawImageWidth: rawImage.width,
+            rawImageHeight: rawImage.height,
+            width: targetSize.width,
+            height: targetSize.height,
+            characterSet: characterSet,
+            colorMode: colorMode,
+            dithering: dithering,
+            contentMode: contentMode,
+            aspectRatioOverride: aspectRatioOverride,
+            lines: lines
+        )
+
         return FrameBuffer(lines: lines)
     }
 }
