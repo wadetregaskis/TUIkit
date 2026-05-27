@@ -193,6 +193,96 @@ struct MouseHitTestPropagationTests {
         let buffer = renderToBuffer(view, context: makeContext())
         #expect(!buffer.hitTestRegions.isEmpty)
     }
+
+    @Test("Click between TextFields moves focus to the clicked one")
+    func clickBetweenTextFieldsMovesFocus() {
+        let a = State<String>(wrappedValue: "")
+        let b = State<String>(wrappedValue: "")
+        let view = VStack(alignment: .leading, spacing: 1) {
+            TextField("A", text: a.projectedValue)
+            TextField("B", text: b.projectedValue)
+        }
+
+        let context = makeContext()
+        let buffer = renderToBuffer(view, context: context)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // After render, both TextFields are registered. The first one
+        // is auto-focused. Click the second one.
+        let regions = buffer.hitTestRegions
+        guard regions.count >= 2 else {
+            Issue.record("expected at least two regions, got \(regions.count)")
+            return
+        }
+        // Lower-y region = upper field A, higher-y = lower field B.
+        let second = regions.max(by: { $0.offsetY < $1.offsetY })!
+        let x = second.offsetX + 1
+        let y = second.offsetY
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+
+        guard let focused = context.environment.focusManager.currentFocused as? TextFieldHandler else {
+            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager.currentFocused))")
+            return
+        }
+        // The text binding pointer identity tells us which field is
+        // focused — handler.text is the second field's binding.
+        focused.text.wrappedValue = "marker"
+        #expect(b.wrappedValue == "marker")
+        #expect(a.wrappedValue == "")
+    }
+
+    @Test("Click on TextField actually moves focus to it (end-to-end)")
+    func clickMovesFocusToTextField() {
+        let binding = State<String>(wrappedValue: "")
+        // Build the page-like wrapping that TextFieldPage has: VStack →
+        // VStack (DemoSection-style) → HStack → TextField.
+        let view = VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading) {
+                Text("Cursor Demo")
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 1) {
+                        Text("Input:")
+                        TextField("Input", text: binding.projectedValue)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 1)
+
+        let context = makeContext()
+        let buffer = renderToBuffer(view, context: context)
+
+        // Make the dispatcher use what was rendered.
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // Find a region with non-zero width that looks like the
+        // TextField (the TextField is the only registered region
+        // here; Text views don't emit regions).
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("No hit-test region found")
+            return
+        }
+
+        // Click the middle of the region. The TextField handler should
+        // claim the press and then focus on release.
+        let centerX = region.offsetX + region.width / 2
+        let centerY = region.offsetY + region.height / 2
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: centerX, y: centerY))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: centerX, y: centerY))
+
+        // The focus manager should now have *some* element focused —
+        // specifically the TextField. We don't know its exact id (it's
+        // auto-generated from view identity) but we can verify the
+        // focused element is a TextFieldHandler.
+        let focused = context.environment.focusManager.currentFocused
+        #expect(focused != nil)
+        #expect(focused is TextFieldHandler)
+    }
 }
 
 // MARK: - HitTestRegion
