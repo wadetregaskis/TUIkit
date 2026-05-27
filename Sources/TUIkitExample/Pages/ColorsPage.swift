@@ -91,11 +91,12 @@ struct ColorsPage: View {
 
 /// A single labelled horizontal gradient strip.
 ///
-/// Renders a fixed-length row of block glyphs whose colours interpolate
-/// smoothly between an arbitrary list of RGB stops. The interpolation is
-/// piecewise-linear in RGB space — good enough to read as "a gradient"
-/// at terminal resolution, and intentionally simple so the demo stays a
-/// readable reference rather than a colour-science primer.
+/// Renders a row of block glyphs whose colours interpolate smoothly
+/// between an arbitrary list of RGB stops. The strip claims whatever
+/// width the parent gives it (`.frame(maxWidth: .infinity)`) so the
+/// demo fills the page no matter the terminal size, and the actual
+/// painting happens in ``GradientStrip``, a `Renderable` that reads
+/// `context.availableWidth` at draw time.
 private struct GradientLine: View {
     /// The label printed to the left of the gradient strip.
     let label: String
@@ -103,25 +104,50 @@ private struct GradientLine: View {
     /// The colour stops to interpolate between, in RGB.
     let stops: [(r: UInt8, g: UInt8, b: UInt8)]
 
-    /// The number of cells of glyphs the strip occupies. 40 fills a
-    /// healthy chunk of the page while leaving room for the label.
-    private static var cells: Int { 40 }
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(label.padded(to: 22))
+                .foregroundStyle(.palette.foregroundSecondary)
+            GradientStrip(stops: stops)
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// Renderable that paints a smoothly-interpolated horizontal gradient
+/// across the full width its parent gives it.
+///
+/// The view conforms to `Renderable` so it can read `availableWidth`
+/// at draw time and use it to choose the number of glyph cells —
+/// without that we'd have to either bake a fixed width into the demo
+/// (the old `40` constant) or pull in a `GeometryReader`-style helper.
+private struct GradientStrip: View, Renderable {
+    /// Piecewise-linear colour stops.
+    let stops: [(r: UInt8, g: UInt8, b: UInt8)]
 
     /// The block glyph used to paint each gradient cell. ▇ is solid
     /// across most terminal fonts and reads as a flat colour band.
     private static var glyph: String { "▇" }
 
-    var body: some View {
-        HStack(spacing: 1) {
-            Text(label.padded(to: 22))
-                .foregroundStyle(.palette.foregroundSecondary)
-            HStack(spacing: 0) {
-                ForEach(0..<Self.cells, id: \.self) { index in
-                    let (r, g, b) = sampleStop(at: Double(index) / Double(Self.cells - 1))
-                    Text(Self.glyph).foregroundStyle(.rgb(r, g, b))
-                }
-            }
+    var body: Never {
+        fatalError("GradientStrip renders via Renderable")
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let cells = max(0, context.availableWidth)
+        guard cells > 0 else { return FrameBuffer(lines: [""]) }
+
+        var line = ""
+        line.reserveCapacity(cells * 20)
+        let denom = max(1, cells - 1)
+        for index in 0..<cells {
+            let parameter = Double(index) / Double(denom)
+            let (r, g, b) = sampleStop(at: parameter)
+            let styled = Text(Self.glyph).foregroundStyle(.rgb(r, g, b))
+            let buffer = TUIkit.renderToBuffer(styled, context: context)
+            line += buffer.lines.first ?? Self.glyph
         }
+        return FrameBuffer(lines: [line])
     }
 
     /// Interpolates between the configured stops at a parameter in `0...1`.
@@ -130,23 +156,16 @@ private struct GradientLine: View {
             let stop = stops.first ?? (0, 0, 0)
             return (stop.r, stop.g, stop.b)
         }
-
-        // Map `parameter` into the [0, segments] range, where `segments`
-        // is one fewer than the number of stops, then split into the
-        // integer segment index and a local 0...1 mix factor.
         let segments = Double(stops.count - 1)
         let scaled = max(0.0, min(segments, parameter * segments))
         let lowerIndex = min(Int(scaled), stops.count - 2)
         let mix = scaled - Double(lowerIndex)
-
         let lower = stops[lowerIndex]
         let upper = stops[lowerIndex + 1]
-
         func lerp(_ start: UInt8, _ end: UInt8) -> UInt8 {
             let blended = Double(start) + (Double(end) - Double(start)) * mix
             return UInt8(max(0, min(255, Int(blended.rounded()))))
         }
-
         return (lerp(lower.r, upper.r), lerp(lower.g, upper.g), lerp(lower.b, upper.b))
     }
 }
