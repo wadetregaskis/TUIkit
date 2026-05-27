@@ -48,11 +48,36 @@
 ///
 /// ## Native text selection
 ///
-/// Most terminals support **Shift-click** (and Shift-drag) to
-/// bypass the program's mouse capture and use the terminal's own
-/// selection mechanism. iTerm2, Terminal.app and gnome-terminal
-/// all do this by default. Document this for your users if you
-/// keep mouse support enabled.
+/// Terminal behaviour for "select text while a program has mouse
+/// tracking active" varies enormously:
+///
+/// | Terminal | Modifier-bypass support |
+/// | -------- | ----------------------- |
+/// | iTerm2 | `Option`+drag (configurable) |
+/// | kitty / wezterm / gnome-terminal | `Shift`+drag |
+/// | Apple Terminal.app (Sequoia) | **None** — no modifier bypasses the program's capture |
+///
+/// On Terminal.app specifically, the *only* way for the user to
+/// engage native selection is for the program to disable its mouse
+/// capture first. The recommended pattern is to expose a toggle
+/// (status-bar item, keyboard shortcut, modal command) that flips
+/// a state property, then conditionally apply the
+/// view-level ``View/mouseSupport(_:)`` modifier:
+///
+/// ```swift
+/// @State var allowTextSelection = false
+///
+/// var body: some View {
+///     ContentView()
+///         .mouseSupport(allowTextSelection ? .disabled : .standard)
+///         .statusBarItems {
+///             StatusBarItem(shortcut: "s", label: allowTextSelection
+///                 ? "mouse" : "select text") {
+///                 allowTextSelection.toggle()
+///             }
+///         }
+/// }
+/// ```
 public struct MouseSupport: Sendable, Equatable {
     /// Whether to report mouse-button presses and releases.
     public var clicks: Bool
