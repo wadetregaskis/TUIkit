@@ -390,8 +390,44 @@ extension Terminal {
 
         // CSI sequence: ESC [
         if nextByte[0] == 0x5B {  // '['
-            // Read until we find a CSI terminator (letter A-Za-z or ~)
-            for _ in 0..<(maxBytes - 2) {
+            // Peek at the first byte after `[` to disambiguate the
+            // sub-format. Legacy ("X10") mouse reports use the form
+            // `ESC[M<button+32><x+32><y+32>` — six bytes total — where
+            // `M` is the introducer rather than a CSI terminator.
+            // Without special-casing, the generic CSI loop below would
+            // stop after the `M` and let the three subsequent coord
+            // bytes leak back as ordinary single-byte reads. Those
+            // bytes are typically ASCII-printable, so they end up as
+            // gibberish in whichever TextField currently has focus.
+            // (Apple's Terminal.app falls back to X10 reports on
+            // some events even when we ask for SGR via ?1006h, so this
+            // really does happen in practice.)
+            let firstParamRead = read(STDIN_FILENO, &nextByte, 1)
+            guard firstParamRead > 0 else { return result }
+            result.append(nextByte[0])
+
+            if nextByte[0] == 0x4D {  // 'M' — legacy mouse report
+                // Read exactly three more bytes: button code, x, y.
+                // Each is encoded as `(value + 32)` and may sit
+                // anywhere in 0x20…0xFF, so we cannot use a generic
+                // terminator predicate.
+                for _ in 0..<3 {
+                    let coordRead = read(STDIN_FILENO, &nextByte, 1)
+                    if coordRead <= 0 { break }
+                    result.append(nextByte[0])
+                }
+                return result
+            }
+
+            // If we already hit a CSI terminator immediately after `[`
+            // (e.g. `ESC[A` for Up Arrow), we're done.
+            if nextByte[0] >= 0x40 && nextByte[0] <= 0x7E {
+                return result
+            }
+
+            // Regular CSI: read parameter bytes until we hit a real
+            // terminator (a letter or `~`).
+            for _ in 0..<(maxBytes - 3) {
                 let paramRead = read(STDIN_FILENO, &nextByte, 1)
                 guard paramRead > 0 else { break }
 
@@ -452,6 +488,19 @@ extension Terminal {
             if let mouse = MouseEvent.parseSGR(bytes) {
                 return .mouse(mouse)
             }
+        }
+
+        // Legacy ("X10") mouse report: ESC [ M <button+32> <x+32> <y+32>
+        // Apple's Terminal.app sometimes falls back to this even when
+        // SGR mouse mode is requested.
+        if bytes.count == 6, bytes[0] == 0x1B, bytes[1] == 0x5B, bytes[2] == 0x4D {
+            if let mouse = MouseEvent.parseLegacy(bytes) {
+                return .mouse(mouse)
+            }
+            // Malformed but unambiguously a legacy report — drop it
+            // entirely rather than letting the coord bytes leak back
+            // through KeyEvent.parse as gibberish.
+            return nil
         }
 
         // Bracketed paste start.

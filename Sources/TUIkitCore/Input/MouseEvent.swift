@@ -206,6 +206,96 @@ extension MouseEvent {
         )
     }
 
+    /// Parses one X10-style ("legacy") mouse report into a `MouseEvent`.
+    ///
+    /// Legacy encoding (predates SGR) looks like:
+    ///
+    /// ```
+    /// ESC [ M <button+32> <x+32> <y+32>
+    /// ```
+    ///
+    /// Six bytes total. Each of button-code, column, and row is
+    /// encoded as `value + 32` and may sit anywhere in 0x20…0xFF,
+    /// which limits the legacy form to roughly column / row 223.
+    /// (TUIkit asks the terminal for SGR encoding via `?1006h`, but
+    /// some terminals — notably Apple's Terminal.app — fall back to
+    /// X10 reports anyway on certain events.)
+    ///
+    /// The button code carries the same bit layout as the SGR form:
+    /// `+4` shift, `+8` meta, `+16` ctrl, `+32` motion, `+64` wheel,
+    /// `+128` horizontal-wheel.
+    ///
+    /// - Parameter bytes: The full six-byte sequence, *including* the
+    ///   leading `ESC [ M`.
+    /// - Returns: A parsed event, or `nil` if the bytes are malformed.
+    public static func parseLegacy(_ bytes: [UInt8]) -> MouseEvent? {
+        guard bytes.count == 6 else { return nil }
+        guard bytes[0] == 0x1B, bytes[1] == 0x5B, bytes[2] == 0x4D /* M */ else { return nil }
+
+        // The +32 bias makes every coord byte at least 0x20 (space).
+        // Treat values below that as malformed.
+        guard bytes[3] >= 0x20, bytes[4] >= 0x20, bytes[5] >= 0x20 else { return nil }
+        let buttonCode = Int(bytes[3]) - 32
+        let column = Int(bytes[4]) - 32
+        let row = Int(bytes[5]) - 32
+
+        // Legacy mouse has no separate release encoding — button code 3
+        // is reused for "any release". We don't see uppercase-M vs
+        // lowercase-m in this format, so the release is signalled by
+        // button 3.
+        let shift = (buttonCode & 4) != 0
+        let meta = (buttonCode & 8) != 0
+        let ctrl = (buttonCode & 16) != 0
+        let isMotion = (buttonCode & 32) != 0
+        let isWheel = (buttonCode & 64) != 0
+        let buttonNumber = buttonCode & 3
+        let horizontalWheel = (buttonCode & 128) != 0
+
+        let button: MouseButton
+        let phase: MousePhase
+
+        if isWheel {
+            phase = .scrolled
+            if horizontalWheel {
+                button = (buttonNumber == 0) ? .scrollLeft : .scrollRight
+            } else {
+                button = (buttonNumber == 0) ? .scrollUp : .scrollDown
+            }
+        } else if isMotion {
+            switch buttonNumber {
+            case 0: button = .left
+            case 1: button = .middle
+            case 2: button = .right
+            default: button = .none
+            }
+            phase = (button == .none) ? .moved : .dragged
+        } else {
+            switch buttonNumber {
+            case 0: button = .left
+            case 1: button = .middle
+            case 2: button = .right
+            case 3:
+                // "Any release" in legacy encoding — we don't know
+                // which button was released. Default to .left, which
+                // is the common case the dispatcher's drag-capture
+                // logic can route correctly.
+                return MouseEvent(
+                    button: .left, phase: .released,
+                    x: max(0, column - 1), y: max(0, row - 1),
+                    shift: shift, ctrl: ctrl, meta: meta
+                )
+            default: return nil
+            }
+            phase = .pressed
+        }
+
+        return MouseEvent(
+            button: button, phase: phase,
+            x: max(0, column - 1), y: max(0, row - 1),
+            shift: shift, ctrl: ctrl, meta: meta
+        )
+    }
+
     /// Parses an ASCII decimal integer slice into an `Int`.
     private static func parseInt(_ slice: ArraySlice<UInt8>) -> Int? {
         var value = 0

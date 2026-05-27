@@ -142,6 +142,48 @@ struct MouseEventSGRParsingTests {
         ]
         #expect(MouseEvent.parseSGR(truncated) == nil)
     }
+
+    // MARK: - Legacy (X10) Mouse Parsing
+
+    /// Legacy left-press at column 1, row 1 → 0-indexed (0, 0).
+    @Test("Legacy left press at origin")
+    func legacyLeftPress() {
+        // ESC [ M  (0+32)  (1+32)  (1+32)  =  1B 5B 4D 20 21 21
+        let bytes: [UInt8] = [0x1B, 0x5B, 0x4D, 0x20, 0x21, 0x21]
+        let event = MouseEvent.parseLegacy(bytes)
+        #expect(event?.button == .left)
+        #expect(event?.phase == .pressed)
+        #expect(event?.x == 0)
+        #expect(event?.y == 0)
+    }
+
+    /// Legacy wheel up: button code 64, x=10, y=5.
+    @Test("Legacy scroll wheel up")
+    func legacyScrollUp() {
+        // ESC [ M  (64+32)=96  (10+32)=42  (5+32)=37
+        let bytes: [UInt8] = [0x1B, 0x5B, 0x4D, 0x60, 0x2A, 0x25]
+        let event = MouseEvent.parseLegacy(bytes)
+        #expect(event?.button == .scrollUp)
+        #expect(event?.phase == .scrolled)
+    }
+
+    /// Legacy "any release" (button 3) at column 5, row 3.
+    @Test("Legacy release maps to .released")
+    func legacyRelease() {
+        // ESC [ M  (3+32)=35  (5+32)=37  (3+32)=35
+        let bytes: [UInt8] = [0x1B, 0x5B, 0x4D, 0x23, 0x25, 0x23]
+        let event = MouseEvent.parseLegacy(bytes)
+        #expect(event?.phase == .released)
+        #expect(event?.x == 4)
+        #expect(event?.y == 2)
+    }
+
+    /// Malformed (too short / wrong header) legacy bytes are rejected.
+    @Test("Malformed legacy bytes are rejected")
+    func legacyMalformed() {
+        #expect(MouseEvent.parseLegacy([0x1B, 0x5B]) == nil)
+        #expect(MouseEvent.parseLegacy([0x1B, 0x5B, 0x41, 0x20, 0x21, 0x21]) == nil)
+    }
 }
 
 // MARK: - Integration: regions propagate through view trees
