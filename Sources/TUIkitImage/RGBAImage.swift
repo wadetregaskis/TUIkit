@@ -17,7 +17,7 @@ public struct RGBA: Sendable, Equatable {
     public var a: UInt8
 
     /// Creates an opaque pixel with the given RGB values.
-    public init(r: UInt8, g: UInt8, b: UInt8, a: UInt8 = 255) {
+    public init(r: UInt8, g: UInt8, b: UInt8, a: UInt8 = .max) {
         self.r = r
         self.g = g
         self.b = b
