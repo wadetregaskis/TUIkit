@@ -55,6 +55,21 @@ extension InputHandler {
             }
         }
 
+        // Modal-claimed ESC: when an open Picker drop-down (or similar
+        // transient surface) has signalled "I own ESC for this frame" by
+        // setting `escapeLabelOverride`, route the key through the focus
+        // system *before* the status bar or any view-registered handler
+        // gets a shot. Otherwise a page-level onKeyPress that returns to
+        // the menu (the example app's ContentView, for one) would close
+        // the page out from under the open drop-down.
+        if event.key == .escape, statusBar.escapeLabelOverride != nil,
+            !focusManager.hasTextInputFocus
+        {
+            if focusManager.dispatchKeyEvent(event) {
+                return
+            }
+        }
+
         // Layer 1: Status bar items with actions
         if statusBar.handleKeyEvent(event) {
             return
