@@ -374,26 +374,24 @@ extension FocusManager {
     /// Activates a specific section by ID.
     ///
     /// If the section was not previously active, focus moves to the section's
-    /// first focusable element. If the section is *already* the active one
-    /// and a focused element is still part of it, the focused element is
-    /// left alone — re-calling activate during a re-render (the picker
-    /// drop-down's open state, ``ModalPresentationModifier``'s every-frame
-    /// activate) must not collapse the user's focus back to the first
-    /// element each time.
+    /// first focusable element. If the section is *already* the active one,
+    /// the current `focusedID` is preserved across re-renders — overlay
+    /// surfaces (`ModalPresentationModifier`, an open `Picker` drop-down)
+    /// call `registerSection` + `activateSection` on every frame, and
+    /// `beginRenderPass` has already cleared the section's focusables by
+    /// the time activateSection runs. Resetting focus here would snap the
+    /// user's focus back to the first child of the (still-empty) section.
+    /// `endRenderPass` validates the stale `focusedID` once the section
+    /// has been re-populated, so it is safe to defer the choice.
     ///
     /// - Parameter id: The section identifier to activate.
     func activateSection(id: String) {
         guard sections.contains(where: { $0.id == id }) else { return }
 
-        // No-op when the requested section is already active *and* the
-        // currently focused element belongs to it. Otherwise Tab would never
-        // appear to move focus, because every re-render would snap focus
-        // back to the section's first child.
-        if activeSectionID == id,
-            let focusedID,
-            let section = section(id: id),
-            section.focusables.contains(where: { $0.focusID == focusedID })
-        {
+        // Re-activating the section we're already on is a no-op: leave
+        // `focusedID` alone and let `endRenderPass` validate it once the
+        // section's focusables have been re-registered during this render.
+        if activeSectionID == id {
             return
         }
 
