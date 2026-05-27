@@ -98,7 +98,7 @@ struct RGBAImageTests {
         var image = RGBAImage(width: 1, height: 1, pixels: pixels)
 
         // Adding positive error should clamp at 255
-        image.addError(at: 0, 0, rError: 20.0, gError: -10.0, bError: 0.0)
+        image.addError(at: 0, 0, rError: 20, gError: -10, bError: 0)
         let pixel = image.pixel(at: 0, 0)
         #expect(pixel.r == 255)  // 250 + 20 -> clamped to 255
         #expect(pixel.g == 0)  // 5 - 10 -> clamped to 0

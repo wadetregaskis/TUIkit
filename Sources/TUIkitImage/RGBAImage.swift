@@ -101,13 +101,13 @@ extension RGBAImage {
     ///   - rError: Red channel error.
     ///   - gError: Green channel error.
     ///   - bError: Blue channel error.
-    public mutating func addError(at x: Int, _ y: Int, rError: Double, gError: Double, bError: Double) {
+    public mutating func addError(at x: Int, _ y: Int, rError: Int16, gError: Int16, bError: Int16) {
         let index = y * width + x
         let pixel = pixels[index]
         pixels[index] = RGBA(
-            r: UInt8(clamping: Int(Double(pixel.r) + rError)),
-            g: UInt8(clamping: Int(Double(pixel.g) + gError)),
-            b: UInt8(clamping: Int(Double(pixel.b) + bError))
+            r: UInt8(clamping: Int16(pixel.r) + rError),
+            g: UInt8(clamping: Int16(pixel.g) + gError),
+            b: UInt8(clamping: Int16(pixel.b) + bError)
         )
     }
 }

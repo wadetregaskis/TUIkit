@@ -99,18 +99,18 @@ extension ASCIIConverter {
                 let newPixel = quantizePixel(oldPixel, mode: mode)
                 result.setPixel(at: x, y, value: newPixel)
 
-                let rErr = Double(oldPixel.r) - Double(newPixel.r)
-                let gErr = Double(oldPixel.g) - Double(newPixel.g)
-                let bErr = Double(oldPixel.b) - Double(newPixel.b)
+                let rErr = Int16(oldPixel.r) - Int16(newPixel.r)
+                let gErr = Int16(oldPixel.g) - Int16(newPixel.g)
+                let bErr = Int16(oldPixel.b) - Int16(newPixel.b)
 
                 // Distribute error to neighbors
                 if x + 1 < image.width {
                     result.addError(
                         at: x + 1,
                         y,
-                        rError: rErr * 7.0 / 16.0,
-                        gError: gErr * 7.0 / 16.0,
-                        bError: bErr * 7.0 / 16.0
+                        rError: rErr * 7 / 16,
+                        gError: gErr * 7 / 16,
+                        bError: bErr * 7 / 16
                     )
                 }
                 if y + 1 < image.height {
@@ -118,25 +118,25 @@ extension ASCIIConverter {
                         result.addError(
                             at: x - 1,
                             y + 1,
-                            rError: rErr * 3.0 / 16.0,
-                            gError: gErr * 3.0 / 16.0,
-                            bError: bErr * 3.0 / 16.0
+                            rError: rErr * 3 / 16,
+                            gError: gErr * 3 / 16,
+                            bError: bErr * 3 / 16
                         )
                     }
                     result.addError(
                         at: x,
                         y + 1,
-                        rError: rErr * 5.0 / 16.0,
-                        gError: gErr * 5.0 / 16.0,
-                        bError: bErr * 5.0 / 16.0
+                        rError: rErr * 5 / 16,
+                        gError: gErr * 5 / 16,
+                        bError: bErr * 5 / 16
                     )
                     if x + 1 < image.width {
                         result.addError(
                             at: x + 1,
                             y + 1,
-                            rError: rErr * 1.0 / 16.0,
-                            gError: gErr * 1.0 / 16.0,
-                            bError: bErr * 1.0 / 16.0
+                            rError: rErr / 16,
+                            gError: gErr / 16,
+                            bError: bErr / 16
                         )
                     }
                 }
