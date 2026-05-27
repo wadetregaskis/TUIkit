@@ -297,9 +297,15 @@ extension Terminal {
     /// reads byte-by-byte until a CSI terminator is found, preventing
     /// multiple sequences from being read at once during fast key repeat.
     ///
-    /// - Parameter maxBytes: Maximum bytes to read (default: 8).
+    /// - Parameter maxBytes: Maximum bytes to read. Defaults to 32 so
+    ///   SGR mouse reports like `ESC[<35;120;48M` (typically 11–17
+    ///   bytes; up to ~18 for three-digit coordinates) fit comfortably
+    ///   with room for any modifier-decorated key chord. With a
+    ///   smaller cap the loop would truncate mouse reports before the
+    ///   `M`/`m` terminator, leaving stray digits in the buffer that
+    ///   subsequent reads then interpret as character keystrokes.
     /// - Returns: The bytes read, or empty array on timeout/error.
-    func readBytes(maxBytes: Int = 8) -> [UInt8] {
+    func readBytes(maxBytes: Int = 32) -> [UInt8] {
         var buffer = [UInt8](repeating: 0, count: 1)
         let bytesRead = read(STDIN_FILENO, &buffer, 1)
 

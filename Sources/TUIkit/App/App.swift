@@ -220,10 +220,14 @@ extension AppRunner {
                         ctrl: mouseEvent.ctrl,
                         meta: mouseEvent.meta
                     )
-                    tuiContext.mouseEventDispatcher.dispatch(translated)
-                    // Mouse events virtually always change something
-                    // (focus, selection, hover) so request a re-render.
-                    appState.setNeedsRender()
+                    // Only request a re-render when a handler actually
+                    // consumed the event. With any-event mouse mode
+                    // (?1003h) the terminal fires a motion report on
+                    // every cursor twitch — re-rendering for every one
+                    // would peg the render loop and starve key input.
+                    if tuiContext.mouseEventDispatcher.dispatch(translated) {
+                        appState.setNeedsRender()
+                    }
                 }
                 eventsProcessed += 1
             }
