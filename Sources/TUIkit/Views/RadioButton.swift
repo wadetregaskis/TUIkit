@@ -269,23 +269,88 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
 
         // Render items based on orientation
         let lines: [String]
+        let itemRegions: [(x: Int, y: Int, width: Int)]
         switch orientation {
         case .vertical:
-            lines = renderVertical(context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
+            (lines, itemRegions) = renderVerticalWithRegions(
+                context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
         case .horizontal:
-            lines = renderHorizontal(context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
+            (lines, itemRegions) = renderHorizontalWithRegions(
+                context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
         }
 
-        return FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+
+        // Mouse: a left-button release on an item row selects that item
+        // and grants the group focus. Each item gets its own hit-test
+        // region so the dispatcher can identify which item was clicked.
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let captureItems = items
+            let captureSelection = selection
+            for (index, region) in itemRegions.enumerated() {
+                let mouseHandlerID = mouseDispatcher.register { event in
+                    guard event.button == .left else { return false }
+                    switch event.phase {
+                    case .pressed: return true
+                    case .released:
+                        focusManager.focus(id: captureFocusID)
+                        handler.focusedIndex = index
+                        captureSelection.wrappedValue = captureItems[index].value
+                        return true
+                    default: return false
+                    }
+                }
+                buffer.hitTestRegions.append(
+                    HitTestRegion(
+                        offsetX: region.x,
+                        offsetY: region.y,
+                        width: region.width,
+                        height: 1,
+                        handlerID: mouseHandlerID
+                    )
+                )
+            }
+        }
+
+        return buffer
     }
 
-    private func renderVertical(
+    private func renderVerticalWithRegions(
         context: RenderContext,
         handler: RadioButtonGroupHandler,
         groupHasFocus: Bool,
         palette: Palette
-    ) -> [String] {
-        items.enumerated().map { index, item in
+    ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
+        var lines: [String] = []
+        var regions: [(x: Int, y: Int, width: Int)] = []
+        for (index, item) in items.enumerated() {
+            let line = renderRadioButton(
+                index: index,
+                item: item,
+                isFocused: handler.focusedIndex == index && groupHasFocus,
+                groupHasFocus: groupHasFocus,
+                isSelected: selection.wrappedValue == item.value,
+                context: context,
+                palette: palette
+            )
+            lines.append(line)
+            // One full-width row per item.
+            regions.append((x: 0, y: index, width: line.strippedLength))
+        }
+        return (lines, regions)
+    }
+
+    private func renderHorizontalWithRegions(
+        context: RenderContext,
+        handler: RadioButtonGroupHandler,
+        groupHasFocus: Bool,
+        palette: Palette
+    ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
+        let itemStrings = items.enumerated().map { index, item -> String in
             renderRadioButton(
                 index: index,
                 item: item,
@@ -296,29 +361,21 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
                 palette: palette
             )
         }
-    }
 
-    private func renderHorizontal(
-        context: RenderContext,
-        handler: RadioButtonGroupHandler,
-        groupHasFocus: Bool,
-        palette: Palette
-    ) -> [String] {
-        let itemLines = items.enumerated().map { index, item in
-            renderRadioButton(
-                index: index,
-                item: item,
-                isFocused: handler.focusedIndex == index && groupHasFocus,
-                groupHasFocus: groupHasFocus,
-                isSelected: selection.wrappedValue == item.value,
-                context: context,
-                palette: palette
-            )
+        let spacingWidth = 2
+        var regions: [(x: Int, y: Int, width: Int)] = []
+        var xCursor = 0
+        for (i, text) in itemStrings.enumerated() {
+            let w = text.strippedLength
+            regions.append((x: xCursor, y: 0, width: w))
+            xCursor += w
+            if i < itemStrings.count - 1 {
+                xCursor += spacingWidth
+            }
         }
 
-        // Join horizontally with spacing
-        let spacing = "  "
-        return [itemLines.joined(separator: spacing)]
+        let spacing = String(repeating: " ", count: spacingWidth)
+        return ([itemStrings.joined(separator: spacing)], regions)
     }
 
     private func renderRadioButton(

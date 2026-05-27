@@ -306,6 +306,35 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         let capColor = palette.accent.opacity(ViewConstants.focusBorderDim)
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
-        return FrameBuffer(text: openCap + fieldContent + closeCap)
+        var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
+
+        // Mouse: click anywhere on the field grants it focus.
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let mouseHandlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default: return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
+
+        return buffer
     }
 }

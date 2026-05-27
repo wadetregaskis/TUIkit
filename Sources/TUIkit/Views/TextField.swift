@@ -323,6 +323,38 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let capColor = palette.accent.opacity(ViewConstants.focusBorderDim)
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
-        return FrameBuffer(text: openCap + fieldContent + closeCap)
+        var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
+
+        // Mouse: a click anywhere on the field grants it focus. We
+        // don't currently move the cursor to the clicked column —
+        // that's a follow-up; first-priority is just being able to
+        // pick which field is active by clicking it.
+        if !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
+            let mouseHandlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default: return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: buffer.width,
+                    height: buffer.height,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
+
+        return buffer
     }
 }

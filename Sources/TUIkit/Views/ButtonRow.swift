@@ -134,23 +134,37 @@ private struct _ButtonRowCore: View, Renderable {
         // Combine horizontally (left-aligned — buttons stack from the leading
         // edge with `spacing` columns between them; any remaining width on
         // the right is left empty for the parent to fill or ignore).
+        //
+        // Each child buffer carries its own hit-test regions (registered by
+        // the Button's mouse wiring); we shift those by the running x-offset
+        // so clicks on individual buttons land on the right handler in the
+        // composed row.
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
+        var resultRegions: [HitTestRegion] = []
         let spacer = String(repeating: " ", count: spacing)
+        var xCursor = 0
 
-        for lineIndex in 0..<maxHeight {
-            for (index, buffer) in buttonBuffers.enumerated() {
-                if index > 0 {
+        for (index, buffer) in buttonBuffers.enumerated() {
+            if index > 0 {
+                for lineIndex in 0..<maxHeight {
                     resultLines[lineIndex] += spacer
                 }
+                xCursor += spacing
+            }
+            for lineIndex in 0..<maxHeight {
                 if lineIndex < buffer.height {
                     resultLines[lineIndex] += buffer.lines[lineIndex]
                 } else {
-                    // Pad with spaces if this button is shorter than the row.
                     resultLines[lineIndex] += String(repeating: " ", count: buffer.width)
                 }
             }
+            resultRegions.append(
+                contentsOf: buffer.shiftedHitTestRegions(byX: xCursor, y: 0))
+            xCursor += buffer.width
         }
 
-        return FrameBuffer(lines: resultLines)
+        var result = FrameBuffer(lines: resultLines)
+        result.hitTestRegions = resultRegions
+        return result
     }
 }
