@@ -285,6 +285,56 @@ private struct _MenuCore: View, Renderable {
             palette: palette
         )
 
+        // Mouse: scroll-wheel anywhere on the menu changes selection;
+        // a left-click on an item row selects it. Item rows live inside
+        // the border (top border + title/divider if present), so we
+        // translate the buffer-relative y back to an item index before
+        // forwarding the event.
+        if !context.isMeasuring,
+            let binding = selectionBinding,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        {
+            let menuItems = items
+            let selectCallback = onSelect
+            let itemsStartRow = 1 + (title != nil ? 2 : 0)  // top border + (title + divider)
+            let mouseHandlerID = mouseDispatcher.register { event in
+                switch event.button {
+                case .scrollUp:
+                    let current = binding.wrappedValue
+                    binding.wrappedValue = current > 0 ? current - 1 : menuItems.count - 1
+                    return true
+                case .scrollDown:
+                    let current = binding.wrappedValue
+                    binding.wrappedValue = current < menuItems.count - 1 ? current + 1 : 0
+                    return true
+                case .left where event.phase == .released:
+                    let itemIndex = event.y - itemsStartRow
+                    if itemIndex >= 0 && itemIndex < menuItems.count {
+                        binding.wrappedValue = itemIndex
+                        selectCallback?(itemIndex)
+                        return true
+                    }
+                    return false
+                case .left where event.phase == .pressed:
+                    // Claim presses inside item rows so the matching
+                    // release routes back here for the activation above.
+                    let itemIndex = event.y - itemsStartRow
+                    return itemIndex >= 0 && itemIndex < menuItems.count
+                default:
+                    return false
+                }
+            }
+            contentBuffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: 0,
+                    width: contentBuffer.width,
+                    height: contentBuffer.height,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
+
         return contentBuffer
     }
 
