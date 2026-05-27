@@ -275,24 +275,13 @@ struct OverlaysPage: View {
             .frame(width: 55)
 
         case .modalCustom:
-            // No explicit frame — the modal sizes to its content. A plain
-            // leading-aligned Button replaces the shared `dismissButton`
-            // (HStack + Spacer + Button), because the Spacer in there
-            // would stretch the modal to fill the entire screen.
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Custom Modal Content").bold().foregroundStyle(.palette.accent)
-                Text("")
-                Text("This modal uses .modal(isPresented:)").foregroundStyle(.palette.foreground)
-                Text("with completely custom view content.").foregroundStyle(.palette.foregroundSecondary)
-                Text("No Alert or Dialog — just any View!").foregroundStyle(.palette.foregroundSecondary)
-                Text("")
-                Button("Dismiss") {
-                    showOverlay = false
-                }
-                .buttonStyle(.primary)
-            }
-            .padding(EdgeInsets(horizontal: 2, vertical: 1))
-            .border(color: .palette.border)
+            // No explicit frame — the modal sizes to its content. To
+            // right-align the Dismiss button without the usual
+            // `HStack { Spacer; Button }` (whose flexible Spacer stretches
+            // the modal to fill the screen), we push the button right with
+            // an explicit leading-padding equal to the natural max text
+            // width minus the rendered button width.
+            modalCustomBody
 
         case .notification:
             // Notifications are posted via NotificationService, not shown as modal content.
@@ -349,5 +338,43 @@ struct OverlaysPage: View {
             }
             .buttonStyle(.primary)
         }
+    }
+
+    /// The "Modal (Custom)" body. Computes the natural max-text width of
+    /// the body lines and pushes the Dismiss button right by exactly the
+    /// gap that's left after subtracting the rendered button width — so
+    /// the modal sizes to its content but the button still sits at the
+    /// trailing edge of that content. (A regular `HStack { Spacer; Button }`
+    /// would do the same trick, but in TUIkit's current layout model the
+    /// HStack's flexible Spacer stretches the parent VStack to the full
+    /// screen width, defeating the whole point of "size-to-fit".)
+    private var modalCustomBody: some View {
+        let lines = [
+            "Custom Modal Content",
+            "This modal uses .modal(isPresented:)",
+            "with completely custom view content.",
+            "No Alert or Dialog — just any View!",
+        ]
+        let maxLineWidth = lines.map(\.count).max() ?? 0
+        // The .primary button style wraps the label in two side caps
+        // (▐ … ▌) and a space of inner padding on each side.
+        let buttonRenderedWidth = "Dismiss".count + 4
+        let leadingPad = max(0, maxLineWidth - buttonRenderedWidth)
+
+        return VStack(alignment: .leading, spacing: 1) {
+            Text("Custom Modal Content").bold().foregroundStyle(.palette.accent)
+            Text("")
+            Text("This modal uses .modal(isPresented:)").foregroundStyle(.palette.foreground)
+            Text("with completely custom view content.").foregroundStyle(.palette.foregroundSecondary)
+            Text("No Alert or Dialog — just any View!").foregroundStyle(.palette.foregroundSecondary)
+            Text("")
+            Button("Dismiss") {
+                showOverlay = false
+            }
+            .buttonStyle(.primary)
+            .padding(.leading, leadingPad)
+        }
+        .padding(EdgeInsets(horizontal: 2, vertical: 1))
+        .border(color: .palette.border)
     }
 }
