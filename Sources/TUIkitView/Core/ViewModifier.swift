@@ -108,3 +108,53 @@ extension ModifiedView: Renderable {
         return result
     }
 }
+
+// MARK: - Layoutable
+
+extension ModifiedView: Layoutable {
+    /// Measures the wrapped content through the modifier without rendering it.
+    ///
+    /// `Renderable` views fall through to `measureChild`'s render-to-measure
+    /// fallback, which calls `renderToBuffer` twice per measure (once at the
+    /// proposal, once at `naturalWidth + 8` to probe flexibility). That's a
+    /// disaster for expensive content (an `Image` whose `renderToBuffer`
+    /// runs the ASCII converter, for example) wrapped in even one
+    /// `.padding()` or custom modifier.
+    ///
+    /// Forwards measurement to the content under the modifier's
+    /// `adjustContext`, then adds the per-axis delta the modifier shrank
+    /// off back onto the reported size. For modifiers that don't adjust
+    /// the context — colour, background, etc. — the delta is zero and we
+    /// just report the child's size. For modifiers that do (padding), the
+    /// caller sees the post-modifier dimensions, which matches what
+    /// `renderToBuffer` would produce.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let adjustedContext = modifier.adjustContext(context)
+        let widthDelta = max(0, context.availableWidth - adjustedContext.availableWidth)
+        let heightDelta = max(0, context.availableHeight - adjustedContext.availableHeight)
+
+        // Propagate the modifier's shrink to the proposal too, so a flex
+        // child still treats the remaining space as its budget.
+        var adjustedProposal = proposal
+        if let proposedWidth = proposal.width {
+            adjustedProposal = ProposedSize(
+                width: max(0, proposedWidth - widthDelta),
+                height: proposal.height
+            )
+        }
+        if let proposedHeight = adjustedProposal.height {
+            adjustedProposal = ProposedSize(
+                width: adjustedProposal.width,
+                height: max(0, proposedHeight - heightDelta)
+            )
+        }
+
+        let childSize = measureChild(content, proposal: adjustedProposal, context: adjustedContext)
+        return ViewSize(
+            width: childSize.width + widthDelta,
+            height: childSize.height + heightDelta,
+            isWidthFlexible: childSize.isWidthFlexible,
+            isHeightFlexible: childSize.isHeightFlexible
+        )
+    }
+}
