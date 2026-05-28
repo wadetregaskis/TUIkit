@@ -256,7 +256,7 @@ extension TrackRenderer {
         let litCellCount = min(width, fullCells + (partialStep > 0 ? 1 : 0))
 
         func colour(at index: Int) -> Color {
-            guard let gradient = gradient, gradient.count >= 2, litCellCount > 1 else {
+            guard let gradient, gradient.count >= 2, litCellCount > 1 else {
                 return filledColor
             }
             let parameter = Double(index) / Double(litCellCount - 1)
