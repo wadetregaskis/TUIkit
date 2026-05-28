@@ -438,7 +438,7 @@ extension Terminal {
         // grows behind the scenes if we don't already have that much
         // free; subsequent drains can reuse the expanded capacity.
         input.append(addingCount: Self.baselineCapacity) { (span: inout OutputSpan<UInt8>) in
-            span.withUnsafeMutableBufferPointer { (buffer, written) in
+            span.withUnsafeMutableBufferPointer { buffer, written in
                 let n = read(STDIN_FILENO, buffer.baseAddress, buffer.count)
                 if n > 0 {
                     written = n
