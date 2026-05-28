@@ -58,6 +58,20 @@ final class Terminal: TerminalProtocol {
     /// frame at no cost.
     private var appliedMouseMode: MouseTrackingMode = .none
 
+    /// Bytes of an in-progress escape sequence saved between
+    /// ``readBytes`` calls. With `VTIME=0/VMIN=0` reads we can't
+    /// block on a partial sequence; we save what we have, return
+    /// `[]`, and let the next call try to drain more bytes from
+    /// stdin. See ``readBytes(maxBytes:)`` for the full design note.
+    private var pendingBytes: [UInt8] = []
+
+    /// How many consecutive ``readBytes`` calls have failed to add
+    /// any new bytes to a non-empty ``pendingBytes`` buffer. Once
+    /// this hits the threshold (see ``readBytes(maxBytes:)``) we
+    /// commit the partial so a bare Esc key (which looks like a
+    /// partial CSI introducer for the first frame) finally fires.
+    private var pendingStaleFrames: Int = 0
+
     /// The original terminal settings.
     private var originalTermios: termios?
 
@@ -351,134 +365,180 @@ extension Terminal {
         write(ANSIRenderer.exitAlternateScreen)
     }
 
-    /// Reads one byte from stdin, with a short retry loop to bridge
-    /// the gap between bytes of an in-progress CSI/mouse sequence.
-    ///
-    /// `VTIME=0 / VMIN=0` makes plain `read()` non-blocking — it
-    /// returns 0 immediately if no data is available. When the
-    /// terminal emits a mouse report it may arrive at the
-    /// application across several `read()`s; the bytes can already be
-    /// in flight from the terminal but not yet drained into our
-    /// process. Without this retry the CSI parser breaks out of its
-    /// loop before reaching the terminator and the trailing coord
-    /// bytes leak back through subsequent `readBytes()` calls as
-    /// ordinary single-byte keystrokes — that's how SGR mouse
-    /// reports end up typed into a focused TextField as `<64;68;28M`.
-    ///
-    /// 6 retries × 1ms gives the terminal up to ~6ms to finish
-    /// writing the sequence. In practice the byte usually arrives on
-    /// the first retry; the cap exists only to keep us from waiting
-    /// forever on a malformed / aborted sequence.
-    ///
-    /// - Returns: The next byte, or `nil` if no byte arrived within
-    ///   the retry budget.
-    private func readCSIByte() -> UInt8? {
+    /// Tries to read exactly one byte from stdin. Pure non-blocking;
+    /// returns `nil` immediately if the kernel has nothing for us.
+    private func tryReadOneByte() -> UInt8? {
         var byte: UInt8 = 0
-        var n = read(STDIN_FILENO, &byte, 1)
-        var retries = 6
-        while n <= 0 && retries > 0 {
-            usleep(1_000)  // 1 ms
-            n = read(STDIN_FILENO, &byte, 1)
-            retries -= 1
-        }
-        return n > 0 ? byte : nil
+        return read(STDIN_FILENO, &byte, 1) > 0 ? byte : nil
     }
 
     /// Reads raw bytes from the terminal, handling escape sequences.
     ///
-    /// Reads exactly one key event worth of bytes. For escape sequences,
-    /// reads byte-by-byte until a CSI terminator is found, preventing
-    /// multiple sequences from being read at once during fast key repeat.
+    /// Reads exactly one event's worth of bytes. Returns either:
+    ///   - a single non-escape byte (a plain keystroke),
+    ///   - a complete escape sequence (Alt+key, SS3 function key, full
+    ///     CSI sequence, legacy or SGR mouse report), or
+    ///   - an empty array when the kernel has no data right now.
     ///
-    /// - Parameter maxBytes: Maximum bytes to read. Defaults to 32 so
-    ///   SGR mouse reports like `ESC[<35;120;48M` (typically 11–17
-    ///   bytes; up to ~18 for three-digit coordinates) fit comfortably
-    ///   with room for any modifier-decorated key chord. With a
-    ///   smaller cap the loop would truncate mouse reports before the
-    ///   `M`/`m` terminator, leaving stray digits in the buffer that
-    ///   subsequent reads then interpret as character keystrokes.
-    /// - Returns: The bytes read, or empty array on timeout/error.
+    /// ## Partial-sequence buffering
+    ///
+    /// A long sequence (notably SGR mouse reports — up to ~18 bytes
+    /// for three-digit coords) can arrive at the application across
+    /// multiple `read()` calls if the terminal hasn't finished
+    /// flushing the bytes by the time we drain stdin. With
+    /// `VTIME=0/VMIN=0` an empty read returns 0 immediately, which
+    /// would otherwise break the CSI loop before the terminator
+    /// arrived and leave the remaining bytes to be re-read on the
+    /// next call as ordinary keystrokes — that's how SGR mouse
+    /// reports leaked into focused TextFields as gibberish like
+    /// `<64;68;28M`.
+    ///
+    /// Instead of busy-waiting with `usleep` (which freezes the run
+    /// loop), we *save* a partial sequence in ``pendingBytes`` and
+    /// return `[]`. The next `readBytes` call resumes from that
+    /// buffer: if more bytes are now available we continue reading
+    /// toward the terminator; if they still aren't, we save again.
+    /// The cost of a partial read is therefore just one main-loop
+    /// idle frame (~24ms) — the main loop keeps animating, accepting
+    /// other input, etc.
+    ///
+    /// A bare Esc key produces only `0x1B`, with no continuation.
+    /// That looks identical to a partial CSI introducer until a
+    /// full frame later, when the byte is still alone — at which
+    /// point we commit it as an Esc keystroke. So pressing Esc has
+    /// a one-frame (~24ms) commit latency; every other key path is
+    /// untouched.
+    ///
+    /// - Parameter maxBytes: Maximum bytes per sequence. Defaults
+    ///   to 32 — enough for any realistic CSI, including SGR mouse
+    ///   reports at three-digit coordinates.
+    /// - Returns: The bytes read, or `[]` if nothing is ready yet.
     func readBytes(maxBytes: Int = 32) -> [UInt8] {
-        var buffer = [UInt8](repeating: 0, count: 1)
-        let bytesRead = read(STDIN_FILENO, &buffer, 1)
+        let initialCount = pendingBytes.count
+        var result = pendingBytes
+        pendingBytes = []
 
-        guard bytesRead > 0 else { return [] }
+        // No partial in flight — try to read the first byte.
+        if result.isEmpty {
+            guard let first = tryReadOneByte() else { return [] }
 
-        // Not an escape sequence - return single byte
-        guard buffer[0] == 0x1B else {
-            return [buffer[0]]
+            // Plain (non-escape) byte: a single-byte key event.
+            if first != 0x1B {
+                pendingStaleFrames = 0
+                return [first]
+            }
+            result.append(first)
         }
 
-        // Read the next byte to determine sequence type
-        var result: [UInt8] = [0x1B]
-        var nextByte = [UInt8](repeating: 0, count: 1)
-
-        let nextRead = read(STDIN_FILENO, &nextByte, 1)
-        guard nextRead > 0 else {
-            // Just ESC alone
+        // Try to complete the escape sequence using whatever's
+        // available right now. If we can't, save the partial and
+        // bail.
+        if tryCompleteEscapeSequence(&result, maxBytes: maxBytes) {
+            pendingStaleFrames = 0
             return result
         }
 
-        result.append(nextByte[0])
+        if result.count > initialCount {
+            // We made progress this call — keep the partial and try
+            // again on the next `readBytes`. The main loop will
+            // idle for ~24ms before then, which gives the terminal
+            // plenty of time to finish writing the sequence.
+            pendingStaleFrames = 0
+            pendingBytes = result
+            return []
+        }
 
-        // CSI sequence: ESC [
-        if nextByte[0] == 0x5B {  // '['
-            // Peek at the first byte after `[` to disambiguate the
-            // sub-format. Legacy ("X10") mouse reports use the form
-            // `ESC[M<button+32><x+32><y+32>` — six bytes total — where
-            // `M` is the introducer rather than a CSI terminator.
-            // Without special-casing, the generic CSI loop below would
-            // stop after the `M` and let the three subsequent coord
-            // bytes leak back as ordinary single-byte reads. Those
-            // bytes are typically ASCII-printable, so they end up as
-            // gibberish in whichever TextField currently has focus.
-            // (Apple's Terminal.app falls back to X10 reports on
-            // some events even when we ask for SGR via ?1006h, so this
-            // really does happen in practice.)
-            guard let firstParam = readCSIByte() else { return result }
-            nextByte[0] = firstParam
-            result.append(firstParam)
+        // No progress at all on this call. That means the partial
+        // we already had still has no fresh bytes behind it.
+        // Stale for one frame is fine; stale for two means whatever
+        // was coming isn't, so commit what we have and let the
+        // caller try to parse it (it'll either match e.g. an Esc
+        // key, or fail and be silently dropped).
+        pendingStaleFrames += 1
+        if pendingStaleFrames >= 2 {
+            pendingStaleFrames = 0
+            return result
+        }
+        pendingBytes = result
+        return []
+    }
 
-            if firstParam == 0x4D {  // 'M' — legacy mouse report
-                // Read exactly three more bytes: button code, x, y.
-                // Each is encoded as `(value + 32)` and may sit
-                // anywhere in 0x20…0xFF, so we cannot use a generic
-                // terminator predicate.
-                for _ in 0..<3 {
-                    guard let coord = readCSIByte() else { break }
-                    result.append(coord)
-                }
-                return result
+    /// Attempts to read the rest of an escape sequence given a
+    /// partial `result` that starts with `0x1B`.
+    ///
+    /// - Returns: `true` if the sequence is now complete, `false` if
+    ///   bytes are missing — in which case `result` holds whatever
+    ///   was read so far, ready to be saved as a partial.
+    private func tryCompleteEscapeSequence(_ result: inout [UInt8], maxBytes: Int) -> Bool {
+        // Need at least the byte after ESC to know which sequence
+        // variant this is.
+        if result.count == 1 {
+            guard let b = tryReadOneByte() else { return false }
+            result.append(b)
+        }
+
+        let secondByte = result[1]
+
+        if secondByte == 0x5B {  // ESC [ = CSI
+            return tryCompleteCSI(&result, maxBytes: maxBytes)
+        }
+
+        if secondByte == 0x4F {  // ESC O = SS3 (F1-F4 etc.)
+            if result.count == 2 {
+                guard let b = tryReadOneByte() else { return false }
+                result.append(b)
             }
+            return true
+        }
 
-            // If we already hit a CSI terminator immediately after `[`
-            // (e.g. `ESC[A` for Up Arrow), we're done.
-            if firstParam >= 0x40 && firstParam <= 0x7E {
-                return result
+        // Alt+key — ESC followed by single key. Two bytes total.
+        return true
+    }
+
+    /// Reads CSI parameter bytes until a terminator (a letter or
+    /// `~`) or `maxBytes` is reached. Handles the legacy "X10"
+    /// mouse-report sub-format (`ESC[M<b><x><y>`, six bytes) where
+    /// `M` is the *introducer*, not the terminator, and the three
+    /// trailing coord bytes can sit anywhere in 0x20…0xFF.
+    ///
+    /// - Returns: `true` if the CSI is complete, `false` if bytes
+    ///   are still pending.
+    private func tryCompleteCSI(_ result: inout [UInt8], maxBytes: Int) -> Bool {
+        // Need the first param byte to disambiguate.
+        if result.count == 2 {
+            guard let b = tryReadOneByte() else { return false }
+            result.append(b)
+        }
+
+        let firstParam = result[2]
+
+        if firstParam == 0x4D {  // 'M' — legacy mouse report
+            // Read exactly three more coord bytes. Each is the raw
+            // value + 32 and may take any byte value.
+            while result.count < 6 {
+                guard let b = tryReadOneByte() else { return false }
+                result.append(b)
             }
+            return true
+        }
 
-            // Regular CSI: read parameter bytes until we hit a real
-            // terminator (a letter or `~`).
-            for _ in 0..<(maxBytes - 3) {
-                guard let next = readCSIByte() else { break }
-                result.append(next)
+        // Single-letter CSI terminator straight after `[`
+        // (e.g. `ESC[A` for Up Arrow).
+        if firstParam >= 0x40 && firstParam <= 0x7E {
+            return true
+        }
 
-                // CSI terminators: letters (0x40-0x7E) mark end of sequence
-                // Common: A-D (arrows), H/F (home/end), Z (shift-tab), ~ (extended)
-                if next >= 0x40 && next <= 0x7E {
-                    break
-                }
-            }
-        } else if nextByte[0] == 0x4F {  // SS3 sequence: ESC O
-            // Read one more byte for F1-F4 keys
-            let funcRead = read(STDIN_FILENO, &nextByte, 1)
-            if funcRead > 0 {
-                result.append(nextByte[0])
+        // Read parameter bytes until terminator.
+        while result.count < maxBytes {
+            guard let b = tryReadOneByte() else { return false }
+            result.append(b)
+            if b >= 0x40 && b <= 0x7E {
+                return true
             }
         }
-        // Alt+key: ESC followed by single key - already have both bytes
-
-        return result
+        // Reached maxBytes without terminator — treat as complete;
+        // downstream parsers will reject the malformed sequence.
+        return true
     }
 
     /// Reads a key event from the terminal.
