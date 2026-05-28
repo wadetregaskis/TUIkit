@@ -66,7 +66,7 @@ struct MousePage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Scroll inside the box. Hold Shift to scroll horizontally on terminals that forward it.")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("(Apple Terminal.app intercepts Shift+wheel for its own scrollback — use a trackpad's horizontal scroll on Terminal.app, or test in iTerm2 / kitty / wezterm for Shift+wheel.)")
+                    Text("(Apple Terminal.app intercepts Shift+wheel for its own scrollback — use a trackpad's horizontal scroll on Terminal.app, or test in iTerm2 / kitty / wezterm for Shift+wheel.)")  // swiftlint:disable:this line_length
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
                     // 2-D scroll position display. The vertical and
