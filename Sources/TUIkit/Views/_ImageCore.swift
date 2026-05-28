@@ -46,7 +46,7 @@ private struct ImageRenderCache: Equatable {
 
     /// Returns whether `self` was built from the same inputs as the
     /// pending render. Compares everything except the cached `lines`.
-    func matches(
+    func matches(  // swiftlint:disable:this function_parameter_count
         rawImageWidth: Int, rawImageHeight: Int,
         width: Int, height: Int,
         characterSet: ASCIICharacterSet, colorMode: ASCIIColorMode,
@@ -220,10 +220,7 @@ extension _ImageCore {
     /// `.braille` modes), and the typical TUIkit redraw cadence —
     /// spinner pulses, focus animations — re-renders an unchanged image
     /// many times per second.
-    // The argument list is wide because every input that influences the
-    // ASCII output has to feed both the call and the cache key.
-    // swiftlint:disable:next function_parameter_count
-    private func renderImage(
+    private func renderImage(  // swiftlint:disable:this function_parameter_count
         _ rawImage: RGBAImage,
         width: Int,
         height: Int,
