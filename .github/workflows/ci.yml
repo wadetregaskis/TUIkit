@@ -31,7 +31,7 @@ jobs:
             install-swiftlint: brew install swiftlint
           - name: "Linux"
             runner: ubuntu-latest
-            container: swift:6.0
+            container: swift:6.2
             install-swiftlint: |
               apt-get update && apt-get install -y curl unzip
               curl -fsSL "https://github.com/realm/SwiftLint/releases/download/0.63.2/swiftlint_linux_$(arch | sed 's/x86_64/amd64/;s/aarch64/arm64/').zip" -o swiftlint.zip
