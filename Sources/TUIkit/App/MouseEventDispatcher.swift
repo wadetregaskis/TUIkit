@@ -85,7 +85,7 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// scene-level base config for that frame. Cleared every
     /// `beginRenderPass`. The latest setter wins — innermost
     /// `.mouseSupport(...)` in the view tree takes effect.
-    private var configOverride: MouseSupport? = nil
+    private var configOverride: MouseSupport?
 
     /// The effective ``MouseSupport`` configuration in force for the
     /// dispatching of incoming events. Set by the AppRunner each

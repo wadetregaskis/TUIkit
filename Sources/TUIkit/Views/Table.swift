@@ -208,7 +208,7 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         let contentLines: [String]
         // Captured for the mouse hit-tester so a click outside any
         // specific row still focuses the table.
-        var sharedTableHandler: ItemListHandler<Value.ID>? = nil
+        var sharedTableHandler: ItemListHandler<Value.ID>?
         var sharedTableFocusID: String = ""
         var sharedTableVisibleRange: Range<Int> = 0..<0
         var sharedTableScrollOffsetAbove: Int = 0

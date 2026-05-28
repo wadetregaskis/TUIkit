@@ -418,7 +418,7 @@ struct MouseEventDispatcherTests {
         let dispatcher = MouseEventDispatcher()
         dispatcher.beginRenderPass()
 
-        var receivedAt: (Int, Int)? = nil
+        var receivedAt: (Int, Int)?
         let id = dispatcher.register { event in
             receivedAt = (event.x, event.y)
             return true
@@ -439,7 +439,7 @@ struct MouseEventDispatcherTests {
         let dispatcher = MouseEventDispatcher()
         dispatcher.beginRenderPass()
 
-        var receivedAt: (Int, Int)? = nil
+        var receivedAt: (Int, Int)?
         let id = dispatcher.register { event in
             receivedAt = (event.x, event.y)
             return true

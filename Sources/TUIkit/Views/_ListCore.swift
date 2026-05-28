@@ -44,7 +44,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus: Bool
         // Lives outside the else branch so the mouse hit-test region we
         // emit at the end of this method can capture the handler.
-        var sharedListHandler: ItemListHandler<SelectionValue>? = nil
+        var sharedListHandler: ItemListHandler<SelectionValue>?
         // The persisted focus ID for the list itself; used by the
         // mouse handler to grant focus on click.
         var sharedListFocusID: String = ""
