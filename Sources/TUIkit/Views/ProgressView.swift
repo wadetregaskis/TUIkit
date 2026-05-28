@@ -226,7 +226,6 @@ extension ProgressView {
         return copy
     }
 
-
     /// Sets the visual style of the progress view.
     ///
     /// - Parameter style: The progress view style.
