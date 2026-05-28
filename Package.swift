@@ -1,5 +1,4 @@
-// swift-tools-version: 6.0
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+// swift-tools-version: 6.2
 
 import PackageDescription
 
@@ -31,6 +30,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.5.1"),
     ],
     targets: [
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────
@@ -45,7 +45,10 @@ let package = Package(
         // ── High-level (aggregates all) ─────────────────────────────────────────────────────────────────
         .target(
             name: "TUIkit",
-            dependencies: ["TUIkitCore", "TUIkitStyling", "TUIkitImage", "TUIkitView"],
+            dependencies: [
+                "TUIkitCore", "TUIkitStyling", "TUIkitImage", "TUIkitView",
+                .product(name: "DequeModule", package: "swift-collections"),
+            ],
             resources: [.copy("Localization/translations"), .copy("VERSION")]
         ),
 

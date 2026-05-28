@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import DequeModule
 import Foundation
 
 #if canImport(Glibc)
@@ -63,12 +64,21 @@ final class Terminal: TerminalProtocol {
     /// ``appendDrain()`` (one `read()` syscall per call) and consumed
     /// from the front by ``readEvent()`` as it identifies events.
     ///
-    /// Acts as a deque without an extra dependency: ``bufferOffset``
-    /// is the read cursor; `inputBuffer[bufferOffset...]` is what's
-    /// still live. When the dead prefix gets large enough we compact
-    /// in one O(remaining) shift — amortised O(1) consumption.
-    private var inputBuffer: [UInt8] = []
-    private var bufferOffset: Int = 0
+    /// ``UniqueDeque`` is a noncopyable ring buffer with O(1)
+    /// removeFirst and an "append into uninitialised storage via
+    /// `OutputSpan`" API — together those let us `read()` straight
+    /// into the deque's backing buffer with zero intermediate
+    /// copies, and consume bytes off the front without paying any
+    /// shuffling cost. Capacity grows geometrically when needed
+    /// and ``consume(_:)`` shrinks it back to ``baselineCapacity``
+    /// once a transient large paste has been fully consumed.
+    private var input: UniqueDeque<UInt8> = .init(
+        minimumCapacity: Terminal.baselineCapacity)
+
+    /// Initial — and steady-state minimum — capacity for ``input``.
+    /// Sized to comfortably hold a frame's worth of bursty mouse
+    /// events without ever needing to grow.
+    private static let baselineCapacity = 4096
 
     /// True while we're between the bracketed-paste start (`ESC[200~`)
     /// and end (`ESC[201~`) markers. Paste content is accumulated
@@ -387,49 +397,58 @@ extension Terminal {
         write(ANSIRenderer.exitAlternateScreen)
     }
 
-    /// Bytes available in ``inputBuffer`` from the current cursor onward.
-    private var remaining: Int { inputBuffer.count - bufferOffset }
-
-    /// Returns the byte at position `i` relative to the current cursor.
-    /// Precondition: `i < remaining`.
-    private func peek(_ i: Int) -> UInt8 { inputBuffer[bufferOffset + i] }
-
-    /// Advances the read cursor by `n` bytes. Performs an
-    /// occasional compact (slide live bytes to the start of the
-    /// array) so the deque doesn't grow without bound during a
-    /// long session.
+    /// Removes `n` bytes from the front of the buffer and, if the
+    /// resulting size fits back inside ``baselineCapacity``, shrinks
+    /// the backing allocation down too. The shrink is the reason
+    /// for the explicit `reallocate(capacity:)` call: ``UniqueDeque``
+    /// grows geometrically (1.5×) when needed but doesn't shrink on
+    /// its own, so we have to ask.
     private func consume(_ n: Int) {
-        bufferOffset += n
-        // Compact when the dead prefix dominates: > 4 KiB absolute,
-        // or > half of a non-trivial buffer.
-        if bufferOffset > 4096
-            || (bufferOffset > 256 && bufferOffset * 2 > inputBuffer.count)
+        input.removeFirst(n)
+        if input.count <= Self.baselineCapacity
+            && input.capacity > Self.baselineCapacity
         {
-            inputBuffer.removeFirst(bufferOffset)
-            bufferOffset = 0
+            input.reallocate(capacity: Self.baselineCapacity)
         }
     }
 
-    /// Drains whatever stdin has waiting into ``inputBuffer``, in
-    /// one `read()` syscall, up to 4 KiB. Returns the number of
-    /// new bytes appended.
+    /// Drains whatever stdin has waiting straight into the deque's
+    /// uninitialised tail storage, with zero intermediate copies.
     ///
-    /// 4 KiB matches typical kernel pipe-write granularity and is
-    /// comfortably above a burst of mouse events; very large
-    /// pastes simply take a few drains to fully arrive — which is
-    /// fine because the main loop keeps spinning between drains.
+    /// Implementation:
+    /// - ``UniqueDeque/append(addingCount:initializingWith:)`` hands
+    ///   us an `OutputSpan<UInt8>` covering contiguous free space
+    ///   at the back of the ring buffer.
+    /// - `withUnsafeMutableBufferPointer` exposes that span as a
+    ///   raw `UnsafeMutableBufferPointer`, which we pass straight to
+    ///   `read(STDIN_FILENO, …)`.
+    /// - We set the span's `written` count to whatever `read()`
+    ///   returned; the deque keeps exactly those bytes initialised.
+    ///
+    /// In the (rare) case that the ring buffer's contiguous tail is
+    /// smaller than our requested chunk, the deque calls our closure
+    /// a second time for the wrapped portion — `read()` is called
+    /// again for that span, which costs at most one extra syscall.
+    ///
+    /// - Returns: the number of new bytes drained from stdin.
     @discardableResult
     private func appendDrain() -> Int {
-        let chunkSize = 4096
-        var chunk = [UInt8](repeating: 0, count: chunkSize)
-        let n = chunk.withUnsafeMutableBufferPointer { ptr -> Int in
-            read(STDIN_FILENO, ptr.baseAddress, chunkSize)
+        var added = 0
+        // Request up to one baseline chunk at a time. The deque
+        // grows behind the scenes if we don't already have that much
+        // free; subsequent drains can reuse the expanded capacity.
+        input.append(addingCount: Self.baselineCapacity) { (span: inout OutputSpan<UInt8>) in
+            span.withUnsafeMutableBufferPointer { (buffer, written) in
+                let n = read(STDIN_FILENO, buffer.baseAddress, buffer.count)
+                if n > 0 {
+                    written = n
+                    added += n
+                } else {
+                    written = 0
+                }
+            }
         }
-        if n > 0 {
-            inputBuffer.append(contentsOf: chunk[0..<n])
-            return n
-        }
-        return 0
+        return added
     }
 
     /// The bracketed-paste start marker (`ESC [ 2 0 0 ~`).
@@ -457,8 +476,8 @@ extension Terminal {
     /// the buffer doesn't have a complete sequence yet — in which
     /// case the bytes already there stay put for the next call.
     private func tryExtractRegularEvent() -> [UInt8]? {
-        guard remaining >= 1 else { return nil }
-        let first = peek(0)
+        guard !input.isEmpty else { return nil }
+        let first = input[0]
 
         // Plain (non-escape) byte: single-byte event.
         if first != 0x1B {
@@ -467,23 +486,24 @@ extension Terminal {
         }
 
         // ESC + ?  — need at least the byte after ESC.
-        guard remaining >= 2 else { return nil }
-        let second = peek(1)
+        guard input.count >= 2 else { return nil }
+        let second = input[1]
 
         if second == 0x5B {  // ESC [ = CSI
             return tryExtractCSI()
         }
 
         if second == 0x4F {  // ESC O = SS3 (F1-F4 etc.)
-            guard remaining >= 3 else { return nil }
-            let bytes = [peek(0), peek(1), peek(2)]
+            guard input.count >= 3 else { return nil }
+            let bytes = [first, second, input[2]]
             consume(3)
             return bytes
         }
 
         // Alt+key — 2 bytes total.
-        let bytes = [peek(0), peek(1)]
+        let bytes = [first, second]
         consume(2)
+
         return bytes
     }
 
@@ -492,18 +512,18 @@ extension Terminal {
     /// sequence bytes on success or `nil` if the terminator hasn't
     /// arrived yet.
     private func tryExtractCSI() -> [UInt8]? {
-        guard remaining >= 3 else { return nil }
-        let firstParam = peek(2)
+        guard input.count >= 3 else { return nil }
+        let firstParam = input[2]
 
         // Legacy ("X10") mouse: ESC [ M <button+32> <x+32> <y+32>
         // M is the *introducer*, not the terminator, and the three
         // trailing coord bytes can take any value, so we just
         // require six bytes total.
         if firstParam == 0x4D {
-            guard remaining >= 6 else { return nil }
+            guard input.count >= 6 else { return nil }
             var bytes = [UInt8]()
             bytes.reserveCapacity(6)
-            for i in 0..<6 { bytes.append(peek(i)) }
+            for i in 0..<6 { bytes.append(input[i]) }
             consume(6)
             return bytes
         }
@@ -511,20 +531,21 @@ extension Terminal {
         // Single-letter CSI (e.g. ESC[A for Up Arrow): the first
         // byte after `[` is already a terminator.
         if firstParam >= 0x40 && firstParam <= 0x7E {
-            let bytes = [peek(0), peek(1), peek(2)]
+            let bytes = [input[0], input[1], firstParam]
             consume(3)
             return bytes
         }
 
         // Scan forward for a real terminator (letter or `~`).
         var i = 3
-        let cap = min(remaining, Self.maxEventBytes)
+        let cap = min(input.count, Self.maxEventBytes)
+
         while i < cap {
-            let b = peek(i)
+            let b = input[i]
             if b >= 0x40 && b <= 0x7E {
                 var bytes = [UInt8]()
                 bytes.reserveCapacity(i + 1)
-                for j in 0...i { bytes.append(peek(j)) }
+                for j in 0...i { bytes.append(input[j]) }
                 consume(i + 1)
                 return bytes
             }
@@ -536,7 +557,7 @@ extension Terminal {
             // consume the truncated prefix and move on.
             var bytes = [UInt8]()
             bytes.reserveCapacity(Self.maxEventBytes)
-            for j in 0..<Self.maxEventBytes { bytes.append(peek(j)) }
+            for j in 0..<Self.maxEventBytes { bytes.append(input[j]) }
             consume(Self.maxEventBytes)
             return bytes
         }
@@ -551,16 +572,16 @@ extension Terminal {
     /// Otherwise returns `nil` and leaves the buffer intact.
     private func tryExtractPaste() -> TerminalInput? {
         let endMarker = Self.pasteEnd
-        guard remaining >= endMarker.count else { return nil }
+        guard input.count >= endMarker.count else { return nil }
 
         // Scan for the end marker. Note: the start marker is no
         // longer in the buffer — `readEvent()` consumed it before
         // setting `inPasteMode = true`.
-        let searchEnd = remaining - endMarker.count + 1
+        let searchEnd = input.count - endMarker.count + 1
         for start in 0..<searchEnd {
             var match = true
             for i in 0..<endMarker.count {
-                if peek(start + i) != endMarker[i] {
+                if input[start + i] != endMarker[i] {
                     match = false
                     break
                 }
@@ -570,7 +591,7 @@ extension Terminal {
             // Content is everything before the marker.
             var content = [UInt8]()
             content.reserveCapacity(start)
-            for i in 0..<start { content.append(peek(i)) }
+            for i in 0..<start { content.append(input[i]) }
             consume(start + endMarker.count)
             inPasteMode = false
 
@@ -581,8 +602,8 @@ extension Terminal {
 
         // No end marker yet. Safety: if a runaway paste fills more
         // than the cap, give up on it so we don't pin memory.
-        if remaining > Self.maxPasteBytes {
-            consume(remaining)
+        if input.count > Self.maxPasteBytes {
+            consume(input.count)
             inPasteMode = false
         }
         return nil
@@ -598,7 +619,7 @@ extension Terminal {
     /// the run loop.
     func readEvent() -> TerminalInput? {
         // Make sure there's something to inspect.
-        if remaining == 0 {
+        if input.isEmpty {
             appendDrain()
         }
 
@@ -637,7 +658,7 @@ extension Terminal {
 
         // Still nothing. If the buffer's empty there's no partial to
         // worry about; just return nil.
-        guard remaining > 0 else {
+        guard !input.isEmpty else {
             staleFrames = 0
             return nil
         }
@@ -650,13 +671,16 @@ extension Terminal {
         // never finish.
         if added == 0 {
             staleFrames += 1
+
             if staleFrames >= 2 {
                 staleFrames = 0
-                let b = peek(0)
-                consume(1)
-                return finalize(bytes: [b])
+
+                if let b = input.popFirst() {
+                    return finalize(bytes: [b])
+                }
             }
         }
+
         return nil
     }
 
@@ -702,7 +726,7 @@ extension Terminal {
     /// - Returns: One event's bytes, or `[]` if no complete event
     ///   is buffered.
     func readBytes(maxBytes: Int = 32) -> [UInt8] {
-        if remaining == 0 { appendDrain() }
+        if input.isEmpty { appendDrain() }
         return tryExtractRegularEvent() ?? []
     }
 
