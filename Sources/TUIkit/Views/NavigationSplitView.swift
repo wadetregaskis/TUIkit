@@ -461,6 +461,13 @@ extension _NavigationSplitViewCore {
     }
 
     /// Pads a buffer to the specified width and height.
+    ///
+    /// The padding doesn't shift the buffer's contents — characters
+    /// stay at the same (x, y) coordinates — so the buffer's overlay
+    /// layers and hit-test regions carry across unchanged. Building
+    /// the result via `replacingLines` preserves both; the previous
+    /// `FrameBuffer(lines: lines, width: width)` constructor dropped
+    /// them, which broke per-column click-to-focus on NavigationSplitView.
     fileprivate func padToSize(_ buffer: FrameBuffer, width: Int, height: Int) -> FrameBuffer {
         var lines = buffer.lines
 
@@ -480,7 +487,7 @@ extension _NavigationSplitViewCore {
             lines.append(emptyLine)
         }
 
-        return FrameBuffer(lines: lines, width: width)
+        return buffer.replacingLines(lines)
     }
 }
 
