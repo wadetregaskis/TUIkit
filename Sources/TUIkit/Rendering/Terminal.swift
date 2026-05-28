@@ -72,6 +72,19 @@ final class Terminal: TerminalProtocol {
     /// partial CSI introducer for the first frame) finally fires.
     private var pendingStaleFrames: Int = 0
 
+    /// Bytes drained from stdin in bulk but not yet handed back via
+    /// ``tryReadOneByte``. Each ``drainStdin`` call refills this
+    /// buffer with a single `read()` syscall — far cheaper than the
+    /// previous one-syscall-per-byte pattern, which compounded
+    /// across the long byte streams produced by mouse motion.
+    private var readBuffer: [UInt8] = []
+
+    /// Current consume offset within ``readBuffer``. Bytes at
+    /// indices `0..<readBufferOffset` have already been returned;
+    /// `readBufferOffset..<readBuffer.count` is what's still
+    /// available to read.
+    private var readBufferOffset: Int = 0
+
     /// The original terminal settings.
     private var originalTermios: termios?
 
@@ -365,11 +378,51 @@ extension Terminal {
         write(ANSIRenderer.exitAlternateScreen)
     }
 
-    /// Tries to read exactly one byte from stdin. Pure non-blocking;
-    /// returns `nil` immediately if the kernel has nothing for us.
+    /// Drains whatever stdin has waiting into ``readBuffer`` in a
+    /// single `read()` syscall. No-op if the buffer still has
+    /// unconsumed bytes from a previous drain.
+    ///
+    /// Bulk reading replaces the previous one-byte-per-syscall
+    /// pattern. A mouse motion stream can produce dozens of bytes
+    /// per frame; reading them one at a time meant dozens of
+    /// syscalls per frame, which showed up as input-loop sluggishness
+    /// during e.g. scrolling a long list. A single `read(..., 256)`
+    /// pulls the whole pipe content in one trip across the
+    /// user/kernel boundary.
+    ///
+    /// 256 bytes is comfortably larger than any single event we
+    /// parse (the longest SGR mouse report is ~18 bytes; even a
+    /// burst of several events fits). When several frames' worth
+    /// of events queue up, a follow-up drain on the next
+    /// ``tryReadOneByte`` picks up the remainder — still O(1)
+    /// syscalls per drain.
+    private func drainStdin() {
+        guard readBufferOffset >= readBuffer.count else { return }
+
+        readBuffer.removeAll(keepingCapacity: true)
+        readBufferOffset = 0
+
+        let chunkSize = 256
+        var chunk = [UInt8](repeating: 0, count: chunkSize)
+        let n = chunk.withUnsafeMutableBufferPointer { ptr -> Int in
+            read(STDIN_FILENO, ptr.baseAddress, chunkSize)
+        }
+        if n > 0 {
+            readBuffer.append(contentsOf: chunk[0..<n])
+        }
+    }
+
+    /// Tries to read exactly one byte. Pure non-blocking; returns
+    /// `nil` immediately if neither ``readBuffer`` nor the kernel
+    /// has anything for us. Bytes come from the buffered drain
+    /// (``drainStdin``) — at most one `read()` syscall per
+    /// consecutive call.
     private func tryReadOneByte() -> UInt8? {
-        var byte: UInt8 = 0
-        return read(STDIN_FILENO, &byte, 1) > 0 ? byte : nil
+        drainStdin()
+        guard readBufferOffset < readBuffer.count else { return nil }
+        let byte = readBuffer[readBufferOffset]
+        readBufferOffset += 1
+        return byte
     }
 
     /// Reads raw bytes from the terminal, handling escape sequences.
@@ -621,17 +674,21 @@ extension Terminal {
         let maxPasteBytes = 65_536
 
         while content.count < maxPasteBytes {
-            var byte = [UInt8](repeating: 0, count: 1)
-            let bytesRead = read(STDIN_FILENO, &byte, 1)
-            guard bytesRead > 0 else {
-                // No more data available right now. For non-blocking reads
-                // (VMIN=0, VTIME=0) this means the paste end marker has not
-                // yet arrived. Wait briefly and retry.
+            // Drain in bulk from the shared readBuffer first; this is
+            // the same path used for normal input, so any paste
+            // content that came through in the same drain as the
+            // start marker is already sitting there.
+            if let b = tryReadOneByte() {
+                content.append(b)
+            } else {
+                // No bytes immediately available. Paste is an
+                // inherently synchronous operation — we must wait
+                // for the end marker before returning, so a brief
+                // sleep here is appropriate (and only happens during
+                // an active paste, not in the steady-state input loop).
                 usleep(1_000)  // 1ms
                 continue
             }
-
-            content.append(byte[0])
 
             // Check if content ends with the paste end marker.
             if content.count >= endMarker.count {
