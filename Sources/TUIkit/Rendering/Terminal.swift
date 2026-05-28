@@ -580,11 +580,9 @@ extension Terminal {
         let searchEnd = input.count - endMarker.count + 1
         for start in 0..<searchEnd {
             var match = true
-            for i in 0..<endMarker.count {
-                if input[start + i] != endMarker[i] {
-                    match = false
-                    break
-                }
+            for i in 0..<endMarker.count where input[start + i] != endMarker[i] {
+                match = false
+                break
             }
             if !match { continue }
 
