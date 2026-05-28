@@ -1,16 +1,8 @@
 ## RULES
 
-### Compatibility (non-negotiable)
-- **Swift 6.0 compatible**: `swift-tools-version: 6.0`. Never use features that require a newer compiler.
-- **Cross-platform**: must build and run without crashes/segfaults on both macOS and Linux. CI tests both (`macos-15` + `swift:6.0` container).
-- When in doubt, verify with the CI pipeline before merging.
-
-### Pre-Push Verification (non-negotiable)
-- **Before pushing to GitHub**: ALWAYS run `./scripts/test-linux.sh` to verify build + tests pass on both macOS and Linux.
-- The script runs `swift build` and `swift test` natively on macOS, then repeats both inside a `swift:6.0` Docker container (same image as CI).
-- **Never push code that has not been verified on both platforms.**
-- Usage: `./scripts/test-linux.sh` (both), `./scripts/test-linux.sh linux` (Linux only), `./scripts/test-linux.sh shell` (interactive Linux shell)
-- Requires Docker Desktop to be running.
+### Compatibility (non-negotiable, with one known exception)
+- **Swift 6.2 compatible**: `swift-tools-version: 6.2`.  Readily make use of language features up to 6.2, such as nonisolated on protocols / classes / structs / enums, test scoping traits, the `@concurrent` attribute, `InlineArray`, `@Observable` types and the `Observations` struct, raw identifier display names for unit tests, default values in string interpolations, weak let, global-actor isolated conformances, isolated synchronous deinit, task naming, regex lookbehind, non-escapable types, `Span` where it's available, yielding accessors, etc.
+- **Cross-platform**: must build and run correctly on both macOS and Linux. CI tests both (`macos-15` + `swift:6.2` container).
 
 ### Architecture (non-negotiable)
 
