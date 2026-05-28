@@ -213,7 +213,7 @@ private let shapeTable: [ShapeEntry] = computeShapeTable()
 /// the previous code materialised these six maps + the characters array
 /// on every call, costing seven allocations per `convertShapeBased` even
 /// before the loop ran.
-private let shapeTableColumns: (
+private let shapeTableColumns: (  // swiftlint:disable:this large_tuple
     t0: [Double], t1: [Double], t2: [Double],
     t3: [Double], t4: [Double], t5: [Double],
     characters: [Character]
@@ -477,7 +477,6 @@ extension ASCIIConverter {
         }
         return characters[bestIndex]
     }
-
 }
 
 // MARK: - Precomputed Sample Offsets
