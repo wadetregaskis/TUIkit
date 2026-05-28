@@ -351,6 +351,39 @@ extension Terminal {
         write(ANSIRenderer.exitAlternateScreen)
     }
 
+    /// Reads one byte from stdin, with a short retry loop to bridge
+    /// the gap between bytes of an in-progress CSI/mouse sequence.
+    ///
+    /// `VTIME=0 / VMIN=0` makes plain `read()` non-blocking — it
+    /// returns 0 immediately if no data is available. When the
+    /// terminal emits a mouse report it may arrive at the
+    /// application across several `read()`s; the bytes can already be
+    /// in flight from the terminal but not yet drained into our
+    /// process. Without this retry the CSI parser breaks out of its
+    /// loop before reaching the terminator and the trailing coord
+    /// bytes leak back through subsequent `readBytes()` calls as
+    /// ordinary single-byte keystrokes — that's how SGR mouse
+    /// reports end up typed into a focused TextField as `<64;68;28M`.
+    ///
+    /// 6 retries × 1ms gives the terminal up to ~6ms to finish
+    /// writing the sequence. In practice the byte usually arrives on
+    /// the first retry; the cap exists only to keep us from waiting
+    /// forever on a malformed / aborted sequence.
+    ///
+    /// - Returns: The next byte, or `nil` if no byte arrived within
+    ///   the retry budget.
+    private func readCSIByte() -> UInt8? {
+        var byte: UInt8 = 0
+        var n = read(STDIN_FILENO, &byte, 1)
+        var retries = 6
+        while n <= 0 && retries > 0 {
+            usleep(1_000)  // 1 ms
+            n = read(STDIN_FILENO, &byte, 1)
+            retries -= 1
+        }
+        return n > 0 ? byte : nil
+    }
+
     /// Reads raw bytes from the terminal, handling escape sequences.
     ///
     /// Reads exactly one key event worth of bytes. For escape sequences,
@@ -402,40 +435,37 @@ extension Terminal {
             // (Apple's Terminal.app falls back to X10 reports on
             // some events even when we ask for SGR via ?1006h, so this
             // really does happen in practice.)
-            let firstParamRead = read(STDIN_FILENO, &nextByte, 1)
-            guard firstParamRead > 0 else { return result }
-            result.append(nextByte[0])
+            guard let firstParam = readCSIByte() else { return result }
+            nextByte[0] = firstParam
+            result.append(firstParam)
 
-            if nextByte[0] == 0x4D {  // 'M' — legacy mouse report
+            if firstParam == 0x4D {  // 'M' — legacy mouse report
                 // Read exactly three more bytes: button code, x, y.
                 // Each is encoded as `(value + 32)` and may sit
                 // anywhere in 0x20…0xFF, so we cannot use a generic
                 // terminator predicate.
                 for _ in 0..<3 {
-                    let coordRead = read(STDIN_FILENO, &nextByte, 1)
-                    if coordRead <= 0 { break }
-                    result.append(nextByte[0])
+                    guard let coord = readCSIByte() else { break }
+                    result.append(coord)
                 }
                 return result
             }
 
             // If we already hit a CSI terminator immediately after `[`
             // (e.g. `ESC[A` for Up Arrow), we're done.
-            if nextByte[0] >= 0x40 && nextByte[0] <= 0x7E {
+            if firstParam >= 0x40 && firstParam <= 0x7E {
                 return result
             }
 
             // Regular CSI: read parameter bytes until we hit a real
             // terminator (a letter or `~`).
             for _ in 0..<(maxBytes - 3) {
-                let paramRead = read(STDIN_FILENO, &nextByte, 1)
-                guard paramRead > 0 else { break }
-
-                result.append(nextByte[0])
+                guard let next = readCSIByte() else { break }
+                result.append(next)
 
                 // CSI terminators: letters (0x40-0x7E) mark end of sequence
                 // Common: A-D (arrows), H/F (home/end), Z (shift-tab), ~ (extended)
-                if nextByte[0] >= 0x40 && nextByte[0] <= 0x7E {
+                if next >= 0x40 && next <= 0x7E {
                     break
                 }
             }
