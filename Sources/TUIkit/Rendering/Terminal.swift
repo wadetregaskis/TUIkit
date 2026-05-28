@@ -58,32 +58,41 @@ final class Terminal: TerminalProtocol {
     /// frame at no cost.
     private var appliedMouseMode: MouseTrackingMode = .none
 
-    /// Bytes of an in-progress escape sequence saved between
-    /// ``readBytes`` calls. With `VTIME=0/VMIN=0` reads we can't
-    /// block on a partial sequence; we save what we have, return
-    /// `[]`, and let the next call try to drain more bytes from
-    /// stdin. See ``readBytes(maxBytes:)`` for the full design note.
-    private var pendingBytes: [UInt8] = []
+    /// All input bytes that have been drained from stdin but not yet
+    /// dispatched as events. Bytes are appended at the back by
+    /// ``appendDrain()`` (one `read()` syscall per call) and consumed
+    /// from the front by ``readEvent()`` as it identifies events.
+    ///
+    /// Acts as a deque without an extra dependency: ``bufferOffset``
+    /// is the read cursor; `inputBuffer[bufferOffset...]` is what's
+    /// still live. When the dead prefix gets large enough we compact
+    /// in one O(remaining) shift — amortised O(1) consumption.
+    private var inputBuffer: [UInt8] = []
+    private var bufferOffset: Int = 0
 
-    /// How many consecutive ``readBytes`` calls have failed to add
-    /// any new bytes to a non-empty ``pendingBytes`` buffer. Once
-    /// this hits the threshold (see ``readBytes(maxBytes:)``) we
-    /// commit the partial so a bare Esc key (which looks like a
-    /// partial CSI introducer for the first frame) finally fires.
-    private var pendingStaleFrames: Int = 0
+    /// True while we're between the bracketed-paste start (`ESC[200~`)
+    /// and end (`ESC[201~`) markers. Paste content is accumulated
+    /// across as many `readEvent()` calls as it takes for the end
+    /// marker to arrive — no blocking, no `usleep`. The run loop
+    /// stays responsive even for very large pastes.
+    private var inPasteMode: Bool = false
 
-    /// Bytes drained from stdin in bulk but not yet handed back via
-    /// ``tryReadOneByte``. Each ``drainStdin`` call refills this
-    /// buffer with a single `read()` syscall — far cheaper than the
-    /// previous one-syscall-per-byte pattern, which compounded
-    /// across the long byte streams produced by mouse motion.
-    private var readBuffer: [UInt8] = []
-
-    /// Current consume offset within ``readBuffer``. Bytes at
-    /// indices `0..<readBufferOffset` have already been returned;
-    /// `readBufferOffset..<readBuffer.count` is what's still
-    /// available to read.
-    private var readBufferOffset: Int = 0
+    /// Frames during which we couldn't make progress on whatever
+    /// sits at the front of the input buffer. Increments only when
+    /// a drain produced no new bytes *and* the buffer still has an
+    /// unparseable partial at the front. Resets on any drained byte
+    /// or successful extract.
+    ///
+    /// Two roles:
+    /// - Bare-Esc disambiguation: `0x1B` alone looks identical to
+    ///   the first byte of a CSI / SS3 / Alt+key sequence until
+    ///   something definitive arrives. After two stale frames
+    ///   (~48ms) we commit it as an Esc keystroke.
+    /// - Stuck-byte recovery: if a malformed or truncated sequence
+    ///   sits at the front and the terminal really isn't sending
+    ///   anything more, we consume one byte to make progress and
+    ///   let the parser try again.
+    private var staleFrames: Int = 0
 
     /// The original terminal settings.
     private var originalTermios: termios?
@@ -378,254 +387,282 @@ extension Terminal {
         write(ANSIRenderer.exitAlternateScreen)
     }
 
-    /// Drains whatever stdin has waiting into ``readBuffer`` in a
-    /// single `read()` syscall. No-op if the buffer still has
-    /// unconsumed bytes from a previous drain.
-    ///
-    /// Bulk reading replaces the previous one-byte-per-syscall
-    /// pattern. A mouse motion stream can produce dozens of bytes
-    /// per frame; reading them one at a time meant dozens of
-    /// syscalls per frame, which showed up as input-loop sluggishness
-    /// during e.g. scrolling a long list. A single `read(..., 256)`
-    /// pulls the whole pipe content in one trip across the
-    /// user/kernel boundary.
-    ///
-    /// 256 bytes is comfortably larger than any single event we
-    /// parse (the longest SGR mouse report is ~18 bytes; even a
-    /// burst of several events fits). When several frames' worth
-    /// of events queue up, a follow-up drain on the next
-    /// ``tryReadOneByte`` picks up the remainder — still O(1)
-    /// syscalls per drain.
-    private func drainStdin() {
-        guard readBufferOffset >= readBuffer.count else { return }
+    /// Bytes available in ``inputBuffer`` from the current cursor onward.
+    private var remaining: Int { inputBuffer.count - bufferOffset }
 
-        readBuffer.removeAll(keepingCapacity: true)
-        readBufferOffset = 0
+    /// Returns the byte at position `i` relative to the current cursor.
+    /// Precondition: `i < remaining`.
+    private func peek(_ i: Int) -> UInt8 { inputBuffer[bufferOffset + i] }
 
-        let chunkSize = 256
+    /// Advances the read cursor by `n` bytes. Performs an
+    /// occasional compact (slide live bytes to the start of the
+    /// array) so the deque doesn't grow without bound during a
+    /// long session.
+    private func consume(_ n: Int) {
+        bufferOffset += n
+        // Compact when the dead prefix dominates: > 4 KiB absolute,
+        // or > half of a non-trivial buffer.
+        if bufferOffset > 4096
+            || (bufferOffset > 256 && bufferOffset * 2 > inputBuffer.count)
+        {
+            inputBuffer.removeFirst(bufferOffset)
+            bufferOffset = 0
+        }
+    }
+
+    /// Drains whatever stdin has waiting into ``inputBuffer``, in
+    /// one `read()` syscall, up to 4 KiB. Returns the number of
+    /// new bytes appended.
+    ///
+    /// 4 KiB matches typical kernel pipe-write granularity and is
+    /// comfortably above a burst of mouse events; very large
+    /// pastes simply take a few drains to fully arrive — which is
+    /// fine because the main loop keeps spinning between drains.
+    @discardableResult
+    private func appendDrain() -> Int {
+        let chunkSize = 4096
         var chunk = [UInt8](repeating: 0, count: chunkSize)
         let n = chunk.withUnsafeMutableBufferPointer { ptr -> Int in
             read(STDIN_FILENO, ptr.baseAddress, chunkSize)
         }
         if n > 0 {
-            readBuffer.append(contentsOf: chunk[0..<n])
+            inputBuffer.append(contentsOf: chunk[0..<n])
+            return n
         }
+        return 0
     }
 
-    /// Tries to read exactly one byte. Pure non-blocking; returns
-    /// `nil` immediately if neither ``readBuffer`` nor the kernel
-    /// has anything for us. Bytes come from the buffered drain
-    /// (``drainStdin``) — at most one `read()` syscall per
-    /// consecutive call.
-    private func tryReadOneByte() -> UInt8? {
-        drainStdin()
-        guard readBufferOffset < readBuffer.count else { return nil }
-        let byte = readBuffer[readBufferOffset]
-        readBufferOffset += 1
-        return byte
+    /// The bracketed-paste start marker (`ESC [ 2 0 0 ~`).
+    private static let pasteStart: [UInt8] = [
+        0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E,
+    ]
+
+    /// The bracketed-paste end marker (`ESC [ 2 0 1 ~`).
+    private static let pasteEnd: [UInt8] = [
+        0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E,
+    ]
+
+    /// Maximum bytes we'll accumulate while waiting for a paste end
+    /// marker. Anything beyond this is treated as a misbehaving
+    /// terminal and discarded so it can't pin memory forever.
+    private static let maxPasteBytes = 1 << 20  // 1 MiB
+
+    /// Hard cap on bytes per regular event sequence — enough for
+    /// the longest realistic CSI / SGR mouse report (three-digit
+    /// coords).
+    private static let maxEventBytes = 32
+
+    /// Tries to peel one complete regular (non-paste) event off the
+    /// front of ``inputBuffer``. Returns the raw bytes, or `nil` if
+    /// the buffer doesn't have a complete sequence yet — in which
+    /// case the bytes already there stay put for the next call.
+    private func tryExtractRegularEvent() -> [UInt8]? {
+        guard remaining >= 1 else { return nil }
+        let first = peek(0)
+
+        // Plain (non-escape) byte: single-byte event.
+        if first != 0x1B {
+            consume(1)
+            return [first]
+        }
+
+        // ESC + ?  — need at least the byte after ESC.
+        guard remaining >= 2 else { return nil }
+        let second = peek(1)
+
+        if second == 0x5B {  // ESC [ = CSI
+            return tryExtractCSI()
+        }
+
+        if second == 0x4F {  // ESC O = SS3 (F1-F4 etc.)
+            guard remaining >= 3 else { return nil }
+            let bytes = [peek(0), peek(1), peek(2)]
+            consume(3)
+            return bytes
+        }
+
+        // Alt+key — 2 bytes total.
+        let bytes = [peek(0), peek(1)]
+        consume(2)
+        return bytes
     }
 
-    /// Reads raw bytes from the terminal, handling escape sequences.
-    ///
-    /// Reads exactly one event's worth of bytes. Returns either:
-    ///   - a single non-escape byte (a plain keystroke),
-    ///   - a complete escape sequence (Alt+key, SS3 function key, full
-    ///     CSI sequence, legacy or SGR mouse report), or
-    ///   - an empty array when the kernel has no data right now.
-    ///
-    /// ## Partial-sequence buffering
-    ///
-    /// A long sequence (notably SGR mouse reports — up to ~18 bytes
-    /// for three-digit coords) can arrive at the application across
-    /// multiple `read()` calls if the terminal hasn't finished
-    /// flushing the bytes by the time we drain stdin. With
-    /// `VTIME=0/VMIN=0` an empty read returns 0 immediately, which
-    /// would otherwise break the CSI loop before the terminator
-    /// arrived and leave the remaining bytes to be re-read on the
-    /// next call as ordinary keystrokes — that's how SGR mouse
-    /// reports leaked into focused TextFields as gibberish like
-    /// `<64;68;28M`.
-    ///
-    /// Instead of busy-waiting with `usleep` (which freezes the run
-    /// loop), we *save* a partial sequence in ``pendingBytes`` and
-    /// return `[]`. The next `readBytes` call resumes from that
-    /// buffer: if more bytes are now available we continue reading
-    /// toward the terminator; if they still aren't, we save again.
-    /// The cost of a partial read is therefore just one main-loop
-    /// idle frame (~24ms) — the main loop keeps animating, accepting
-    /// other input, etc.
-    ///
-    /// A bare Esc key produces only `0x1B`, with no continuation.
-    /// That looks identical to a partial CSI introducer until a
-    /// full frame later, when the byte is still alone — at which
-    /// point we commit it as an Esc keystroke. So pressing Esc has
-    /// a one-frame (~24ms) commit latency; every other key path is
-    /// untouched.
-    ///
-    /// - Parameter maxBytes: Maximum bytes per sequence. Defaults
-    ///   to 32 — enough for any realistic CSI, including SGR mouse
-    ///   reports at three-digit coordinates.
-    /// - Returns: The bytes read, or `[]` if nothing is ready yet.
-    func readBytes(maxBytes: Int = 32) -> [UInt8] {
-        let initialCount = pendingBytes.count
-        var result = pendingBytes
-        pendingBytes = []
+    /// CSI extractor — assumes `inputBuffer` starts with `ESC [`
+    /// and the buffer has at least 2 bytes. Returns the full
+    /// sequence bytes on success or `nil` if the terminator hasn't
+    /// arrived yet.
+    private func tryExtractCSI() -> [UInt8]? {
+        guard remaining >= 3 else { return nil }
+        let firstParam = peek(2)
 
-        // No partial in flight — try to read the first byte.
-        if result.isEmpty {
-            guard let first = tryReadOneByte() else { return [] }
-
-            // Plain (non-escape) byte: a single-byte key event.
-            if first != 0x1B {
-                pendingStaleFrames = 0
-                return [first]
-            }
-            result.append(first)
+        // Legacy ("X10") mouse: ESC [ M <button+32> <x+32> <y+32>
+        // M is the *introducer*, not the terminator, and the three
+        // trailing coord bytes can take any value, so we just
+        // require six bytes total.
+        if firstParam == 0x4D {
+            guard remaining >= 6 else { return nil }
+            var bytes = [UInt8]()
+            bytes.reserveCapacity(6)
+            for i in 0..<6 { bytes.append(peek(i)) }
+            consume(6)
+            return bytes
         }
 
-        // Try to complete the escape sequence using whatever's
-        // available right now. If we can't, save the partial and
-        // bail.
-        if tryCompleteEscapeSequence(&result, maxBytes: maxBytes) {
-            pendingStaleFrames = 0
-            return result
-        }
-
-        if result.count > initialCount {
-            // We made progress this call — keep the partial and try
-            // again on the next `readBytes`. The main loop will
-            // idle for ~24ms before then, which gives the terminal
-            // plenty of time to finish writing the sequence.
-            pendingStaleFrames = 0
-            pendingBytes = result
-            return []
-        }
-
-        // No progress at all on this call. That means the partial
-        // we already had still has no fresh bytes behind it.
-        // Stale for one frame is fine; stale for two means whatever
-        // was coming isn't, so commit what we have and let the
-        // caller try to parse it (it'll either match e.g. an Esc
-        // key, or fail and be silently dropped).
-        pendingStaleFrames += 1
-        if pendingStaleFrames >= 2 {
-            pendingStaleFrames = 0
-            return result
-        }
-        pendingBytes = result
-        return []
-    }
-
-    /// Attempts to read the rest of an escape sequence given a
-    /// partial `result` that starts with `0x1B`.
-    ///
-    /// - Returns: `true` if the sequence is now complete, `false` if
-    ///   bytes are missing — in which case `result` holds whatever
-    ///   was read so far, ready to be saved as a partial.
-    private func tryCompleteEscapeSequence(_ result: inout [UInt8], maxBytes: Int) -> Bool {
-        // Need at least the byte after ESC to know which sequence
-        // variant this is.
-        if result.count == 1 {
-            guard let b = tryReadOneByte() else { return false }
-            result.append(b)
-        }
-
-        let secondByte = result[1]
-
-        if secondByte == 0x5B {  // ESC [ = CSI
-            return tryCompleteCSI(&result, maxBytes: maxBytes)
-        }
-
-        if secondByte == 0x4F {  // ESC O = SS3 (F1-F4 etc.)
-            if result.count == 2 {
-                guard let b = tryReadOneByte() else { return false }
-                result.append(b)
-            }
-            return true
-        }
-
-        // Alt+key — ESC followed by single key. Two bytes total.
-        return true
-    }
-
-    /// Reads CSI parameter bytes until a terminator (a letter or
-    /// `~`) or `maxBytes` is reached. Handles the legacy "X10"
-    /// mouse-report sub-format (`ESC[M<b><x><y>`, six bytes) where
-    /// `M` is the *introducer*, not the terminator, and the three
-    /// trailing coord bytes can sit anywhere in 0x20…0xFF.
-    ///
-    /// - Returns: `true` if the CSI is complete, `false` if bytes
-    ///   are still pending.
-    private func tryCompleteCSI(_ result: inout [UInt8], maxBytes: Int) -> Bool {
-        // Need the first param byte to disambiguate.
-        if result.count == 2 {
-            guard let b = tryReadOneByte() else { return false }
-            result.append(b)
-        }
-
-        let firstParam = result[2]
-
-        if firstParam == 0x4D {  // 'M' — legacy mouse report
-            // Read exactly three more coord bytes. Each is the raw
-            // value + 32 and may take any byte value.
-            while result.count < 6 {
-                guard let b = tryReadOneByte() else { return false }
-                result.append(b)
-            }
-            return true
-        }
-
-        // Single-letter CSI terminator straight after `[`
-        // (e.g. `ESC[A` for Up Arrow).
+        // Single-letter CSI (e.g. ESC[A for Up Arrow): the first
+        // byte after `[` is already a terminator.
         if firstParam >= 0x40 && firstParam <= 0x7E {
-            return true
+            let bytes = [peek(0), peek(1), peek(2)]
+            consume(3)
+            return bytes
         }
 
-        // Read parameter bytes until terminator.
-        while result.count < maxBytes {
-            guard let b = tryReadOneByte() else { return false }
-            result.append(b)
+        // Scan forward for a real terminator (letter or `~`).
+        var i = 3
+        let cap = min(remaining, Self.maxEventBytes)
+        while i < cap {
+            let b = peek(i)
             if b >= 0x40 && b <= 0x7E {
-                return true
+                var bytes = [UInt8]()
+                bytes.reserveCapacity(i + 1)
+                for j in 0...i { bytes.append(peek(j)) }
+                consume(i + 1)
+                return bytes
+            }
+            i += 1
+        }
+
+        if i >= Self.maxEventBytes {
+            // Maxed out without a terminator. Treat as malformed —
+            // consume the truncated prefix and move on.
+            var bytes = [UInt8]()
+            bytes.reserveCapacity(Self.maxEventBytes)
+            for j in 0..<Self.maxEventBytes { bytes.append(peek(j)) }
+            consume(Self.maxEventBytes)
+            return bytes
+        }
+
+        // Buffer simply doesn't have the terminator yet.
+        return nil
+    }
+
+    /// While `inPasteMode` is set, scans ``inputBuffer`` for the
+    /// paste end marker. If found, builds a paste event from the
+    /// content between markers and consumes through the end marker.
+    /// Otherwise returns `nil` and leaves the buffer intact.
+    private func tryExtractPaste() -> TerminalInput? {
+        let endMarker = Self.pasteEnd
+        guard remaining >= endMarker.count else { return nil }
+
+        // Scan for the end marker. Note: the start marker is no
+        // longer in the buffer — `readEvent()` consumed it before
+        // setting `inPasteMode = true`.
+        let searchEnd = remaining - endMarker.count + 1
+        for start in 0..<searchEnd {
+            var match = true
+            for i in 0..<endMarker.count {
+                if peek(start + i) != endMarker[i] {
+                    match = false
+                    break
+                }
+            }
+            if !match { continue }
+
+            // Content is everything before the marker.
+            var content = [UInt8]()
+            content.reserveCapacity(start)
+            for i in 0..<start { content.append(peek(i)) }
+            consume(start + endMarker.count)
+            inPasteMode = false
+
+            let text = String(bytes: content, encoding: .utf8)
+                ?? String(content.map { Character(UnicodeScalar($0)) })
+            return .key(KeyEvent(key: .paste(text)))
+        }
+
+        // No end marker yet. Safety: if a runaway paste fills more
+        // than the cap, give up on it so we don't pin memory.
+        if remaining > Self.maxPasteBytes {
+            consume(remaining)
+            inPasteMode = false
+        }
+        return nil
+    }
+
+    /// Reads up to one complete event from the input stream.
+    /// Returns `nil` when nothing is ready right now.
+    ///
+    /// This is the single entry point for the input pipeline. It
+    /// drains stdin opportunistically (once per call, only when
+    /// the buffer is empty or a partial sequence needs more
+    /// bytes), parses events out of the buffer, and never blocks
+    /// the run loop.
+    func readEvent() -> TerminalInput? {
+        // Make sure there's something to inspect.
+        if remaining == 0 {
+            appendDrain()
+        }
+
+        if inPasteMode {
+            if let event = tryExtractPaste() {
+                staleFrames = 0
+                return event
+            }
+            // Paste content is still in flight. Give the kernel one
+            // chance to deliver more right now, but don't sleep —
+            // the main loop will spin again in ~24ms.
+            let added = appendDrain()
+            if added > 0, let event = tryExtractPaste() {
+                staleFrames = 0
+                return event
+            }
+            // Don't increment staleFrames in paste mode — large
+            // pastes legitimately take several frames to fully
+            // arrive, and the maxPasteBytes guard handles the
+            // pathological case.
+            return nil
+        }
+
+        if let bytes = tryExtractRegularEvent() {
+            staleFrames = 0
+            return finalize(bytes: bytes)
+        }
+
+        // No complete event yet. Try one more drain in case the
+        // kernel has the missing bytes ready right now.
+        let added = appendDrain()
+        if added > 0, let bytes = tryExtractRegularEvent() {
+            staleFrames = 0
+            return finalize(bytes: bytes)
+        }
+
+        // Still nothing. If the buffer's empty there's no partial to
+        // worry about; just return nil.
+        guard remaining > 0 else {
+            staleFrames = 0
+            return nil
+        }
+
+        // We have a stuck partial at the front. Wait one more frame
+        // for the rest; if still nothing comes, give up on the
+        // front byte. This recovers bare Esc (which looks identical
+        // to a partial CSI introducer until something definitive
+        // arrives) and any truncated sequence the terminal will
+        // never finish.
+        if added == 0 {
+            staleFrames += 1
+            if staleFrames >= 2 {
+                staleFrames = 0
+                let b = peek(0)
+                consume(1)
+                return finalize(bytes: [b])
             }
         }
-        // Reached maxBytes without terminator — treat as complete;
-        // downstream parsers will reject the malformed sequence.
-        return true
+        return nil
     }
 
-    /// Reads a key event from the terminal.
-    ///
-    /// When bracketed paste mode is active the terminal wraps pasted text
-    /// in `ESC[200~` ... `ESC[201~` markers. This method detects the start
-    /// marker, buffers all bytes until the end marker, and returns the
-    /// entire pasted text as a single `Key.paste(String)` event.
-    ///
-    /// - Returns: The key event, or nil on timeout/error.
-    func readKeyEvent() -> KeyEvent? {
-        let bytes = readBytes()
-        guard !bytes.isEmpty else { return nil }
-
-        // Detect bracketed paste start: ESC [ 2 0 0 ~
-        if bytes == [0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E] {
-            let pastedText = readBracketedPasteContent()
-            return KeyEvent(key: .paste(pastedText))
-        }
-
-        return KeyEvent.parse(bytes)
-    }
-
-    /// Reads the next input event from the terminal, whether key or mouse.
-    ///
-    /// Recognises SGR-extended mouse reports (`CSI < … M/m`) and routes
-    /// them through ``MouseEvent.parseSGR(_:)``; everything else falls
-    /// through the same path as ``readKeyEvent()`` for key handling.
-    ///
-    /// - Returns: The next event, or nil on timeout/error.
-    func readEvent() -> TerminalInput? {
-        let bytes = readBytes()
-        guard !bytes.isEmpty else { return nil }
-
+    /// Wraps raw event bytes into a ``TerminalInput``. Detects
+    /// the bracketed-paste start marker and flips into paste mode.
+    private func finalize(bytes: [UInt8]) -> TerminalInput? {
         // SGR mouse report: ESC [ < … M / m
         if bytes.count >= 9, bytes[0] == 0x1B, bytes[1] == 0x5B, bytes[2] == 0x3C {
             if let mouse = MouseEvent.parseSGR(bytes) {
@@ -633,23 +670,21 @@ extension Terminal {
             }
         }
 
-        // Legacy ("X10") mouse report: ESC [ M <button+32> <x+32> <y+32>
-        // Apple's Terminal.app sometimes falls back to this even when
-        // SGR mouse mode is requested.
+        // Legacy mouse report: ESC [ M <b> <x> <y>
         if bytes.count == 6, bytes[0] == 0x1B, bytes[1] == 0x5B, bytes[2] == 0x4D {
             if let mouse = MouseEvent.parseLegacy(bytes) {
                 return .mouse(mouse)
             }
-            // Malformed but unambiguously a legacy report — drop it
-            // entirely rather than letting the coord bytes leak back
-            // through KeyEvent.parse as gibberish.
+            // Recognisably a legacy report but malformed — drop it
+            // rather than letting the coord bytes leak as keystrokes.
             return nil
         }
 
-        // Bracketed paste start.
-        if bytes == [0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E] {
-            let pastedText = readBracketedPasteContent()
-            return .key(KeyEvent(key: .paste(pastedText)))
+        // Bracketed paste start: switch into paste mode and try to
+        // extract the content right now if it's already buffered.
+        if bytes == Self.pasteStart {
+            inPasteMode = true
+            return tryExtractPaste()
         }
 
         if let key = KeyEvent.parse(bytes) {
@@ -658,50 +693,30 @@ extension Terminal {
         return nil
     }
 
-    /// Reads bytes until the bracketed paste end marker `ESC[201~` is found.
+    /// Reads raw event bytes — back-compat for the
+    /// ``TerminalProtocol`` interface. New code should prefer
+    /// ``readEvent()`` which gives you parsed events directly and
+    /// handles bracketed paste, mouse reports, and the bare-Esc
+    /// disambiguation in one place.
     ///
-    /// Called after the paste start marker `ESC[200~` has been detected.
-    /// Reads byte-by-byte, watching for the 6-byte end sequence. All bytes
-    /// before the end marker are collected and returned as a UTF-8 string.
+    /// - Returns: One event's bytes, or `[]` if no complete event
+    ///   is buffered.
+    func readBytes(maxBytes: Int = 32) -> [UInt8] {
+        if remaining == 0 { appendDrain() }
+        return tryExtractRegularEvent() ?? []
+    }
+
+    /// Reads a key event from the terminal — back-compat for the
+    /// ``TerminalProtocol`` interface. New code should call
+    /// ``readEvent()`` and switch on the returned ``TerminalInput``.
     ///
-    /// - Returns: The pasted text content.
-    private func readBracketedPasteContent() -> String {
-        var content: [UInt8] = []
-        // The end marker is: ESC [ 2 0 1 ~
-        let endMarker: [UInt8] = [0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E]
-
-        // Safety limit to prevent infinite buffering on malformed input.
-        let maxPasteBytes = 65_536
-
-        while content.count < maxPasteBytes {
-            // Drain in bulk from the shared readBuffer first; this is
-            // the same path used for normal input, so any paste
-            // content that came through in the same drain as the
-            // start marker is already sitting there.
-            if let b = tryReadOneByte() {
-                content.append(b)
-            } else {
-                // No bytes immediately available. Paste is an
-                // inherently synchronous operation — we must wait
-                // for the end marker before returning, so a brief
-                // sleep here is appropriate (and only happens during
-                // an active paste, not in the steady-state input loop).
-                usleep(1_000)  // 1ms
-                continue
-            }
-
-            // Check if content ends with the paste end marker.
-            if content.count >= endMarker.count {
-                let tail = Array(content.suffix(endMarker.count))
-                if tail == endMarker {
-                    // Remove the end marker from the content.
-                    content.removeLast(endMarker.count)
-                    break
-                }
-            }
-        }
-
-        return String(bytes: content, encoding: .utf8) ?? String(content.map { Character(UnicodeScalar($0)) })
+    /// If the next event is a mouse event it is consumed and `nil`
+    /// is returned — the legacy interface has nowhere to surface it.
+    /// Callers that care about mouse events must use `readEvent()`.
+    func readKeyEvent() -> KeyEvent? {
+        guard let event = readEvent() else { return nil }
+        if case .key(let key) = event { return key }
+        return nil
     }
 }
 
