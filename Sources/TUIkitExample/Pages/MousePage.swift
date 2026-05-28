@@ -64,8 +64,11 @@ struct MousePage: View {
 
             DemoSection("Scroll Counter") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Scroll inside the box. Hold Shift to scroll horizontally.")
+                    Text("Scroll inside the box. Hold Shift to scroll horizontally on terminals that forward it.")
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Text("(Apple Terminal.app intercepts Shift+wheel for its own scrollback — use a trackpad's horizontal scroll on Terminal.app, or test in iTerm2 / kitty / wezterm for Shift+wheel.)")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                        .dim()
                     // 2-D scroll position display. The vertical and
                     // horizontal axes each get their own line so you
                     // can see independent accumulation.
