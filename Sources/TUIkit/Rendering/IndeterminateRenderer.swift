@@ -169,12 +169,14 @@ extension IndeterminateRenderer {
     /// rightward.
     private static func renderGradient(width: Int) -> String {
         let stops: [(r: UInt8, g: UInt8, b: UInt8)] = [
+            // swiftlint:disable comma
             (180,  30,  80),  // magenta-pink
             (220, 110,  40),  // amber
             (220, 220,  60),  // yellow
             ( 60, 200,  90),  // green
             ( 50, 140, 220),  // cyan-blue
             (140,  90, 220),  // violet
+            // swiftlint:enable comma
         ]
         let phase = phase(period: 2.4)
         var result = ""
