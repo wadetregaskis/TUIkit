@@ -393,11 +393,10 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                             // dragging across the track lands on the
                             // same values you'd reach by tapping `→`.
                             let pos = max(0, min(trackWidth - 1, event.x - trackLeft))
-                            let f = trackWidth > 1
-                                ? Double(pos) / Double(trackWidth - 1)
-                                : 0
                             let range = captureBounds.upperBound - captureBounds.lowerBound
-                            let raw = captureBounds.lowerBound + f * range
+                            let raw = captureBounds.lowerBound + (trackWidth > 1
+                                                                  ? Double(pos) / Double(trackWidth - 1)
+                                                                  : 0) * range
                             let snapped: Double
                             if captureStep > 0 {
                                 let stepsFromLow = ((raw - captureBounds.lowerBound) / captureStep).rounded()
