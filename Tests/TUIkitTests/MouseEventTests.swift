@@ -273,7 +273,7 @@ struct MouseHitTestPropagationTests {
         // focused — handler.text is the second field's binding.
         focused.text.wrappedValue = "marker"
         #expect(b.wrappedValue == "marker")
-        #expect(a.wrappedValue == "")
+        #expect(a.wrappedValue == "")  // swiftlint:disable:this empty_string
     }
 
     @Test("View .mouseSupport modifier overrides scene base config")
