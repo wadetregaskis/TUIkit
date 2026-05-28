@@ -203,14 +203,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             let captureEntries = entries
             let captureSelection = selection
             let captureHandler = handler
-            for (index, _) in captureEntries.enumerated() {
+            for (index, entry) in captureEntries.enumerated() {
                 let mouseHandlerID = mouseDispatcher.register { event in
                     guard event.button == .left else { return false }
                     switch event.phase {
                     case .pressed: return true
                     case .released:
                         focusManager.focus(id: captureFocusID)
-                        captureSelection.wrappedValue = captureEntries[index].tag
+                        captureSelection.wrappedValue = entry.tag
                         captureHandler.highlightedIndex = index
                         captureHandler.isOpen = false
                         return true
