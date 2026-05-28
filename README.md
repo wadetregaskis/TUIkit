@@ -236,7 +236,7 @@ Tools/
 
 ## Requirements
 
-- Swift 6.0+
+- Swift 6.2+
 - macOS 14+ or Linux
 
 ## Developer Notes
