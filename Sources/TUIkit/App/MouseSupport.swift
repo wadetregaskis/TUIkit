@@ -115,20 +115,20 @@ public struct MouseSupport: Sendable, Equatable {
     }
 
     /// No mouse capture — terminal native behaviour is fully preserved.
-    public static let disabled = MouseSupport()
+    public static let disabled = Self()
 
     /// Scroll-wheel only, no clicks or drag.
-    public static let scrollOnly = MouseSupport(scrolling: true)
+    public static let scrollOnly = Self(scrolling: true)
 
     /// Clicks, scrolling, and drag tracking — but no motion.
     ///
     /// This is the recommended default for most TUI apps. Hover
     /// effects require ``full``.
-    public static let standard = MouseSupport(
+    public static let standard = Self(
         clicks: true, scrolling: true, drag: true)
 
     /// Everything including cursor-motion reporting.
-    public static let full = MouseSupport(
+    public static let full = Self(
         clicks: true, scrolling: true, drag: true, motion: true)
 }
 
