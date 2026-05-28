@@ -85,12 +85,20 @@ struct MousePage: View {
                         // shift to route the wheel sideways.
                         switch event.button {
                         case .scrollUp:
-                            if event.shift { scrollDeltaX -= 1 }
-                            else { scrollDeltaY += 1 }
+                            if event.shift {
+                                scrollDeltaX -= 1
+                            } else {
+                                scrollDeltaY += 1
+                            }
+
                             return true
                         case .scrollDown:
-                            if event.shift { scrollDeltaX += 1 }
-                            else { scrollDeltaY -= 1 }
+                            if event.shift {
+                                scrollDeltaX += 1
+                            } else {
+                                scrollDeltaY -= 1
+                            }
+
                             return true
                         case .scrollLeft:
                             scrollDeltaX -= 1
