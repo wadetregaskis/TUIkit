@@ -255,8 +255,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let listFocusManager = context.environment.focusManager
             let captureFocusID = sharedListFocusID
             let paddingTop = style.rowPadding.top
+            // The bordered container places content at y = 1
+            // (top border) plus the configured top padding. The
+            // captured row y-ranges below are already relative to the
+            // *content* (they include the scroll indicator's own row
+            // when present), so this single inset is the entire
+            // translation needed.
             let topInset = 1 + paddingTop
-            let scrollIndicatorOffset = sharedListHandler?.hasContentAbove == true ? 1 : 0
             let rowRanges = visibleRowYRanges
             let listHandler = sharedListHandler
 
@@ -280,8 +285,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // selection.
                     let yInLines = event.y - topInset
                     if let hit = rowRanges.first(where: { range in
-                        let yInRow = yInLines - range.yStart - scrollIndicatorOffset
-                        return yInRow >= 0 && yInRow < range.height
+                        yInLines >= range.yStart && yInLines < range.yStart + range.height
                     }) {
                         if case .content = hit.type {
                             listHandler?.focusedIndex = hit.rowIndex
