@@ -18,6 +18,9 @@ private enum PickerMenuConstants {
     /// `StateStorage` property index for the persisted focus identifier.
     static let focusIDStateIndex = 1
 
+    /// `StateStorage` property index for the persisted hover state.
+    static let isHoveredStateIndex = 2
+
     /// The caret shown when the drop-down is closed (▾).
     static let closedCaret = "\u{25BE}"
 
@@ -105,6 +108,18 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Hover state for the collapsed control. Same shape as
+        // Button — flipped by the dispatcher on synthetic
+        // .entered / .exited events, suppressed while focused
+        // (focus is more emphatic) and while disabled.
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: PickerMenuConstants.isHoveredStateIndex
+        )
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
+
         // Render every option's label once; reuse for sizing and drawing.
         let renderedLabels: [String] = entries.map { entry in
             entry.label.renderToBuffer(context: context).lines.first ?? ""
@@ -135,6 +150,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             renderedLabels: renderedLabels,
             isOpen: isOpen,
             isFocused: isFocused,
+            isHovered: isHovered,
             context: context,
             palette: palette
         )
@@ -147,14 +163,22 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            mouseDispatcher.requestFeature(.motion)
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let captureHandler = handler
+            let captureHoverBox = hoverBox
             let mouseHandlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     focusManager.focus(id: captureFocusID)
                     captureHandler.isOpen.toggle()
                     if captureHandler.isOpen {
@@ -172,7 +196,8 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
                     offsetY: 0,
                     width: collapsedWidth,
                     height: 1,
-                    handlerID: mouseHandlerID
+                    handlerID: mouseHandlerID,
+                    focusID: persistedFocusID
                 )
             )
         }
@@ -254,6 +279,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         renderedLabels: [String],
         isOpen: Bool,
         isFocused: Bool,
+        isHovered: Bool,
         context: RenderContext,
         palette: any Palette
     ) -> String {
@@ -272,7 +298,13 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         let fittedText = fit(selectedText, to: textWidth)
         let content = " " + fittedText + caret + " "
 
-        let buttonBg = palette.accent.opacity(ViewConstants.focusBorderDim)
+        // Same hover treatment as Button: bump the background
+        // tint while the cursor is hovering and the control
+        // isn't focused. Caps and label colour are unchanged.
+        let buttonBgOpacity = isHovered
+            ? ViewConstants.hoverBackground
+            : ViewConstants.focusBorderDim
+        let buttonBg = palette.accent.opacity(buttonBgOpacity)
 
         let labelFg: Color
         if isDisabled {
