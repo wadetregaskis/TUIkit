@@ -414,11 +414,26 @@ extension TextFieldHandler {
             clearSelection()
         }
 
-        var current = text.wrappedValue
-        let index = current.index(current.startIndex, offsetBy: min(cursorPosition, current.count))
-        current.insert(char, at: index)
-        text.wrappedValue = current
+        // Note: `current` retains the pre-write value via copy-on-
+        // write; we only mutate `updated`. Diagnostic logging below
+        // takes advantage of that to report the before/after pair
+        // without an extra capture.
+        let current = text.wrappedValue
+        var updated = current
+        let index = updated.index(updated.startIndex, offsetBy: min(cursorPosition, updated.count))
+        updated.insert(char, at: index)
+        text.wrappedValue = updated
         cursorPosition += 1
+
+        // Diagnostic (TUIKIT_DEBUG_FOCUS=1): identify which @State
+        // we actually wrote through. Bindings don't carry identity,
+        // but the wrappedValue pair is enough to spot the wrong-
+        // field-receiving-input class of bug.
+        debugFocusLog("""
+            insertCharacter '\(char)' into handler \(focusID)
+              pre wrappedValue: \(current.debugDescription)
+              post wrappedValue: \(updated.debugDescription)
+            """)
     }
 
     /// Deletes the character before the cursor (backspace).

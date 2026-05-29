@@ -207,6 +207,33 @@ extension MouseEventDispatcher {
     /// - Returns: `true` if a handler consumed the event.
     @discardableResult
     func dispatch(_ event: MouseEvent) -> Bool {
+        // Diagnostic (TUIKIT_DEBUG_FOCUS=1): log every press/release
+        // with the click coords (in content-area space), the
+        // registered regions, and which — if any — matched. Used to
+        // diagnose "I clicked the field but no focus event fired"
+        // bugs: tells us whether the click ever reached the
+        // dispatcher, whether its category is allowed, and whether
+        // any region's geometry covers it. The outer guard is the
+        // hot-path branch — when debug is off this is a single
+        // global-Bool load and one comparison.
+        if isFocusDebugEnabled, event.phase == .pressed || event.phase == .released {
+            let regionLines = regions.enumerated().map { index, region in
+                let matches = region.contains(x: event.x, y: event.y)
+                return "    [\(index)] handler=\(region.handlerID.raw) "
+                    + "x=\(region.offsetX)..<\(region.offsetX + region.width) "
+                    + "y=\(region.offsetY)..<\(region.offsetY + region.height)"
+                    + (matches ? " ← MATCHES" : "")
+            }
+            debugFocusLog("""
+                dispatch \(event.phase) \(event.button)
+                  click at (x=\(event.x), y=\(event.y))
+                  activeSupport: \(activeSupport)
+                  eventIsAllowed: \(eventIsAllowed(event))
+                  regions (\(regions.count)):
+                \(regionLines.joined(separator: "\n"))
+                """)
+        }
+
         // Honour the active MouseSupport configuration: drop events
         // whose category isn't enabled. The terminal may still send
         // them (e.g. wheel events arrive even in click-only mode),

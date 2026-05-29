@@ -299,6 +299,24 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Diagnostic (TUIKIT_DEBUG_FOCUS=1): on every render, log
+        // what *this* field's binding is reading, what focus it
+        // has, and its identity path. When the visible bug is
+        // "I typed Z into Search but it's showing up in Input",
+        // the per-field render lines for the surrounding frames
+        // tell us immediately whether Input's binding is actually
+        // reading searchQuery's @State value, or whether the value
+        // is right but landing in the wrong screen position.
+        if !context.isMeasuring {
+            debugFocusLog("""
+                TextField render
+                  focusID: \(persistedFocusID)
+                  text.wrappedValue: \(text.wrappedValue.debugDescription)
+                  isFocused: \(isFocused)
+                  isMeasuring: \(context.isMeasuring)
+                """)
+        }
+
         // Build the text field content using shared renderer
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
@@ -339,7 +357,19 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 switch event.phase {
                 case .pressed: return true
                 case .released:
+                    // Diagnostic (TUIKIT_DEBUG_FOCUS=1): log the
+                    // click and what the focus manager looks like
+                    // at the moment we ask it to switch focus.
+                    // Helpful for the "click doesn't focus until
+                    // something else re-renders" symptom.
+                    debugFocusLog("""
+                        TextField click → focus(id: \(captureFocusID))
+                          sections: \(focusManager.debugSectionsSummary())
+                          focusedBefore: \(focusManager.currentFocusedID ?? "nil")
+                        """)
                     focusManager.focus(id: captureFocusID)
+                    debugFocusLog(
+                        "  focusedAfter: \(focusManager.currentFocusedID ?? "nil")")
                     return true
                 default: return false
                 }

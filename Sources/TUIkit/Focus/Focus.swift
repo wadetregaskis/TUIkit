@@ -295,9 +295,24 @@ extension FocusManager {
         // Dispatch to focused element first — let it handle keys like Up/Down/Left/Right.
         // If element consumes the event, stop here.
         if let focused = currentFocused {
+            debugFocusLog("""
+                dispatchKeyEvent \(event.key)
+                  focusedID: \(focusedID ?? "nil")
+                  activeSection: \(activeSectionID ?? "nil")
+                  sections: \(debugSectionsSummary())
+                  currentFocused.focusID: \(focused.focusID)
+                """)
             if focused.handleKeyEvent(event) {
                 return true
             }
+        } else {
+            debugFocusLog("""
+                dispatchKeyEvent \(event.key)
+                  focusedID: \(focusedID ?? "nil")
+                  activeSection: \(activeSectionID ?? "nil")
+                  sections: \(debugSectionsSummary())
+                  currentFocused: nil
+                """)
         }
 
         // Tab navigation: cycle sections (or elements within single section)
@@ -531,6 +546,18 @@ extension FocusManager {
             focus(available[fallbackIndex])
             return true
         }
+    }
+
+    /// Diagnostic one-line summary of the focus manager's section
+    /// state. Used by the gated logging across the framework when
+    /// `TUIKIT_DEBUG_FOCUS=1`; not part of the public API.
+    internal func debugSectionsSummary() -> String {
+        let parts = sections.map { section -> String in
+            let active = section.id == activeSectionID ? "*" : ""
+            let ids = section.focusables.map(\.focusID).joined(separator: ",")
+            return "\(active)\(section.id)[\(ids)]"
+        }
+        return parts.joined(separator: " | ")
     }
 
     /// Notifies the currently focused element that it lost focus.
