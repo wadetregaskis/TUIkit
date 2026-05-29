@@ -188,6 +188,7 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         fatalError("_TableCore renders via Renderable")
     }
 
+    // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!

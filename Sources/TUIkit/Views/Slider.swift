@@ -283,6 +283,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
     }
 
+    // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette

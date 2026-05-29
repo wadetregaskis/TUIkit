@@ -302,6 +302,7 @@ private struct _StepperCore<Label: View>: View, Renderable {
         fatalError("_StepperCore renders via Renderable")
     }
 
+    // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette

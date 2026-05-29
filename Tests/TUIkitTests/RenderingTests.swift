@@ -477,7 +477,12 @@ struct RenderingTests {
         guard let region = buffer.hitTestRegions.first else { return }
         #expect(
             region.offsetX > 0 || region.offsetY > 0,
-            "region should be shifted by the centering offsets; got offsetX=\(region.offsetX), offsetY=\(region.offsetY) — likely indicates regions are being preserved but not shifted, which still breaks clicks"
+            """
+            region should be shifted by the centering offsets; got \
+            offsetX=\(region.offsetX), offsetY=\(region.offsetY) \
+            — likely indicates regions are being preserved but not \
+            shifted, which still breaks clicks
+            """
         )
         #expect(
             region.offsetX + region.width <= 80,

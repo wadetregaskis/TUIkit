@@ -57,6 +57,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         fatalError("_PickerMenuCore renders via Renderable")
     }
 
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!

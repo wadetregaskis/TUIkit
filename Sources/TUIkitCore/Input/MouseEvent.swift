@@ -132,6 +132,7 @@ extension MouseEvent {
     ///   leading `ESC [`.
     /// - Returns: A parsed event, or `nil` if the bytes are malformed
     ///   or not an SGR mouse report.
+    // swiftlint:disable:next cyclomatic_complexity
     public static func parseSGR(_ bytes: [UInt8]) -> MouseEvent? {
         // Minimum well-formed sequence: ESC [ < N ; N ; N M
         guard bytes.count >= 9 else { return nil }
