@@ -24,6 +24,10 @@ import TUIkit
 ///   - Row content with hit-test regions / focus IDs adding
 ///     measurable cost (the `focusID` field added in this
 ///     session shouldn't move these numbers).
+///
+/// All benchmark bodies wrap their work in
+/// `MainActor.assumeIsolated` — see the comment in
+/// ``LayoutBenchmarks`` for the rationale.
 enum ListTableBenchmarks {
 
     static func register() {
@@ -39,26 +43,28 @@ enum ListTableBenchmarks {
     /// list bookkeeping.
     private static func registerListBenchmarks() {
         Benchmark("list/50 rows, single-select") { benchmark in
-            let items = (0..<50).map { "Row \($0)" }
-            let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
-                ForEach(items, id: \.self) { Text($0) }
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let items = (0..<50).map { "Row \($0)" }
+                let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
+                    ForEach(items, id: \.self) { Text($0) }
+                }
+                let context = tallContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("list/500 rows, single-select") { benchmark in
-            let items = (0..<500).map { "Row \($0)" }
-            let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
-                ForEach(items, id: \.self) { Text($0) }
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let items = (0..<500).map { "Row \($0)" }
+                let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
+                    ForEach(items, id: \.self) { Text($0) }
+                }
+                let context = tallContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
@@ -67,26 +73,28 @@ enum ListTableBenchmarks {
         /// here would surface as visible frame-rate drops in
         /// the example app.
         Benchmark("list/1900 rows, single-select (emoji-list-sized)") { benchmark in
-            let items = (0..<1900).map { "Row \($0)" }
-            let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
-                ForEach(items, id: \.self) { Text($0) }
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let items = (0..<1900).map { "Row \($0)" }
+                let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
+                    ForEach(items, id: \.self) { Text($0) }
+                }
+                let context = tallContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("list/50 rows, selectionless") { benchmark in
-            let items = (0..<50).map { "Row \($0)" }
-            let view = List("Items") {
-                ForEach(items, id: \.self) { Text($0) }
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let items = (0..<50).map { "Row \($0)" }
+                let view = List("Items") {
+                    ForEach(items, id: \.self) { Text($0) }
+                }
+                let context = tallContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }
@@ -106,18 +114,19 @@ enum ListTableBenchmarks {
 
     private static func registerTableBenchmarks() {
         Benchmark("table/200 rows × 3 columns") { benchmark in
-            let view = Table(
-                people,
-                selection: Binding<Int?>.constant(nil)
-            ) {
-                TableColumn<Person>("Name", value: \.name)
-                TableColumn<Person>("Age") { "\($0.age)" }
-                TableColumn<Person>("City", value: \.city)
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let view = Table(
+                    people,
+                    selection: Binding<Int?>.constant(nil)
+                ) {
+                    TableColumn<Person>("Name", value: \.name)
+                    TableColumn<Person>("Age") { "\($0.age)" }
+                    TableColumn<Person>("City", value: \.city)
+                }
+                let context = tallContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }
@@ -125,28 +134,29 @@ enum ListTableBenchmarks {
     // MARK: - Scrolled state
 
     /// Lists are most expensive when they have to render scroll
-    /// indicators and re-window. These two benchmarks drive a
-    /// list into a scrolled state before measuring so the
-    /// number reflects the windowed-render cost, not first-
-    /// frame setup.
+    /// indicators and re-window. This benchmark drives the
+    /// 1000-row case so the number reflects the windowed-
+    /// render cost, not first-frame setup.
     private static func registerScrolledListBenchmarks() {
         Benchmark("list/1000 rows, mid-scroll") { benchmark in
-            let items = (0..<1000).map { "Row \($0)" }
-            let view = List("Items", selection: .constant("Row 500")) {
-                ForEach(items, id: \.self) { Text($0) }
-            }
-            // First render establishes the handler; subsequent
-            // renders inherit its scrollOffset = 0. To benchmark
-            // the mid-scroll case meaningfully would require
-            // mutating handler state between renders, which
-            // isn't accessible from the public API. Leaving this
-            // as 'rendered repeatedly from the top' for now —
-            // it still catches per-render regressions, just
-            // doesn't isolate the middle-of-list path.
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: tallContext())
-                })
+            MainActor.assumeIsolated {
+                let items = (0..<1000).map { "Row \($0)" }
+                let view = List("Items", selection: Binding<String?>.constant("Row 500")) {
+                    ForEach(items, id: \.self) { Text($0) }
+                }
+                let context = tallContext()
+                // First render establishes the handler;
+                // subsequent renders inherit its scrollOffset.
+                // To benchmark the mid-scroll case meaningfully
+                // would require mutating handler state between
+                // renders, which isn't accessible from the
+                // public API. Leaving this as 'rendered
+                // repeatedly from the top' for now — it still
+                // catches per-render regressions, just doesn't
+                // isolate the middle-of-list path.
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }

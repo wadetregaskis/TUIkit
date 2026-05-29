@@ -12,6 +12,10 @@ import TUIkit
 /// registration, container chrome — on shapes that look like
 /// real pages so regressions on any of those layers surface
 /// here.
+///
+/// All benchmark bodies wrap their work in
+/// `MainActor.assumeIsolated` — see the comment in
+/// ``LayoutBenchmarks`` for the rationale.
 enum RenderBenchmarks {
 
     static func register() {
@@ -27,47 +31,52 @@ enum RenderBenchmarks {
     /// hover state machine, dispatcher feature requests, etc.).
     private static func registerControlBenchmarks() {
         Benchmark("render/Button (default style)") { benchmark in
-            let view = Button("Save") { /* no-op */ }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+            MainActor.assumeIsolated {
+                let view = Button("Save") { /* no-op */ }
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("render/TextField") { benchmark in
-            let view = TextField("Search", text: .constant("hello"))
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+            MainActor.assumeIsolated {
+                let view = TextField("Search", text: .constant("hello"))
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("render/Toggle") { benchmark in
-            let view = Toggle("Enable", isOn: .constant(true))
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+            MainActor.assumeIsolated {
+                let view = Toggle("Enable", isOn: .constant(true))
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("render/Slider") { benchmark in
-            let view = Slider(value: .constant(0.5), in: 0...1, step: 0.01)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+            MainActor.assumeIsolated {
+                let view = Slider(value: .constant(0.5), in: 0...1, step: 0.01)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("render/Stepper") { benchmark in
-            let view = Stepper("Quantity", value: .constant(5), in: 0...10)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+            MainActor.assumeIsolated {
+                let view = Stepper("Quantity", value: .constant(5), in: 0...10)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }
@@ -81,33 +90,34 @@ enum RenderBenchmarks {
     /// their time in.
     private static func registerPageShapeBenchmarks() {
         Benchmark("render/Mixed-form page") { benchmark in
-            let view = VStack(alignment: .leading) {
-                Text("Settings").bold().underline()
-                HStack {
-                    Text("Username:")
-                    TextField("user", text: .constant("alice"))
+            MainActor.assumeIsolated {
+                let view = VStack(alignment: .leading) {
+                    Text("Settings").bold().underline()
+                    HStack {
+                        Text("Username:")
+                        TextField("user", text: .constant("alice"))
+                    }
+                    HStack {
+                        Text("Notifications:")
+                        Toggle("On", isOn: .constant(true))
+                    }
+                    HStack {
+                        Text("Volume:")
+                        Slider(value: .constant(0.7), in: 0...1)
+                    }
+                    HStack {
+                        Text("Retries:")
+                        Stepper("Retries", value: .constant(3), in: 0...10)
+                    }
+                    HStack {
+                        Button("Cancel") { }
+                        Button("Save") { }
+                    }
                 }
-                HStack {
-                    Text("Notifications:")
-                    Toggle("On", isOn: .constant(true))
+                let context = pageContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
                 }
-                HStack {
-                    Text("Volume:")
-                    Slider(value: .constant(0.7), in: 0...1)
-                }
-                HStack {
-                    Text("Retries:")
-                    Stepper("Retries", value: .constant(3), in: 0...10)
-                }
-                HStack {
-                    Button("Cancel") { }
-                    Button("Save") { }
-                }
-            }
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: pageContext())
-                })
             }
         }
     }

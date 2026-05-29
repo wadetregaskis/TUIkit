@@ -13,6 +13,10 @@ import TUIkit
 /// hit-test regions are filtered. Both halves of that have
 /// O(content_height) and O(regions) cost respectively, so
 /// regressions tend to surface as the content gets taller.
+///
+/// All benchmark bodies wrap their work in
+/// `MainActor.assumeIsolated` — see the comment in
+/// ``LayoutBenchmarks`` for the rationale.
 enum ScrollViewBenchmarks {
 
     static func register() {
@@ -24,47 +28,50 @@ enum ScrollViewBenchmarks {
 
     private static func registerLongTextBenchmarks() {
         Benchmark("scrollview/100 Text rows") { benchmark in
-            let lines = (0..<100).map { "Row \($0)" }
-            let view = ScrollView {
-                VStack {
-                    ForEach(lines, id: \.self) { Text($0) }
+            MainActor.assumeIsolated {
+                let lines = (0..<100).map { "Row \($0)" }
+                let view = ScrollView {
+                    VStack {
+                        ForEach(lines, id: \.self) { Text($0) }
+                    }
                 }
-            }
-            .frame(height: 10)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+                .frame(height: 10)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("scrollview/1000 Text rows") { benchmark in
-            let lines = (0..<1000).map { "Row \($0)" }
-            let view = ScrollView {
-                VStack {
-                    ForEach(lines, id: \.self) { Text($0) }
+            MainActor.assumeIsolated {
+                let lines = (0..<1000).map { "Row \($0)" }
+                let view = ScrollView {
+                    VStack {
+                        ForEach(lines, id: \.self) { Text($0) }
+                    }
                 }
-            }
-            .frame(height: 10)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+                .frame(height: 10)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
 
         Benchmark("scrollview/100 rows, indicators off") { benchmark in
-            let lines = (0..<100).map { "Row \($0)" }
-            let view = ScrollView(showsIndicators: false) {
-                VStack {
-                    ForEach(lines, id: \.self) { Text($0) }
+            MainActor.assumeIsolated {
+                let lines = (0..<100).map { "Row \($0)" }
+                let view = ScrollView(showsIndicators: false) {
+                    VStack {
+                        ForEach(lines, id: \.self) { Text($0) }
+                    }
                 }
-            }
-            .frame(height: 10)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+                .frame(height: 10)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }
@@ -77,24 +84,25 @@ enum ScrollViewBenchmarks {
     /// content buffer and decide whether to keep it.
     private static func registerMixedContentBenchmarks() {
         Benchmark("scrollview/Mixed-widget content") { benchmark in
-            let view = ScrollView {
-                VStack(alignment: .leading) {
-                    Text("Heading").bold()
-                    TextField("Filter", text: .constant(""))
-                    HStack {
-                        Button("-1") { }
-                        Button("+1") { }
-                        Button("Reset") { }
+            MainActor.assumeIsolated {
+                let view = ScrollView {
+                    VStack(alignment: .leading) {
+                        Text("Heading").bold()
+                        TextField("Filter", text: .constant(""))
+                        HStack {
+                            Button("-1") { }
+                            Button("+1") { }
+                            Button("Reset") { }
+                        }
+                        Slider(value: .constant(0.5))
+                        ForEach(0..<30, id: \.self) { Text("Row \($0)") }
                     }
-                    Slider(value: .constant(0.5))
-                    ForEach(0..<30, id: \.self) { Text("Row \($0)") }
                 }
-            }
-            .frame(height: 10)
-            for _ in benchmark.scaledIterations {
-                blackHole(MainActor.assumeIsolated {
-                    renderToBuffer(view, context: standardContext())
-                })
+                .frame(height: 10)
+                let context = standardContext()
+                for _ in benchmark.scaledIterations {
+                    blackHole(renderToBuffer(view, context: context))
+                }
             }
         }
     }

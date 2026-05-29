@@ -46,7 +46,11 @@ enum ImageBenchmarks {
                 let red: UInt8 = band == 0 ? intensity : intensity / 4
                 let green: UInt8 = band == 1 ? intensity : intensity / 4
                 let blue: UInt8 = band == 2 ? intensity : intensity / 4
-                pixels.append(RGBA(red: red, green: green, blue: blue, alpha: 255))
+                // RGBA uses short field names (r/g/b/a)
+                // matching the upstream API; `a` defaults to
+                // .max so an opaque pixel doesn't need to
+                // pass it explicitly.
+                pixels.append(RGBA(r: red, g: green, b: blue))
             }
         }
         return RGBAImage(width: width, height: height, pixels: pixels)
