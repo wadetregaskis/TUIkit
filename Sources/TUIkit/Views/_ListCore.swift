@@ -333,14 +333,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     return false
                 }
             }
-            buffer.hitTestRegions.append(
+            // Insert at the very back of the regions array so any
+            // interactive children whose regions cover the click
+            // (a Button inside a row, a TextField, a Stepper)
+            // still win the dispatcher's reverse-iteration match.
+            // This region is the fallback: it fires only when
+            // nothing more specific matched. Without this we'd
+            // intercept clicks on List rows containing Buttons,
+            // blocking the Button's own handler. NavigationSplit-
+            // View's column-wide region uses the same pattern.
+            buffer.hitTestRegions.insert(
                 HitTestRegion(
                     offsetX: 0,
                     offsetY: 0,
                     width: buffer.width,
                     height: buffer.height,
                     handlerID: mouseHandlerID
-                )
+                ),
+                at: 0
             )
         }
 

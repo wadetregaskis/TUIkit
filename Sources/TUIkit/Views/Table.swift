@@ -388,12 +388,16 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
                     return false
                 }
             }
-            buffer.hitTestRegions.append(
+            // Insert at the back so interactive children inside
+            // a row still win the dispatcher's reverse-iteration
+            // match. See the parallel comment in _ListCore.
+            buffer.hitTestRegions.insert(
                 HitTestRegion(
                     offsetX: 0, offsetY: 0,
                     width: buffer.width, height: buffer.height,
                     handlerID: mouseHandlerID
-                )
+                ),
+                at: 0
             )
         }
 
