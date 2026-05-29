@@ -284,15 +284,37 @@ extension RenderLoop {
                 buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight)
         }
 
+        // Build the status-bar buffer up front so we can merge
+        // its per-item hit-test regions into the dispatcher's
+        // region set before writing. The status bar lives below
+        // the content area in terminal-space; events arrive in
+        // content-area coordinates (the App input loop subtracts
+        // the header height), so the status bar's local
+        // coordinates need to be shifted down by `contentHeight`.
+        let statusBarBuffer: FrameBuffer? = statusBar.hasItems
+            ? buildStatusBarBuffer(
+                terminalWidth: terminalWidth, environment: environment)
+            : nil
+
+        var mergedRegions = buffer.hitTestRegions
+        if let statusBarBuffer {
+            for region in statusBarBuffer.hitTestRegions {
+                var shifted = region
+                shifted.offsetY += contentHeight
+                mergedRegions.append(shifted)
+            }
+        }
+
         // Publish the now-composited hit-test regions so the dispatcher
         // can route mouse events arriving between this frame and the
         // next. Regions are kept in absolute content-area coordinates;
         // the App input loop translates terminal coords to content
         // coords before dispatching.
-        tuiContext.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+        tuiContext.mouseEventDispatcher.setRegions(mergedRegions)
 
         writeFrame(
             buffer: buffer,
+            statusBarBuffer: statusBarBuffer,
             environment: environment,
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight,
@@ -403,6 +425,7 @@ extension RenderLoop {
     /// and status bar inside a single buffered frame (one `write()` syscall).
     fileprivate func writeFrame(
         buffer: FrameBuffer,
+        statusBarBuffer: FrameBuffer?,
         environment: EnvironmentValues,
         terminalWidth: Int,
         terminalHeight: Int,
@@ -442,11 +465,11 @@ extension RenderLoop {
             reset: reset
         )
 
-        if statusBar.hasItems {
-            renderStatusBar(
+        if let statusBarBuffer {
+            writeStatusBarBuffer(
+                statusBarBuffer,
                 atRow: terminalHeight - statusBarHeight + 1,
                 terminalWidth: terminalWidth,
-                environment: environment,
                 bgCode: backgroundCodes.statusBar,
                 reset: reset
             )
@@ -600,14 +623,18 @@ extension RenderLoop {
         )
     }
 
-    /// Renders the status bar at the specified terminal row.
-    fileprivate func renderStatusBar(
-        atRow row: Int,
+    /// Renders the status bar into a `FrameBuffer` and returns
+    /// it. The buffer carries the per-item hit-test regions that
+    /// ``StatusBar/applyHitTestRegions`` emitted at status-bar
+    /// local coordinates — the caller is responsible for
+    /// shifting those into content-area coordinates and merging
+    /// them into the dispatcher's region set before
+    /// ``writeStatusBarBuffer(_:atRow:terminalWidth:bgCode:reset:)``
+    /// writes the diff out.
+    fileprivate func buildStatusBarBuffer(
         terminalWidth: Int,
-        environment: EnvironmentValues,
-        bgCode: String,
-        reset: String
-    ) {
+        environment: EnvironmentValues
+    ) -> FrameBuffer {
         let palette = environment.palette
 
         let highlightColor =
@@ -631,8 +658,20 @@ extension RenderLoop {
             environment: environment
         )
 
-        let buffer = renderToBuffer(statusBarView, context: context)
+        return renderToBuffer(statusBarView, context: context)
+    }
 
+    /// Writes a previously-built status-bar buffer to the
+    /// terminal at the specified row. The build and write
+    /// phases are split so the caller can intercept the
+    /// buffer's hit-test regions between them.
+    fileprivate func writeStatusBarBuffer(
+        _ buffer: FrameBuffer,
+        atRow row: Int,
+        terminalWidth: Int,
+        bgCode: String,
+        reset: String
+    ) {
         let outputLines = diffWriter.buildOutputLines(
             buffer: buffer,
             terminalWidth: terminalWidth,
