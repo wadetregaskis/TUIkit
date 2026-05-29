@@ -28,6 +28,7 @@ enum ScrollViewBenchmarks {
 
     private static func registerLongTextBenchmarks() {
         Benchmark("scrollview/100 Text rows") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let lines = (0..<100).map { "Row \($0)" }
                 let view = ScrollView {
@@ -37,13 +38,14 @@ enum ScrollViewBenchmarks {
                 }
                 .frame(height: 10)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("scrollview/1000 Text rows") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let lines = (0..<1000).map { "Row \($0)" }
                 let view = ScrollView {
@@ -53,13 +55,14 @@ enum ScrollViewBenchmarks {
                 }
                 .frame(height: 10)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("scrollview/100 rows, indicators off") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let lines = (0..<100).map { "Row \($0)" }
                 let view = ScrollView(showsIndicators: false) {
@@ -69,7 +72,7 @@ enum ScrollViewBenchmarks {
                 }
                 .frame(height: 10)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -84,6 +87,7 @@ enum ScrollViewBenchmarks {
     /// content buffer and decide whether to keep it.
     private static func registerMixedContentBenchmarks() {
         Benchmark("scrollview/Mixed-widget content") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = ScrollView {
                     VStack(alignment: .leading) {
@@ -100,7 +104,7 @@ enum ScrollViewBenchmarks {
                 }
                 .frame(height: 10)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }

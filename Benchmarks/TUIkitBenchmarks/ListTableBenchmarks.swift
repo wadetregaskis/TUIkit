@@ -43,26 +43,28 @@ enum ListTableBenchmarks {
     /// list bookkeeping.
     private static func registerListBenchmarks() {
         Benchmark("list/50 rows, single-select") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let items = (0..<50).map { "Row \($0)" }
                 let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
                     ForEach(items, id: \.self) { Text($0) }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("list/500 rows, single-select") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let items = (0..<500).map { "Row \($0)" }
                 let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
                     ForEach(items, id: \.self) { Text($0) }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -73,26 +75,28 @@ enum ListTableBenchmarks {
         /// here would surface as visible frame-rate drops in
         /// the example app.
         Benchmark("list/1900 rows, single-select (emoji-list-sized)") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let items = (0..<1900).map { "Row \($0)" }
                 let view = List("Items", selection: Binding<String?>.constant("Row 0")) {
                     ForEach(items, id: \.self) { Text($0) }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("list/50 rows, selectionless") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let items = (0..<50).map { "Row \($0)" }
                 let view = List("Items") {
                     ForEach(items, id: \.self) { Text($0) }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -114,6 +118,7 @@ enum ListTableBenchmarks {
 
     private static func registerTableBenchmarks() {
         Benchmark("table/200 rows × 3 columns") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Table(
                     people,
@@ -124,7 +129,7 @@ enum ListTableBenchmarks {
                     TableColumn<Person>("City", value: \.city)
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -139,6 +144,7 @@ enum ListTableBenchmarks {
     /// render cost, not first-frame setup.
     private static func registerScrolledListBenchmarks() {
         Benchmark("list/1000 rows, mid-scroll") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let items = (0..<1000).map { "Row \($0)" }
                 let view = List("Items", selection: Binding<String?>.constant("Row 500")) {
@@ -154,7 +160,7 @@ enum ListTableBenchmarks {
                 // repeatedly from the top' for now — it still
                 // catches per-render regressions, just doesn't
                 // isolate the middle-of-list path.
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }

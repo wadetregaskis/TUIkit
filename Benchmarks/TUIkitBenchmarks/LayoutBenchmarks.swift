@@ -40,36 +40,39 @@ enum LayoutBenchmarks {
 
     private static func registerStackBenchmarks() {
         Benchmark("layout/VStack — 10 Text children") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = VStack {
                     ForEach(0..<10, id: \.self) { Text("Item \($0)") }
                 }
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("layout/HStack — 10 Text children") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = HStack {
                     ForEach(0..<10, id: \.self) { Text("\($0)") }
                 }
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("layout/VStack — 100 Text children") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = VStack {
                     ForEach(0..<100, id: \.self) { Text("Item \($0)") }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -84,6 +87,7 @@ enum LayoutBenchmarks {
     /// where layout cost compounds.
     private static func registerNestedStackBenchmarks() {
         Benchmark("layout/VStack(HStack(Text x 3)) — 50 rows") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = VStack {
                     ForEach(0..<50, id: \.self) { row in
@@ -95,7 +99,7 @@ enum LayoutBenchmarks {
                     }
                 }
                 let context = tallContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -110,16 +114,18 @@ enum LayoutBenchmarks {
     /// real apps reach for: bold, padding, border, frame.
     private static func registerModifierBenchmarks() {
         Benchmark("layout/Modifier chain — bare Text") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Text("Modifier baseline")
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("layout/Modifier chain — 4 modifiers") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Text("Modifier baseline")
                     .bold()
@@ -127,7 +133,7 @@ enum LayoutBenchmarks {
                     .border()
                     .frame(width: 30, height: 5)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -142,12 +148,13 @@ enum LayoutBenchmarks {
     /// so a regression gets a stack trace.
     private static func registerLazyStackBenchmarks() {
         Benchmark("layout/LazyVStack — 500 Text children") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = LazyVStack {
                     ForEach(0..<500, id: \.self) { Text("Row \($0)") }
                 }
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }

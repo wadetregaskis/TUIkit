@@ -31,50 +31,55 @@ enum RenderBenchmarks {
     /// hover state machine, dispatcher feature requests, etc.).
     private static func registerControlBenchmarks() {
         Benchmark("render/Button (default style)") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Button("Save") { /* no-op */ }
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("render/TextField") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = TextField("Search", text: .constant("hello"))
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("render/Toggle") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Toggle("Enable", isOn: .constant(true))
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("render/Slider") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Slider(value: .constant(0.5), in: 0...1, step: 0.01)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
         }
 
         Benchmark("render/Stepper") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = Stepper("Quantity", value: .constant(5), in: 0...10)
                 let context = standardContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
@@ -90,6 +95,7 @@ enum RenderBenchmarks {
     /// their time in.
     private static func registerPageShapeBenchmarks() {
         Benchmark("render/Mixed-form page") { benchmark in
+            let iterations = benchmark.scaledIterations
             MainActor.assumeIsolated {
                 let view = VStack(alignment: .leading) {
                     Text("Settings").bold().underline()
@@ -115,7 +121,7 @@ enum RenderBenchmarks {
                     }
                 }
                 let context = pageContext()
-                for _ in benchmark.scaledIterations {
+                for _ in iterations {
                     blackHole(renderToBuffer(view, context: context))
                 }
             }
