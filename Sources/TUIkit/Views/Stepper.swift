@@ -293,6 +293,8 @@ private enum StepperStateIndex {
     static let handler = 0
     static let focusID = 1
     static let isHovered = 2
+    static let incrementRepeat = 3
+    static let decrementRepeat = 4
 }
 
 /// Internal view that handles the actual rendering of Stepper.
@@ -444,15 +446,41 @@ private struct _StepperCore<Label: View>: View, Renderable {
                 )
             )
 
+            // Get (or create) the auto-repeat timers for each
+            // arrow. Storing them in StateStorage lets the
+            // timers persist across renders — a press starts
+            // the timer, the renders that happen during the
+            // hold mustn't reset it.
+            let incrementRepeatKey = StateStorage.StateKey(
+                identity: context.identity,
+                propertyIndex: StateIndex.incrementRepeat
+            )
+            let incrementRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
+                for: incrementRepeatKey, default: AutoRepeatTimer())
+            let captureIncrementTimer = incrementRepeatBox.value
+
+            let decrementRepeatKey = StateStorage.StateKey(
+                identity: context.identity,
+                propertyIndex: StateIndex.decrementRepeat
+            )
+            let decrementRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
+                for: decrementRepeatKey, default: AutoRepeatTimer())
+            let captureDecrementTimer = decrementRepeatBox.value
+
             // Right-arrow click: increment + focus. Registered after
             // the whole-row region so it wins for x = totalWidth-1.
+            // Press-and-hold fires once immediately, then keeps
+            // incrementing on a fixed cadence — the canonical
+            // stepper auto-repeat. Release stops the timer.
             let incrementID = mouseDispatcher.register { event in
                 guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
-                    captureHandler.increment()
+                case .pressed:
                     focusManager.focus(id: captureFocusID)
+                    captureIncrementTimer.start { captureHandler.increment() }
+                    return true
+                case .released, .dragged:
+                    captureIncrementTimer.stop()
                     return true
                 default: return false
                 }
@@ -465,14 +493,17 @@ private struct _StepperCore<Label: View>: View, Renderable {
                 )
             )
 
-            // Left-arrow click: decrement + focus.
+            // Left-arrow click: decrement + focus. Same auto-
+            // repeat shape as the increment arrow above.
             let decrementID = mouseDispatcher.register { event in
                 guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
-                    captureHandler.decrement()
+                case .pressed:
                     focusManager.focus(id: captureFocusID)
+                    captureDecrementTimer.start { captureHandler.decrement() }
+                    return true
+                case .released, .dragged:
+                    captureDecrementTimer.stop()
                     return true
                 default: return false
                 }

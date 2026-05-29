@@ -248,6 +248,8 @@ private enum SliderStateIndex {
     static let handler = 0
     static let focusID = 1
     static let isHovered = 2
+    static let leftArrowRepeat = 3
+    static let rightArrowRepeat = 4
 }
 
 /// Internal view that handles the actual rendering of Slider.
@@ -372,6 +374,48 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             let captureHoverBox = hoverBox
             let trackLeft = 2  // "◀ "
             let trackRight = trackLeft + trackWidth  // exclusive
+
+            // Auto-repeat timers for the left / right arrows.
+            // Press-and-hold on either arrow fires the value
+            // change once immediately, then keeps firing at a
+            // fixed cadence until release. Track-drag and
+            // wheel paths are unchanged.
+            let leftArrowRepeatKey = StateStorage.StateKey(
+                identity: context.identity,
+                propertyIndex: StateIndex.leftArrowRepeat
+            )
+            let leftArrowRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
+                for: leftArrowRepeatKey, default: AutoRepeatTimer())
+            let captureLeftArrowTimer = leftArrowRepeatBox.value
+
+            let rightArrowRepeatKey = StateStorage.StateKey(
+                identity: context.identity,
+                propertyIndex: StateIndex.rightArrowRepeat
+            )
+            let rightArrowRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
+                for: rightArrowRepeatKey, default: AutoRepeatTimer())
+            let captureRightArrowTimer = rightArrowRepeatBox.value
+
+            // The arrow steps performed by the auto-repeat
+            // timers. Captured here so the timer closures don't
+            // need to recompute clamping each tick.
+            let decrementOnce: @MainActor () -> Void = {
+                captureValue.wrappedValue = min(
+                    captureBounds.upperBound,
+                    max(captureBounds.lowerBound,
+                        captureValue.wrappedValue - captureStep))
+            }
+            let incrementOnce: @MainActor () -> Void = {
+                captureValue.wrappedValue = min(
+                    captureBounds.upperBound,
+                    max(captureBounds.lowerBound,
+                        captureValue.wrappedValue + captureStep))
+            }
+            let stopArrowTimers: @MainActor () -> Void = {
+                captureLeftArrowTimer.stop()
+                captureRightArrowTimer.stop()
+            }
+
             let handlerID = mouseDispatcher.register { event in
                 switch event.phase {
                 case .entered:
@@ -404,20 +448,28 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                         if event.x < trackLeft {
                             // Left arrow.
                             if event.phase == .pressed {
-                                let new = min(captureBounds.upperBound,
-                                              max(captureBounds.lowerBound,
-                                                  captureValue.wrappedValue - captureStep))
-                                captureValue.wrappedValue = new
+                                stopArrowTimers()
+                                captureLeftArrowTimer.start(action: decrementOnce)
+                            } else {
+                                // .dragged onto the arrow from
+                                // elsewhere — stop any track
+                                // dragging, don't restart the
+                                // auto-repeat.
+                                stopArrowTimers()
                             }
                         } else if event.x >= trackRight {
                             // Right arrow.
                             if event.phase == .pressed {
-                                let new = min(captureBounds.upperBound,
-                                              max(captureBounds.lowerBound,
-                                                  captureValue.wrappedValue + captureStep))
-                                captureValue.wrappedValue = new
+                                stopArrowTimers()
+                                captureRightArrowTimer.start(action: incrementOnce)
+                            } else {
+                                stopArrowTimers()
                             }
                         } else {
+                            // Track area — any arrow timer
+                            // running from a previous press
+                            // stops here.
+                            stopArrowTimers()
                             // Inside the track itself. Snap the
                             // computed value to the nearest multiple
                             // of the configured step so keyboard and
@@ -443,6 +495,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                         focusManager.focus(id: captureFocusID)
                         return true
                     case .released:
+                        stopArrowTimers()
                         return true
                     default:
                         return false
