@@ -188,229 +188,283 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         fatalError("_TableCore renders via Renderable")
     }
 
-    // swiftlint:disable:next function_body_length
+    /// Populated-state snapshot the mouse handler needs.
+    private struct PopulatedRenderState {
+        let handler: ItemListHandler<Value.ID>
+        let focusID: String
+        let visibleRange: Range<Int>
+        let scrollOffsetAbove: Int
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
 
-        // Calculate available width inside container (subtract border + padding)
+        // Calculate available width inside container (subtract
+        // border + padding).
         let innerWidth = max(0, context.availableWidth - 4)
-
-        // Calculate column widths
         let columnWidths = calculateColumnWidths(
-            availableWidth: innerWidth,
-            spacing: columnSpacing
-        )
-
-        // Build header line from column titles
+            availableWidth: innerWidth, spacing: columnSpacing)
         let headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
 
-        // Handle empty state
         let contentLines: [String]
-        // Captured for the mouse hit-tester so a click outside any
-        // specific row still focuses the table.
-        var sharedTableHandler: ItemListHandler<Value.ID>?
-        var sharedTableFocusID: String = ""
-        var sharedTableVisibleRange: Range<Int> = 0..<0
-        var sharedTableScrollOffsetAbove: Int = 0
-
+        let renderState: PopulatedRenderState?
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
+            renderState = nil
         } else {
-            // Viewport height. The fixed chrome is 3 lines: the top border,
-            // the bottom border, and the column-header line. Scroll indicators
-            // cost a further 2 lines — but only when the rows actually
-            // overflow. So when every row fits, use the full available height
-            // instead of reserving space for indicators that never appear and
-            // scrolling unnecessarily.
-            let availableHeight = context.availableHeight
-            let chromeRows = 3
-            let fitViewport = max(1, availableHeight - chromeRows)
-            let viewportHeight =
-                data.count <= fitViewport
-                ? fitViewport
-                : max(1, availableHeight - chromeRows - 2)
-
-            // Focus registration via shared helper
-            let persistedFocusID = FocusRegistration.persistFocusID(
+            let result = buildPopulatedContent(
                 context: context,
-                explicitFocusID: focusID,
-                defaultPrefix: "table",
-                propertyIndex: 1  // focusID
+                stateStorage: stateStorage,
+                palette: palette,
+                columnWidths: columnWidths,
+                innerWidth: innerWidth
             )
-
-            // Get or create persistent handler
-            let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
-            let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
-                for: handlerKey,
-                default: ItemListHandler(
-                    focusID: persistedFocusID,
-                    itemCount: data.count,
-                    viewportHeight: viewportHeight,
-                    selectionMode: selectionMode,
-                    canBeFocused: !isDisabled
-                )
-            )
-            let handler = handlerBox.value
-
-            // Update handler with current values
-            handler.itemCount = data.count
-            handler.viewportHeight = viewportHeight
-            handler.canBeFocused = !isDisabled
-            handler.itemIDs = data.map { $0.id }
-
-            // Bounds-clamp scrollOffset against the new
-            // itemCount / viewportHeight; see the matching
-            // comment in _ListCore.
-            handler.clampScrollOffset()
-
-            // Assign selection bindings directly (type-safe, no AnyHashable conversion)
-            handler.singleSelection = singleSelection
-            handler.multiSelection = multiSelection
-
-            // Intentionally NOT calling ensureFocusedItemVisible
-            // on every render — see the same comment in
-            // _ListCore. Wheel scrolling is independent of the
-            // focused row; the focus-changing paths
-            // (moveFocus, Home/End/Page keys, onFocusReceived)
-            // already call ensureFocusedItemVisible themselves.
-
-            FocusRegistration.register(context: context, handler: handler)
-            let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-
-            sharedTableHandler = handler
-            sharedTableFocusID = persistedFocusID
-            sharedTableVisibleRange = handler.visibleRange
-            sharedTableScrollOffsetAbove = handler.hasContentAbove ? 1 : 0
-
-            // Build content lines
-            var lines: [String] = []
-
-            // Top scroll indicator
-            if handler.hasContentAbove {
-                let rowsAbove = handler.visibleRange.lowerBound
-                lines.append(
-                    renderScrollIndicator(
-                        direction: .up, count: rowsAbove, width: innerWidth, palette: palette))
-            }
-
-            // Data rows
-            let visibleRange = handler.visibleRange
-            for rowIndex in visibleRange {
-                let item = data[rowIndex]
-                let isFocused = handler.isFocused(at: rowIndex) && tableHasFocus
-                let isSelected = handler.isSelected(at: rowIndex)
-
-                lines.append(
-                    renderRow(
-                        item: item,
-                        columnWidths: columnWidths,
-                        isFocused: isFocused,
-                        isSelected: isSelected,
-                        rowWidth: innerWidth,
-                        context: context,
-                        palette: palette
-                    )
-                )
-            }
-
-            // Bottom scroll indicator
-            if handler.hasContentBelow {
-                let rowsBelow = handler.itemCount - handler.visibleRange.upperBound
-                lines.append(
-                    renderScrollIndicator(
-                        direction: .down, count: rowsBelow, width: innerWidth, palette: palette))
-            }
-
-            contentLines = lines
+            contentLines = result.lines
+            renderState = result.state
         }
 
-        // Create the table content as a simple view
-        let tableContent = _TableContentView(lines: contentLines)
-
-        // Create header view
-        let headerView = _TableHeaderView(line: headerLine)
-
-        // Wrap in ContainerView with header separator (column titles are in header)
         let container = ContainerView(
             title: nil,
             style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
             padding: EdgeInsets(horizontal: 1, vertical: 0)
         ) {
             VStack(spacing: 0) {
-                headerView
-                tableContent
+                _TableHeaderView(line: headerLine)
+                _TableContentView(lines: contentLines)
             }
         }
-
         var buffer = TUIkit.renderToBuffer(container, context: context)
 
-        // Mouse: same shape as List — scroll-wheel scrolls, click on a
-        // data row selects+focuses, click anywhere else inside the
-        // table grants focus without changing selection.
-        //
-        // Buffer layout from the container wrap:
-        //   y=0           top border
-        //   y=1           column header line
-        //   y=2           top scroll indicator (only when hasContentAbove)
-        //   y=2 + offset  first data row (offset = 1 when scroll indicator present)
-        //   …             data rows, one per line
-        //   y=N           bottom scroll indicator / bottom border
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            let tableFocusManager = context.environment.focusManager
-            let captureFocusID = sharedTableFocusID
-            let captureHandler = sharedTableHandler
-            let visibleRange = sharedTableVisibleRange
-            let firstRowY = 2 + sharedTableScrollOffsetAbove
-
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.button {
-                case .scrollUp:
-                    // Wheel scrolls the viewport, never the
-                    // selection. See the matching comment in
-                    // _ListCore for the model.
-                    captureHandler?.scroll(by: -ViewConstants.mouseWheelScrollLines)
-                    return true
-                case .scrollDown:
-                    captureHandler?.scroll(by: ViewConstants.mouseWheelScrollLines)
-                    return true
-                case .left:
-                    guard event.phase == .released else {
-                        return event.phase == .pressed
-                    }
-                    // Each data row is one line tall.
-                    let dataRowIndex = event.y - firstRowY
-                    if dataRowIndex >= 0,
-                        dataRowIndex < visibleRange.count
-                    {
-                        let absoluteIndex = visibleRange.lowerBound + dataRowIndex
-                        if let handler = captureHandler {
-                            handler.focusedIndex = absoluteIndex
-                            handler.toggleSelectionAtFocusedIndex()
-                        }
-                    }
-                    tableFocusManager.focus(id: captureFocusID)
-                    return true
-                default:
-                    return false
-                }
-            }
-            // Insert at the back so interactive children inside
-            // a row still win the dispatcher's reverse-iteration
-            // match. See the parallel comment in _ListCore.
-            buffer.hitTestRegions.insert(
-                HitTestRegion(
-                    offsetX: 0, offsetY: 0,
-                    width: buffer.width, height: buffer.height,
-                    handlerID: mouseHandlerID
-                ),
-                at: 0
-            )
+        if let state = renderState {
+            attachMouseHandlers(to: &buffer, context: context, state: state)
         }
-
         return buffer
+    }
+
+    // MARK: - Populated content
+
+    /// Renders the populated data rows + scroll indicators and
+    /// captures the state the mouse handler needs.
+    private func buildPopulatedContent(
+        context: RenderContext,
+        stateStorage: StateStorage,
+        palette: any Palette,
+        columnWidths: [Int],
+        innerWidth: Int
+    ) -> (lines: [String], state: PopulatedRenderState) {
+        // Viewport height. The fixed chrome is 3 lines: the top
+        // border, the bottom border, and the column-header line.
+        // Scroll indicators cost a further 2 lines — but only
+        // when rows actually overflow. So when every row fits,
+        // use the full available height instead of reserving
+        // indicator space.
+        let availableHeight = context.availableHeight
+        let chromeRows = 3
+        let fitViewport = max(1, availableHeight - chromeRows)
+        let viewportHeight =
+            data.count <= fitViewport
+            ? fitViewport
+            : max(1, availableHeight - chromeRows - 2)
+
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context,
+            explicitFocusID: focusID,
+            defaultPrefix: "table",
+            propertyIndex: 1  // focusID
+        )
+        let handler = resolveHandler(
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            context: context,
+            viewportHeight: viewportHeight
+        )
+        FocusRegistration.register(context: context, handler: handler)
+        let tableHasFocus = FocusRegistration.isFocused(
+            context: context, focusID: persistedFocusID)
+
+        let lines = composeRowLines(
+            handler: handler,
+            tableHasFocus: tableHasFocus,
+            columnWidths: columnWidths,
+            innerWidth: innerWidth,
+            context: context,
+            palette: palette
+        )
+
+        return (
+            lines: lines,
+            state: PopulatedRenderState(
+                handler: handler,
+                focusID: persistedFocusID,
+                visibleRange: handler.visibleRange,
+                scrollOffsetAbove: handler.hasContentAbove ? 1 : 0
+            )
+        )
+    }
+
+    /// Fetches (or creates) the persistent ``ItemListHandler``
+    /// and syncs its per-frame inputs.
+    private func resolveHandler(
+        persistedFocusID: String,
+        stateStorage: StateStorage,
+        context: RenderContext,
+        viewportHeight: Int
+    ) -> ItemListHandler<Value.ID> {
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: 0)
+        let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
+            for: handlerKey,
+            default: ItemListHandler(
+                focusID: persistedFocusID,
+                itemCount: data.count,
+                viewportHeight: viewportHeight,
+                selectionMode: selectionMode,
+                canBeFocused: !isDisabled
+            )
+        )
+        let handler = handlerBox.value
+        handler.itemCount = data.count
+        handler.viewportHeight = viewportHeight
+        handler.canBeFocused = !isDisabled
+        handler.itemIDs = data.map { $0.id }
+        handler.clampScrollOffset()
+        handler.singleSelection = singleSelection
+        handler.multiSelection = multiSelection
+        return handler
+    }
+
+    /// Stitches scroll indicators around the visible data rows.
+    private func composeRowLines(
+        handler: ItemListHandler<Value.ID>,
+        tableHasFocus: Bool,
+        columnWidths: [Int],
+        innerWidth: Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> [String] {
+        var lines: [String] = []
+        if handler.hasContentAbove {
+            lines.append(renderScrollIndicator(
+                direction: .up,
+                count: handler.visibleRange.lowerBound,
+                width: innerWidth,
+                palette: palette
+            ))
+        }
+        let visibleRange = handler.visibleRange
+        for rowIndex in visibleRange {
+            let item = data[rowIndex]
+            let isFocused = handler.isFocused(at: rowIndex) && tableHasFocus
+            let isSelected = handler.isSelected(at: rowIndex)
+            lines.append(renderRow(
+                item: item,
+                columnWidths: columnWidths,
+                isFocused: isFocused,
+                isSelected: isSelected,
+                rowWidth: innerWidth,
+                context: context,
+                palette: palette
+            ))
+        }
+        if handler.hasContentBelow {
+            let rowsBelow = handler.itemCount - handler.visibleRange.upperBound
+            lines.append(renderScrollIndicator(
+                direction: .down,
+                count: rowsBelow,
+                width: innerWidth,
+                palette: palette
+            ))
+        }
+        return lines
+    }
+
+    // MARK: - Mouse handler wiring
+
+    /// Registers the table's container-wide mouse handler and
+    /// emits its hit-test region. Same shape as _ListCore — scroll-
+    /// wheel scrolls, click on a data row selects + focuses,
+    /// click anywhere else focuses without changing selection.
+    ///
+    /// Buffer layout from the container wrap:
+    /// ```
+    ///   y=0           top border
+    ///   y=1           column header line
+    ///   y=2           top scroll indicator (only when hasContentAbove)
+    ///   y=2 + offset  first data row (offset = 1 when scroll indicator present)
+    ///   …             data rows, one per line
+    ///   y=N           bottom scroll indicator / bottom border
+    /// ```
+    private func attachMouseHandlers(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState
+    ) {
+        guard !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        let focusManager = context.environment.focusManager
+        let firstRowY = 2 + state.scrollOffsetAbove
+        let mouseHandlerID = mouseDispatcher.register(
+            containerMouseHandler(
+                state: state,
+                focusManager: focusManager,
+                firstRowY: firstRowY
+            )
+        )
+        // Insert at the back so interactive children inside a
+        // row still win the dispatcher's reverse-iteration
+        // match. See the parallel comment in _ListCore.
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: 0, offsetY: 0,
+                width: buffer.width, height: buffer.height,
+                handlerID: mouseHandlerID
+            ),
+            at: 0
+        )
+    }
+
+    /// The closure invoked by the container-wide hit-test
+    /// region. Routes wheel to the handler's scroll position
+    /// (never the selection), left-release to row hit-testing
+    /// + focus, and rejects everything else.
+    private func containerMouseHandler(
+        state: PopulatedRenderState,
+        focusManager: FocusManager,
+        firstRowY: Int
+    ) -> @MainActor (MouseEvent) -> Bool {
+        let captureHandler = state.handler
+        let captureFocusID = state.focusID
+        let visibleRange = state.visibleRange
+        return { event in
+            switch event.button {
+            case .scrollUp:
+                // Wheel scrolls the viewport, never the
+                // selection. See the matching comment in
+                // _ListCore for the model.
+                captureHandler.scroll(by: -ViewConstants.mouseWheelScrollLines)
+                return true
+            case .scrollDown:
+                captureHandler.scroll(by: ViewConstants.mouseWheelScrollLines)
+                return true
+            case .left:
+                guard event.phase == .released else {
+                    return event.phase == .pressed
+                }
+                // Each data row is one line tall.
+                let dataRowIndex = event.y - firstRowY
+                if dataRowIndex >= 0, dataRowIndex < visibleRange.count {
+                    let absoluteIndex = visibleRange.lowerBound + dataRowIndex
+                    captureHandler.focusedIndex = absoluteIndex
+                    captureHandler.toggleSelectionAtFocusedIndex()
+                }
+                focusManager.focus(id: captureFocusID)
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     // MARK: - Column Width Calculation
