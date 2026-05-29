@@ -77,6 +77,23 @@ extension DimmedModifier: Renderable {
             flattenLine(line, foreground: foreground, background: background, width: contentBuffer.width)
         }
 
+        // Intentionally use the bare FrameBuffer(lines:) initializer
+        // rather than `contentBuffer.replacingLines(...)`: dimming
+        // is applied to background content behind a modal / alert,
+        // and that background MUST become fully inert while the
+        // modal is up.
+        //
+        // - hit-test regions are dropped so clicks on dimmed
+        //   buttons / text fields / etc. don't fire (the modal
+        //   above is responsible for intercepting input).
+        // - overlay layers are dropped so a popover / picker that
+        //   was open on the background before the modal appeared
+        //   doesn't continue to draw on top, half-bright, in front
+        //   of the dimmed backdrop.
+        //
+        // The intent is "this layer is a flat, non-interactive
+        // backdrop". If you find yourself wanting to preserve
+        // either, you almost certainly want a different modifier.
         return FrameBuffer(lines: dimmedLines)
     }
 
