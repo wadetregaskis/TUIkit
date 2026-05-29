@@ -37,7 +37,7 @@ protocol ListRowExtractor {
 
 extension ForEach: ListRowExtractor {
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
-        data.compactMap { element -> ListRow<RowID>? in
+        data.enumerated().compactMap { (index, element) -> ListRow<RowID>? in
             let elementID = element[keyPath: idKeyPath]
             let view = content(element)
 
@@ -47,8 +47,25 @@ extension ForEach: ListRowExtractor {
             // Render the view
             let buffer = TUIkit.renderToBuffer(view, context: context)
 
-            guard let rowID = elementID as? RowID else { return nil }
-            return ListRow(id: rowID, buffer: buffer, badge: badge)
+            // Prefer the element's natural ID when its type matches
+            // the row ID type the caller asked for.
+            if let rowID = elementID as? RowID {
+                return ListRow(id: rowID, buffer: buffer, badge: badge)
+            }
+            // Otherwise fall back to the row index. This makes
+            // selectionless Lists with the Int-defaulted overload
+            // pick up ForEach rows whose natural IDs are of a
+            // different type (e.g. String). The Int-defaulted
+            // overload is what Swift's overload resolution picks
+            // for `List("title") { ForEach(strings, id: \.self) { ... } }`
+            // because there's no other constraint to pin
+            // SelectionValue, so without this fallback the cast
+            // above would fail for every element and the list would
+            // render as empty.
+            if let indexID = index as? RowID {
+                return ListRow(id: indexID, buffer: buffer, badge: badge)
+            }
+            return nil
         }
     }
 }
