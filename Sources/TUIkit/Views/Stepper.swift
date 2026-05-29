@@ -372,11 +372,17 @@ private struct _StepperCore<Label: View>: View, Renderable {
             let rowHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
-                    captureHandler.increment()
+                    // Wheel up matches "scrolling up through the
+                    // values" — i.e. towards smaller / earlier.
+                    // (The previous direction felt inverted on
+                    // every platform with natural scrolling — a
+                    // two-finger upward swipe should reveal
+                    // smaller values, not advance the stepper.)
+                    captureHandler.decrement()
                     focusManager.focus(id: captureFocusID)
                     return true
                 case .scrollDown:
-                    captureHandler.decrement()
+                    captureHandler.increment()
                     focusManager.focus(id: captureFocusID)
                     return true
                 case .left:
