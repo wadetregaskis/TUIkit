@@ -263,8 +263,12 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             handler.singleSelection = singleSelection
             handler.multiSelection = multiSelection
 
-            // Ensure focused item is visible
-            handler.ensureFocusedItemVisible()
+            // Intentionally NOT calling ensureFocusedItemVisible
+            // on every render — see the same comment in
+            // _ListCore. Wheel scrolling is independent of the
+            // focused row; the focus-changing paths
+            // (moveFocus, Home/End/Page keys, onFocusReceived)
+            // already call ensureFocusedItemVisible themselves.
 
             FocusRegistration.register(context: context, handler: handler)
             let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)

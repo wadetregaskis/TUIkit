@@ -159,8 +159,26 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler.singleSelection = singleSelection
             handler.multiSelection = multiSelection
 
-            // Ensure focused item is visible
-            handler.ensureFocusedItemVisible()
+            // Note: we intentionally do NOT call
+            // `handler.ensureFocusedItemVisible()` here on every
+            // render. That was the bug fixed in this commit —
+            // each frame, the clamp would scrub the wheel-driven
+            // scrollOffset back to whatever kept the focused row
+            // visible, so wheel scrolling silently snapped back
+            // every frame. The interaction model is "wheel scrolls
+            // the viewport independently of the focused row"
+            // (matching Finder / Explorer / VS Code etc.); the
+            // focused row is allowed to scroll off-screen.
+            //
+            // The cases where the framework genuinely needs to
+            // make the focused row visible — arrow-key navigation
+            // (moveFocus), Home/End/PageUp/PageDown, programmatic
+            // focus arrival (onFocusReceived), and the
+            // explicit Home/End keys — all already call
+            // ensureFocusedItemVisible themselves. Clicks set
+            // focusedIndex to a row that's already on-screen
+            // (it had to be hit-tested), so they don't need a
+            // clamp either.
 
             FocusRegistration.register(context: context, handler: handler)
             listHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)

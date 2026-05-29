@@ -375,4 +375,62 @@ struct ListRenderingTests {
         #expect(content.contains("My Title"))
         #expect(content.contains("row body"))
     }
+
+    // MARK: - Wheel scrolling vs. selection visibility
+
+    @Test("Wheel scroll can move the focused row out of view (not clamped each render)")
+    func wheelScrollSurvivesRender() {
+        // Regression test for the bug where _ListCore.renderToBuffer
+        // called handler.ensureFocusedItemVisible() on every render
+        // — so the wheel-driven scrollOffset got scrubbed back to
+        // whatever kept the focused row visible. The interaction
+        // model is "wheel scrolls the viewport independently of
+        // the focused row" (matching Finder / Explorer / VS Code);
+        // this test guards against the clamp coming back.
+        let context = createTestContext(width: 30, height: 10)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        // 100 rows, 5-tall viewport — content easily overflows.
+        let items = (0..<100).map { "Row \($0)" }
+        let view = List("Long", selection: .constant("Row 0")) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .frame(height: 5)
+
+        // Initial render — scrollOffset is 0, focusedIndex is 0.
+        let initial = renderToBuffer(view, context: context)
+        dispatcher.setRegions(initial.hitTestRegions)
+        let initialText = initial.lines.map(\.stripped).joined(separator: "\n")
+        #expect(initialText.contains("Row 0"))
+
+        // Dispatch a wheel-down event inside the list. With the
+        // bug present, the next render would call
+        // ensureFocusedItemVisible and scrub scrollOffset back
+        // to 0 because focusedIndex is still 0.
+        guard let region = initial.hitTestRegions.last else {
+            Issue.record("expected at least one hit-test region from List")
+            return
+        }
+        for _ in 0..<5 {
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .scrollDown,
+                    phase: .scrolled,
+                    x: region.offsetX + region.width / 2,
+                    y: region.offsetY + region.height / 2
+                )
+            )
+        }
+
+        // Re-render — the bug would surface here, scrolling back
+        // to row 0. With the fix, Row 0 is off-screen and the
+        // viewport now shows rows further down.
+        let afterScroll = renderToBuffer(view, context: context)
+        let afterText = afterScroll.lines.map(\.stripped).joined(separator: "\n")
+        #expect(
+            !afterText.contains("Row 0"),
+            "After wheel scrolling, Row 0 should be off-screen; got:\n\(afterText)"
+        )
+    }
 }
