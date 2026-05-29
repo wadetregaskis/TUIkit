@@ -60,7 +60,6 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         fatalError("_PickerMenuCore renders via Renderable")
     }
 
-    // swiftlint:disable:next function_body_length cyclomatic_complexity
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
@@ -71,8 +70,79 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             defaultPrefix: "picker",
             propertyIndex: PickerMenuConstants.focusIDStateIndex
         )
+        let handler = resolveHandler(
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            context: context
+        )
+        FocusRegistration.register(context: context, handler: handler)
+        let isFocused = FocusRegistration.isFocused(
+            context: context, focusID: persistedFocusID)
 
-        // Type-erase the selection so the (non-generic) handler can drive it.
+        let hoverBox = resolveHoverBox(
+            stateStorage: stateStorage, context: context)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
+
+        // Render every option's label once; reuse for sizing and drawing.
+        let renderedLabels: [String] = entries.map { entry in
+            entry.label.renderToBuffer(context: context).lines.first ?? ""
+        }
+        let maxLabelWidth = renderedLabels.map(\.strippedLength).max() ?? 0
+
+        // Inner width = label + selection marker + a space + 1 char padding
+        // on each side. Clamp to the space actually available.
+        let desiredInner = maxLabelWidth + 4
+        let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
+
+        let isOpen = handler.isOpen && !entries.isEmpty
+        publishOpenEscapeLabel(context: context, isOpen: isOpen)
+
+        let collapsed = collapsedLine(
+            innerWidth: innerWidth,
+            renderedLabels: renderedLabels,
+            isOpen: isOpen,
+            isFocused: isFocused,
+            isHovered: isHovered,
+            context: context,
+            palette: palette
+        )
+        var buffer = FrameBuffer(lines: [collapsed])
+
+        attachCollapsedMouseHandlers(
+            to: &buffer,
+            context: context,
+            handler: handler,
+            hoverBox: hoverBox,
+            persistedFocusID: persistedFocusID,
+            collapsedWidth: collapsed.strippedLength
+        )
+
+        guard isOpen else { return buffer }
+        handler.highlightedIndex = min(
+            max(0, handler.highlightedIndex), entries.count - 1)
+        attachOpenPopup(
+            to: &buffer,
+            context: context,
+            handler: handler,
+            persistedFocusID: persistedFocusID,
+            innerWidth: innerWidth,
+            renderedLabels: renderedLabels,
+            palette: palette
+        )
+        return buffer
+    }
+
+    // MARK: - Render-time state resolution
+
+    /// Type-erases the selection binding so the non-generic
+    /// handler can drive it, then fetches (or creates) the
+    /// persistent handler from StateStorage and syncs the
+    /// per-frame bindings on it.
+    private func resolveHandler(
+        persistedFocusID: String,
+        stateStorage: StateStorage,
+        context: RenderContext
+    ) -> _PickerMenuHandler {
         let erasedSelection = Binding<AnyHashable>(
             get: { AnyHashable(selection.wrappedValue) },
             set: { newValue in
@@ -83,7 +153,6 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         )
         let itemValues = entries.map { AnyHashable($0.tag) }
 
-        // Fetch or create the persistent handler (holds open/closed state).
         let handlerKey = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: PickerMenuConstants.handlerStateIndex
@@ -101,113 +170,102 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         handler.selection = erasedSelection
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
-        if isDisabled {
-            handler.isOpen = false
-        }
+        if isDisabled { handler.isOpen = false }
+        return handler
+    }
 
-        FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-
-        // Hover state for the collapsed control. Same shape as
-        // Button — flipped by the dispatcher on synthetic
-        // .entered / .exited events, suppressed while focused
-        // (focus is more emphatic) and while disabled.
-        let hoverKey = StateStorage.StateKey(
+    /// Fetches the hover StateBox.
+    private func resolveHoverBox(
+        stateStorage: StateStorage,
+        context: RenderContext
+    ) -> StateBox<Bool> {
+        let key = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: PickerMenuConstants.isHoveredStateIndex
         )
-        let hoverBox: StateBox<Bool> = stateStorage.storage(
-            for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        return stateStorage.storage(for: key, default: false)
+    }
 
-        // Render every option's label once; reuse for sizing and drawing.
-        let renderedLabels: [String] = entries.map { entry in
-            entry.label.renderToBuffer(context: context).lines.first ?? ""
-        }
-        let maxLabelWidth = renderedLabels.map(\.strippedLength).max() ?? 0
+    /// While the drop-down is open the picker's own handler
+    /// consumes ESC to close it, so any page-level ESC handler
+    /// stays inactive. Posting the ESC label override here makes
+    /// that discoverable in the status bar without changing
+    /// which handler fires.
+    private func publishOpenEscapeLabel(
+        context: RenderContext, isOpen: Bool
+    ) {
+        guard isOpen, !context.isMeasuring else { return }
+        context.environment.statusBar.escapeLabelOverride = "close drop-down menu"
+    }
 
-        // Inner width = label + selection marker + a space + 1 char padding
-        // on each side. Clamp to the space actually available.
-        let desiredInner = maxLabelWidth + 4
-        let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
+    // MARK: - Mouse handler wiring
 
-        let isOpen = handler.isOpen && !entries.isEmpty
-
-        // While the drop-down is open the picker's own handler consumes ESC
-        // to close it (see `_PickerMenuHandler.handleKeyEvent`), so any
-        // page-level ESC handler stays inactive. Posting the ESC label
-        // override here makes that fact discoverable in the status bar
-        // without changing which handler fires. The override is cleared
-        // at the start of each render pass by `RenderLoop.beginRenderPass`,
-        // so we only need to write it while the drop-down is actually open
-        // — closing or navigating away naturally restores the page's label.
-        if isOpen && !context.isMeasuring {
-            context.environment.statusBar.escapeLabelOverride = "close drop-down menu"
-        }
-
-        let collapsed = collapsedLine(
-            innerWidth: innerWidth,
-            renderedLabels: renderedLabels,
-            isOpen: isOpen,
-            isFocused: isFocused,
-            isHovered: isHovered,
-            context: context,
-            palette: palette
-        )
-
-        var buffer = FrameBuffer(lines: [collapsed])
-
-        // Mouse: a click on the collapsed control toggles the drop-down
-        // and grants focus. Width includes the two caps.
-        let collapsedWidth = collapsed.strippedLength
-        if !isDisabled, !context.isMeasuring,
+    /// Registers the collapsed control's mouse handler and emits
+    /// its hit-test region. A click on the collapsed control
+    /// toggles the drop-down and grants focus; hover transitions
+    /// drive the visual affordance.
+    private func attachCollapsedMouseHandlers(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        handler: _PickerMenuHandler,
+        hoverBox: StateBox<Bool>,
+        persistedFocusID: String,
+        collapsedWidth: Int
+    ) {
+        guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            mouseDispatcher.requestFeature(.motion)
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let captureHandler = handler
-            let captureHoverBox = hoverBox
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
-                case .pressed where event.button == .left:
-                    return true
-                case .released where event.button == .left:
-                    focusManager.focus(id: captureFocusID)
-                    captureHandler.isOpen.toggle()
-                    if captureHandler.isOpen {
-                        captureHandler.highlightedIndex =
-                            captureHandler.itemValues.firstIndex(
-                                of: captureHandler.selection.wrappedValue) ?? 0
-                    }
-                    return true
-                default: return false
+        else { return }
+        mouseDispatcher.requestFeature(.motion)
+        let focusManager = context.environment.focusManager
+        let mouseHandlerID = mouseDispatcher.register { event in
+            switch event.phase {
+            case .entered:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            case .pressed where event.button == .left:
+                return true
+            case .released where event.button == .left:
+                focusManager.focus(id: persistedFocusID)
+                handler.isOpen.toggle()
+                if handler.isOpen {
+                    handler.highlightedIndex =
+                        handler.itemValues.firstIndex(
+                            of: handler.selection.wrappedValue) ?? 0
                 }
+                return true
+            default: return false
             }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: collapsedWidth,
-                    height: 1,
-                    handlerID: mouseHandlerID,
-                    focusID: persistedFocusID
-                )
-            )
         }
-
-        guard isOpen else { return buffer }
-
-        handler.highlightedIndex = min(
-            max(0, handler.highlightedIndex),
-            entries.count - 1
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0,
+                offsetY: 0,
+                width: collapsedWidth,
+                height: 1,
+                handlerID: mouseHandlerID,
+                focusID: persistedFocusID
+            )
         )
+    }
+
+    /// Builds the open drop-down popup, wires its per-row mouse
+    /// handlers, and attaches it as an overlay layer anchored
+    /// one row below the collapsed control. The in-flow control
+    /// stays a single line so opening the picker never disturbs
+    /// the layout of sibling views and the list draws on top of
+    /// whatever sits beneath it.
+    private func attachOpenPopup(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        handler: _PickerMenuHandler,
+        persistedFocusID: String,
+        innerWidth: Int,
+        renderedLabels: [String],
+        palette: any Palette
+    ) {
         let popup = popupLines(
             innerWidth: innerWidth,
             renderedLabels: renderedLabels,
@@ -215,50 +273,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
             context: context,
             palette: palette
         )
-
-        // Build the popup buffer with one hit-test region per option
-        // row. Items start at y=1 (after the top border); the row's
-        // local x ranges across the full inner width (excluding side
-        // borders → offsetX 1, width innerWidth).
         var popupBuffer = FrameBuffer(lines: popup)
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let captureEntries = entries
-            let captureSelection = selection
-            let captureHandler = handler
-            for (index, entry) in captureEntries.enumerated() {
-                let mouseHandlerID = mouseDispatcher.register { event in
-                    guard event.button == .left else { return false }
-                    switch event.phase {
-                    case .pressed: return true
-                    case .released:
-                        focusManager.focus(id: captureFocusID)
-                        captureSelection.wrappedValue = entry.tag
-                        captureHandler.highlightedIndex = index
-                        captureHandler.isOpen = false
-                        return true
-                    default: return false
-                    }
-                }
-                popupBuffer.hitTestRegions.append(
-                    HitTestRegion(
-                        offsetX: 1,
-                        offsetY: 1 + index,
-                        width: innerWidth,
-                        height: 1,
-                        handlerID: mouseHandlerID
-                    )
-                )
-            }
-        }
-
-        // The drop-down floats as an overlay layer anchored one row below the
-        // collapsed control. The in-flow control stays a single line, so
-        // opening the picker never disturbs the layout of sibling views and
-        // the list draws on top of whatever sits beneath it.
+        attachPopupRowHandlers(
+            to: &popupBuffer,
+            context: context,
+            handler: handler,
+            persistedFocusID: persistedFocusID,
+            innerWidth: innerWidth
+        )
         buffer.overlays = [
             OverlayLayer(
                 offsetX: 0,
@@ -268,7 +290,49 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
                 anchorHeight: 1
             )
         ]
-        return buffer
+    }
+
+    /// Emits one hit-test region per popup row so a left-click
+    /// on any option selects it and closes the drop-down. Items
+    /// start at y=1 (after the top border); the row's local x
+    /// ranges across the full inner width (excluding side
+    /// borders → offsetX 1, width innerWidth).
+    private func attachPopupRowHandlers(
+        to popupBuffer: inout FrameBuffer,
+        context: RenderContext,
+        handler: _PickerMenuHandler,
+        persistedFocusID: String,
+        innerWidth: Int
+    ) {
+        guard !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        let focusManager = context.environment.focusManager
+        let captureSelection = selection
+        for (index, entry) in entries.enumerated() {
+            let mouseHandlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed: return true
+                case .released:
+                    focusManager.focus(id: persistedFocusID)
+                    captureSelection.wrappedValue = entry.tag
+                    handler.highlightedIndex = index
+                    handler.isOpen = false
+                    return true
+                default: return false
+                }
+            }
+            popupBuffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 1,
+                    offsetY: 1 + index,
+                    width: innerWidth,
+                    height: 1,
+                    handlerID: mouseHandlerID
+                )
+            )
+        }
     }
 
     // MARK: Collapsed Control
