@@ -273,14 +273,23 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                     return false
                 }
             }
-            visibleBuffer.hitTestRegions.append(
+            // Insert at the back of the regions array so any
+            // interactive children inside the content (Buttons,
+            // TextFields, etc.) still win clicks. Wheel events
+            // bubble out through the dispatcher's wheel fall-
+            // through, so this region only catches wheels that
+            // weren't claimed by any inner control — exactly the
+            // behaviour we want. Same pattern as the matching
+            // change in _ListCore / _TableCore.
+            visibleBuffer.hitTestRegions.insert(
                 HitTestRegion(
                     offsetX: 0,
                     offsetY: 0,
                     width: viewportWidth,
                     height: viewportHeight,
                     handlerID: mouseHandlerID
-                )
+                ),
+                at: 0
             )
         }
 
@@ -302,12 +311,16 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             return FrameBuffer(lines: [], width: viewportWidth)
         }
 
-        // Slice the visible lines, padding with blank lines if
-        // the content is shorter than the viewport so the
-        // ScrollView fills the space it was given.
+        // Slice the visible lines, padding each one to the full
+        // viewport width and topping up missing rows so the
+        // ScrollView fills the space it was given on BOTH axes.
+        // Without the per-line padding the result buffer's
+        // effective width would follow the longest line (which
+        // might just be a 'N more above' indicator — far
+        // shorter than the proposed width).
         var visibleLines = Array(
             full.lines.dropFirst(scrollOffset).prefix(viewportHeight)
-        )
+        ).map { $0.padToVisibleWidth(viewportWidth) }
         if visibleLines.count < viewportHeight {
             let blank = String(repeating: " ", count: viewportWidth)
             visibleLines.append(
@@ -372,12 +385,15 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         if handler.hasContentAbove, !lines.isEmpty {
             let rowsAbove = handler.scrollOffset
+            // Indicator rows are padded to full viewport width
+            // — without padding the resulting buffer's effective
+            // width collapses to the indicator's own length.
             lines[0] = renderScrollIndicator(
                 direction: .up,
                 count: rowsAbove,
                 width: width,
                 palette: palette
-            )
+            ).padToVisibleWidth(width)
         }
 
         if handler.hasContentBelow, lines.count >= 1 {
@@ -391,7 +407,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 count: rowsBelow,
                 width: width,
                 palette: palette
-            )
+            ).padToVisibleWidth(width)
         }
 
         return buffer.replacingLines(lines)

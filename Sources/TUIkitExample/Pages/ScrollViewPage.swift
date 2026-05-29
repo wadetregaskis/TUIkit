@@ -32,14 +32,17 @@ struct ScrollViewPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Long text — wheel scrolls without focus") {
+            DemoSection("Long text — naked ScrollView with default indicators") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(
-                        "Roll the wheel anywhere over the box below to "
-                            + "scroll. Click into it and use ↑/↓, PageUp/"
-                            + "PageDown, Home/End for keyboard scrolling. "
-                            + "Indicators along the top and bottom edges "
-                            + "show how many rows are off-screen."
+                        "ScrollView draws no chrome of its own beyond "
+                            + "the optional 'N more above / below' "
+                            + "indicators — there's no border, no "
+                            + "background, no padding. The visible box "
+                            + "below is just a .border() applied to the "
+                            + "ScrollView; remove that line and the "
+                            + "ScrollView is invisible except for the "
+                            + "indicators and any content it shows."
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
@@ -62,7 +65,11 @@ struct ScrollViewPage: View {
                             + "it just windows whatever you put in it. "
                             + "Click and type into the field, tap the "
                             + "buttons, drag the slider — all of it "
-                            + "works the same as outside a ScrollView."
+                            + "works exactly as outside a ScrollView. "
+                            + "Wheel events on top of an inner control "
+                            + "fall through to the ScrollView, so "
+                            + "scrolling works even when the cursor is "
+                            + "over a Button."
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
@@ -98,13 +105,12 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection("Indicators off — same scrolling, no chrome") {
+            DemoSection("Indicators off — fully naked") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(
-                        "The same long-text box but with "
-                            + ".showsIndicators(false). Wheel and "
-                            + "keyboard scrolling still work; the "
-                            + "edge chrome is just suppressed."
+                        "The same long-text content with "
+                            + ".showsIndicators(false) and no .border(). "
+                            + "Just the scrolling effect, nothing else."
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
@@ -116,7 +122,6 @@ struct ScrollViewPage: View {
                         }
                     }
                     .frame(height: 5)
-                    .border(color: .palette.border)
                 }
             }
 
