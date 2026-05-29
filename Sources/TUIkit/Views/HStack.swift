@@ -189,6 +189,17 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // ellipsis) instead of silently spilling an extra row that the
         // parent — which measured the stack as shorter — then clips.
         let rowHeight = max(1, min(allocatedHeight, context.availableHeight))
+        // Empty children (e.g. `if false { ChildView() }`, which
+        // ViewBuilder lowers to `Optional<ChildView>.none`, and
+        // `EmptyView()`) are filtered from layout entirely: they
+        // contribute no width, and FrameBuffer.appendHorizontally
+        // drops the spacing slot they would otherwise have claimed.
+        // This matches SwiftUI's HStack semantics — a non-rendering
+        // child is treated as if it weren't in the children list at
+        // all. To reserve a column regardless, opt in with a sized
+        // placeholder (Color.clear.frame(width: 1), Spacer with an
+        // explicit width, etc.) — note that EmptyView() in an else
+        // branch will also be filtered.
         var result = FrameBuffer()
         for (index, child) in children.enumerated() {
             let spacingToApply = index > 0 ? spacing : 0

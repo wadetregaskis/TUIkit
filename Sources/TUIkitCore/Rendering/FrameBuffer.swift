@@ -205,10 +205,41 @@ extension FrameBuffer {
 
     /// Places another buffer to the right of this one with optional spacing.
     ///
+    /// An empty `other` contributes no width *and* no spacing slot
+    /// — the buffers join with the spacing they would have had if
+    /// `other` were not in the list at all. This matches SwiftUI's
+    /// `HStack` behaviour (and ``appendVertically``'s mirror of the
+    /// same rule): an `Optional<ChildView>.none`, an `EmptyView`,
+    /// or any other zero-width child is treated as if it were not
+    /// in the children list at all. To reserve a column whether or
+    /// not a conditional fires, opt in with a sized placeholder
+    /// such as ``Color/clear``-with-frame or ``Spacer/init()``-
+    /// with-frame — `EmptyView()` in an `else` branch will NOT
+    /// reserve the column, because `EmptyView()` is also empty.
+    ///
     /// - Parameters:
     ///   - other: The buffer to append to the right.
     ///   - spacing: Number of space characters between the two buffers.
+    ///     Ignored when `other` is empty, by design (see above).
     public mutating func appendHorizontally(_ other: Self, spacing: Int = 0) {
+        let priorWidth = width
+
+        guard !other.isEmpty else {
+            // `other` contributes no visible columns and no spacing
+            // slot (see doc comment above). It may still carry
+            // overlay layers and hit-test regions that must be
+            // preserved — those are anchored to its (zero-width)
+            // position, not to any inter-child spacing.
+            if !other.overlays.isEmpty {
+                overlays.append(contentsOf: other.shiftedOverlays(byX: priorWidth, y: 0))
+            }
+            if !other.hitTestRegions.isEmpty {
+                hitTestRegions.append(
+                    contentsOf: other.shiftedHitTestRegions(byX: priorWidth, y: 0))
+            }
+            return
+        }
+
         let maxHeight = max(height, other.height)
         let myWidth = width
         let spacer = String(repeating: " ", count: spacing)
