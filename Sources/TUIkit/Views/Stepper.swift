@@ -302,6 +302,12 @@ private struct _StepperCore<Label: View>: View, Renderable {
         fatalError("_StepperCore renders via Renderable")
     }
 
+    private enum StateIndex {
+        static let handler = 0
+        static let focusID = 1
+        static let isHovered = 2
+    }
+
     // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
@@ -311,11 +317,12 @@ private struct _StepperCore<Label: View>: View, Renderable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "stepper",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
 
         // Get or create persistent handler from state storage
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<StepperHandler<Int>> = stateStorage.storage(
             for: handlerKey,
             default: StepperHandler(
@@ -339,9 +346,16 @@ private struct _StepperCore<Label: View>: View, Renderable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.isHovered)
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
+
         // Build the stepper content
         let content = buildContent(
             isFocused: isFocused,
+            isHovered: isHovered,
             palette: palette,
             pulsePhase: context.environment.pulsePhase
         )
@@ -361,15 +375,28 @@ private struct _StepperCore<Label: View>: View, Renderable {
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            mouseDispatcher.requestFeature(.motion)
             let focusManager = context.environment.focusManager
             let captureHandler = handler
             let captureFocusID = persistedFocusID
+            let captureHoverBox = hoverBox
             let totalWidth = buffer.width
 
             // Whole-row region: handles scroll wheel anywhere on the
             // stepper, and absorbs left clicks on the value area as
-            // focus-only.
+            // focus-only. Also drives the hover state machine for
+            // the row.
             let rowHandlerID = mouseDispatcher.register { event in
+                switch event.phase {
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                default:
+                    break
+                }
                 switch event.button {
                 case .scrollUp:
                     // Wheel up matches "scrolling up through the
@@ -453,10 +480,15 @@ private struct _StepperCore<Label: View>: View, Renderable {
     /// Builds the rendered stepper content.
     private func buildContent(
         isFocused: Bool,
+        isHovered: Bool,
         palette: any Palette,
         pulsePhase: Double
     ) -> String {
-        // Arrow and value colors: pulsing accent when focused, dimmed when unfocused
+        // Arrow and value colors:
+        //   - Focused: pulsing accent
+        //   - Hovered (not focused): static accent at the
+        //     hoverBackground tint
+        //   - Otherwise: dimmed
         let arrowColor: Color
         let valueColor: Color
         if isDisabled {
@@ -467,6 +499,9 @@ private struct _StepperCore<Label: View>: View, Renderable {
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
             arrowColor = Color.lerp(dimAccent, palette.accent, phase: pulsePhase)
             valueColor = palette.foreground
+        } else if isHovered {
+            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground)
+            valueColor = palette.foregroundSecondary
         } else {
             // Dimmed arrows when unfocused
             arrowColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)

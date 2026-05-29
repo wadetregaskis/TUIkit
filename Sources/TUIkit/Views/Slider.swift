@@ -283,6 +283,12 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
     }
 
+    private enum StateIndex {
+        static let handler = 0
+        static let focusID = 1
+        static let isHovered = 2
+    }
+
     // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
@@ -295,11 +301,12 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "slider",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
 
         // Get or create persistent handler from state storage
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<SliderHandler<Double>> = stateStorage.storage(
             for: handlerKey,
             default: SliderHandler(
@@ -321,6 +328,12 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.isHovered)
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
+
         // Calculate fraction, clamped to [0, 1] to handle out-of-bounds values
         let range = bounds.upperBound - bounds.lowerBound
         let fraction = range > 0 ? min(1.0, max(0.0, (value.wrappedValue - bounds.lowerBound) / range)) : 0
@@ -329,6 +342,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         let content = buildContent(
             fraction: fraction,
             isFocused: isFocused,
+            isHovered: isHovered,
             palette: palette,
             pulsePhase: context.environment.pulsePhase,
             trackWidth: trackWidth
@@ -344,14 +358,26 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            mouseDispatcher.requestFeature(.motion)
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let captureValue = value
             let captureBounds = bounds
             let captureStep = step
+            let captureHoverBox = hoverBox
             let trackLeft = 2  // "◀ "
             let trackRight = trackLeft + trackWidth  // exclusive
             let handlerID = mouseDispatcher.register { event in
+                switch event.phase {
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                default:
+                    break
+                }
                 switch event.button {
                 case .scrollUp:
                     let new = min(captureBounds.upperBound,
@@ -438,11 +464,17 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     private func buildContent(
         fraction: Double,
         isFocused: Bool,
+        isHovered: Bool,
         palette: any Palette,
         pulsePhase: Double,
         trackWidth: Int
     ) -> String {
-        // Arrow colors: pulsing accent when focused, dimmed when unfocused
+        // Arrow colors:
+        //   - Focused: pulsing accent
+        //   - Hovered (not focused): static accent at the
+        //     hoverBackground tint so the affordance is visible
+        //     without competing with the focus pulse
+        //   - Otherwise: dimmed foregroundTertiary
         let arrowColor: Color
         if isDisabled {
             arrowColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
@@ -450,6 +482,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             // Pulse between 35% and 100% accent
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
             arrowColor = Color.lerp(dimAccent, palette.accent, phase: pulsePhase)
+        } else if isHovered {
+            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground)
         } else {
             // Dimmed arrows when unfocused
             arrowColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
