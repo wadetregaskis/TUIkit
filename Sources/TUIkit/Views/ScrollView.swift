@@ -149,6 +149,7 @@ private enum ScrollViewStateIndex {
     static let handler = 0
     static let focusID = 1
     static let lastFocusedID = 2
+    static let lastInteractionGen = 3
 }
 
 /// A lightweight String-box used by ``_ScrollViewCore`` to track
@@ -158,6 +159,15 @@ private enum ScrollViewStateIndex {
 /// renders.
 private final class LastFocusedIDBox: @unchecked Sendable {
     var value: String?
+}
+
+/// Tracks the ``FocusManager/focusedInteractionGeneration`` value
+/// seen at the previous render so ``_ScrollViewCore`` can detect
+/// "the focused control just consumed a key event" between
+/// frames. Class-typed for the same reason as
+/// ``LastFocusedIDBox``.
+private final class LastInteractionGenBox: @unchecked Sendable {
+    var value: UInt64 = 0
 }
 
 /// Internal core that performs the windowing, hit-testing, and
@@ -234,35 +244,51 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // between renders.
         handler.scrollOffset = max(0, min(handler.maxOffset, handler.scrollOffset))
 
-        // Phase 1 of "follow the focused control":
+        // "Follow the focused control" — snap the viewport back
+        // to the focused control when either of two things just
+        // happened:
         //
-        // On every render, compare the framework's currently
-        // focused control to the one that was focused on our
-        // previous render. If they differ — i.e. the focus just
-        // moved (Tab into a new control, a click that focused a
-        // different element, programmatic focus change) — and
-        // the newly focused element sits inside this ScrollView's
-        // content, scroll just enough to bring its rendered
-        // bounds into the viewport.
+        //   - Focus moved (Tab into a different control, a click
+        //     that focused something else, programmatic focus
+        //     change). Detected by comparing
+        //     focusManager.currentFocusedID to the value we saw
+        //     at the previous render.
         //
-        // Wheel scrolling does NOT change focusedID, so peek
+        //   - The focused control consumed a key event (the user
+        //     poked the still-focused control via the keyboard
+        //     even though wheel scrolling has moved it
+        //     off-screen). Detected by comparing
+        //     focusManager.focusedInteractionGeneration to the
+        //     value we saw at the previous render — the
+        //     counter is bumped inside FocusManager.dispatchKeyEvent
+        //     when the focused handler returned true.
+        //
+        // Wheel scrolling does NOT change either signal, so peek
         // mode (wheel-scroll the focused control off-screen, no
         // snap-back) is preserved naturally.
-        //
-        // Phase 2 — "snap when the focused control is *interacted
-        // with*" — needs a way to distinguish a render triggered
-        // by wheel scrolling from one triggered by anything else,
-        // which requires plumbing input-source information
-        // through the dispatcher. Tracked as a separate follow-up.
         let lastFocusedKey = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: StateIndex.lastFocusedID
         )
         let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
             for: lastFocusedKey, default: LastFocusedIDBox())
-        let currentFocusedID = context.environment.focusManager.currentFocusedID
+
+        let lastInteractionKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastInteractionGen
+        )
+        let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
+            for: lastInteractionKey, default: LastInteractionGenBox())
+
+        let focusManager = context.environment.focusManager
+        let currentFocusedID = focusManager.currentFocusedID
+        let currentInteractionGen = focusManager.focusedInteractionGeneration
+
         let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
-        if focusJustChanged,
+        let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
+        let shouldSnap = focusJustChanged || interactionJustFired
+
+        if shouldSnap,
            let focusedID = currentFocusedID,
            let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
         {
@@ -271,22 +297,47 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             let viewportTop = handler.scrollOffset
             let viewportBottom = handler.scrollOffset + viewportHeight
 
-            // If the focused region is above the viewport, scroll
-            // up so the top of the region aligns with the viewport
-            // top. If below, scroll down so the bottom of the
-            // region aligns with the viewport bottom. Otherwise
-            // leave the offset alone — the region is already at
-            // least partly visible.
+            // When showsIndicators is true, the visible buffer
+            // overwrites its top and / or bottom rows with the
+            // 'N more above / below' chrome whenever there's
+            // content off-screen in the corresponding direction.
+            // We need to reserve room for those indicator rows
+            // when computing the target scrollOffset, otherwise
+            // the snap puts the focused control exactly on the
+            // row the indicator will then cover.
+            //
+            // The decision is bidirectional: after snapping there
+            // will still be content above iff the chosen
+            // scrollOffset > 0, and content below iff
+            // scrollOffset + viewportHeight < contentHeight.
+            //
+            // Scroll-up case: align the focused region's top with
+            // viewportTop, leaving 1 row of headroom for the top
+            // indicator when one would appear.
             if regionTop < viewportTop {
-                handler.scrollOffset = max(0, regionTop)
+                let proposed = regionTop
+                let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
+                handler.scrollOffset =
+                    max(0, min(handler.maxOffset, proposed - topIndicatorRow))
             } else if regionBottom > viewportBottom {
-                handler.scrollOffset = max(0, min(
-                    handler.maxOffset,
-                    regionBottom - viewportHeight
-                ))
+                // Scroll-down case: align the region's bottom with
+                // viewportBottom, leaving 1 row for the bottom
+                // indicator if one would appear.
+                let proposed = regionBottom - viewportHeight
+                let bottomIndicatorWouldAppear =
+                    showsIndicators
+                    && (proposed + viewportHeight < handler.contentHeight)
+                handler.scrollOffset = max(
+                    0,
+                    min(
+                        handler.maxOffset,
+                        proposed + (bottomIndicatorWouldAppear ? 1 : 0)
+                    )
+                )
             }
         }
         lastFocusedBox.value.value = currentFocusedID
+        lastInteractionBox.value.value = currentInteractionGen
 
         // Register focus so the dispatchKeyEvent → handler chain
         // is wired up. The handler's own state controls what

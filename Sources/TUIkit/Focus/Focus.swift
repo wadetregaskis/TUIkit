@@ -57,6 +57,15 @@ public final class FocusManager: @unchecked Sendable {
     /// The currently focused element's ID within the active section.
     private var focusedID: String?
 
+    /// A monotonic counter that increments every time the
+    /// currently focused element handles (consumes) a key event.
+    /// Used by ``ScrollView`` to tell apart "the focused control
+    /// was just interacted with" from "the wheel just fired";
+    /// when the counter changes between renders, the ScrollView
+    /// snaps its viewport back to the focused control even
+    /// though `currentFocusedID` itself hasn't changed.
+    public private(set) var focusedInteractionGeneration: UInt64 = 0
+
     /// Callback triggered when focus changes (element or section).
     public var onFocusChange: (() -> Void)?
 
@@ -303,6 +312,12 @@ extension FocusManager {
                   currentFocused.focusID: \(focused.focusID)
                 """)
             if focused.handleKeyEvent(event) {
+                // Bump the interaction generation so any
+                // surrounding ScrollView re-renders this frame
+                // and snaps the viewport back to the focused
+                // control (Phase 2 of "follow the focused
+                // control").
+                focusedInteractionGeneration &+= 1
                 return true
             }
         } else {
