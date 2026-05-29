@@ -315,7 +315,6 @@ private struct _StepperCore<Label: View>: View, Renderable {
 
     private typealias StateIndex = StepperStateIndex
 
-    // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
@@ -369,155 +368,194 @@ private struct _StepperCore<Label: View>: View, Renderable {
 
         var buffer = FrameBuffer(text: content)
 
-        // Hit-test regions:
-        //   • Scroll wheel up/down anywhere → ± step (+ focus)
-        //   • Click on ◀ (x = 0)             → decrement (+ focus)
-        //   • Click on ▶ (x = totalWidth-1)  → increment (+ focus)
-        //   • Click on the value in between  → focus only, no change
-        //
-        // Splitting the row into discrete left-arrow / value / right-arrow
-        // regions mirrors the macOS / SwiftUI behaviour: clicking the
-        // numeric area moves the keyboard caret into the control without
-        // perturbing its value.
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            mouseDispatcher.requestFeature(.motion)
-            let focusManager = context.environment.focusManager
-            let captureHandler = handler
-            let captureFocusID = persistedFocusID
-            let captureHoverBox = hoverBox
-            let totalWidth = buffer.width
-
-            // Whole-row region: handles scroll wheel anywhere on the
-            // stepper, and absorbs left clicks on the value area as
-            // focus-only. Also drives the hover state machine for
-            // the row.
-            let rowHandlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
-                default:
-                    break
-                }
-                switch event.button {
-                case .scrollUp:
-                    // Wheel up matches "scrolling up through the
-                    // values" — i.e. towards smaller / earlier.
-                    // (The previous direction felt inverted on
-                    // every platform with natural scrolling — a
-                    // two-finger upward swipe should reveal
-                    // smaller values, not advance the stepper.)
-                    captureHandler.decrement()
-                    focusManager.focus(id: captureFocusID)
-                    return true
-                case .scrollDown:
-                    captureHandler.increment()
-                    focusManager.focus(id: captureFocusID)
-                    return true
-                case .left:
-                    guard event.phase == .released else {
-                        // Press / drag: claim so subsequent release
-                        // routes here, but don't move the value.
-                        return event.phase == .pressed
-                    }
-                    focusManager.focus(id: captureFocusID)
-                    return true
-                default:
-                    return false
-                }
-            }
-            // Tag the row-wide region with the persistent focus
-            // ID — it covers the whole stepper. The narrower
-            // increment / decrement regions emitted below are
-            // sub-targets, so they don't carry a focusID
-            // (otherwise a ScrollView consumer would think the
-            // focused area was just one cell wide).
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0, offsetY: 0,
-                    width: totalWidth, height: buffer.height,
-                    handlerID: rowHandlerID,
-                    focusID: persistedFocusID
-                )
-            )
-
-            // Get (or create) the auto-repeat timers for each
-            // arrow. Storing them in StateStorage lets the
-            // timers persist across renders — a press starts
-            // the timer, the renders that happen during the
-            // hold mustn't reset it.
-            let incrementRepeatKey = StateStorage.StateKey(
-                identity: context.identity,
-                propertyIndex: StateIndex.incrementRepeat
-            )
-            let incrementRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
-                for: incrementRepeatKey, default: AutoRepeatTimer())
-            let captureIncrementTimer = incrementRepeatBox.value
-
-            let decrementRepeatKey = StateStorage.StateKey(
-                identity: context.identity,
-                propertyIndex: StateIndex.decrementRepeat
-            )
-            let decrementRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
-                for: decrementRepeatKey, default: AutoRepeatTimer())
-            let captureDecrementTimer = decrementRepeatBox.value
-
-            // Right-arrow click: increment + focus. Registered after
-            // the whole-row region so it wins for x = totalWidth-1.
-            // Press-and-hold fires once immediately, then keeps
-            // incrementing on a fixed cadence — the canonical
-            // stepper auto-repeat. Release stops the timer.
-            let incrementID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
-                switch event.phase {
-                case .pressed:
-                    focusManager.focus(id: captureFocusID)
-                    captureIncrementTimer.start { captureHandler.increment() }
-                    return true
-                case .released, .dragged:
-                    captureIncrementTimer.stop()
-                    return true
-                default: return false
-                }
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: totalWidth - 1, offsetY: 0,
-                    width: 1, height: buffer.height,
-                    handlerID: incrementID
-                )
-            )
-
-            // Left-arrow click: decrement + focus. Same auto-
-            // repeat shape as the increment arrow above.
-            let decrementID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
-                switch event.phase {
-                case .pressed:
-                    focusManager.focus(id: captureFocusID)
-                    captureDecrementTimer.start { captureHandler.decrement() }
-                    return true
-                case .released, .dragged:
-                    captureDecrementTimer.stop()
-                    return true
-                default: return false
-                }
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0, offsetY: 0,
-                    width: 1, height: buffer.height,
-                    handlerID: decrementID
-                )
-            )
-        }
+        attachMouseHandlers(
+            to: &buffer,
+            context: context,
+            handler: handler,
+            hoverBox: hoverBox,
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage
+        )
 
         return buffer
+    }
+
+    // MARK: - Mouse handler wiring
+
+    /// Registers the whole-row, increment-arrow, and decrement-
+    /// arrow mouse handlers and appends their hit-test regions
+    /// to `buffer`. Splitting the row into discrete left-arrow /
+    /// value / right-arrow regions mirrors the macOS / SwiftUI
+    /// behaviour: clicking the numeric area moves the keyboard
+    /// caret into the control without perturbing its value.
+    private func attachMouseHandlers(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        handler: StepperHandler<Int>,
+        hoverBox: StateBox<Bool>,
+        persistedFocusID: String,
+        stateStorage: StateStorage
+    ) {
+        guard !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        mouseDispatcher.requestFeature(.motion)
+
+        let focusManager = context.environment.focusManager
+        let totalWidth = buffer.width
+
+        // Whole-row region: scroll-wheel anywhere, focus-only
+        // click on the value area, hover state for the whole
+        // row. Tagged with the persistent focusID so a
+        // surrounding ScrollView's snap-to-focus locates the
+        // entire stepper (the narrower arrow regions below
+        // intentionally don't carry a focusID).
+        let rowID = mouseDispatcher.register(
+            wholeRowHandler(
+                handler: handler,
+                hoverBox: hoverBox,
+                focusManager: focusManager,
+                focusID: persistedFocusID
+            )
+        )
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0, offsetY: 0,
+                width: totalWidth, height: buffer.height,
+                handlerID: rowID,
+                focusID: persistedFocusID
+            )
+        )
+
+        // Per-arrow auto-repeat timers, persisted across renders.
+        let incrementTimer = autoRepeatTimer(
+            stateStorage: stateStorage,
+            context: context,
+            propertyIndex: StateIndex.incrementRepeat
+        )
+        let decrementTimer = autoRepeatTimer(
+            stateStorage: stateStorage,
+            context: context,
+            propertyIndex: StateIndex.decrementRepeat
+        )
+
+        // Right-arrow region — single cell at x = totalWidth - 1.
+        let incrementID = mouseDispatcher.register(
+            arrowHandler(
+                timer: incrementTimer,
+                focusManager: focusManager,
+                focusID: persistedFocusID,
+                action: handler.increment
+            )
+        )
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: totalWidth - 1, offsetY: 0,
+                width: 1, height: buffer.height,
+                handlerID: incrementID
+            )
+        )
+
+        // Left-arrow region — single cell at x = 0.
+        let decrementID = mouseDispatcher.register(
+            arrowHandler(
+                timer: decrementTimer,
+                focusManager: focusManager,
+                focusID: persistedFocusID,
+                action: handler.decrement
+            )
+        )
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0, offsetY: 0,
+                width: 1, height: buffer.height,
+                handlerID: decrementID
+            )
+        )
+    }
+
+    /// Builds the row-wide mouse handler closure: scroll-wheel,
+    /// hover, focus-only clicks on the value area.
+    private func wholeRowHandler(
+        handler: StepperHandler<Int>,
+        hoverBox: StateBox<Bool>,
+        focusManager: FocusManager,
+        focusID: String
+    ) -> @MainActor (MouseEvent) -> Bool {
+        { event in
+            switch event.phase {
+            case .entered:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            default:
+                break
+            }
+            switch event.button {
+            case .scrollUp:
+                // Wheel up matches "scrolling up through the
+                // values" — towards smaller / earlier.
+                handler.decrement()
+                focusManager.focus(id: focusID)
+                return true
+            case .scrollDown:
+                handler.increment()
+                focusManager.focus(id: focusID)
+                return true
+            case .left:
+                guard event.phase == .released else {
+                    // Press / drag: claim so subsequent release
+                    // routes here, but don't move the value.
+                    return event.phase == .pressed
+                }
+                focusManager.focus(id: focusID)
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    /// Builds an arrow-cell mouse handler closure. Press-and-
+    /// hold drives the supplied timer (which fires the action
+    /// once immediately, then repeats at a fixed cadence).
+    /// Release or drag-off stops the timer.
+    private func arrowHandler(
+        timer: AutoRepeatTimer,
+        focusManager: FocusManager,
+        focusID: String,
+        action: @escaping @MainActor () -> Void
+    ) -> @MainActor (MouseEvent) -> Bool {
+        { event in
+            guard event.button == .left else { return false }
+            switch event.phase {
+            case .pressed:
+                focusManager.focus(id: focusID)
+                timer.start(action: action)
+                return true
+            case .released, .dragged:
+                timer.stop()
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    /// Fetches (or creates) the auto-repeat timer at the given
+    /// `propertyIndex` on the current view identity.
+    private func autoRepeatTimer(
+        stateStorage: StateStorage,
+        context: RenderContext,
+        propertyIndex: Int
+    ) -> AutoRepeatTimer {
+        let key = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: propertyIndex)
+        let box: StateBox<AutoRepeatTimer> = stateStorage.storage(
+            for: key, default: AutoRepeatTimer())
+        return box.value
     }
 
     /// Builds the rendered stepper content.
