@@ -47,19 +47,34 @@ public struct HitTestRegion: Sendable, Equatable {
     /// the dispatcher owns the closure lifetimes.
     public let handlerID: HandlerID
 
+    /// The persistent focus identifier of the focusable view that
+    /// emitted this region, when applicable.
+    ///
+    /// Optional and `nil` for non-focusable regions (a List's
+    /// container-wide click region, a ScrollView's wheel region,
+    /// `.onMouseEvent` modifiers, etc.). When set, ScrollView
+    /// (and any other consumer that wants to know "where in the
+    /// content does focus live?") can scan the carrying
+    /// buffer's regions for one whose `focusID` matches
+    /// `FocusManager.focusedID` and read its bounds directly,
+    /// without any side-channel mapping.
+    public let focusID: String?
+
     /// Creates a hit-test region.
     public init(
         offsetX: Int,
         offsetY: Int,
         width: Int,
         height: Int,
-        handlerID: HandlerID
+        handlerID: HandlerID,
+        focusID: String? = nil
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.width = width
         self.height = height
         self.handlerID = handlerID
+        self.focusID = focusID
     }
 
     /// Whether the region contains the given absolute screen position.

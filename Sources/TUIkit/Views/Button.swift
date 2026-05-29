@@ -255,7 +255,8 @@ private struct _ButtonCore: View, Renderable {
                     offsetY: 0,
                     width: buffer.width,
                     height: buffer.height,
-                    handlerID: handlerID
+                    handlerID: handlerID,
+                    focusID: persistedFocusID
                 )
             )
         }

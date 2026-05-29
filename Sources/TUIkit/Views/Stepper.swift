@@ -429,11 +429,18 @@ private struct _StepperCore<Label: View>: View, Renderable {
                     return false
                 }
             }
+            // Tag the row-wide region with the persistent focus
+            // ID — it covers the whole stepper. The narrower
+            // increment / decrement regions emitted below are
+            // sub-targets, so they don't carry a focusID
+            // (otherwise a ScrollView consumer would think the
+            // focused area was just one cell wide).
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: 0, offsetY: 0,
                     width: totalWidth, height: buffer.height,
-                    handlerID: rowHandlerID
+                    handlerID: rowHandlerID,
+                    focusID: persistedFocusID
                 )
             )
 

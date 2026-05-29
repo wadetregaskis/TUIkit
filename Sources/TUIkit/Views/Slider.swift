@@ -457,7 +457,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     offsetY: 0,
                     width: buffer.width,
                     height: buffer.height,
-                    handlerID: handlerID
+                    handlerID: handlerID,
+                    focusID: persistedFocusID
                 )
             )
         }

@@ -374,7 +374,8 @@ private struct _ToggleCore<Label: View>: View, Renderable {
                     offsetY: 0,
                     width: buffer.width,
                     height: buffer.height,
-                    handlerID: handlerID
+                    handlerID: handlerID,
+                    focusID: persistedFocusID
                 )
             )
         }

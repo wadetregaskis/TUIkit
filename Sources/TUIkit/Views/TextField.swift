@@ -423,7 +423,8 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                     offsetY: 0,
                     width: buffer.width,
                     height: buffer.height,
-                    handlerID: mouseHandlerID
+                    handlerID: mouseHandlerID,
+                    focusID: persistedFocusID
                 )
             )
         }

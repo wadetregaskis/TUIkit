@@ -148,6 +148,16 @@ extension ScrollView: @preconcurrency Equatable where Content: Equatable {
 private enum ScrollViewStateIndex {
     static let handler = 0
     static let focusID = 1
+    static let lastFocusedID = 2
+}
+
+/// A lightweight String-box used by ``_ScrollViewCore`` to track
+/// which focusable was focused at the previous render, so it can
+/// detect focus *changes* and scroll the new focused control into
+/// view. Class-typed so a StateBox can hold it mutably across
+/// renders.
+private final class LastFocusedIDBox: @unchecked Sendable {
+    var value: String?
 }
 
 /// Internal core that performs the windowing, hit-testing, and
@@ -223,6 +233,60 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // height; the user may have grown / shrunk the content
         // between renders.
         handler.scrollOffset = max(0, min(handler.maxOffset, handler.scrollOffset))
+
+        // Phase 1 of "follow the focused control":
+        //
+        // On every render, compare the framework's currently
+        // focused control to the one that was focused on our
+        // previous render. If they differ — i.e. the focus just
+        // moved (Tab into a new control, a click that focused a
+        // different element, programmatic focus change) — and
+        // the newly focused element sits inside this ScrollView's
+        // content, scroll just enough to bring its rendered
+        // bounds into the viewport.
+        //
+        // Wheel scrolling does NOT change focusedID, so peek
+        // mode (wheel-scroll the focused control off-screen, no
+        // snap-back) is preserved naturally.
+        //
+        // Phase 2 — "snap when the focused control is *interacted
+        // with*" — needs a way to distinguish a render triggered
+        // by wheel scrolling from one triggered by anything else,
+        // which requires plumbing input-source information
+        // through the dispatcher. Tracked as a separate follow-up.
+        let lastFocusedKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastFocusedID
+        )
+        let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
+            for: lastFocusedKey, default: LastFocusedIDBox())
+        let currentFocusedID = context.environment.focusManager.currentFocusedID
+        let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
+        if focusJustChanged,
+           let focusedID = currentFocusedID,
+           let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
+        {
+            let regionTop = region.offsetY
+            let regionBottom = region.offsetY + region.height
+            let viewportTop = handler.scrollOffset
+            let viewportBottom = handler.scrollOffset + viewportHeight
+
+            // If the focused region is above the viewport, scroll
+            // up so the top of the region aligns with the viewport
+            // top. If below, scroll down so the bottom of the
+            // region aligns with the viewport bottom. Otherwise
+            // leave the offset alone — the region is already at
+            // least partly visible.
+            if regionTop < viewportTop {
+                handler.scrollOffset = max(0, regionTop)
+            } else if regionBottom > viewportBottom {
+                handler.scrollOffset = max(0, min(
+                    handler.maxOffset,
+                    regionBottom - viewportHeight
+                ))
+            }
+        }
+        lastFocusedBox.value.value = currentFocusedID
 
         // Register focus so the dispatchKeyEvent → handler chain
         // is wired up. The handler's own state controls what
