@@ -8,6 +8,22 @@
 
 /// Which mouse button (or wheel direction) generated an event.
 public enum MouseButton: Sendable, Equatable {
+    /// Whether this button identifies a scroll-wheel event
+    /// (vertical or horizontal). Used by the dispatcher to
+    /// decide whether to bubble unhandled events out to a
+    /// containing region — a scrolling Stepper / List /
+    /// ScrollView should still scroll when the cursor lands on
+    /// top of a child control that doesn't itself handle the
+    /// wheel.
+    public var isWheel: Bool {
+        switch self {
+        case .scrollUp, .scrollDown, .scrollLeft, .scrollRight:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// The left (primary) mouse button.
     case left
 

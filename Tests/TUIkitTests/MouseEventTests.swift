@@ -543,4 +543,101 @@ struct MouseEventDispatcherTests {
             MouseEvent(button: .left, phase: .pressed, x: 2, y: 2))
         #expect(result == false)
     }
+
+    // MARK: - Wheel-event fall-through
+
+    @Test("Wheel falls through inner non-handler to outer scroll handler")
+    func wheelFallsThroughToOuter() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.beginRenderPass()
+        var innerSawWheel = false
+        var outerSawWheel = false
+
+        // Outer registers first (outermost), inner registers
+        // later (innermost). Inner does NOT handle wheel events.
+        let outer = dispatcher.register { event in
+            if event.button == .scrollDown {
+                outerSawWheel = true
+                return true
+            }
+            return false
+        }
+        let inner = dispatcher.register { event in
+            if event.button == .left {
+                return true
+            }
+            innerSawWheel = (event.button == .scrollDown)
+            return false  // inner does not consume the wheel
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 10, handlerID: outer),
+            HitTestRegion(offsetX: 2, offsetY: 2, width: 4, height: 4, handlerID: inner),
+        ])
+
+        let consumed = dispatcher.dispatch(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 3, y: 3)
+        )
+
+        #expect(consumed, "outer should consume the bubbled wheel event")
+        #expect(innerSawWheel, "inner handler should be invoked first")
+        #expect(outerSawWheel, "outer handler should receive the fall-through")
+    }
+
+    @Test("Click does NOT fall through inner non-handler to outer")
+    func clickDoesNotFallThrough() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.beginRenderPass()
+        var outerSawClick = false
+
+        let outer = dispatcher.register { event in
+            if event.button == .left {
+                outerSawClick = true
+                return true
+            }
+            return false
+        }
+        let inner = dispatcher.register { _ in false }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 10, handlerID: outer),
+            HitTestRegion(offsetX: 2, offsetY: 2, width: 4, height: 4, handlerID: inner),
+        ])
+
+        let consumed = dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 3, y: 3)
+        )
+
+        #expect(!consumed)
+        #expect(!outerSawClick, "click must stop at inner — no fall-through for non-wheel events")
+    }
+
+    @Test("Wheel falls through chain of non-handlers to deepest handler")
+    func wheelFallsThroughChain() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.beginRenderPass()
+        var outerSawWheel = false
+
+        // Three nested regions: outer handles wheel; middle and
+        // inner refuse. The wheel should walk from inner through
+        // middle and finally land on outer.
+        let outer = dispatcher.register { event in
+            if event.button == .scrollDown { outerSawWheel = true; return true }
+            return false
+        }
+        let middle = dispatcher.register { _ in false }
+        let inner = dispatcher.register { _ in false }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 20, height: 20, handlerID: outer),
+            HitTestRegion(offsetX: 2, offsetY: 2, width: 16, height: 16, handlerID: middle),
+            HitTestRegion(offsetX: 4, offsetY: 4, width: 12, height: 12, handlerID: inner),
+        ])
+
+        let consumed = dispatcher.dispatch(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 5, y: 5)
+        )
+        #expect(consumed)
+        #expect(outerSawWheel)
+    }
 }

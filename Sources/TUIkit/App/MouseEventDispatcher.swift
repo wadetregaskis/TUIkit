@@ -256,32 +256,52 @@ extension MouseEventDispatcher {
             }
         }
 
-        // Otherwise, find the innermost region containing the cursor.
-        guard let region = topRegion(at: event.x, y: event.y) else {
-            return false
+        // Find the matching regions outside-in (innermost first
+        // = last-registered first; the dispatcher's contract is
+        // that views register in render order, so the inner-
+        // most modifier's region is appended last). For click /
+        // drag events we hand the event to the innermost match
+        // and stop; for wheel events we
+        // let the dispatch fall through to the next region when
+        // a handler returns false. That's what makes a List or
+        // ScrollView scroll even when the cursor lands on top of
+        // a Button or TextField inside it — those children don't
+        // handle wheel events, so the wheel bubbles past them to
+        // the surrounding scroller.
+        let matching = matchingRegions(at: event.x, y: event.y)
+        guard !matching.isEmpty else { return false }
+
+        for region in matching {
+            guard let handler = handlers[region.handlerID] else { continue }
+            let localized = localize(
+                event, byOffsetX: region.offsetX, offsetY: region.offsetY)
+            let consumed = handler(localized)
+            if consumed {
+                if event.phase == .pressed {
+                    pressedHandlers[event.button] = PressCapture(
+                        handlerID: region.handlerID,
+                        regionOffsetX: region.offsetX,
+                        regionOffsetY: region.offsetY
+                    )
+                }
+                return true
+            }
+            // Fall through only for wheel events. Click / drag
+            // / motion stop at the first matching region (and
+            // return its handler's `consumed` result, which is
+            // already `false` here).
+            if !event.button.isWheel {
+                return false
+            }
         }
-        guard let handler = handlers[region.handlerID] else { return false }
-        let localized = localize(event, byOffsetX: region.offsetX, offsetY: region.offsetY)
-        let consumed = handler(localized)
-        if consumed, event.phase == .pressed {
-            pressedHandlers[event.button] = PressCapture(
-                handlerID: region.handlerID,
-                regionOffsetX: region.offsetX,
-                regionOffsetY: region.offsetY
-            )
-        }
-        return consumed
+        return false
     }
 
-    /// Returns the topmost region containing the given point, or
-    /// `nil` if no region matches.
-    private func topRegion(at x: Int, y: Int) -> HitTestRegion? {
-        // Last-registered region wins; modifier chains evaluate outside-in,
-        // so the inner-most modifier registers last.
-        for region in regions.reversed() where region.contains(x: x, y: y) {
-            return region
-        }
-        return nil
+    /// Returns every region containing the given point, ordered
+    /// innermost-first (last-registered first). Used by
+    /// ``dispatch`` to implement wheel-event fall-through.
+    private func matchingRegions(at x: Int, y: Int) -> [HitTestRegion] {
+        regions.reversed().filter { $0.contains(x: x, y: y) }
     }
 
     /// Translates the event's coordinates from absolute screen-space
