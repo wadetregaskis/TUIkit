@@ -6,7 +6,33 @@
 
 // MARK: - List Core (Internal Rendering)
 
-/// Internal core view that handles list rendering inside a ContainerView.
+/// Internal core view that handles list rendering inside a
+/// ContainerView.
+///
+/// # Interaction model
+///
+/// Selection, focus, and scroll position are three independent
+/// concepts:
+///
+/// - **Scroll position** is moved by the mouse wheel (3 lines per
+///   tick by default — see ``ViewConstants/mouseWheelScrollLines``).
+///   Wheel scrolling NEVER changes the selection or the focused
+///   row; it can scroll either out of view. This matches every
+///   major desktop list-view convention (Finder, Explorer, VS
+///   Code, etc.). The previous "wheel = arrow key" implementation
+///   made unfocused lists look unscrollable until the invisible
+///   selection bumped the viewport edge — exactly the wrong UX.
+///
+/// - **Selection / focus** is moved by the arrow keys when the
+///   list itself has focus, and by clicking a row. Pressing an
+///   arrow on a focused list whose selection has been scrolled
+///   off-screen scrolls the viewport back to the new selection,
+///   via the usual ``ItemListHandler/ensureFocusedItemVisible``
+///   path.
+///
+/// - **Selection visibility when unfocused** defaults to hidden
+///   (a desaturated highlight is too noisy in many contexts).
+///   Opt-in with ``View/unfocusedSelectionVisibility(_:)``.
 struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: View>: View, Renderable {
     let title: String?
     let content: Content
@@ -268,10 +294,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let mouseHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
-                    listHandler?.moveFocus(by: -1, wrap: false)
+                    // Wheel scrolling moves the viewport, NEVER the
+                    // selection. Matches Finder / Explorer / every
+                    // major desktop list-view: arrow keys are for
+                    // selection, the wheel is for the viewport.
+                    // Conflating the two (the previous behaviour)
+                    // made unfocused scrolling look broken — the
+                    // invisible selection moved before the viewport
+                    // did, so wheel ticks appeared to do nothing
+                    // until the selection bumped the viewport edge.
+                    listHandler?.scroll(by: -ViewConstants.mouseWheelScrollLines)
                     return true
                 case .scrollDown:
-                    listHandler?.moveFocus(by: 1, wrap: false)
+                    listHandler?.scroll(by: ViewConstants.mouseWheelScrollLines)
                     return true
                 case .left:
                     guard event.phase == .released else {

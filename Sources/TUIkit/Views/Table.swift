@@ -358,10 +358,13 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             let mouseHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
-                    captureHandler?.moveFocus(by: -1, wrap: false)
+                    // Wheel scrolls the viewport, never the
+                    // selection. See the matching comment in
+                    // _ListCore for the model.
+                    captureHandler?.scroll(by: -ViewConstants.mouseWheelScrollLines)
                     return true
                 case .scrollDown:
-                    captureHandler?.moveFocus(by: 1, wrap: false)
+                    captureHandler?.scroll(by: ViewConstants.mouseWheelScrollLines)
                     return true
                 case .left:
                     guard event.phase == .released else {

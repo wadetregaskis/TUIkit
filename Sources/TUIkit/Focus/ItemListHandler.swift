@@ -262,6 +262,27 @@ extension ItemListHandler {
         ensureFocusedItemVisible()
     }
 
+    /// Moves the scroll position by the given delta without
+    /// changing which item is focused.
+    ///
+    /// Used by mouse-wheel handlers. Selection and focus are
+    /// orthogonal to the scroll position: scrolling can move the
+    /// focused row out of view, and that's intentional — the model
+    /// matches every major desktop list-view convention (Finder,
+    /// Explorer, VS Code, etc.), where wheel scrolling moves the
+    /// viewport and arrow keys move the selection. Pressing an
+    /// arrow key on a focused list whose selection is currently
+    /// off-screen will scroll back to it via the existing
+    /// ``moveFocus(by:wrap:)`` path.
+    ///
+    /// - Parameter delta: Number of rows to scroll (negative =
+    ///   scroll up, positive = scroll down).
+    func scroll(by delta: Int) {
+        guard delta != 0, viewportHeight > 0, itemCount > viewportHeight else { return }
+        let maxOffset = max(0, itemCount - viewportHeight)
+        scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
+    }
+
     /// Adjusts scroll offset to keep the focused item visible.
     func ensureFocusedItemVisible() {
         guard viewportHeight > 0 else { return }

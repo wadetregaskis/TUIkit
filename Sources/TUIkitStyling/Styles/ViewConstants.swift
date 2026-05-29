@@ -39,6 +39,18 @@ public enum ViewConstants {
     /// Accent opacity for focused button caps pulsing bright phase.
     public static let buttonCapPulseBright: Double = 0.45
 
+    // MARK: - Interaction
+
+    /// Number of rows scrolled per mouse-wheel tick in Lists,
+    /// Tables, and other scrollable selection views.
+    ///
+    /// Matches the macOS / Windows / web default of three lines
+    /// per detent — a single line per tick feels sluggish for
+    /// wheel-driven scrolling. Wheel events scroll the viewport
+    /// directly; they do not move the selection (the model
+    /// matches Finder, Explorer, etc.).
+    public static let mouseWheelScrollLines: Int = 3
+
     // MARK: - Default Strings
 
     /// Default placeholder text for empty List and Table views.

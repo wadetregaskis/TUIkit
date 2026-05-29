@@ -509,4 +509,91 @@ struct ItemListHandlerScrollTests {
         let range = handler.visibleRange
         #expect(range == 0..<5)
     }
+
+    // MARK: - scroll(by:) — wheel scrolling, independent of focus
+
+    @Test("scroll(by:) moves scrollOffset but not focusedIndex")
+    func scrollDoesNotChangeFocus() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 20,
+            viewportHeight: 5,
+            selectionMode: .single
+        )
+        handler.focusedIndex = 7
+        handler.scrollOffset = 5
+
+        handler.scroll(by: 3)
+
+        #expect(handler.scrollOffset == 8)
+        #expect(handler.focusedIndex == 7, "scroll must not move focus")
+    }
+
+    @Test("scroll(by:) can scroll the focused item out of view")
+    func scrollCanMoveFocusOutOfViewport() {
+        // The whole point: arrow keys and the wheel are separate
+        // axes. If the wheel happens to scroll past the focused
+        // row, that's fine — pressing an arrow key will scroll back
+        // to it via ensureFocusedItemVisible().
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 20,
+            viewportHeight: 5,
+            selectionMode: .single
+        )
+        handler.focusedIndex = 2
+        handler.scrollOffset = 0
+
+        handler.scroll(by: 10)
+
+        #expect(handler.scrollOffset == 10)
+        #expect(handler.focusedIndex == 2, "wheel scroll must not pull focus along with it")
+        #expect(!handler.visibleRange.contains(handler.focusedIndex),
+            "focus should now be outside the visible range — that's the expected, documented behaviour")
+    }
+
+    @Test("scroll(by:) clamps to top")
+    func scrollClampsToTop() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 20,
+            viewportHeight: 5,
+            selectionMode: .single
+        )
+        handler.scrollOffset = 2
+
+        handler.scroll(by: -10)
+
+        #expect(handler.scrollOffset == 0)
+    }
+
+    @Test("scroll(by:) clamps to bottom")
+    func scrollClampsToBottom() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 20,
+            viewportHeight: 5,
+            selectionMode: .single
+        )
+        // maxOffset = 20 - 5 = 15
+        handler.scrollOffset = 10
+
+        handler.scroll(by: 20)
+
+        #expect(handler.scrollOffset == 15)
+    }
+
+    @Test("scroll(by:) is a no-op when content fits in viewport")
+    func scrollNoOpWhenAllContentVisible() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 3,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+
+        handler.scroll(by: 5)
+
+        #expect(handler.scrollOffset == 0, "nothing to scroll when content fits")
+    }
 }
