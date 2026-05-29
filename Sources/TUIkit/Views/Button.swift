@@ -168,6 +168,7 @@ private struct _ButtonCore: View, Renderable {
 
     private enum StateIndex {
         static let focusID = 0
+        static let isHovered = 1
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -185,36 +186,62 @@ private struct _ButtonCore: View, Renderable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Hover state persists across renders via StateStorage —
+        // the dispatcher flips it on .entered / .exited events
+        // synthesised by the hover state machine. Disabled
+        // buttons never show the affordance, so clamp to false
+        // when isDisabled regardless of the stored value.
+        let stateStorage = context.environment.stateStorage!
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.isHovered
+        )
+        let hoverBox: StateBox<Bool> = stateStorage.storage(for: hoverKey, default: false)
+        let isHovered = !isDisabled && hoverBox.value
+
         let style = context.environment.buttonStyle
         let configuration = ButtonStyleConfiguration(
             label: label,
             role: role,
             isPressed: false,
             isFocused: isFocused && !isDisabled,
+            isHovered: isHovered,
             isEnabled: !isDisabled
         )
         var buffer = style.makeBuffer(configuration: configuration, context: context)
 
-        // Hit-test region for mouse clicks. A left-button release inside
-        // the button's bounds counts as a click: it grants focus and
-        // fires the action exactly like Enter / Space do. Disabled
-        // buttons skip registration entirely so they neither steal
-        // focus nor swallow events.
+        // Hit-test region for mouse clicks AND hover transitions.
+        // A left-button release inside the button's bounds counts
+        // as a click; .entered / .exited (synthesised by the
+        // dispatcher from cursor motion) drive the hover state.
+        // Disabled buttons skip registration entirely so they
+        // neither steal focus nor swallow events.
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            // Ask the dispatcher to enable motion reporting this
+            // frame so .moved events come through and feed the
+            // hover state machine.
+            mouseDispatcher.requestFeature(.motion)
+
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let captureAction = action
+            let captureHoverBox = hoverBox
             let handlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed:
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                case .pressed where event.button == .left:
                     // Claim the press so the dispatcher routes the
                     // matching release back here even if the cursor
                     // drifts off the button before it lifts.
                     return true
-                case .released:
+                case .released where event.button == .left:
                     focusManager.focus(id: captureFocusID)
                     captureAction()
                     return true

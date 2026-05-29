@@ -42,6 +42,16 @@ public struct ButtonStyleConfiguration {
     ///   because button rendering is procedural.
     public let isFocused: Bool
 
+    /// Whether the cursor is currently hovering over the button.
+    ///
+    /// - Note: Terminal-specific addition. SwiftUI surfaces hover
+    ///   state via the `.onHover` modifier; TUIkit surfaces it on
+    ///   the configuration because button rendering is procedural,
+    ///   so styles can pick up the affordance without each one
+    ///   wiring its own `.onHover`. Always `false` on a disabled
+    ///   button.
+    public let isHovered: Bool
+
     /// Whether the button is enabled.
     ///
     /// - Note: Terminal-specific addition mirroring SwiftUI's `\.isEnabled`
@@ -308,6 +318,12 @@ private struct _ButtonStyleBody: View, Renderable {
         let palette = context.environment.palette
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
+        // Hover is suppressed when the button is focused — focus
+        // is already a more emphatic affordance — so the visual
+        // doesn't compete with itself. Disabled buttons never
+        // show hover (Button._ButtonCore clamps it to false
+        // before constructing the configuration).
+        let isHovered = configuration.isHovered && !isFocused
 
         // A destructive role always wins on colour, matching SwiftUI, where
         // the role overrides whatever tint the style would otherwise use.
@@ -360,8 +376,14 @@ private struct _ButtonStyleBody: View, Renderable {
             configuration.label, into: context.availableWidth, chrome: chromeWidth)
         let paddedLabel = padding + labelText + padding
 
-        // Standard: half-block caps around an accent-tinted background.
-        let buttonBg = palette.accent.opacity(ViewConstants.focusBorderDim)
+        // Standard: half-block caps around an accent-tinted
+        // background. Hover bumps the tint slightly so the
+        // affordance reads as "I am clickable" without the
+        // pulsing animation that focus uses.
+        let buttonBgOpacity = isHovered
+            ? ViewConstants.hoverBackground
+            : ViewConstants.focusBorderDim
+        let buttonBg = palette.accent.opacity(buttonBgOpacity)
 
         // Label foreground: bold = tinted, otherwise a dimmed foreground.
         let labelFg: Color

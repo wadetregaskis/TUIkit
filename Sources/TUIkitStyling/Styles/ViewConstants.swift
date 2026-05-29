@@ -39,6 +39,14 @@ public enum ViewConstants {
     /// Accent opacity for focused button caps pulsing bright phase.
     public static let buttonCapPulseBright: Double = 0.45
 
+    /// Accent opacity for the background tint of a control while
+    /// the cursor is hovering over it (not focused, not pressed).
+    /// Sits between the static unfocused tint
+    /// (``focusBorderDim`` = 0.20) and the focused max-pulse
+    /// (``buttonCapPulseBright`` = 0.45) so the affordance is
+    /// visible without competing with focus itself.
+    public static let hoverBackground: Double = 0.32
+
     // MARK: - Interaction
 
     /// Number of rows scrolled per mouse-wheel tick in Lists,

@@ -24,6 +24,13 @@ private func createTestContext(width: Int = 80, height: Int = 24) -> RenderConte
     )
 }
 
+/// Renders to a string with ANSI codes preserved so tests can
+/// assert about specific colour escapes.
+@MainActor
+private func ansiRendered<V: View>(_ view: V, context: RenderContext) -> String {
+    renderToBuffer(view, context: context).lines.joined(separator: "\n")
+}
+
 // MARK: - Button Tests
 
 @MainActor
@@ -191,6 +198,99 @@ struct ButtonTests {
         #expect(!visible.contains("\u{258C}"))
         #expect(visible.contains("A"))
         #expect(visible.contains("B"))
+    }
+
+    // MARK: - Hover
+
+    @Test("Hover .entered flips Button's hover state and changes its rendered tint")
+    func hoverFlipsRenderedTint() {
+        let context = createTestContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+
+        let view = Button("Hover me") { /* no-op */ }
+
+        // First render: registers handler + region, default
+        // hover state is false → un-hovered tint.
+        let pre = ansiRendered(view, context: context)
+        // Capture the regions before we re-render (which would
+        // clear them in beginRenderPass).
+        let regions = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions)
+
+        guard let buttonRegion = regions.first else {
+            Issue.record("expected at least one hit-test region from Button")
+            return
+        }
+
+        // Dispatch .moved into the region — the dispatcher
+        // synthesises .entered for the button's handler, which
+        // flips its hover StateBox to true.
+        _ = dispatcher.dispatch(
+            MouseEvent(
+                button: .none,
+                phase: .moved,
+                x: buttonRegion.offsetX + 1,
+                y: buttonRegion.offsetY
+            )
+        )
+
+        // Second render: hover state is now true → the tint
+        // bumps from focusBorderDim (.20) to hoverBackground
+        // (.32). The exact ANSI escapes differ.
+        let post = ansiRendered(view, context: context)
+        #expect(
+            pre != post,
+            "Button should render differently when hovered; pre and post matched"
+        )
+    }
+
+    @Test("Hover .exited restores Button's un-hovered tint")
+    func hoverExitRestoresTint() {
+        let context = createTestContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+
+        let view = Button("Hover me") { /* no-op */ }
+
+        let pre = ansiRendered(view, context: context)
+        let regions = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions)
+        guard let buttonRegion = regions.first else { return }
+
+        // Enter
+        _ = dispatcher.dispatch(
+            MouseEvent(
+                button: .none, phase: .moved,
+                x: buttonRegion.offsetX + 1, y: buttonRegion.offsetY
+            )
+        )
+        let hovered = ansiRendered(view, context: context)
+        #expect(pre != hovered)
+
+        // Re-issue regions after the render (beginRenderPass
+        // cleared them) and move the cursor out.
+        let regions2 = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions2)
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: 100, y: 100)
+        )
+        let restored = ansiRendered(view, context: context)
+        #expect(
+            restored == pre,
+            "Button should return to its un-hovered tint after the cursor leaves"
+        )
+    }
+
+    @Test("Disabled Buttons do not register a hit-test region (no hover)")
+    func disabledButtonNoHover() {
+        let context = createTestContext()
+        let view = Button("Disabled") { }.disabled()
+        let buffer = renderToBuffer(view, context: context)
+        #expect(
+            buffer.hitTestRegions.isEmpty,
+            "Disabled buttons should not emit a hit-test region; got \(buffer.hitTestRegions.count)"
+        )
     }
 }
 
