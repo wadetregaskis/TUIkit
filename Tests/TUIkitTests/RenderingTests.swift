@@ -423,6 +423,82 @@ struct RenderingTests {
         }
     }
 
+    /// Regression test for a bug where `WindowGroup.centerBuffer`
+    /// rebuilt the final buffer with the bare `FrameBuffer(lines:)`
+    /// initializer, silently discarding the `hitTestRegions` (and
+    /// `overlays`) accumulated by the view tree. The symptom in the
+    /// example app was "clicks on TextFields / Buttons / anything
+    /// do nothing, but only on pages whose content doesn't exactly
+    /// fill the terminal" — clicks reached the dispatcher fine, the
+    /// active MouseSupport allowed them, but there were no regions
+    /// to test against because the centering rebuild had dropped
+    /// them all. Fixed in 7fabfb01.
+    ///
+    /// The fast path of `centerBuffer` (taken when content fills
+    /// the terminal exactly) returned the buffer unchanged and so
+    /// preserved regions by accident; only the slow path needed
+    /// the fix. This test renders through the slow path by giving
+    /// `WindowGroup` more room than the content needs, and asserts
+    /// that the regions emitted by an `.onMouseEvent` modifier
+    /// survive — and that their geometry has been shifted to match
+    /// the centering offset applied to the visible content.
+    @Test("WindowGroup centering preserves hit-test regions from the view tree")
+    func windowGroupCenteringPreservesHitTestRegions() {
+        // A tiny view emitting a single hit-test region. Using
+        // .onMouseEvent (the public modifier) means we exercise the
+        // same region-emission path real apps use.
+        let view = Text("Click me")
+            .onMouseEvent { _ in true }
+
+        let windowGroup = WindowGroup { view }
+
+        // RenderContext(tuiContext:) does not currently inject the
+        // mouseEventDispatcher into the environment; without one,
+        // OnMouseEventModifier skips registration and the test
+        // becomes vacuous. Wire it up explicitly. (Production code
+        // sets this in RenderLoop.makeRenderContext.)
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
+
+        // Content is ~8 chars wide × 1 line tall; the terminal is
+        // much bigger, so centerBuffer's slow path runs.
+        let context = RenderContext(
+            availableWidth: 80,
+            availableHeight: 24,
+            environment: environment,
+            tuiContext: tuiContext
+        )
+        let buffer = windowGroup.renderScene(context: context)
+
+        #expect(buffer.height == 24, "scene buffer should fill the terminal height")
+        #expect(buffer.width == 80, "scene buffer should fill the terminal width")
+        #expect(
+            !buffer.hitTestRegions.isEmpty,
+            "WindowGroup centering must not drop hit-test regions; got 0 regions for an .onMouseEvent-wrapped view"
+        )
+
+        // The visible content was shifted right and down to centre
+        // it. The regions must shift by the same amount — otherwise
+        // a click on the visible text wouldn't hit the region. Find
+        // the region and verify it falls somewhere inside the
+        // buffer (not at the origin, which would imply the
+        // centering offset was not applied).
+        guard let region = buffer.hitTestRegions.first else { return }
+        #expect(
+            region.offsetX > 0 || region.offsetY > 0,
+            "region should be shifted by the centering offsets; got offsetX=\(region.offsetX), offsetY=\(region.offsetY) — likely indicates regions are being preserved but not shifted, which still breaks clicks"
+        )
+        #expect(
+            region.offsetX + region.width <= 80,
+            "region should fit inside the scene buffer width"
+        )
+        #expect(
+            region.offsetY + region.height <= 24,
+            "region should fit inside the scene buffer height"
+        )
+    }
+
     @Test("HStack with Spacer inside border respects available width")
     func hstackWithSpacerInsideBorder() {
         let view = HStack {
