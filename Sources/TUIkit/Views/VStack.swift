@@ -157,6 +157,17 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let alignmentWidth = hasFlexible ? context.availableWidth : maxChildWidth
 
         // === PASS 3: Assemble vertically ===
+        // Empty children (e.g. `if false { ChildView() }`, which
+        // ViewBuilder lowers to `Optional<ChildView>.none`, and
+        // `EmptyView()`) are filtered from layout entirely: they
+        // contribute no height, and FrameBuffer.appendVertically
+        // drops the spacing slot they would otherwise have claimed.
+        // This matches SwiftUI's VStack semantics — a non-rendering
+        // child is treated as if it weren't in the children list at
+        // all. To reserve a row regardless, opt in with a sized
+        // placeholder (Color.clear.frame(height: 1), Spacer with an
+        // explicit height, etc.) — note that EmptyView() in an else
+        // branch will also be filtered.
         var result = FrameBuffer()
         for (index, child) in children.enumerated() {
             let spacingToApply = index > 0 ? spacing : 0

@@ -143,15 +143,32 @@ public struct FrameBuffer: Sendable, Equatable {
 extension FrameBuffer {
     /// Stacks another buffer below this one with optional spacing.
     ///
+    /// An empty `other` contributes no height *and* no spacing slot
+    /// — the buffers join with the spacing they would have had if
+    /// `other` were not in the list at all. This matches SwiftUI's
+    /// `VStack` behaviour: `if false { ChildView() }` evaluates to
+    /// `Optional<ChildView>.none`, and an `Optional.none` child does
+    /// not consume a spacing slot from its parent stack. The same
+    /// holds for `EmptyView()` and any other zero-height child. If
+    /// callers want to reserve a row whether or not the conditional
+    /// fires, they must opt in with a sized placeholder such as
+    /// ``Color/clear``-with-frame or ``Spacer/init()``-with-frame —
+    /// using `EmptyView()` in an `else` branch will NOT reserve the
+    /// row, because `EmptyView()` is also empty.
+    ///
     /// - Parameters:
     ///   - other: The buffer to append below.
     ///   - spacing: Number of empty lines between the two buffers.
+    ///     Ignored when `other` is empty, by design (see above).
     public mutating func appendVertically(_ other: Self, spacing: Int = 0) {
         let priorHeight = lines.count
 
         guard !other.isEmpty else {
-            // `other` contributes no visible lines, but may still carry
-            // overlay layers and hit-test regions that must not be lost.
+            // `other` contributes no visible lines and no spacing
+            // slot (see doc comment above). It may still carry
+            // overlay layers and hit-test regions that must be
+            // preserved — those are anchored to its (zero-height)
+            // position, not to any inter-child spacing.
             if !other.overlays.isEmpty {
                 overlays.append(contentsOf: other.shiftedOverlays(byX: 0, y: priorHeight))
             }
