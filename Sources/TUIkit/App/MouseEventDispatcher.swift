@@ -71,6 +71,16 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// guarantees no carry-over between frames.
     private var nextHandlerID: UInt64 = 0
 
+    /// The handler ID of the region the cursor was sitting on
+    /// when the previous `.moved` event was processed, or `nil`
+    /// if the cursor wasn't over any registered region. Used to
+    /// synthesise `.entered` / `.exited` transitions when the
+    /// cursor crosses region boundaries. Preserved across
+    /// render passes — handler IDs are stable across renders
+    /// for view trees whose shape doesn't change, which covers
+    /// the common case.
+    private var lastHoveredHandlerID: HitTestRegion.HandlerID?
+
     /// Per-frame feature requests posted by view modifiers that
     /// genuinely need a higher mouse-tracking level than the base
     /// configuration provides (e.g. an ``.onHover`` modifier asks
@@ -171,6 +181,12 @@ extension MouseEventDispatcher {
         case .pressed, .released: return activeSupport.clicks
         case .dragged: return activeSupport.drag
         case .moved: return activeSupport.motion
+        case .entered, .exited:
+            // Synthetic phases — generated internally by the
+            // dispatcher, never coming from the terminal. They
+            // ride alongside the underlying `.moved` event's
+            // permission.
+            return activeSupport.motion
         }
     }
 
@@ -240,6 +256,13 @@ extension MouseEventDispatcher {
         // but the user asked us not to surface them.
         guard eventIsAllowed(event) else { return false }
 
+        // Bare cursor motion drives the hover state machine —
+        // not the normal click routing. See dispatchMotion for
+        // the rationale on why we route `.moved` separately.
+        if event.phase == .moved {
+            return dispatchMotion(event)
+        }
+
         // Drag capture: when a button is currently held, route every
         // subsequent event for that button to the handler that took
         // the press, regardless of where the cursor sits now.
@@ -302,6 +325,65 @@ extension MouseEventDispatcher {
     /// ``dispatch`` to implement wheel-event fall-through.
     private func matchingRegions(at x: Int, y: Int) -> [HitTestRegion] {
         regions.reversed().filter { $0.contains(x: x, y: y) }
+    }
+
+    /// Processes a bare cursor-motion event by synthesising
+    /// `.entered` / `.exited` transitions on the affected
+    /// handlers — the hover state machine.
+    ///
+    /// Why route `.moved` separately:
+    ///
+    /// - There is no useful "the cursor moved here" semantic
+    ///   that a single hit-test-based dispatch could deliver.
+    ///   What views actually care about is "the cursor is now
+    ///   over me" / "the cursor left me", and that requires
+    ///   tracking which region the cursor was over previously.
+    /// - Synthesising transitions in one place keeps the rest
+    ///   of the dispatcher dumb. Modifiers like ``OnHover``
+    ///   only have to react to the synthetic `.entered` /
+    ///   `.exited` phases; they never deal with raw motion.
+    ///
+    /// Returns `true` iff at least one transition fired
+    /// (either an `.entered` on a new region or an `.exited`
+    /// on the previous one), so the AppRunner re-renders the
+    /// view tree to reflect the new hover state. Pure motion
+    /// inside the already-hovered region returns `false` —
+    /// re-rendering for every cursor twitch would peg the run
+    /// loop.
+    private func dispatchMotion(_ event: MouseEvent) -> Bool {
+        let currentRegion = matchingRegions(at: event.x, y: event.y).first
+        let currentID = currentRegion?.handlerID
+
+        guard currentID != lastHoveredHandlerID else { return false }
+
+        var fired = false
+
+        // Fire .exited on the previously hovered handler if it
+        // is still registered. (Between event and re-render,
+        // the previous frame's handlers are still in `handlers`
+        // — beginRenderPass for the next frame hasn't run yet.)
+        if let oldID = lastHoveredHandlerID, let oldHandler = handlers[oldID] {
+            let exit = MouseEvent(
+                button: .none, phase: .exited,
+                x: event.x, y: event.y,
+                shift: event.shift, ctrl: event.ctrl, meta: event.meta
+            )
+            _ = oldHandler(exit)
+            fired = true
+        }
+
+        if let newID = currentID, let newHandler = handlers[newID] {
+            let enter = MouseEvent(
+                button: .none, phase: .entered,
+                x: event.x, y: event.y,
+                shift: event.shift, ctrl: event.ctrl, meta: event.meta
+            )
+            _ = newHandler(enter)
+            fired = true
+        }
+
+        lastHoveredHandlerID = currentID
+        return fired
     }
 
     /// Translates the event's coordinates from absolute screen-space

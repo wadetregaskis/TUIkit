@@ -74,6 +74,19 @@ public enum MousePhase: Sendable, Equatable {
     /// A scroll-wheel "tick" — no press/release pairs, the wheel emits
     /// a single tick at the cursor's current position.
     case scrolled
+
+    /// Synthetic phase: the cursor just entered a region whose
+    /// handler is registered. Emitted by `MouseEventDispatcher`
+    /// in response to a `.moved` event that transitioned the
+    /// cursor onto a different region from where it was before.
+    /// No corresponding raw terminal event — the dispatcher
+    /// owns the enter / exit state machine.
+    case entered
+
+    /// Synthetic phase: the cursor just left a region whose
+    /// handler is still registered. Fires alongside `.entered`
+    /// on the new region. Same notes as `.entered`.
+    case exited
 }
 
 // MARK: - Mouse Event
