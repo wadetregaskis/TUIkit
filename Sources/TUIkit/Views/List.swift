@@ -296,6 +296,143 @@ extension List where Footer == EmptyView {
     }
 }
 
+// MARK: - Selectionless Initializers (with Footer)
+
+extension List {
+    /// Creates a list without selection, with title and footer.
+    ///
+    /// The list still scrolls — wheel events go straight to the
+    /// viewport, and arrow keys move the focus cursor when the
+    /// list itself is focused — but there is no selection
+    /// binding, so the keyboard `Enter` / `Space` selection
+    /// toggle is a no-op and no row ever renders with the
+    /// selected style.
+    ///
+    /// - Parameters:
+    ///   - title: The title displayed in the border.
+    ///   - content: A ViewBuilder that defines the list content.
+    ///   - footer: A ViewBuilder that defines the footer content.
+    public init(
+        _ title: String,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.title = title
+        self.content = content()
+        self.footer = footer()
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = true
+    }
+
+    /// Creates a list without selection, with a footer, without
+    /// a title. See ``init(_:content:footer:)`` for details.
+    ///
+    /// - Parameters:
+    ///   - content: A ViewBuilder that defines the list content.
+    ///   - footer: A ViewBuilder that defines the footer content.
+    public init(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.title = nil
+        self.content = content()
+        self.footer = footer()
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = true
+    }
+}
+
+// MARK: - Selectionless Initializers (without Footer)
+
+extension List where Footer == EmptyView {
+    /// Creates a list without selection, with a title. See
+    /// ``init(_:content:footer:)`` for details on selectionless
+    /// behaviour.
+    ///
+    /// - Parameters:
+    ///   - title: The title displayed in the border.
+    ///   - content: A ViewBuilder that defines the list content.
+    public init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+        self.footer = nil
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = false
+    }
+
+    /// Creates a list without selection or title. See
+    /// ``init(_:content:footer:)`` for details on selectionless
+    /// behaviour.
+    ///
+    /// - Parameter content: A ViewBuilder that defines the list
+    ///   content.
+    public init(@ViewBuilder content: () -> Content) {
+        self.title = nil
+        self.content = content()
+        self.footer = nil
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = false
+    }
+}
+
+// MARK: - Selectionless Default-Type Initializers
+
+// When the caller writes `List { Text("a") }` with no ForEach
+// inside, Swift has nothing to infer `SelectionValue` from. The
+// constrained extensions below give SelectionValue a default of
+// Int so those bare-content lists type-check without requiring
+// the caller to spell out `List<Int, _, _>(...)`. When a ForEach
+// or other content does provide a SelectionValue type, the
+// generic inits above are picked instead.
+
+extension List where SelectionValue == Int, Footer == EmptyView {
+    /// Creates a selectionless list with a title and a default
+    /// SelectionValue of `Int`. See ``init(_:content:footer:)``
+    /// for the selectionless semantics.
+    public init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+        self.footer = nil
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = false
+    }
+
+    /// Creates a selectionless list with a default SelectionValue
+    /// of `Int`. See ``init(_:content:footer:)`` for the
+    /// selectionless semantics.
+    public init(@ViewBuilder content: () -> Content) {
+        self.title = nil
+        self.content = content()
+        self.footer = nil
+        self.singleSelection = nil
+        self.multiSelection = nil
+        self.focusID = nil
+        self.isDisabled = false
+        self.emptyPlaceholder = ViewConstants.emptyListPlaceholder
+        self.showFooterSeparator = false
+    }
+}
+
 // MARK: - Convenience Modifiers
 
 extension List {

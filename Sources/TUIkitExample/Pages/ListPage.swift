@@ -106,10 +106,7 @@ struct ListPage: View {
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    List(
-                        "\(longLines.count) lines",
-                        selection: noopSelection
-                    ) {
+                    List("\(longLines.count) lines") {
                         ForEach(longLines, id: \.self) { line in
                             Text(line)
                         }
@@ -152,10 +149,7 @@ struct ListPage: View {
                 }
             }
 
-            List(
-                "Empty List",
-                selection: Binding<String?>(get: { nil }, set: { _ in })
-            ) {
+            List("Empty List") {
                 EmptyView()
             }
 
@@ -185,13 +179,5 @@ struct ListPage: View {
     /// wheel scrolling is visible.
     private var longLines: [String] {
         (1...100).map { "Line \($0) — scroll the wheel to move past me." }
-    }
-
-    /// A swallow-everything single-selection binding. List
-    /// currently requires a selection binding; this one accepts
-    /// any value, ignores it, and always reports `nil`, giving
-    /// the visual effect of a list with no live selection.
-    private var noopSelection: Binding<String?> {
-        Binding<String?>(get: { nil }, set: { _ in })
     }
 }

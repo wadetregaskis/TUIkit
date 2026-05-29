@@ -324,4 +324,55 @@ struct ListRenderingTests {
             "All lines should have same width but min=\(minLineWidth) max=\(maxLineWidth)"
         )
     }
+
+    // MARK: - Selectionless List inits
+
+    @Test("Selectionless List with title and ForEach renders rows")
+    func selectionlessListWithForEachRenders() {
+        let context = createTestContext()
+        let items = ["alpha", "beta", "gamma"]
+
+        let view = List("Read-only") {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .frame(width: 30, height: 8)
+
+        let buffer = renderToBuffer(view, context: context)
+        let content = buffer.lines.map(\.stripped).joined(separator: "\n")
+
+        #expect(content.contains("Read-only"), "title should render")
+        for item in items {
+            #expect(content.contains(item), "selectionless List should render row '\(item)'")
+        }
+    }
+
+    @Test("Selectionless List with no title and bare content type-checks")
+    func selectionlessListWithBareContentTypeChecks() {
+        // Compile-time test: the Int-defaulted convenience init
+        // should let `List { Text(...) }` type-check without the
+        // caller having to spell out SelectionValue.
+        let context = createTestContext()
+        let view = List {
+            Text("just a row")
+        }
+        .frame(width: 20, height: 5)
+
+        let buffer = renderToBuffer(view, context: context)
+        let content = buffer.lines.map(\.stripped).joined(separator: "\n")
+        #expect(content.contains("just a row"))
+    }
+
+    @Test("Selectionless List with title and bare content type-checks")
+    func selectionlessListWithTitleAndBareContentTypeChecks() {
+        let context = createTestContext()
+        let view = List("My Title") {
+            Text("row body")
+        }
+        .frame(width: 20, height: 5)
+
+        let buffer = renderToBuffer(view, context: context)
+        let content = buffer.lines.map(\.stripped).joined(separator: "\n")
+        #expect(content.contains("My Title"))
+        #expect(content.contains("row body"))
+    }
 }
