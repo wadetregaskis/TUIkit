@@ -14,8 +14,8 @@ import TUIkit
 /// O(content_height) and O(regions) cost respectively, so
 /// regressions tend to surface as the content gets taller.
 ///
-/// All benchmark bodies wrap their work in
-/// `MainActor.assumeIsolated` — see the comment in
+/// All benchmark bodies hop to `MainActor` via
+/// `await MainActor.run { … }` — see the comment in
 /// ``LayoutBenchmarks`` for the rationale.
 enum ScrollViewBenchmarks {
 
@@ -27,9 +27,9 @@ enum ScrollViewBenchmarks {
     // MARK: - Long text
 
     private static func registerLongTextBenchmarks() {
-        Benchmark("scrollview/100 Text rows") { benchmark in
+        Benchmark("scrollview/100 Text rows") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let lines = (0..<100).map { "Row \($0)" }
                 let view = ScrollView {
                     VStack {
@@ -44,9 +44,9 @@ enum ScrollViewBenchmarks {
             }
         }
 
-        Benchmark("scrollview/1000 Text rows") { benchmark in
+        Benchmark("scrollview/1000 Text rows") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let lines = (0..<1000).map { "Row \($0)" }
                 let view = ScrollView {
                     VStack {
@@ -61,9 +61,9 @@ enum ScrollViewBenchmarks {
             }
         }
 
-        Benchmark("scrollview/100 rows, indicators off") { benchmark in
+        Benchmark("scrollview/100 rows, indicators off") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let lines = (0..<100).map { "Row \($0)" }
                 let view = ScrollView(showsIndicators: false) {
                     VStack {
@@ -86,9 +86,9 @@ enum ScrollViewBenchmarks {
     /// filtering path, which has to scan every region in the
     /// content buffer and decide whether to keep it.
     private static func registerMixedContentBenchmarks() {
-        Benchmark("scrollview/Mixed-widget content") { benchmark in
+        Benchmark("scrollview/Mixed-widget content") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = ScrollView {
                     VStack(alignment: .leading) {
                         Text("Heading").bold()

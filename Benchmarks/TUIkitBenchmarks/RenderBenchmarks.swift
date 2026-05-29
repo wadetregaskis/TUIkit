@@ -13,8 +13,8 @@ import TUIkit
 /// real pages so regressions on any of those layers surface
 /// here.
 ///
-/// All benchmark bodies wrap their work in
-/// `MainActor.assumeIsolated` — see the comment in
+/// All benchmark bodies hop to `MainActor` via
+/// `await MainActor.run { … }` — see the comment in
 /// ``LayoutBenchmarks`` for the rationale.
 enum RenderBenchmarks {
 
@@ -30,9 +30,9 @@ enum RenderBenchmarks {
     /// overhead being added per frame (focus registration,
     /// hover state machine, dispatcher feature requests, etc.).
     private static func registerControlBenchmarks() {
-        Benchmark("render/Button (default style)") { benchmark in
+        Benchmark("render/Button (default style)") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = Button("Save") { /* no-op */ }
                 let context = standardContext()
                 for _ in iterations {
@@ -41,9 +41,9 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/TextField") { benchmark in
+        Benchmark("render/TextField") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = TextField("Search", text: .constant("hello"))
                 let context = standardContext()
                 for _ in iterations {
@@ -52,9 +52,9 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Toggle") { benchmark in
+        Benchmark("render/Toggle") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = Toggle("Enable", isOn: .constant(true))
                 let context = standardContext()
                 for _ in iterations {
@@ -63,9 +63,9 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Slider") { benchmark in
+        Benchmark("render/Slider") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = Slider(value: .constant(0.5), in: 0...1, step: 0.01)
                 let context = standardContext()
                 for _ in iterations {
@@ -74,9 +74,9 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Stepper") { benchmark in
+        Benchmark("render/Stepper") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = Stepper("Quantity", value: .constant(5), in: 0...10)
                 let context = standardContext()
                 for _ in iterations {
@@ -94,9 +94,9 @@ enum RenderBenchmarks {
     /// the page-render hot path TUIkit apps spend most of
     /// their time in.
     private static func registerPageShapeBenchmarks() {
-        Benchmark("render/Mixed-form page") { benchmark in
+        Benchmark("render/Mixed-form page") { benchmark async in
             let iterations = benchmark.scaledIterations
-            MainActor.assumeIsolated {
+            await MainActor.run {
                 let view = VStack(alignment: .leading) {
                     Text("Settings").bold().underline()
                     HStack {
