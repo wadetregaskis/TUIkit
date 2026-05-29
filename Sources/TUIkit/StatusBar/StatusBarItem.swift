@@ -128,6 +128,14 @@ public protocol StatusBarItemProtocol: Sendable {
     ///
     /// Override this for complex matching (e.g., arrow keys).
     func matches(_ event: KeyEvent) -> Bool
+
+    /// Executes the item's action, if it has one.
+    ///
+    /// Called by the keyboard handler when the trigger key fires
+    /// and by the mouse-click handler when the item is clicked.
+    /// Default no-op so informational-only conformers don't need
+    /// to implement it.
+    func execute()
 }
 
 // Default implementations
@@ -145,6 +153,10 @@ extension StatusBarItemProtocol {
         guard let trigger = triggerKey else { return false }
         return event.key == trigger
     }
+
+    /// Default `execute()` is a no-op so informational-only
+    /// conformers don't need to override.
+    public func execute() {}
 }
 
 // MARK: - Status Bar Item

@@ -194,157 +194,356 @@ private struct _StatusBarCore: View, Renderable {
         // "close menu" or similar while the underlying handler is unchanged.
         let escapeOverride = context.environment.statusBar.escapeLabelOverride
 
-        // Build item strings
-        let itemStrings = combinedItems.map { item -> String in
-            let shortcutStyled = ANSIRenderer.render(
-                item.shortcut,
-                with: {
-                    var style = TextStyle()
-                    style.foregroundColor = highlightColor
-                    style.isBold = true
-                    return style
-                }()
+        // Build item strings and capture their visible widths
+        // so the layout pass can also report each item's column
+        // range in the rendered line — used below to emit mouse
+        // hit-test regions for clickable items.
+        let layouts = combinedItems.map { item -> ItemLayout in
+            let display = renderItemString(
+                item: item,
+                escapeOverride: escapeOverride
             )
-
-            // Apply the modal escape-label override only to items bound to
-            // the escape key; everything else keeps its declared label.
-            let effectiveLabel: String
-            if item.shortcut == Shortcut.escape, let override = escapeOverride {
-                effectiveLabel = override
-            } else {
-                effectiveLabel = item.label
-            }
-
-            let labelStyled: String
-            if let color = labelColor {
-                labelStyled = ANSIRenderer.render(
-                    " " + effectiveLabel,
-                    with: {
-                        var style = TextStyle()
-                        style.foregroundColor = color
-                        return style
-                    }()
-                )
-            } else {
-                labelStyled = " " + effectiveLabel
-            }
-
-            return shortcutStyled + labelStyled
+            return ItemLayout(
+                item: item,
+                display: display,
+                visibleWidth: display.strippedLength
+            )
         }
+
+        let buffer: FrameBuffer
+        let itemColumnOffset: Int
+        let itemRowOffset: Int
 
         switch style {
         case .compact:
-            return renderCompact(itemStrings: itemStrings, width: context.availableWidth)
+            let result = renderCompact(layouts: layouts, width: context.availableWidth)
+            buffer = result.buffer
+            itemColumnOffset = 0
+            itemRowOffset = 0
+            // The placed columns on `result.placedColumns` are
+            // already absolute on a single-row compact bar.
+            return applyHitTestRegions(
+                buffer: buffer,
+                layouts: layouts,
+                columns: result.placedColumns,
+                columnOffset: itemColumnOffset,
+                rowOffset: itemRowOffset,
+                context: context
+            )
 
         case .bordered:
-            return renderBordered(itemStrings: itemStrings, width: context.availableWidth, context: context)
+            let result = renderBordered(
+                layouts: layouts,
+                width: context.availableWidth,
+                context: context
+            )
+            buffer = result.buffer
+            // The bordered renderer reports columns relative to
+            // the inner content; offset by the border + the
+            // single-space content padding it added on the left.
+            itemColumnOffset = 1 + 1
+            itemRowOffset = 1
+            return applyHitTestRegions(
+                buffer: buffer,
+                layouts: layouts,
+                columns: result.placedColumns,
+                columnOffset: itemColumnOffset,
+                rowOffset: itemRowOffset,
+                context: context
+            )
         }
     }
 
-    /// Aligns content within the given width based on alignment setting.
-    private func alignContent(itemStrings: [String], width: Int) -> String {
+    /// Per-item layout snapshot — display string + its visible
+    /// width — passed through the alignment pipeline so the
+    /// pipeline can produce a parallel array of column offsets.
+    private struct ItemLayout {
+        let item: any StatusBarItemProtocol
+        let display: String
+        let visibleWidth: Int
+    }
+
+    /// A laid-out line with the columns at which each input
+    /// item's display string was placed.
+    private struct LaidOutLine {
+        let line: String
+        let placedColumns: [Int]
+    }
+
+    /// A laid-out buffer with the same column metadata as
+    /// ``LaidOutLine``, used by the bordered style which wraps
+    /// the line in a 3-row frame.
+    private struct LaidOutBuffer {
+        let buffer: FrameBuffer
+        let placedColumns: [Int]
+    }
+
+    /// Renders a single item's `shortcut + " " + label` with the
+    /// configured highlight / label colors and the escape-label
+    /// override.
+    private func renderItemString(
+        item: any StatusBarItemProtocol,
+        escapeOverride: String?
+    ) -> String {
+        let shortcutStyled = ANSIRenderer.render(
+            item.shortcut,
+            with: {
+                var textStyle = TextStyle()
+                textStyle.foregroundColor = highlightColor
+                textStyle.isBold = true
+                return textStyle
+            }()
+        )
+
+        // Apply the modal escape-label override only to items bound to
+        // the escape key; everything else keeps its declared label.
+        let effectiveLabel: String
+        if item.shortcut == Shortcut.escape, let override = escapeOverride {
+            effectiveLabel = override
+        } else {
+            effectiveLabel = item.label
+        }
+
+        let labelStyled: String
+        if let color = labelColor {
+            labelStyled = ANSIRenderer.render(
+                " " + effectiveLabel,
+                with: {
+                    var textStyle = TextStyle()
+                    textStyle.foregroundColor = color
+                    return textStyle
+                }()
+            )
+        } else {
+            labelStyled = " " + effectiveLabel
+        }
+
+        return shortcutStyled + labelStyled
+    }
+
+    /// Emits a 1-row hit-test region for each item with an
+    /// action, sized to the item's visible width and offset by
+    /// the surrounding chrome. Returns `buffer` unchanged when
+    /// the mouse dispatcher isn't available (measure pass etc.)
+    /// or when none of the items are clickable.
+    private func applyHitTestRegions(
+        buffer: FrameBuffer,
+        layouts: [ItemLayout],
+        columns: [Int],
+        columnOffset: Int,
+        rowOffset: Int,
+        context: RenderContext
+    ) -> FrameBuffer {
+        guard !context.isMeasuring,
+              let dispatcher = context.environment.mouseEventDispatcher,
+              layouts.contains(where: { itemHasAction($0.item) })
+        else {
+            return buffer
+        }
+
+        var result = buffer
+        for (layout, columnInLine) in zip(layouts, columns) {
+            guard itemHasAction(layout.item) else { continue }
+            let captureItem = layout.item
+            let handlerID = dispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed:
+                    return true
+                case .released:
+                    captureItem.execute()
+                    return true
+                default:
+                    return false
+                }
+            }
+            result.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: columnOffset + columnInLine,
+                    offsetY: rowOffset,
+                    width: layout.visibleWidth,
+                    height: 1,
+                    handlerID: handlerID
+                )
+            )
+        }
+        return result
+    }
+
+    /// Whether an item has a meaningful action to invoke. For
+    /// concrete StatusBarItems we can read hasAction directly;
+    /// for other conformers we assume any non-informational item
+    /// (i.e. one with a triggerKey) is clickable.
+    private func itemHasAction(_ item: any StatusBarItemProtocol) -> Bool {
+        if let concrete = item as? StatusBarItem { return concrete.hasAction }
+        return item.triggerKey != nil
+    }
+
+    /// Aligns content within the given width based on alignment
+    /// setting. Returns the rendered line and the column at
+    /// which each input item was placed.
+    private func alignContent(layouts: [ItemLayout], width: Int) -> LaidOutLine {
         let separator = "  "  // Two spaces between items for non-justified
+        let strings = layouts.map(\.display)
+        let widths = layouts.map(\.visibleWidth)
 
         switch alignment {
         case .leading:
-            let content = " " + itemStrings.joined(separator: separator)
-            return content.padToVisibleWidth(width)
+            let content = " " + strings.joined(separator: separator)
+            var columns: [Int] = []
+            var running = 1  // leading space
+            for itemWidth in widths {
+                columns.append(running)
+                running += itemWidth + separator.count
+            }
+            return LaidOutLine(
+                line: content.padToVisibleWidth(width),
+                placedColumns: columns
+            )
 
         case .trailing:
-            let content = itemStrings.joined(separator: separator) + " "
+            let content = strings.joined(separator: separator) + " "
             let contentWidth = content.strippedLength
             let padding = max(0, width - contentWidth)
-            return String(repeating: " ", count: padding) + content
+            var columns: [Int] = []
+            var running = padding
+            for itemWidth in widths {
+                columns.append(running)
+                running += itemWidth + separator.count
+            }
+            return LaidOutLine(
+                line: String(repeating: " ", count: padding) + content,
+                placedColumns: columns
+            )
 
         case .center:
-            let content = itemStrings.joined(separator: separator)
+            let content = strings.joined(separator: separator)
             let contentWidth = content.strippedLength
             let totalPadding = max(0, width - contentWidth)
             let leftPadding = totalPadding / 2
             let rightPadding = totalPadding - leftPadding
-            return String(repeating: " ", count: leftPadding) + content + String(repeating: " ", count: rightPadding)
+            var columns: [Int] = []
+            var running = leftPadding
+            for itemWidth in widths {
+                columns.append(running)
+                running += itemWidth + separator.count
+            }
+            let line = String(repeating: " ", count: leftPadding)
+                + content
+                + String(repeating: " ", count: rightPadding)
+            return LaidOutLine(line: line, placedColumns: columns)
 
         case .justified:
-            return justifyContent(itemStrings: itemStrings, width: width)
+            return justifyContent(layouts: layouts, width: width)
         }
     }
 
     /// Distributes items evenly across the width (justified alignment).
-    private func justifyContent(itemStrings: [String], width: Int) -> String {
-        guard !itemStrings.isEmpty else {
-            return String(repeating: " ", count: width)
+    /// Returns the rendered line and the column at which each
+    /// input item was placed.
+    private func justifyContent(layouts: [ItemLayout], width: Int) -> LaidOutLine {
+        guard !layouts.isEmpty else {
+            return LaidOutLine(
+                line: String(repeating: " ", count: width),
+                placedColumns: []
+            )
         }
 
-        guard itemStrings.count > 1 else {
+        guard layouts.count > 1 else {
             // Single item: center it
-            let content = itemStrings.first ?? ""
-            let contentWidth = content.strippedLength
+            let only = layouts[0]
+            let contentWidth = only.visibleWidth
             let totalPadding = max(0, width - contentWidth)
             let leftPadding = totalPadding / 2
             let rightPadding = totalPadding - leftPadding
-            return String(repeating: " ", count: leftPadding) + content + String(repeating: " ", count: rightPadding)
+            let line = String(repeating: " ", count: leftPadding)
+                + only.display
+                + String(repeating: " ", count: rightPadding)
+            return LaidOutLine(line: line, placedColumns: [leftPadding])
         }
 
         // Calculate total content width (without gaps)
-        let totalContentWidth = itemStrings.reduce(0) { sum, item in
-            sum + item.strippedLength
-        }
+        let totalContentWidth = layouts.reduce(0) { $0 + $1.visibleWidth }
 
         // For n items, we have n+1 gaps (left edge, between each item, right edge)
-        let gapCount = itemStrings.count + 1
+        let gapCount = layouts.count + 1
         let availableForGaps = max(0, width - totalContentWidth)
         let gapWidth = availableForGaps / gapCount
         let extraSpace = availableForGaps % gapCount
 
-        // Build justified string with equal gaps
-        var result = ""
+        // Build justified string with equal gaps, recording each
+        // item's starting column as we go.
+        var line = ""
+        var columns: [Int] = []
+        var cursor = 0
 
         // Left edge gap (gets extra space if available)
         let leftGapExtra = extraSpace > 0 ? 1 : 0
-        result += String(repeating: " ", count: gapWidth + leftGapExtra)
+        let leftGap = gapWidth + leftGapExtra
+        line += String(repeating: " ", count: leftGap)
+        cursor += leftGap
 
-        for (index, item) in itemStrings.enumerated() {
-            result += item
+        for (index, layout) in layouts.enumerated() {
+            columns.append(cursor)
+            line += layout.display
+            cursor += layout.visibleWidth
 
-            if index < itemStrings.count - 1 {
-                // Gap between items
-                // Distribute extra space to middle gaps (after left edge took one if available)
+            if index < layouts.count - 1 {
+                // Gap between items.
+                // Distribute extra space to middle gaps (after left edge took one if available).
                 let gapIndex = index + 1  // 0 = left edge, 1..n-1 = between items, n = right edge
                 let extra = gapIndex < extraSpace ? 1 : 0
-                result += String(repeating: " ", count: gapWidth + extra)
+                let gap = gapWidth + extra
+                line += String(repeating: " ", count: gap)
+                cursor += gap
             }
         }
 
         // Right edge gap
-        let rightGapIndex = itemStrings.count
+        let rightGapIndex = layouts.count
         let rightGapExtra = rightGapIndex < extraSpace ? 1 : 0
-        result += String(repeating: " ", count: gapWidth + rightGapExtra)
+        line += String(repeating: " ", count: gapWidth + rightGapExtra)
 
         // Ensure the result fills the width exactly
-        return result.padToVisibleWidth(width)
+        return LaidOutLine(
+            line: line.padToVisibleWidth(width),
+            placedColumns: columns
+        )
     }
 
     /// Renders the compact style (single line with alignment).
-    private func renderCompact(itemStrings: [String], width: Int) -> FrameBuffer {
-        let line = alignContent(itemStrings: itemStrings, width: width)
-        return FrameBuffer(lines: [line])
+    private func renderCompact(layouts: [ItemLayout], width: Int) -> LaidOutBuffer {
+        let result = alignContent(layouts: layouts, width: width)
+        return LaidOutBuffer(
+            buffer: FrameBuffer(lines: [result.line]),
+            placedColumns: result.placedColumns
+        )
     }
 
-    /// Renders the bordered style using the current appearance's border style.
-    private func renderBordered(itemStrings: [String], width: Int, context: RenderContext) -> FrameBuffer {
+    /// Renders the bordered style using the current appearance's
+    /// border style. Reports each item's column relative to the
+    /// *inner* content area; the caller offsets by the border
+    /// and padding when emitting hit-test regions.
+    private func renderBordered(
+        layouts: [ItemLayout],
+        width: Int,
+        context: RenderContext
+    ) -> LaidOutBuffer {
         let contentPadding = 2  // 1 char padding left + right
         let innerWidth = width - BorderRenderer.borderWidthOverhead
         let contentWidth = innerWidth - contentPadding
-        let content = " " + alignContent(itemStrings: itemStrings, width: contentWidth) + " "
+        let aligned = alignContent(layouts: layouts, width: contentWidth)
+        let content = " " + aligned.line + " "
 
         let border = context.environment.appearance.borderStyle
         let borderColor = context.environment.palette.border
 
-        return FrameBuffer(lines: [
+        let buffer = FrameBuffer(lines: [
             BorderRenderer.standardTopBorder(style: border, innerWidth: innerWidth, color: borderColor),
             BorderRenderer.standardContentLine(content: content, innerWidth: innerWidth, style: border, color: borderColor),
             BorderRenderer.standardBottomBorder(style: border, innerWidth: innerWidth, color: borderColor),
         ])
+        return LaidOutBuffer(buffer: buffer, placedColumns: aligned.placedColumns)
     }
 }
 
