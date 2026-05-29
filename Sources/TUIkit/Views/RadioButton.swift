@@ -210,6 +210,18 @@ public struct RadioButtonGroup<Value: Hashable>: View {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_RadioButtonGroupCore``.
+/// Lifted out of the generic struct because Swift does not
+/// allow static stored properties in generic types.
+private enum RadioButtonGroupStateIndex {
+    static let handler = 0
+    static let focusID = 1
+    /// The index of the currently hovered item, or `-1` for
+    /// none. A single shared StateBox covers the whole group
+    /// because at most one item can be hovered at a time.
+    static let hoveredIndex = 2
+}
+
 /// Internal view that handles the actual rendering of RadioButtonGroup.
 private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
     let selection: Binding<Value>
@@ -217,6 +229,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
     let orientation: RadioButtonOrientation
     let focusID: String?
     let isDisabled: Bool
+
+    private typealias StateIndex = RadioButtonGroupStateIndex
 
     var body: Never {
         fatalError("_RadioButtonGroupCore renders via Renderable")
@@ -241,12 +255,13 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "radio-group",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
 
         // Get or create persistent handler from state storage.
         // The handler maintains focusedIndex across renders, enabling Tab navigation.
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<RadioButtonGroupHandler> = stateStorage.storage(
             for: handlerKey,
             default: RadioButtonGroupHandler(
@@ -267,16 +282,31 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         FocusRegistration.register(context: context, handler: handler)
         let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Hover state for the group — at most one item is
+        // hovered at a time, so a single StateBox<Int> holds
+        // its index (or `-1` for none). The per-item mouse
+        // handlers flip it on .entered / .exited; the
+        // renderer reads it per row below. Disabled groups
+        // never show hover (mouse handlers below skip
+        // registration entirely).
+        let hoveredIndexKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.hoveredIndex)
+        let hoveredIndexBox: StateBox<Int> = stateStorage.storage(
+            for: hoveredIndexKey, default: -1)
+        let hoveredIndex = isDisabled ? -1 : hoveredIndexBox.value
+
         // Render items based on orientation
         let lines: [String]
         let itemRegions: [(x: Int, y: Int, width: Int)]
         switch orientation {
         case .vertical:
             (lines, itemRegions) = renderVerticalWithRegions(
-                context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
+                context: context, handler: handler, groupHasFocus: groupHasFocus,
+                hoveredIndex: hoveredIndex, palette: palette)
         case .horizontal:
             (lines, itemRegions) = renderHorizontalWithRegions(
-                context: context, handler: handler, groupHasFocus: groupHasFocus, palette: palette)
+                context: context, handler: handler, groupHasFocus: groupHasFocus,
+                hoveredIndex: hoveredIndex, palette: palette)
         }
 
         var buffer = FrameBuffer(lines: lines)
@@ -284,13 +314,22 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         // Mouse: a left-button release on an item row selects that item
         // and grants the group focus. Each item gets its own hit-test
         // region so the dispatcher can identify which item was clicked.
+        // The same per-item region drives the hover state — .entered
+        // / .exited synthesised by the dispatcher flip the shared
+        // hoveredIndexBox to that item's index (or back to -1).
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            // Ask the dispatcher to enable motion reporting this
+            // frame so the hover state machine sees .moved
+            // events.
+            mouseDispatcher.requestFeature(.motion)
+
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let captureItems = items
             let captureSelection = selection
+            let captureHoveredIndexBox = hoveredIndexBox
             // Tag only the currently-focused item's region with
             // the group's focus ID so ScrollView's snap-to-focus
             // anchors on the right radio button — not whichever
@@ -303,15 +342,29 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
             // mismatched IDs are skipped.
             for (index, region) in itemRegions.enumerated() {
                 let mouseHandlerID = mouseDispatcher.register { event in
-                    guard event.button == .left else { return false }
                     switch event.phase {
-                    case .pressed: return true
-                    case .released:
+                    case .entered:
+                        captureHoveredIndexBox.value = index
+                        return true
+                    case .exited:
+                        // Only clear if this is the index we
+                        // claimed — protects against a fast
+                        // cursor movement where .entered on the
+                        // next item arrives before .exited on
+                        // the previous item.
+                        if captureHoveredIndexBox.value == index {
+                            captureHoveredIndexBox.value = -1
+                        }
+                        return true
+                    case .pressed where event.button == .left:
+                        return true
+                    case .released where event.button == .left:
                         focusManager.focus(id: captureFocusID)
                         handler.focusedIndex = index
                         captureSelection.wrappedValue = captureItems[index].value
                         return true
-                    default: return false
+                    default:
+                        return false
                     }
                 }
                 buffer.hitTestRegions.append(
@@ -334,17 +387,20 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         context: RenderContext,
         handler: RadioButtonGroupHandler,
         groupHasFocus: Bool,
+        hoveredIndex: Int,
         palette: Palette
     ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int)] = []
         for (index, item) in items.enumerated() {
+            let isFocused = handler.focusedIndex == index && groupHasFocus
             let line = renderRadioButton(
                 index: index,
                 item: item,
-                isFocused: handler.focusedIndex == index && groupHasFocus,
+                isFocused: isFocused,
                 groupHasFocus: groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
+                isHovered: hoveredIndex == index && !isFocused,
                 context: context,
                 palette: palette
             )
@@ -359,15 +415,18 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         context: RenderContext,
         handler: RadioButtonGroupHandler,
         groupHasFocus: Bool,
+        hoveredIndex: Int,
         palette: Palette
     ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
         let itemStrings = items.enumerated().map { index, item -> String in
-            renderRadioButton(
+            let isFocused = handler.focusedIndex == index && groupHasFocus
+            return renderRadioButton(
                 index: index,
                 item: item,
-                isFocused: handler.focusedIndex == index && groupHasFocus,
+                isFocused: isFocused,
                 groupHasFocus: groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
+                isHovered: hoveredIndex == index && !isFocused,
                 context: context,
                 palette: palette
             )
@@ -395,13 +454,19 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         isFocused: Bool,
         groupHasFocus: Bool,
         isSelected: Bool,
+        isHovered: Bool,
         context: RenderContext,
         palette: Palette
     ) -> String {
         // Radio indicator: ● if selected OR focused, ◯ if neither
         let indicator = (isSelected || isFocused) ? TerminalSymbols.radioSelected : TerminalSymbols.radioUnselected
 
-        // Determine indicator color based on state
+        // Determine indicator color based on state. Priority
+        // order: disabled > focused > selected > hovered >
+        // default. Hover thus only changes the look of an
+        // unselected, unfocused item — focus and selection are
+        // both more emphatic affordances and shouldn't
+        // compete.
         let indicatorColor: Color
         if isDisabled {
             indicatorColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
@@ -412,8 +477,13 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         } else if isSelected {
             // Selected but not focused: solid accent
             indicatorColor = palette.accent
+        } else if isHovered {
+            // Hovered (and neither focused nor selected):
+            // dim accent — reads as "you can pick me" without
+            // mimicking the focused or selected look.
+            indicatorColor = palette.accent.opacity(ViewConstants.focusBorderDim)
         } else {
-            // Unselected and unfocused: dimmed
+            // Unselected, unfocused, unhovered: dimmed.
             indicatorColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
         }
 

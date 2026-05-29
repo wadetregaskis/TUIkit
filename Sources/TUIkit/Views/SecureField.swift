@@ -210,6 +210,16 @@ extension SecureField {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_SecureFieldCore``.
+/// Lifted out of the struct to mirror the
+/// ``_TextFieldCore`` arrangement and keep the indices
+/// named.
+private enum SecureFieldStateIndex {
+    static let handler = 0
+    static let focusID = 1
+    static let isHovered = 2
+}
+
 /// Internal view that handles the actual rendering of SecureField.
 private struct _SecureFieldCore: View, Renderable, Layoutable {
     let text: Binding<String>
@@ -217,6 +227,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
     let focusID: String?
     let isDisabled: Bool
     let onSubmitAction: (() -> Void)?
+
+    private typealias StateIndex = SecureFieldStateIndex
 
     /// Minimum width for the secure field content area.
     private let minContentWidth = 10
@@ -258,12 +270,13 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "securefield",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
 
         // Get or create persistent handler from state storage.
         // Reuses TextFieldHandler since key handling is identical.
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<TextFieldHandler> = stateStorage.storage(
             for: handlerKey,
             default: TextFieldHandler(
@@ -284,6 +297,16 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Hover state persists across renders; the dispatcher
+        // flips it on .entered / .exited events synthesised
+        // from motion. Disabled / focused fields suppress the
+        // visual effect — same suppression as TextField.
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.isHovered)
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
+
         // Build the secure field content using shared renderer
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
@@ -302,26 +325,49 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             contentWidth: contentWidth
         )
 
-        // Wrap with half-block caps
-        let capColor = palette.accent.opacity(ViewConstants.focusBorderDim)
+        // Wrap with half-block caps. Hover bumps the cap tint
+        // so the affordance reads as "I'm clickable" — same
+        // visual language as TextField. Focused fields don't
+        // show the hover bump (focus is the more emphatic
+        // signal).
+        let capOpacity = isHovered
+            ? ViewConstants.hoverBackground
+            : ViewConstants.focusBorderDim
+        let capColor = palette.accent.opacity(capOpacity)
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
         var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
 
-        // Mouse: click anywhere on the field grants it focus.
+        // Mouse: a click anywhere on the field grants it
+        // focus. The same hit-test region drives the hover
+        // state machine — .entered / .exited (synthesised by
+        // the dispatcher) flip the hover StateBox.
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            // Ask the dispatcher to enable motion reporting
+            // this frame so the hover machine sees .moved
+            // events.
+            mouseDispatcher.requestFeature(.motion)
+
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
+            let captureHoverBox = hoverBox
             let mouseHandlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     focusManager.focus(id: captureFocusID)
                     return true
-                default: return false
+                default:
+                    return false
                 }
             }
             buffer.hitTestRegions.append(
