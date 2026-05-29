@@ -238,26 +238,29 @@ struct SectionInfo {
 
 extension Section: SectionRowExtractor {
     func extractSectionInfo(context: RenderContext) -> SectionInfo {
-        // Render header with styling
+        // Render header with styling. Styling is a per-line ANSI
+        // wrap — no horizontal or vertical shift — so overlays and
+        // hit-test regions carry through unshifted. The bare
+        // FrameBuffer(lines:) initializer would drop them.
         let headerBuffer: FrameBuffer?
         if !(header is EmptyView) {
             let raw = TUIkit.renderToBuffer(header, context: context)
             let styledLines = raw.lines.map { line in
                 applyHeaderFooterStyle(line, bold: true)
             }
-            headerBuffer = FrameBuffer(lines: styledLines)
+            headerBuffer = raw.replacingLines(styledLines)
         } else {
             headerBuffer = nil
         }
 
-        // Render footer with styling
+        // Render footer with styling. See header comment above.
         let footerBuffer: FrameBuffer?
         if !(footer is EmptyView) {
             let raw = TUIkit.renderToBuffer(footer, context: context)
             let styledLines = raw.lines.map { line in
                 applyHeaderFooterStyle(line, bold: false)
             }
-            footerBuffer = FrameBuffer(lines: styledLines)
+            footerBuffer = raw.replacingLines(styledLines)
         } else {
             footerBuffer = nil
         }

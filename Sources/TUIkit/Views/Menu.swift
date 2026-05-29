@@ -437,7 +437,12 @@ private struct _MenuCore: View, Renderable {
 
         result.append(BorderRenderer.standardBottomBorder(style: style, innerWidth: innerWidth, color: borderForeground))
 
-        return FrameBuffer(lines: result)
+        // The border adds a top row and a leading column, so content
+        // shifted right by 1 and down by 1. Carry overlays and hit-
+        // test regions by the same amount — bare FrameBuffer(lines:)
+        // would drop them, breaking clicks on menu items inside the
+        // bordered menu.
+        return buffer.replacingLines(result, overlayShiftX: 1, overlayShiftY: 1)
     }
 }
 

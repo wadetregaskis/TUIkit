@@ -151,7 +151,13 @@ private struct _LazyVStackCore<Content: View>: View, Renderable {
             alignedLines.append(leftPadding + paddedLine + String(repeating: " ", count: max(0, rightPaddingCount)))
         }
 
-        return FrameBuffer(lines: alignedLines)
+        // Content shifted right by `bufferOffset`; carry overlays
+        // and hit-test regions by the same amount so they stay
+        // anchored. The bare FrameBuffer(lines:) initializer would
+        // drop them, breaking clicks on any interactive content
+        // inside a LazyVStack with a non-leading alignment or a
+        // child narrower than the stack.
+        return buffer.replacingLines(alignedLines, overlayShiftX: bufferOffset)
     }
 }
 
@@ -297,7 +303,11 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
         var lines = Array(repeating: emptyLine, count: topPadding)
         lines += buffer.lines
         lines += Array(repeating: emptyLine, count: bottomPadding)
-        return FrameBuffer(lines: lines)
+        // Content shifted down by `topPadding`; carry overlays and
+        // hit-test regions by the same amount. Bare initializer
+        // would drop them, breaking clicks on a LazyHStack with a
+        // non-top alignment or a child shorter than the stack.
+        return buffer.replacingLines(lines, overlayShiftY: topPadding)
     }
 }
 

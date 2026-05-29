@@ -29,7 +29,13 @@ public struct BackgroundModifier: ViewModifier {
             lines.append(colored)
         }
 
-        return FrameBuffer(lines: lines)
+        // Background colouring is a styling pass — content stays in
+        // place (no horizontal or vertical shift), so overlays and
+        // hit-test regions carry through unshifted. Using the bare
+        // FrameBuffer(lines:) initializer here would silently drop
+        // the child's regions, breaking clicks on any control with a
+        // .background() modifier applied to it.
+        return buffer.replacingLines(lines)
     }
 
     /// Applies background color to a string, preserving existing formatting.
