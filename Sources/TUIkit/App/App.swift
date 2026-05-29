@@ -353,6 +353,19 @@ extension WindowGroup: SceneRenderable {
             result.append(String(repeating: " ", count: targetWidth))
         }
 
-        return FrameBuffer(lines: result)
+        // The content shifted right by `horizontalOffset` and down by
+        // `verticalOffset`; carry overlay layers AND hit-test regions
+        // by the same amount so they stay anchored to the content
+        // they were emitted alongside. Using the bare
+        // FrameBuffer(lines:) initializer here would silently discard
+        // every region the view tree built up, with the highly
+        // misleading symptom "clicks on TextFields / Buttons /
+        // anything do nothing, but only on pages whose content
+        // doesn't exactly fill the terminal".
+        return buffer.replacingLines(
+            result,
+            overlayShiftX: horizontalOffset,
+            overlayShiftY: verticalOffset
+        )
     }
 }
