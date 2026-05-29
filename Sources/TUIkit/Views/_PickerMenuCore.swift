@@ -311,16 +311,33 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         let captureSelection = selection
         for (index, entry) in entries.enumerated() {
             let mouseHandlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
+                case .entered:
+                    // Hover follows the cursor across the
+                    // popup, same model as a desktop drop-down:
+                    // whichever row is under the cursor becomes
+                    // the highlighted one. Keyboard navigation
+                    // drives the same `highlightedIndex`, so
+                    // the visual treatment is uniform — there's
+                    // no separate "I'm hovered" state to render.
+                    handler.highlightedIndex = index
+                    return true
+                case .exited:
+                    // Leave the highlight where it is when the
+                    // cursor leaves the popup — also matches
+                    // desktop drop-downs (the next keystroke
+                    // continues from wherever the eye left off).
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     focusManager.focus(id: persistedFocusID)
                     captureSelection.wrappedValue = entry.tag
                     handler.highlightedIndex = index
                     handler.isOpen = false
                     return true
-                default: return false
+                default:
+                    return false
                 }
             }
             popupBuffer.hitTestRegions.append(
