@@ -58,11 +58,12 @@ env.palette             = paletteManager.currentPalette
 env.appearanceManager   = appearanceManager
 env.appearance          = appearanceManager.currentAppearance
 env.notificationService = NotificationService.current
-env.stateStorage        = tuiContext.stateStorage
-env.lifecycle           = tuiContext.lifecycle
-env.keyEventDispatcher  = tuiContext.keyEventDispatcher
-env.renderCache         = tuiContext.renderCache
-env.preferenceStorage   = tuiContext.preferences
+env.stateStorage         = tuiContext.stateStorage
+env.lifecycle            = tuiContext.lifecycle
+env.keyEventDispatcher   = tuiContext.keyEventDispatcher
+env.mouseEventDispatcher = tuiContext.mouseEventDispatcher
+env.renderCache          = tuiContext.renderCache
+env.preferenceStorage    = tuiContext.preferences
 env.localizationService = LocalizationService.shared
 ```
 

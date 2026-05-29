@@ -12,8 +12,19 @@ import TUIkitView
 extension RenderContext {
     /// Creates a new RenderContext with runtime services from a `TUIContext`.
     ///
-    /// Injects all services from the `TUIContext` into `EnvironmentValues`,
-    /// making them accessible via `context.environment.stateStorage`, etc.
+    /// Injects every service the `TUIContext` owns into
+    /// `EnvironmentValues`, making them accessible via
+    /// `context.environment.stateStorage`, etc.
+    ///
+    /// > Note: Services that live on `RenderLoop` rather than on
+    ///   `TUIContext` (the focus manager, palette manager,
+    ///   appearance manager, notification service, localization
+    ///   service) are NOT set up by this initializer — callers
+    ///   that need them must populate them on `environment`
+    ///   beforehand. The full production setup lives in
+    ///   ``RenderLoop/makeRenderContext``. Tests using this init
+    ///   that exercise click handling will want to set
+    ///   `environment.focusManager` themselves.
     ///
     /// - Parameters:
     ///   - availableWidth: The available width in characters.
@@ -32,6 +43,13 @@ extension RenderContext {
         env.stateStorage = tuiContext.stateStorage
         env.lifecycle = tuiContext.lifecycle
         env.keyEventDispatcher = tuiContext.keyEventDispatcher
+        // Forgetting mouseEventDispatcher here causes any view
+        // tested through this init that emits hit-test regions
+        // (Button, TextField, .onMouseEvent, etc.) to silently
+        // no-op its mouse handling — OnMouseEventModifier skips
+        // registration when the dispatcher is nil. That made an
+        // entire class of mouse tests vacuous until we noticed.
+        env.mouseEventDispatcher = tuiContext.mouseEventDispatcher
         env.renderCache = tuiContext.renderCache
         env.preferenceStorage = tuiContext.preferences
         self.init(

@@ -452,22 +452,12 @@ struct RenderingTests {
 
         let windowGroup = WindowGroup { view }
 
-        // RenderContext(tuiContext:) does not currently inject the
-        // mouseEventDispatcher into the environment; without one,
-        // OnMouseEventModifier skips registration and the test
-        // becomes vacuous. Wire it up explicitly. (Production code
-        // sets this in RenderLoop.makeRenderContext.)
-        let tuiContext = TUIContext()
-        var environment = EnvironmentValues()
-        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-
         // Content is ~8 chars wide × 1 line tall; the terminal is
         // much bigger, so centerBuffer's slow path runs.
         let context = RenderContext(
             availableWidth: 80,
             availableHeight: 24,
-            environment: environment,
-            tuiContext: tuiContext
+            tuiContext: TUIContext()
         )
         let buffer = windowGroup.renderScene(context: context)
 
