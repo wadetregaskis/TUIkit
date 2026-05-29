@@ -53,7 +53,7 @@ public enum SelectionMode: Sendable {
 /// | PageUp | Move up by viewport height |
 /// | PageDown | Move down by viewport height |
 /// | Enter/Space | Toggle selection at focused index |
-final class ItemListHandler<SelectionValue: Hashable>: Focusable {
+final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffsetState {
     /// The unique identifier for this focusable element.
     let focusID: String
 
@@ -262,44 +262,17 @@ extension ItemListHandler {
         ensureFocusedItemVisible()
     }
 
-    /// Moves the scroll position by the given delta without
-    /// changing which item is focused.
+    /// The extent that ``ScrollableOffsetState`` measures
+    /// against. For ``ItemListHandler`` that's
+    /// ``itemCount`` — total rows.
     ///
-    /// Used by mouse-wheel handlers. Selection and focus are
-    /// orthogonal to the scroll position: scrolling can move the
-    /// focused row out of view, and that's intentional — the model
-    /// matches every major desktop list-view convention (Finder,
-    /// Explorer, VS Code, etc.), where wheel scrolling moves the
-    /// viewport and arrow keys move the selection. Pressing an
-    /// arrow key on a focused list whose selection is currently
-    /// off-screen will scroll back to it via the existing
-    /// ``moveFocus(by:wrap:)`` path.
-    ///
-    /// - Parameter delta: Number of rows to scroll (negative =
-    ///   scroll up, positive = scroll down).
-    func scroll(by delta: Int) {
-        guard delta != 0, viewportHeight > 0, itemCount > viewportHeight else { return }
-        let maxOffset = max(0, itemCount - viewportHeight)
-        scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
-    }
-
-    /// Clamps `scrollOffset` to the current valid range
-    /// `0...max(0, itemCount - viewportHeight)`.
-    ///
-    /// Used by `_ListCore` / `_TableCore` each render after
-    /// updating `itemCount` and `viewportHeight`, so that
-    /// shrinking the data set under an existing scroll
-    /// position (e.g. a search field narrowing the visible
-    /// items) gracefully snaps the viewport back to where
-    /// rows actually exist instead of pointing at empty
-    /// space past the end. Distinct from
-    /// ``ensureFocusedItemVisible()``: this is a bounds
-    /// check, not a focus-tracking clamp — `focusedIndex` is
-    /// not consulted and not changed.
-    func clampScrollOffset() {
-        let maxOffset = max(0, itemCount - viewportHeight)
-        scrollOffset = max(0, min(maxOffset, scrollOffset))
-    }
+    /// (``scroll(by:)`` and ``clampScrollOffset()`` are
+    /// supplied by the ``ScrollableOffsetState`` extension
+    /// using this extent. Wheel-scroll routing is similarly
+    /// handled by the protocol's ``handleWheelEvent(_:
+    /// linesPerTick:)``. See the protocol comment for why
+    /// these moved out of this class.)
+    var extent: Int { itemCount }
 
     /// Adjusts scroll offset to keep the focused item visible.
     func ensureFocusedItemVisible() {
@@ -378,23 +351,7 @@ extension ItemListHandler {
     }
 }
 
-// MARK: - Scroll Indicator State
-
-extension ItemListHandler {
-    /// Whether there is content above the visible viewport.
-    var hasContentAbove: Bool {
-        scrollOffset > 0
-    }
-
-    /// Whether there is content below the visible viewport.
-    var hasContentBelow: Bool {
-        scrollOffset + viewportHeight < itemCount
-    }
-
-    /// The range of visible item indices.
-    var visibleRange: Range<Int> {
-        let start = scrollOffset
-        let end = min(scrollOffset + viewportHeight, itemCount)
-        return start..<end
-    }
-}
+// (``hasContentAbove`` / ``hasContentBelow`` / ``visibleRange``
+//  are provided by the ``ScrollableOffsetState`` extension and
+//  read the ``extent`` defined above. The list-specific
+//  arithmetic lives in ``ensureFocusedItemVisible()``.)

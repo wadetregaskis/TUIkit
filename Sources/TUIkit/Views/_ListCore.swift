@@ -298,7 +298,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
                 direction: .up,
-                count: handler.scrollOffset,
+                count: handler.rowsAbove,
                 width: rowWidth,
                 palette: palette
             ))
@@ -331,11 +331,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
 
         if handler.hasContentBelow {
-            let lastVisibleIndex = visibleRows.last?.0 ?? (handler.scrollOffset - 1)
-            let rowsBelow = max(0, handler.itemCount - lastVisibleIndex - 1)
             lines.append(renderScrollIndicator(
                 direction: .down,
-                count: rowsBelow,
+                count: handler.rowsBelow,
                 width: rowWidth,
                 palette: palette
             ))
@@ -402,17 +400,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let captureFocusID = state.focusID
         let rowRanges = state.visibleRowYRanges
         return { event in
-            switch event.button {
-            case .scrollUp:
-                // Wheel scrolling moves the viewport, NEVER the
-                // selection — same model as Finder / Explorer /
-                // VS Code; arrow keys handle selection.
-                captureHandler.scroll(by: -ViewConstants.mouseWheelScrollLines)
-                return true
-            case .scrollDown:
-                captureHandler.scroll(by: ViewConstants.mouseWheelScrollLines)
-                return true
-            case .left:
+            // Wheel scrolling moves the viewport, NEVER the
+            // selection — same model as Finder / Explorer /
+            // VS Code; arrow keys handle selection. Routed
+            // through the shared ScrollableOffsetState
+            // helper so the math lives in one place.
+            if captureHandler.handleWheelEvent(event) { return true }
+
+            if event.button == .left {
                 guard event.phase == .released else {
                     return event.phase == .pressed
                 }
@@ -431,9 +426,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
                 focusManager.focus(id: captureFocusID)
                 return true
-            default:
-                return false
             }
+            return false
         }
     }
 

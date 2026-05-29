@@ -242,7 +242,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Re-clamp the offset against the now-known content
         // height; the user may have grown / shrunk the content
         // between renders.
-        handler.scrollOffset = max(0, min(handler.maxOffset, handler.scrollOffset))
+        handler.clampScrollOffset()
 
         // "Follow the focused control" — snap the viewport back
         // to the focused control when either of two things just
@@ -387,14 +387,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.button {
-                case .scrollUp:
-                    captureHandler.scroll(by: -ViewConstants.mouseWheelScrollLines)
-                    return true
-                case .scrollDown:
-                    captureHandler.scroll(by: ViewConstants.mouseWheelScrollLines)
-                    return true
-                case .left:
+                if captureHandler.handleWheelEvent(event) { return true }
+                if event.button == .left {
                     switch event.phase {
                     case .pressed:
                         return true
@@ -404,9 +398,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                     default:
                         return false
                     }
-                default:
-                    return false
                 }
+                return false
             }
             // Insert at the back of the regions array so any
             // interactive children inside the content (Buttons,
@@ -519,27 +512,21 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         var lines = buffer.lines
 
         if handler.hasContentAbove, !lines.isEmpty {
-            let rowsAbove = handler.scrollOffset
             // Indicator rows are padded to full viewport width
             // — without padding the resulting buffer's effective
             // width collapses to the indicator's own length.
             lines[0] = renderScrollIndicator(
                 direction: .up,
-                count: rowsAbove,
+                count: handler.rowsAbove,
                 width: width,
                 palette: palette
             ).padToVisibleWidth(width)
         }
 
         if handler.hasContentBelow, lines.count >= 1 {
-            let rowsBelow = max(
-                0,
-                handler.contentHeight
-                    - (handler.scrollOffset + handler.viewportHeight)
-            )
             lines[lines.count - 1] = renderScrollIndicator(
                 direction: .down,
-                count: rowsBelow,
+                count: handler.rowsBelow,
                 width: width,
                 palette: palette
             ).padToVisibleWidth(width)

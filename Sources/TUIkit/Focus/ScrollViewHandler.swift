@@ -36,7 +36,7 @@
 ///   nonisolated class conforms cleanly to the nonisolated
 ///   `Focusable` protocol without crossing an isolation
 ///   boundary.
-public final class ScrollViewHandler: Focusable {
+public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
     /// The unique focus identifier for this scroll view.
     public let focusID: String
@@ -71,43 +71,19 @@ public final class ScrollViewHandler: Focusable {
     }
 }
 
-// MARK: - Scroll Position Helpers
+// MARK: - ScrollableOffsetState conformance
 
 extension ScrollViewHandler {
 
-    /// The largest valid `scrollOffset` for the current content
-    /// and viewport heights. Zero when the content fits entirely.
-    public var maxOffset: Int {
-        max(0, contentHeight - viewportHeight)
-    }
+    /// The extent that ``ScrollableOffsetState`` measures
+    /// against. For ``ScrollViewHandler`` that's
+    /// ``contentHeight`` — total natural lines.
+    public var extent: Int { contentHeight }
+}
 
-    /// Whether the scroll view has content above the viewport
-    /// (i.e. the user has scrolled down at least once).
-    public var hasContentAbove: Bool {
-        scrollOffset > 0
-    }
+// MARK: - Convenience
 
-    /// Whether the scroll view has content below the viewport.
-    public var hasContentBelow: Bool {
-        scrollOffset + viewportHeight < contentHeight
-    }
-
-    /// The half-open range of content rows currently visible.
-    public var visibleRange: Range<Int> {
-        guard contentHeight > 0 else { return 0..<0 }
-        let end = min(contentHeight, scrollOffset + viewportHeight)
-        return scrollOffset..<end
-    }
-
-    /// Moves the scroll position by `delta` rows. Negative values
-    /// scroll up, positive values scroll down. Clamped to
-    /// `0...maxOffset`. A no-op when the content already fits.
-    ///
-    /// - Parameter delta: The number of rows to scroll.
-    public func scroll(by delta: Int) {
-        guard delta != 0, viewportHeight > 0, contentHeight > viewportHeight else { return }
-        scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
-    }
+extension ScrollViewHandler {
 
     /// Jumps to the top of the content.
     public func scrollToTop() { scrollOffset = 0 }

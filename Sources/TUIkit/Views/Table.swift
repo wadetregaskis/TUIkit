@@ -347,7 +347,7 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
                 direction: .up,
-                count: handler.visibleRange.lowerBound,
+                count: handler.rowsAbove,
                 width: innerWidth,
                 palette: palette
             ))
@@ -368,10 +368,9 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             ))
         }
         if handler.hasContentBelow {
-            let rowsBelow = handler.itemCount - handler.visibleRange.upperBound
             lines.append(renderScrollIndicator(
                 direction: .down,
-                count: rowsBelow,
+                count: handler.rowsBelow,
                 width: innerWidth,
                 palette: palette
             ))
@@ -438,17 +437,14 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
         return { event in
-            switch event.button {
-            case .scrollUp:
-                // Wheel scrolls the viewport, never the
-                // selection. See the matching comment in
-                // _ListCore for the model.
-                captureHandler.scroll(by: -ViewConstants.mouseWheelScrollLines)
-                return true
-            case .scrollDown:
-                captureHandler.scroll(by: ViewConstants.mouseWheelScrollLines)
-                return true
-            case .left:
+            // Wheel scrolls the viewport, never the selection.
+            // See the matching comment in _ListCore for the
+            // model. Routed through the shared
+            // ScrollableOffsetState helper so the math lives
+            // in one place.
+            if captureHandler.handleWheelEvent(event) { return true }
+
+            if event.button == .left {
                 guard event.phase == .released else {
                     return event.phase == .pressed
                 }
@@ -461,9 +457,8 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
                 }
                 focusManager.focus(id: captureFocusID)
                 return true
-            default:
-                return false
             }
+            return false
         }
     }
 
