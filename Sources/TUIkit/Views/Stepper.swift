@@ -440,12 +440,16 @@ private struct _StepperCore<Label: View>: View, Renderable {
         )
 
         // Right-arrow region — single cell at x = totalWidth - 1.
+        // Closure literals (rather than bare `handler.increment`
+        // method references) give Swift a proper
+        // @MainActor @Sendable () -> Void to capture; an
+        // unapplied method reference isn't Sendable on its own.
         let incrementID = mouseDispatcher.register(
             arrowHandler(
                 timer: incrementTimer,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
-                action: handler.increment
+                action: { handler.increment() }
             )
         )
         buffer.hitTestRegions.append(
@@ -462,7 +466,7 @@ private struct _StepperCore<Label: View>: View, Renderable {
                 timer: decrementTimer,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
-                action: handler.decrement
+                action: { handler.decrement() }
             )
         )
         buffer.hitTestRegions.append(

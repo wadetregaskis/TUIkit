@@ -520,8 +520,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         trackWidth: Int,
         leftArrowTimer: AutoRepeatTimer,
         rightArrowTimer: AutoRepeatTimer,
-        decrementOnce: @MainActor () -> Void,
-        incrementOnce: @MainActor () -> Void,
+        decrementOnce: @escaping @MainActor () -> Void,
+        incrementOnce: @escaping @MainActor () -> Void,
         stopArrowTimers: @MainActor () -> Void,
         focusManager: FocusManager,
         focusID: String
