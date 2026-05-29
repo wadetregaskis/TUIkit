@@ -39,7 +39,12 @@ internal func debugFocusLog(_ message: @autoclosure () -> String) {
     let line = "[\(stamp)] \(message())\n"
     if let handle = FileHandle(forWritingAtPath: "/tmp/tuikit-debug.log") {
         defer { try? handle.close() }
-        try? handle.seekToEnd()
+        // The `_ = try?` dance silences Swift 6's "result of
+        // 'try?' is unused" warning. We don't care whether
+        // seekToEnd succeeded — if it fails we just write at the
+        // current position; the diagnostic file isn't load-
+        // bearing.
+        _ = try? handle.seekToEnd()
         if let data = line.data(using: .utf8) { try? handle.write(contentsOf: data) }
     } else {
         try? line.write(toFile: "/tmp/tuikit-debug.log", atomically: false, encoding: .utf8)

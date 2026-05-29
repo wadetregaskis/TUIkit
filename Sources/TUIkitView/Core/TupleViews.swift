@@ -53,13 +53,43 @@ extension TupleView: Renderable, ChildInfoProvider {
 
     public func childInfos(context: RenderContext) -> [ChildInfo] {
         var infos: [ChildInfo] = []
-        repeat infos.append(
-            makeChildInfo(
-                for: each children,
-                context: context.withChildIdentity(type: type(of: each children), index: infos.count)
-            )
+        repeat Self.appendChildInfos(
+            from: each children,
+            into: &infos,
+            context: context
         )
         return infos
+    }
+
+    /// Appends one or more `ChildInfo` entries for `child`.
+    ///
+    /// When `child` is itself a `ChildInfoProvider` (a nested
+    /// `TupleView`, a `ForEach`, etc.), its `childInfos` are
+    /// spliced in so the surrounding stack sees the children as
+    /// individual siblings — rather than treating the whole
+    /// provider as one opaque element. Without this a `ForEach`
+    /// buried inside a TupleView would never have its body
+    /// iterations enumerated, leaving the resulting `VStack` /
+    /// `HStack` to render the ForEach as a single empty buffer
+    /// via the Priority-3 'no rendering path' branch in
+    /// `renderToBuffer`.
+    @MainActor
+    private static func appendChildInfos<C: View>(
+        from child: C,
+        into infos: inout [ChildInfo],
+        context: RenderContext
+    ) {
+        if let provider = child as? ChildInfoProvider {
+            infos.append(contentsOf: provider.childInfos(context: context))
+        } else {
+            infos.append(
+                makeChildInfo(
+                    for: child,
+                    context: context.withChildIdentity(
+                        type: type(of: child), index: infos.count)
+                )
+            )
+        }
     }
 }
 
@@ -68,9 +98,27 @@ extension TupleView: Renderable, ChildInfoProvider {
 extension TupleView: ChildViewProvider {
     public func childViews(context: RenderContext) -> [ChildView] {
         var views: [ChildView] = []
-        repeat views.append(
-            ChildView(each children, childIndex: views.count)
+        repeat Self.appendChildViews(
+            from: each children,
+            into: &views,
+            context: context
         )
         return views
+    }
+
+    /// Appends one or more `ChildView` entries for `child`. See
+    /// the matching note on `appendChildInfos` — this exists for
+    /// the same reason on the two-pass layout side.
+    @MainActor
+    private static func appendChildViews<C: View>(
+        from child: C,
+        into views: inout [ChildView],
+        context: RenderContext
+    ) {
+        if let provider = child as? ChildViewProvider {
+            views.append(contentsOf: provider.childViews(context: context))
+        } else {
+            views.append(ChildView(child, childIndex: views.count))
+        }
     }
 }
