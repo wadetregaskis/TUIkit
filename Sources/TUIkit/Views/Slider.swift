@@ -296,7 +296,6 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
 
     private typealias StateIndex = SliderStateIndex
 
-    // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
@@ -357,166 +356,258 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
 
         var buffer = FrameBuffer(text: content)
 
-        // Hit-test region. Three behaviours:
-        //   • Scroll up / down anywhere on the row → ± step
-        //   • Left-press / drag on the track portion → set fraction
-        //     directly from the x position
-        //   • Left-press on either arrow → ± step
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            mouseDispatcher.requestFeature(.motion)
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let captureValue = value
-            let captureBounds = bounds
-            let captureStep = step
-            let captureHoverBox = hoverBox
-            let trackLeft = 2  // "◀ "
-            let trackRight = trackLeft + trackWidth  // exclusive
-
-            // Auto-repeat timers for the left / right arrows.
-            // Press-and-hold on either arrow fires the value
-            // change once immediately, then keeps firing at a
-            // fixed cadence until release. Track-drag and
-            // wheel paths are unchanged.
-            let leftArrowRepeatKey = StateStorage.StateKey(
-                identity: context.identity,
-                propertyIndex: StateIndex.leftArrowRepeat
-            )
-            let leftArrowRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
-                for: leftArrowRepeatKey, default: AutoRepeatTimer())
-            let captureLeftArrowTimer = leftArrowRepeatBox.value
-
-            let rightArrowRepeatKey = StateStorage.StateKey(
-                identity: context.identity,
-                propertyIndex: StateIndex.rightArrowRepeat
-            )
-            let rightArrowRepeatBox: StateBox<AutoRepeatTimer> = stateStorage.storage(
-                for: rightArrowRepeatKey, default: AutoRepeatTimer())
-            let captureRightArrowTimer = rightArrowRepeatBox.value
-
-            // The arrow steps performed by the auto-repeat
-            // timers. Captured here so the timer closures don't
-            // need to recompute clamping each tick.
-            let decrementOnce: @MainActor () -> Void = {
-                captureValue.wrappedValue = min(
-                    captureBounds.upperBound,
-                    max(captureBounds.lowerBound,
-                        captureValue.wrappedValue - captureStep))
-            }
-            let incrementOnce: @MainActor () -> Void = {
-                captureValue.wrappedValue = min(
-                    captureBounds.upperBound,
-                    max(captureBounds.lowerBound,
-                        captureValue.wrappedValue + captureStep))
-            }
-            let stopArrowTimers: @MainActor () -> Void = {
-                captureLeftArrowTimer.stop()
-                captureRightArrowTimer.stop()
-            }
-
-            let handlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
-                default:
-                    break
-                }
-                switch event.button {
-                case .scrollUp:
-                    let new = min(captureBounds.upperBound,
-                                  max(captureBounds.lowerBound,
-                                      captureValue.wrappedValue + captureStep))
-                    captureValue.wrappedValue = new
-                    focusManager.focus(id: captureFocusID)
-                    return true
-                case .scrollDown:
-                    let new = min(captureBounds.upperBound,
-                                  max(captureBounds.lowerBound,
-                                      captureValue.wrappedValue - captureStep))
-                    captureValue.wrappedValue = new
-                    focusManager.focus(id: captureFocusID)
-                    return true
-                case .left:
-                    switch event.phase {
-                    case .pressed, .dragged:
-                        if event.x < trackLeft {
-                            // Left arrow.
-                            if event.phase == .pressed {
-                                stopArrowTimers()
-                                captureLeftArrowTimer.start(action: decrementOnce)
-                            } else {
-                                // .dragged onto the arrow from
-                                // elsewhere — stop any track
-                                // dragging, don't restart the
-                                // auto-repeat.
-                                stopArrowTimers()
-                            }
-                        } else if event.x >= trackRight {
-                            // Right arrow.
-                            if event.phase == .pressed {
-                                stopArrowTimers()
-                                captureRightArrowTimer.start(action: incrementOnce)
-                            } else {
-                                stopArrowTimers()
-                            }
-                        } else {
-                            // Track area — any arrow timer
-                            // running from a previous press
-                            // stops here.
-                            stopArrowTimers()
-                            // Inside the track itself. Snap the
-                            // computed value to the nearest multiple
-                            // of the configured step so keyboard and
-                            // mouse adjustments stay in lockstep —
-                            // dragging across the track lands on the
-                            // same values you'd reach by tapping `→`.
-                            let pos = max(0, min(trackWidth - 1, event.x - trackLeft))
-                            let range = captureBounds.upperBound - captureBounds.lowerBound
-                            let raw = captureBounds.lowerBound + (trackWidth > 1
-                                                                  ? Double(pos) / Double(trackWidth - 1)
-                                                                  : 0) * range
-                            let snapped: Double
-                            if captureStep > 0 {
-                                let stepsFromLow = ((raw - captureBounds.lowerBound) / captureStep).rounded()
-                                snapped = captureBounds.lowerBound + stepsFromLow * captureStep
-                            } else {
-                                snapped = raw
-                            }
-                            captureValue.wrappedValue =
-                                min(captureBounds.upperBound,
-                                    max(captureBounds.lowerBound, snapped))
-                        }
-                        focusManager.focus(id: captureFocusID)
-                        return true
-                    case .released:
-                        stopArrowTimers()
-                        return true
-                    default:
-                        return false
-                    }
-                default:
-                    return false
-                }
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: buffer.width,
-                    height: buffer.height,
-                    handlerID: handlerID,
-                    focusID: persistedFocusID
-                )
-            )
-        }
+        attachMouseHandlers(
+            to: &buffer,
+            context: context,
+            hoverBox: hoverBox,
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            trackWidth: trackWidth
+        )
 
         return buffer
+    }
+
+    // MARK: - Mouse handler wiring
+
+    /// Registers the slider's single buffer-wide mouse handler
+    /// (which routes wheel + arrow + track behaviour) and emits
+    /// its hit-test region. The handler is composed from the
+    /// per-axis helpers below.
+    private func attachMouseHandlers(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        hoverBox: StateBox<Bool>,
+        persistedFocusID: String,
+        stateStorage: StateStorage,
+        trackWidth: Int
+    ) {
+        guard !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        mouseDispatcher.requestFeature(.motion)
+
+        let focusManager = context.environment.focusManager
+        let trackLeft = 2  // "◀ "
+        let trackRight = trackLeft + trackWidth  // exclusive
+
+        let leftArrowTimer = autoRepeatTimer(
+            stateStorage: stateStorage,
+            context: context,
+            propertyIndex: StateIndex.leftArrowRepeat
+        )
+        let rightArrowTimer = autoRepeatTimer(
+            stateStorage: stateStorage,
+            context: context,
+            propertyIndex: StateIndex.rightArrowRepeat
+        )
+
+        let handlerID = mouseDispatcher.register(
+            mouseHandler(
+                hoverBox: hoverBox,
+                focusManager: focusManager,
+                focusID: persistedFocusID,
+                leftArrowTimer: leftArrowTimer,
+                rightArrowTimer: rightArrowTimer,
+                trackLeft: trackLeft,
+                trackRight: trackRight,
+                trackWidth: trackWidth
+            )
+        )
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0,
+                offsetY: 0,
+                width: buffer.width,
+                height: buffer.height,
+                handlerID: handlerID,
+                focusID: persistedFocusID
+            )
+        )
+    }
+
+    /// The single mouse handler for the slider's hit-test
+    /// region. Routes hover, wheel, arrow-click + auto-repeat,
+    /// and track drag-set behaviour. Returns a closure rather
+    /// than a method so the captures (which include the
+    /// `value` and `bounds` from the surrounding view) are
+    /// fixed at the moment of registration.
+    private func mouseHandler(
+        hoverBox: StateBox<Bool>,
+        focusManager: FocusManager,
+        focusID: String,
+        leftArrowTimer: AutoRepeatTimer,
+        rightArrowTimer: AutoRepeatTimer,
+        trackLeft: Int,
+        trackRight: Int,
+        trackWidth: Int
+    ) -> @MainActor (MouseEvent) -> Bool {
+        let value = self.value
+        let bounds = self.bounds
+        let step = self.step
+
+        let decrementOnce: @MainActor () -> Void = {
+            value.wrappedValue = min(
+                bounds.upperBound,
+                max(bounds.lowerBound, value.wrappedValue - step))
+        }
+        let incrementOnce: @MainActor () -> Void = {
+            value.wrappedValue = min(
+                bounds.upperBound,
+                max(bounds.lowerBound, value.wrappedValue + step))
+        }
+        let stopArrowTimers: @MainActor () -> Void = {
+            leftArrowTimer.stop()
+            rightArrowTimer.stop()
+        }
+
+        return { event in
+            switch event.phase {
+            case .entered:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            default:
+                break
+            }
+            switch event.button {
+            case .scrollUp:
+                incrementOnce()
+                focusManager.focus(id: focusID)
+                return true
+            case .scrollDown:
+                decrementOnce()
+                focusManager.focus(id: focusID)
+                return true
+            case .left:
+                return Self.handleLeftButton(
+                    event: event,
+                    value: value,
+                    bounds: bounds,
+                    step: step,
+                    trackLeft: trackLeft,
+                    trackRight: trackRight,
+                    trackWidth: trackWidth,
+                    leftArrowTimer: leftArrowTimer,
+                    rightArrowTimer: rightArrowTimer,
+                    decrementOnce: decrementOnce,
+                    incrementOnce: incrementOnce,
+                    stopArrowTimers: stopArrowTimers,
+                    focusManager: focusManager,
+                    focusID: focusID
+                )
+            default:
+                return false
+            }
+        }
+    }
+
+    /// Dispatches a `.left`-button mouse event among the three
+    /// regions Slider supports: the left arrow, the right arrow,
+    /// and the track in between. Static so it doesn't capture
+    /// `self`, avoiding a reference cycle through the parent
+    /// closure.
+    // swiftlint:disable:next function_parameter_count
+    private static func handleLeftButton(
+        event: MouseEvent,
+        value: Binding<Double>,
+        bounds: ClosedRange<Double>,
+        step: Double,
+        trackLeft: Int,
+        trackRight: Int,
+        trackWidth: Int,
+        leftArrowTimer: AutoRepeatTimer,
+        rightArrowTimer: AutoRepeatTimer,
+        decrementOnce: @MainActor () -> Void,
+        incrementOnce: @MainActor () -> Void,
+        stopArrowTimers: @MainActor () -> Void,
+        focusManager: FocusManager,
+        focusID: String
+    ) -> Bool {
+        switch event.phase {
+        case .pressed, .dragged:
+            if event.x < trackLeft {
+                // Left arrow.
+                if event.phase == .pressed {
+                    stopArrowTimers()
+                    leftArrowTimer.start(action: decrementOnce)
+                } else {
+                    // .dragged onto the arrow from elsewhere —
+                    // stop any track dragging, don't restart
+                    // the auto-repeat.
+                    stopArrowTimers()
+                }
+            } else if event.x >= trackRight {
+                // Right arrow.
+                if event.phase == .pressed {
+                    stopArrowTimers()
+                    rightArrowTimer.start(action: incrementOnce)
+                } else {
+                    stopArrowTimers()
+                }
+            } else {
+                stopArrowTimers()
+                applyTrackValue(
+                    eventX: event.x,
+                    value: value,
+                    bounds: bounds,
+                    step: step,
+                    trackLeft: trackLeft,
+                    trackWidth: trackWidth
+                )
+            }
+            focusManager.focus(id: focusID)
+            return true
+        case .released:
+            stopArrowTimers()
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Maps a track-area cursor x to a snapped slider value and
+    /// applies it. Snaps to the nearest multiple of `step` so
+    /// keyboard and mouse adjustments stay in lockstep —
+    /// dragging across the track lands on the same values you'd
+    /// reach by tapping →.
+    private static func applyTrackValue(
+        eventX: Int,
+        value: Binding<Double>,
+        bounds: ClosedRange<Double>,
+        step: Double,
+        trackLeft: Int,
+        trackWidth: Int
+    ) {
+        let pos = max(0, min(trackWidth - 1, eventX - trackLeft))
+        let range = bounds.upperBound - bounds.lowerBound
+        let raw = bounds.lowerBound + (trackWidth > 1
+            ? Double(pos) / Double(trackWidth - 1)
+            : 0) * range
+        let snapped: Double
+        if step > 0 {
+            let stepsFromLow = ((raw - bounds.lowerBound) / step).rounded()
+            snapped = bounds.lowerBound + stepsFromLow * step
+        } else {
+            snapped = raw
+        }
+        value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, snapped))
+    }
+
+    /// Fetches (or creates) the auto-repeat timer at the given
+    /// `propertyIndex` on the current view identity.
+    private func autoRepeatTimer(
+        stateStorage: StateStorage,
+        context: RenderContext,
+        propertyIndex: Int
+    ) -> AutoRepeatTimer {
+        let key = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: propertyIndex)
+        let box: StateBox<AutoRepeatTimer> = stateStorage.storage(
+            for: key, default: AutoRepeatTimer())
+        return box.value
     }
 
     /// Builds the rendered slider content.
