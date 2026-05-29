@@ -31,12 +31,12 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.5.1"),
-        // swift-benchmark (ordo-one/package-benchmark): proper
-        // warmup / statistics / baseline tracking for the
-        // perf-sensitive code paths. The plugin is invoked via
-        // 'swift package benchmark'; see
-        // https://swiftpackageindex.com/ordo-one/package-benchmark
-        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.29.4"),
+        // swift-benchmark (ordo-one/benchmark): proper warmup /
+        // statistics / baseline tracking for the perf-sensitive
+        // code paths. The plugin is invoked via 'swift package
+        // benchmark'; see
+        // https://swiftpackageindex.com/ordo-one/benchmark
+        .package(url: "https://github.com/ordo-one/benchmark", from: "1.29.4"),
     ],
     targets: [
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────
@@ -86,11 +86,11 @@ let package = Package(
             name: "TUIkitBenchmarks",
             dependencies: [
                 "TUIkit",
-                .product(name: "Benchmark", package: "package-benchmark"),
+                .product(name: "Benchmark", package: "benchmark"),
             ],
             path: "Benchmarks/TUIkitBenchmarks",
             plugins: [
-                .plugin(name: "BenchmarkPlugin", package: "package-benchmark"),
+                .plugin(name: "BenchmarkPlugin", package: "benchmark"),
             ]
         ),
     ]
