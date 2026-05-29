@@ -39,11 +39,15 @@ private struct FileItem: Identifiable {
 /// - Single selection with binding
 /// - Multi-selection with binding
 /// - Keyboard navigation (Up/Down/Home/End/PageUp/PageDown)
+/// - Mouse-wheel scrolling (independent of selection — wheel
+///   scrolls the viewport, arrow keys move the selection)
+/// - Unfocused selection visibility (`.automatic` vs `.hidden`)
 /// - Scroll indicators
 /// - Empty state placeholder
 struct ListPage: View {
     @State var singleSelection: String?
     @State var multiSelection: Set<String> = []
+    @State var transientSelection: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -79,11 +83,79 @@ struct ListPage: View {
             DemoSection("Current Selections") {
                 VStack(alignment: .leading, spacing: 1) {
                     ValueDisplayRow("Single:", singleSelection ?? "(none)")
-                    ValueDisplayRow("Multi:", multiSelection.isEmpty ? "(none)" : multiSelection.sorted().joined(separator: ", "))
+                    ValueDisplayRow(
+                        "Multi:",
+                        multiSelection.isEmpty
+                            ? "(none)"
+                            : multiSelection.sorted().joined(separator: ", ")
+                    )
                 }
             }
 
-            List("Empty List", selection: Binding<String?>(get: { nil }, set: { _ in })) {
+            DemoSection(
+                "Wheel scrolling — long list, no live selection"
+            ) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "Scroll the wheel anywhere over the list below. "
+                            + "It scrolls even when the list doesn't have "
+                            + "focus — wheel events go to the viewport, "
+                            + "not the selection. (Arrow keys still move "
+                            + "the selection, but only when the list is "
+                            + "focused.)"
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    List(
+                        "\(longLines.count) lines",
+                        selection: noopSelection
+                    ) {
+                        ForEach(longLines, id: \.self) { line in
+                            Text(line)
+                        }
+                    }
+                    .frame(height: 8)
+                }
+            }
+
+            DemoSection(
+                "Unfocused-selection visibility: .hidden"
+            ) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "Click an item, then click somewhere else on the "
+                            + "page so the list loses focus. The selection "
+                            + "highlight disappears, but the underlying "
+                            + "binding is still set — focus the list again "
+                            + "(Tab / click) and the highlight returns."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    List(
+                        "Transient picker",
+                        selection: $transientSelection
+                    ) {
+                        ForEach(FileItem.sampleFiles) { file in
+                            HStack(spacing: 1) {
+                                Text(file.icon)
+                                Text(file.name)
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+                    .unfocusedSelectionVisibility(.hidden)
+
+                    ValueDisplayRow(
+                        "Bound value:",
+                        transientSelection ?? "(none)"
+                    )
+                }
+            }
+
+            List(
+                "Empty List",
+                selection: Binding<String?>(get: { nil }, set: { _ in })
+            ) {
                 EmptyView()
             }
 
@@ -95,6 +167,9 @@ struct ListPage: View {
                     "Use [PageUp/PageDown] for fast scrolling",
                     "Use [Enter/Space] to select/deselect",
                     "Use [Tab] to switch between lists",
+                    "Use the mouse wheel to scroll any list "
+                        + "(works whether or not the list has focus, "
+                        + "and whether or not it has a selection binding)",
                 ]
             )
 
@@ -103,5 +178,20 @@ struct ListPage: View {
         .appHeader {
             DemoAppHeader("List Demo")
         }
+    }
+
+    /// A long list of numbered lines used by the wheel-scrolling
+    /// demo. Long enough that the viewport always overflows so
+    /// wheel scrolling is visible.
+    private var longLines: [String] {
+        (1...100).map { "Line \($0) — scroll the wheel to move past me." }
+    }
+
+    /// A swallow-everything single-selection binding. List
+    /// currently requires a selection binding; this one accepts
+    /// any value, ignores it, and always reports `nil`, giving
+    /// the visual effect of a list with no live selection.
+    private var noopSelection: Binding<String?> {
+        Binding<String?>(get: { nil }, set: { _ in })
     }
 }
