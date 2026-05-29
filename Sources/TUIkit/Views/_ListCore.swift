@@ -528,13 +528,46 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             } else if isFocused {
                 return palette.focusBackground
             } else if isSelected {
+                // Selected row while the list itself doesn't have
+                // focus. Controlled by the
+                // `unfocusedSelectionVisibility` environment value
+                // (default `.automatic` → visible). Setting
+                // `.hidden` suppresses the desaturated highlight
+                // and falls through to the alternating-row /
+                // no-background path — useful for transient lists
+                // (pop-up pickers, quick-pick palettes) where the
+                // ambient highlight is more noise than signal.
+                if context.environment.unfocusedSelectionVisibility == .hidden {
+                    return alternatingBackgroundIfAny(
+                        sectionContentIndex: sectionContentIndex,
+                        style: style,
+                        palette: palette
+                    )
+                }
                 return palette.accent.opacity(ViewConstants.selectedBackground)
-            } else if style.alternatingRowColors && sectionContentIndex.isMultiple(of: 2) {
-                return palette.accent.opacity(ViewConstants.alternatingRowBackground)
             } else {
-                return nil
+                return alternatingBackgroundIfAny(
+                    sectionContentIndex: sectionContentIndex,
+                    style: style,
+                    palette: palette
+                )
             }
         }
+    }
+
+    /// Returns the alternating-row tint when this row qualifies
+    /// for it, or nil otherwise. Extracted so the unfocused-
+    /// selection-hidden path and the unselected-row path can both
+    /// fall back to it without duplicating the condition.
+    private func alternatingBackgroundIfAny(
+        sectionContentIndex: Int,
+        style: any ListStyle,
+        palette: any Palette
+    ) -> Color? {
+        if style.alternatingRowColors && sectionContentIndex.isMultiple(of: 2) {
+            return palette.accent.opacity(ViewConstants.alternatingRowBackground)
+        }
+        return nil
     }
 
     /// Renders a line with a right-aligned badge.

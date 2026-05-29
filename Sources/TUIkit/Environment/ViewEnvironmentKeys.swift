@@ -60,3 +60,34 @@ extension EnvironmentValues {
         set { self[SelectionDisabledKey.self] = newValue }
     }
 }
+
+// MARK: - Unfocused Selection Visibility Environment Key
+
+/// Environment key for unfocused-selection-visibility configuration.
+private struct UnfocusedSelectionVisibilityKey: EnvironmentKey {
+    static let defaultValue: Visibility = .automatic
+}
+
+extension EnvironmentValues {
+    /// Whether a List or Table renders its selection highlight
+    /// when the list itself does not have focus.
+    ///
+    /// - `.automatic` (default): resolves to visible — the
+    ///   selected row is rendered with a desaturated accent
+    ///   background while the list is unfocused, matching
+    ///   desktop list-view convention (Finder, Explorer, etc.).
+    /// - `.visible`: same as `.automatic` for now. Reserved for
+    ///   future per-style behaviour.
+    /// - `.hidden`: the selected row blends in with non-selected
+    ///   rows while the list is unfocused. The selection binding
+    ///   is unaffected; only the visual indicator is suppressed.
+    ///   Useful when the list is a transient picker rather than a
+    ///   persistent surface where the user expects to see what
+    ///   they have selected at all times.
+    ///
+    /// Set via ``View/unfocusedSelectionVisibility(_:)``.
+    var unfocusedSelectionVisibility: Visibility {
+        get { self[UnfocusedSelectionVisibilityKey.self] }
+        set { self[UnfocusedSelectionVisibilityKey.self] = newValue }
+    }
+}

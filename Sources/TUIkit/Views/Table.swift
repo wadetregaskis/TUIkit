@@ -520,6 +520,15 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         } else if isFocused {
             return (" ", palette.foregroundTertiary, palette.focusBackground)
         } else if isSelected {
+            // Selected row while the table itself doesn't have
+            // focus. Same model as _ListCore: the
+            // `unfocusedSelectionVisibility` env value controls
+            // whether the indicator is shown. `.hidden` collapses
+            // the row's visual state into the same as an
+            // unselected unfocused row.
+            if context.environment.unfocusedSelectionVisibility == .hidden {
+                return (" ", palette.foregroundTertiary, nil)
+            }
             return ("●", palette.accent.opacity(ViewConstants.selectionIndicator), nil)
         } else {
             return (" ", palette.foregroundTertiary, nil)

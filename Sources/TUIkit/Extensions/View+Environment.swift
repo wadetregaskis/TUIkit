@@ -129,4 +129,36 @@ extension View {
     public func listStyle(_ style: any ListStyle) -> some View {
         environment(\.listStyle, style)
     }
+
+    /// Controls whether a List or Table renders its selection
+    /// highlight when the list itself does not have focus.
+    ///
+    /// Default — and the `.automatic` resolution — is to show the
+    /// selected row with a desaturated accent background while
+    /// the list is unfocused, matching desktop list-view
+    /// convention. Use `.hidden` on transient surfaces (a pop-up
+    /// picker, a quick-pick palette) where the unfocused
+    /// highlight is more noise than signal.
+    ///
+    /// # Example
+    ///
+    /// ```swift
+    /// List(items, selection: $selection) {
+    ///     ForEach(items) { item in Text(item.name) }
+    /// }
+    /// .unfocusedSelectionVisibility(.hidden)
+    /// ```
+    ///
+    /// The selection binding itself is unaffected; only the
+    /// visual indicator is suppressed when the list lacks focus.
+    /// Cascades through the environment so it can be set on a
+    /// parent (e.g. a NavigationSplitView column) and inherited
+    /// by every selection-bearing descendant.
+    ///
+    /// - Parameter visibility: The desired visibility.
+    /// - Returns: A view with the unfocused-selection visibility
+    ///   set on its environment.
+    public func unfocusedSelectionVisibility(_ visibility: Visibility) -> some View {
+        environment(\.unfocusedSelectionVisibility, visibility)
+    }
 }

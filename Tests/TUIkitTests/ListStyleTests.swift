@@ -121,6 +121,23 @@ struct ListStyleTests {
         #expect(env.listStyle.showsBorder)
     }
 
+    // MARK: - Unfocused Selection Visibility Environment Tests
+
+    @Test("Unfocused selection visibility defaults to .automatic")
+    func testUnfocusedSelectionVisibilityDefault() {
+        let env = EnvironmentValues()
+        #expect(env.unfocusedSelectionVisibility == .automatic)
+    }
+
+    @Test("Unfocused selection visibility can be changed")
+    func testUnfocusedSelectionVisibilityChange() {
+        var env = EnvironmentValues()
+        env.unfocusedSelectionVisibility = .hidden
+        #expect(env.unfocusedSelectionVisibility == .hidden)
+        env.unfocusedSelectionVisibility = .visible
+        #expect(env.unfocusedSelectionVisibility == .visible)
+    }
+
     // MARK: - Grouping Style Tests
 
     @Test("Plain grouping style value")
