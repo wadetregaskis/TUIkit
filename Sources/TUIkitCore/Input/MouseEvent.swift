@@ -161,7 +161,6 @@ extension MouseEvent {
     ///   leading `ESC [`.
     /// - Returns: A parsed event, or `nil` if the bytes are malformed
     ///   or not an SGR mouse report.
-    // swiftlint:disable:next cyclomatic_complexity
     public static func parseSGR(_ bytes: [UInt8]) -> MouseEvent? {
         // Minimum well-formed sequence: ESC [ < N ; N ; N M
         guard bytes.count >= 9 else { return nil }
@@ -184,45 +183,10 @@ extension MouseEvent {
             return nil
         }
 
-        // Decode the packed button code into its component bits.
-        let shift = (buttonCode & 4) != 0
-        let meta = (buttonCode & 8) != 0
-        let ctrl = (buttonCode & 16) != 0
-        let isMotion = (buttonCode & 32) != 0
-        let isWheel = (buttonCode & 64) != 0
-        let buttonNumber = buttonCode & 3
-        let horizontalWheel = (buttonCode & 128) != 0  // some terms use bit 7
-
-        let button: MouseButton
-        let phase: MousePhase
-
-        if isWheel {
-            phase = .scrolled
-            if horizontalWheel {
-                button = (buttonNumber == 0) ? .scrollLeft : .scrollRight
-            } else {
-                button = (buttonNumber == 0) ? .scrollUp : .scrollDown
-            }
-        } else if isMotion {
-            switch buttonNumber {
-            case 0: button = .left
-            case 1: button = .middle
-            case 2: button = .right
-            default: button = .none
-            }
-            phase = (button == .none) ? .moved : .dragged
-        } else {
-            switch buttonNumber {
-            case 0: button = .left
-            case 1: button = .middle
-            case 2: button = .right
-            default:
-                // 3 is reserved (used for legacy mode releases); SGR
-                // releases are signalled by the lowercase 'm' terminator
-                // instead, so we should never see button 3 here.
-                return nil
-            }
-            phase = isRelease ? .released : .pressed
+        guard let (button, phase) = decodeSGRButton(
+            buttonCode: buttonCode, isRelease: isRelease
+        ) else {
+            return nil
         }
 
         return MouseEvent(
@@ -230,10 +194,77 @@ extension MouseEvent {
             phase: phase,
             x: max(0, column - 1),
             y: max(0, row - 1),
-            shift: shift,
-            ctrl: ctrl,
-            meta: meta
+            shift: (buttonCode & 4) != 0,
+            ctrl: (buttonCode & 16) != 0,
+            meta: (buttonCode & 8) != 0
         )
+    }
+
+    /// Decodes the packed SGR button code into the
+    /// `(MouseButton, MousePhase)` pair it describes. Returns
+    /// `nil` for codes that don't correspond to any TUIkit
+    /// event shape — notably button index 3 in a non-release
+    /// position, which is reserved for legacy-mode releases and
+    /// shouldn't appear in SGR reports.
+    private static func decodeSGRButton(
+        buttonCode: Int, isRelease: Bool
+    ) -> (MouseButton, MousePhase)? {
+        let isMotion = (buttonCode & 32) != 0
+        let isWheel = (buttonCode & 64) != 0
+        let horizontalWheel = (buttonCode & 128) != 0  // some terms use bit 7
+        let buttonNumber = buttonCode & 3
+
+        if isWheel {
+            return (decodeSGRWheel(
+                buttonNumber: buttonNumber,
+                horizontal: horizontalWheel
+            ), .scrolled)
+        }
+        if isMotion {
+            let button = decodeSGRMotionButton(buttonNumber: buttonNumber)
+            return (button, button == .none ? .moved : .dragged)
+        }
+        guard let button = decodeSGRClickButton(buttonNumber: buttonNumber)
+        else {
+            return nil
+        }
+        return (button, isRelease ? .released : .pressed)
+    }
+
+    /// Wheel events split four ways: vertical / horizontal, up
+    /// / down (or left / right).
+    private static func decodeSGRWheel(
+        buttonNumber: Int, horizontal: Bool
+    ) -> MouseButton {
+        if horizontal {
+            return buttonNumber == 0 ? .scrollLeft : .scrollRight
+        }
+        return buttonNumber == 0 ? .scrollUp : .scrollDown
+    }
+
+    /// Bare-cursor motion or drag — same button-index mapping as
+    /// a click but `.none` for "no button held" so the dispatcher
+    /// can distinguish `.moved` from `.dragged`.
+    private static func decodeSGRMotionButton(buttonNumber: Int) -> MouseButton {
+        switch buttonNumber {
+        case 0: return .left
+        case 1: return .middle
+        case 2: return .right
+        default: return .none
+        }
+    }
+
+    /// Click events: button index 0 / 1 / 2 map to left / middle
+    /// / right. Index 3 is reserved (used for legacy-mode
+    /// releases); SGR releases are signalled by the `m`
+    /// terminator instead, so we should never see it here.
+    private static func decodeSGRClickButton(buttonNumber: Int) -> MouseButton? {
+        switch buttonNumber {
+        case 0: return .left
+        case 1: return .middle
+        case 2: return .right
+        default: return nil
+        }
     }
 
     /// Parses one X10-style ("legacy") mouse report into a `MouseEvent`.
