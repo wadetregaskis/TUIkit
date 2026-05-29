@@ -261,6 +261,12 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         )
     }
 
+    private enum StateIndex {
+        static let handler = 0
+        static let focusID = 1
+        static let isHovered = 2
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
@@ -273,12 +279,13 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "textfield",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
 
         // Get or create persistent handler from state storage.
         // The handler maintains cursor position across renders.
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)  // handler
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<TextFieldHandler> = stateStorage.storage(
             for: handlerKey,
             default: TextFieldHandler(
@@ -298,6 +305,15 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
 
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+
+        // Hover state persists across renders; the dispatcher
+        // flips it on .entered / .exited events synthesised from
+        // motion. Disabled fields suppress the visual effect.
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.isHovered)
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
 
         // Diagnostic (TUIKIT_DEBUG_FOCUS=1): on every render, log
         // what *this* field's binding is reading, what focus it
@@ -337,26 +353,48 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             contentWidth: contentWidth
         )
 
-        // Wrap with half-block caps
-        let capColor = palette.accent.opacity(ViewConstants.focusBorderDim)
+        // Wrap with half-block caps. Hover bumps the cap tint so
+        // the affordance reads as "I'm clickable" without
+        // mimicking the focused look (focused fields get their
+        // signal from the cursor blink and the bold cap colour
+        // elsewhere — TextField's focus styling comes from the
+        // text renderer, not the caps).
+        let capOpacity = isHovered
+            ? ViewConstants.hoverBackground
+            : ViewConstants.focusBorderDim
+        let capColor = palette.accent.opacity(capOpacity)
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
         var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
 
-        // Mouse: a click anywhere on the field grants it focus. We
-        // don't currently move the cursor to the clicked column —
-        // that's a follow-up; first-priority is just being able to
-        // pick which field is active by clicking it.
+        // Mouse: a click anywhere on the field grants it focus.
+        // The same hit-test region drives the hover state
+        // machine — .entered / .exited (synthesised by the
+        // dispatcher) flip the hover StateBox. We don't
+        // currently move the cursor to the clicked column —
+        // that's a follow-up; first-priority is just being able
+        // to pick which field is active by clicking it.
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            // Ask the dispatcher to enable motion reporting this
+            // frame so the hover machine sees .moved events.
+            mouseDispatcher.requestFeature(.motion)
+
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
+            let captureHoverBox = hoverBox
             let mouseHandlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed: return true
-                case .released:
+                case .entered:
+                    captureHoverBox.value = true
+                    return true
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     // Diagnostic (TUIKIT_DEBUG_FOCUS=1): log the
                     // click and what the focus manager looks like
                     // at the moment we ask it to switch focus.

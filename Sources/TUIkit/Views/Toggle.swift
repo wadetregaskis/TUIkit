@@ -241,14 +241,20 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         fatalError("_ToggleCore renders via Renderable")
     }
 
+    private enum StateIndex {
+        static let focusID = 0
+        static let isHovered = 1
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
+        let stateStorage = context.environment.stateStorage!
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "toggle",
-            propertyIndex: 0  // focusID
+            propertyIndex: StateIndex.focusID
         )
         let binding = isOn
         let handler = ActionHandler(
@@ -259,6 +265,16 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         let isOnValue = isOn.wrappedValue
+
+        // Hover state — flipped by the dispatcher on .entered /
+        // .exited events synthesised from motion. Suppressed
+        // when focused (focus is the more emphatic affordance)
+        // and when disabled.
+        let hoverKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.isHovered)
+        let hoverBox: StateBox<Bool> = stateStorage.storage(
+            for: hoverKey, default: false)
+        let isHovered = !isDisabled && !isFocused && hoverBox.value
 
         // Render the label, keeping its colour styling. Stripping the ANSI
         // here left the label with no foreground colour at all, so it drew
@@ -284,6 +300,10 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         } else if isFocused {
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
             bracketColor = Color.lerp(dimAccent, palette.accent, phase: context.environment.pulsePhase)
+        } else if isHovered {
+            // Hover bumps the brackets to a partial accent tint
+            // so the affordance reads without the focused pulse.
+            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground)
         } else {
             bracketColor = palette.foreground
         }
@@ -312,20 +332,30 @@ private struct _ToggleCore<Label: View>: View, Renderable {
 
         var buffer = FrameBuffer(lines: [combinedLine])
 
-        // Hit-test region: a left-button release anywhere on the toggle
-        // row flips its value, mirroring how Space / Enter activate it.
+        // Hit-test region: a left-button release anywhere on the
+        // toggle row flips its value, mirroring how Space / Enter
+        // activate it. The same region drives the hover state
+        // machine — .entered / .exited (synthesised by the
+        // dispatcher) flip the hover StateBox.
         if !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
+            mouseDispatcher.requestFeature(.motion)
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
             let toggleBinding = isOn
+            let captureHoverBox = hoverBox
             let handlerID = mouseDispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed:
+                case .entered:
+                    captureHoverBox.value = true
                     return true
-                case .released:
+                case .exited:
+                    captureHoverBox.value = false
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     focusManager.focus(id: captureFocusID)
                     toggleBinding.wrappedValue.toggle()
                     return true
