@@ -291,6 +291,16 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
             let captureFocusID = persistedFocusID
             let captureItems = items
             let captureSelection = selection
+            // Tag only the currently-focused item's region with
+            // the group's focus ID so ScrollView's snap-to-focus
+            // anchors on the right radio button — not whichever
+            // one happens to come first. Arrow-key navigation
+            // changes handler.focusedIndex; the next render
+            // moves the tag to the new item, and the snap
+            // follows. Items that aren't currently focused get
+            // a nil focusID — the surrounding ScrollView's
+            // hit-test region falls through cleanly because
+            // mismatched IDs are skipped.
             for (index, region) in itemRegions.enumerated() {
                 let mouseHandlerID = mouseDispatcher.register { event in
                     guard event.button == .left else { return false }
@@ -310,7 +320,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
                         offsetY: region.y,
                         width: region.width,
                         height: 1,
-                        handlerID: mouseHandlerID
+                        handlerID: mouseHandlerID,
+                        focusID: index == handler.focusedIndex ? captureFocusID : nil
                     )
                 )
             }
