@@ -224,6 +224,15 @@ extension TextField {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_TextFieldCore``.
+/// Lifted out of the generic struct because Swift does not
+/// allow static stored properties in generic types.
+private enum TextFieldStateIndex {
+    static let handler = 0
+    static let focusID = 1
+    static let isHovered = 2
+}
+
 /// Internal view that handles the actual rendering of TextField.
 private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     let label: Label
@@ -261,11 +270,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         )
     }
 
-    private enum StateIndex {
-        static let handler = 0
-        static let focusID = 1
-        static let isHovered = 2
-    }
+    private typealias StateIndex = TextFieldStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!

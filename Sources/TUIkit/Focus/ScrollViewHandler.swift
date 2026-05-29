@@ -28,7 +28,14 @@
 ///
 /// The handler does not track selection — there is no
 /// "currently focused row" concept in a generic scroll view.
-@MainActor
+///
+/// > Note: Like ``ItemListHandler`` and ``TextFieldHandler``,
+///   `ScrollViewHandler` isn't marked `@MainActor`. The
+///   framework guarantees handlers are only touched from the
+///   render loop / event dispatch (both `@MainActor`), so the
+///   nonisolated class conforms cleanly to the nonisolated
+///   `Focusable` protocol without crossing an isolation
+///   boundary.
 public final class ScrollViewHandler: Focusable {
 
     /// The unique focus identifier for this scroll view.

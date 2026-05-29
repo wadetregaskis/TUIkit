@@ -230,6 +230,14 @@ extension Toggle {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_ToggleCore``. Lifted
+/// out of the generic struct because Swift does not allow
+/// static stored properties in generic types.
+private enum ToggleStateIndex {
+    static let focusID = 0
+    static let isHovered = 1
+}
+
 /// Internal view that handles the actual rendering of Toggle.
 private struct _ToggleCore<Label: View>: View, Renderable {
     let isOn: Binding<Bool>
@@ -241,10 +249,7 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         fatalError("_ToggleCore renders via Renderable")
     }
 
-    private enum StateIndex {
-        static let focusID = 0
-        static let isHovered = 1
-    }
+    private typealias StateIndex = ToggleStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette

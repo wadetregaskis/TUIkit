@@ -241,6 +241,15 @@ extension Slider {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_SliderCore``. Lifted
+/// out of the generic struct because Swift does not allow
+/// static stored properties in generic types.
+private enum SliderStateIndex {
+    static let handler = 0
+    static let focusID = 1
+    static let isHovered = 2
+}
+
 /// Internal view that handles the actual rendering of Slider.
 private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Layoutable {
     let value: Binding<Double>
@@ -283,11 +292,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
     }
 
-    private enum StateIndex {
-        static let handler = 0
-        static let focusID = 1
-        static let isHovered = 2
-    }
+    private typealias StateIndex = SliderStateIndex
 
     // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

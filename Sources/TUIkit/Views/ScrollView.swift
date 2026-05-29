@@ -142,6 +142,14 @@ extension ScrollView: @preconcurrency Equatable where Content: Equatable {
 
 // MARK: - _ScrollViewCore (internal rendering)
 
+/// StateStorage property indices for ``_ScrollViewCore``.
+/// Lifted out of the generic struct because Swift does not
+/// allow static stored properties in generic types.
+private enum ScrollViewStateIndex {
+    static let handler = 0
+    static let focusID = 1
+}
+
 /// Internal core that performs the windowing, hit-testing, and
 /// keyboard wiring for ``ScrollView``.
 private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
@@ -154,12 +162,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     var body: Never { fatalError("_ScrollViewCore renders via Renderable") }
 
-    /// StateStorage property indices for the handler and the
-    /// persisted focus ID.
-    private enum StateIndex {
-        static let handler = 0
-        static let focusID = 1
-    }
+    private typealias StateIndex = ScrollViewStateIndex
 
     // MARK: Layout
 

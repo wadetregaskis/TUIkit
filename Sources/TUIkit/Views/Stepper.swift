@@ -286,6 +286,15 @@ extension Stepper {
 
 // MARK: - Internal Core View
 
+/// StateStorage property indices for ``_StepperCore``. Lifted
+/// out of the generic struct because Swift does not allow
+/// static stored properties in generic types.
+private enum StepperStateIndex {
+    static let handler = 0
+    static let focusID = 1
+    static let isHovered = 2
+}
+
 /// Internal view that handles the actual rendering of Stepper.
 private struct _StepperCore<Label: View>: View, Renderable {
     let value: Binding<Int>
@@ -302,11 +311,7 @@ private struct _StepperCore<Label: View>: View, Renderable {
         fatalError("_StepperCore renders via Renderable")
     }
 
-    private enum StateIndex {
-        static let handler = 0
-        static let focusID = 1
-        static let isHovered = 2
-    }
+    private typealias StateIndex = StepperStateIndex
 
     // swiftlint:disable:next function_body_length
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
