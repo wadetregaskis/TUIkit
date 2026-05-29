@@ -42,7 +42,7 @@ enum ListTableBenchmarks {
     /// dominated by the visible-row rendering, not the whole-
     /// list bookkeeping.
     private static func registerListBenchmarks() {
-        Benchmark("list/50 rows, single-select") { benchmark async in
+        Benchmark("list/50 rows, single-select", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let items = (0..<50).map { "Row \($0)" }
@@ -56,7 +56,7 @@ enum ListTableBenchmarks {
             }
         }
 
-        Benchmark("list/500 rows, single-select") { benchmark async in
+        Benchmark("list/500 rows, single-select", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let items = (0..<500).map { "Row \($0)" }
@@ -74,7 +74,7 @@ enum ListTableBenchmarks {
         /// where lazy rendering matters most; regressions
         /// here would surface as visible frame-rate drops in
         /// the example app.
-        Benchmark("list/1900 rows, single-select (emoji-list-sized)") { benchmark async in
+        Benchmark("list/1900 rows, single-select (emoji-list-sized)", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let items = (0..<1900).map { "Row \($0)" }
@@ -88,7 +88,7 @@ enum ListTableBenchmarks {
             }
         }
 
-        Benchmark("list/50 rows, selectionless") { benchmark async in
+        Benchmark("list/50 rows, selectionless", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let items = (0..<50).map { "Row \($0)" }
@@ -117,7 +117,7 @@ enum ListTableBenchmarks {
     }
 
     private static func registerTableBenchmarks() {
-        Benchmark("table/200 rows × 3 columns") { benchmark async in
+        Benchmark("table/200 rows × 3 columns", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Table(
@@ -143,7 +143,7 @@ enum ListTableBenchmarks {
     /// 1000-row case so the number reflects the windowed-
     /// render cost, not first-frame setup.
     private static func registerScrolledListBenchmarks() {
-        Benchmark("list/1000 rows, mid-scroll") { benchmark async in
+        Benchmark("list/1000 rows, mid-scroll", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let items = (0..<1000).map { "Row \($0)" }

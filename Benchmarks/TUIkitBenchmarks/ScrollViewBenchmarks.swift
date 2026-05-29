@@ -27,7 +27,7 @@ enum ScrollViewBenchmarks {
     // MARK: - Long text
 
     private static func registerLongTextBenchmarks() {
-        Benchmark("scrollview/100 Text rows") { benchmark async in
+        Benchmark("scrollview/100 Text rows", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let lines = (0..<100).map { "Row \($0)" }
@@ -44,7 +44,7 @@ enum ScrollViewBenchmarks {
             }
         }
 
-        Benchmark("scrollview/1000 Text rows") { benchmark async in
+        Benchmark("scrollview/1000 Text rows", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let lines = (0..<1000).map { "Row \($0)" }
@@ -61,7 +61,7 @@ enum ScrollViewBenchmarks {
             }
         }
 
-        Benchmark("scrollview/100 rows, indicators off") { benchmark async in
+        Benchmark("scrollview/100 rows, indicators off", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let lines = (0..<100).map { "Row \($0)" }
@@ -86,7 +86,7 @@ enum ScrollViewBenchmarks {
     /// filtering path, which has to scan every region in the
     /// content buffer and decide whether to keep it.
     private static func registerMixedContentBenchmarks() {
-        Benchmark("scrollview/Mixed-widget content") { benchmark async in
+        Benchmark("scrollview/Mixed-widget content", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = ScrollView {

@@ -22,14 +22,18 @@ import TUIkit
 ///     overhead — modifier infrastructure should be free at
 ///     idle.
 ///
-/// All benchmark bodies hop to `MainActor` via
-/// `await MainActor.run { … }` because every view-construction
-/// API in TUIkit is `@MainActor`-isolated. The benchmark
-/// library runs each closure in its own subprocess on a
-/// worker thread, so `MainActor.assumeIsolated` would fail
-/// the precondition at runtime — only an actual main-actor
-/// hop works. Each closure is declared `async` so the
-/// hop is permitted.
+/// **All view-using benchmarks in this file are skipped
+/// by default.** TUIkit's `View` API is `@MainActor`-isolated
+/// and package-benchmark blocks the main thread on a
+/// `DispatchSemaphore` while async benchmark closures run.
+/// `await MainActor.run` from inside a benchmark closure
+/// therefore deadlocks against the blocked main thread →
+/// SIGTRAP. The skip is wired via
+/// ``viewBenchmarkConfiguration()`` (which sets
+/// `Configuration.skip = true` when
+/// `TUIKIT_BENCH_RUN_VIEW` is unset). Task #31 — moving
+/// the render pipeline off MainActor onto a dedicated
+/// global actor — unblocks these.
 enum LayoutBenchmarks {
 
     static func register() {
@@ -42,7 +46,7 @@ enum LayoutBenchmarks {
     // MARK: - Stack benchmarks
 
     private static func registerStackBenchmarks() {
-        Benchmark("layout/VStack — 10 Text children") { benchmark async in
+        Benchmark("layout/VStack — 10 Text children", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = VStack {
@@ -55,7 +59,7 @@ enum LayoutBenchmarks {
             }
         }
 
-        Benchmark("layout/HStack — 10 Text children") { benchmark async in
+        Benchmark("layout/HStack — 10 Text children", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = HStack {
@@ -68,7 +72,7 @@ enum LayoutBenchmarks {
             }
         }
 
-        Benchmark("layout/VStack — 100 Text children") { benchmark async in
+        Benchmark("layout/VStack — 100 Text children", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = VStack {
@@ -89,7 +93,7 @@ enum LayoutBenchmarks {
     /// of mixed-content rows, a footer — and it's the case
     /// where layout cost compounds.
     private static func registerNestedStackBenchmarks() {
-        Benchmark("layout/VStack(HStack(Text x 3)) — 50 rows") { benchmark async in
+        Benchmark("layout/VStack(HStack(Text x 3)) — 50 rows", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = VStack {
@@ -116,7 +120,7 @@ enum LayoutBenchmarks {
     /// the 'modifier-heavy' version stacks the same modifiers
     /// real apps reach for: bold, padding, border, frame.
     private static func registerModifierBenchmarks() {
-        Benchmark("layout/Modifier chain — bare Text") { benchmark async in
+        Benchmark("layout/Modifier chain — bare Text", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Text("Modifier baseline")
@@ -127,7 +131,7 @@ enum LayoutBenchmarks {
             }
         }
 
-        Benchmark("layout/Modifier chain — 4 modifiers") { benchmark async in
+        Benchmark("layout/Modifier chain — 4 modifiers", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Text("Modifier baseline")
@@ -150,7 +154,7 @@ enum LayoutBenchmarks {
     /// benchmark below confirms the lazy variant stays bounded
     /// so a regression gets a stack trace.
     private static func registerLazyStackBenchmarks() {
-        Benchmark("layout/LazyVStack — 500 Text children") { benchmark async in
+        Benchmark("layout/LazyVStack — 500 Text children", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = LazyVStack {

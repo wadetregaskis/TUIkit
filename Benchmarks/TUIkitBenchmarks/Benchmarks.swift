@@ -5,7 +5,34 @@
 //  License: MIT
 
 import Benchmark
+import Foundation
 import TUIkit
+
+/// `true` when view-using benchmarks should be skipped.
+/// Defaults to `true` because TUIkit's `View` API is
+/// `@MainActor`-isolated and package-benchmark blocks the
+/// main thread on a `DispatchSemaphore` while async
+/// benchmark closures run. Calling `await MainActor.run`
+/// from those closures deadlocks against the blocked main
+/// thread → SIGTRAP. Set `TUIKIT_BENCH_RUN_VIEW=1` to
+/// attempt the view benchmarks anyway (they will crash
+/// until #31 — moving TUIkit's render pipeline off
+/// MainActor onto a dedicated global actor — lands).
+let skipViewBenchmarks =
+    ProcessInfo.processInfo.environment["TUIKIT_BENCH_RUN_VIEW"] != "1"
+
+/// Configuration helper for view-using benchmarks. Stamps
+/// the default config with `skip: skipViewBenchmarks` so
+/// the suite can run cleanly under the current
+/// MainActor-deadlock constraint. `nonisolated(unsafe)` is
+/// safe here: the configuration is built once during
+/// benchmark registration on the main thread before any
+/// async benchmark closures run.
+func viewBenchmarkConfiguration() -> Benchmark.Configuration {
+    var config = Benchmark.defaultConfiguration
+    config.skip = skipViewBenchmarks
+    return config
+}
 
 /// Top-level benchmarks closure. The configuration value
 /// lives inside the closure (rather than a top-level `let`)
@@ -37,7 +64,14 @@ let benchmarks: @Sendable () -> Void = {
             .throughput,
         ],
         timeUnits: .microseconds,
-        maxDuration: .seconds(1)
+        // 1 s per benchmark when run via the Plugin from
+        // macOS. Override with TUIKIT_BENCH_MAX_DURATION_MS
+        // when running under a tighter wallclock budget (CI
+        // smoke tests, sandboxed environments where 24
+        // benchmarks × 1 s is too long).
+        maxDuration: .milliseconds(
+            Int(ProcessInfo.processInfo.environment["TUIKIT_BENCH_MAX_DURATION_MS"] ?? "1000") ?? 1000
+        )
     )
 
     // Each suite lives in its own file (LayoutBenchmarks,

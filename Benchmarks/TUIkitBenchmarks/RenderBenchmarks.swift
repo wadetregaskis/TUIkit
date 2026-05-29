@@ -30,7 +30,7 @@ enum RenderBenchmarks {
     /// overhead being added per frame (focus registration,
     /// hover state machine, dispatcher feature requests, etc.).
     private static func registerControlBenchmarks() {
-        Benchmark("render/Button (default style)") { benchmark async in
+        Benchmark("render/Button (default style)", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Button("Save") { /* no-op */ }
@@ -41,7 +41,7 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/TextField") { benchmark async in
+        Benchmark("render/TextField", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = TextField("Search", text: .constant("hello"))
@@ -52,7 +52,7 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Toggle") { benchmark async in
+        Benchmark("render/Toggle", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Toggle("Enable", isOn: .constant(true))
@@ -63,7 +63,7 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Slider") { benchmark async in
+        Benchmark("render/Slider", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Slider(value: .constant(0.5), in: 0...1, step: 0.01)
@@ -74,7 +74,7 @@ enum RenderBenchmarks {
             }
         }
 
-        Benchmark("render/Stepper") { benchmark async in
+        Benchmark("render/Stepper", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = Stepper("Quantity", value: .constant(5), in: 0...10)
@@ -94,7 +94,7 @@ enum RenderBenchmarks {
     /// the page-render hot path TUIkit apps spend most of
     /// their time in.
     private static func registerPageShapeBenchmarks() {
-        Benchmark("render/Mixed-form page") { benchmark async in
+        Benchmark("render/Mixed-form page", configuration: viewBenchmarkConfiguration()) { benchmark async in
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let view = VStack(alignment: .leading) {
