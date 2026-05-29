@@ -283,6 +283,24 @@ extension ItemListHandler {
         scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
     }
 
+    /// Clamps `scrollOffset` to the current valid range
+    /// `0...max(0, itemCount - viewportHeight)`.
+    ///
+    /// Used by `_ListCore` / `_TableCore` each render after
+    /// updating `itemCount` and `viewportHeight`, so that
+    /// shrinking the data set under an existing scroll
+    /// position (e.g. a search field narrowing the visible
+    /// items) gracefully snaps the viewport back to where
+    /// rows actually exist instead of pointing at empty
+    /// space past the end. Distinct from
+    /// ``ensureFocusedItemVisible()``: this is a bounds
+    /// check, not a focus-tracking clamp — `focusedIndex` is
+    /// not consulted and not changed.
+    func clampScrollOffset() {
+        let maxOffset = max(0, itemCount - viewportHeight)
+        scrollOffset = max(0, min(maxOffset, scrollOffset))
+    }
+
     /// Adjusts scroll offset to keep the focused item visible.
     func ensureFocusedItemVisible() {
         guard viewportHeight > 0 else { return }

@@ -596,4 +596,77 @@ struct ItemListHandlerScrollTests {
 
         #expect(handler.scrollOffset == 0, "nothing to scroll when content fits")
     }
+
+    // MARK: - clampScrollOffset() — bounds check after data changes
+
+    @Test("clampScrollOffset() snaps to maxOffset when itemCount drops")
+    func clampScrollOffsetSnapsWhenItemCountDrops() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.scrollOffset = 50
+
+        // Simulate a filter narrowing the list to 5 items.
+        // maxOffset becomes max(0, 5 - 10) = 0 — everything fits.
+        handler.itemCount = 5
+        handler.clampScrollOffset()
+
+        #expect(handler.scrollOffset == 0)
+    }
+
+    @Test("clampScrollOffset() snaps to new maxOffset when content still overflows")
+    func clampScrollOffsetSnapsToNewMax() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.scrollOffset = 80
+
+        // Filter narrows to 30 — still overflows, but the max is
+        // lower than the existing offset. Clamp should bring it to
+        // max(0, 30 - 10) = 20.
+        handler.itemCount = 30
+        handler.clampScrollOffset()
+
+        #expect(handler.scrollOffset == 20)
+    }
+
+    @Test("clampScrollOffset() leaves a still-valid scrollOffset alone")
+    func clampScrollOffsetLeavesValidOffsetAlone() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.scrollOffset = 5
+
+        handler.clampScrollOffset()
+
+        #expect(handler.scrollOffset == 5)
+    }
+
+    @Test("clampScrollOffset() does NOT change focusedIndex")
+    func clampScrollOffsetDoesNotChangeFocus() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.focusedIndex = 42
+        handler.scrollOffset = 80
+        handler.itemCount = 30  // shrinks below focusedIndex
+
+        handler.clampScrollOffset()
+
+        #expect(handler.scrollOffset == 20, "scrollOffset clamps")
+        #expect(handler.focusedIndex == 42,
+            "clampScrollOffset must NOT touch focusedIndex — that's ensureFocusedItemVisible's job")
+    }
 }

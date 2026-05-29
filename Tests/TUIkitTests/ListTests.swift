@@ -433,4 +433,72 @@ struct ListRenderingTests {
             "After wheel scrolling, Row 0 should be off-screen; got:\n\(afterText)"
         )
     }
+
+    @Test("Filtering content under a deep scrollOffset snaps the viewport back to the data")
+    func filterUnderScrollSnapsViewport() {
+        // Regression test for the bug where a List that had been
+        // scrolled deep (e.g. emoji-list at row 1500) and was then
+        // filtered down to a handful of items rendered as a tiny
+        // strip showing only the 'N more above' indicator — the
+        // viewport was pointing past the end of the filtered data
+        // because scrollOffset wasn't bounds-clamped against the
+        // new itemCount. The fix: _ListCore now calls
+        // handler.clampScrollOffset() each render after updating
+        // itemCount.
+        let context = createTestContext(width: 30, height: 12)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let allItems = (0..<200).map { "Row \($0)" }
+        let filteredItems = ["Row 5", "Row 6", "Row 7"]
+
+        // The same view shape both times — only the captured
+        // items array differs. Identity is derived from position
+        // in the parent body, so the same StateStorage slot
+        // (and therefore the same ItemListHandler with its
+        // existing scrollOffset) is reused across renders.
+        func makeView(_ items: [String]) -> some View {
+            List("Filterable", selection: .constant("Row 0")) {
+                ForEach(items, id: \.self) { Text($0) }
+            }
+            .frame(height: 6)
+        }
+
+        // First render: full set. Scroll deep so scrollOffset is
+        // way past the eventual filtered count.
+        let big = renderToBuffer(makeView(allItems), context: context)
+        dispatcher.setRegions(big.hitTestRegions)
+        guard let region = big.hitTestRegions.last else {
+            Issue.record("expected at least one hit-test region from List")
+            return
+        }
+        for _ in 0..<30 {
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .scrollDown,
+                    phase: .scrolled,
+                    x: region.offsetX + region.width / 2,
+                    y: region.offsetY + region.height / 2
+                )
+            )
+        }
+
+        // Now re-render with the filtered data. With the bug
+        // present, scrollOffset is unchanged (≥ 90) but the new
+        // itemCount is 3, so the viewport renders nothing but the
+        // 'N more above' indicator. With the fix, scrollOffset is
+        // clamped to max(0, 3 - viewportHeight) and the filtered
+        // rows render normally.
+        let small = renderToBuffer(makeView(filteredItems), context: context)
+        let text = small.lines.map(\.stripped).joined(separator: "\n")
+
+        #expect(
+            text.contains("Row 5"),
+            "After filter, Row 5 should be visible; got:\n\(text)"
+        )
+        #expect(
+            text.contains("Row 7"),
+            "After filter, Row 7 should be visible; got:\n\(text)"
+        )
+    }
 }

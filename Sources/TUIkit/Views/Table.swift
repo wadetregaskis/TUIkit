@@ -259,6 +259,11 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             handler.canBeFocused = !isDisabled
             handler.itemIDs = data.map { $0.id }
 
+            // Bounds-clamp scrollOffset against the new
+            // itemCount / viewportHeight; see the matching
+            // comment in _ListCore.
+            handler.clampScrollOffset()
+
             // Assign selection bindings directly (type-safe, no AnyHashable conversion)
             handler.singleSelection = singleSelection
             handler.multiSelection = multiSelection

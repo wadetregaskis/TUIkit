@@ -139,6 +139,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler.viewportHeight = viewportHeight
             handler.canBeFocused = !isDisabled
 
+            // Snap scrollOffset back inside the new valid
+            // range. This is a bounds check, not a focus-
+            // tracking clamp — `focusedIndex` stays put. If a
+            // search field or other filter shrinks itemCount
+            // out from under an existing scrollOffset, the
+            // viewport would otherwise point past the end and
+            // the rendered content would collapse to just the
+            // 'N more above' indicator. After clamping, the
+            // viewport sits at the last valid scroll position
+            // (or 0 if everything now fits), and the user sees
+            // the items.
+            handler.clampScrollOffset()
+
             // Build selectableIndices set and itemIDs from typed rows
             var selectableIndices = Set<Int>()
             var itemIDs: [SelectionValue?] = []
