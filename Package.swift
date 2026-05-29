@@ -31,6 +31,12 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.5.1"),
+        // swift-benchmark (ordo-one/package-benchmark): proper
+        // warmup / statistics / baseline tracking for the
+        // perf-sensitive code paths. The plugin is invoked via
+        // 'swift package benchmark'; see
+        // https://swiftpackageindex.com/ordo-one/package-benchmark
+        .package(url: "https://github.com/ordo-one/package-benchmark", from: "1.29.4"),
     ],
     targets: [
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────
@@ -70,6 +76,22 @@ let package = Package(
             name: "EmojiBenchmark",
             dependencies: ["TUIkitCore"],
             path: "Tools/EmojiBenchmark"
+        ),
+
+        // ── Benchmarks ──────────────────────────────────────────────────────────────────────────────────
+        // Driven by ordo-one/package-benchmark. Invoke via
+        // 'swift package benchmark' (full suite) or
+        // 'swift package benchmark run TUIkitBenchmarks <name>' (one).
+        .executableTarget(
+            name: "TUIkitBenchmarks",
+            dependencies: [
+                "TUIkit",
+                .product(name: "Benchmark", package: "package-benchmark"),
+            ],
+            path: "Benchmarks/TUIkitBenchmarks",
+            plugins: [
+                .plugin(name: "BenchmarkPlugin", package: "package-benchmark"),
+            ]
         ),
     ]
 )
