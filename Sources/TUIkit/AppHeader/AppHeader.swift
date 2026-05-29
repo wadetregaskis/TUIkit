@@ -46,6 +46,15 @@ extension AppHeader: Renderable {
         let styledDivider = ANSIRenderer.colorize(divider, foreground: palette.border)
         lines.append(styledDivider)
 
-        return FrameBuffer(lines: lines)
+        // Preserve any hit-test regions the header content
+        // emitted (e.g. a Button inside `.appHeader { ... }`).
+        // Without this, `FrameBuffer(lines:)` builds a fresh
+        // buffer with empty hitTestRegions and the regions
+        // disappear before they can be merged into the
+        // dispatcher's set in RenderLoop. Same class of bug
+        // as the status-bar one fixed in commit e5382a77.
+        var result = FrameBuffer(lines: lines)
+        result.hitTestRegions = contentBuffer.hitTestRegions
+        return result
     }
 }

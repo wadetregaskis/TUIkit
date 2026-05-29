@@ -284,19 +284,42 @@ extension RenderLoop {
                 buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight)
         }
 
-        // Build the status-bar buffer up front so we can merge
-        // its per-item hit-test regions into the dispatcher's
-        // region set before writing. The status bar lives below
-        // the content area in terminal-space; events arrive in
-        // content-area coordinates (the App input loop subtracts
-        // the header height), so the status bar's local
-        // coordinates need to be shifted down by `contentHeight`.
+        // Build the app-header and status-bar buffers up front
+        // so we can merge their hit-test regions into the
+        // dispatcher's region set before writing.
+        //
+        // Coordinate translation:
+        //   - The App input loop subtracts appHeader.height
+        //     from incoming events' y, so content-area
+        //     coordinates start at y = 0 and run to
+        //     y = contentHeight - 1.
+        //   - The app header sits ABOVE the content area in
+        //     terminal-space, so its events arrive with
+        //     negative y after translation. Regions emitted
+        //     inside the header therefore need offsetY
+        //     shifted by -appHeader.height.
+        //   - The status bar sits BELOW the content area in
+        //     terminal-space, so its events arrive with
+        //     y >= contentHeight. Status-bar regions need
+        //     offsetY shifted by +contentHeight.
+        let appHeaderBuffer: FrameBuffer? = appHeader.hasContent
+            ? buildAppHeaderBuffer(
+                terminalWidth: terminalWidth, environment: environment)
+            : nil
+
         let statusBarBuffer: FrameBuffer? = statusBar.hasItems
             ? buildStatusBarBuffer(
                 terminalWidth: terminalWidth, environment: environment)
             : nil
 
         var mergedRegions = buffer.hitTestRegions
+        if let appHeaderBuffer {
+            for region in appHeaderBuffer.hitTestRegions {
+                var shifted = region
+                shifted.offsetY -= appHeader.height
+                mergedRegions.append(shifted)
+            }
+        }
         if let statusBarBuffer {
             for region in statusBarBuffer.hitTestRegions {
                 var shifted = region
@@ -314,6 +337,7 @@ extension RenderLoop {
 
         writeFrame(
             buffer: buffer,
+            appHeaderBuffer: appHeaderBuffer,
             statusBarBuffer: statusBarBuffer,
             environment: environment,
             terminalWidth: terminalWidth,
@@ -425,6 +449,7 @@ extension RenderLoop {
     /// and status bar inside a single buffered frame (one `write()` syscall).
     fileprivate func writeFrame(
         buffer: FrameBuffer,
+        appHeaderBuffer: FrameBuffer?,
         statusBarBuffer: FrameBuffer?,
         environment: EnvironmentValues,
         terminalWidth: Int,
@@ -446,11 +471,11 @@ extension RenderLoop {
 
         terminal.beginFrame()
 
-        if appHeader.hasContent {
-            renderAppHeader(
+        if let appHeaderBuffer {
+            writeAppHeaderBuffer(
+                appHeaderBuffer,
                 atRow: 1,
                 terminalWidth: terminalWidth,
-                environment: environment,
                 bgCode: backgroundCodes.appHeader,
                 reset: reset
             )
@@ -586,15 +611,18 @@ extension RenderLoop {
         return (content, x, y)
     }
 
-    /// Renders the app header at the specified terminal row.
-    fileprivate func renderAppHeader(
-        atRow row: Int,
+    /// Builds the app-header buffer (with its hit-test regions
+    /// carried through from the user's `.appHeader { ... }`
+    /// content) and returns it. The caller is responsible for
+    /// merging the regions into the dispatcher's set — same
+    /// split as the status-bar build / write pair below, for
+    /// the same reason (regions emitted at render time would
+    /// otherwise be discarded before reaching the dispatcher).
+    fileprivate func buildAppHeaderBuffer(
         terminalWidth: Int,
-        environment: EnvironmentValues,
-        bgCode: String,
-        reset: String
-    ) {
-        guard let contentBuffer = appHeader.contentBuffer else { return }
+        environment: EnvironmentValues
+    ) -> FrameBuffer? {
+        guard let contentBuffer = appHeader.contentBuffer else { return nil }
 
         let headerView = AppHeader(contentBuffer: contentBuffer)
 
@@ -604,8 +632,19 @@ extension RenderLoop {
             environment: environment
         )
 
-        let buffer = renderToBuffer(headerView, context: context)
+        return renderToBuffer(headerView, context: context)
+    }
 
+    /// Writes a previously-built app-header buffer to the
+    /// terminal at the specified row. Companion to
+    /// ``buildAppHeaderBuffer(terminalWidth:environment:)``.
+    fileprivate func writeAppHeaderBuffer(
+        _ buffer: FrameBuffer,
+        atRow row: Int,
+        terminalWidth: Int,
+        bgCode: String,
+        reset: String
+    ) {
         let outputLines = diffWriter.buildOutputLines(
             buffer: buffer,
             terminalWidth: terminalWidth,
