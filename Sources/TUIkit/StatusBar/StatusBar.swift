@@ -203,11 +203,16 @@ private struct _StatusBarCore: View, Renderable {
         // Build item strings and capture their visible widths
         // so the layout pass can also report each item's column
         // range in the rendered line — used below to emit mouse
-        // hit-test regions for clickable items.
+        // hit-test regions for clickable items. The hovered item
+        // (set by the dispatcher's .entered / .exited events
+        // below) gets a bumped tint so the user has visual
+        // confirmation that an item is clickable.
+        let hoveredID = context.environment.statusBar.hoveredItemID
         let layouts = combinedItems.map { item -> ItemLayout in
             let display = renderItemString(
                 item: item,
-                escapeOverride: escapeOverride
+                escapeOverride: escapeOverride,
+                isHovered: item.id == hoveredID && itemHasAction(item)
             )
             return ItemLayout(
                 item: item,
@@ -286,10 +291,13 @@ private struct _StatusBarCore: View, Renderable {
 
     /// Renders a single item's `shortcut + " " + label` with the
     /// configured highlight / label colors and the escape-label
-    /// override.
+    /// override. When `isHovered` is true, the whole item is
+    /// underlined so the user has a clear visual confirmation
+    /// that they're over a clickable target.
     private func renderItemString(
         item: any StatusBarItemProtocol,
-        escapeOverride: String?
+        escapeOverride: String?,
+        isHovered: Bool
     ) -> String {
         let shortcutStyled = ANSIRenderer.render(
             item.shortcut,
@@ -297,6 +305,7 @@ private struct _StatusBarCore: View, Renderable {
                 var textStyle = TextStyle()
                 textStyle.foregroundColor = highlightColor
                 textStyle.isBold = true
+                textStyle.isUnderlined = isHovered
                 return textStyle
             }()
         )
@@ -317,6 +326,19 @@ private struct _StatusBarCore: View, Renderable {
                 with: {
                     var textStyle = TextStyle()
                     textStyle.foregroundColor = color
+                    textStyle.isUnderlined = isHovered
+                    return textStyle
+                }()
+            )
+        } else if isHovered {
+            // Plain label with hover — emit an underlined run
+            // so the visual cue is consistent with the styled-
+            // colour branch above.
+            labelStyled = ANSIRenderer.render(
+                " " + effectiveLabel,
+                with: {
+                    var textStyle = TextStyle()
+                    textStyle.isUnderlined = true
                     return textStyle
                 }()
             )
@@ -346,17 +368,37 @@ private struct _StatusBarCore: View, Renderable {
         else {
             return buffer
         }
+        // Per-frame motion request — the dispatcher only emits
+        // .entered / .exited transitions when motion tracking is
+        // active.
+        dispatcher.requestFeature(.motion)
+        let statusBarState = context.environment.statusBar
 
         var result = buffer
         for (layout, columnInLine) in zip(layouts, columns) {
             guard itemHasAction(layout.item) else { continue }
             let captureItem = layout.item
+            let captureItemID = layout.item.id
             let handlerID = dispatcher.register { event in
-                guard event.button == .left else { return false }
                 switch event.phase {
-                case .pressed:
+                case .entered:
+                    statusBarState.hoveredItemID = captureItemID
                     return true
-                case .released:
+                case .exited:
+                    // Only clear if we're the currently-hovered
+                    // item — another item's .entered may have
+                    // already overwritten the id by the time we
+                    // see our own .exited (the dispatcher fires
+                    // exit on the old region before enter on the
+                    // new, but a re-entry to the same item in a
+                    // single frame could race).
+                    if statusBarState.hoveredItemID == captureItemID {
+                        statusBarState.hoveredItemID = nil
+                    }
+                    return true
+                case .pressed where event.button == .left:
+                    return true
+                case .released where event.button == .left:
                     captureItem.execute()
                     return true
                 default:

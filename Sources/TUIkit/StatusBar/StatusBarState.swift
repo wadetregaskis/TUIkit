@@ -141,6 +141,16 @@ public final class StatusBarState: @unchecked Sendable {
     /// Clearing the modal (set to nil) restores the underlying item label.
     public var escapeLabelOverride: String?
 
+    /// The `id` of the status-bar item the mouse cursor is
+    /// currently hovering over, or `nil` if the cursor isn't on
+    /// any item.
+    ///
+    /// Flipped by ``_StatusBarCore``'s per-item mouse handler in
+    /// response to the dispatcher's synthetic `.entered` /
+    /// `.exited` events. The renderer reads it to apply a
+    /// hover-bumped tint on the matching item.
+    public var hoveredItemID: String?
+
     /// Creates a new status bar state.
     ///
     /// - Parameter appState: The app state instance for triggering re-renders.
