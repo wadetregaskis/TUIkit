@@ -136,6 +136,14 @@ public protocol StatusBarItemProtocol: Sendable {
     /// Default no-op so informational-only conformers don't need
     /// to implement it.
     func execute()
+
+    /// Whether this item should appear in the rendered status
+    /// bar. Items that bind a key purely for the keyboard
+    /// dispatch path (e.g. a Shift-variant of an existing
+    /// shortcut, surfaced visually as "c|C" by its sibling) can
+    /// return `false` to stay invisible while still firing on
+    /// the keyboard.
+    var displayInStatusBar: Bool { get }
 }
 
 // Default implementations
@@ -157,6 +165,9 @@ extension StatusBarItemProtocol {
     /// Default `execute()` is a no-op so informational-only
     /// conformers don't need to override.
     public func execute() {}
+
+    /// Default: items are shown in the status bar.
+    public var displayInStatusBar: Bool { true }
 }
 
 // MARK: - Status Bar Item
@@ -193,6 +204,12 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     /// The sort order controlling horizontal position in the status bar.
     public let order: StatusBarItemOrder
 
+    /// Whether this item should appear in the rendered status
+    /// bar. Hidden items still fire on their trigger key — used
+    /// to bind a Shift-variant of a visible shortcut without
+    /// adding a separate row to the bar.
+    public let displayInStatusBar: Bool
+
     /// The action to perform when the shortcut is triggered.
     private let action: (() -> Void)?
 
@@ -203,18 +220,25 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     ///   - label: A short description (one word).
     ///   - key: The key that triggers the action (derived from shortcut if not provided).
     ///   - order: The display order (default: `.default`).
+    ///   - displayInStatusBar: Whether the item is rendered in
+    ///     the status bar (default: `true`). Use `false` to bind
+    ///     a key without displaying a separate row — useful for
+    ///     Shift-variants whose display is already covered by a
+    ///     sibling item like `"c|C"`.
     ///   - action: The action to perform.
     public init(
         shortcut: String,
         label: String,
         key: Key? = nil,
         order: StatusBarItemOrder = .default,
+        displayInStatusBar: Bool = true,
         action: (() -> Void)? = nil
     ) {
         self.id = "\(shortcut)-\(label)"
         self.shortcut = shortcut
         self.label = label
         self.order = order
+        self.displayInStatusBar = displayInStatusBar
         self.action = action
 
         // Derive trigger key from shortcut if not explicitly provided
@@ -238,7 +262,9 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     ///   - label: A short description.
     ///   - order: The display order (default: `.default`).
     public init(shortcut: String, label: String, order: StatusBarItemOrder = .default) {
-        self.init(shortcut: shortcut, label: label, key: nil, order: order, action: nil)
+        self.init(
+            shortcut: shortcut, label: label, key: nil, order: order,
+            displayInStatusBar: true, action: nil)
     }
 
     /// Whether this item has an action to execute.

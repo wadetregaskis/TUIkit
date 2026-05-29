@@ -175,14 +175,20 @@ private struct _StatusBarCore: View, Renderable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Filter out items hidden from the status bar — they
+        // still participate in keyboard dispatch via StatusBar-
+        // State, but they don't contribute a visible row here.
+        let visibleUserItems = userItems.filter(\.displayInStatusBar)
+        let visibleSystemItems = systemItems.filter(\.displayInStatusBar)
+
         // Get shortcuts used by user items (for deduplication)
-        let userShortcuts = Set(userItems.map { $0.shortcut })
+        let userShortcuts = Set(visibleUserItems.map { $0.shortcut })
 
         // Filter out system items that are overridden by user items
-        let filteredSystemItems = systemItems.filter { !userShortcuts.contains($0.shortcut) }
+        let filteredSystemItems = visibleSystemItems.filter { !userShortcuts.contains($0.shortcut) }
 
         // Combine: sorted user items + filtered system items (fixed order)
-        let sortedUserItems = userItems.sorted { $0.order < $1.order }
+        let sortedUserItems = visibleUserItems.sorted { $0.order < $1.order }
         let combinedItems = sortedUserItems + filteredSystemItems
 
         guard !combinedItems.isEmpty else {

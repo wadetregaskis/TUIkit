@@ -67,14 +67,46 @@ struct ImageURLPage: View {
     }
 
     private var statusBarItems: [any StatusBarItemProtocol] {
-        [
+        let charSetCount = ImageDemoHelpers.charSets.count
+        let colorModeCount = ImageDemoHelpers.colorModes.count
+        return [
             StatusBarItem(shortcut: Shortcut.escape, label: "back"),
-            StatusBarItem(shortcut: "c", label: ImageDemoHelpers.charSetLabel(charSetIndex)) {
-                charSetIndex = (charSetIndex + 1) % ImageDemoHelpers.charSets.count
+            // c|C — lowercase cycles forward, uppercase cycles
+            // backward. The "C" item is hidden so the bar shows
+            // a single entry with the dual-key indicator.
+            StatusBarItem(
+                shortcut: "c|C",
+                label: ImageDemoHelpers.charSetLabel(charSetIndex),
+                key: .character("c")
+            ) {
+                charSetIndex = (charSetIndex + 1) % charSetCount
             },
-            StatusBarItem(shortcut: "m", label: ImageDemoHelpers.colorModeLabel(colorModeIndex)) {
-                colorModeIndex = (colorModeIndex + 1) % ImageDemoHelpers.colorModes.count
+            StatusBarItem(
+                shortcut: "C",
+                label: "",
+                key: .character("C"),
+                displayInStatusBar: false
+            ) {
+                charSetIndex = (charSetIndex - 1 + charSetCount) % charSetCount
             },
+            StatusBarItem(
+                shortcut: "m|M",
+                label: ImageDemoHelpers.colorModeLabel(colorModeIndex),
+                key: .character("m")
+            ) {
+                colorModeIndex = (colorModeIndex + 1) % colorModeCount
+            },
+            StatusBarItem(
+                shortcut: "M",
+                label: "",
+                key: .character("M"),
+                displayInStatusBar: false
+            ) {
+                colorModeIndex =
+                    (colorModeIndex - 1 + colorModeCount) % colorModeCount
+            },
+            // d is a binary toggle — a Shift variant would be a
+            // no-op, so no "D" partner.
             StatusBarItem(shortcut: "d", label: ditheringOn ? "dither:on" : "dither:off") {
                 ditheringOn.toggle()
             },
