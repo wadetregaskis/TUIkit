@@ -151,6 +151,17 @@ extension AppRunner {
         pulseTimer.start()
         cursorTimer.start()
 
+        // Wake the main loop the moment stdin has data,
+        // instead of always sleeping for ~24 ms regardless of
+        // input. The notifier wraps a DispatchSource on
+        // STDIN_FILENO; the main loop awaits its
+        // `waitForArrival(timeoutNanoseconds:)` in lieu of a
+        // bare `Task.sleep`. See StdinArrivalStream.swift for
+        // the why.
+        let stdinArrival = StdinArrivalNotifier()
+        stdinArrival.start()
+        defer { stdinArrival.stop() }
+
         // Initial render
         renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
 
@@ -248,12 +259,22 @@ extension AppRunner {
                 eventsProcessed += 1
             }
 
-            // Suspend ~24ms before the next frame. Unlike a blocking sleep,
-            // `Task.sleep` is a real suspension point: it releases the main
-            // actor, so work queued with `Task { @MainActor }`, `MainActor.run`,
-            // or `DispatchQueue.main` runs between frames instead of being
-            // starved until the app exits. Also caps the frame rate at ~42 FPS.
-            try? await Task.sleep(nanoseconds: 23_800_000)
+            // Wait for either:
+            //   - up to ~24 ms (the animation cadence, ~42 FPS), or
+            //   - stdin to have data (the moment the user types
+            //     or the terminal sends a mouse / focus report).
+            // Whichever fires first wakes the loop. The arrival
+            // path drops a keystroke's worth of latency: before
+            // this change, even a single keypress could sit in
+            // the kernel buffer for up to ~24 ms before the loop
+            // drained it.
+            //
+            // The notifier's wait is a real suspension point —
+            // it releases the main actor while we wait, so work
+            // queued via `Task { @MainActor }`, `MainActor.run`,
+            // or `DispatchQueue.main` runs between frames just
+            // as it did with the old bare `Task.sleep`.
+            await stdinArrival.waitForArrival(timeoutNanoseconds: 23_800_000)
         }
 
         // Stop pulse timer before cleanup
