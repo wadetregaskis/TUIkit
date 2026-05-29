@@ -252,15 +252,25 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             )
         }
 
-        // Mouse wheel handler + hit-test region covering the
-        // viewport. We don't translate clicks here; click
-        // routing to inner controls is handled by their own
-        // hit-test regions, which were emitted into the
-        // content buffer and shifted up by `windowedBuffer`.
+        // Mouse handler + hit-test region covering the viewport.
+        // Three responsibilities, all routed through the same
+        // region:
+        //   - wheel events (.scrollUp / .scrollDown) scroll the
+        //     viewport;
+        //   - left-button releases focus the ScrollView so the
+        //     keyboard scroll keys (arrows / Page / Home / End)
+        //     reach it without the user having to Tab to it;
+        //   - any other event is rejected so the dispatcher
+        //     can fall through to nothing (clicks on inner
+        //     controls already won at this point because of
+        //     the insert(at: 0) below).
         if !context.isMeasuring,
-           let mouseDispatcher = context.environment.mouseEventDispatcher
+           let mouseDispatcher = context.environment.mouseEventDispatcher,
+           !isDisabled
         {
             let captureHandler = handler
+            let focusManager = context.environment.focusManager
+            let captureFocusID = persistedFocusID
             let mouseHandlerID = mouseDispatcher.register { event in
                 switch event.button {
                 case .scrollUp:
@@ -269,6 +279,16 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 case .scrollDown:
                     captureHandler.scroll(by: ViewConstants.mouseWheelScrollLines)
                     return true
+                case .left:
+                    switch event.phase {
+                    case .pressed:
+                        return true
+                    case .released:
+                        focusManager.focus(id: captureFocusID)
+                        return true
+                    default:
+                        return false
+                    }
                 default:
                     return false
                 }

@@ -97,7 +97,7 @@ struct ScrollViewPage: View {
                                 "Slider value:", String(format: "%.0f", sliderValue))
 
                             Text("And a long block of trailing text:").bold()
-                            ForEach(loremLines.prefix(20), id: \.self) { Text($0) }
+                            ForEach(Array(loremLines.prefix(20)), id: \.self) { Text($0) }
                         }
                     }
                     .frame(height: 10)
