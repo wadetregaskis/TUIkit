@@ -24,6 +24,7 @@ enum DemoPage: Int, CaseIterable {
     case spinners
     case lists
     case tables
+    case scrollView
     case sliders
     case steppers
     case splitView
@@ -126,6 +127,9 @@ struct ContentView: View {
         case .tables:
             TablePage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .scrollView:
+            ScrollViewPage()
+                .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .sliders:
             SliderPage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
@@ -173,7 +177,8 @@ struct ContentView: View {
             "4": .overlays, "5": .layout, "6": .buttons,
             "7": .toggles, "8": .textFields, "\\": .secureFields,
             "9": .radioButtons, "0": .spinners, "-": .lists,
-            "=": .tables, "[": .sliders, "]": .steppers,
+            "=": .tables, "s": .scrollView,
+            "[": .sliders, "]": .steppers,
             ";": .splitView, "'": .imageFile, ",": .imageURL,
             ".": .emoji, "/": .pickers, "`": .progress,
             "m": .mouse,

@@ -66,6 +66,7 @@ struct MainMenuPage: View {
                         MenuItem(label: "Spinners", shortcut: "0"),
                         MenuItem(label: "Lists", shortcut: "-"),
                         MenuItem(label: "Tables", shortcut: "="),
+                        MenuItem(label: "Scroll View", shortcut: "s"),
                         MenuItem(label: "Sliders", shortcut: "["),
                         MenuItem(label: "Steppers", shortcut: "]"),
                         MenuItem(label: "Split View", shortcut: ";"),
