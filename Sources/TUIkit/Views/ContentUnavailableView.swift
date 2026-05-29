@@ -192,19 +192,33 @@ private struct _ContentUnavailableViewCore<Label: View, Description: View, Actio
             result.appendVertically(actionsBuffer, spacing: 1)
         }
 
-        // Center each line horizontally
+        // Centre the assembled buffer as one block, applying a
+        // single uniform horizontal shift to every line.
+        //
+        // The previous implementation centred each line
+        // independently using its own visible width. That looked
+        // marginally nicer when label / description / actions had
+        // very different widths, but it made the inner content's
+        // hit-test regions (typically on the action Buttons)
+        // impossible to shift correctly — `replacingLines` can
+        // only carry a single uniform shift, and per-line shifts
+        // would leave the action buttons' regions pointing at
+        // their pre-centre column positions, so clicks would land
+        // a few cells off the actual buttons.
+        //
+        // Block centring relative to result.width keeps every
+        // line's offset consistent, so the buttons' regions stay
+        // accurate after shifting. Visually it means shorter
+        // lines (e.g. the title) are left-aligned within the
+        // bounding box of the widest line rather than individually
+        // centred.
         guard !result.isEmpty else { return result }
 
         let targetWidth = context.availableWidth
-        var centeredLines: [String] = []
-        centeredLines.reserveCapacity(result.lines.count)
+        let leftPad = max(0, (targetWidth - result.width) / 2)
+        let padding = String(repeating: " ", count: leftPad)
+        let centeredLines = result.lines.map { padding + $0 }
 
-        for line in result.lines {
-            let visibleWidth = line.strippedLength
-            let leftPad = max(0, (targetWidth - visibleWidth) / 2)
-            centeredLines.append(String(repeating: " ", count: leftPad) + line)
-        }
-
-        return FrameBuffer(lines: centeredLines)
+        return result.replacingLines(centeredLines, overlayShiftX: leftPad)
     }
 }
