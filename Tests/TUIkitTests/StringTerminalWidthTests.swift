@@ -53,12 +53,31 @@ struct CharacterTerminalWidthTests {
         #expect(Character("한").terminalWidth == 2)
     }
 
-    @Test("Fitzpatrick modifier alone is 0 cells wide")
+    @Test("Standalone Fitzpatrick skin-tone modifier is 2 cells wide")
     func fitzpatrickModifierAlone() {
-        // U+1F3FD (medium skin tone) is zero-width on its own
-        let scalar = Unicode.Scalar(0x1F3FD)!
-        let ch = Character(scalar)
-        #expect(ch.terminalWidth == 0)
+        // A skin-tone modifier shown on its own — no preceding base, as in the
+        // emoji corpus list — is painted by Terminal.app as a 2-cell colour
+        // swatch. (It is zero-width only when it COMBINES with a base, in which
+        // case it's part of a multi-scalar cluster, not standalone.) Reporting
+        // it as 0 here previously shifted following content left by 2 cells and
+        // dropped the enclosing border.
+        for value in 0x1F3FB...0x1F3FF {
+            let ch = Character(Unicode.Scalar(value)!)
+            #expect(ch.terminalWidth == 2, "U+\(String(value, radix: 16, uppercase: true)) standalone")
+        }
+        // Regression guard: combined with a base it is still one 2-cell cluster.
+        #expect(Character("👋🏽").terminalWidth == 2)
+    }
+
+    @Test("U+2300-block emoji-presentation codepoints are 2 cells wide")
+    func bmp2300EmojiWidth() {
+        // ⌚ ⌛ ⏩ ⏪ ⏫ ⏬ ⏰ ⏳ are painted 2 cells, but some platforms'
+        // `isEmojiPresentation` under-reports them (notably macOS), so they're
+        // pinned via explicit ranges in `terminalWidth`.
+        for value in [0x231A, 0x231B, 0x23E9, 0x23EA, 0x23EB, 0x23EC, 0x23F0, 0x23F3] {
+            let ch = Character(Unicode.Scalar(value)!)
+            #expect(ch.terminalWidth == 2, "U+\(String(value, radix: 16, uppercase: true))")
+        }
     }
 
     @Test("Variation selector U+FE0F alone is 0 cells wide")

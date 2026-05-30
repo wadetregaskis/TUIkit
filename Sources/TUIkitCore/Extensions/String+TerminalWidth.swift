@@ -28,7 +28,15 @@ extension Character {
         if (0x20D0...0x20FF).contains(scalarValue) { return 0 }  // combining marks for symbols
         if (0xFE20...0xFE2F).contains(scalarValue) { return 0 }  // combining half marks
         if (0xE0000...0xE007F).contains(scalarValue) { return 0 }  // tags block
-        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 0 }  // emoji skin-tone modifiers (Fitzpatrick types 1–6, always combine with preceding emoji)
+        // NOTE: a skin-tone modifier reaching here is the FIRST scalar of the
+        // grapheme cluster, i.e. it is *standalone* (no base) — when it
+        // combines with a preceding emoji it is part of a multi-scalar cluster
+        // whose first scalar is the base, handled below. Terminal.app paints a
+        // standalone modifier as a 2-cell colour swatch (this is exactly how
+        // the emoji-corpus list shows U+1F3FB…U+1F3FF), so it is 2 cells wide —
+        // NOT zero. (Returning 0 here was a bug: it shifted everything after a
+        // lone modifier left by 2 cells and dropped the enclosing border.)
+        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 2 }  // standalone Fitzpatrick skin-tone swatch
 
         // Multi-scalar grapheme clusters (emoji sequences with ZWJ, skin tones,
         // flag sequences, keycap sequences) are typically 2 cells wide.
@@ -64,6 +72,17 @@ extension Character {
         if first.properties.isEmojiPresentation {
             return 2
         }
+
+        // Emoji-presentation-by-default codepoints in the U+2300 block that
+        // some platforms' `isEmojiPresentation` under-reports (notably macOS,
+        // where the bundled Unicode data lags): Terminal.app paints these
+        // 2 cells but the property check above returns false, so they'd
+        // otherwise fall through to the 1-cell default. Pin them explicitly
+        // so the width is correct cross-platform. (On Linux the property check
+        // already catches them; these ranges are then a harmless no-op.)
+        if (0x231A...0x231B).contains(scalarValue) { return 2 }  // ⌚ ⌛
+        if (0x23E9...0x23EC).contains(scalarValue) { return 2 }  // ⏩ ⏪ ⏫ ⏬
+        if scalarValue == 0x23F0 || scalarValue == 0x23F3 { return 2 }  // ⏰ ⏳
 
         // East Asian Wide and Fullwidth characters (2 cells)
         if (0x1100...0x115F).contains(scalarValue) { return 2 }  // Hangul Jamo
