@@ -263,4 +263,116 @@ struct RenderLoopRegionMergeTests {
         #expect(!headerFired, "Status-bar click must not leak to the header handler")
         #expect(!contentFired, "Status-bar click must not leak to the content handler")
     }
+
+    // MARK: - StatusBarItem identity stability
+
+    /// Regression for #37 — the hover underline that
+    /// disappeared after a click that didn't change the page.
+    /// The bug was that `StatusBarItem.id` was
+    /// `"\(shortcut)-\(label)"`, so an item whose action
+    /// mutated its own label ended up with a new id on the
+    /// next render — and the hover state machine, which
+    /// stores `hoveredItemID` and compares it against
+    /// `item.id` per render, lost the match.
+    @Test("StatusBarItem identity is stable across label changes")
+    func statusBarItemIdentityIsStable() {
+        let staticID = StatusBarItem(
+            shortcut: "x", label: "X: A", action: {}
+        ).id
+        let mutatedLabelID = StatusBarItem(
+            shortcut: "x", label: "X: B (next state)", action: {}
+        ).id
+        #expect(staticID == mutatedLabelID,
+                "Items sharing a shortcut must share an id regardless of label changes")
+    }
+
+    // MARK: - Action-less item clickability
+
+    /// Regression for #36 — system items like "Back" (esc),
+    /// "Quit" (q), and "Show" (enter) declare a `triggerKey`
+    /// but no `action`. They were silently filtered out of
+    /// the click / hover path because the guard in
+    /// `applyHitTestRegions` skipped items whose
+    /// `hasAction` was false. They should still be clickable
+    /// — their click synthesises the corresponding key event
+    /// through the full InputHandler chain.
+    @Test("Action-less StatusBarItem with triggerKey gets a hit-test region")
+    func actionLessItemWithTriggerKeyGetsRegion() {
+        // The "Back" pattern — Shortcut.escape resolves to
+        // .escape; no action argument.
+        let backItem = StatusBarItem(shortcut: "esc", label: "back")
+        let bar = StatusBar(
+            userItems: [backItem],
+            systemItems: [],
+            style: .compact,
+            alignment: .leading,
+            highlightColor: .cyan,
+            labelColor: .white
+        )
+
+        let context = makeContext(width: 40, height: bar.height)
+        let buffer = renderToBuffer(bar, context: context)
+
+        #expect(!buffer.hitTestRegions.isEmpty,
+                "Action-less StatusBarItem with a triggerKey must still emit a hit-test region")
+        #expect(backItem.triggerKey != nil,
+                "Pre-condition: the 'esc' shortcut must derive a triggerKey for the regression to be meaningful")
+    }
+
+    /// Companion to the above — a click on an action-less
+    /// item with a triggerKey routes a synthesised key event
+    /// through the environment's `synthesizeKeyEvent` closure
+    /// (which AppRunner wires to InputHandler.handle).
+    @Test("Click on action-less StatusBarItem fires synthesizeKeyEvent")
+    func clickOnActionLessItemFiresSynthesizeKey() {
+        var synthesisedKey: KeyEvent?
+        var environment = EnvironmentValues()
+        let tuiContext = TUIContext()
+        environment.focusManager = FocusManager()
+        environment.stateStorage = tuiContext.stateStorage
+        environment.lifecycle = tuiContext.lifecycle
+        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
+        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
+        environment.renderCache = tuiContext.renderCache
+        environment.preferenceStorage = tuiContext.preferences
+        // Inject a synthesis recorder so the test can observe
+        // which key the click produced.
+        environment.synthesizeKeyEvent = { event in
+            synthesisedKey = event
+        }
+        let context = RenderContext(
+            availableWidth: 40,
+            availableHeight: 1,
+            environment: environment,
+            tuiContext: tuiContext
+        )
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let backItem = StatusBarItem(shortcut: "esc", label: "back")
+        let bar = StatusBar(
+            userItems: [backItem],
+            systemItems: [],
+            style: .compact,
+            alignment: .leading,
+            highlightColor: .cyan,
+            labelColor: .white
+        )
+
+        let buffer = renderToBuffer(bar, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("Pre-condition: rendered bar must have at least one region")
+            return
+        }
+
+        _ = dispatcher.dispatch(MouseEvent(
+            button: .left, phase: .released,
+            x: region.offsetX + 1, y: region.offsetY
+        ))
+
+        #expect(synthesisedKey?.key == .escape,
+                "Click on the 'back' item must synthesise an ESC KeyEvent through the environment closure")
+    }
 }

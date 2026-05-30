@@ -388,6 +388,7 @@ extension RenderLoop {
         environment.stateStorage = tuiContext.stateStorage
         environment.lifecycle = tuiContext.lifecycle
         environment.keyEventDispatcher = tuiContext.keyEventDispatcher
+        environment.synthesizeKeyEvent = tuiContext.synthesizeKeyEvent
         environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
         environment.renderCache = tuiContext.renderCache
         environment.preferenceStorage = tuiContext.preferences

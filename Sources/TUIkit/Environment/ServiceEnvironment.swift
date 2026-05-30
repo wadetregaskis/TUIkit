@@ -32,6 +32,22 @@ private struct MouseEventDispatcherKey: EnvironmentKey {
     static let defaultValue: MouseEventDispatcher? = nil
 }
 
+// MARK: - Synthesised Key Event Dispatch
+
+/// EnvironmentKey for the synthesised-key path: a closure
+/// that routes a ``KeyEvent`` through the full
+/// ``InputHandler`` 5-layer chain. See ``TUIContext/
+/// synthesizeKeyEvent`` for the rationale and consumer.
+///
+/// The closure is typed `@MainActor` because every caller
+/// (``RenderLoop``, ``StatusBar``'s mouse handler) and the
+/// only producer (``AppRunner/run()``) all run on the main
+/// actor; the annotation also satisfies `Sendable` for the
+/// static `defaultValue` storage.
+private struct SynthesizeKeyEventKey: EnvironmentKey {
+    static let defaultValue: (@MainActor (KeyEvent) -> Void)? = nil
+}
+
 // MARK: - Preference Storage
 
 /// EnvironmentKey for preference value collection during rendering.
@@ -92,6 +108,14 @@ extension EnvironmentValues {
     var keyEventDispatcher: KeyEventDispatcher? {
         get { self[KeyEventDispatcherKey.self] }
         set { self[KeyEventDispatcherKey.self] = newValue }
+    }
+
+    /// Dispatches a synthesised ``KeyEvent`` through the full
+    /// ``InputHandler`` 5-layer chain. See
+    /// ``TUIContext/synthesizeKeyEvent`` for the rationale.
+    var synthesizeKeyEvent: (@MainActor (KeyEvent) -> Void)? {
+        get { self[SynthesizeKeyEventKey.self] }
+        set { self[SynthesizeKeyEventKey.self] = newValue }
     }
 
     /// Mouse event handler registration and dispatch.

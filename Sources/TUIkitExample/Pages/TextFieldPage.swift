@@ -133,6 +133,7 @@ struct TextFieldPage: View {
 
     private var cursorStatusBarItems: [any StatusBarItemProtocol] {
         [
+            StatusBarItem(shortcut: Shortcut.escape, label: "back"),
             StatusBarItem(shortcut: Shortcut.f1, label: shapeLabel) {
                 cursorShapeIndex = (cursorShapeIndex + 1) % shapes.count
             },

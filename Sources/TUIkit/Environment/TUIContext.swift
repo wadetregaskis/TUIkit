@@ -226,6 +226,27 @@ final class TUIContext: @unchecked Sendable {
     /// for removed views are garbage-collected at the end of each render pass.
     let renderCache: RenderCache
 
+    /// Closure that synthesises a key event through the full
+    /// ``InputHandler`` 5-layer dispatch chain (text-input,
+    /// status-bar items, view handlers, focus system, default
+    /// quit / theme / appearance bindings).
+    ///
+    /// Populated by ``AppRunner/run()`` immediately after the
+    /// `InputHandler` is constructed; consumed by the
+    /// ``StatusBar`` mouse handler so a click on an item that
+    /// only has a `triggerKey` (no inline action) — e.g. the
+    /// "Back" (ESC), "Quit" (q), or "Show" (Enter) system
+    /// entries — fires through the same chain that a physical
+    /// keypress would, including ``InputHandler``'s Layer 4
+    /// quit binding which only ``AppRunner`` knows how to
+    /// invoke.
+    ///
+    /// `var` rather than `let` because ``InputHandler`` needs
+    /// to reference ``TUIContext``-owned services at
+    /// construction time, so the closure can only be wired up
+    /// after both objects exist.
+    var synthesizeKeyEvent: (@MainActor (KeyEvent) -> Void)?
+
     /// Creates a new TUI context with fresh instances of all services.
     ///
     /// Uses the shared `RenderCache` singleton for all instances.

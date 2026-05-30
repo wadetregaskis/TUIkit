@@ -107,6 +107,15 @@ extension AppRunner {
                 self?.isRunning = false
             }
         )
+        // Wire the synthesised-key path: clicks on system status-
+        // bar items (Back / Quit / Show — items with only a
+        // triggerKey, no inline action) route their click through
+        // the same 5-layer dispatch chain that a physical
+        // keypress goes through. See StatusBar.swift's mouse
+        // handler for the consumer side and TUIContext.swift's
+        // `synthesizeKeyEvent` doc-comment for why this is a
+        // closure threaded through the context.
+        tuiContext.synthesizeKeyEvent = { inputHandler.handle($0) }
         let renderer = RenderLoop(
             app: app,
             terminal: terminal,

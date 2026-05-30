@@ -234,7 +234,22 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
         displayInStatusBar: Bool = true,
         action: (() -> Void)? = nil
     ) {
-        self.id = "\(shortcut)-\(label)"
+        // Identity is the shortcut alone, NOT shortcut + label.
+        // Status-bar items often render dynamic labels (e.g.
+        // "Color: ANSI 16" → "Color: ANSI 256" after the action
+        // cycles a value), and the hover state machine is
+        // identity-based — `statusBarState.hoveredItemID` is set
+        // on .entered and compared against `item.id` on the
+        // next render. If id included the label, the post-
+        // action render would compute a fresh id ("c|C-Color:
+        // ANSI 256") that no longer matches the stored
+        // hoveredItemID ("c|C-Color: ANSI 16"), and the hover
+        // underline would silently drop until the user moved
+        // the cursor out and back in. Shortcut is the right
+        // stable key — at most one visible status-bar item
+        // exists per shortcut (StatusBar dedupes by shortcut
+        // when merging user and system items).
+        self.id = shortcut
         self.shortcut = shortcut
         self.label = label
         self.order = order

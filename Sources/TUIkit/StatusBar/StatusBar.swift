@@ -212,7 +212,7 @@ private struct _StatusBarCore: View, Renderable {
             let display = renderItemString(
                 item: item,
                 escapeOverride: escapeOverride,
-                isHovered: item.id == hoveredID && itemHasAction(item)
+                isHovered: item.id == hoveredID && itemIsClickable(item)
             )
             return ItemLayout(
                 item: item,
@@ -364,7 +364,7 @@ private struct _StatusBarCore: View, Renderable {
     ) -> FrameBuffer {
         guard !context.isMeasuring,
               let dispatcher = context.environment.mouseEventDispatcher,
-              layouts.contains(where: { itemHasAction($0.item) })
+              layouts.contains(where: { itemIsClickable($0.item) })
         else {
             return buffer
         }
@@ -373,10 +373,11 @@ private struct _StatusBarCore: View, Renderable {
         // active.
         dispatcher.requestFeature(.motion)
         let statusBarState = context.environment.statusBar
+        let captureSynthesizeKey = context.environment.synthesizeKeyEvent
 
         var result = buffer
         for (layout, columnInLine) in zip(layouts, columns) {
-            guard itemHasAction(layout.item) else { continue }
+            guard itemIsClickable(layout.item) else { continue }
             let captureItem = layout.item
             let captureItemID = layout.item.id
             let handlerID = dispatcher.register { event in
@@ -399,7 +400,28 @@ private struct _StatusBarCore: View, Renderable {
                 case .pressed where event.button == .left:
                     return true
                 case .released where event.button == .left:
-                    captureItem.execute()
+                    // Two click models, picked at runtime per
+                    // item: items with an inline action invoke
+                    // it directly; items that only have a
+                    // triggerKey (system "back" / "quit" /
+                    // "show", page-level ESC label entries)
+                    // synthesise the corresponding key event
+                    // and dispatch it through the same key
+                    // chain that responds to a physical
+                    // keypress. The mouse path therefore
+                    // mirrors the keyboard path exactly — a
+                    // click on "back" runs whatever the ESC
+                    // handler runs, including page pops the
+                    // page system installs.
+                    if let concrete = captureItem as? StatusBarItem,
+                       concrete.hasAction
+                    {
+                        captureItem.execute()
+                    } else if let triggerKey = captureItem.triggerKey {
+                        captureSynthesizeKey?(KeyEvent(key: triggerKey))
+                    } else {
+                        captureItem.execute()
+                    }
                     return true
                 default:
                     return false
@@ -418,12 +440,20 @@ private struct _StatusBarCore: View, Renderable {
         return result
     }
 
-    /// Whether an item has a meaningful action to invoke. For
-    /// concrete StatusBarItems we can read hasAction directly;
-    /// for other conformers we assume any non-informational item
-    /// (i.e. one with a triggerKey) is clickable.
-    private func itemHasAction(_ item: any StatusBarItemProtocol) -> Bool {
-        if let concrete = item as? StatusBarItem { return concrete.hasAction }
+    /// Whether an item can respond to a mouse click — either
+    /// because it has an explicit action closure, or because
+    /// it has a triggerKey that the keyboard handler chain
+    /// already responds to. The latter covers system items
+    /// like "Back" (esc), "Quit" (q), "Show" (enter), and the
+    /// page-level "back" item that pages register as a label
+    /// for the global ESC handler: each has a triggerKey but
+    /// no inline action, and the mouse handler dispatches the
+    /// key event through ``keyEventDispatcher`` so a click is
+    /// equivalent to pressing the key.
+    private func itemIsClickable(_ item: any StatusBarItemProtocol) -> Bool {
+        if let concrete = item as? StatusBarItem {
+            return concrete.hasAction || concrete.triggerKey != nil
+        }
         return item.triggerKey != nil
     }
 
