@@ -2,7 +2,21 @@
 
 ## Preface
 
-Tracks all recommendations from `papers/project_analysis.md` (2026-02-14). The analysis reviewed 135 Swift source files (28,126 lines) and identified 29 improvements across four priority levels (P1 quick wins, P2 high-impact/medium-effort, P3 medium-impact/higher-effort, P4 long-term architectural) plus nine additional findings (code style, test coverage). Twenty-four of twenty-nine items are complete; this plan focuses the remaining five items on the test-coverage gap in image processing, notifications, view extensions, and the `App/` subsystem, plus the organizational question around `project-template/`.
+Tracks all recommendations from the 2026-02-14 project analysis, which reviewed the Swift source and identified 29 improvements across four priority levels (P1 quick wins, P2 high-impact/medium-effort, P3 medium-impact/higher-effort, P4 long-term architectural) plus nine additional findings (code style, test coverage).
+
+> **Status (updated 2026-05-30):** 26 of 29 done. The image-
+> subsystem tests (`ASCIIConverter`, `RGBAImage`) and the
+> `Notification/` tests have since landed, so the test-coverage
+> gap is now down to **three** items: View-extension tests,
+> the `App/` subsystem (specifically a dedicated `InputHandler`
+> test + a coverage rationale), and the `project-template/`
+> organizational decision (also pinned in
+> `questions-for-wade.md`).
+>
+> Note: the original source file `papers/project_analysis.md`
+> is **no longer present** in the repo; the "Completed Work
+> (Context)" section below preserves the substance inline, so
+> nothing is lost.
 
 ## Specification / Goal
 
@@ -102,12 +116,12 @@ The following is preserved as historical context; all items are done.
 
 ### Remaining
 
-- [ ] `project-template/` organization decision + action (keep / move / fold)
-- [ ] `ASCIIConverterTests.swift`
-- [ ] `RGBAImageTests.swift`
-- [ ] `Notification/` subsystem tests
-- [ ] `Extensions/` view extension tests
-- [ ] `App/` subsystem coverage evaluation + resulting tests or rationale
+- [x] `ASCIIConverter` tests — **done** (in `Tests/TUIkitTests/ImageTests.swift`, not the separate `Image/` path originally proposed)
+- [x] `RGBAImage` tests — **done** (in `Tests/TUIkitTests/ImageTests.swift`)
+- [x] `Notification/` subsystem tests — **done** (`Tests/TUIkitTests/NotificationModifierTests.swift`)
+- [ ] `Extensions/` view extension tests — **still open** (no dedicated test file; some behaviour is exercised indirectly by View tests, but the targeted coverage called for here doesn't exist yet)
+- [ ] `App/` subsystem coverage — **partial**: `RenderLoop` has `RenderLoopRegionMergeTests` + `RenderLoopPaletteIntegrationTests`; `InputHandler` still has **no dedicated test** (only indirect integration coverage). Remaining: add `InputHandler` tests (mockable via `TerminalProtocol`/synthesised events) and write the coverage rationale.
+- [ ] `project-template/` organization decision + action (keep / move / fold) — **still open** (pinned in `questions-for-wade.md`)
 
 ### Verification
 
@@ -124,9 +138,13 @@ The following is preserved as historical context; all items are done.
 | P2       | 5     | 5         | 0         |
 | P3       | 5     | 5         | 0         |
 | P4       | 5     | 5         | 0         |
-| Additional | 9   | 4         | 5         |
-| **Total** | **29** | **24**  | **5**     |
+| Additional | 9   | 6         | 3         |
+| **Total** | **29** | **26**  | **3**     |
+
+Remaining three: View-extension tests, `App/`-subsystem
+(`InputHandler` tests + coverage rationale), and the
+`project-template/` organizational decision.
 
 ---
 
-*Source: `papers/project_analysis.md` (2026-02-14)*
+*Originally sourced from `papers/project_analysis.md` (2026-02-14), which is no longer present in the repo; the completed-work context above is preserved inline.*
