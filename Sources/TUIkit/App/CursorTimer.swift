@@ -12,8 +12,12 @@ import Foundation
 /// - `blinkVisible`: Boolean for sharp on/off blinking
 /// - `pulsePhase`: Smooth 0-1 sine wave for pulsing
 ///
-/// The timer runs independently from the `PulseTimer` (which handles focus indicators)
-/// to allow different animation speeds and precise control over cursor timing.
+/// The timer is a single `@MainActor` `Task` that sleeps between ticks (the
+/// same pattern as ``PulseTimer`` and ``AutoRepeatTimer``). It runs
+/// independently from the `PulseTimer` (which handles focus indicators) so
+/// the two can use different cadences. Staying on the main actor means the
+/// tick counter is never mutated off-thread, so the phases read during
+/// render are race-free.
 ///
 /// ## Animation Speeds
 ///
@@ -33,6 +37,7 @@ import Foundation
 /// }
 /// let phase = cursor.pulsePhase(for: .regular)
 /// ```
+@MainActor
 final class CursorTimer {
     /// Base tick interval in milliseconds.
     /// We use a fast tick (50ms) and derive phases from elapsed time.
@@ -41,8 +46,8 @@ final class CursorTimer {
     /// Elapsed ticks since timer started.
     private var elapsedTicks = 0
 
-    /// The GCD timer source.
-    private var timer: DispatchSourceTimer?
+    /// The running animation task, or `nil` if stopped.
+    private var task: Task<Void, Never>?
 
     /// The render notifier to trigger re-renders.
     private weak var renderNotifier: AppState?
@@ -56,7 +61,7 @@ final class CursorTimer {
     }
 
     deinit {
-        stop()
+        task?.cancel()
     }
 }
 
@@ -100,26 +105,27 @@ extension CursorTimer {
     ///
     /// If the timer is already running, this is a no-op.
     func start() {
-        guard timer == nil else { return }
+        guard task == nil else { return }
 
-        let source = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-        let interval = DispatchTimeInterval.milliseconds(tickIntervalMs)
-        source.schedule(deadline: .now() + interval, repeating: interval)
-
-        source.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.elapsedTicks += 1
-            self.renderNotifier?.setNeedsRender()
+        let tickNanos = UInt64(tickIntervalMs) * 1_000_000
+        task = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: tickNanos)
+                } catch {
+                    return  // cancelled
+                }
+                guard let self else { return }
+                self.elapsedTicks += 1
+                self.renderNotifier?.setNeedsRender()
+            }
         }
-
-        source.resume()
-        timer = source
     }
 
     /// Stops the cursor animation timer.
     func stop() {
-        timer?.cancel()
-        timer = nil
+        task?.cancel()
+        task = nil
         elapsedTicks = 0
     }
 

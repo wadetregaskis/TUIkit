@@ -66,7 +66,9 @@ private struct PulsePhaseKey: EnvironmentKey {
 
 /// EnvironmentKey for TextField/SecureField cursor blink animation.
 private struct CursorTimerKey: EnvironmentKey {
-    nonisolated(unsafe) static let defaultValue: CursorTimer? = nil
+    // `CursorTimer` is `@MainActor` (hence implicitly `Sendable`), so a `nil`
+    // default needs no `nonisolated(unsafe)`.
+    static let defaultValue: CursorTimer? = nil
 }
 
 // MARK: - Focus Indicator Color

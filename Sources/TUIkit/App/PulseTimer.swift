@@ -12,15 +12,18 @@ import Foundation
 /// using a sine curve. On each step, it calls `setNeedsRender()` to
 /// trigger a re-render with the updated phase.
 ///
-/// The timer runs on its own `DispatchSourceTimer`, completely independent
-/// from the Spinner animation (which uses Swift Concurrency tasks) and
-/// the RenderLoop (which renders on demand via `AppState.needsRender`).
+/// The timer is a single `@MainActor` `Task` that sleeps between steps —
+/// the same pattern as ``AutoRepeatTimer`` and the input-reader's
+/// `StdinArrivalNotifier`. Keeping it on the main actor means the phase it
+/// publishes (read during render, also on the main actor) is never touched
+/// off-thread, so there's no cross-thread data race and no dispatch-queue
+/// machinery to manage.
 ///
 /// ## Breathing Cycle
 ///
 /// - The phase follows `sin(step * π / totalSteps)`, producing a smooth
 ///   0 → 1 → 0 oscillation.
-/// - Default: 10 steps at 300ms each = 3 second cycle.
+/// - Default: 10 steps at 100ms each = 2 second cycle.
 /// - At phase 0: color is dimmed (20% of accent). At phase 1: full accent.
 ///
 /// ## Usage
@@ -31,6 +34,7 @@ import Foundation
 /// // ... later
 /// pulse.stop()
 /// ```
+@MainActor
 final class PulseTimer {
     /// The number of discrete steps in a half-cycle (dim → bright).
     ///
@@ -44,8 +48,8 @@ final class PulseTimer {
     /// The current step in the full cycle (0 ..< totalHalfSteps * 2).
     private var currentStep = 0
 
-    /// The GCD timer source.
-    private var timer: DispatchSourceTimer?
+    /// The running animation task, or `nil` if stopped.
+    private var task: Task<Void, Never>?
 
     /// The render notifier to trigger re-renders.
     private weak var renderNotifier: AppState?
@@ -72,7 +76,7 @@ final class PulseTimer {
     }
 
     deinit {
-        stop()
+        task?.cancel()
     }
 }
 
@@ -83,26 +87,27 @@ extension PulseTimer {
     ///
     /// If the timer is already running, this is a no-op.
     func start() {
-        guard timer == nil else { return }
+        guard task == nil else { return }
 
-        let source = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-        let interval = DispatchTimeInterval.milliseconds(stepIntervalMs)
-        source.schedule(deadline: .now() + interval, repeating: interval)
-
-        source.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.currentStep = (self.currentStep + 1) % (self.totalHalfSteps * 2)
-            self.renderNotifier?.setNeedsRender()
+        let stepNanos = UInt64(stepIntervalMs) * 1_000_000
+        task = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: stepNanos)
+                } catch {
+                    return  // cancelled
+                }
+                guard let self else { return }
+                self.currentStep = (self.currentStep + 1) % (self.totalHalfSteps * 2)
+                self.renderNotifier?.setNeedsRender()
+            }
         }
-
-        source.resume()
-        timer = source
     }
 
     /// Stops the breathing animation.
     func stop() {
-        timer?.cancel()
-        timer = nil
+        task?.cancel()
+        task = nil
         currentStep = 0
     }
 
