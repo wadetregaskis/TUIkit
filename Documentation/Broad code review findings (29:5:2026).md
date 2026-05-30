@@ -1,4 +1,4 @@
-# Broad code-review findings
+# Broad code-review findings (29/5/2026)
 
 A broad pass over the library source (Sources/TUIkit,
 TUIkitCore, TUIkitStyling, TUIkitView, TUIkitImage; the example
@@ -78,9 +78,6 @@ listed under "Checked and rejected" so it isn't re-chased later.
 
 So these aren't re-investigated later:
 
-- **`Color.lerp` "missing docs":** it already has a complete,
-  accurate doc comment, and it *does* clamp `phase` to [0,1] and
-  fall back to `from` when a colour isn't RGB-resolvable.
 - **`StateStorage.endRenderPass` "double filter":** the two
   filter loops operate on *two different dictionaries*
   (`values` and `trackedValues`); they can't be merged and the
@@ -104,12 +101,3 @@ So these aren't re-investigated later:
 - `@unchecked Sendable` usage is minimal and justified.
 - Equatable/Hashable conformances are consistent.
 - The render diff / cache-invalidation path reads as correct.
-
-## How this connects to the other docs
-
-- The characterisation-test prerequisite for the ANSI refactor
-  is the same work flagged in `Test coverage gaps and
-  redundancy.md` (text-width is under-tested at the unit level).
-- `ViewIdentity` being non-`Sendable` surfaced during the
-  benchmark work; whether to make it `Sendable` is pinned in
-  `questions-for-wade.md`.
