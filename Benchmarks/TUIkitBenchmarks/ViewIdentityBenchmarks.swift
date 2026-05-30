@@ -37,11 +37,10 @@ enum ViewIdentityBenchmarks {
 
     private static let depth = 16
 
-    // Note: `ViewIdentity` is not `Sendable`, so these can't be
-    // `static let`s; they're built inside the benchmark closure
-    // (once, before the timed loop).
-    private static let ancestorPath = "Root/0:Stack/1:List/2:Row"
-    private static let descendantPath = "Root/0:Stack/1:List/2:Row/3:Cell/4:Button/5:Label"
+    private static let ancestor = ViewIdentity(path: "Root/0:Stack/1:List/2:Row")
+    private static let descendant = ViewIdentity(
+        path: "Root/0:Stack/1:List/2:Row/3:Cell/4:Button/5:Label"
+    )
 
     // MARK: - Path construction
 
@@ -76,8 +75,6 @@ enum ViewIdentityBenchmarks {
 
     private static func registerAncestry() {
         Benchmark("identity/isAncestor ×1000") { benchmark in
-            let ancestor = ViewIdentity(path: ancestorPath)
-            let descendant = ViewIdentity(path: descendantPath)
             for _ in benchmark.scaledIterations {
                 var hits = 0
                 for _ in 0..<1_000 where ancestor.isAncestor(of: descendant) {
