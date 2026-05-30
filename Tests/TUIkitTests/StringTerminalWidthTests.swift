@@ -156,6 +156,22 @@ struct CharacterTerminalAppCursorAdvanceTests {
                 "\(flag) cursor advances by only 1 in Terminal.app")
         }
     }
+
+    @Test("Lone regional indicator: cursor advance is 1 (same under-advance as a flag pair)")
+    func loneRegionalIndicatorCursorAdvance() {
+        // A single regional indicator (shown individually in the emoji
+        // corpus, e.g. U+1F1E6) paints 2 cells but Terminal.app advances the
+        // cursor by only 1 — the same under-advance as a flag pair. Measured
+        // on macOS 15.7. Without this, the following content / enclosing
+        // border lands one cell too far left.
+        for value in [0x1F1E6, 0x1F1FA, 0x1F1FF] {
+            let ch = Character(Unicode.Scalar(value)!)
+            #expect(ch.terminalWidth == 2, "U+\(String(value, radix: 16, uppercase: true)) paints 2 cells")
+            #expect(
+                ch.terminalAppCursorAdvance == 1,
+                "U+\(String(value, radix: 16, uppercase: true)) cursor advances by only 1")
+        }
+    }
 }
 
 // MARK: - String.withTerminalAppCursorCompensation

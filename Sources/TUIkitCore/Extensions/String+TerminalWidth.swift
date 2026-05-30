@@ -129,6 +129,22 @@ extension Character {
     /// ``String/withTerminalAppCursorCompensation()``.
     public var terminalAppCursorAdvance: Int {
         let scalars = unicodeScalars
+
+        // A *lone* regional indicator (e.g. U+1F1E6 on its own — the emoji
+        // corpus lists each one individually) paints 2 cells but Terminal.app
+        // advances the cursor by only 1, the same under-advance as a flag
+        // PAIR. This must be handled before the multi-scalar guard below (a
+        // lone indicator is a single scalar); otherwise it reports advance =
+        // width = 2 and the following content (and any enclosing border) lands
+        // one cell too far left. (Terminal.app additionally mis-paints the
+        // lone glyph itself — clipped/offset — which no escape sequence can
+        // fix; this only corrects the cursor accounting so the layout aligns.)
+        if scalars.count == 1, let only = scalars.first,
+            (0x1F1E6...0x1F1FF).contains(only.value)
+        {
+            return 1
+        }
+
         guard scalars.count > 1, let first = scalars.first else { return terminalWidth }
 
         let hasVS16 = scalars.contains { $0.value == 0xFE0F }
