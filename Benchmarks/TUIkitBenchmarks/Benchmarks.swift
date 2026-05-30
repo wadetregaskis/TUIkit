@@ -74,13 +74,28 @@ let benchmarks: @Sendable () -> Void = {
         )
     )
 
-    // Each suite lives in its own file (LayoutBenchmarks,
-    // RenderBenchmarks, ListTableBenchmarks, ImageBenchmarks)
-    // and registers via a static `register()` entry point —
-    // keeps this file as a manifest of what's being measured.
+    // Each suite lives in its own file and registers via a
+    // static `register()` entry point — keeps this file as a
+    // manifest of what's being measured.
+    //
+    // View-rendering suites (currently skipped by default,
+    // gated on TUIKIT_BENCH_RUN_VIEW — see `skipViewBenchmarks`)
+    // because they cross onto `@MainActor`:
     LayoutBenchmarks.register()
     RenderBenchmarks.register()
     ListTableBenchmarks.register()
     ScrollViewBenchmarks.register()
+
+    // Off-main-actor suites: pure value-type computation on the
+    // hot paths (image conversion, text-width measurement, input
+    // parsing, color quantization, frame-buffer composition,
+    // scroll arithmetic, view-identity paths). These run by
+    // default — no MainActor deadlock.
     ImageBenchmarks.register()
+    TextWidthBenchmarks.register()
+    InputParsingBenchmarks.register()
+    ColorBenchmarks.register()
+    FrameBufferBenchmarks.register()
+    ScrollMathBenchmarks.register()
+    ViewIdentityBenchmarks.register()
 }
