@@ -6,15 +6,23 @@
 
 // MARK: - Input Handler
 
-/// Dispatches key events through a 4-layer priority chain.
+/// Dispatches key events through a five-layer priority chain (layers 0–4).
 ///
 /// The dispatch order is:
-/// 1. **Status bar** — items with actions get first priority
+/// 0. **Text input** (conditional) — a focused `TextField`/`SecureField`
+///    consumes the event first
+/// 1. **Status bar** — items with actions
 /// 2. **View handlers** — registered via `onKeyPress` modifiers
-/// 3. **Focus system** — Tab/Shift+Tab navigation, Enter/Space on focused buttons
+/// 3. **Focus system** (conditional) — Tab/Shift+Tab navigation, Enter/Space
+///    on focused buttons
 /// 4. **Default bindings** — `q` (quit), `t` (theme), `a` (appearance)
 ///
-/// If a layer consumes the event, subsequent layers are skipped.
+/// Layers 0 and 3 are mutually exclusive, gated on
+/// `focusManager.hasTextInputFocus`: when a text-input element is focused,
+/// layer 0 runs and layer 3 is skipped. If a layer consumes the event,
+/// subsequent layers are skipped. (An open modal that has claimed Escape is a
+/// special case routed through the focus system ahead of layer 1 — see
+/// `handle(_:)`.)
 internal struct InputHandler {
     /// The status bar state for item-level event handling.
     let statusBar: StatusBarState
@@ -38,17 +46,20 @@ internal struct InputHandler {
 // MARK: - Internal API
 
 extension InputHandler {
-    /// Dispatches a key event through the 4-layer priority chain.
+    /// Dispatches a key event through the five-layer priority chain.
     ///
     /// - Parameter event: The key event to handle.
     func handle(_ event: KeyEvent) {
-        // Text-Input Priority: when a text-input element (TextField/SecureField)
-        // is focused, let it handle the event FIRST. This ensures printable
-        // characters, backspace, delete, arrows, home, end, and enter reach the
-        // text field before any other layer can intercept them.
+        // Layer 0: Text input (conditional). When a text-input element
+        // (TextField/SecureField) is focused, let it handle the event FIRST.
+        // This ensures printable characters, backspace, delete, arrows, home,
+        // end, and enter reach the text field before any other layer can
+        // intercept them.
         //
         // Only structural/navigation keys that the text field does NOT consume
         // (Escape, Tab, unhandled Ctrl+shortcuts) fall through to other layers.
+        // Mutually exclusive with Layer 3 (focus system), which is skipped
+        // below when text input has focus.
         if focusManager.hasTextInputFocus {
             if focusManager.dispatchKeyEvent(event) {
                 return
