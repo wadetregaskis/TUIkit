@@ -4,14 +4,13 @@
 
 Tracks all recommendations from the 2026-02-14 project analysis, which reviewed the Swift source and identified 29 improvements across four priority levels (P1 quick wins, P2 high-impact/medium-effort, P3 medium-impact/higher-effort, P4 long-term architectural) plus nine additional findings (code style, test coverage).
 
-> **Status (updated 2026-05-30):** 26 of 29 done. The image-
+> **Status (updated 2026-05-30):** 27 of 29 done. The image-
 > subsystem tests (`ASCIIConverter`, `RGBAImage`) and the
-> `Notification/` tests have since landed, so the test-coverage
-> gap is now down to **three** items: View-extension tests,
-> the `App/` subsystem (specifically a dedicated `InputHandler`
-> test + a coverage rationale), and the `project-template/`
-> organizational decision (also pinned in
-> `questions-for-wade.md`).
+> `Notification/` tests have landed, and the `project-template/`
+> question is resolved (kept inline; see `CONTRIBUTING.md`). The
+> remaining gap is **two** items: View-extension tests and the
+> `App/` subsystem (a dedicated `InputHandler` test + a coverage
+> rationale).
 >
 > Note: the original source file `papers/project_analysis.md`
 > is **no longer present** in the repo; the "Completed Work
@@ -121,7 +120,7 @@ The following is preserved as historical context; all items are done.
 - [x] `Notification/` subsystem tests — **done** (`Tests/TUIkitTests/NotificationModifierTests.swift`)
 - [ ] `Extensions/` view extension tests — **still open** (no dedicated test file; some behaviour is exercised indirectly by View tests, but the targeted coverage called for here doesn't exist yet)
 - [ ] `App/` subsystem coverage — **partial**: `RenderLoop` has `RenderLoopRegionMergeTests` + `RenderLoopPaletteIntegrationTests`; `InputHandler` still has **no dedicated test** (only indirect integration coverage). Remaining: add `InputHandler` tests (mockable via `TerminalProtocol`/synthesised events) and write the coverage rationale.
-- [ ] `project-template/` organization decision + action (keep / move / fold) — **still open** (pinned in `questions-for-wade.md`)
+- [x] `project-template/` organization decision + action (keep / move / fold) — **done**: decided **keep inline**; rationale documented in `CONTRIBUTING.md`.
 
 ### Verification
 
@@ -138,12 +137,13 @@ The following is preserved as historical context; all items are done.
 | P2       | 5     | 5         | 0         |
 | P3       | 5     | 5         | 0         |
 | P4       | 5     | 5         | 0         |
-| Additional | 9   | 6         | 3         |
-| **Total** | **29** | **26**  | **3**     |
+| Additional | 9   | 7         | 2         |
+| **Total** | **29** | **27**  | **2**     |
 
-Remaining three: View-extension tests, `App/`-subsystem
-(`InputHandler` tests + coverage rationale), and the
-`project-template/` organizational decision.
+Remaining two: View-extension tests and the `App/`-subsystem
+(`InputHandler` tests + coverage rationale). The
+`project-template/` decision is resolved (kept inline; see
+`CONTRIBUTING.md`).
 
 ---
 

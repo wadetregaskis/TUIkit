@@ -79,6 +79,17 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 - Tests run in parallel
 - Test files mirror source structure in `Tests/TUIkitTests/`
 
+## The `project-template/` directory
+
+`project-template/` is a starter kit for spinning up a new app built on
+TUIkit (a `tuikit` scaffold plus an `install.sh` and its own README). It
+is intentionally kept **inline in this repository** rather than split into
+a separate repo: it's small, low-churn, and easiest to keep in step with
+the library when it lives alongside it. It is excluded from source
+archives / GitHub release tarballs via `export-ignore` in `.gitattributes`,
+so it adds no weight for SwiftPM consumers. If it ever grows enough to
+warrant independent versioning, revisit moving it out.
+
 ## Detailed Architecture Rules
 
 For comprehensive architecture documentation including the `_*Core` pattern, focus system, state management, and interactive view rules, see [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
