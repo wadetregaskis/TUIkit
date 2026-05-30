@@ -1,6 +1,15 @@
 {
-  "originHash" : "4c9c9ec41372fd5484da86837a4b98276fc3f48ef4ea2f4a502630561290b02a",
+  "originHash" : "036d6b6fcb0624958f00c6d9cbd76684e26133a0c7d3106cb3474f3ae59cbf65",
   "pins" : [
+    {
+      "identity" : "benchmark",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ordo-one/benchmark",
+      "state" : {
+        "revision" : "88a6d9d7fda716505b72e286c4a1816439ae88c7",
+        "version" : "1.33.0"
+      }
+    },
     {
       "identity" : "hdrhistogram-swift",
       "kind" : "remoteSourceControl",
@@ -8,15 +17,6 @@
       "state" : {
         "revision" : "c2e1210df04b4fff47e53f2f9dad9cc45ae15d63",
         "version" : "0.2.0"
-      }
-    },
-    {
-      "identity" : "package-benchmark",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ordo-one/package-benchmark",
-      "state" : {
-        "revision" : "88a6d9d7fda716505b72e286c4a1816439ae88c7",
-        "version" : "1.33.0"
       }
     },
     {
