@@ -228,9 +228,20 @@ extension ItemListHandler {
                     // Wrap around: -1 becomes last, count becomes 0
                     newIndex = ((newIndex % itemCount) + itemCount) % itemCount
                 } else {
-                    // Clamp to valid range and stop if out of bounds
-                    if newIndex < 0 || newIndex >= itemCount {
-                        return
+                    // If the jump overshoots a boundary (common for Page Up /
+                    // Page Down within one page of the top/bottom), land on the
+                    // nearest selectable item AT that boundary rather than
+                    // refusing to move. The previous `return` here made
+                    // Page Up/Down "stop short" — it did nothing whenever the
+                    // jump would pass the first/last item instead of clamping
+                    // to it.
+                    if newIndex < 0 {
+                        newIndex = selectableIndices.min() ?? 0
+                        break
+                    }
+                    if newIndex >= itemCount {
+                        newIndex = selectableIndices.max() ?? (itemCount - 1)
+                        break
                     }
                 }
 

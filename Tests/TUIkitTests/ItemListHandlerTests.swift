@@ -242,6 +242,60 @@ struct ItemListHandlerNavigationTests {
         #expect(handler.focusedIndex == 2)
     }
 
+    @Test("PageUp within one page of the top reaches the first item (overshoot clamps, not stalls)")
+    func pageUpOvershootReachesTop() {
+        // All rows selectable, but selectableIndices is *populated* — exactly
+        // how a normal selectable list (e.g. the emoji corpus) is set up, and
+        // the path the boundary bug lived in. Previously PageUp here refused
+        // to move because the target (5 - 10 = -5) was out of bounds.
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.selectableIndices = Set(0..<100)
+        handler.focusedIndex = 5  // within one page of the top
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageUp))
+        #expect(handler.focusedIndex == 0)
+    }
+
+    @Test("PageDown within one page of the bottom reaches the last item")
+    func pageDownOvershootReachesBottom() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 100,
+            viewportHeight: 10,
+            selectionMode: .single
+        )
+        handler.selectableIndices = Set(0..<100)
+        handler.focusedIndex = 95  // within one page of the bottom
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageDown))
+        #expect(handler.focusedIndex == 99)
+    }
+
+    @Test("Page jumps overshooting a boundary land on the nearest selectable item")
+    func pageOvershootWithHeadersLandsOnBoundarySelectable() {
+        // 1, 4, 7 are headers; first selectable is 0, last is 9.
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 10,
+            viewportHeight: 3,
+            selectionMode: .single
+        )
+        handler.selectableIndices = [0, 2, 3, 5, 6, 8, 9]
+
+        handler.focusedIndex = 2
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageUp))  // target -1 → first selectable
+        #expect(handler.focusedIndex == 0)
+
+        handler.focusedIndex = 8
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageDown))  // target 11 → last selectable
+        #expect(handler.focusedIndex == 9)
+    }
+
     @Test("Empty list handles navigation gracefully")
     func emptyListNavigation() {
         let handler = ItemListHandler<String>(
