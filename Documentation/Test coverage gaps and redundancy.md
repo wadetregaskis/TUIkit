@@ -138,8 +138,11 @@ either.
 ## Suggested order of attack
 
 1. ~~`AppStorage` + backends~~ — **done** (`AppStorageTests`, `MockStorageBackend`).
-2. `InputHandler` five-layer dispatch suite — **still open** (the main
-   remaining gap; only indirect coverage today).
+2. ~~`InputHandler` five-layer dispatch suite~~ — **done**
+   (`InputHandlerTests`): layer-precedence (status bar > view handlers >
+   focus), the layer-4 defaults (`q`/`t`/`a`), and the modal-Escape
+   special case. Layer 0 (text input) stays with the TextField tests
+   since `hasTextInputFocus` keys off a real `TextFieldHandler`.
 3. ~~`StdinArrivalStream`~~ — **done** (`StdinArrivalNotifierTests`).
 4. ~~`OnMouseEventModifier` / `DragGestureModifier`~~ — **done**, and the
    sibling gesture modifiers too: `onTapGesture`, `onScrollGesture`.
@@ -154,5 +157,7 @@ Also closed along the way: **`ViewRenderer`** now has a dedicated suite
 (`ViewRendererTests`) — writing it uncovered and fixed a real crash in
 `renderOnce(_:)` (it rendered with an empty environment).
 
-Each remaining item is independent and can land as its own small, green
-commit. The clear next one is the `InputHandler` five-layer suite.
+Every prioritised gap above is now closed. What remains is only the
+low-priority "possibly over-tested" note below (no action) and the
+separately-tracked ANSI-scanner consolidation (a latent-bug-class
+cleanup, not a coverage gap).
