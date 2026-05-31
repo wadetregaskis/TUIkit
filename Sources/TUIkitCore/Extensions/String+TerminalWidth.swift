@@ -4,6 +4,20 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// MARK: - ANSI Segment
+
+/// One segment of a string produced by ``Swift/String/ansiSegments()``:
+/// either a complete ANSI (CSI) escape sequence or a single visible
+/// grapheme cluster.
+enum ANSISegment {
+    /// A complete escape sequence; `isSGR` is `true` for colour/style
+    /// (`…m`) sequences and `false` for cursor-movement, erase, etc.
+    case ansi(String, isSGR: Bool)
+
+    /// A single visible grapheme cluster.
+    case visible(Character)
+}
+
 // MARK: - Terminal Character Width
 
 extension Character {
@@ -432,6 +446,65 @@ extension String {
         return runs
     }
 
+    /// Splits the string into ordered segments — each either a complete
+    /// ANSI (CSI) escape sequence or a single visible grapheme cluster.
+    ///
+    /// The scan runs at the Unicode-scalar level so an escape's terminator
+    /// byte (e.g. the `m` of an SGR colour code) never fuses with a
+    /// following `Extend` scalar (a lone Fitzpatrick modifier, VS-16, …)
+    /// into one `Character`. `Character`-level scanning *does* fuse them,
+    /// which makes the "skip the final byte" step swallow the modifier as
+    /// part of the escape — corrupting every visible-width computation
+    /// that follows. Visible runs between escapes are grapheme-clustered
+    /// on their own (escapes always break clusters anyway), so widths come
+    /// out the same as for un-styled text.
+    func ansiSegments() -> [ANSISegment] {
+        var segments: [ANSISegment] = []
+        let scalars = unicodeScalars
+        var index = scalars.startIndex
+        var visible = Self.UnicodeScalarView()
+
+        func flushVisible() {
+            guard !visible.isEmpty else { return }
+            for character in String(visible) { segments.append(.visible(character)) }
+            visible = Self.UnicodeScalarView()
+        }
+
+        while index < scalars.endIndex {
+            guard scalars[index].value == 0x1B else {  // not ESC → visible
+                visible.append(scalars[index])
+                index = scalars.index(after: index)
+                continue
+            }
+            flushVisible()
+            var sequence = Self.UnicodeScalarView()
+            sequence.append(scalars[index])
+            index = scalars.index(after: index)
+            var isSGR = false
+            if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
+                sequence.append(scalars[index])
+                index = scalars.index(after: index)
+                while index < scalars.endIndex,
+                    (0x30...0x39).contains(scalars[index].value) || scalars[index].value == 0x3B {
+                    sequence.append(scalars[index])
+                    index = scalars.index(after: index)
+                }
+                // Final byte: a single ASCII letter, consumed by exactly one
+                // scalar so a trailing Extend scalar stays a visible segment.
+                if index < scalars.endIndex,
+                    (0x41...0x5A).contains(scalars[index].value)
+                        || (0x61...0x7A).contains(scalars[index].value) {
+                    isSGR = scalars[index].value == 0x6D  // 'm'
+                    sequence.append(scalars[index])
+                    index = scalars.index(after: index)
+                }
+            }
+            segments.append(.ansi(String(sequence), isSGR: isSGR))
+        }
+        flushVisible()
+        return segments
+    }
+
     /// The string with all ANSI (CSI) escape codes removed.
     public var stripped: String {
         visibleANSIRuns().joined()
@@ -478,32 +551,16 @@ extension String {
 
         var result = ""
         var visible = 0
-        var index = startIndex
 
-        while index < endIndex && visible < visibleCount {
-            // Check if we're at the start of an ANSI escape sequence
-            if self[index] == "\u{1B}" {
-                // Consume the entire ANSI sequence (ESC [ ... letter)
-                let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    // Skip parameter bytes (digits, semicolons)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    // Skip the final byte (letter)
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
-                result += String(self[seqStart..<index])
-            } else {
-                let charWidth = self[index].terminalWidth
-                if visible + charWidth > visibleCount { break }
-                result.append(self[index])
+        for segment in ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, _):
+                result += sequence
+            case .visible(let character):
+                let charWidth = character.terminalWidth
+                if visible + charWidth > visibleCount { return result }
+                result.append(character)
                 visible += charWidth
-                index = self.index(after: index)
             }
         }
 
@@ -531,45 +588,31 @@ extension String {
         var result = ""
         var visible = 0
         var cursor  = 0   // Terminal.app cursor advance from start of line
-        var index   = startIndex
 
-        while index < endIndex && visible < visibleCount {
-            if self[index] == "\u{1B}" {
-                let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
+        for segment in ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, _):
+                result += sequence
+            case .visible(let character):
+                let charWidth = character.terminalWidth
+                if visible + charWidth > visibleCount { return result }
+                let advance = character.terminalAppCursorAdvance
+                if advance > charWidth && cursor + advance > visibleCount {
+                    // Over-advancer that would push Terminal.app's cursor past
+                    // the right edge.  Replace with `charWidth` plain spaces
+                    // to preserve the layout but avoid the wrap-to-next-row
+                    // bug.  Skin tone is sacrificed in this narrow case.
+                    if charWidth > 0 {
+                        result.append(String(repeating: " ", count: charWidth))
                     }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
+                    visible += charWidth
+                    cursor += charWidth
+                } else {
+                    result.append(character)
+                    visible += charWidth
+                    cursor += advance
                 }
-                result += String(self[seqStart..<index])
-                continue
             }
-            let c = self[index]
-            let charWidth = c.terminalWidth
-            if visible + charWidth > visibleCount { break }
-            let advance = c.terminalAppCursorAdvance
-            if advance > charWidth && cursor + advance > visibleCount {
-                // Over-advancer that would push Terminal.app's cursor past
-                // the right edge.  Replace with `charWidth` plain spaces
-                // to preserve the layout but avoid the wrap-to-next-row
-                // bug.  Skin tone is sacrificed in this narrow case.
-                if charWidth > 0 {
-                    result.append(String(repeating: " ", count: charWidth))
-                }
-                visible += charWidth
-                cursor += charWidth
-                index = self.index(after: index)
-                continue
-            }
-            result.append(c)
-            visible += charWidth
-            cursor += advance
-            index = self.index(after: index)
         }
 
         return result
@@ -592,63 +635,33 @@ extension String {
     ///   `visibleOffset` visible cells.
     public func ansiSGRContextAndCleanSuffix(from visibleOffset: Int) -> String? {
         var sgrContext = ""
-        var index = startIndex
+        var suffix = ""
         var visible = 0
 
-        // Phase 1: scan to visibleOffset, accumulate only SGR sequences.
-        while index < endIndex && visible < visibleOffset {
-            if self[index] == "\u{1B}" {
-                let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        if self[index] == "m" {
-                            sgrContext += String(self[seqStart...index])
-                        }
-                        // Non-SGR sequences (CUF, EL, …) consumed but not kept
-                        index = self.index(after: index)
-                    }
+        for segment in ansiSegments() {
+            // Before the offset is reached we're accumulating the entry
+            // colour state; at or after it, content belongs in the suffix.
+            let inSuffix = visible >= visibleOffset
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                // Keep only SGR sequences; non-SGR (CUF, EL, …) are dropped
+                // so they can't displace the cursor at a fixed write column.
+                guard isSGR else { continue }
+                if inSuffix {
+                    suffix += sequence
+                } else {
+                    sgrContext += sequence
                 }
-            } else {
-                visible += self[index].terminalWidth
-                index = self.index(after: index)
+            case .visible(let character):
+                if inSuffix {
+                    suffix.append(character)
+                } else {
+                    visible += character.terminalWidth
+                }
             }
         }
 
         guard visible >= visibleOffset else { return nil }
-
-        // Phase 2: build suffix keeping visible chars and SGR sequences only.
-        // Non-SGR ANSI sequences (CUF, ESC[2K, etc.) are dropped so they
-        // cannot displace the cursor when the caller writes at a fixed column.
-        var suffix = ""
-        while index < endIndex {
-            if self[index] == "\u{1B}" {
-                let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        if self[index] == "m" {
-                            // SGR — keep it
-                            suffix += String(self[seqStart...index])
-                        }
-                        // Non-SGR — drop it entirely
-                        index = self.index(after: index)
-                    }
-                }
-            } else {
-                suffix.append(self[index])
-                index = self.index(after: index)
-            }
-        }
-
         return sgrContext + suffix
     }
 
@@ -661,29 +674,25 @@ extension String {
     /// - Returns: The remainder of the string with ANSI codes intact.
     public func ansiAwareSuffix(droppingVisible dropCount: Int) -> String {
         var visible = 0
-        var index = startIndex
+        var result = ""
 
-        while index < endIndex && visible < dropCount {
-            if self[index] == "\u{1B}" {
-                // Skip the entire ANSI sequence
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
+        for segment in ansiSegments() {
+            // Everything at or after the drop boundary is kept verbatim
+            // (ANSI included); everything before it is discarded.
+            let keeping = visible >= dropCount
+            switch segment {
+            case .ansi(let sequence, _):
+                if keeping { result += sequence }
+            case .visible(let character):
+                if keeping {
+                    result.append(character)
+                } else {
+                    visible += character.terminalWidth
                 }
-            } else {
-                visible += self[index].terminalWidth
-                index = self.index(after: index)
             }
         }
 
-        guard index < endIndex else { return "" }
-        return String(self[index...])
+        return result
     }
 
     // MARK: - ANSI State Extraction
