@@ -13,98 +13,39 @@ import Testing
 @Suite("Color.downsampledToPalette256")
 struct DownsampleToPalette256Tests {
 
-    @Test("Standard ANSI colors pass through unchanged")
-    func standardPassthrough() {
-        #expect(Color.red.downsampledToPalette256() == .red)
-        #expect(Color.blue.downsampledToPalette256() == .blue)
-        #expect(Color.black.downsampledToPalette256() == .black)
-        #expect(Color.white.downsampledToPalette256() == .white)
+    /// Colors already representable in the 256-color palette
+    /// (standard, bright, palette256, semantic) pass through
+    /// unchanged.
+    @Test(
+        "Already-palette256-representable colors pass through unchanged",
+        arguments: [
+            Color.red, .blue, .black, .white,  // standard
+            .brightRed, .brightCyan,  // bright
+            .palette(42), .palette(200),  // palette256
+            Color.palette.accent,  // semantic
+        ])
+    func passthrough(_ color: Color) {
+        #expect(color.downsampledToPalette256() == color)
     }
 
-    @Test("Bright ANSI colors pass through unchanged")
-    func brightPassthrough() {
-        #expect(Color.brightRed.downsampledToPalette256() == .brightRed)
-        #expect(Color.brightCyan.downsampledToPalette256() == .brightCyan)
-    }
-
-    @Test("Palette256 colors pass through unchanged")
-    func palette256Passthrough() {
-        #expect(Color.palette(42).downsampledToPalette256() == .palette(42))
-        #expect(Color.palette(200).downsampledToPalette256() == .palette(200))
-    }
-
-    @Test("Pure red RGB maps to palette red (index 196)")
-    func pureRed() {
-        let result = Color.rgb(255, 0, 0).downsampledToPalette256()
-        // 256-color pure red: 16 + 36*5 + 6*0 + 0 = 196
-        #expect(result == .palette(196))
-    }
-
-    @Test("Pure green RGB maps to palette green (index 46)")
-    func pureGreen() {
-        let result = Color.rgb(0, 255, 0).downsampledToPalette256()
-        // 16 + 36*0 + 6*5 + 0 = 46
-        #expect(result == .palette(46))
-    }
-
-    @Test("Pure blue RGB maps to palette blue (index 21)")
-    func pureBlue() {
-        let result = Color.rgb(0, 0, 255).downsampledToPalette256()
-        // 16 + 36*0 + 6*0 + 5 = 21
-        #expect(result == .palette(21))
-    }
-
-    @Test("Pure white RGB maps to palette white (index 231)")
-    func pureWhite() {
-        let result = Color.rgb(255, 255, 255).downsampledToPalette256()
-        // 16 + 36*5 + 6*5 + 5 = 231
-        #expect(result == .palette(231))
-    }
-
-    @Test("Pure black RGB maps to cube origin (index 16)")
-    func pureBlack() {
-        let result = Color.rgb(0, 0, 0).downsampledToPalette256()
-        // Cube index 16 is (0,0,0) — exact match, distance = 0
-        #expect(result == .palette(16))
-    }
-
-    @Test("Mid-gray RGB prefers grayscale ramp over cube")
-    func midGray() {
-        // 128,128,128 — grayscale 244 has value 128 (exact),
-        // cube 102 has (135,135,135)
-        let result = Color.rgb(128, 128, 128).downsampledToPalette256()
-        #expect(result == .palette(244))
-    }
-
-    @Test("Orange RGB maps to nearest cube entry")
-    func orangeRGB() {
-        let result = Color.rgb(255, 128, 0).downsampledToPalette256()
-        // r=255→5, g=128→nearest is 135(index 2), b=0→0
-        // Index: 16 + 36*5 + 6*2 + 0 = 208
-        #expect(result == .palette(208))
-    }
-
-    @Test("Semantic colors pass through unchanged")
-    func semanticPassthrough() {
-        let semantic = Color.palette.accent
-        #expect(semantic.downsampledToPalette256() == semantic)
-    }
-
-    @Test("Near-cube-boundary colors quantize correctly")
-    func nearBoundary() {
-        // Channel value 115 is equidistant between 95 (level 1) and 135 (level 2)
-        // but closer to 95 by 20 vs 135 by 20 — should pick 95 (first found)
-        let result = Color.rgb(95, 0, 0).downsampledToPalette256()
-        // r=95→level 1, g=0→0, b=0→0 → index 16 + 36*1 = 52
-        #expect(result == .palette(52))
-    }
-
-    @Test("Exact cube channel values map directly")
-    func exactCubeValues() {
-        // All six cube levels: 0, 95, 135, 175, 215, 255
-        let r135g175b215 = Color.rgb(135, 175, 215).downsampledToPalette256()
-        // r=2, g=3, b=4 → 16 + 36*2 + 6*3 + 4 = 16 + 72 + 18 + 4 = 110
-        #expect(r135g175b215 == .palette(110))
+    /// RGB colors map to the nearest 256-color cube / grayscale
+    /// index. Comments give the index arithmetic
+    /// (16 + 36·r + 6·g + b over the cube levels 0/95/135/175/215/255).
+    @Test(
+        "RGB colors downsample to the nearest palette256 index",
+        arguments: [
+            (Color.rgb(255, 0, 0), 196),  // pure red: 16 + 36·5
+            (Color.rgb(0, 255, 0), 46),  // pure green: 16 + 6·5
+            (Color.rgb(0, 0, 255), 21),  // pure blue: 16 + 5
+            (Color.rgb(255, 255, 255), 231),  // pure white
+            (Color.rgb(0, 0, 0), 16),  // pure black: cube origin
+            (Color.rgb(128, 128, 128), 244),  // mid-gray: grayscale ramp beats cube
+            (Color.rgb(255, 128, 0), 208),  // orange: r→5, g→135(2), b→0
+            (Color.rgb(95, 0, 0), 52),  // near boundary: r→level 1 → 16 + 36·1
+            (Color.rgb(135, 175, 215), 110),  // exact cube levels 2,3,4
+        ])
+    func rgbToNearestIndex(_ input: Color, _ index: Int) {
+        #expect(input.downsampledToPalette256() == .palette(UInt8(index)))
     }
 }
 
@@ -113,100 +54,45 @@ struct DownsampleToPalette256Tests {
 @Suite("Color.downsampledToANSI16")
 struct DownsampleToANSI16Tests {
 
-    @Test("Standard ANSI colors pass through unchanged")
-    func standardPassthrough() {
-        #expect(Color.red.downsampledToANSI16() == .red)
-        #expect(Color.blue.downsampledToANSI16() == .blue)
-        #expect(Color.black.downsampledToANSI16() == .black)
+    /// Standard, bright, and semantic colors pass through the
+    /// 16-color downsample unchanged.
+    @Test(
+        "Already-ANSI16-representable colors pass through unchanged",
+        arguments: [
+            Color.red, .blue, .black,  // standard
+            .brightRed, .brightGreen,  // bright
+            Color.palette.accent,  // semantic
+        ])
+    func passthrough(_ color: Color) {
+        #expect(color.downsampledToANSI16() == color)
     }
 
-    @Test("Bright ANSI colors pass through unchanged")
-    func brightPassthrough() {
-        #expect(Color.brightRed.downsampledToANSI16() == .brightRed)
-        #expect(Color.brightGreen.downsampledToANSI16() == .brightGreen)
-    }
-
-    @Test("Palette256 indices 0-7 map to standard ANSI colors")
-    func palette256StandardRange() {
-        #expect(Color.palette(0).downsampledToANSI16() == .black)
-        #expect(Color.palette(1).downsampledToANSI16() == .red)
-        #expect(Color.palette(2).downsampledToANSI16() == .green)
-        #expect(Color.palette(7).downsampledToANSI16() == .white)
-    }
-
-    @Test("Palette256 indices 8-15 map to bright ANSI colors")
-    func palette256BrightRange() {
-        #expect(Color.palette(8).downsampledToANSI16() == .brightBlack)
-        #expect(Color.palette(9).downsampledToANSI16() == .brightRed)
-        #expect(Color.palette(14).downsampledToANSI16() == .brightCyan)
-        #expect(Color.palette(15).downsampledToANSI16() == .brightWhite)
-    }
-
-    @Test("Palette256 higher indices map to nearest ANSI color")
-    func palette256HigherIndices() {
-        // Index 196 = pure red (255,0,0) → should match bright red
-        let result = Color.palette(196).downsampledToANSI16()
-        #expect(result == .brightRed)
-    }
-
-    @Test("Pure RGB red maps to nearest ANSI red")
-    func pureRGBRed() {
-        let result = Color.rgb(255, 0, 0).downsampledToANSI16()
-        // Bright red is (255, 0, 0) — exact match
-        #expect(result == .brightRed)
-    }
-
-    @Test("Pure RGB blue maps to nearest ANSI blue")
-    func pureRGBBlue() {
-        let result = Color.rgb(0, 0, 255).downsampledToANSI16()
-        // Standard blue (0, 0, 238) is closest
-        #expect(result == .blue)
-    }
-
-    @Test("Pure RGB green maps to nearest ANSI green")
-    func pureRGBGreen() {
-        let result = Color.rgb(0, 255, 0).downsampledToANSI16()
-        // Bright green is (0, 255, 0) — exact match
-        #expect(result == .brightGreen)
-    }
-
-    @Test("RGB black maps to ANSI black")
-    func rgbBlack() {
-        let result = Color.rgb(0, 0, 0).downsampledToANSI16()
-        #expect(result == .black)
-    }
-
-    @Test("RGB white maps to ANSI bright white")
-    func rgbWhite() {
-        let result = Color.rgb(255, 255, 255).downsampledToANSI16()
-        #expect(result == .brightWhite)
-    }
-
-    @Test("Semantic colors pass through unchanged")
-    func semanticPassthrough() {
-        let semantic = Color.palette.accent
-        #expect(semantic.downsampledToANSI16() == semantic)
-    }
-
-    @Test("RGB yellow maps to nearest ANSI yellow")
-    func rgbYellow() {
-        let result = Color.rgb(255, 255, 0).downsampledToANSI16()
-        // Bright yellow is (255, 255, 0) — exact match
-        #expect(result == .brightYellow)
-    }
-
-    @Test("Dark red maps to standard ANSI red, not bright")
-    func darkRed() {
-        let result = Color.rgb(200, 0, 0).downsampledToANSI16()
-        // Standard red is (205, 0, 0) — very close
-        #expect(result == .red)
-    }
-
-    @Test("Gray maps to bright black (gray)")
-    func gray() {
-        let result = Color.rgb(127, 127, 127).downsampledToANSI16()
-        // Bright black is (127, 127, 127) — exact match
-        #expect(result == .brightBlack)
+    /// palette256 and RGB colors map to their nearest 16-color ANSI
+    /// equivalent. Indices 0–7 → standard, 8–15 → bright, higher
+    /// indices and RGB → nearest by distance.
+    @Test(
+        "palette256 and RGB colors downsample to the nearest ANSI16 color",
+        arguments: [
+            (Color.palette(0), Color.black),
+            (.palette(1), .red),
+            (.palette(2), .green),
+            (.palette(7), .white),
+            (.palette(8), .brightBlack),
+            (.palette(9), .brightRed),
+            (.palette(14), .brightCyan),
+            (.palette(15), .brightWhite),
+            (.palette(196), .brightRed),  // pure red (255,0,0)
+            (.rgb(255, 0, 0), .brightRed),  // exact bright red
+            (.rgb(0, 0, 255), .blue),  // standard blue (0,0,238) closest
+            (.rgb(0, 255, 0), .brightGreen),  // exact bright green
+            (.rgb(0, 0, 0), .black),
+            (.rgb(255, 255, 255), .brightWhite),
+            (.rgb(255, 255, 0), .brightYellow),  // exact bright yellow
+            (.rgb(200, 0, 0), .red),  // dark red → standard (205,0,0)
+            (.rgb(127, 127, 127), .brightBlack),  // gray = bright black
+        ])
+    func toNearestANSI16(_ input: Color, _ expected: Color) {
+        #expect(input.downsampledToANSI16() == expected)
     }
 }
 
@@ -243,86 +129,32 @@ struct ColorDepthTests {
 @Suite("ANSIRenderer.downsample")
 struct ANSIRendererDownsampleTests {
 
-    // MARK: - Truecolor depth
-
-    @Test("At truecolor, RGB passes through")
-    func truecolorRGB() {
-        let color = Color.rgb(100, 200, 50)
-        let result = ANSIRenderer.downsample(color, to: .truecolor)
-        #expect(result == color)
-    }
-
-    @Test("At truecolor, palette256 passes through")
-    func truecolorPalette() {
-        let color = Color.palette(42)
-        let result = ANSIRenderer.downsample(color, to: .truecolor)
-        #expect(result == color)
-    }
-
-    @Test("At truecolor, standard passes through")
-    func truecolorStandard() {
-        let result = ANSIRenderer.downsample(.red, to: .truecolor)
-        #expect(result == .red)
-    }
-
-    // MARK: - 256-color depth
-
-    @Test("At palette256, RGB is downsampled")
-    func palette256RGB() {
-        let result = ANSIRenderer.downsample(.rgb(255, 0, 0), to: .palette256)
-        #expect(result == .palette(196))
-    }
-
-    @Test("At palette256, palette256 passes through")
-    func palette256Palette() {
-        let result = ANSIRenderer.downsample(.palette(42), to: .palette256)
-        #expect(result == .palette(42))
-    }
-
-    @Test("At palette256, standard passes through")
-    func palette256Standard() {
-        let result = ANSIRenderer.downsample(.red, to: .palette256)
-        #expect(result == .red)
-    }
-
-    @Test("At palette256, bright passes through")
-    func palette256Bright() {
-        let result = ANSIRenderer.downsample(.brightCyan, to: .palette256)
-        #expect(result == .brightCyan)
-    }
-
-    // MARK: - 16-color depth
-
-    @Test("At basic16, RGB is downsampled to ANSI")
-    func basic16RGB() {
-        let result = ANSIRenderer.downsample(.rgb(255, 0, 0), to: .basic16)
-        #expect(result == .brightRed)
-    }
-
-    @Test("At basic16, palette256 is downsampled to ANSI")
-    func basic16Palette() {
-        let result = ANSIRenderer.downsample(.palette(196), to: .basic16)
-        #expect(result == .brightRed)
-    }
-
-    @Test("At basic16, standard passes through")
-    func basic16Standard() {
-        let result = ANSIRenderer.downsample(.red, to: .basic16)
-        #expect(result == .red)
-    }
-
-    @Test("At basic16, bright passes through")
-    func basic16Bright() {
-        let result = ANSIRenderer.downsample(.brightGreen, to: .basic16)
-        #expect(result == .brightGreen)
-    }
-
-    // MARK: - noColor depth
-
-    @Test("At noColor, colors pass through (stripping happens in code generation)")
-    func noColorPassthrough() {
-        let result = ANSIRenderer.downsample(.rgb(255, 0, 0), to: .noColor)
-        #expect(result == .rgb(255, 0, 0))
+    /// `ANSIRenderer.downsample(_:to:)` reduces a color to the given
+    /// depth: truecolor and noColor pass everything through (noColor
+    /// stripping happens later, in code generation); palette256
+    /// downsamples only RGB; basic16 downsamples RGB and palette256.
+    @Test(
+        "Downsampling a color to a target depth yields the expected color",
+        arguments: [
+            // truecolor — everything passes through
+            (Color.rgb(100, 200, 50), ColorDepth.truecolor, Color.rgb(100, 200, 50)),
+            (.palette(42), .truecolor, .palette(42)),
+            (.red, .truecolor, .red),
+            // palette256 — RGB downsampled, the rest pass through
+            (.rgb(255, 0, 0), .palette256, .palette(196)),
+            (.palette(42), .palette256, .palette(42)),
+            (.red, .palette256, .red),
+            (.brightCyan, .palette256, .brightCyan),
+            // basic16 — RGB and palette256 downsampled, ANSI passes through
+            (.rgb(255, 0, 0), .basic16, .brightRed),
+            (.palette(196), .basic16, .brightRed),
+            (.red, .basic16, .red),
+            (.brightGreen, .basic16, .brightGreen),
+            // noColor — passes through (stripped during code generation)
+            (.rgb(255, 0, 0), .noColor, .rgb(255, 0, 0)),
+        ])
+    func downsample(_ color: Color, _ depth: ColorDepth, _ expected: Color) {
+        #expect(ANSIRenderer.downsample(color, to: depth) == expected)
     }
 }
 
@@ -332,99 +164,49 @@ struct ANSIRendererDownsampleTests {
 @Suite("ANSIRenderer Color Codes with Explicit Depth")
 struct ANSIRendererExplicitDepthTests {
 
-    // MARK: - Foreground codes
-
-    @Test("Foreground codes at truecolor emit 38;2;r;g;b for RGB")
-    func fgTruecolorRGB() {
-        let codes = ANSIRenderer.foregroundCodes(for: .rgb(100, 200, 50), depth: .truecolor)
-        #expect(codes == ["38", "2", "100", "200", "50"])
+    /// SGR foreground parameter codes for a color at a given depth.
+    @Test(
+        "Foreground codes match the color and depth",
+        arguments: [
+            (Color.rgb(100, 200, 50), ColorDepth.truecolor, ["38", "2", "100", "200", "50"]),
+            (.palette(42), .truecolor, ["38", "5", "42"]),
+            (.red, .truecolor, ["31"]),
+            (.rgb(255, 0, 0), .palette256, ["38", "5", "196"]),
+            (.rgb(255, 0, 0), .basic16, ["91"]),  // bright red
+            (.palette(196), .basic16, ["91"]),
+            (.red, .noColor, []),
+            (.rgb(255, 0, 0), .noColor, []),
+        ])
+    func foregroundCodes(_ color: Color, _ depth: ColorDepth, _ codes: [String]) {
+        #expect(ANSIRenderer.foregroundCodes(for: color, depth: depth) == codes)
     }
 
-    @Test("Foreground codes at truecolor emit 38;5;n for palette256")
-    func fgTruecolorPalette() {
-        let codes = ANSIRenderer.foregroundCodes(for: .palette(42), depth: .truecolor)
-        #expect(codes == ["38", "5", "42"])
+    /// SGR background parameter codes for a color at a given depth.
+    @Test(
+        "Background codes match the color and depth",
+        arguments: [
+            (Color.rgb(100, 200, 50), ColorDepth.truecolor, ["48", "2", "100", "200", "50"]),
+            (.rgb(0, 255, 0), .palette256, ["48", "5", "46"]),
+            (.rgb(0, 255, 0), .basic16, ["102"]),  // bright green bg
+            (.blue, .noColor, []),
+        ])
+    func backgroundCodes(_ color: Color, _ depth: ColorDepth, _ codes: [String]) {
+        #expect(ANSIRenderer.backgroundCodes(for: color, depth: depth) == codes)
     }
 
-    @Test("Foreground codes at truecolor emit standard code for ANSI color")
-    func fgTruecolorStandard() {
-        let codes = ANSIRenderer.foregroundCodes(for: .red, depth: .truecolor)
-        #expect(codes == ["31"])
+    /// Bright colors are already 16-color-representable, so their
+    /// codes are identical at every (color-capable) depth.
+    @Test(
+        "Bright foreground codes pass through at all color depths",
+        arguments: [ColorDepth.truecolor, .palette256, .basic16])
+    func brightForegroundPassthrough(_ depth: ColorDepth) {
+        #expect(ANSIRenderer.foregroundCodes(for: .brightCyan, depth: depth) == ["96"])
     }
 
-    @Test("Foreground codes at palette256 downsamples RGB to 38;5;n")
-    func fgPalette256RGB() {
-        let codes = ANSIRenderer.foregroundCodes(for: .rgb(255, 0, 0), depth: .palette256)
-        #expect(codes == ["38", "5", "196"])
-    }
-
-    @Test("Foreground codes at basic16 downsamples RGB to standard code")
-    func fgBasic16RGB() {
-        let codes = ANSIRenderer.foregroundCodes(for: .rgb(255, 0, 0), depth: .basic16)
-        // Bright red = SGR 91
-        #expect(codes == ["91"])
-    }
-
-    @Test("Foreground codes at basic16 downsamples palette256 to standard code")
-    func fgBasic16Palette() {
-        let codes = ANSIRenderer.foregroundCodes(for: .palette(196), depth: .basic16)
-        #expect(codes == ["91"])
-    }
-
-    @Test("Foreground codes at noColor returns empty")
-    func fgNoColor() {
-        let codes = ANSIRenderer.foregroundCodes(for: .red, depth: .noColor)
-        #expect(codes.isEmpty)
-    }
-
-    @Test("Foreground codes at noColor returns empty for RGB")
-    func fgNoColorRGB() {
-        let codes = ANSIRenderer.foregroundCodes(for: .rgb(255, 0, 0), depth: .noColor)
-        #expect(codes.isEmpty)
-    }
-
-    // MARK: - Background codes
-
-    @Test("Background codes at truecolor emit 48;2;r;g;b for RGB")
-    func bgTruecolorRGB() {
-        let codes = ANSIRenderer.backgroundCodes(for: .rgb(100, 200, 50), depth: .truecolor)
-        #expect(codes == ["48", "2", "100", "200", "50"])
-    }
-
-    @Test("Background codes at palette256 downsamples RGB to 48;5;n")
-    func bgPalette256RGB() {
-        let codes = ANSIRenderer.backgroundCodes(for: .rgb(0, 255, 0), depth: .palette256)
-        #expect(codes == ["48", "5", "46"])
-    }
-
-    @Test("Background codes at basic16 downsamples RGB to standard code")
-    func bgBasic16RGB() {
-        let codes = ANSIRenderer.backgroundCodes(for: .rgb(0, 255, 0), depth: .basic16)
-        // Bright green background = SGR 102
-        #expect(codes == ["102"])
-    }
-
-    @Test("Background codes at noColor returns empty")
-    func bgNoColor() {
-        let codes = ANSIRenderer.backgroundCodes(for: .blue, depth: .noColor)
-        #expect(codes.isEmpty)
-    }
-
-    // MARK: - Bright colors
-
-    @Test("Bright foreground codes pass through at all depths")
-    func brightFgPassthrough() {
-        for depth: ColorDepth in [.truecolor, .palette256, .basic16] {
-            let codes = ANSIRenderer.foregroundCodes(for: .brightCyan, depth: depth)
-            #expect(codes == ["96"])
-        }
-    }
-
-    @Test("Bright background codes pass through at all depths")
-    func brightBgPassthrough() {
-        for depth: ColorDepth in [.truecolor, .palette256, .basic16] {
-            let codes = ANSIRenderer.backgroundCodes(for: .brightBlue, depth: depth)
-            #expect(codes == ["104"])
-        }
+    @Test(
+        "Bright background codes pass through at all color depths",
+        arguments: [ColorDepth.truecolor, .palette256, .basic16])
+    func brightBackgroundPassthrough(_ depth: ColorDepth) {
+        #expect(ANSIRenderer.backgroundCodes(for: .brightBlue, depth: depth) == ["104"])
     }
 }
