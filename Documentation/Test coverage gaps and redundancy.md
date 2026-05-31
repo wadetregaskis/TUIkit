@@ -137,11 +137,22 @@ either.
 
 ## Suggested order of attack
 
-1. `AppStorage` + backends (highest risk, easiest to mock).
-2. `InputHandler` five-layer dispatch suite.
-3. `StdinArrivalStream` (pipe-FD driven).
-4. `OnMouseEventModifier` / `DragGestureModifier`.
-5. Parameterise `ColorDownsampling` + style + SGR-parsing suites.
-6. View-extension targeted tests; `SignalManager` rationale.
+1. ~~`AppStorage` + backends~~ — **done** (`AppStorageTests`, `MockStorageBackend`).
+2. `InputHandler` five-layer dispatch suite — **still open** (the main
+   remaining gap; only indirect coverage today).
+3. ~~`StdinArrivalStream`~~ — **done** (`StdinArrivalNotifierTests`).
+4. ~~`OnMouseEventModifier` / `DragGestureModifier`~~ — **done**, and the
+   sibling gesture modifiers too: `onTapGesture`, `onScrollGesture`.
+5. ~~Parameterise `ColorDownsampling` + SGR-parsing~~ — **done**. (The
+   style suites were assessed as not worth parameterising — see above.)
+6. View-extension targeted tests — **largely done** (gesture modifiers,
+   `String.withPersistentBackground`; `truncatedToWidth` was already
+   well covered via `TextTests`). `SignalManager` covered via the
+   extracted `SignalFlags` + tests.
 
-Each is independent and can land as its own small, green commit.
+Also closed along the way: **`ViewRenderer`** now has a dedicated suite
+(`ViewRendererTests`) — writing it uncovered and fixed a real crash in
+`renderOnce(_:)` (it rendered with an empty environment).
+
+Each remaining item is independent and can land as its own small, green
+commit. The clear next one is the `InputHandler` five-layer suite.
