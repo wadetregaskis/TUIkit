@@ -157,7 +157,9 @@ Also closed along the way: **`ViewRenderer`** now has a dedicated suite
 (`ViewRendererTests`) — writing it uncovered and fixed a real crash in
 `renderOnce(_:)` (it rendered with an empty environment).
 
-Every prioritised gap above is now closed. What remains is only the
-low-priority "possibly over-tested" note below (no action) and the
-separately-tracked ANSI-scanner consolidation (a latent-bug-class
-cleanup, not a coverage gap).
+Every prioritised gap above is now closed. The ANSI-scanner
+consolidation that was parked here turned out to be a real (not latent)
+bug — four scanners swallowed an Extend scalar that followed an SGR
+terminator; it's now fixed via the scalar-level `ansiSegments()` helper,
+with `AnsiAwareScannerTests` covering all six functions. What remains is
+only the low-priority "possibly over-tested" note below (no action).
