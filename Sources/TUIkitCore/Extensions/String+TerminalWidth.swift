@@ -361,59 +361,57 @@ extension String {
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells
     /// and zero-width characters (combining marks, variation selectors).
     public var strippedLength: Int {
-        var count = 0
-        var index = startIndex
-
-        while index < endIndex {
-            if self[index] == "\u{1B}" {
-                // Skip ANSI sequence: ESC [ params letter
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    // Skip parameter bytes (digits, semicolons)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    // Skip the final byte (letter)
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
-            } else {
-                count += self[index].terminalWidth
-                index = self.index(after: index)
-            }
-        }
-
-        return count
+        String(scalarsStrippingANSI()).reduce(0) { $0 + $1.terminalWidth }
     }
 
-    /// The string with all ANSI escape codes removed.
-    public var stripped: String {
-        var result = ""
-        result.reserveCapacity(count)
-        var index = startIndex
-
-        while index < endIndex {
-            if self[index] == "\u{1B}" {
-                // Skip ANSI sequence: ESC [ params letter
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
+    /// This string's Unicode scalars with all CSI (`ESC [ … letter`) escape
+    /// sequences removed.
+    ///
+    /// Scans at the **scalar** level rather than the grapheme-cluster level.
+    /// That distinction is the whole point: an SGR sequence's terminator is a
+    /// letter (e.g. `m`), and in styled output it is immediately followed by
+    /// visible content. If that content begins with an `Extend` scalar — a
+    /// Fitzpatrick skin-tone modifier (U+1F3FB…U+1F3FF), a ZWJ, a combining
+    /// mark, a variation selector — Swift grapheme-clusters it onto the
+    /// preceding terminator letter (`m` + 🏽 → a single `Character`). A
+    /// `Character`-level skip of "the final letter" would then consume that
+    /// modifier along with the escape sequence and silently drop its width,
+    /// which made an ANSI-wrapped standalone modifier measure as 0 cells and
+    /// pushed enclosing list/table borders off by 2. Skipping exactly one
+    /// scalar for the terminator leaves the modifier as visible content.
+    private func scalarsStrippingANSI() -> String.UnicodeScalarView {
+        var visible = Self.UnicodeScalarView()
+        let scalars = unicodeScalars
+        var index = scalars.startIndex
+        while index < scalars.endIndex {
+            if scalars[index].value == 0x1B {  // ESC
+                index = scalars.index(after: index)
+                if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
+                    index = scalars.index(after: index)
+                    // Parameter bytes: ASCII digits and ';'.
+                    while index < scalars.endIndex,
+                        (0x30...0x39).contains(scalars[index].value) || scalars[index].value == 0x3B {
+                        index = scalars.index(after: index)
                     }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
+                    // Final byte: a single ASCII letter. Advance exactly one
+                    // scalar so any following Extend scalar is preserved.
+                    if index < scalars.endIndex,
+                        (0x41...0x5A).contains(scalars[index].value)
+                            || (0x61...0x7A).contains(scalars[index].value) {
+                        index = scalars.index(after: index)
                     }
                 }
             } else {
-                result.append(self[index])
-                index = self.index(after: index)
+                visible.append(scalars[index])
+                index = scalars.index(after: index)
             }
         }
+        return visible
+    }
 
-        return result
+    /// The string with all ANSI (CSI) escape codes removed.
+    public var stripped: String {
+        String(scalarsStrippingANSI())
     }
 
     /// Returns a copy with ANSI escape sequences removed, suitable for rendering user-provided content.

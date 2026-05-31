@@ -88,6 +88,49 @@ struct CharacterTerminalWidthTests {
     }
 }
 
+// MARK: - String.strippedLength
+
+@Suite("String.strippedLength")
+struct StrippedLengthTests {
+
+    @Test("Plain text counts visible cells")
+    func plainText() {
+        #expect("hello".strippedLength == 5)
+        #expect("日本".strippedLength == 4)  // 2 cells each
+        #expect("".strippedLength == 0)
+    }
+
+    @Test("ANSI escape sequences are excluded from the count")
+    func ansiExcluded() {
+        #expect("\u{1B}[31mhello\u{1B}[0m".strippedLength == 5)
+        #expect("\u{1B}[1;38;2;10;20;30mX\u{1B}[0m".strippedLength == 1)
+    }
+
+    @Test("An ANSI-wrapped standalone Fitzpatrick modifier counts as 2 cells")
+    func ansiWrappedModifier() {
+        // Regression: the skin-tone modifier (Extend) grapheme-clusters onto
+        // the SGR terminator letter (m🏽), so a Character-level ANSI skip used
+        // to swallow it → strippedLength returned 0 and list/table borders
+        // overflowed by 2. Scalar-level scanning keeps it visible.
+        #expect("\u{1B}[31m\u{1F3FD}\u{1B}[0m".strippedLength == 2)
+        // The realistic rendered shape: styled emoji + styled label.
+        let rendered = "\u{1B}[38;2;50;255;50m\u{1F3FD}\u{1B}[0m \u{1B}[38;2;50;255;50mlabel\u{1B}[0m"
+        #expect(rendered.strippedLength == 8)  // 2 + 1 + 5
+    }
+
+    @Test("An ANSI-wrapped flag pair counts as 2 cells")
+    func ansiWrappedFlag() {
+        #expect("\u{1B}[31m🇺🇸\u{1B}[0m".strippedLength == 2)
+    }
+
+    @Test("stripped removes escape codes but keeps the modifier scalar")
+    func strippedKeepsModifier() {
+        let s = "\u{1B}[31m\u{1F3FD}\u{1B}[0m"
+        #expect(s.stripped == "\u{1F3FD}")
+        #expect(s.stripped.unicodeScalars.count == 1)
+    }
+}
+
 // MARK: - Character.terminalAppCursorAdvance
 
 @Suite("Character.terminalAppCursorAdvance")
