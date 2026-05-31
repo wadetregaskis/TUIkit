@@ -27,16 +27,7 @@ private let testFiles: [FileInfo] = [
 
 @MainActor
 private func createTestContext(width: Int = 80, height: Int = 24) -> RenderContext {
-    let focusManager = FocusManager()
-    var environment = EnvironmentValues()
-    environment.focusManager = focusManager
-
-    return RenderContext(
-        availableWidth: width,
-        availableHeight: height,
-        environment: environment,
-        tuiContext: TUIContext()
-    )
+    makeRenderContext(width: width, height: height)
 }
 
 // MARK: - TableColumn Tests
