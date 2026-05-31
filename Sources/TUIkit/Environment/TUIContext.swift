@@ -40,10 +40,26 @@ final class LifecycleManager: @unchecked Sendable {
     /// Running async tasks keyed by lifecycle token.
     private var tasks: [String: Task<Void, Never>] = [:]
 
+    /// Whether appear/task effects actually run.
+    ///
+    /// `true` for a live app. A one-off snapshot render (see
+    /// ``ViewRenderer``) sets this `false`: views are still tracked
+    /// (so `recordAppear` tokens behave), but `onAppear` actions don't
+    /// execute and `.task` work isn't started — there is no run loop
+    /// to observe their results and no teardown pass to balance them,
+    /// and a snapshot must not mutate shared state as a side effect.
+    private let firesEffects: Bool
+
     // MARK: - Init
 
     /// Creates a new lifecycle manager.
-    init() {}
+    ///
+    /// - Parameter firesEffects: Whether `onAppear`/`.task` effects
+    ///   run (default `true`). Pass `false` for a side-effect-free
+    ///   snapshot render.
+    init(firesEffects: Bool = true) {
+        self.firesEffects = firesEffects
+    }
 }
 
 // MARK: - Internal API
@@ -86,9 +102,12 @@ extension LifecycleManager {
 
         if !appearedTokens.contains(token) {
             appearedTokens.insert(token)
+            let shouldFire = firesEffects
             lock.unlock()
-            action()
-            return true
+            // In snapshot mode the view is still recorded as appeared
+            // (so repeat renders behave), but the action is suppressed.
+            if shouldFire { action() }
+            return shouldFire
         }
         lock.unlock()
         return false
@@ -141,11 +160,14 @@ extension LifecycleManager {
         operation: @escaping @Sendable () async -> Void
     ) {
         lock.lock()
+        defer { lock.unlock() }
+        // Snapshot renders don't start tasks — there's no run loop to
+        // observe their effects and no disappear pass to cancel them.
+        guard firesEffects else { return }
         tasks[token]?.cancel()
         tasks[token] = Task(priority: priority) {
             await operation()
         }
-        lock.unlock()
     }
 
     /// Cancels and removes the task associated with the given token.

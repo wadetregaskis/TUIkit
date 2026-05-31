@@ -59,6 +59,10 @@ final class MockTerminal: TerminalProtocol {
     /// The current cursor position (row, column), 1-based.
     private(set) var cursorPosition: (row: Int, column: Int) = (1, 1)
 
+    /// Every `moveCursor(toRow:column:)` call, in order — lets tests
+    /// assert per-line positioning, not just the final cursor.
+    private(set) var cursorMoves: [(row: Int, column: Int)] = []
+
     /// Whether frame buffering is active.
     private var isBuffering = false
 
@@ -112,6 +116,7 @@ extension MockTerminal {
 
     func moveCursor(toRow row: Int, column: Int) {
         cursorPosition = (row, column)
+        cursorMoves.append((row, column))
         write(ANSIRenderer.moveCursor(toRow: row, column: column))
     }
 
@@ -149,6 +154,7 @@ extension MockTerminal {
         isInAlternateScreen = false
         isBuffering = false
         cursorPosition = (1, 1)
+        cursorMoves.removeAll()
         size = (80, 24)
     }
 

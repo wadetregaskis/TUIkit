@@ -156,3 +156,29 @@ extension EnvironmentValues {
         set { self[ActiveFocusSectionKey.self] = newValue }
     }
 }
+
+// MARK: - Runtime Service Wiring
+
+extension EnvironmentValues {
+    /// Wires the runtime services that the render pass and view
+    /// modifiers read (state storage, lifecycle, the input
+    /// dispatchers, render cache, preferences, localization) from a
+    /// ``TUIContext`` into this environment.
+    ///
+    /// Shared by ``RenderLoop`` — the live pipeline — and
+    /// ``ViewRenderer`` — one-off snapshot rendering — so the set of
+    /// wired services can't drift between the two. It deliberately
+    /// does **not** set the app-level managers (status bar, app
+    /// header, focus, palette, appearance); callers add those as they
+    /// need them.
+    mutating func applyRuntimeServices(from context: TUIContext) {
+        stateStorage = context.stateStorage
+        lifecycle = context.lifecycle
+        keyEventDispatcher = context.keyEventDispatcher
+        synthesizeKeyEvent = context.synthesizeKeyEvent
+        mouseEventDispatcher = context.mouseEventDispatcher
+        renderCache = context.renderCache
+        preferenceStorage = context.preferences
+        localizationService = LocalizationService.shared
+    }
+}

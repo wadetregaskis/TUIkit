@@ -384,15 +384,9 @@ extension RenderLoop {
         }
         environment.notificationService = NotificationService.current
 
-        // Runtime services (previously accessed via context.tuiContext)
-        environment.stateStorage = tuiContext.stateStorage
-        environment.lifecycle = tuiContext.lifecycle
-        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
-        environment.synthesizeKeyEvent = tuiContext.synthesizeKeyEvent
-        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-        environment.renderCache = tuiContext.renderCache
-        environment.preferenceStorage = tuiContext.preferences
-        environment.localizationService = LocalizationService.shared
+        // Runtime services (shared with ViewRenderer's one-off path so
+        // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).
+        environment.applyRuntimeServices(from: tuiContext)
 
         return environment
     }
