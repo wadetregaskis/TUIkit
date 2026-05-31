@@ -94,22 +94,28 @@ Merging these would *hurt* navigability. No action recommended.
 
 ### The real opportunity: parameterisation
 
-**Zero** test files use `@Test(arguments:)`. Several suites are
-shaped as N near-identical `@Test` functions that differ only in
-an input value — exactly what Swift Testing's parameterised tests
-are for. High-value candidates:
+Several suites were shaped as N near-identical `@Test` functions
+that differ only in an input value — exactly what Swift Testing's
+parameterised tests are for. Benefit: fewer, denser tests; adding a
+case is one row, not a new function; failures report the offending
+argument.
 
-- `ColorDownsamplingTests` — parameterise over `ColorDepth`
-  (`.trueColor` / `.ansi256` / `.ansi16` / `.mono`) and over a
-  table of input→expected colours.
-- Border / track / button / toggle / picker **style** tests —
-  parameterise over the style variants.
-- `MouseEvent` SGR parsing — parameterise over (sequence →
-  expected event) rows (press/release/drag/wheel + modifiers +
-  malformed).
+**Done:**
 
-Benefit: fewer, denser tests; adding a case is one row, not a
-new function; failures report the offending argument.
+- `ColorDownsamplingTests` — now `@Test(arguments:)` tables:
+  RGB→palette256 index, colour→ANSI16, `downsample(colour, depth)`,
+  fore/background codes per colour+depth, bright-passthrough per
+  depth.
+- `MouseEventSGRParsingTests` — now tables: SGR/legacy sequences →
+  (button, phase, x, y), plus rejected-sequence tables (the
+  shift-modifier case stays standalone, asserting a different field).
+
+**Assessed, not worth it:** the cursor / list **style** suites
+(`TextCursorStyleTests`, `ListStyleTests`) are a mix of
+shape→character, default-value, custom-init and `Equatable` checks
+rather than one repeated mapping; they're already small and tidy, so
+parameterising only the handful of mapping rows would be churn for
+little gain.
 
 ### Helper duplication
 
