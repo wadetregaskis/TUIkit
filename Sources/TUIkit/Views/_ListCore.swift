@@ -166,15 +166,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         style: any ListStyle,
         targetContentHeight: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
-        // Use the full content height when every row fits; only
-        // reserve the 2 scroll-indicator lines when the rows
-        // genuinely overflow, so a list with room to spare
-        // never scrolls unnecessarily.
+        // A list only scrolls (and shows indicators) when its rows
+        // don't all fit in the content area.
         let totalRowLines = rows.reduce(0) { $0 + $1.buffer.height }
-        let viewportHeight =
-            totalRowLines <= targetContentHeight
-            ? targetContentHeight
-            : max(1, targetContentHeight - 2)
+        let overflowing = totalRowLines > targetContentHeight
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -187,14 +182,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
-            viewportHeight: viewportHeight
+            contentHeight: targetContentHeight,
+            overflowing: overflowing
         )
         FocusRegistration.register(context: context, handler: handler)
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
 
-        let visibleRows = calculateVisibleRows(
-            rows: rows, handler: handler, viewportHeight: viewportHeight)
+        // Reserve a line for each scroll indicator that is actually
+        // present at this offset, so the rows plus indicators fill
+        // the content area exactly — no wasted blank line at the
+        // ends (which used to push the "N more below" indicator one
+        // row too high), and no overflow in the middle.
+        let visibleRows = resolveVisibleWindow(
+            rows: rows,
+            handler: handler,
+            contentHeight: targetContentHeight,
+            overflowing: overflowing
+        )
+        // Sync the viewport to the rows actually shown so the
+        // handler's indicator predicates match the rendering.
+        handler.viewportHeight = max(1, visibleRows.count)
 
         // Row width — explicit-frame lists fill the available
         // interior; otherwise we shrink to the widest visible row.
@@ -241,8 +249,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
-        viewportHeight: Int
+        contentHeight: Int,
+        overflowing: Bool
     ) -> ItemListHandler<SelectionValue> {
+        // Clamp the offset against the largest possible visible-row
+        // count (one indicator, at an end); the exact viewport is
+        // finalised in resolveVisibleWindow once the offset is known.
+        let provisionalViewport =
+            overflowing ? max(1, contentHeight - 1) : contentHeight
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: 0)
         let handlerBox: StateBox<ItemListHandler<SelectionValue>> = stateStorage.storage(
@@ -250,14 +264,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             default: ItemListHandler(
                 focusID: persistedFocusID,
                 itemCount: rows.count,
-                viewportHeight: viewportHeight,
+                viewportHeight: provisionalViewport,
                 selectionMode: selectionMode,
                 canBeFocused: !isDisabled
             )
         )
         let handler = handlerBox.value
         handler.itemCount = rows.count
-        handler.viewportHeight = viewportHeight
+        handler.contentHeight = contentHeight
+        handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.clampScrollOffset()
 
@@ -518,6 +533,42 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     }
 
     // MARK: - Visible Row Calculation
+
+    /// Determines which rows are visible, reserving a line for each
+    /// scroll indicator that is actually present at the current
+    /// offset.
+    ///
+    /// The reservation is dynamic: at the top or bottom only one
+    /// indicator shows, so one more row fits than in the middle
+    /// (where both show). This is what keeps the rows-plus-indicators
+    /// height equal to ``contentHeight`` everywhere — eliminating the
+    /// wasted blank line at the ends that used to bump the "N more
+    /// below" indicator one row too high.
+    private func resolveVisibleWindow(
+        rows: [SelectableListRow<SelectionValue>],
+        handler: ItemListHandler<SelectionValue>,
+        contentHeight: Int,
+        overflowing: Bool
+    ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
+        guard overflowing else {
+            return calculateVisibleRows(
+                rows: rows, handler: handler, viewportHeight: contentHeight)
+        }
+        let aboveLines = handler.scrollOffset > 0 ? 1 : 0
+        // First fill assuming no "below" indicator…
+        let withoutBelow = calculateVisibleRows(
+            rows: rows,
+            handler: handler,
+            viewportHeight: max(1, contentHeight - aboveLines))
+        // …then, if rows remain past that window, a "below" indicator
+        // is needed, so reserve its line and refill.
+        let belowShown = handler.scrollOffset + withoutBelow.count < rows.count
+        guard belowShown else { return withoutBelow }
+        return calculateVisibleRows(
+            rows: rows,
+            handler: handler,
+            viewportHeight: max(1, contentHeight - aboveLines - 1))
+    }
 
     private func calculateVisibleRows(
         rows: [SelectableListRow<SelectionValue>],

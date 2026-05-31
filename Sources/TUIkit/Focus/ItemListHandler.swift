@@ -61,7 +61,28 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     var itemCount: Int
 
     /// The number of visible items in the viewport.
+    ///
+    /// Callers set this to the number of rows that are *actually*
+    /// shown at the current ``scrollOffset`` — i.e. the content
+    /// area minus a line for each scroll indicator that is present
+    /// (see ``contentHeight``). Every ``ScrollableOffsetState``
+    /// predicate (``hasContentBelow``, ``visibleRange``,
+    /// ``rowsBelow``, ``maxOffset``) is derived from it, so keeping
+    /// it equal to the rows on screen is what makes the indicators
+    /// line up exactly with the content area.
     var viewportHeight: Int
+
+    /// The full height of the scrollable content area, in rows —
+    /// the space available for visible rows *plus* whichever
+    /// scroll indicators are showing.
+    ///
+    /// When set, ``ensureFocusedItemVisible()`` reserves room for
+    /// the indicators so the focused row never lands on an
+    /// indicator line. `nil` means the caller manages indicator
+    /// reservation itself and ``viewportHeight`` is the literal
+    /// visible-row count (the original behaviour, still used by the
+    /// handler's own unit tests).
+    var contentHeight: Int?
 
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode
@@ -286,7 +307,53 @@ extension ItemListHandler {
     var extent: Int { itemCount }
 
     /// Adjusts scroll offset to keep the focused item visible.
+    ///
+    /// When ``contentHeight`` is set the scroll-down target reserves
+    /// a line for the scroll indicators that will be present, so the
+    /// focused row never ends up hidden behind a "N more below"
+    /// indicator at the top→middle transition. ``clampScrollOffset()``
+    /// then snaps the offset back to the true bottom near the end,
+    /// where only one indicator shows and one extra row fits.
+    ///
+    /// With ``contentHeight`` `nil` the original literal-viewport
+    /// arithmetic is used (the caller has already reserved indicator
+    /// space, and the handler's unit tests rely on this form).
     func ensureFocusedItemVisible() {
+        guard let contentHeight else {
+            ensureFocusedItemVisibleLegacy()
+            return
+        }
+        guard contentHeight > 0 else { return }
+
+        // Scroll up: the focused row becomes the first visible row.
+        // When it isn't the very first item an "above" indicator
+        // appears, but the focused row is still the first *row* shown
+        // (just below the indicator), so it stays visible.
+        if focusedIndex < scrollOffset {
+            scrollOffset = focusedIndex
+        }
+
+        // Scroll down: keep the focused row within the visible rows.
+        // Use the conservative visible-row count — the case where
+        // both indicators show (contentHeight - 2) — so the focused
+        // row never lands on an indicator line. clampScrollOffset()
+        // pulls the offset back to the true bottom near the end.
+        let safeRows =
+            itemCount <= contentHeight
+            ? contentHeight
+            : max(1, contentHeight - 2)
+        if focusedIndex >= scrollOffset + safeRows {
+            scrollOffset = focusedIndex - safeRows + 1
+        }
+
+        clampScrollOffset()
+    }
+
+    /// The pre-dynamic-indicator scroll-into-view arithmetic, kept
+    /// for callers (and tests) that set ``viewportHeight`` to the
+    /// literal visible-row count and do their own indicator
+    /// reservation.
+    private func ensureFocusedItemVisibleLegacy() {
         guard viewportHeight > 0 else { return }
 
         // If focused item is above the viewport, scroll up

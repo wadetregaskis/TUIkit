@@ -253,19 +253,14 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         columnWidths: [Int],
         innerWidth: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
-        // Viewport height. The fixed chrome is 3 lines: the top
-        // border, the bottom border, and the column-header line.
-        // Scroll indicators cost a further 2 lines — but only
-        // when rows actually overflow. So when every row fits,
-        // use the full available height instead of reserving
-        // indicator space.
+        // The fixed chrome is 3 lines: the top border, the bottom
+        // border, and the column-header line. What's left is the
+        // scrollable content area, shared between the visible rows
+        // and whichever scroll indicators are present.
         let availableHeight = context.availableHeight
         let chromeRows = 3
-        let fitViewport = max(1, availableHeight - chromeRows)
-        let viewportHeight =
-            data.count <= fitViewport
-            ? fitViewport
-            : max(1, availableHeight - chromeRows - 2)
+        let contentHeight = max(1, availableHeight - chromeRows)
+        let overflowing = data.count > contentHeight
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -277,11 +272,29 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
-            viewportHeight: viewportHeight
+            contentHeight: contentHeight,
+            overflowing: overflowing
         )
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
+
+        // Reserve a line for each scroll indicator actually present
+        // at this offset so the rows plus indicators fill the content
+        // area exactly — no wasted blank line at the ends (which used
+        // to push the "N more below" indicator one row too high), no
+        // overflow in the middle. Mirrors _ListCore.
+        if overflowing {
+            let aboveLines = handler.scrollOffset > 0 ? 1 : 0
+            let remaining = data.count - handler.scrollOffset
+            let rowsWithoutBelow = min(remaining, max(1, contentHeight - aboveLines))
+            let belowShown = handler.scrollOffset + rowsWithoutBelow < data.count
+            let visibleRowCount =
+                belowShown
+                ? max(1, contentHeight - aboveLines - 1)
+                : rowsWithoutBelow
+            handler.viewportHeight = max(1, min(visibleRowCount, remaining))
+        }
 
         let lines = composeRowLines(
             handler: handler,
@@ -309,8 +322,14 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
-        viewportHeight: Int
+        contentHeight: Int,
+        overflowing: Bool
     ) -> ItemListHandler<Value.ID> {
+        // Clamp against the largest possible visible-row count (one
+        // indicator, at an end); the exact viewport is finalised by
+        // the caller once the offset is known.
+        let provisionalViewport =
+            overflowing ? max(1, contentHeight - 1) : contentHeight
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: 0)
         let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
@@ -318,14 +337,15 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
             default: ItemListHandler(
                 focusID: persistedFocusID,
                 itemCount: data.count,
-                viewportHeight: viewportHeight,
+                viewportHeight: provisionalViewport,
                 selectionMode: selectionMode,
                 canBeFocused: !isDisabled
             )
         )
         let handler = handlerBox.value
         handler.itemCount = data.count
-        handler.viewportHeight = viewportHeight
+        handler.contentHeight = contentHeight
+        handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.itemIDs = data.map { $0.id }
         handler.clampScrollOffset()

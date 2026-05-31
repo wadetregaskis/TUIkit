@@ -723,4 +723,40 @@ struct ItemListHandlerScrollTests {
         #expect(handler.focusedIndex == 42,
             "clampScrollOffset must NOT touch focusedIndex — that's ensureFocusedItemVisible's job")
     }
+
+    // MARK: - Indicator-aware scroll-into-view (contentHeight set)
+
+    /// With ``contentHeight`` set, the scroll-into-view logic reserves
+    /// room for the scroll indicators. Scrolling into the middle must
+    /// leave the focused row within the rows actually shown
+    /// (contentHeight − 2 when both indicators are present) — never on
+    /// the "N more below" indicator line; and focusing the last item
+    /// must reach the true bottom (only the "more above" indicator
+    /// shows there, so one extra row fits).
+    @Test("Indicator-aware scroll keeps the focused row visible and reaches the true bottom")
+    func indicatorAwareScrollIntoView() {
+        let handler = ItemListHandler<String>(
+            focusID: "test",
+            itemCount: 20,
+            viewportHeight: 5,  // bottom-case viewport (contentHeight − 1)
+            selectionMode: .single
+        )
+        handler.contentHeight = 6
+
+        // Middle: both indicators show → 4 rows visible. The focused
+        // row must fall within [scrollOffset, scrollOffset + 3].
+        handler.focusedIndex = 6
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset <= 6)
+        #expect(
+            6 <= handler.scrollOffset + 3,
+            "focused row must be within the 4 visible middle rows; scrollOffset=\(handler.scrollOffset)")
+
+        // Bottom: "above" indicator + 5 rows (15…19) → offset 20 − 5.
+        handler.focusedIndex = 19
+        handler.ensureFocusedItemVisible()
+        #expect(
+            handler.scrollOffset == 15,
+            "last item should sit at the true bottom (offset 15); got \(handler.scrollOffset)")
+    }
 }

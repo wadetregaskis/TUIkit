@@ -492,4 +492,98 @@ struct ListRenderingTests {
             "After filter, Row 7 should be visible; got:\n\(text)"
         )
     }
+
+    // MARK: - Scroll-indicator placement
+
+    /// Regression test for the "spurious / misplaced scroll
+    /// indicator" bug: at the top of an overflowing list the
+    /// viewport reserved space for *both* indicators even though
+    /// only "▼ N more below" was showing, leaving a wasted blank
+    /// line at the bottom and bumping the indicator one row too
+    /// high. The fix reserves a line only for an indicator that is
+    /// actually present, so the rows + indicator fill the content
+    /// area exactly.
+    @Test("Overflowing list shows 'more below' on the last content row at the top — no blank line")
+    func scrollIndicatorOnLastRowAtTop() {
+        let context = createTestContext(width: 24, height: 8)
+        let items = (0..<20).map { "item-\($0)" }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
+        let joined = lines.joined(separator: "\n")
+
+        // The bottom border is the last line; the indicator must be
+        // the content row immediately above it (was a blank line,
+        // with the indicator one row higher, under the bug).
+        #expect(
+            lines[lines.count - 2].contains("more below"),
+            "'more below' must sit on the last content row; got:\n\(joined)")
+        #expect(
+            !lines[lines.count - 2].contains("item-"),
+            "the last content row is the indicator, not an item; got:\n\(joined)")
+        // The row directly above the indicator must be a real item,
+        // proving there is no wasted blank line.
+        #expect(
+            lines[lines.count - 3].contains("item-"),
+            "a real item must sit directly above the indicator; got:\n\(joined)")
+        #expect(
+            !joined.contains("more above"),
+            "no 'more above' at the very top; got:\n\(joined)")
+    }
+
+    /// At the bottom only the "▲ N more above" indicator shows, the
+    /// last item is visible, and it sits on the last content row
+    /// (no wasted blank line at the bottom end either).
+    @Test("Overflowing list shows the last item on the last content row at the bottom")
+    func scrollIndicatorAtBottom() {
+        let context = createTestContext(width: 24, height: 8)
+        let items = (0..<20).map { "item-\($0)" }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        _ = renderToBuffer(view, context: context)  // register + focus the list
+        _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .end))
+        let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
+        let joined = lines.joined(separator: "\n")
+
+        #expect(
+            lines[1].contains("more above"),
+            "top content row must be the 'more above' indicator; got:\n\(joined)")
+        #expect(
+            !joined.contains("more below"),
+            "no 'more below' at the bottom; got:\n\(joined)")
+        #expect(
+            lines[lines.count - 2].contains("item-19"),
+            "the last item must sit on the last content row; got:\n\(joined)")
+    }
+
+    /// In the middle both indicators show and the rows between them
+    /// fill the content area exactly — no overlap, no blank line.
+    @Test("Overflowing list shows both indicators with the focused row visible in the middle")
+    func scrollIndicatorsInMiddle() {
+        let context = createTestContext(width: 24, height: 8)
+        let items = (0..<20).map { "item-\($0)" }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        _ = renderToBuffer(view, context: context)
+        for _ in 0..<6 {
+            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+        }
+        let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
+        let joined = lines.joined(separator: "\n")
+
+        #expect(
+            lines[1].contains("more above"),
+            "'more above' on the first content row; got:\n\(joined)")
+        #expect(
+            lines[lines.count - 2].contains("more below"),
+            "'more below' on the last content row; got:\n\(joined)")
+        // The focused row (item-6) must be a real, visible row — not
+        // hidden behind the below indicator at the transition.
+        #expect(
+            joined.contains("item-6"),
+            "the focused row must stay visible at the top→middle transition; got:\n\(joined)")
+    }
 }
