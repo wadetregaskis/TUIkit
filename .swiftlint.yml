@@ -21,6 +21,10 @@ disabled_rules:
   - trailing_comma
   # swift-format places opening braces on new lines for wrapped signatures
   - opening_brace
+  # A type's length isn't a meaningful quality signal here: cohesive
+  # internal render cores (e.g. _ListCore) are clearer kept whole than
+  # split across files purely to satisfy a line ceiling.
+  - type_body_length
 
 opt_in_rules:
   - closure_end_indentation
@@ -68,10 +72,6 @@ file_length:
   warning: 600
   error: 1200
   ignore_comment_only_lines: true
-
-type_body_length:
-  warning: 450
-  error: 600
 
 function_body_length:
   # The 250-line error ceiling lets the bundled-palette registry in
