@@ -586,4 +586,28 @@ struct ListRenderingTests {
             joined.contains("item-6"),
             "the focused row must stay visible at the top→middle transition; got:\n\(joined)")
     }
+
+    /// The scroll offset must never rest at 1: an "▲ 1 more above"
+    /// indicator hides a single row using a line that could simply
+    /// show that row, so offset 0 (first row visible, no indicator)
+    /// strictly dominates it. Walking the selection down must take
+    /// the above indicator straight from absent to "2 more above".
+    @Test("Overflowing list never shows '1 more above' (offset never rests at 1)")
+    func neverShowsSingleRowAboveIndicator() {
+        let context = createTestContext(width: 24, height: 8)
+        let items = (0..<20).map { "item-\($0)" }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        _ = renderToBuffer(view, context: context)  // register + focus
+
+        for _ in 0..<20 {
+            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+            let joined = renderToBuffer(view, context: context)
+                .lines.map(\.stripped).joined(separator: "\n")
+            #expect(
+                !joined.contains("▲ 1 more above"),
+                "offset 1 is dominated by offset 0 — never show '1 more above'; got:\n\(joined)")
+        }
+    }
 }

@@ -275,6 +275,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.clampScrollOffset()
+        // An "above" indicator that hides exactly one row wastes its
+        // line: that line could just show the row. So never rest at
+        // offset 1 — snap to 0, where the first row shows with no
+        // indicator. Removing the indicator frees a line, so the row
+        // that was at the bottom of the viewport is still shown.
+        if overflowing, handler.scrollOffset == 1 {
+            handler.scrollOffset = 0
+        }
 
         var selectableIndices = Set<Int>()
         var itemIDs: [SelectionValue?] = []
