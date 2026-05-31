@@ -118,6 +118,20 @@ struct StrippedLengthTests {
         #expect(rendered.strippedLength == 8)  // 2 + 1 + 5
     }
 
+    @Test("A space and an ANSI-separated modifier are counted as distinct runs (1 + 2)")
+    func spaceThenAnsiWrappedModifier() {
+        // The list-indent case: a plain space, then a styled modifier. The
+        // space and the Extend modifier are separated by an escape sequence,
+        // so they must be measured as separate runs — 1 + 2 = 3. Counting the
+        // whole visible string at once would let the modifier cluster onto the
+        // space and report 2, which padded list rows one cell too wide
+        // (border one column too far right).
+        #expect(" \u{1B}[31m\u{1F3FD}\u{1B}[0m".strippedLength == 3)
+        // …and adjacent within a single run, a base + modifier is one 2-cell
+        // cluster, as it should be.
+        #expect("\u{1B}[31m\u{1F44B}\u{1F3FD}\u{1B}[0m".strippedLength == 2)
+    }
+
     @Test("An ANSI-wrapped flag pair counts as 2 cells")
     func ansiWrappedFlag() {
         #expect("\u{1B}[31m🇺🇸\u{1B}[0m".strippedLength == 2)

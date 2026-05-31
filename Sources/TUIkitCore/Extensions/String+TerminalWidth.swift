@@ -361,30 +361,52 @@ extension String {
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells
     /// and zero-width characters (combining marks, variation selectors).
     public var strippedLength: Int {
-        String(scalarsStrippingANSI()).reduce(0) { $0 + $1.terminalWidth }
+        visibleANSIRuns().reduce(0) { total, run in
+            total + run.reduce(0) { $0 + $1.terminalWidth }
+        }
     }
 
-    /// This string's Unicode scalars with all CSI (`ESC [ … letter`) escape
-    /// sequences removed.
+    /// The visible text of this string split into runs separated by CSI
+    /// (`ESC [ … letter`) escape sequences, with the sequences removed.
     ///
-    /// Scans at the **scalar** level rather than the grapheme-cluster level.
-    /// That distinction is the whole point: an SGR sequence's terminator is a
-    /// letter (e.g. `m`), and in styled output it is immediately followed by
-    /// visible content. If that content begins with an `Extend` scalar — a
-    /// Fitzpatrick skin-tone modifier (U+1F3FB…U+1F3FF), a ZWJ, a combining
-    /// mark, a variation selector — Swift grapheme-clusters it onto the
-    /// preceding terminator letter (`m` + 🏽 → a single `Character`). A
-    /// `Character`-level skip of "the final letter" would then consume that
-    /// modifier along with the escape sequence and silently drop its width,
-    /// which made an ANSI-wrapped standalone modifier measure as 0 cells and
-    /// pushed enclosing list/table borders off by 2. Skipping exactly one
-    /// scalar for the terminator leaves the modifier as visible content.
-    private func scalarsStrippingANSI() -> String.UnicodeScalarView {
-        var visible = Self.UnicodeScalarView()
+    /// Two things matter here, both about grapheme clustering around escape
+    /// sequences:
+    ///
+    /// 1. **Scan at the scalar level, not by `Character`.** An SGR
+    ///    terminator is a letter (e.g. `m`), and styled output places visible
+    ///    content right after it. If that content begins with an `Extend`
+    ///    scalar — a Fitzpatrick skin-tone modifier (U+1F3FB…U+1F3FF), a ZWJ,
+    ///    a combining mark, a variation selector — Swift grapheme-clusters it
+    ///    onto the terminator letter (`m` + 🏽 → one `Character`). A
+    ///    `Character`-level skip of "the final letter" would consume the
+    ///    modifier with the escape sequence and drop its width (an
+    ///    ANSI-wrapped standalone modifier measured 0 cells). Skipping one
+    ///    scalar for the terminator keeps the modifier visible.
+    ///
+    /// 2. **Keep the runs separate; do not concatenate before measuring.**
+    ///    Content on opposite sides of an escape sequence is visually
+    ///    distinct and must be measured independently. A space ending one
+    ///    styled run followed by a skin-tone modifier starting the next is
+    ///    1 + 2 cells, but concatenating them would let the `Extend` modifier
+    ///    cluster onto the space and be miscounted as a single 2-cell glyph
+    ///    (the residual off-by-one after fix 1). Each run is grapheme-
+    ///    clustered on its own.
+    private func visibleANSIRuns() -> [String] {
+        var runs: [String] = []
+        var current = Self.UnicodeScalarView()
         let scalars = unicodeScalars
         var index = scalars.startIndex
+
+        func flush() {
+            if !current.isEmpty {
+                runs.append(String(current))
+                current = Self.UnicodeScalarView()
+            }
+        }
+
         while index < scalars.endIndex {
-            if scalars[index].value == 0x1B {  // ESC
+            if scalars[index].value == 0x1B {  // ESC — start of a CSI sequence
+                flush()
                 index = scalars.index(after: index)
                 if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
                     index = scalars.index(after: index)
@@ -402,16 +424,17 @@ extension String {
                     }
                 }
             } else {
-                visible.append(scalars[index])
+                current.append(scalars[index])
                 index = scalars.index(after: index)
             }
         }
-        return visible
+        flush()
+        return runs
     }
 
     /// The string with all ANSI (CSI) escape codes removed.
     public var stripped: String {
-        String(scalarsStrippingANSI())
+        visibleANSIRuns().joined()
     }
 
     /// Returns a copy with ANSI escape sequences removed, suitable for rendering user-provided content.
