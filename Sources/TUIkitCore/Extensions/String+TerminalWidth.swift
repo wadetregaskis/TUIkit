@@ -31,6 +31,18 @@ extension Character {
         guard let first = scalars.first else { return 0 }
         let scalarValue = first.value
 
+        // Fast path: a lone printable-ASCII scalar is always exactly one
+        // cell. This is the overwhelming majority of terminal text, and
+        // returning here skips the Unicode-property queries below
+        // (`isEmoji` / `isEmojiPresentation`) — those resolve through
+        // `_swift_stdlib_getBinaryProperties`, the single hottest leaf in
+        // render profiling. Restricted to single-scalar clusters so an
+        // ASCII base that carries combining marks, a keycap selector, etc.
+        // (e.g. "1️⃣") still falls through to the full width logic below.
+        if scalarValue >= 0x20, scalarValue <= 0x7E, scalars.count == 1 {
+            return 1
+        }
+
         // Zero-width characters
         if scalarValue == 0x200B || scalarValue == 0x200C || scalarValue == 0x200D || scalarValue == 0xFEFF { return 0 }  // ZW space/NJ/J/BOM
         if scalarValue == 0x00AD { return 0 }  // soft hyphen
