@@ -16,6 +16,8 @@ DerivedData/
 /profiling-traces/
 *.trace
 __pycache__/
+# ordo-one/benchmark stores baselines here; local + machine-specific.
+/.benchmarkBaselines/
 
 # Docs site (Astro)
 docs/node_modules/
