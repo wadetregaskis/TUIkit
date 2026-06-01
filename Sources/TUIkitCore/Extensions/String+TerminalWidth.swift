@@ -420,8 +420,6 @@ extension String {
     private func visibleANSIRuns() -> [String] {
         var runs: [String] = []
         var current = Self.UnicodeScalarView()
-        let scalars = unicodeScalars
-        var index = scalars.startIndex
 
         func flush() {
             if !current.isEmpty {
@@ -430,28 +428,52 @@ extension String {
             }
         }
 
-        while index < scalars.endIndex {
-            if scalars[index].value == 0x1B {  // ESC — start of a CSI sequence
-                flush()
-                index = scalars.index(after: index)
-                if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
-                    index = scalars.index(after: index)
-                    // Parameter bytes: ASCII digits and ';'.
-                    while index < scalars.endIndex,
-                        (0x30...0x39).contains(scalars[index].value) || scalars[index].value == 0x3B {
-                        index = scalars.index(after: index)
-                    }
-                    // Final byte: a single ASCII letter. Advance exactly one
-                    // scalar so any following Extend scalar is preserved.
-                    if index < scalars.endIndex,
-                        (0x41...0x5A).contains(scalars[index].value)
-                            || (0x61...0x7A).contains(scalars[index].value) {
-                        index = scalars.index(after: index)
-                    }
+        // Single forward pass over the scalar view. Iterating with the view's
+        // own iterator (`for…in`) decodes each scalar exactly once and never
+        // indexes by `String.Index`, so it avoids the per-access
+        // validateScalarIndex / _decodeScalar cost that the old index walk paid
+        // on every `scalars[index]` — the top self-time leaves in render
+        // profiling, and strippedLength runs on every line every frame. No
+        // array copy, no putback: a 3-state machine subsumes the look-ahead.
+        //
+        //   normal — accumulating visible scalars
+        //   sawESC — just saw ESC; a following '[' opens a CSI introducer
+        //   inCSI  — inside ESC[…; consume parameter bytes then one terminator
+        //
+        // An ESC, and a complete CSI introducer (ESC [ params letter), are
+        // dropped; everything else is visible. Exactly one scalar is consumed
+        // for the terminator so a trailing Extend scalar stays visible.
+        enum ScanState { case normal, sawESC, inCSI }
+        var state = ScanState.normal
+
+        for scalar in unicodeScalars {
+            let value = scalar.value
+            switch state {
+            case .normal:
+                if value == 0x1B { flush(); state = .sawESC } else { current.append(scalar) }
+
+            case .sawESC:
+                if value == 0x5B {  // '[' → CSI introducer
+                    state = .inCSI
+                } else if value == 0x1B {  // ESC ESC → drop the first, restart
+                    state = .sawESC
+                } else {  // a bare ESC: it is dropped, this scalar is visible
+                    current.append(scalar)
+                    state = .normal
                 }
-            } else {
-                current.append(scalars[index])
-                index = scalars.index(after: index)
+
+            case .inCSI:
+                if (0x30...0x39).contains(value) || value == 0x3B {
+                    continue  // parameter byte (digit or ';') — stay in CSI
+                }
+                if (0x41...0x5A).contains(value) || (0x61...0x7A).contains(value) {
+                    state = .normal  // final letter — introducer complete, consumed
+                } else if value == 0x1B {  // ESC interrupts a malformed CSI
+                    state = .sawESC
+                } else {  // non-letter where a terminator was expected: not
+                    current.append(scalar)  // part of the introducer, so visible
+                    state = .normal
+                }
             }
         }
         flush()
