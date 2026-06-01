@@ -22,6 +22,28 @@
 ### Workflow
 - **NEVER merge PRs autonomously**: stop after creating, let user merge
 
+### Performance & profiling (non-negotiable)
+- **Profile with the committed tools.** `Tools/Profiling/` records an
+  Instruments Time Profiler trace of `TUIkitExample` driven through a PTY
+  (`record.sh`) and ranks the hot functions (`analyze_timeprofile.py`).
+  See `Tools/Profiling/README.md`. Extend these rather than hand-rolling
+  one-off profiling.
+- **The profiling record lives in the commit message, not in the repo.**
+  Raw `.trace` bundles are large (~14 MB; ~5 MB compressed) and
+  git-ignored — NEVER commit them; they would bloat the clone for every
+  downstream package consumer forever.
+- **A change motivated or informed by profiling MUST, in its commit
+  message:**
+  1. quote the relevant profiling excerpts / numbers — the
+     `analyze_timeprofile.py` lines that matter (self / inclusive %, the
+     hot functions, module split), and
+  2. explain how that profile data informed the change: what was hot, why
+     this change addresses it, and the before/after numbers when available.
+
+  This keeps the rationale attached to the change it produced and
+  discoverable via `git log` / `git blame`, at zero repo cost. (Commits
+  not motivated by profiling — tooling, unrelated fixes — are exempt.)
+
 ### SwiftUI API Parity (non-negotiable)
 Public APIs MUST match SwiftUI signatures exactly unless terminal constraints require deviation (document why in comments).
 

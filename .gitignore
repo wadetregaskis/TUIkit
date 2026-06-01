@@ -11,6 +11,12 @@ DerivedData/
 /docs-output/
 /docc-output/
 
+# Profiling: raw Instruments traces are large (~14 MB each) and are NEVER
+# committed — the profiling record lives in commit messages (see CLAUDE.md).
+/profiling-traces/
+*.trace
+__pycache__/
+
 # Docs site (Astro)
 docs/node_modules/
 docs/.astro/
