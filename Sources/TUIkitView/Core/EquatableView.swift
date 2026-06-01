@@ -118,6 +118,19 @@ extension EquatableView: Renderable {
     }
 }
 
+// MARK: - Layout
+
+extension EquatableView: Layoutable {
+    /// Measures the wrapped content. An `EquatableView` is transparent to
+    /// layout — its size is exactly its content's size — so forwarding the
+    /// measurement keeps the content out of measureChild's render-to-measure
+    /// fallback. The buffer cache remains a render-time optimization; the
+    /// measure pass is pure size computation here.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
 // MARK: - Private Helpers
 
 extension EquatableView {

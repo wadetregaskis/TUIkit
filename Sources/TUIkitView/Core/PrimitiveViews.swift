@@ -160,3 +160,42 @@ extension ViewArray: Renderable, ChildInfoProvider {
         }
     }
 }
+
+// MARK: - Transparent-wrapper Layout
+
+// These wrappers impose no geometry of their own — their size is exactly
+// the size of the view they wrap. Declaring `Layoutable` (forwarding the
+// measurement to the child) keeps the wrapped subtree out of measureChild's
+// render-to-measure fallback, which would otherwise render it twice per
+// frame — once for its natural size and once more to probe flexibility —
+// on top of the real render. The render paths are unchanged, so output is
+// identical; only the measure pass gets cheaper.
+
+// NOTE: AnyView is deliberately NOT made Layoutable. It type-erases via a
+// stored render closure; capturing the wrapped view a second time in a
+// measure closure that also references the generic `measureChild` triggers
+// a runtime crash (reproducible — see AlignmentBoxSquishTests). AnyView
+// therefore keeps the render-to-measure fallback. It is far less common
+// than `if/else` (ConditionalView), which this change does cover.
+
+extension EmptyView: Layoutable {
+    /// An empty view occupies no cells.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize.fixed(0, 0)
+    }
+}
+
+extension ConditionalView: Layoutable {
+    /// Measures whichever branch is present, using the same branch identity
+    /// the render pass uses so `@State` resolves identically. The inactive-
+    /// branch state invalidation in `renderToBuffer` is a render-time
+    /// side-effect and is intentionally not repeated during measurement.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        switch self {
+        case .trueContent(let content):
+            return measureChild(content, proposal: proposal, context: context.withBranchIdentity("true"))
+        case .falseContent(let content):
+            return measureChild(content, proposal: proposal, context: context.withBranchIdentity("false"))
+        }
+    }
+}
