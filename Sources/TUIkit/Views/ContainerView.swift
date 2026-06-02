@@ -392,6 +392,15 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         innerContext.environment.focusIndicatorColor = nil
         let innerWidthAvailable = innerContext.availableWidth
 
+        // The body and footer are distinct structural children, so they get
+        // distinct identities (index 0 / 1) rather than both inheriting the
+        // container's. Otherwise their `@State` would share a storage slot, and
+        // — since a footerless container's empty footer measures to height 0,
+        // giving the body the same available height — they would collide on a
+        // memoized-measurement key. Must match `renderToBuffer` exactly.
+        let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
+        let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
+
         // Vertical chrome: top + bottom border, plus the optional footer
         // separator — the same arithmetic renderToBuffer uses.
         let hasFooter = footer != nil
@@ -404,7 +413,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         var footerNaturalHeight = 0
         var footerFlexibleHeight = false
         if let footerView = footer {
-            var footerContext = innerContext
+            var footerContext = footerInner
             footerContext.availableHeight = innerAvailableHeight
             let size = measureChild(
                 footerView.padding(footerPadding),
@@ -417,7 +426,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
 
         // Body into the space the chrome and footer leave.
         let bodyAvailableHeight = max(0, innerAvailableHeight - footerNaturalHeight)
-        var bodyContext = innerContext
+        var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
         let bodySize = measureChild(
             content.padding(padding),
@@ -449,7 +458,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         var footerFinalHeight = 0
         if let footerView = footer {
             let footerWidth = max(0, innerWidth - footerPadding.leading - footerPadding.trailing)
-            var footerContext = innerContext
+            var footerContext = footerInner
             footerContext.availableWidth = footerWidth
             footerContext.availableHeight = innerAvailableHeight
             let size = measureChild(
@@ -494,6 +503,12 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let indicatorColor = context.environment.focusIndicatorColor
         innerContext.environment.focusIndicatorColor = nil
 
+        // Distinct identities for the body and footer (see `sizeThatFits` — must
+        // match it exactly so the two passes agree on identity, hence on
+        // `@State` slots and focus IDs).
+        let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
+        let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
+
         // Vertical chrome: top + bottom border, plus the optional footer
         // separator. The body and footer must share whatever is left so the
         // assembled container never grows taller than `availableHeight`.
@@ -506,7 +521,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // the constrained re-render below, after the body — preserving Tab order.
         let measuredFooter: FrameBuffer?
         if let footerView = footer {
-            var measureContext = innerContext
+            var measureContext = footerInner
             measureContext.isMeasuring = true
             measureContext.availableHeight = innerAvailableHeight
             measuredFooter = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: measureContext)
@@ -518,7 +533,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
 
         // Render the body into the space the chrome and footer leave.
         let bodyAvailableHeight = max(0, innerAvailableHeight - footerHeight)
-        var bodyContext = innerContext
+        var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
         let bodyBuffer = TUIkit.renderToBuffer(content.padding(padding), context: bodyContext)
             .clamped(toWidth: innerContext.availableWidth, height: bodyAvailableHeight)
@@ -543,7 +558,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // the real render and registers focus, after the body.
         let footerBuffer: FrameBuffer?
         if let footerView = footer {
-            var footerContext = innerContext
+            var footerContext = footerInner
             footerContext.availableWidth = max(0, innerWidth - footerPadding.leading - footerPadding.trailing)
             footerContext.availableHeight = innerAvailableHeight
             footerBuffer = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: footerContext)
