@@ -135,6 +135,46 @@ public final class RenderCache: @unchecked Sendable {
     /// Cached entries keyed by view identity.
     private var entries: [ViewIdentity: CacheEntry] = [:]
 
+    /// Key for a memoized *measurement* (one identity can be measured at several
+    /// proposals per frame, so — unlike the buffer cache — this is keyed by the
+    /// proposal and available extent as well as the identity).
+    public struct SizeKey: Hashable {
+        public let identity: ViewIdentity
+        public let proposalWidth: Int?
+        public let proposalHeight: Int?
+        public let availableWidth: Int
+        public let availableHeight: Int
+        public let hasExplicitWidth: Bool
+        public let hasExplicitHeight: Bool
+
+        public init(
+            identity: ViewIdentity,
+            proposalWidth: Int?,
+            proposalHeight: Int?,
+            availableWidth: Int,
+            availableHeight: Int,
+            hasExplicitWidth: Bool,
+            hasExplicitHeight: Bool
+        ) {
+            self.identity = identity
+            self.proposalWidth = proposalWidth
+            self.proposalHeight = proposalHeight
+            self.availableWidth = availableWidth
+            self.availableHeight = availableHeight
+            self.hasExplicitWidth = hasExplicitWidth
+            self.hasExplicitHeight = hasExplicitHeight
+        }
+    }
+
+    /// A memoized measurement: the view value at cache time and its size.
+    private struct SizeEntry {
+        let viewSnapshot: Any
+        let size: ViewSize
+    }
+
+    /// Memoized `EquatableView` measurements (see ``lookupSize`` / ``storeSize``).
+    private var sizeEntries: [SizeKey: SizeEntry] = [:]
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -237,6 +277,29 @@ extension RenderCache {
         logDebug("STORE \(identity.path)")
     }
 
+    /// Looks up a memoized *measurement* for an `EquatableView`.
+    ///
+    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:)``:
+    /// returns the cached ``ViewSize`` only when the view value compares equal
+    /// and the proposal/available extent match. Value comparison is what makes
+    /// this safe where an identity-only key is not — a hit means identical
+    /// content, hence (between invalidations, which also bound environment
+    /// changes) an identical size.
+    public func lookupSize<V: Equatable>(key: SizeKey, view: V) -> ViewSize? {
+        guard let entry = sizeEntries[key], let old = entry.viewSnapshot as? V, old == view else {
+            stats.misses += 1
+            return nil
+        }
+        stats.hits += 1
+        return entry.size
+    }
+
+    /// Stores a memoized measurement for an `EquatableView`.
+    public func storeSize<V: Equatable>(key: SizeKey, view: V, size: ViewSize) {
+        stats.stores += 1
+        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)
+    }
+
     /// Marks an identity as active during the current render pass.
     ///
     /// Identities not marked active by the end of the render pass
@@ -263,6 +326,9 @@ extension RenderCache {
         for key in staleKeys {
             entries.removeValue(forKey: key)
         }
+        for key in sizeEntries.keys where !activeIdentities.contains(key.identity) {
+            sizeEntries.removeValue(forKey: key)
+        }
     }
 
     /// Clears all cached entries.
@@ -275,6 +341,7 @@ extension RenderCache {
         stats.clears += 1
         logDebug("CLEAR ALL (\(entries.count) entries)")
         entries.removeAll(keepingCapacity: true)
+        sizeEntries.removeAll(keepingCapacity: true)
     }
 
     /// Clears cached entries affected by a state change at the given identity.
@@ -286,13 +353,17 @@ extension RenderCache {
     /// - Parameter identity: The identity of the view whose state changed.
     public func clearAffected(by identity: ViewIdentity) {
         stats.subtreeClears += 1
-        let staleKeys = entries.keys.filter { cached in
+        func affects(_ cached: ViewIdentity) -> Bool {
             cached == identity
                 || cached.isAncestor(of: identity)
                 || identity.isAncestor(of: cached)
         }
+        let staleKeys = entries.keys.filter(affects)
         for key in staleKeys {
             entries.removeValue(forKey: key)
+        }
+        for key in sizeEntries.keys where affects(key.identity) {
+            sizeEntries.removeValue(forKey: key)
         }
         logDebug("CLEAR AFFECTED by \(identity.path): \(staleKeys.count) of \(entries.count + staleKeys.count) entries")
     }
@@ -300,6 +371,7 @@ extension RenderCache {
     /// Removes all cached entries, resets GC state, and clears statistics.
     public func reset() {
         entries.removeAll()
+        sizeEntries.removeAll()
         activeIdentities.removeAll()
         stats = Stats()
         statsAtFrameStart = Stats()

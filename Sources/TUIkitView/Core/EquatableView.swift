@@ -121,13 +121,38 @@ extension EquatableView: Renderable {
 // MARK: - Layout
 
 extension EquatableView: Layoutable {
-    /// Measures the wrapped content. An `EquatableView` is transparent to
-    /// layout — its size is exactly its content's size — so forwarding the
-    /// measurement keeps the content out of measureChild's render-to-measure
-    /// fallback. The buffer cache remains a render-time optimization; the
-    /// measure pass is pure size computation here.
+    /// Measures the wrapped content, memoizing the result by the content's
+    /// *value* (`Equatable.==`) — the size twin of the buffer cache in
+    /// `renderToBuffer`.
+    ///
+    /// Two-pass layout measures the same subtree repeatedly, and across frames a
+    /// static subtree measures to the same size every time. Because the cache is
+    /// keyed by the whole view value (not just identity), a hit means identical
+    /// content — and therefore, between cache invalidations (which also bound
+    /// the environment changes a measure could depend on), an identical size.
+    /// That value comparison is exactly why this is safe where an
+    /// identity-keyed measure memo is not. The cache shares `RenderCache`'s
+    /// lifecycle: cleared on `@State`/global-environment change, GC'd with the
+    /// buffer entries. When no cache is present (standalone measurement) this
+    /// forwards straight to the content, uncached.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        guard let cache = context.environment.renderCache else {
+            return measureChild(content, proposal: proposal, context: context)
+        }
+        let key = RenderCache.SizeKey(
+            identity: context.identity,
+            proposalWidth: proposal.width,
+            proposalHeight: proposal.height,
+            availableWidth: context.availableWidth,
+            availableHeight: context.availableHeight,
+            hasExplicitWidth: context.hasExplicitWidth,
+            hasExplicitHeight: context.hasExplicitHeight)
+        if let cached = cache.lookupSize(key: key, view: content) {
+            return cached
+        }
+        let size = measureChild(content, proposal: proposal, context: context)
+        cache.storeSize(key: key, view: content, size: size)
+        return size
     }
 }
 
