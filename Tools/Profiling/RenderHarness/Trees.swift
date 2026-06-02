@@ -89,6 +89,35 @@ enum Trees {
         }
     }
 
+    /// A Panel (with a button footer) beside a Card, each wrapping multi-line
+    /// content. Exercises the labeled-container measure path: `_PanelCore` /
+    /// `_CardCore` wrap `renderContainer` → `ContainerView` → `_ContainerViewCore`.
+    /// Mirrors the container demos and the Panel/Card showcase pages.
+    @MainActor
+    static func paneled() -> some View {
+        HStack(spacing: 2) {
+            Panel("Settings") {
+                VStack(alignment: .leading) {
+                    Text("Network")
+                    Text("Display")
+                    Text("Audio")
+                }
+            } footer: {
+                ButtonRow {
+                    Button("Save") {}
+                    Button("Cancel") {}
+                }
+            }
+            Card {
+                VStack(alignment: .leading) {
+                    Text("Card line one")
+                    Text("Card line two")
+                    Text("Card line three")
+                }
+            }
+        }
+    }
+
     /// A settings-style page mixing interactive controls. Mirrors the
     /// `render/Mixed-form page` benchmark.
     @MainActor
