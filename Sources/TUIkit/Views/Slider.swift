@@ -270,10 +270,33 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// Default track width when no explicit frame is set.
     private let defaultTrackWidth = 20
 
-    /// Fixed width for arrows and value label.
-    /// Layout: ◀ [track] ▶ [value]
-    /// Arrows: 4 chars ("◀ " + " ▶"), Value: 5 chars (" 100%")
-    private let fixedWidth = 9  // arrowsWidth(4) + valueLabelWidth(5)
+    /// The "NN%" label drawn at the trailing edge. Its width is 2–4 columns
+    /// depending on the percentage ("0%"…"100%"), so it is derived from the
+    /// live value rather than assumed. The fraction is clamped here exactly as
+    /// it is for display, so the width is stable across the value-clamping that
+    /// happens mid-render.
+    private var valueLabelText: String {
+        let range = bounds.upperBound - bounds.lowerBound
+        let fraction = range > 0
+            ? min(1.0, max(0.0, (value.wrappedValue - bounds.lowerBound) / range))
+            : 0
+        return "\(Int((fraction * 100).rounded()))%"
+    }
+
+    /// Columns consumed by everything other than the track:
+    /// `"◀ " + track + " ▶ " + "NN%"`, i.e. the two arrows, the three spaces
+    /// around them, and the value label.
+    ///
+    /// The value label is 2–4 columns wide depending on the percentage, so
+    /// this MUST be computed from the live value and used by BOTH
+    /// `sizeThatFits` and `renderToBuffer`. It was previously hard-coded to 9
+    /// (a 4-column "100%"); at any other value the track was sized one or two
+    /// columns too wide, so the slider rendered short of the space it measured
+    /// and its overall width jittered as the value crossed 10%/100%.
+    private var chromeWidth: Int {
+        // "◀" + " " (before track) + " " + "▶" + " " (after track) = 5 columns.
+        5 + valueLabelText.count
+    }
 
     var body: Never {
         fatalError("_SliderCore renders via Renderable")
@@ -284,10 +307,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// Slider is width-flexible: it has a minimum width but expands
     /// to fill available horizontal space in HStack.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let proposedWidth = proposal.width ?? (defaultTrackWidth + fixedWidth)
-        let trackWidth = max(minTrackWidth, proposedWidth - fixedWidth)
+        let chrome = chromeWidth
+        let proposedWidth = proposal.width ?? (defaultTrackWidth + chrome)
+        let trackWidth = max(minTrackWidth, proposedWidth - chrome)
         return ViewSize(
-            width: trackWidth + fixedWidth,
+            width: trackWidth + chrome,
             height: 1,
             isWidthFlexible: true,
             isHeightFlexible: false
@@ -300,8 +324,10 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
 
-        // Slider expands to fill available width (with minimum)
-        let trackWidth = max(minTrackWidth, context.availableWidth - fixedWidth)
+        // Slider expands to fill available width (with minimum). Subtracting
+        // the chrome here means track + chrome fills exactly `availableWidth`,
+        // matching what `sizeThatFits` reports.
+        let trackWidth = max(minTrackWidth, context.availableWidth - chromeWidth)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -653,9 +679,9 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         let leftArrow = ANSIRenderer.colorize(TerminalSymbols.leftArrow, foreground: arrowColor)
         let rightArrow = ANSIRenderer.colorize(TerminalSymbols.rightArrow, foreground: arrowColor)
 
-        // Build value label (percentage)
-        let percentage = Int((fraction * 100).rounded())
-        let valueText = "\(percentage)%"
+        // Build value label (percentage) — the same source of truth that
+        // `chromeWidth` measures, so the label always fits the space reserved.
+        let valueText = valueLabelText
         let valueLabelColor = isDisabled ? palette.foregroundTertiary : palette.foregroundSecondary
         let valueLabel = ANSIRenderer.colorize(valueText, foreground: valueLabelColor)
 
