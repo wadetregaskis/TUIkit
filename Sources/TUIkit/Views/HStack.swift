@@ -85,6 +85,7 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         let contentWidth = max(0, availableWidth - totalSpacing)
 
         var ideal = [Int](repeating: 0, count: count)
+        var idealHeight = [Int](repeating: 0, count: count)
         var fills = [Bool](repeating: false, count: count)
         for (index, child) in children.enumerated() {
             if child.isSpacer {
@@ -97,18 +98,28 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 // measure and render can no longer disagree.
                 let size = child.measure(proposal: .unspecified, context: context)
                 ideal[index] = size.width
+                idealHeight[index] = size.height
                 fills[index] = size.isWidthFlexible
             }
         }
 
         let widths = distributeLinearSpace(naturalSizes: ideal, isFlexible: fills, available: contentWidth)
 
-        // Heights at the widths children will actually be given (a child
-        // squeezed narrow enough to wrap is taller than at its natural width).
+        // Heights at the widths children will actually be given. A child given
+        // at least its ideal width wraps no further than it did at `.unspecified`
+        // (its ideal width is where it wrapped, and the allocation never exceeds
+        // the available width that ideal was measured against), so its height is
+        // the one already measured — reuse it. Only a child squeezed *narrower*
+        // than its ideal can grow taller, so only those are re-measured. This
+        // halves the per-child measures in the common (un-squeezed) case.
         var height = 1
         for (index, child) in children.enumerated() where !child.isSpacer {
-            let size = child.measure(proposal: ProposedSize(width: widths[index], height: nil), context: context)
-            height = max(height, size.height)
+            if widths[index] >= ideal[index] {
+                height = max(height, idealHeight[index])
+            } else {
+                let size = child.measure(proposal: ProposedSize(width: widths[index], height: nil), context: context)
+                height = max(height, size.height)
+            }
         }
 
         let totalWidth = widths.reduce(0, +) + totalSpacing
