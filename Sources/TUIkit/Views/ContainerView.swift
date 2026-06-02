@@ -287,7 +287,7 @@ extension ContainerView where Footer == EmptyView {
 /// This private struct contains all the complex rendering logic, allowing
 /// ContainerView to have a proper `body: some View` that enables modifiers
 /// to work correctly.
-private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable {
+private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layoutable {
     /// The container title (rendered in border or header section).
     let title: String?
 
@@ -306,8 +306,121 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
     /// The inner padding for the body.
     let padding: EdgeInsets
 
+    /// Padding applied around the footer. A single source of truth shared by
+    /// `renderToBuffer` and `sizeThatFits` so the two cannot disagree about the
+    /// footer's width budget.
+    private var footerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
+
     var body: Never {
         fatalError("_ContainerViewCore renders via Renderable")
+    }
+
+    /// Measures the container analytically — mirroring `renderToBuffer`'s
+    /// geometry but *measuring* the body and footer (cheap, and recursive
+    /// through `Layoutable` children) instead of rendering the whole subtree
+    /// and assembling its border chrome.
+    ///
+    /// `.border()` is a title- and footer-less `ContainerView`, so before this
+    /// every bordered measure fell through `measureChild`'s render-to-measure
+    /// fallback, which renders the entire subtree *twice* (once at the
+    /// proposal, once at `naturalWidth + 8` to probe flexibility). Nested
+    /// borders multiplied that: the layout-heavy RenderHarness trees
+    /// (`alignment`, `nested` — deeply nested `.border()`s) ran ~12× and ~45×
+    /// slower than the border-free `frames` tree. Measuring instead of
+    /// double-rendering removes that cost; the measure/render equivalence
+    /// tests pin the two passes together.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        // Resolve the space we were offered (proposal wins over the context,
+        // exactly as renderChild sets availableWidth/Height before rendering).
+        var base = context
+        base.availableWidth = proposal.width ?? context.availableWidth
+        base.availableHeight = proposal.height ?? context.availableHeight
+
+        // Inner context between the side borders (width − 2), matching render.
+        var innerContext = base.forBorderedContent()
+        innerContext.environment.focusIndicatorColor = nil
+        let innerWidthAvailable = innerContext.availableWidth
+
+        // Vertical chrome: top + bottom border, plus the optional footer
+        // separator — the same arithmetic renderToBuffer uses.
+        let hasFooter = footer != nil
+        let chromeHeight = 2 + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
+        let innerAvailableHeight = max(0, base.availableHeight - chromeHeight)
+
+        // Footer at its natural (full inner) width: gives the height the body
+        // must share and the footer's contribution to the inner-width vote.
+        var footerNaturalWidth = 0
+        var footerNaturalHeight = 0
+        var footerFlexibleWidth = false
+        var footerFlexibleHeight = false
+        if let footerView = footer {
+            var footerContext = innerContext
+            footerContext.availableHeight = innerAvailableHeight
+            let size = measureChild(
+                footerView.padding(footerPadding),
+                proposal: ProposedSize(width: innerWidthAvailable, height: innerAvailableHeight),
+                context: footerContext)
+            footerNaturalWidth = min(size.width, innerWidthAvailable)
+            footerNaturalHeight = min(size.height, innerAvailableHeight)
+            footerFlexibleWidth = size.isWidthFlexible
+            footerFlexibleHeight = size.isHeightFlexible
+        }
+
+        // Body into the space the chrome and footer leave.
+        let bodyAvailableHeight = max(0, innerAvailableHeight - footerNaturalHeight)
+        var bodyContext = innerContext
+        bodyContext.availableHeight = bodyAvailableHeight
+        let bodySize = measureChild(
+            content.padding(padding),
+            proposal: ProposedSize(width: innerWidthAvailable, height: bodyAvailableHeight),
+            context: bodyContext)
+        let bodyWidth = min(bodySize.width, innerWidthAvailable)
+        let bodyHeight = min(bodySize.height, bodyAvailableHeight)
+
+        // Bordering empty content with no footer produces nothing: render's
+        // `bodyBuffer.isEmpty` short-circuit returns the (empty) body as-is,
+        // WITHOUT the border chrome. A body that measures to zero width or
+        // height renders to an empty buffer — e.g. `EmptyView().border()`, or
+        // a border squeezed so narrow (`availableWidth <= 2`) that no content
+        // column survives. Mirror that here so a collapsed border doesn't
+        // measure two rows/cols taller than it renders.
+        if (bodyWidth == 0 || bodyHeight == 0) && footer == nil {
+            return ViewSize.fixed(bodyWidth, bodyHeight)
+        }
+
+        // Inner width: the widest of title / body / footer, capped at the
+        // space between the side borders.
+        let titleWidth = title.map { $0.strippedLength + 4 } ?? 0
+        let contentBasedWidth = max(titleWidth, bodyWidth, footerNaturalWidth)
+        let innerWidth = base.resolveContainerWidth(
+            contentWidth: contentBasedWidth, innerAvailableWidth: innerWidthAvailable)
+
+        // Footer re-measured at the resolved inner width — a narrower footer
+        // may wrap taller, exactly as the constrained re-render does.
+        var footerFinalHeight = 0
+        if let footerView = footer {
+            let footerWidth = max(0, innerWidth - footerPadding.leading - footerPadding.trailing)
+            var footerContext = innerContext
+            footerContext.availableWidth = footerWidth
+            footerContext.availableHeight = innerAvailableHeight
+            let size = measureChild(
+                footerView.padding(footerPadding),
+                proposal: ProposedSize(width: footerWidth, height: innerAvailableHeight),
+                context: footerContext)
+            footerFinalHeight = min(size.height, innerAvailableHeight)
+        }
+
+        let footerPresent = hasFooter && footerFinalHeight > 0
+        let separator = (footerPresent && style.showFooterSeparator) ? 1 : 0
+        let totalHeight = 1 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0) + 1
+        let totalWidth = innerWidth + 2
+
+        return ViewSize(
+            width: min(totalWidth, max(0, base.availableWidth)),
+            height: min(totalHeight, max(0, base.availableHeight)),
+            isWidthFlexible: bodySize.isWidthFlexible || footerFlexibleWidth,
+            isHeightFlexible: bodySize.isHeightFlexible || footerFlexibleHeight
+        )
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -334,7 +447,6 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // Measure the footer first (without side-effects) so the body knows
         // how much vertical space is left. Real focus registration happens in
         // the constrained re-render below, after the body — preserving Tab order.
-        let footerPadding = EdgeInsets(horizontal: 1, vertical: 0)
         let measuredFooter: FrameBuffer?
         if let footerView = footer {
             var measureContext = innerContext
