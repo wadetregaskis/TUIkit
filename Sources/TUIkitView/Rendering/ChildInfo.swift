@@ -220,10 +220,18 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // injection) lives in renderToBuffer, not in body. They fall through
     // to the render-to-measure fallback below, which runs the full pipeline.
     if !(view is Renderable), V.Body.self != Never.self {
+        // Descend into the body under the SAME child identity `renderToBuffer`
+        // uses (it appends the body type via `withChildIdentity`). Measuring
+        // under the parent identity instead made the measure pass hydrate a
+        // composite view's `@State` from a different slot than the render pass,
+        // so a state-dependent view could measure a different size than it
+        // rendered. Hydration still keys off `context` (the parent), exactly as
+        // render does; only the recursion descends with the child identity.
+        let childContext = context.withChildIdentity(type: V.Body.self)
         let body = StateRegistration.withHydration(context: context) {
             view.body
         }
-        return measureChild(body, proposal: proposal, context: context)
+        return measureChild(body, proposal: proposal, context: childContext)
     }
 
     // Fallback: render to measure (without side-effects)
