@@ -80,6 +80,7 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var totalHeight = 0
         var maxWidth = 0
         var hasFlexibleHeight = false
+        var hasFlexibleWidth = false
 
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
@@ -87,6 +88,15 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             maxWidth = max(maxWidth, size.width)
             if child.isSpacer || size.isHeightFlexible {
                 hasFlexibleHeight = true
+            }
+            // A VStack fills its width exactly when a child does — its
+            // renderToBuffer fills `availableWidth` in that case (a width-flexible
+            // child rendered at the full width makes maxChildWidth == available).
+            // Spacers here are vertical, so they don't make the column
+            // width-flexible. (Was hard-coded `false`, which under-reported the
+            // column to its parent and mis-drove width distribution.)
+            if size.isWidthFlexible {
+                hasFlexibleWidth = true
             }
         }
         totalHeight += max(0, children.count - 1) * spacing
@@ -99,7 +109,7 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         return ViewSize(
             width: min(maxWidth, max(0, widthLimit)),
             height: min(totalHeight, max(0, heightLimit)),
-            isWidthFlexible: false,
+            isWidthFlexible: hasFlexibleWidth,
             isHeightFlexible: hasFlexibleHeight
         )
     }
