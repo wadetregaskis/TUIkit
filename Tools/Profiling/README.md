@@ -20,11 +20,19 @@ path end to end. This directory makes that repeatable.
 | Mode | What it profiles | Status |
 |------|------------------|--------|
 | **B — end-to-end (this toolkit)** | The real `TUIkitExample` driven through a PTY: input → 5-layer dispatch → render → diff → `write()` | ✅ working |
-| **A — headless render harness** | `renderToBuffer(view:)` on fixed view trees in a tight loop — deterministic, fully CPU-bound, no input timing | 🔜 proposed (see below) |
+| **A — headless render harness** | `renderToBuffer(view:)` on fixed view trees in a tight loop — deterministic, fully CPU-bound, no input timing | ✅ working (`RenderHarness`) |
 
-Mode B is the realism check. Mode A (when built) is the microscope for
-iterating on a fix; it pairs with the existing `swift package benchmark`
-malloc/CPU counters for regression guards.
+Mode B is the realism check. Mode A is the microscope for iterating on a
+fix; it pairs with the existing `swift package benchmark` malloc/CPU
+counters for regression guards.
+
+> **`--attach` vs `--launch`.** Mode B has `drive.py` fork the app in a
+> PTY and points `xctrace record --attach <pid>` at it. Some environments
+> deny debugger attach entirely ("Not allowed to attach to process" — CI,
+> locked-down VMs, sandboxes); there, Mode B cannot record. Mode A's
+> harness needs no PTY, so Instruments can **launch** it
+> (`xctrace record --launch -- RenderHarness …`), which those environments
+> do allow. When attach is blocked, Mode A is the only profiling option.
 
 ## Prerequisites
 
@@ -125,20 +133,36 @@ they informed the change (what was hot, why the change addresses it,
 before/after when available). See the "Performance & profiling" rule in
 [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md).
 
-## Proposed: Mode A — headless render harness
+## Mode A — headless render harness (`RenderHarness`)
 
-A small executable target (e.g. `Tools/Profiling/RenderHarness` or a
-`--profile` flag on a dedicated target) that builds representative view
-trees — the mixed-form page, a 1900-row `List`, a `Table`, a
-`ScrollView` mid-scroll — and calls `renderToBuffer(view, context:)` in a
-counted loop, then exits. Profile with:
+`RenderHarness` is an executable target (`Tools/Profiling/RenderHarness`)
+that builds a representative view tree and calls
+`renderToBuffer(view, context:)` in a counted loop, then exits. Each tree
+keeps its concrete `View` type (no `AnyView` erasure) so the profile
+reflects the real `measureChild` / `Layoutable` dispatch.
+
+Trees (`--tree`): `alignment` (three flexible bordered boxes — heavy on the
+measure pass), `nested` (a Panel column beside that row), `frames` (bare
+`.frame`s where each `FlexibleFrameView` is itself the measured child), and
+`form` (a settings page of interactive controls). Seeds: the shapes in
+`Benchmarks/TUIkitBenchmarks/RenderBenchmarks.swift` and the layout tests.
 
 ```bash
+swift build -c release --product RenderHarness -Xswiftc -g
+BIN="$(swift build -c release --product RenderHarness --show-bin-path)/RenderHarness"
 xcrun xctrace record --template "Time Profiler" --output harness.trace \
-    --launch -- .build/release/RenderHarness --tree list --iterations 5000
+    --launch -- "$BIN" --tree alignment --iterations 10000
 python3 Tools/Profiling/analyze_timeprofile.py harness.trace
 ```
 
-This gives deterministic, fully-symbolicated, input-timing-free profiles
-ideal for before/after comparisons while optimizing. The view trees in
-`Benchmarks/TUIkitBenchmarks/RenderBenchmarks.swift` are the seed.
+This gives deterministic, input-timing-free profiles ideal for
+before/after comparisons while optimizing. Because the harness exits
+quickly and takes no input, a plain `/usr/bin/time -p "$BIN" --tree …` is
+also a reliable, low-overhead before/after signal where Instruments
+sampling is impractical (e.g. a VM where the Time Profiler runs slowly).
+
+Build it with `--product RenderHarness` (or set `BENCHMARK_DISABLE_JEMALLOC=1`)
+so the build does not pull the `jemalloc`-backed benchmark target.
+
+Future trees worth adding: a long `List`, a `Table`, a `ScrollView`
+mid-scroll.

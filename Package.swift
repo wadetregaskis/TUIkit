@@ -27,6 +27,7 @@ let package = Package(
         // ── Tools ───────────────────────────────────────────────────────────────────────────────────────
         .executable(name: "EmojiBugScanner", targets: ["EmojiBugScanner"]),
         .executable(name: "EmojiBenchmark",  targets: ["EmojiBenchmark"]),
+        .executable(name: "RenderHarness",   targets: ["RenderHarness"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
@@ -76,6 +77,15 @@ let package = Package(
             name: "EmojiBenchmark",
             dependencies: ["TUIkitCore"],
             path: "Tools/EmojiBenchmark"
+        ),
+        // Mode A profiling harness (see Tools/Profiling/README.md): a
+        // no-PTY, no-attach executable that loops `renderToBuffer` over a
+        // representative tree so it can be profiled with `xctrace --launch`
+        // in environments where `--attach` is denied.
+        .executableTarget(
+            name: "RenderHarness",
+            dependencies: ["TUIkit"],
+            path: "Tools/Profiling/RenderHarness"
         ),
 
         // ── Benchmarks ──────────────────────────────────────────────────────────────────────────────────

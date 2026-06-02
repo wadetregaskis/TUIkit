@@ -1,0 +1,120 @@
+//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  Trees.swift
+//
+//  Created by LAYERED.work
+//  License: MIT
+
+import TUIkit
+
+/// Representative view trees for the Mode A profiling harness.
+///
+/// These mirror shapes already exercised by the test suite and the
+/// `ordo-one` render benchmarks, chosen to stress different parts of the
+/// render pipeline:
+///
+/// - ``alignmentRow()`` — three flexible bordered boxes sharing a row via
+///   `.frame(maxWidth: .infinity)`. Heavy on the two-pass **measure** path,
+///   in particular `FlexibleFrameView`'s render-to-measure fallback.
+/// - ``nestedRow()`` — a Panel column beside that alignment row, so the
+///   flexible-width sharing nests two levels deep (the demo's worst case).
+/// - ``mixedForm()`` — a settings-style page mixing interactive controls;
+///   broad coverage of the modifier chain + focus registration.
+enum Trees {
+    /// Three flexible bordered boxes sharing a row. Mirrors the
+    /// "Content Alignment" demo and `AlignmentBoxSquishTests`.
+    @MainActor
+    static func alignmentRow() -> some View {
+        HStack(spacing: 1) {
+            VStack(alignment: .leading) {
+                Text("Leading align")
+                Text("short")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .border()
+
+            VStack(alignment: .center) {
+                Text("Center align")
+                Text("short")
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .border()
+
+            VStack(alignment: .trailing) {
+                Text("Trailing align")
+                Text("short")
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .border()
+        }
+    }
+
+    /// A Panel column beside the alignment row, nesting flexible-width
+    /// sharing two levels deep. Mirrors `AlignmentBoxSquishTests`'
+    /// full-nested shape (minus the `AnyView` wrapper, which would erase
+    /// the concrete type the profile is meant to reflect).
+    @MainActor
+    static func nestedRow() -> some View {
+        HStack(spacing: 2) {
+            VStack(alignment: .leading) {
+                Text("Panel (Header + Footer)").bold().underline()
+                VStack(alignment: .leading) {
+                    Text("Primary text (foreground)")
+                    Text("Secondary text (foregroundSecondary)")
+                    Text("Tertiary text (foregroundTertiary)")
+                }
+                .border()
+            }
+            VStack(alignment: .leading) {
+                Text("Content Alignment").bold().underline()
+                alignmentRow()
+            }
+        }
+    }
+
+    /// Bare flexible frames stacked directly (no border wrapper), so each
+    /// `FlexibleFrameView` is the direct child a `VStack` measures — i.e. it
+    /// is itself the view that hits `measureChild`'s render-to-measure
+    /// fallback. Isolates `FlexibleFrameView`'s measure cost (the alignment
+    /// row instead routes that fallback through the enclosing `.border()`).
+    /// Mixes the three constraint shapes: fill (`maxWidth: .infinity`),
+    /// content-dependent (`minWidth:`), and fixed (`width:`).
+    @MainActor
+    static func frames() -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Fill leading").frame(maxWidth: .infinity, alignment: .leading)
+            Text("Fill centre").frame(maxWidth: .infinity, alignment: .center)
+            Text("Fill trailing").frame(maxWidth: .infinity, alignment: .trailing)
+            Text("Min width").frame(minWidth: 10, alignment: .leading)
+            Text("Fixed width").frame(width: 20, alignment: .center)
+        }
+    }
+
+    /// A settings-style page mixing interactive controls. Mirrors the
+    /// `render/Mixed-form page` benchmark.
+    @MainActor
+    static func mixedForm() -> some View {
+        VStack(alignment: .leading) {
+            Text("Settings").bold().underline()
+            HStack {
+                Text("Username:")
+                TextField("user", text: .constant("alice"))
+            }
+            HStack {
+                Text("Notifications:")
+                Toggle("On", isOn: .constant(true))
+            }
+            HStack {
+                Text("Volume:")
+                Slider(value: .constant(0.7), in: 0...1)
+            }
+            HStack {
+                Text("Retries:")
+                Stepper("Retries", value: .constant(3), in: 0...10)
+            }
+            HStack {
+                Button("Cancel") { }
+                Button("Save") { }
+            }
+        }
+    }
+}
