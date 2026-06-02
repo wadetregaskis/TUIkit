@@ -171,26 +171,31 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // on top of the real render. The render paths are unchanged, so output is
 // identical; only the measure pass gets cheaper.
 
-// NOTE: AnyView is deliberately NOT made Layoutable. It type-erases via a
-// stored render closure; adding a second (measure) closure that also
-// captures the wrapped view corrupts AnyView's value storage. Copying such
-// an AnyView then crashes inside the compiler-generated value witness:
-//
+// NOTE: AnyView is deliberately NOT made Layoutable, and its storage must NOT
+// change. The single render closure above is the only form that does not
+// crash. Changing AnyView's storage in *any* of these ways trips a Swift
+// compiler codegen defect that corrupts the value at runtime:
+//   - adding a second (measure) closure capturing the wrapped view,
+//   - adding a stored property (even an inert tuple pad), or
+//   - boxing the view in an abstract-base + generic-subclass class.
+// Each manifests as a garbage pointer in the *compiler-generated* copy/destroy
+// machinery — e.g.
 //     swift_retain  <-  initializeWithCopy for AnyView  <-  renderToBuffer
-//     EXC_BAD_ACCESS / SIGSEGV — swift_retain reading a refcount through a
-//     non-pointer (the retained "object" is small ASCII text data, e.g.
-//     0x61/0x78 = 'a'/'x', from the rendered subtree).
-//
-// The witness retains a field that is not a reference — a codegen-level
-// corruption, not app logic. It is flaky and layout/codegen-sensitive: it
-// needs a complex nested tree under load (the full test suite reliably trips
-// it via AlignmentBoxSquishTests; isolated runs usually don't), which is why
-// it resists minimization. Confirmed on Swift 6.2.4 (swiftpm-testing-helper
-// .ips reports). AnyView therefore keeps the render-to-measure fallback (it
-// is also far less common than `if/else`, which the ConditionalView
-// conformance above already covers). Do NOT "fix" this by making AnyView
-// Layoutable without first confirming the value-witness crash is gone on the
-// toolchain in use.
+//     swift_release <-  (class-box variant), SIGSEGV/SIGBUS —
+// retaining/releasing a non-pointer (the bad "object" is small ASCII text
+// data, e.g. 0x61/0x78 = 'a'/'x', from the rendered subtree). The value
+// witnesses themselves are correctly generated (verified in -Onone IR: the
+// copy retains exactly the right offsets), so the corruption is upstream in
+// codegen, not app logic. It is single-threaded (reproduces with
+// `--no-parallel`, so not a data race) and not stack overflow (shallow ~20
+// frames). Adding an inert 24-byte pad makes it DETERMINISTIC (crashes every
+// run, suite and standalone); the two-closure form is flakier. Confirmed on
+// Swift 6.2.4 via lldb + swiftpm-testing-helper .ips reports, reproduced by
+// AlignmentBoxSquishTests / AnyViewTests. AnyView therefore keeps the
+// render-to-measure fallback (it is also far less common than `if/else`,
+// which the ConditionalView conformance below already covers). Do NOT change
+// AnyView's storage without confirming the crash is gone on the toolchain in
+// use; the smallest repro is a one-line inert pad field here + the full suite.
 
 extension EmptyView: Layoutable {
     /// An empty view occupies no cells.
