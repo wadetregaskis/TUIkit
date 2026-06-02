@@ -66,38 +66,51 @@ extension FlexibleFrameView: @preconcurrency Equatable where Content: Equatable 
 
 // MARK: - Renderable
 
-extension FlexibleFrameView: Renderable {
-    public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Calculate the target width based on constraints
-        let targetWidth: Int
+extension FlexibleFrameView {
+    /// The width the content is offered for a given available width.
+    ///
+    /// Shared by ``renderToBuffer(context:)`` and ``sizeThatFits(proposal:context:)``
+    /// so the measure and render passes can never disagree about how the
+    /// frame constrains its content.
+    func contentTargetWidth(availableWidth: Int) -> Int {
         if let maximumWidth = maxWidth {
             switch maximumWidth {
             case .infinity:
-                targetWidth = context.availableWidth
+                return availableWidth
             case .fixed(let value):
-                targetWidth = min(value, context.availableWidth)
+                return min(value, availableWidth)
             }
         } else if let ideal = idealWidth {
-            targetWidth = min(ideal, context.availableWidth)
-        } else {
-            // No max constraint - render with available width, then size to content
-            targetWidth = context.availableWidth
+            return min(ideal, availableWidth)
         }
+        // No max constraint - offer the available width, then size to content.
+        return availableWidth
+    }
 
-        // Calculate the target height based on constraints
-        let targetHeight: Int?
+    /// The height the content is offered for a given available height, or
+    /// `nil` to use the content's intrinsic height. Shared by the render and
+    /// measure passes (see ``contentTargetWidth(availableWidth:)``).
+    func contentTargetHeight(availableHeight: Int) -> Int? {
         if let maximumHeight = maxHeight {
             switch maximumHeight {
             case .infinity:
-                targetHeight = context.availableHeight
+                return availableHeight
             case .fixed(let value):
-                targetHeight = min(value, context.availableHeight)
+                return min(value, availableHeight)
             }
         } else if let ideal = idealHeight {
-            targetHeight = min(ideal, context.availableHeight)
-        } else {
-            targetHeight = nil  // Use intrinsic height
+            return min(ideal, availableHeight)
         }
+        return nil  // Use intrinsic height
+    }
+}
+
+extension FlexibleFrameView: Renderable {
+    public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Calculate the target width and height based on constraints (the same
+        // computation the measure pass uses, see contentTargetWidth/Height).
+        let targetWidth = contentTargetWidth(availableWidth: context.availableWidth)
+        let targetHeight = contentTargetHeight(availableHeight: context.availableHeight)
 
         // Create context for content with constrained width
         var contentContext = context
@@ -207,5 +220,95 @@ extension FlexibleFrameView: Renderable {
         case .trailing:
             return String(repeating: " ", count: padding) + line
         }
+    }
+}
+
+// MARK: - Layoutable
+
+extension FlexibleFrameView: Layoutable {
+    /// Measures the frame, skipping the render-to-measure fallback's double
+    /// render for the common fill case.
+    ///
+    /// `FlexibleFrameView` is `Renderable`, so `measureChild` measured it
+    /// through the render-to-measure fallback: render the whole subtree once for
+    /// its natural size, then again 8 cells wider to probe width-flexibility
+    /// (and the real render then made three passes in total).
+    ///
+    /// A `maxWidth: .infinity` frame always fills the width it is offered and is
+    /// always width-flexible, so its size needs no flexibility probe — a single
+    /// content measure (structural when the content is itself `Layoutable`, the
+    /// common `VStack`/`HStack`/`Text` case) gives the height, and the width is
+    /// the available width. Every other constraint shape makes the frame's width
+    /// depend on how the content *reflows* at different widths (a wrapping label
+    /// widens when given more room), which only re-rendering reliably captures —
+    /// those keep the original two-render measurement, byte-for-byte unchanged.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        guard hasInfiniteMaxWidth else {
+            return measureByRendering(proposal: proposal, context: context)
+        }
+
+        let availableWidth = proposal.width ?? context.availableWidth
+        let availableHeight = proposal.height ?? context.availableHeight
+
+        // Measure the content once, in the same context renderToBuffer renders
+        // it in (full width, optional fixed height, explicit-width flag), to get
+        // the height the frame reports. The width is the available width: the
+        // content's `max(_, availableWidth)` bump fills it and the outer clamp
+        // caps it there.
+        let targetHeight = contentTargetHeight(availableHeight: availableHeight)
+        var contentContext = context
+        contentContext.availableWidth = availableWidth
+        if let targetHeight {
+            contentContext.availableHeight = targetHeight
+        }
+        contentContext.hasExplicitWidth = true
+        let contentSize = measureChild(
+            content,
+            proposal: ProposedSize(width: availableWidth, height: targetHeight),
+            context: contentContext)
+
+        var height = contentSize.height
+        if let minHeight {
+            height = max(height, minHeight)
+        }
+        if let maximumHeight = maxHeight, case .infinity = maximumHeight {
+            height = max(height, availableHeight)
+        }
+        height = min(height, availableHeight)
+
+        return ViewSize.flexibleWidth(minWidth: availableWidth, height: height)
+    }
+
+    /// Whether the frame fills its available width (`maxWidth: .infinity`).
+    private var hasInfiniteMaxWidth: Bool {
+        if case .infinity? = maxWidth { return true }
+        return false
+    }
+
+    /// The original render-to-measure fallback, kept for the constraint shapes
+    /// whose width depends on content reflow. Mirrors `measureChild`'s fallback
+    /// exactly: render for the natural size, then 8 cells wider to see whether
+    /// the width grows.
+    private func measureByRendering(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        var measureContext = context
+        measureContext.isMeasuring = true
+        measureContext.hasExplicitWidth = false
+        if let width = proposal.width {
+            measureContext.availableWidth = width
+        }
+        if let height = proposal.height {
+            measureContext.availableHeight = height
+        }
+        let buffer = TUIkit.renderToBuffer(self, context: measureContext)
+        let naturalWidth = buffer.width
+
+        var probeContext = measureContext
+        probeContext.availableWidth = naturalWidth + 8
+        let probedWidth = TUIkit.renderToBuffer(self, context: probeContext).width
+
+        if probedWidth > naturalWidth {
+            return ViewSize.flexibleWidth(minWidth: naturalWidth, height: buffer.height)
+        }
+        return ViewSize.fixed(naturalWidth, buffer.height)
     }
 }
