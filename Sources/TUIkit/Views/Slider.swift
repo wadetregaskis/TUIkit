@@ -270,29 +270,40 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// Default track width when no explicit frame is set.
     private let defaultTrackWidth = 20
 
-    /// The "NN%" label drawn at the trailing edge. Its width is 2–4 columns
-    /// depending on the percentage ("0%"…"100%"), so it is derived from the
-    /// live value rather than assumed. The fraction is clamped here exactly as
-    /// it is for display, so the width is stable across the value-clamping that
-    /// happens mid-render.
+    /// Width of the value field, in columns: the width of the widest value the
+    /// slider can show, `"100%"`. Shorter values are padded to this width (see
+    /// ``valueLabelText``) so the field — and therefore the track and arrows —
+    /// never change size as the value changes.
+    private var valueFieldWidth: Int { 4 }
+
+    /// The `"NN%"` value drawn at the trailing edge, padded to a FIXED field
+    /// (``valueFieldWidth``) so the slider keeps a constant length and the right
+    /// arrow doesn't shift when the value crosses 10%/100%. Shorter values are
+    /// left-aligned with trailing spaces (`"50% "`), matching a fixed numeric
+    /// field; this also fills the trailing cell the old hard-coded chrome left
+    /// blank. The fraction is clamped exactly as it is for display, so the
+    /// width is stable across the value-clamping that happens mid-render.
     private var valueLabelText: String {
         let range = bounds.upperBound - bounds.lowerBound
         let fraction = range > 0
             ? min(1.0, max(0.0, (value.wrappedValue - bounds.lowerBound) / range))
             : 0
-        return "\(Int((fraction * 100).rounded()))%"
+        let text = "\(Int((fraction * 100).rounded()))%"
+        guard text.count < valueFieldWidth else { return text }
+        return text + String(repeating: " ", count: valueFieldWidth - text.count)
     }
 
     /// Columns consumed by everything other than the track:
-    /// `"◀ " + track + " ▶ " + "NN%"`, i.e. the two arrows, the three spaces
-    /// around them, and the value label.
+    /// `"◀ " + track + " ▶ " + value field`, i.e. the two arrows, the three
+    /// spaces around them, and the fixed-width value field.
     ///
-    /// The value label is 2–4 columns wide depending on the percentage, so
-    /// this MUST be computed from the live value and used by BOTH
-    /// `sizeThatFits` and `renderToBuffer`. It was previously hard-coded to 9
-    /// (a 4-column "100%"); at any other value the track was sized one or two
-    /// columns too wide, so the slider rendered short of the space it measured
-    /// and its overall width jittered as the value crossed 10%/100%.
+    /// Constant (5 + ``valueFieldWidth`` = 9), because the value field is padded
+    /// to a fixed width — so the track and arrows hold a constant position as
+    /// the value changes (the slider never changes length). Used by BOTH
+    /// `sizeThatFits` and `renderToBuffer` so the two agree, and because the
+    /// field is padded the track + chrome fills the available width exactly
+    /// (the value padding occupies the cell the old hard-coded 9 left blank for
+    /// values narrower than "100%").
     private var chromeWidth: Int {
         // "◀" + " " (before track) + " " + "▶" + " " (after track) = 5 columns.
         5 + valueLabelText.count
