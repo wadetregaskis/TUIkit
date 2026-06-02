@@ -155,7 +155,7 @@ public struct Button: View {
 /// `_ButtonCore` owns the interactive behaviour — focus registration and
 /// keyboard handling — and delegates all visual appearance to the active
 /// ``ButtonStyle`` read from the environment.
-private struct _ButtonCore: View, Renderable {
+private struct _ButtonCore: View, Renderable, Layoutable {
     let label: String
     let action: () -> Void
     let role: ButtonRole?
@@ -169,6 +169,12 @@ private struct _ButtonCore: View, Renderable {
     private enum StateIndex {
         static let focusID = 0
         static let isHovered = 1
+    }
+
+    /// A button hugs its label (it never grows to fill), so measure it by
+    /// rendering once rather than through the render-twice fallback.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
