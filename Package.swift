@@ -37,7 +37,7 @@ let package = Package(
         // code paths. The plugin is invoked via 'swift package
         // benchmark'; see
         // https://swiftpackageindex.com/ordo-one/benchmark
-        .package(url: "https://github.com/ordo-one/benchmark", from: "1.29.4"),
+        .package(url: "https://github.com/ordo-one/benchmark", from: "1.29.4", traits: []),
     ],
     targets: [
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 {
-  "originHash" : "036d6b6fcb0624958f00c6d9cbd76684e26133a0c7d3106cb3474f3ae59cbf65",
+  "originHash" : "4575468d83a7c87224d1d2de3c19ac3a8b9198e5205a7086386eed8c5fcdf987",
   "pins" : [
     {
       "identity" : "benchmark",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "c2e1210df04b4fff47e53f2f9dad9cc45ae15d63",
         "version" : "0.2.0"
-      }
-    },
-    {
-      "identity" : "package-jemalloc",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ordo-one/package-jemalloc.git",
-      "state" : {
-        "revision" : "e8a5db026963f5bfeac842d9d3f2cc8cde323b49",
-        "version" : "1.0.0"
       }
     },
     {
