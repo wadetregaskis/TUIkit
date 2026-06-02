@@ -118,6 +118,21 @@ enum Trees {
         }
     }
 
+    /// A column of `.equatable()` bordered rows — the case the value-based
+    /// measure memo targets. The outer `VStack` re-measures every row each
+    /// frame (its first pass measures children at `.unspecified`); with the
+    /// memo, an unchanged row's measurement is served from `RenderCache` after
+    /// the first frame instead of re-measuring the bordered subtree. Mirrors a
+    /// long list of memoized rows.
+    @MainActor
+    static func memoRows() -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<24, id: \.self) { index in
+                MemoRow(index: index).equatable()
+            }
+        }
+    }
+
     /// A settings-style page mixing interactive controls. Mirrors the
     /// `render/Mixed-form page` benchmark.
     @MainActor
@@ -145,5 +160,22 @@ enum Trees {
                 Button("Save") { }
             }
         }
+    }
+}
+
+/// An `Equatable` row for the ``Trees/memoRows()`` tree: a small bordered
+/// two-line block whose measurement is non-trivial (it goes through the
+/// container measure path). Wrapped in `.equatable()`, an unchanged row is
+/// measured once and then served from the cache.
+struct MemoRow: View, Equatable {
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Row \(index): primary content line")
+            Text("secondary detail")
+        }
+        .padding()
+        .border()
     }
 }

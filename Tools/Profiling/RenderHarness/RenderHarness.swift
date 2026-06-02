@@ -63,6 +63,11 @@ struct RenderHarness {
         // needs. (The richer `tuiContext:` initializer is internal to TUIkit.)
         var environment = EnvironmentValues()
         environment.stateStorage = StateStorage()
+        // EquatableView memoizes through the render cache (its render
+        // force-unwraps it); supply one so the `memoRows` tree can run. The
+        // harness never clears it between iterations, so it models the
+        // steady-state where unchanged subtrees stay cached across frames.
+        environment.renderCache = RenderCache()
         let context = RenderContext(
             availableWidth: cols, availableHeight: rows, environment: environment)
 
@@ -75,6 +80,7 @@ struct RenderHarness {
         case "nested": checksum = renderLoop(Trees.nestedRow(), context, iterations)
         case "frames": checksum = renderLoop(Trees.frames(), context, iterations)
         case "paneled": checksum = renderLoop(Trees.paneled(), context, iterations)
+        case "memoRows": checksum = renderLoop(Trees.memoRows(), context, iterations)
         case "form": checksum = renderLoop(Trees.mixedForm(), context, iterations)
         default:
             FileHandle.standardError.write(Data("unknown tree: \(tree)\n".utf8))
@@ -101,6 +107,6 @@ struct RenderHarness {
 
     static let usage = """
         RenderHarness — Mode A profiling harness (xctrace --launch).
-        Usage: RenderHarness [--tree alignment|nested|frames|paneled|form] [--iterations N] [--cols C] [--rows R]
+        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|form] [--iterations N] [--cols C] [--rows R]
         """
 }
