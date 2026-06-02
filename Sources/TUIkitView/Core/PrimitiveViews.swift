@@ -172,11 +172,25 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // identical; only the measure pass gets cheaper.
 
 // NOTE: AnyView is deliberately NOT made Layoutable. It type-erases via a
-// stored render closure; capturing the wrapped view a second time in a
-// measure closure that also references the generic `measureChild` triggers
-// a runtime crash (reproducible — see AlignmentBoxSquishTests). AnyView
-// therefore keeps the render-to-measure fallback. It is far less common
-// than `if/else` (ConditionalView), which this change does cover.
+// stored render closure; adding a second (measure) closure that also
+// captures the wrapped view corrupts AnyView's value storage. Copying such
+// an AnyView then crashes inside the compiler-generated value witness:
+//
+//     swift_retain  <-  initializeWithCopy for AnyView  <-  renderToBuffer
+//     EXC_BAD_ACCESS / SIGSEGV — swift_retain reading a refcount through a
+//     non-pointer (the retained "object" is small ASCII text data, e.g.
+//     0x61/0x78 = 'a'/'x', from the rendered subtree).
+//
+// The witness retains a field that is not a reference — a codegen-level
+// corruption, not app logic. It is flaky and layout/codegen-sensitive: it
+// needs a complex nested tree under load (the full test suite reliably trips
+// it via AlignmentBoxSquishTests; isolated runs usually don't), which is why
+// it resists minimization. Confirmed on Swift 6.2.4 (swiftpm-testing-helper
+// .ips reports). AnyView therefore keeps the render-to-measure fallback (it
+// is also far less common than `if/else`, which the ConditionalView
+// conformance above already covers). Do NOT "fix" this by making AnyView
+// Layoutable without first confirming the value-witness crash is gone on the
+// toolchain in use.
 
 extension EmptyView: Layoutable {
     /// An empty view occupies no cells.
