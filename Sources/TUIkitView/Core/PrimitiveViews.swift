@@ -171,31 +171,30 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // on top of the real render. The render paths are unchanged, so output is
 // identical; only the measure pass gets cheaper.
 
-// NOTE: AnyView is deliberately NOT made Layoutable, and its storage must NOT
-// change. The single render closure above is the only form that does not
-// crash. Changing AnyView's storage in *any* of these ways trips a Swift
-// compiler codegen defect that corrupts the value at runtime:
-//   - adding a second (measure) closure capturing the wrapped view,
-//   - adding a stored property (even an inert tuple pad), or
-//   - boxing the view in an abstract-base + generic-subclass class.
-// Each manifests as a garbage pointer in the *compiler-generated* copy/destroy
-// machinery — e.g.
-//     swift_retain  <-  initializeWithCopy for AnyView  <-  renderToBuffer
-//     swift_release <-  (class-box variant), SIGSEGV/SIGBUS —
-// retaining/releasing a non-pointer (the bad "object" is small ASCII text
-// data, e.g. 0x61/0x78 = 'a'/'x', from the rendered subtree). The value
-// witnesses themselves are correctly generated (verified in -Onone IR: the
-// copy retains exactly the right offsets), so the corruption is upstream in
-// codegen, not app logic. It is single-threaded (reproduces with
-// `--no-parallel`, so not a data race) and not stack overflow (shallow ~20
-// frames). Adding an inert 24-byte pad makes it DETERMINISTIC (crashes every
-// run, suite and standalone); the two-closure form is flakier. Confirmed on
-// Swift 6.2.4 via lldb + swiftpm-testing-helper .ips reports, reproduced by
-// AlignmentBoxSquishTests / AnyViewTests. AnyView therefore keeps the
-// render-to-measure fallback (it is also far less common than `if/else`,
-// which the ConditionalView conformance below already covers). Do NOT change
-// AnyView's storage without confirming the crash is gone on the toolchain in
-// use; the smallest repro is a one-line inert pad field here + the full suite.
+// NOTE: AnyView is deliberately NOT made Layoutable; it keeps the
+// render-to-measure fallback. Forwarding the measure to the wrapped view (as
+// the wrappers above do) is NOT behaviour-equivalent for AnyView's *arbitrary*
+// content: a child's own `sizeThatFits` is not always render-consistent for
+// flexible / wrapping / nested content (e.g. `VStack`/`HStack` under-report
+// width-flexibility vs what re-rendering 8 cells wider observes), and AnyView's
+// fallback — which actually re-renders — is the behaviour that ships. A
+// characterization test confirmed the forwarded measure differs (width and
+// width-flexibility) for the nested-alignment-row and wrapping cases, though no
+// current layout test regresses. The unlike-Conditional/Equatable distinction
+// is that those wrap a single statically-known branch; AnyView erases anything.
+//
+// ⚠️ Also: changing AnyView's stored layout requires a CLEAN build. AnyView is
+// a non-resilient struct used across TUIkitView → TUIkit → tests; a layout
+// change via a private member (a second closure, a pad, …) changes its size but
+// not TUIkitView's public interface hash, so an INCREMENTAL `swift build` does
+// not recompile the cross-module dependents — they keep the old, smaller layout
+// and corrupt memory at runtime. A clean build is fine. This is an
+// incremental-compilation (Swift driver / SwiftPM) bug, NOT a codegen bug —
+// AnyView's value witnesses are correctly generated (verified in -Onone IR).
+// It masqueraded as a "compiler crash" through earlier investigation. Minimal
+// repro + analysis: `anyview-incremental-repro/` (untracked) + the
+// perf-optimisation handoff doc. So if you do change AnyView's storage,
+// `rm -rf .build` before testing.
 
 extension EmptyView: Layoutable {
     /// An empty view occupies no cells.
