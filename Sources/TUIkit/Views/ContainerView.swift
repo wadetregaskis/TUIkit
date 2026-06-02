@@ -159,6 +159,57 @@ internal func renderContainer<Content: View, Footer: View>(
     return TUIkit.renderToBuffer(container, context: context)
 }
 
+/// Measures a `ContainerView` from a `ContainerConfig` and content/footer views.
+///
+/// The measure-side twin of ``renderContainer``: it builds the *identical*
+/// `ContainerView` and measures it (reaching the `Layoutable`
+/// `_ContainerViewCore.sizeThatFits`) instead of rendering it. Container cores
+/// (`_PanelCore`, `_CardCore`, `_AlertCore`, `_DialogCore`) delegate their
+/// `sizeThatFits` here so a labeled container measures analytically instead of
+/// falling through `measureChild`'s render-to-measure fallback — the same win
+/// `.border()` got when `_ContainerViewCore` became `Layoutable`. Because both
+/// functions construct the same `ContainerView`, the two passes cannot disagree.
+///
+/// - Parameters:
+///   - title: The container title (optional).
+///   - config: The shared visual configuration.
+///   - content: The body content view.
+///   - footer: The footer view (optional).
+///   - proposal: The proposed size from the parent.
+///   - context: The current render context.
+/// - Returns: The size the container needs.
+@MainActor
+internal func measureContainer<Content: View, Footer: View>(
+    title: String?,
+    config: ContainerConfig,
+    content: Content,
+    footer: Footer?,
+    proposal: ProposedSize,
+    context: RenderContext
+) -> ViewSize {
+    let hasFooter = footer != nil
+    let style = ContainerStyle(
+        showHeaderSeparator: true,
+        showFooterSeparator: hasFooter && config.showFooterSeparator,
+        borderStyle: config.borderStyle,
+        borderColor: config.borderColor
+    )
+
+    let container = ContainerView(
+        title: title,
+        titleColor: config.titleColor,
+        style: style,
+        padding: config.padding
+    ) {
+        content
+    } footer: {
+        if let footerView = footer {
+            footerView
+        }
+    }
+    return measureChild(container, proposal: proposal, context: context)
+}
+
 // MARK: - Container View
 
 /// A unified container with optional header, body, and footer sections.
@@ -351,7 +402,6 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // must share and the footer's contribution to the inner-width vote.
         var footerNaturalWidth = 0
         var footerNaturalHeight = 0
-        var footerFlexibleWidth = false
         var footerFlexibleHeight = false
         if let footerView = footer {
             var footerContext = innerContext
@@ -362,7 +412,6 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
                 context: footerContext)
             footerNaturalWidth = min(size.width, innerWidthAvailable)
             footerNaturalHeight = min(size.height, innerAvailableHeight)
-            footerFlexibleWidth = size.isWidthFlexible
             footerFlexibleHeight = size.isHeightFlexible
         }
 
@@ -415,10 +464,18 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let totalHeight = 1 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0) + 1
         let totalWidth = innerWidth + 2
 
+        // Width-flexibility is render-derived, not inherited from the body's
+        // (sometimes soft) flag: `resolveContainerWidth` caps the inner width at
+        // what's available, so the container fills exactly when its content
+        // wants at least that much. Reading the child's `isWidthFlexible`
+        // instead would mislabel a container whose body merely *wraps* (a
+        // wrapping `Text`, or any `AnyView`-erased body measured by the
+        // imprecise +8 probe) as filling when it actually shrinks to content.
+        let fillsWidth = contentBasedWidth >= innerWidthAvailable
         return ViewSize(
             width: min(totalWidth, max(0, base.availableWidth)),
             height: min(totalHeight, max(0, base.availableHeight)),
-            isWidthFlexible: bodySize.isWidthFlexible || footerFlexibleWidth,
+            isWidthFlexible: fillsWidth,
             isHeightFlexible: bodySize.isHeightFlexible || footerFlexibleHeight
         )
     }

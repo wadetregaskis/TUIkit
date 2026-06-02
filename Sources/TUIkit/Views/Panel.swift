@@ -172,7 +172,7 @@ extension Panel where Footer == EmptyView {
 ///
 /// This separation ensures `Panel.body` returns a real `View`, allowing
 /// environment modifiers like `.foregroundStyle()` to propagate correctly.
-struct _PanelCore<Content: View, Footer: View>: View, Renderable {
+struct _PanelCore<Content: View, Footer: View>: View, Renderable, Layoutable {
     let title: String
     let content: Content
     let footer: Footer?
@@ -180,6 +180,20 @@ struct _PanelCore<Content: View, Footer: View>: View, Renderable {
 
     var body: Never {
         fatalError("_PanelCore renders via Renderable")
+    }
+
+    /// Measures via the shared container path so a Panel sizes analytically
+    /// (through the `Layoutable` `_ContainerViewCore`) instead of falling into
+    /// `measureChild`'s render-to-measure fallback.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureContainer(
+            title: title,
+            config: config,
+            content: content,
+            footer: footer,
+            proposal: proposal,
+            context: context
+        )
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

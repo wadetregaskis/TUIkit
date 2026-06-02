@@ -119,7 +119,7 @@ extension Dialog: @preconcurrency Equatable where Content: Equatable, Footer: Eq
 ///
 /// This separation ensures `Dialog.body` returns a real `View`, allowing
 /// environment modifiers like `.foregroundStyle()` to propagate correctly.
-struct _DialogCore<Content: View, Footer: View>: View, Renderable {
+struct _DialogCore<Content: View, Footer: View>: View, Renderable, Layoutable {
     let title: String
     let content: Content
     let footer: Footer?
@@ -127,6 +127,19 @@ struct _DialogCore<Content: View, Footer: View>: View, Renderable {
 
     var body: Never {
         fatalError("_DialogCore renders via Renderable")
+    }
+
+    /// Measures via the shared container path (analytical) instead of the
+    /// render-to-measure fallback.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureContainer(
+            title: title,
+            config: config,
+            content: content,
+            footer: footer,
+            proposal: proposal,
+            context: context
+        )
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

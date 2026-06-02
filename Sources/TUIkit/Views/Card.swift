@@ -143,7 +143,7 @@ extension Card: @preconcurrency Equatable where Content: Equatable, Footer: Equa
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering of Card.
-private struct _CardCore<Content: View, Footer: View>: View, Renderable {
+private struct _CardCore<Content: View, Footer: View>: View, Renderable, Layoutable {
     let title: String?
     let content: Content
     let footer: Footer?
@@ -154,16 +154,31 @@ private struct _CardCore<Content: View, Footer: View>: View, Renderable {
         fatalError("_CardCore renders via Renderable")
     }
 
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Wrap content with background if specified
-        let bodyContent: AnyView
+    /// The body as `renderToBuffer` assembles it: wrapped in its optional
+    /// background, then type-erased. Shared so measure and render size the same
+    /// content.
+    private var bodyContent: AnyView {
         if let bgColor = backgroundColor {
-            bodyContent = AnyView(content.background(bgColor))
-        } else {
-            bodyContent = AnyView(content)
+            return AnyView(content.background(bgColor))
         }
+        return AnyView(content)
+    }
 
-        return renderContainer(
+    /// Measures via the shared container path (analytical) instead of the
+    /// render-to-measure fallback.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureContainer(
+            title: title,
+            config: config,
+            content: bodyContent,
+            footer: footer,
+            proposal: proposal,
+            context: context
+        )
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        renderContainer(
             title: title,
             config: config,
             content: bodyContent,
