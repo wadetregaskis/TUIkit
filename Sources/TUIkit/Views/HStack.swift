@@ -70,67 +70,61 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         fatalError("_HStackCore renders via Renderable")
     }
 
+    /// The single sizing routine shared by `sizeThatFits` and `renderToBuffer`,
+    /// so the two passes cannot disagree about widths or height — measuring each
+    /// child once at its ideal, distributing, then re-measuring heights at the
+    /// allocated widths. (Previously each pass had its own copy of this logic
+    /// and measured children at a different proposal, which let the reported
+    /// size drift from the rendered one — e.g. a nested row measured one row
+    /// taller than it rendered.)
+    private func resolvedLayout(
+        _ children: [ChildView], availableWidth: Int, context: RenderContext
+    ) -> (widths: [Int], totalWidth: Int, height: Int, fills: Bool) {
+        let count = children.count
+        let totalSpacing = max(0, count - 1) * spacing
+        let contentWidth = max(0, availableWidth - totalSpacing)
+
+        var ideal = [Int](repeating: 0, count: count)
+        var fills = [Bool](repeating: false, count: count)
+        for (index, child) in children.enumerated() {
+            if child.isSpacer {
+                ideal[index] = child.spacerMinLength ?? 0
+                fills[index] = true
+            } else {
+                // Behaviour-preserving: feed the same ideal width + reported
+                // flexibility the old renderToBuffer used. The change here is
+                // only that sizeThatFits now goes through this SAME routine, so
+                // measure and render can no longer disagree.
+                let size = child.measure(proposal: .unspecified, context: context)
+                ideal[index] = size.width
+                fills[index] = size.isWidthFlexible
+            }
+        }
+
+        let widths = distributeLinearSpace(naturalSizes: ideal, isFlexible: fills, available: contentWidth)
+
+        // Heights at the widths children will actually be given (a child
+        // squeezed narrow enough to wrap is taller than at its natural width).
+        var height = 1
+        for (index, child) in children.enumerated() where !child.isSpacer {
+            let size = child.measure(proposal: ProposedSize(width: widths[index], height: nil), context: context)
+            height = max(height, size.height)
+        }
+
+        let totalWidth = widths.reduce(0, +) + totalSpacing
+        return (widths, min(totalWidth, max(0, availableWidth)), height, fills.contains(true))
+    }
+
     /// Measures the HStack without rendering.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
-
-        // Pass 1 — natural sizes at the proposal we were given.
-        var naturalSizes: [ViewSize] = []
-        naturalSizes.reserveCapacity(children.count)
-        var hasFlexibleWidth = false
-        var totalNaturalWidth = 0
-        var maxNaturalHeight = 0
-        for child in children {
-            let size = child.measure(proposal: proposal, context: context)
-            naturalSizes.append(size)
-            totalNaturalWidth += size.width
-            maxNaturalHeight = max(maxNaturalHeight, size.height)
-            if child.isSpacer || size.isWidthFlexible {
-                hasFlexibleWidth = true
-            }
-        }
-
-        // Pass 1.5 — re-measure heights at the widths children will actually
-        // be given. Without this, a child squeezed narrow enough to wrap
-        // text would report its natural (unconstrained) height during
-        // measurement, leaving the parent VStack/HStack reserving too few
-        // rows and clipping the wrapped content at render time. We mirror
-        // the same width-distribution logic the renderer uses.
-        let widthLimit = proposal.width ?? context.availableWidth
-        let totalSpacing = max(0, children.count - 1) * spacing
-        let contentWidth = max(0, widthLimit - totalSpacing)
-        var naturalWidth = [Int](repeating: 0, count: children.count)
-        var isFlexible = [Bool](repeating: false, count: children.count)
-        for (index, child) in children.enumerated() {
-            if child.isSpacer {
-                naturalWidth[index] = child.spacerMinLength ?? 0
-                isFlexible[index] = true
-            } else {
-                naturalWidth[index] = naturalSizes[index].width
-                isFlexible[index] = naturalSizes[index].isWidthFlexible
-            }
-        }
-        let finalWidths = distributeLinearSpace(
-            naturalSizes: naturalWidth,
-            isFlexible: isFlexible,
-            available: contentWidth
-        )
-        var maxHeight = maxNaturalHeight
-        for (index, child) in children.enumerated() where !child.isSpacer {
-            // Avoid an unnecessary re-measure when the allocated width
-            // matches what we already measured — the height cannot change.
-            if finalWidths[index] == naturalSizes[index].width { continue }
-            let probe = ProposedSize(width: finalWidths[index], height: nil)
-            let size = child.measure(proposal: probe, context: context)
-            maxHeight = max(maxHeight, size.height)
-        }
-
-        let totalWidth = totalNaturalWidth + totalSpacing
+        let layout = resolvedLayout(
+            children, availableWidth: proposal.width ?? context.availableWidth, context: context)
         return ViewSize(
-            width: min(totalWidth, max(0, widthLimit)),
-            height: maxHeight,
-            isWidthFlexible: hasFlexibleWidth,
+            width: layout.totalWidth,
+            height: layout.height,
+            isWidthFlexible: layout.fills,
             isHeightFlexible: false
         )
     }
@@ -139,56 +133,15 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
-        // === PASS 1: Measure every child's natural size ===
-        var childSizes: [ViewSize] = []
-        childSizes.reserveCapacity(children.count)
-        var maxHeight = 1
-        for child in children {
-            let size = child.measure(proposal: .unspecified, context: context)
-            childSizes.append(size)
-            maxHeight = max(maxHeight, size.height)
-        }
+        let layout = resolvedLayout(children, availableWidth: context.availableWidth, context: context)
+        let finalWidths = layout.widths
 
-        let totalSpacing = max(0, children.count - 1) * spacing
-        let contentWidth = max(0, context.availableWidth - totalSpacing)
-
-        var naturalWidth = [Int](repeating: 0, count: children.count)
-        var isFlexible = [Bool](repeating: false, count: children.count)
-        for (index, child) in children.enumerated() {
-            if child.isSpacer {
-                naturalWidth[index] = child.spacerMinLength ?? 0
-                isFlexible[index] = true
-            } else {
-                naturalWidth[index] = childSizes[index].width
-                isFlexible[index] = childSizes[index].isWidthFlexible
-            }
-        }
-
-        let finalWidths = distributeLinearSpace(
-            naturalSizes: naturalWidth,
-            isFlexible: isFlexible,
-            available: contentWidth
-        )
-
-        // === PASS 1.5: Re-measure heights at the allocated widths ===
-        // PASS 1 measured each child at its natural (unspecified) width, but a
-        // child that wraps text is taller at a narrow allocated width than at
-        // its natural width. Without this pass the row would size to the
-        // natural-width heights and PASS 2 would clip whatever wrapped over.
-        var allocatedHeight = maxHeight
-        for (index, child) in children.enumerated() where !child.isSpacer {
-            let proposed = ProposedSize(width: finalWidths[index], height: nil)
-            let size = child.measure(proposal: proposed, context: context)
-            allocatedHeight = max(allocatedHeight, size.height)
-        }
-
-        // === PASS 2: Render each child into its allocated width ===
         // The row is as tall as the tallest child, bounded by the space the
         // stack itself was given. Children render into exactly this height
         // so a child squeezed narrow enough to wrap truncates (with an
         // ellipsis) instead of silently spilling an extra row that the
         // parent — which measured the stack as shorter — then clips.
-        let rowHeight = max(1, min(allocatedHeight, context.availableHeight))
+        let rowHeight = max(1, min(layout.height, context.availableHeight))
         // Empty children (e.g. `if false { ChildView() }`, which
         // ViewBuilder lowers to `Optional<ChildView>.none`, and
         // `EmptyView()`) are filtered from layout entirely: they
