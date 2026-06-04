@@ -68,6 +68,41 @@ public struct ChildView {
         }
     }
 
+    /// Creates a child wrapper that renders `view` but derives its per-child
+    /// identity from a *different* type `IdentityType`.
+    ///
+    /// Used when a row is wrapped in a transparent helper (e.g. `_MemoizedRow`)
+    /// that must not appear in the identity path: pass the wrapper as `view` and
+    /// the original content type as `identityType`, so the child's
+    /// `ViewIdentity` — and thus its `@State` / focus slots — is exactly what it
+    /// would be unwrapped. The wrapper itself adds no identity (it is
+    /// `Renderable`), so the inner content keeps the same identity either way.
+    ///
+    /// - Parameters:
+    ///   - view: The (possibly wrapped) view to measure and render.
+    ///   - identityType: The type whose name forms the identity path component.
+    ///   - childIndex: The positional index used for identity disambiguation.
+    public init<V: View, IdentityType>(
+        _ view: V, identityType: IdentityType.Type, childIndex: Int
+    ) {
+        if let spacer = view as? SpacerProtocol {
+            self.isSpacer = true
+            self.spacerMinLength = spacer.spacerMinLength
+        } else {
+            self.isSpacer = false
+            self.spacerMinLength = nil
+        }
+
+        self._measure = { proposal, context in
+            let childContext = context.withChildIdentity(type: identityType, index: childIndex)
+            return measureChild(view, proposal: proposal, context: childContext)
+        }
+        self._render = { width, height, context in
+            let childContext = context.withChildIdentity(type: identityType, index: childIndex)
+            return renderChild(view, width: width, height: height, context: childContext)
+        }
+    }
+
     /// Measures this child view without rendering.
     public func measure(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         _measure(proposal, context)

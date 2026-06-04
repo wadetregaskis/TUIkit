@@ -18,6 +18,18 @@ private struct PulseReader: View, Renderable {
     }
 }
 
+/// Records the identity path it renders under, so a test can assert that
+/// wrapping a row in `_MemoizedRow` does not leak the wrapper into the path.
+private final class IdentityCapture: @unchecked Sendable { var path = "" }
+private struct IdentityProbe: View, Renderable {
+    let capture: IdentityCapture
+    var body: Never { fatalError("IdentityProbe renders via Renderable") }
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        capture.path = context.identity.path
+        return FrameBuffer(text: "x")
+    }
+}
+
 /// Proves the `_MemoizedRow` safety gate: an inert row is memoized, but a row
 /// whose content is interactive (emits hit-test regions / overlays) is NOT —
 /// because the render cache deliberately does not invalidate on the per-frame
@@ -85,5 +97,36 @@ struct MemoizedRowGateTests {
         #expect(buffer.overlays.isEmpty)
         // ...but the volatile-read probe caught the pulsePhase read.
         #expect(cache.count == 0)
+    }
+
+    @Test("ForEach rows in a stack are auto-memoized by element value")
+    func stackForEachRowsAutoMemoized() {
+        let cache = RenderCache()
+        let context = makeContext(cache: cache)
+        let items = [1, 2, 3, 4]  // Int is Equatable
+        let view = VStack { ForEach(items, id: \.self) { Text("row \($0)") } }
+
+        _ = renderToBuffer(view, context: context)
+        #expect(cache.count >= items.count)  // each row stored
+
+        let hitsBefore = cache.stats.hits
+        _ = renderToBuffer(view, context: context)
+        #expect(cache.stats.hits > hitsBefore)  // second render served from cache
+    }
+
+    @Test("ForEach-in-stack memo is identity-transparent (no wrapper in the path)")
+    func stackForEachIdentityTransparent() {
+        let cache = RenderCache()
+        let context = makeContext(cache: cache)
+        let capture = IdentityCapture()
+        let view = VStack { ForEach([42], id: \.self) { _ in IdentityProbe(capture: capture) } }
+
+        _ = renderToBuffer(view, context: context)
+
+        #expect(!capture.path.isEmpty)
+        // The row renders under its content's identity, not the _MemoizedRow
+        // wrapper's — so @State / focus slots are exactly what they'd be unwrapped.
+        #expect(!capture.path.contains("_MemoizedRow"))
+        #expect(capture.path.contains("IdentityProbe"))
     }
 }

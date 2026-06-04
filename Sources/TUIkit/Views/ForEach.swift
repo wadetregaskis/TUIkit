@@ -103,7 +103,20 @@ extension ForEach: ChildViewProvider {
     /// `TupleView` uses for its tuple of children.
     public func childViews(context: RenderContext) -> [ChildView] {
         data.enumerated().map { index, element in
-            ChildView(content(element), childIndex: index)
+            let view = content(element)
+            // When the element is Equatable, wrap the row in a value-memo keyed
+            // by the element (as List does), so a container re-measuring /
+            // re-rendering its children each frame serves an unchanged row from
+            // the cache. `identityType: Content.self` keeps the per-child
+            // identity exactly what it is unwrapped — the memo is identity-
+            // transparent (the wrapper is Renderable, adds no identity).
+            if let equatableElement = element as? any Equatable {
+                return ChildView(
+                    _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                    identityType: Content.self,
+                    childIndex: index)
+            }
+            return ChildView(view, childIndex: index)
         }
     }
 }

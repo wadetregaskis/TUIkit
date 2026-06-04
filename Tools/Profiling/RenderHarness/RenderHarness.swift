@@ -81,6 +81,7 @@ struct RenderHarness {
         case "frames": checksum = renderLoop(Trees.frames(), context, iterations)
         case "paneled": checksum = renderLoop(Trees.paneled(), context, iterations)
         case "memoRows": checksum = renderLoop(Trees.memoRows(), context, iterations)
+        case "stackRows": checksum = renderLoop(Trees.stackRows(), context, iterations)
         case "list": checksum = renderLoop(Trees.list(), context, iterations)
         case "form": checksum = renderLoop(Trees.mixedForm(), context, iterations)
         default:
@@ -111,6 +112,6 @@ struct RenderHarness {
 
     static let usage = """
         RenderHarness — Mode A profiling harness (xctrace --launch).
-        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|list|form] [--iterations N] [--cols C] [--rows R]
+        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|stackRows|list|form] [--iterations N] [--cols C] [--rows R]
         """
 }

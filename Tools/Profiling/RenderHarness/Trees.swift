@@ -156,6 +156,30 @@ enum Trees {
         }
     }
 
+    /// A column of plain `ForEach` rows in a `VStack` (no `.equatable()`), each
+    /// a bordered two-line block. The enclosing `VStack` re-measures and
+    /// re-renders every child each frame; because the element is `Equatable`,
+    /// `ForEach.childViews` auto-memoizes each row by value, so an unchanged row
+    /// is served from the cache for BOTH passes after the first frame. A/B
+    /// against the pre-wiring baseline shows the stack row-memo win — the
+    /// automatic counterpart of the manually-`.equatable()` ``memoRows()``.
+    @MainActor
+    static func stackRows() -> some View {
+        let items = (0..<24).map {
+            ListItem(id: $0, title: "Row \($0): primary content line", detail: "secondary detail")
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(items) { item in
+                VStack(alignment: .leading) {
+                    Text(item.title)
+                    Text(item.detail)
+                }
+                .padding()
+                .border()
+            }
+        }
+    }
+
     /// A settings-style page mixing interactive controls. Mirrors the
     /// `render/Mixed-form page` benchmark.
     @MainActor
