@@ -44,8 +44,11 @@ extension ForEach: ListRowExtractor {
             // Extract badge if the view is wrapped in a BadgeModifier
             let badge = extractBadgeValue(from: view)
 
-            // Render the view
-            let buffer = TUIkit.renderToBuffer(view, context: context)
+            // Render the view under a per-row child identity (matching
+            // ForEach.childViews) so each row's @State / focus / cache entry is
+            // distinct — previously every row shared `context`'s identity.
+            let rowContext = context.withChildIdentity(type: Content.self, index: index)
+            let buffer = TUIkit.renderToBuffer(view, context: rowContext)
 
             // Prefer the element's natural ID when its type matches
             // the row ID type the caller asked for.
