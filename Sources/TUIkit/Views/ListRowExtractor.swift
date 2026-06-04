@@ -41,14 +41,30 @@ extension ForEach: ListRowExtractor {
             let elementID = element[keyPath: idKeyPath]
             let view = content(element)
 
-            // Extract badge if the view is wrapped in a BadgeModifier
+            // Extract badge if the view is wrapped in a BadgeModifier. Done on
+            // the bare view, before any memo wrapper, so the modifier is found.
             let badge = extractBadgeValue(from: view)
 
             // Render the view under a per-row child identity (matching
             // ForEach.childViews) so each row's @State / focus / cache entry is
             // distinct — previously every row shared `context`'s identity.
             let rowContext = context.withChildIdentity(type: Content.self, index: index)
-            let buffer = TUIkit.renderToBuffer(view, context: rowContext)
+
+            // List renders every row each frame. When the element is Equatable,
+            // wrap the row in a value-memo keyed by the element, so an unchanged
+            // row is served from the render cache instead of re-rendered. The
+            // wrapper is Renderable (adds no child identity), so the inner view
+            // keeps the same `rowContext` identity it would have unwrapped — the
+            // memo is identity-transparent. _MemoizedRow's own gate declines to
+            // cache interactive / volatile rows.
+            let buffer: FrameBuffer
+            if let equatableElement = element as? any Equatable {
+                buffer = TUIkit.renderToBuffer(
+                    _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                    context: rowContext)
+            } else {
+                buffer = TUIkit.renderToBuffer(view, context: rowContext)
+            }
 
             // Prefer the element's natural ID when its type matches
             // the row ID type the caller asked for.

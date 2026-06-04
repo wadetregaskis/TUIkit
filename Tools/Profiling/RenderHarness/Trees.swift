@@ -133,6 +133,29 @@ enum Trees {
         }
     }
 
+    /// A long `List` of `ForEach` rows. `_ListCore` renders EVERY row to a
+    /// buffer each frame (then windows to the viewport), so the cost scales with
+    /// the total row count, not what's visible. Because the rows are a pure
+    /// function of an `Equatable` element, `ForEach` auto-memoizes them by value
+    /// (see `extractListRows`): the first frame stores 200 row buffers, every
+    /// later frame serves them from the cache. Pre-memo baseline at 80x24 was
+    /// ~15.2s / 2000 iters; ~3.8s with the memo.
+    @MainActor
+    static func list() -> some View {
+        let items = (0..<200).map {
+            ListItem(id: $0, title: "Item \($0)", detail: "detail line for row number \($0)")
+        }
+        return List {
+            ForEach(items) { item in
+                HStack {
+                    Text(item.title)
+                    Spacer()
+                    Text(item.detail)
+                }
+            }
+        }
+    }
+
     /// A settings-style page mixing interactive controls. Mirrors the
     /// `render/Mixed-form page` benchmark.
     @MainActor
@@ -161,6 +184,14 @@ enum Trees {
             }
         }
     }
+}
+
+/// A model row for the ``Trees/list()`` tree — `Identifiable` for `ForEach`
+/// and `Equatable` so a row memo could key on it.
+struct ListItem: Identifiable, Equatable {
+    let id: Int
+    let title: String
+    let detail: String
 }
 
 /// An `Equatable` row for the ``Trees/memoRows()`` tree: a small bordered

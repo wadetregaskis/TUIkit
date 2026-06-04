@@ -81,6 +81,7 @@ struct RenderHarness {
         case "frames": checksum = renderLoop(Trees.frames(), context, iterations)
         case "paneled": checksum = renderLoop(Trees.paneled(), context, iterations)
         case "memoRows": checksum = renderLoop(Trees.memoRows(), context, iterations)
+        case "list": checksum = renderLoop(Trees.list(), context, iterations)
         case "form": checksum = renderLoop(Trees.mixedForm(), context, iterations)
         default:
             FileHandle.standardError.write(Data("unknown tree: \(tree)\n".utf8))
@@ -91,6 +92,9 @@ struct RenderHarness {
         // Print the accumulated checksum so the optimiser cannot elide the
         // render loop as dead code.
         print("tree=\(tree) iterations=\(iterations) size=\(cols)x\(rows) checksum=\(checksum)")
+        if let stats = environment.renderCache?.stats {
+            print("cache: hits=\(stats.hits) misses=\(stats.misses) stores=\(stats.stores) entries=\(environment.renderCache?.count ?? 0)")
+        }
     }
 
     /// Renders `view` `iterations` times, folding each buffer's dimensions into
@@ -107,6 +111,6 @@ struct RenderHarness {
 
     static let usage = """
         RenderHarness — Mode A profiling harness (xctrace --launch).
-        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|form] [--iterations N] [--cols C] [--rows R]
+        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|list|form] [--iterations N] [--cols C] [--rows R]
         """
 }

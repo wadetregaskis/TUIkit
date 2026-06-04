@@ -133,8 +133,16 @@ extension EnvironmentValues {
     }
 
     /// The current breathing animation phase (0-1) for the focus indicator.
+    ///
+    /// This is per-frame volatile: it changes every render without clearing the
+    /// render cache. Reading it records to any active ``volatileReadTracker`` so
+    /// a value-memoizing view (`_MemoizedRow`) can decline to cache a subtree
+    /// whose output would otherwise freeze.
     var pulsePhase: Double {
-        get { self[PulsePhaseKey.self] }
+        get {
+            volatileReadTracker?.recordVolatileRead()
+            return self[PulsePhaseKey.self]
+        }
         set { self[PulsePhaseKey.self] = newValue }
     }
 
