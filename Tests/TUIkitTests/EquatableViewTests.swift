@@ -32,7 +32,11 @@ struct EquatableViewTests {
         env.stateStorage = tuiContext.stateStorage
         env.lifecycle = tuiContext.lifecycle
         env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
+        // A fresh cache, NOT the RenderCache.shared singleton TUIContext() uses
+        // by default: these tests assert an absolute entry count, and List /
+        // ForEach renders in other (interleaved) tests now populate the shared
+        // cache, which would pollute the count.
+        env.renderCache = RenderCache()
         env.preferenceStorage = tuiContext.preferences
         return RenderContext(
             availableWidth: width,
@@ -97,12 +101,13 @@ struct EquatableViewTests {
     func cacheMissOnSizeChange() {
         let tuiContext = TUIContext()
         let identity = ViewIdentity(path: "Root")
+        let cache = RenderCache()  // isolated from RenderCache.shared (see testContext)
 
         var env = EnvironmentValues()
         env.stateStorage = tuiContext.stateStorage
         env.lifecycle = tuiContext.lifecycle
         env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
+        env.renderCache = cache
         env.preferenceStorage = tuiContext.preferences
 
         // First render at 80x24
@@ -126,7 +131,7 @@ struct EquatableViewTests {
 
         #expect(buffer2.lines[0].stripped == "Size")
         // Cache entry was overwritten with new size
-        #expect(tuiContext.renderCache.count == 1)
+        #expect(cache.count == 1)
     }
 
     // MARK: - Cache Invalidation on State Change
