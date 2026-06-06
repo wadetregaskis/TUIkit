@@ -46,6 +46,19 @@ final class CursorTimer {
     /// Elapsed ticks since timer started.
     private var elapsedTicks = 0
 
+    /// Whether the cursor clock was read during the current render frame.
+    ///
+    /// Reset by ``beginFrameReadTracking()`` before each render; set when
+    /// ``blinkVisible(for:)`` or ``pulsePhase(for:)`` is consulted. The run loop
+    /// reads it after the frame to decide whether the cursor is still animating
+    /// (a text field is focused) and the timer should keep ticking.
+    private(set) var didReadThisFrame = false
+
+    /// Clears the per-frame read flag. Call before each render pass.
+    func beginFrameReadTracking() {
+        didReadThisFrame = false
+    }
+
     /// The running animation task, or `nil` if stopped.
     private var task: Task<Void, Never>?
 
@@ -73,6 +86,7 @@ extension CursorTimer {
     /// - Parameter speed: The cursor speed setting.
     /// - Returns: `true` if cursor should be visible, `false` if hidden.
     func blinkVisible(for speed: TextCursorStyle.Speed) -> Bool {
+        didReadThisFrame = true
         let cycleMs = speed.blinkCycleMs
         let elapsedMs = elapsedTicks * tickIntervalMs
         let positionInCycle = elapsedMs % cycleMs
@@ -89,6 +103,7 @@ extension CursorTimer {
     /// - Parameter speed: The cursor speed setting.
     /// - Returns: Phase value between 0 and 1.
     func pulsePhase(for speed: TextCursorStyle.Speed) -> Double {
+        didReadThisFrame = true
         let cycleMs = speed.pulseCycleMs
         let elapsedMs = elapsedTicks * tickIntervalMs
         let positionInCycle = elapsedMs % cycleMs

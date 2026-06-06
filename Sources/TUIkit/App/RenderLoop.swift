@@ -103,6 +103,19 @@ internal struct RenderBackgroundCodes: Equatable {
 /// - Coordinating lifecycle tracking (appear/disappear)
 /// - Diff-based terminal output via `FrameDiffWriter`
 /// - Buffered frame output via `Terminal`
+/// What animation clocks a render frame actually consumed.
+///
+/// The run loop uses this to keep a clock ticking only while a frame is still
+/// consuming it — so a static screen drives no further frames. (Top-level, not
+/// nested in the generic `RenderLoop`, so callers can name it without its type
+/// parameter.)
+struct RenderActivity {
+    /// A view read `pulsePhase` this frame (a focus indicator is animating).
+    let usesPulse: Bool
+    /// A view read the cursor clock this frame (a text field is focused).
+    let usesCursor: Bool
+}
+
 @MainActor
 internal final class RenderLoop<A: App> {
     /// The user's app instance (provides `body`).
@@ -187,7 +200,8 @@ extension RenderLoop {
     ///   - pulsePhase: The current breathing indicator phase (0–1).
     ///     Passed from `PulseTimer` via `AppRunner`.
     ///   - cursorTimer: The cursor timer for TextField/SecureField animations.
-    func render(pulsePhase: Double = 0, cursorTimer: CursorTimer? = nil) {
+    @discardableResult
+    func render(pulsePhase: Double = 0, cursorTimer: CursorTimer? = nil) -> RenderActivity {
         beginRenderPass()
 
         // If an @Published property changed, clear the entire render cache
@@ -206,6 +220,14 @@ extension RenderLoop {
         var environment = buildEnvironment()
         environment.pulsePhase = pulsePhase
         environment.cursorTimer = cursorTimer
+        // Install a fresh volatile-read tracker at the render root so that, after
+        // the frame, we can tell whether anything actually consumed the pulse
+        // clock (the row memo reuses this same tracker further down). Likewise
+        // reset the cursor clock's per-frame read flag. These drive demand-driven
+        // animation: the run loop keeps a clock ticking only while a frame uses
+        // it, so a static screen produces no further frames.
+        environment.volatileReadTracker = VolatileReadTracker()
+        cursorTimer?.beginFrameReadTracking()
 
         let scene = evaluateAppBody(environment: environment)
         if let paletteOverrideScene = scene as? any RootPaletteOverrideProvidingScene,
@@ -347,6 +369,10 @@ extension RenderLoop {
         )
 
         endRenderPass()
+
+        return RenderActivity(
+            usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
+            usesCursor: cursorTimer?.didReadThisFrame ?? false)
     }
 
     /// Invalidates the diff cache, forcing a full repaint on the next render.

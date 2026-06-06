@@ -156,9 +156,15 @@ extension AppRunner {
 
         isRunning = true
 
-        // Start animation timers
-        pulseTimer.start()
-        cursorTimer.start()
+        // Animation clocks are demand-driven: after each render the loop keeps a
+        // clock ticking only while that frame actually consumed it. A static
+        // screen (no focus pulse, no text cursor) leaves both stopped, so it
+        // requests no further frames and the loop idles instead of re-rendering
+        // identical output ~30×/sec.
+        let applyAnimationActivity: (RenderActivity) -> Void = { activity in
+            if activity.usesPulse { pulseTimer.start() } else { pulseTimer.stop() }
+            if activity.usesCursor { cursorTimer.start() } else { cursorTimer.stop() }
+        }
 
         // Wake the main loop the moment stdin has data,
         // instead of always sleeping for ~24 ms regardless of
@@ -172,7 +178,8 @@ extension AppRunner {
         defer { stdinArrival.stop() }
 
         // Initial render
-        renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+        applyAnimationActivity(
+            renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
 
         // Main loop
         while isRunning {
@@ -201,7 +208,8 @@ extension AppRunner {
             // Check if terminal was resized or state changed
             if signals.consumeRerenderFlag() || appState.needsRender {
                 appState.didRender()
-                renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                applyAnimationActivity(
+                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
                 // Re-evaluate the mouse-tracking mode now that
                 // modifiers have had a chance to elevate the base
                 // configuration this frame. The terminal only emits a
