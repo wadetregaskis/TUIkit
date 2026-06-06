@@ -80,7 +80,13 @@ internal final class AppRunner<A: App> {
 
     init(app: A) {
         self.app = app
-        self.appState = AppState()
+        // MUST be the shared singleton: `@State`/`StateBox`, `@Observable`,
+        // `Spinner`, `AppStorage`, etc. all signal re-renders through
+        // `AppState.shared`. The run loop polls *this* instance's `needsRender`,
+        // so it has to be the same object — otherwise state changes never reach
+        // the loop. (This was masked while the pulse/cursor timers force-rendered
+        // ~30×/sec; demand-driven rendering exposed it as a frozen screen.)
+        self.appState = AppState.shared
         self.appearanceManager = ThemeManager(items: AppearanceRegistry.all, renderTrigger: { [appState] in appState.setNeedsRender() })
         self.appHeader = AppHeaderState()
         self.focusManager = FocusManager()
