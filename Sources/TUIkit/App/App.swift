@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Dispatch
+
 // MARK: - App Protocol
 
 /// The base protocol for TUIkit applications.
@@ -34,9 +36,21 @@ public protocol App {
 
     /// Initializes the app.
     init()
+
+    /// The maximum render frame rate, in frames per second.
+    ///
+    /// Rendering is demand-driven: the app renders only when something changes,
+    /// and never more often than this. A static screen (no animation, no input)
+    /// renders nothing at all. Raise it for smoother animation, lower it to cap
+    /// CPU while something is animating. Default: 60.
+    var maxFrameRate: Int { get }
 }
 
 extension App {
+    /// The maximum render frame rate (frames per second). Default 60; override
+    /// `maxFrameRate` on your `App` to change it.
+    public var maxFrameRate: Int { 60 }
+
     /// Starts the app.
     ///
     /// This method is called by the `@main` attribute and starts
@@ -149,9 +163,25 @@ extension AppRunner {
         // re-apply step inside the main loop below.
         terminal.applyMouseSupport(.standard)
 
-        // Register for state changes
-        appState.observe { [signals] in
+        // Wakes the main loop on stdin data (a DispatchSource on STDIN_FILENO)
+        // and on render-requests (via `wake()`). The loop awaits its
+        // `waitForArrival(...)`. See StdinArrivalStream.swift.
+        let stdinArrival = StdinArrivalNotifier()
+        stdinArrival.start()
+        // Also wake on signals via SignalManager's self-pipe (set up in
+        // `signals.install()` above), so a resize / SIGINT wakes the
+        // demand-driven loop even while it's blocked with nothing to render.
+        stdinArrival.watchWakeFD(signals.signalWakeReadFD)
+        defer { stdinArrival.stop() }
+
+        // Register for state changes: flag a rerender AND wake the (possibly
+        // idle-blocked) loop. `setNeedsRender`'s observers can fire off the main
+        // actor, so hop to the main actor to touch the MainActor-isolated
+        // notifier. `stdinArrival` is captured weakly so this persistent observer
+        // doesn't keep it alive past the run.
+        appState.observe { [signals, weak stdinArrival] in
             signals.requestRerender()
+            Task { @MainActor in stdinArrival?.wake() }
         }
 
         // Reset pulse animation and trigger re-render when focus changes
@@ -172,16 +202,14 @@ extension AppRunner {
             if activity.usesCursor { cursorTimer.start() } else { cursorTimer.stop() }
         }
 
-        // Wake the main loop the moment stdin has data,
-        // instead of always sleeping for ~24 ms regardless of
-        // input. The notifier wraps a DispatchSource on
-        // STDIN_FILENO; the main loop awaits its
-        // `waitForArrival(timeoutNanoseconds:)` in lieu of a
-        // bare `Task.sleep`. See StdinArrivalStream.swift for
-        // the why.
-        let stdinArrival = StdinArrivalNotifier()
-        stdinArrival.start()
-        defer { stdinArrival.stop() }
+        // Frame-rate cap: never render more than `frameIntervalNanos` apart, so a
+        // burst of render-requests (e.g. an animation ticking faster than the
+        // cap) coalesces into at most one render per frame. Otherwise purely
+        // demand-driven: with nothing pending the loop blocks until woken, so a
+        // static screen does ZERO renders. Rate from the app (default 60 FPS).
+        let frameIntervalNanos: UInt64 = 1_000_000_000 / UInt64(max(1, app.maxFrameRate))
+        var lastRenderAtNanos = DispatchTime.now().uptimeNanoseconds
+        var pendingRender = false
 
         // Initial render
         applyAnimationActivity(
@@ -205,62 +233,37 @@ extension AppRunner {
                 break
             }
 
-            // Invalidate diff cache on terminal resize so every line
-            // is rewritten with the new dimensions.
+            // Terminal resize (SIGWINCH): rewrite every line at the new size.
             if signals.consumeResizeFlag() {
                 renderer.invalidateDiffCache()
+                pendingRender = true
+            }
+            // A render requested by the AppState observer / state change.
+            if signals.consumeRerenderFlag() {
+                pendingRender = true
             }
 
-            // Check if terminal was resized or state changed
-            if signals.consumeRerenderFlag() || appState.needsRender {
-                appState.didRender()
-                applyAnimationActivity(
-                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
-                // Re-evaluate the mouse-tracking mode now that
-                // modifiers have had a chance to elevate the base
-                // configuration this frame. The terminal only emits a
-                // mode-change escape if the effective mode actually
-                // changed.
-                let effective = renderer.effectiveMouseSupport()
-                terminal.applyMouseSupport(effective)
-                tuiContext.mouseEventDispatcher.setActiveSupport(effective)
-            }
-
-            // Read terminal events (non-blocking with VTIME=0).
-            // Process all available events per frame. A high limit
-            // prevents input buffering lag during paste operations while
-            // still avoiding infinite loops if input arrives faster than
-            // we can process.
+            // Read + dispatch all pending terminal events (non-blocking). Done
+            // BEFORE the render so a keypress / mouse action shows up in the same
+            // frame it triggers. A high cap avoids paste lag without spinning.
             var eventsProcessed = 0
             let maxEventsPerFrame = 128
-            while eventsProcessed < maxEventsPerFrame,
-                let input = terminal.readEvent()
-            {
+            while eventsProcessed < maxEventsPerFrame, let input = terminal.readEvent() {
                 switch input {
                 case .key(let keyEvent):
-                    // "`": dump the current frame to ~/tuikit-frame.ansi.
-                    // Permanent debug shortcut — does not consume the
-                    // event so view-level "`" handlers can still
-                    // respond if needed.
-                    //
-                    // lastFrameData only contains what the *diff* wrote,
-                    // which is empty on a static screen.  Force a full
-                    // repaint first so the frame buffer captures every
-                    // line, then dump that snapshot.
+                    // "`": dump the current frame to ~/tuikit-frame.ansi (debug
+                    // shortcut, not consumed). Force a full repaint first so the
+                    // snapshot captures every line.
                     if keyEvent.key == .character("`") {
                         renderer.invalidateDiffCache()
                         renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
                         terminal.dumpLastFrame()
                     }
-
                     inputHandler.handle(keyEvent)
 
                 case .mouse(let mouseEvent):
-                    // Mouse hit-test regions are in content-area
-                    // coordinates (origin = top-left of the content
-                    // area), so translate the terminal-space y by the
-                    // header height before dispatching. x is already
-                    // aligned since the header spans the full width.
+                    // Hit-test regions are in content-area coordinates; translate
+                    // the terminal-space y by the header height before dispatch.
                     let translated = MouseEvent(
                         button: mouseEvent.button,
                         phase: mouseEvent.phase,
@@ -270,11 +273,8 @@ extension AppRunner {
                         ctrl: mouseEvent.ctrl,
                         meta: mouseEvent.meta
                     )
-                    // Only request a re-render when a handler actually
-                    // consumed the event. With any-event mouse mode
-                    // (?1003h) the terminal fires a motion report on
-                    // every cursor twitch — re-rendering for every one
-                    // would peg the render loop and starve key input.
+                    // Re-render only when a handler consumed the event — with
+                    // any-event mouse mode the terminal reports every motion.
                     if tuiContext.mouseEventDispatcher.dispatch(translated) {
                         appState.setNeedsRender()
                     }
@@ -282,22 +282,42 @@ extension AppRunner {
                 eventsProcessed += 1
             }
 
-            // Wait for either:
-            //   - up to ~24 ms (the animation cadence, ~42 FPS), or
-            //   - stdin to have data (the moment the user types
-            //     or the terminal sends a mouse / focus report).
-            // Whichever fires first wakes the loop. The arrival
-            // path drops a keystroke's worth of latency: before
-            // this change, even a single keypress could sit in
-            // the kernel buffer for up to ~24 ms before the loop
-            // drained it.
-            //
-            // The notifier's wait is a real suspension point —
-            // it releases the main actor while we wait, so work
-            // queued via `Task { @MainActor }`, `MainActor.run`,
-            // or `DispatchQueue.main` runs between frames just
-            // as it did with the old bare `Task.sleep`.
-            await stdinArrival.waitForArrival(timeoutNanoseconds: 23_800_000)
+            // Fold a state-change request (incl. input handled above) into the
+            // pending-render flag.
+            if appState.needsRender {
+                appState.didRender()
+                pendingRender = true
+            }
+
+            // Render at most once per frame interval. If a render is pending but
+            // the previous one was less than one interval ago, wait out the
+            // remainder (the cap) instead of rendering now. With nothing pending,
+            // leave `waitNanos` nil: the loop blocks until a wake (stdin or a
+            // render-request), so a static screen does no work at all.
+            var waitNanos: UInt64? = nil
+            if pendingRender {
+                let now = DispatchTime.now().uptimeNanoseconds
+                let elapsed = now &- lastRenderAtNanos
+                if elapsed >= frameIntervalNanos {
+                    applyAnimationActivity(
+                        renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
+                    // Re-evaluate the mouse-tracking mode (modifiers may elevate
+                    // it this frame); only re-emitted when it actually changes.
+                    let effective = renderer.effectiveMouseSupport()
+                    terminal.applyMouseSupport(effective)
+                    tuiContext.mouseEventDispatcher.setActiveSupport(effective)
+                    lastRenderAtNanos = DispatchTime.now().uptimeNanoseconds
+                    pendingRender = false
+                } else {
+                    waitNanos = frameIntervalNanos &- elapsed
+                }
+            }
+
+            // Block until woken (stdin data or a render-request `wake()`), or —
+            // when rate-limited — until the frame deadline. The wait releases the
+            // main actor, so the observer's `wake()` hop and other queued
+            // main-actor work run between frames.
+            await stdinArrival.waitForArrival(timeoutNanoseconds: waitNanos)
         }
 
         // Stop pulse timer before cleanup

@@ -75,6 +75,13 @@ struct SignalFlags {
 /// `Bool`-field store on it.
 nonisolated(unsafe) private var signalFlags = SignalFlags()
 
+/// Read/write ends of a self-pipe. A signal handler writes one byte to `write`
+/// (async-signal-safe); the run loop watches `read` with a `DispatchSource` and
+/// wakes. This lets the demand-driven loop — which blocks indefinitely when
+/// nothing needs rendering — notice SIGWINCH (resize) / SIGINT without polling.
+/// `(-1, -1)` until ``SignalManager/install()`` creates it.
+nonisolated(unsafe) private var signalWakePipe: (read: Int32, write: Int32) = (-1, -1)
+
 // MARK: - Signal Manager
 
 /// Manages POSIX signal handlers for the application lifecycle.
@@ -142,14 +149,44 @@ extension SignalManager {
     /// Signal handlers only set boolean flags — all actual work
     /// happens in the main loop, which is async-signal-safe.
     func install() {
-        // Each assignment is a single async-signal-safe Bool-field store
-        // on the global `signalFlags`.
+        // Self-pipe (non-blocking both ends): the run loop watches the read end
+        // to wake on signals, since it is otherwise demand-driven and may block
+        // indefinitely. Best-effort — if `pipe` fails the flags still work, the
+        // loop just won't be woken by signals until its next wake from elsewhere.
+        var fds: [Int32] = [-1, -1]
+        if pipe(&fds) == 0 {
+            for fd in fds {
+                _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            }
+            signalWakePipe = (read: fds[0], write: fds[1])
+        }
+
+        // Each handler does only async-signal-safe work: aligned Bool stores on
+        // `signalFlags`, then a single non-blocking one-byte write to the
+        // self-pipe to wake the loop.
         signal(SIGINT) { _ in
             signalFlags.needsShutdown = true
+            let fd = signalWakePipe.write
+            if fd >= 0 {
+                var byte: UInt8 = 0
+                _ = write(fd, &byte, 1)
+            }
         }
         signal(SIGWINCH) { _ in
             signalFlags.needsRerender = true
             signalFlags.terminalResized = true
+            let fd = signalWakePipe.write
+            if fd >= 0 {
+                var byte: UInt8 = 0
+                _ = write(fd, &byte, 1)
+            }
         }
+    }
+
+    /// The read end of the signal self-pipe (`-1` if `install()` hasn't run or
+    /// the pipe couldn't be created). The run loop watches this with a
+    /// `DispatchSource` to wake on SIGWINCH / SIGINT.
+    var signalWakeReadFD: Int32 {
+        signalWakePipe.read
     }
 }

@@ -82,6 +82,17 @@ final class StdinArrivalNotifier {
     /// hasn't been called.
     private var source: (any DispatchSourceRead)?
 
+    /// An extra read source (e.g. the signal self-pipe) whose readability also
+    /// wakes the loop, registered via ``watchWakeFD(_:)``. Drained on each fire.
+    private var extraSource: (any DispatchSourceRead)?
+
+    /// A wake delivered while no waiter was suspended. The next
+    /// ``waitForArrival(timeoutNanoseconds:)`` returns immediately and clears
+    /// it, so a render-request that lands between the loop's check and its
+    /// suspension is never lost. All callers are MainActor-isolated and run to
+    /// suspension, so a single flag (no lock) is sufficient.
+    private var pendingWake = false
+
     /// Installs the dispatch source on `STDIN_FILENO`. The
     /// source fires on `DispatchQueue.main` whenever the
     /// kernel has data ready to deliver — see the type-level
@@ -99,27 +110,53 @@ final class StdinArrivalNotifier {
             // bridge — no thread hop, no runtime check beyond
             // a debug assertion that we're on the right thread.
             MainActor.assumeIsolated {
-                self?.signal()
+                self?.wake()
             }
         }
         source = src
         src.activate()
     }
 
-    /// Tears the dispatch source down. Safe to call multiple
+    /// Also wake when `fd` becomes readable (e.g. the signal self-pipe, so
+    /// SIGWINCH / SIGINT wake the demand-driven loop). The fd is drained on each
+    /// fire so it doesn't keep re-triggering. Pass the read end; ownership of the
+    /// fd stays with the caller (this only watches it).
+    func watchWakeFD(_ fd: Int32) {
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
+        src.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                var scratch = [UInt8](repeating: 0, count: 64)
+                while read(fd, &scratch, scratch.count) > 0 {}
+                self?.wake()
+            }
+        }
+        extraSource = src
+        src.activate()
+    }
+
+    /// Tears the dispatch sources down. Safe to call multiple
     /// times.
     func stop() {
         source?.cancel()
         source = nil
+        extraSource?.cancel()
+        extraSource = nil
         // If anyone is still waiting, resume them so the loop
         // doesn't hang on the way out.
         signal()
     }
 
-    /// Suspends until either stdin has data or
-    /// `timeoutNanoseconds` have elapsed, whichever happens
-    /// first.
-    func waitForArrival(timeoutNanoseconds: UInt64) async {
+    /// Suspends until woken — by stdin data, a ``wake()`` (render request /
+    /// resize), or, if `timeoutNanoseconds` is non-nil, that timeout elapsing.
+    /// Pass `nil` to block indefinitely (purely demand-driven; nothing forces a
+    /// wake), which is what the run loop does when there is nothing to render.
+    func waitForArrival(timeoutNanoseconds: UInt64?) async {
+        // A wake that arrived before we suspended — return without blocking.
+        if pendingWake {
+            pendingWake = false
+            return
+        }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             // Defensive: if someone is already waiting, that's
             // a logic bug — we should be single-waiter. Resume
@@ -133,25 +170,36 @@ final class StdinArrivalNotifier {
 
             pendingContinuation = continuation
 
-            // Spawn the timeout. The Task inherits MainActor
-            // isolation from this enclosing method, so
-            // `signal()` runs on the main actor — same place
-            // the dispatch handler ends up. No locking needed
-            // because all paths into `signal()` are
-            // MainActor-isolated.
-            timeoutTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
-                self?.signal()
+            // Spawn the timeout, if any. The Task inherits MainActor isolation
+            // from this enclosing method, so `signal()` runs on the main actor —
+            // same place the dispatch handler ends up. No locking needed because
+            // all paths into `signal()` are MainActor-isolated.
+            if let timeoutNanoseconds {
+                timeoutTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                    self?.signal()
+                }
             }
         }
     }
 
-    /// Resumes the pending waiter if there is one. Called
-    /// from both the dispatch source's event handler (via
-    /// `MainActor.assumeIsolated`) and the timeout Task
-    /// (inherited MainActor isolation). The first one to
-    /// grab the continuation wins; the other finds it `nil`
-    /// and no-ops.
+    /// Wakes the loop because there is work to do — stdin arrived, or a render
+    /// was requested (state change, animation tick, resize). If a waiter is
+    /// suspended, resume it; otherwise remember the wake (``pendingWake``) so the
+    /// next ``waitForArrival`` returns at once. Crucially it does NOT set
+    /// `pendingWake` when it resumes a waiter — doing so caused a spurious extra
+    /// iteration per wake (a busy spin on animating screens).
+    func wake() {
+        if pendingContinuation != nil {
+            signal()
+        } else {
+            pendingWake = true
+        }
+    }
+
+    /// Resumes the pending waiter if there is one. Called from ``wake()`` and
+    /// the timeout Task (inherited MainActor isolation). The first one to grab
+    /// the continuation wins; the other finds it `nil` and no-ops.
     private func signal() {
         let cont = pendingContinuation
         pendingContinuation = nil

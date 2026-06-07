@@ -64,4 +64,50 @@ struct StdinArrivalNotifierTests {
         notifier.stop()
         notifier.stop()
     }
+
+    @MainActor
+    @Test("wake() before waiting makes the next waitForArrival return at once")
+    func wakeBeforeWaitReturnsImmediately() async {
+        let notifier = StdinArrivalNotifier()
+        notifier.wake()  // no waiter yet — remembered as pendingWake
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        // A 60-second timeout: it must NOT block (the pending wake short-circuits
+        // it), or this test hangs far past any reasonable runtime.
+        await notifier.waitForArrival(timeoutNanoseconds: 60_000_000_000)
+        #expect(clock.now - start < .milliseconds(100))
+    }
+
+    @MainActor
+    @Test("wake() promptly resumes a suspended waiter")
+    func wakeResumesPendingWaiter() async {
+        let notifier = StdinArrivalNotifier()
+        let waiter = Task { @MainActor in
+            await notifier.waitForArrival(timeoutNanoseconds: 60_000_000_000)
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)  // let it register
+        notifier.wake()
+        await waiter.value  // returns only because wake() resumed it
+    }
+
+    @MainActor
+    @Test("wake() that resumes a waiter leaves no spurious pending wake")
+    func wakeResumeLeavesNoPendingWake() async {
+        let notifier = StdinArrivalNotifier()
+        let waiter = Task { @MainActor in
+            await notifier.waitForArrival(timeoutNanoseconds: 60_000_000_000)
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        notifier.wake()  // resumes the waiter; the wake is consumed
+        await waiter.value
+
+        // Regression guard: a wake that resumed a waiter must NOT also set
+        // pendingWake, or the next wait would return instantly — the busy spin
+        // that pegged animating screens. So this wait must actually block.
+        let clock = ContinuousClock()
+        let start = clock.now
+        await notifier.waitForArrival(timeoutNanoseconds: 30_000_000)  // 30 ms
+        #expect(clock.now - start >= .milliseconds(15))
+    }
 }
