@@ -302,6 +302,33 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // Progress bar line
         lines.append(renderBarLine(width: width, palette: palette, context: context))
 
+        // The indeterminate animation derives its phase from the wall clock, so
+        // it only advances when the view is re-rendered over time. The run loop
+        // is demand-driven (it won't re-render a static screen), so — like
+        // Spinner — drive periodic re-renders while this indeterminate bar is on
+        // screen. Keyed by the stable view identity: the task starts once on
+        // appearance and is cancelled when the bar leaves the tree. (Determinate
+        // bars don't animate, so they need none of this.)
+        if fractionCompleted == nil, let lifecycle = context.environment.lifecycle {
+            let token = "progress-indeterminate-\(context.identity.path)"
+            if lifecycle.hasAppeared(token: token) {
+                _ = lifecycle.recordAppear(token: token) {}
+            } else {
+                _ = lifecycle.recordAppear(token: token) {}
+                lifecycle.startTask(token: token, priority: .medium) {
+                    while !Task.isCancelled {
+                        // ~30 FPS; the run loop caps the actual rate to maxFrameRate.
+                        try? await Task.sleep(nanoseconds: 33_000_000)
+                        guard !Task.isCancelled else { break }
+                        AppState.shared.setNeedsRender()
+                    }
+                }
+            }
+            lifecycle.registerDisappear(token: token) { [lifecycle] in
+                lifecycle.cancelTask(token: token)
+            }
+        }
+
         return FrameBuffer(lines: lines)
     }
 
