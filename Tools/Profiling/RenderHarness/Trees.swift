@@ -133,13 +133,18 @@ enum Trees {
         }
     }
 
-    /// A long `List` of `ForEach` rows. `_ListCore` renders EVERY row to a
-    /// buffer each frame (then windows to the viewport), so the cost scales with
-    /// the total row count, not what's visible. Because the rows are a pure
-    /// function of an `Equatable` element, `ForEach` auto-memoizes them by value
-    /// (see `extractListRows`): the first frame stores 200 row buffers, every
-    /// later frame serves them from the cache. Pre-memo baseline at 80x24 was
-    /// ~15.2s / 2000 iters; ~3.8s with the memo.
+    /// A long `List` of `ForEach` rows. `_ListCore` now renders only the rows
+    /// in the visible window each frame (lazy rows — see `LazyListRowContent`),
+    /// so the per-frame cost is O(visible), not O(total): at 80x24 the cache
+    /// holds ~23 row entries (the window), not 200, and at 80x12 only ~11. The
+    /// eager predecessor processed all 200 every frame regardless of viewport.
+    /// The rows are a pure function of an `Equatable` element, so the visible
+    /// rows are *also* value-memoized (`extractListRows` wraps them in
+    /// `_MemoizedRow`); even with that memo masking the render cost, windowing
+    /// alone cut 80x24 from ~13.6s to ~7.9s user / 3000 iters (1.7x), and the
+    /// win scales with how little is visible (80x12: ~11.5s → ~4.8s, 2.4x).
+    /// For non-`Equatable` rows (no memo) each skipped row is a full render, so
+    /// the win is far larger — that is the emoji-browser case this targets.
     @MainActor
     static func list() -> some View {
         let items = (0..<200).map {

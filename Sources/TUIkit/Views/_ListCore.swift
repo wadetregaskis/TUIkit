@@ -168,8 +168,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     ) -> (lines: [String], state: PopulatedRenderState) {
         // A list only scrolls (and shows indicators) when its rows
         // don't all fit in the content area.
-        let totalRowLines = rows.reduce(0) { $0 + $1.buffer.height }
-        let overflowing = totalRowLines > targetContentHeight
+        let overflowing = rowsOverflow(rows, targetContentHeight: targetContentHeight)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -232,6 +231,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visibleRowYRanges: visibleRowYRanges
             )
         )
+    }
+
+    /// Whether the rows can't all fit in `targetContentHeight` lines — i.e.
+    /// whether the list scrolls and shows indicators.
+    ///
+    /// Exactly the old `totalRowLines > targetContentHeight` test, but it stops
+    /// summing the moment the running total exceeds the area instead of first
+    /// rendering *every* row. For the common case (rows are at least one line
+    /// tall) that short-circuits after ~`targetContentHeight` rows, so a
+    /// 2,000-row List in a 40-line area renders ~40 rows here, not 2,000 — and
+    /// when the list isn't scrolled those are the very rows about to be shown,
+    /// whose buffers ``LazyListRowContent`` memoises (no re-render downstream).
+    /// It walks all rows only when their total height genuinely fits the area
+    /// (a short list, which is rendered in full anyway).
+    private func rowsOverflow(
+        _ rows: [SelectableListRow<SelectionValue>],
+        targetContentHeight: Int
+    ) -> Bool {
+        var totalRowLines = 0
+        for row in rows {
+            totalRowLines += row.buffer.height
+            if totalRowLines > targetContentHeight { return true }
+        }
+        return false
     }
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
@@ -466,7 +489,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Check for ListRowExtractor (ForEach)
         if let extractor = content as? ListRowExtractor {
             let rows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
-            return rows.map { SelectableListRow(type: .content(id: $0.id), buffer: $0.buffer, badge: $0.badge) }
+            // Thread the lazy content box through unchanged — reading `.buffer`
+            // / `.badge` here would force a render of every row, defeating the
+            // windowing. Only the visible window forces its rows.
+            return rows.map { SelectableListRow(type: .content(id: $0.id), content: $0.content) }
         }
 
         // Check for ChildInfoProvider (handles TupleView with multiple children)
@@ -521,7 +547,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let extractor = section as? ListRowExtractor {
             let contentRows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
             for row in contentRows {
-                rows.append(SelectableListRow(type: .content(id: row.id), buffer: row.buffer, badge: row.badge))
+                // Thread the lazy box through — don't force `.buffer` / `.badge`.
+                rows.append(SelectableListRow(type: .content(id: row.id), content: row.content))
             }
         } else {
             // Fallback: render content as single row (if Section content is not ForEach)
