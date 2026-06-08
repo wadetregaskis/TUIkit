@@ -223,4 +223,34 @@ struct SliderTrackStyleTests {
             #expect(buffer.lines[0].contains("▶"), "Style \(style) should contain right arrow")
         }
     }
+
+    // MARK: - Scroll wheel
+
+    /// Wheel direction must match every other wheel control (Stepper, Menu,
+    /// List, ScrollView): wheel DOWN advances (increases), wheel UP retreats
+    /// (decreases). The slider previously had this inverted, so a horizontal
+    /// slider adjusted the opposite way from the wheel everywhere else.
+    @Test("Scroll wheel down increases the value, up decreases it")
+    func wheelDirectionMatchesEverythingElse() {
+        var value = 0.5
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let context = makeRenderContext(width: 40, height: 1)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let buffer = renderToBuffer(Slider(value: binding, in: 0...1, step: 0.1), context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let region = buffer.hitTestRegions.max(by: { $0.width < $1.width }) else {
+            Issue.record("expected a slider hit-test region"); return
+        }
+        let x = region.offsetX + region.width / 2
+        let y = region.offsetY
+
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: x, y: y))
+        #expect(value > 0.5, "wheel down should increase the value, got \(value)")
+
+        value = 0.5
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x, y: y))
+        #expect(value < 0.5, "wheel up should decrease the value, got \(value)")
+    }
 }

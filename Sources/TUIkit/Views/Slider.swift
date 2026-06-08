@@ -511,11 +511,15 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             }
             switch event.button {
             case .scrollUp:
-                incrementOnce()
+                // Wheel up scrolls toward smaller / earlier values; wheel down
+                // advances. Matches Stepper, Menu, List and ScrollView — the
+                // slider previously had this inverted, so a horizontal slider
+                // adjusted the opposite way from every other wheel control.
+                decrementOnce()
                 focusManager.focus(id: focusID)
                 return true
             case .scrollDown:
-                decrementOnce()
+                incrementOnce()
                 focusManager.focus(id: focusID)
                 return true
             case .left:
