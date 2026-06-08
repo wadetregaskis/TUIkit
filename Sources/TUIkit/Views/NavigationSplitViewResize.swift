@@ -101,6 +101,10 @@ final class _SplitDividerHandler: Focusable {
     /// drag is in progress. Set on `.pressed`, read on `.dragged`/`.released`.
     var dragStartWidth: Int?
 
+    /// Whether the cursor is currently over the divider. Drives the subtle
+    /// hover pulse of the grip dots. Set on `.entered`/`.exited`.
+    var isHovered: Bool = false
+
     init(
         focusID: String,
         columnIndex: Int,

@@ -340,11 +340,11 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             }
         }
 
-        // Read the pulse clock ONLY when a divider is focused, so the
-        // demand-driven loop keeps the pulse animating just for that case (a
-        // static split with no focused divider stays idle).
-        let anyDividerActive = dividerInfos.contains { $0.isActive }
-        let pulsePhase = anyDividerActive ? context.environment.pulsePhase : 0
+        // Read the pulse clock ONLY when a divider is focused/dragged or
+        // hovered, so the demand-driven loop keeps the pulse animating just for
+        // those cases (a static split with no active/hovered divider stays idle).
+        let anyDividerPulsing = dividerInfos.contains { $0.isActive || $0.isHovered }
+        let pulsePhase = anyDividerPulsing ? context.environment.pulsePhase : 0
 
         // Combine buffers horizontally, inserting the (possibly resizable)
         // dividers between them.
@@ -529,7 +529,7 @@ extension _NavigationSplitViewCore {
                 // The divider for the gap before this column.
                 let info = index - 1 < dividerInfos.count
                     ? dividerInfos[index - 1]
-                    : DividerRenderInfo(isActive: false, mouseHandlerID: nil)
+                    : DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
                 let dividerBuffer = buildDividerColumn(
                     info: info, height: maxHeight, resizable: resizable,
                     palette: palette, pulsePhase: pulsePhase)
@@ -543,8 +543,11 @@ extension _NavigationSplitViewCore {
 
     /// Per-gap divider state passed from `renderToBuffer` to `combineColumns`.
     fileprivate struct DividerRenderInfo {
-        /// Whether this divider's focus section is active (drawn highlighted).
+        /// Whether this divider's focus section is active (focused or being
+        /// dragged) — its background pulses.
         let isActive: Bool
+        /// Whether the cursor is over the divider — its grip dots pulse.
+        let isHovered: Bool
         /// The mouse handler claiming drags on the divider, or `nil` when the
         /// split isn't resizable (or while measuring).
         let mouseHandlerID: HitTestRegion.HandlerID?
@@ -565,7 +568,7 @@ extension _NavigationSplitViewCore {
         guard resizable, !context.isMeasuring, let widths,
             let stateStorage = context.environment.stateStorage
         else {
-            return DividerRenderInfo(isActive: false, mouseHandlerID: nil)
+            return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
         }
 
         let sectionID = "nav-split-divider-\(index)"
@@ -589,12 +592,27 @@ extension _NavigationSplitViewCore {
 
         var mouseHandlerID: HitTestRegion.HandlerID?
         if let mouseDispatcher = context.environment.mouseEventDispatcher {
+            // Enable motion reporting so the dispatcher can synthesise the
+            // hover enter/exit transitions that pulse the grip dots.
+            mouseDispatcher.requestFeature(.motion)
             let captureWidths = widths
             let captureHandler = handler
             let column = index
             let minWidth = minimumColumnWidth
             let captureFocus = focusManager
             mouseHandlerID = mouseDispatcher.register { event in
+                // Hover transitions first — these arrive with a non-`.left`
+                // button, so they'd be dropped by the button guard below.
+                switch event.phase {
+                case .entered:
+                    captureHandler.isHovered = true
+                    return true
+                case .exited:
+                    captureHandler.isHovered = false
+                    return true
+                default:
+                    break
+                }
                 guard event.button == .left else { return false }
                 switch event.phase {
                 case .pressed:
@@ -621,19 +639,27 @@ extension _NavigationSplitViewCore {
             }
         }
 
-        return DividerRenderInfo(isActive: isActive, mouseHandlerID: mouseHandlerID)
+        return DividerRenderInfo(
+            isActive: isActive, isHovered: handler.isHovered, mouseHandlerID: mouseHandlerID)
     }
 
     /// Builds the one-column divider buffer for a gap.
     ///
-    /// A resizable divider is a full-height heavy bar (`┃`) — distinct from the
-    /// light `│` borders of the columns either side, so it reads as a grabbable
-    /// handle rather than a doubled border, and is a visible target for both the
-    /// mouse and the eye. Idle it is dim; when focused (Tab'd to, or mid-drag)
-    /// it **pulses** between dim and the accent colour, the same focus cue the
-    /// columns use. A non-resizable divider is a plain space column (the
-    /// historical separator). The drag hit-test region spans the full height, so
-    /// a drag works anywhere along the bar.
+    /// A resizable divider is a subtle grab handle — three `◦` dots stacked at
+    /// its vertical centre — over an otherwise blank column, so it doesn't
+    /// double up against the light `│` borders of the columns either side. Two
+    /// independent cues animate it:
+    ///
+    /// - **Focused or dragging** (`isActive`): the whole divider *background*
+    ///   pulses, a clear "this is the handle you're moving" signal.
+    /// - **Hovered** (`isHovered`): just the grip dots pulse — a quiet hint
+    ///   that's not distracting when the cursor merely passes over.
+    ///
+    /// `pulsePhase` is non-zero only when some divider is active or hovered (see
+    /// `renderToBuffer`), so an untouched split animates nothing. A
+    /// non-resizable divider is a plain space column (the historical separator);
+    /// its drag hit-test region spans the full height, so a drag works anywhere
+    /// along it, not just on the dots.
     fileprivate func buildDividerColumn(
         info: DividerRenderInfo,
         height: Int,
@@ -641,28 +667,42 @@ extension _NavigationSplitViewCore {
         palette: any Palette,
         pulsePhase: Double
     ) -> FrameBuffer {
-        let color: Color
-        if info.isActive {
-            // Pulse between a dim accent and full accent (mirrors the column
-            // focus-border cue). `pulsePhase` was read by `renderToBuffer` only
-            // when a divider is active, so the animation clock stays alive only
-            // while one is focused.
-            color = Color.lerp(
-                palette.accent.opacity(ViewConstants.focusBorderDim),
-                palette.accent,
-                phase: pulsePhase)
-        } else {
-            color = palette.border
+        let h = max(0, height)
+        guard resizable, h > 0 else {
+            return FrameBuffer(lines: Array(repeating: " ", count: h))
         }
-        let bar = resizable ? ANSIRenderer.colorize("┃", foreground: color) : " "
-        let lines = Array(repeating: bar, count: max(0, height))
+
+        // Three grip dots centred vertically (fewer if the divider is short).
+        let center = h / 2
+        let gripRows = Set([center - 1, center, center + 1].filter { $0 >= 0 && $0 < h })
+
+        // Grip foreground: a quiet dot, pulsing toward the accent while hovered.
+        let dotColor = info.isHovered
+            ? Color.lerp(
+                palette.accent.opacity(ViewConstants.focusBorderDim),
+                palette.accent, phase: pulsePhase)
+            : palette.foregroundTertiary
+
+        // Background: pulses across the whole divider while focused / dragging
+        // (same min/max the List focus-pulse uses).
+        let background: Color? = info.isActive
+            ? Color.lerp(
+                palette.accent.opacity(ViewConstants.focusPulseMin),
+                palette.accent.opacity(ViewConstants.focusPulseMax), phase: pulsePhase)
+            : nil
+
+        let lines: [String] = (0..<h).map { row in
+            let cell = gripRows.contains(row)
+                ? ANSIRenderer.colorize("◦", foreground: dotColor)
+                : " "
+            return cell.withPersistentBackground(background)
+        }
 
         var buffer = FrameBuffer(lines: lines)
         if let id = info.mouseHandlerID {
             buffer.hitTestRegions.append(
                 HitTestRegion(
-                    offsetX: 0, offsetY: 0, width: 1, height: max(0, height),
-                    handlerID: id
+                    offsetX: 0, offsetY: 0, width: 1, height: h, handlerID: id
                 )
             )
         }

@@ -552,12 +552,12 @@ struct NavigationSplitViewResizeTests {
             availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
     }
 
-    /// The visible column of the divider grip on the centre row — i.e. the
-    /// sidebar column's width.
+    /// The visible column of the divider grip (a `◦` dot) on the centre row —
+    /// i.e. the sidebar column's width.
     private func gripX(_ buffer: FrameBuffer) -> Int? {
         guard buffer.height > 0 else { return nil }
         let mid = buffer.lines[buffer.height / 2].stripped
-        guard let r = mid.firstIndex(of: "┃") else { return nil }
+        guard let r = mid.firstIndex(of: "◦") else { return nil }
         return mid.distance(from: mid.startIndex, to: r)
     }
 
@@ -632,6 +632,54 @@ struct NavigationSplitViewResizeTests {
         let x1 = gripX(frame(view, context))
         #expect(x1 == x0 + 5,
             "dragging right by 5 should widen the sidebar by 5 and survive the GC (before \(x0), after \(String(describing: x1)))")
+    }
+
+    @Test("The divider grip is three stacked dots at its centre")
+    func gripIsThreeDots() {
+        let context = resizeContext(width: 60, height: 12)
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+        let buffer = frame(view, context)
+        let dots = buffer.lines.reduce(0) { sum, line in
+            sum + line.stripped.filter { $0 == "◦" }.count
+        }
+        #expect(dots == 3, "one divider should show three grip dots, got \(dots)")
+    }
+
+    @Test("Hovering the divider changes the grip rendering")
+    func hoverPulsesGrip() {
+        let context = resizeContext(width: 60, height: 12)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        // Motion must be enabled for the dispatcher to synthesise enter/exit.
+        dispatcher.setActiveSupport(MouseSupport(clicks: true, scrolling: true, drag: true, motion: true))
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+
+        let buffer = frame(view, context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let x = gripX(buffer) else { Issue.record("no grip"); return }
+        let mid = buffer.height / 2
+        let dividerRowBefore = buffer.lines[mid]  // raw, with ANSI
+
+        // Move the cursor onto the divider → dispatcher synthesises `.entered`.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .moved, x: x, y: mid))
+        let dividerRowAfter = frame(view, context).lines[mid]
+
+        #expect(dividerRowBefore != dividerRowAfter,
+            "hovering the divider should restyle the grip dot")
+    }
+
+    @Test("A focused divider gains a (pulsing) background")
+    func focusedDividerHasBackground() {
+        let context = resizeContext(width: 60, height: 12)
+        let fm = context.environment.focusManager
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+
+        _ = frame(view, context)
+        let unfocused = frame(view, context).lines[6]  // raw, with ANSI
+        fm.activateSection(id: "nav-split-divider-0")
+        let focused = frame(view, context).lines[6]
+
+        #expect(unfocused != focused,
+            "focusing the divider should add a background to its column")
     }
 
     @Test("navigationSplitViewResizable(false) removes the handle and divider section")
