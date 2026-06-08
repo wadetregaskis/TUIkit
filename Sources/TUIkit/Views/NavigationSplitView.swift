@@ -228,15 +228,32 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             return FrameBuffer()
         }
 
+        // Resizable columns (the default) persist a user-chosen width per
+        // non-trailing column and expose a draggable / focusable divider.
+        let resizable =
+            context.environment.navigationSplitViewResizable
+            && context.environment.stateStorage != nil
+        let widths: SplitViewWidths? = resizable
+            ? context.environment.stateStorage!.storage(
+                for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
+                default: SplitViewWidths()
+            ).value
+            : nil
+
         // Calculate column widths
         let columnWidths = calculateColumnWidths(
             visibleColumns: visibleColumns,
             style: style,
-            availableWidth: context.availableWidth
+            availableWidth: context.availableWidth,
+            widths: widths,
+            writeBack: resizable && !context.isMeasuring
         )
 
         // Render each visible column
         var buffers: [FrameBuffer] = []
+        // One entry per gap between columns; drives the divider's look and its
+        // drag hit-test region (see `combineColumns`).
+        var dividerInfos: [DividerRenderInfo] = []
         let focusManager = context.environment.focusManager
 
         for (index, column) in visibleColumns.enumerated() {
@@ -295,13 +312,33 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                 )
             }
             buffers.append(buffer)
+
+            // Wire the divider that follows this column (all but the last).
+            // Registering its focus section here — right after this column's
+            // section and before the next column's — interleaves it into the
+            // Tab order (col0, divider0, col1, divider1, …) so Tab reaches the
+            // handle, where the arrow keys resize it.
+            if index < visibleColumns.count - 1 {
+                dividerInfos.append(
+                    wireDivider(
+                        index: index,
+                        resizable: resizable,
+                        widths: widths,
+                        context: context,
+                        focusManager: focusManager
+                    )
+                )
+            }
         }
 
-        // Combine buffers horizontally with separators
+        // Combine buffers horizontally, inserting the (possibly resizable)
+        // dividers between them.
         return combineColumns(
             buffers: buffers,
             columnWidths: columnWidths,
-            separator: separator,
+            dividerInfos: dividerInfos,
+            resizable: resizable,
+            palette: context.environment.palette,
             availableHeight: context.availableHeight
         )
     }
@@ -355,11 +392,21 @@ extension _NavigationSplitViewCore {
     private var fixedContentWidth: Int { 30 }
 
     /// Calculates the width for each visible column.
-    /// TUI-specific: Left columns have fixed widths, only the rightmost column is flexible.
+    ///
+    /// TUI-specific: every left column has a width, the rightmost column is
+    /// flexible and absorbs the remainder. A left column's width is the user's
+    /// stored width (from a drag / keyboard resize) when present, otherwise its
+    /// default; either way it is clamped so the column keeps at least
+    /// `minimumColumnWidth` and leaves at least that much for each column to its
+    /// right. When `writeBack` is set (the real render of a resizable split),
+    /// the clamped width is written back so the next arrow-key step starts from
+    /// the true current width and a too-wide drag settles at the real maximum.
     fileprivate func calculateColumnWidths(
         visibleColumns: [NavigationSplitViewColumn],
         style: any NavigationSplitViewStyle,
-        availableWidth: Int
+        availableWidth: Int,
+        widths: SplitViewWidths?,
+        writeBack: Bool
     ) -> [Int] {
         let separatorCount = max(0, visibleColumns.count - 1)
         let usableWidth = availableWidth - separatorCount
@@ -368,8 +415,7 @@ extension _NavigationSplitViewCore {
             return Array(repeating: 0, count: visibleColumns.count)
         }
 
-        // TUI-specific: Fixed widths for left columns, flexible rightmost column
-        var widths: [Int] = []
+        var result: [Int] = []
         var remainingWidth = usableWidth
 
         for (index, column) in visibleColumns.enumerated() {
@@ -377,25 +423,36 @@ extension _NavigationSplitViewCore {
 
             if isLastColumn {
                 // Last column gets all remaining width
-                widths.append(max(minimumColumnWidth, remainingWidth))
+                result.append(max(minimumColumnWidth, remainingWidth))
             } else {
-                // Fixed width for left columns
-                let fixedWidth: Int
+                // Default width for left columns, overridden by a stored
+                // user resize when present.
+                let defaultWidth: Int
                 switch column {
                 case .sidebar:
-                    fixedWidth = fixedSidebarWidth
+                    defaultWidth = fixedSidebarWidth
                 case .content:
-                    fixedWidth = fixedContentWidth
+                    defaultWidth = fixedContentWidth
                 default:
-                    fixedWidth = minimumColumnWidth
+                    defaultWidth = minimumColumnWidth
                 }
-                let width = min(fixedWidth, remainingWidth - minimumColumnWidth)
-                widths.append(max(minimumColumnWidth, width))
+                let desired = widths?.value(for: index) ?? defaultWidth
+                // Reserve at least minimumColumnWidth for every column still to
+                // the right, so a wide left column can't starve them.
+                let columnsToTheRight = visibleColumns.count - index - 1
+                let maxForColumn =
+                    remainingWidth - minimumColumnWidth * columnsToTheRight
+                let width = max(
+                    minimumColumnWidth, min(desired, max(minimumColumnWidth, maxForColumn)))
+                if writeBack {
+                    widths?.set(width, for: index)
+                }
+                result.append(width)
                 remainingWidth -= width
             }
         }
 
-        return widths
+        return result
     }
 
     /// Returns the focus section ID for a column.
@@ -426,11 +483,15 @@ extension _NavigationSplitViewCore {
         }
     }
 
-    /// Combines column buffers horizontally with separators.
+    /// Combines column buffers horizontally, inserting a one-column divider
+    /// between each pair. The divider carries the resize handle and (when
+    /// resizable) a full-height drag hit-test region.
     fileprivate func combineColumns(
         buffers: [FrameBuffer],
         columnWidths: [Int],
-        separator: String,
+        dividerInfos: [DividerRenderInfo],
+        resizable: Bool,
+        palette: any Palette,
         availableHeight: Int
     ) -> FrameBuffer {
         guard !buffers.isEmpty else { return FrameBuffer() }
@@ -448,16 +509,139 @@ extension _NavigationSplitViewCore {
             if index == 0 {
                 result = paddedBuffer
             } else {
-                // Add separator column (just a space, no styling needed)
-                let separatorBuffer = FrameBuffer(
-                    lines: Array(repeating: separator, count: maxHeight)
-                )
-                result.appendHorizontally(separatorBuffer, spacing: 0)
+                // The divider for the gap before this column.
+                let info = index - 1 < dividerInfos.count
+                    ? dividerInfos[index - 1]
+                    : DividerRenderInfo(isActive: false, mouseHandlerID: nil)
+                let dividerBuffer = buildDividerColumn(
+                    info: info, height: maxHeight, resizable: resizable, palette: palette)
+                result.appendHorizontally(dividerBuffer, spacing: 0)
                 result.appendHorizontally(paddedBuffer, spacing: 0)
             }
         }
 
         return result
+    }
+
+    /// Per-gap divider state passed from `renderToBuffer` to `combineColumns`.
+    fileprivate struct DividerRenderInfo {
+        /// Whether this divider's focus section is active (drawn highlighted).
+        let isActive: Bool
+        /// The mouse handler claiming drags on the divider, or `nil` when the
+        /// split isn't resizable (or while measuring).
+        let mouseHandlerID: HitTestRegion.HandlerID?
+    }
+
+    /// Sets up the divider that follows column `index`: registers its focus
+    /// section + handler (so Tab reaches it and the arrow keys resize it), and
+    /// registers the mouse handler that drags it. Returns the info
+    /// `combineColumns` needs to draw and hit-test it. A no-op (returns an
+    /// inert divider) while measuring or when the split isn't resizable.
+    fileprivate func wireDivider(
+        index: Int,
+        resizable: Bool,
+        widths: SplitViewWidths?,
+        context: RenderContext,
+        focusManager: FocusManager
+    ) -> DividerRenderInfo {
+        guard resizable, !context.isMeasuring, let widths,
+            let stateStorage = context.environment.stateStorage
+        else {
+            return DividerRenderInfo(isActive: false, mouseHandlerID: nil)
+        }
+
+        let sectionID = "nav-split-divider-\(index)"
+        focusManager.registerSection(id: sectionID)
+
+        // Persist one handler per divider so its drag anchor survives renders.
+        let handler = stateStorage.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: 1 + index),
+            default: _SplitDividerHandler(
+                focusID: "\(sectionID)-\(context.identity.path)",
+                columnIndex: index,
+                widths: widths,
+                minimumColumnWidth: minimumColumnWidth
+            )
+        ).value
+        handler.canBeFocused = true
+        focusManager.register(handler, inSection: sectionID)
+
+        let isActive = focusManager.isActiveSection(sectionID)
+
+        var mouseHandlerID: HitTestRegion.HandlerID?
+        if let mouseDispatcher = context.environment.mouseEventDispatcher {
+            let captureWidths = widths
+            let captureHandler = handler
+            let column = index
+            let minWidth = minimumColumnWidth
+            let captureFocus = focusManager
+            mouseHandlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed:
+                    // Anchor: the column's width when the drag began. Also
+                    // focus the divider so a drag and the keyboard agree on
+                    // which handle is active.
+                    captureHandler.dragStartWidth =
+                        captureWidths.value(for: column) ?? minWidth
+                    captureFocus.activateSection(id: sectionID)
+                    return true
+                case .dragged, .released:
+                    // `event.x` is localised to the divider's press position,
+                    // so it is exactly the signed cell delta to apply.
+                    if let start = captureHandler.dragStartWidth {
+                        captureWidths.set(start + event.x, for: column)
+                    }
+                    if event.phase == .released {
+                        captureHandler.dragStartWidth = nil
+                    }
+                    return true
+                default:
+                    return false
+                }
+            }
+        }
+
+        return DividerRenderInfo(isActive: isActive, mouseHandlerID: mouseHandlerID)
+    }
+
+    /// Builds the one-column divider buffer for a gap.
+    ///
+    /// Resizable dividers show a faint `┃` grip at their vertical centre so the
+    /// handle is discoverable without a full vertical line clashing with the
+    /// bordered columns either side; when focused/dragged the whole divider is
+    /// drawn as an accent line. A non-resizable divider is a plain space column
+    /// (the historical separator). The drag hit-test region spans the full
+    /// height so a drag works anywhere along the divider, not just on the grip.
+    fileprivate func buildDividerColumn(
+        info: DividerRenderInfo,
+        height: Int,
+        resizable: Bool,
+        palette: any Palette
+    ) -> FrameBuffer {
+        let gripRow = height / 2
+        let color = info.isActive ? palette.accent : palette.border
+        let lines: [String] = (0..<max(0, height)).map { row in
+            guard resizable else { return " " }
+            if row == gripRow {
+                return ANSIRenderer.colorize("┃", foreground: color)
+            }
+            // A focused divider shows a full line; otherwise just the grip,
+            // leaving a plain space so adjacent column borders don't double up.
+            return info.isActive ? ANSIRenderer.colorize("│", foreground: color) : " "
+        }
+
+        var buffer = FrameBuffer(lines: lines)
+        if let id = info.mouseHandlerID {
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0, offsetY: 0, width: 1, height: max(0, height),
+                    handlerID: id
+                )
+            )
+        }
+        return buffer
     }
 
     /// Pads a buffer to the specified width and height.

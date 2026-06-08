@@ -536,3 +536,95 @@ struct NavigationSplitViewEquatableTests {
         #expect(view1 != view2)
     }
 }
+
+// MARK: - Resizable Columns
+
+@MainActor
+@Suite("NavigationSplitView Resize")
+struct NavigationSplitViewResizeTests {
+    /// A context with a fresh focus manager plus the TUIContext services
+    /// (state storage, mouse dispatcher) the resize machinery needs.
+    private func resizeContext(width: Int = 80, height: Int = 12) -> RenderContext {
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        return RenderContext(
+            availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
+    }
+
+    /// The visible column of the divider grip on the centre row — i.e. the
+    /// sidebar column's width.
+    private func gripX(_ buffer: FrameBuffer) -> Int? {
+        guard buffer.height > 0 else { return nil }
+        let mid = buffer.lines[buffer.height / 2].stripped
+        guard let r = mid.firstIndex(of: "┃") else { return nil }
+        return mid.distance(from: mid.startIndex, to: r)
+    }
+
+    @Test("Divider handler arrow keys adjust the stored width")
+    func handlerKeyboard() {
+        let widths = SplitViewWidths()
+        widths.set(25, for: 0)
+        let handler = _SplitDividerHandler(
+            focusID: "d", columnIndex: 0, widths: widths, minimumColumnWidth: 10)
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right)))
+        #expect(widths.value(for: 0) == 26)
+        _ = handler.handleKeyEvent(KeyEvent(key: .left))
+        _ = handler.handleKeyEvent(KeyEvent(key: .left))
+        #expect(widths.value(for: 0) == 24)
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, shift: true))
+        #expect(widths.value(for: 0) == 29, "Shift = 5-cell step")
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        #expect(widths.value(for: 0) == 10, "Home = narrowest")
+        #expect(!handler.handleKeyEvent(KeyEvent(key: .up)), "unrelated key not consumed")
+    }
+
+    @Test("Left arrow on the focused divider narrows the sidebar")
+    func keyboardResize() {
+        let context = resizeContext()
+        let fm = context.environment.focusManager
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+
+        _ = renderToBuffer(view, context: context)  // register divider section + handler
+        guard let before = gripX(renderToBuffer(view, context: context)) else {
+            Issue.record("expected a divider grip"); return
+        }
+        fm.activateSection(id: "nav-split-divider-0")
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
+        let after = gripX(renderToBuffer(view, context: context))
+
+        #expect(after == before - 1, "← should narrow the sidebar by one (before \(before), after \(String(describing: after)))")
+    }
+
+    @Test("Dragging the divider widens the sidebar")
+    func mouseDragResize() {
+        let context = resizeContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let x0 = gripX(buffer) else { Issue.record("no grip"); return }
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x0, y: 6))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: x0 + 5, y: 6))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x0 + 5, y: 6))
+
+        let x1 = gripX(renderToBuffer(view, context: context))
+        #expect(x1 == x0 + 5, "dragging right by 5 should widen the sidebar by 5 (before \(x0), after \(String(describing: x1)))")
+    }
+
+    @Test("navigationSplitViewResizable(false) removes the handle and divider section")
+    func optOut() {
+        let context = resizeContext()
+        let fm = context.environment.focusManager
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .navigationSplitViewResizable(false)
+
+        let buffer = renderToBuffer(view, context: context)
+        #expect(gripX(buffer) == nil, "no grip handle when not resizable")
+        #expect(fm.section(id: "nav-split-divider-0") == nil, "no divider focus section when not resizable")
+    }
+}
