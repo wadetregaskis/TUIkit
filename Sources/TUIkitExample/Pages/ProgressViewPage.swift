@@ -23,7 +23,23 @@ private func animatedFraction(period: Double = 50) -> Double {
 /// Shows ``ProgressView`` in its determinate (a known fraction) and
 /// indeterminate (no known total) modes, across every built-in style.
 struct ProgressViewPage: View {
+    /// The determinate track styles the top "Determinate" section cycles
+    /// through with the `s` shortcut. The "Determinate styles" section below
+    /// shows the full catalogue in parallel and is unaffected by this.
+    private static let cyclableStyles: [(name: String, style: TrackStyle)] = [
+        ("block", .block),
+        ("blockFine", .blockFine),
+        ("shade", .shade),
+        ("bar", .bar),
+        ("dot", .dot),
+        ("braille", .braille),
+    ]
+
+    /// Which style the top "Determinate" section is currently showing.
+    @State private var determinateStyleIndex = 0
+
     var body: some View {
+        let current = Self.cyclableStyles[determinateStyleIndex]
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection("Determinate") {
@@ -31,9 +47,11 @@ struct ProgressViewPage: View {
                 // share the same wall-clock phase so they stay in sync,
                 // and the PulseTimer's ~10 Hz re-render makes the
                 // animation look continuous despite being state-less.
+                // The `s` shortcut cycles the style applied to just these two.
                 VStack(alignment: .leading, spacing: 1) {
                     let fraction = animatedFraction()
                     ProgressView("Downloading files…", value: fraction)
+                        .progressViewStyle(current.style)
 
                     ProgressView(value: fraction) {
                         Text("Build progress")
@@ -42,6 +60,7 @@ struct ProgressViewPage: View {
                         Text("\(Int((fraction * 100).rounded()))%")
                             .foregroundStyle(.palette.foregroundSecondary)
                     }
+                    .progressViewStyle(current.style)
                 }
             }
 
@@ -113,6 +132,14 @@ struct ProgressViewPage: View {
         }
         .appHeader {
             DemoAppHeader("Progress Views")
+        }
+        // Merges with the page's back / scroll items. Cycles only the top
+        // "Determinate" section's style; the style catalogues below stay put.
+        .statusBarItems {
+            StatusBarItem(shortcut: "s", label: "style: \(current.name)") {
+                determinateStyleIndex =
+                    (determinateStyleIndex + 1) % Self.cyclableStyles.count
+            }
         }
     }
 
