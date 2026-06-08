@@ -276,4 +276,46 @@ struct ScrollViewRenderingTests {
         #expect(!text.contains("more below"))
         #expect(!text.contains("more above"))
     }
+
+    /// Regression test for "the Mixed-widget ScrollView won't scroll to the
+    /// focused control". When a ScrollView is nested in a layout that
+    /// render-to-measures it (here a VStack with a flexible `Spacer` sibling),
+    /// its `renderToBuffer` runs several times per frame in measuring mode.
+    /// Inner controls don't emit hit-test regions while measuring, so the
+    /// "follow the focused control" detection — if it ran during a measure
+    /// pass — would consume the focus-change signal (update its last-seen
+    /// focus) WITHOUT being able to scroll, leaving the real render with
+    /// nothing to act on. The control below the fold then never scrolled into
+    /// view. The fix gates the whole snap step on `!isMeasuring`.
+    @Test("Nested ScrollView still scrolls a below-fold focused control into view")
+    func nestedScrollViewFollowsFocusBelowFold() {
+        var context = makeContext(width: 40, height: 24)
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let fm = context.environment.focusManager
+
+        let view = VStack(alignment: .leading, spacing: 1) {
+            Text("preceding content")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<10, id: \.self) { i in
+                        Button("btn-\(i)") {}.focusID("btn-\(i)")
+                    }
+                }
+            }
+            .frame(height: 5)
+            .border()
+            Spacer()
+        }
+
+        _ = renderToBuffer(view, context: context)
+        fm.focus(id: "btn-0")
+        let top = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
+        #expect(top.contains("btn-0"))
+
+        fm.focus(id: "btn-9")
+        let moved = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
+        #expect(moved.contains("btn-9"),
+            "a nested ScrollView must scroll a below-fold focused control into view")
+    }
 }
