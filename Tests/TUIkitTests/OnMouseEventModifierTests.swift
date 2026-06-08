@@ -119,4 +119,50 @@ struct OnMouseEventModifierTests {
 
         #expect(recorder.events.map(\.phase) == [.pressed, .dragged, .released])
     }
+
+    @Test("A release reaches the press handler even when a re-render reassigns handler ids")
+    func releaseSurvivesReRenderBetweenPressAndRelease() {
+        // Regression test for the "first menu click always opens item 0" bug.
+        // A consumed press requests a render, so a render routinely happens
+        // BETWEEN a click's press and its release. `beginRenderPass` clears the
+        // handler table and re-registers everything from an id counter reset to
+        // 0, so a handler's id is NOT stable across that render. The drag/press
+        // capture must therefore hold the handler itself, not its id — otherwise
+        // the release is delivered to whichever handler inherited the stale id.
+        let ctx = context()
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let target = Recorder()
+        let decoy = Recorder()
+
+        // Frame 0: only the target is registered; it claims the press.
+        dispatcher.beginRenderPass()
+        let targetID0 = dispatcher.register(target.record)
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 3, handlerID: targetID0)
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 1))
+        #expect(target.events.map(\.phase) == [.pressed])
+
+        // Frame 1 (the render the press triggered): a DECOY now registers first,
+        // so it inherits the id the target held in frame 0; the target gets a
+        // fresh id. This is exactly the menu-page shuffle (menu id 1 -> 0).
+        dispatcher.beginRenderPass()
+        let decoyID = dispatcher.register(decoy.record)
+        let targetID1 = dispatcher.register(target.record)
+        #expect(decoyID == targetID0, "decoy must inherit the target's frame-0 id to model the bug")
+        #expect(targetID1 != targetID0)
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 3, handlerID: targetID1),
+            HitTestRegion(offsetX: 20, offsetY: 0, width: 10, height: 3, handlerID: decoyID),
+        ])
+
+        // The release must go to the handler that took the press (target),
+        // never to the decoy that inherited its stale id.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 1, y: 1))
+
+        #expect(decoy.events.isEmpty, "release leaked to the handler that inherited the stale id")
+        #expect(target.events.map(\.phase) == [.pressed, .released])
+    }
 }

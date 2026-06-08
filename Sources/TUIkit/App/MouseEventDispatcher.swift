@@ -46,7 +46,18 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// to the original region even when the cursor wanders elsewhere
     /// during the drag.
     private struct PressCapture {
-        let handlerID: HitTestRegion.HandlerID
+        /// The handler that claimed the press — captured directly, NOT by id.
+        /// `pressedHandlers` spans frames (a press and its release can straddle
+        /// one or more renders), but handler ids do not: `beginRenderPass`
+        /// clears the table and re-registers everything from a counter reset to
+        /// 0, so the same id maps to a *different* handler after any re-render.
+        /// A render between press and release is routine — a consumed press
+        /// requests one — so looking the handler up by the captured id on
+        /// release would route the release to the wrong handler (the classic
+        /// symptom: the first menu click always activated item 0). Holding the
+        /// closure keeps the release/drag bound to the exact handler that took
+        /// the press, which is the whole point of drag capture.
+        let handler: (MouseEvent) -> Bool
         let regionOffsetX: Int
         let regionOffsetY: Int
     }
@@ -267,11 +278,9 @@ extension MouseEventDispatcher {
         // subsequent event for that button to the handler that took
         // the press, regardless of where the cursor sits now.
         if event.phase == .dragged || event.phase == .released {
-            if let capture = pressedHandlers[event.button],
-                let handler = handlers[capture.handlerID]
-            {
+            if let capture = pressedHandlers[event.button] {
                 let localized = localize(event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
-                _ = handler(localized)
+                _ = capture.handler(localized)
                 if event.phase == .released {
                     pressedHandlers[event.button] = nil
                 }
@@ -302,7 +311,7 @@ extension MouseEventDispatcher {
             if consumed {
                 if event.phase == .pressed {
                     pressedHandlers[event.button] = PressCapture(
-                        handlerID: region.handlerID,
+                        handler: handler,
                         regionOffsetX: region.offsetX,
                         regionOffsetY: region.offsetY
                     )
