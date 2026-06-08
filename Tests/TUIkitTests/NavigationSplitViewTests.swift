@@ -580,31 +580,48 @@ struct NavigationSplitViewResizeTests {
         #expect(!handler.handleKeyEvent(KeyEvent(key: .up)), "unrelated key not consumed")
     }
 
-    @Test("Left arrow on the focused divider narrows the sidebar")
+    /// Renders one frame through the run loop's per-frame begin/end render
+    /// passes — including the `StateStorage` GC that collects identities not
+    /// marked active. Resizes must survive this; rendering without it (as the
+    /// earlier tests did) hid the bug where the widths box was collected every
+    /// frame and the resize reset.
+    private func frame(_ view: some View, _ context: RenderContext) -> FrameBuffer {
+        let ss = context.environment.stateStorage!
+        let fm = context.environment.focusManager
+        ss.beginRenderPass(); fm.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        fm.endRenderPass(); ss.endRenderPass()
+        return buffer
+    }
+
+    @Test("Arrow keys on the focused divider resize it — and the change persists across the GC")
     func keyboardResize() {
         let context = resizeContext()
         let fm = context.environment.focusManager
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
 
-        _ = renderToBuffer(view, context: context)  // register divider section + handler
-        guard let before = gripX(renderToBuffer(view, context: context)) else {
+        _ = frame(view, context)  // register divider section + handler
+        guard let before = gripX(frame(view, context)) else {
             Issue.record("expected a divider grip"); return
         }
         fm.activateSection(id: "nav-split-divider-0")
         _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
-        let after = gripX(renderToBuffer(view, context: context))
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
+        let after = gripX(frame(view, context))
 
-        #expect(after == before - 1, "← should narrow the sidebar by one (before \(before), after \(String(describing: after)))")
+        #expect(after == before - 3,
+            "← thrice should narrow the sidebar by 3 and survive the per-frame GC (before \(before), after \(String(describing: after)))")
     }
 
-    @Test("Dragging the divider widens the sidebar")
+    @Test("Dragging the divider widens the sidebar — and the change persists across the GC")
     func mouseDragResize() {
         let context = resizeContext()
         let dispatcher = context.environment.mouseEventDispatcher!
         dispatcher.setActiveSupport(.standard)
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
 
-        let buffer = renderToBuffer(view, context: context)
+        let buffer = frame(view, context)
         dispatcher.setRegions(buffer.hitTestRegions)
         guard let x0 = gripX(buffer) else { Issue.record("no grip"); return }
 
@@ -612,8 +629,9 @@ struct NavigationSplitViewResizeTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: x0 + 5, y: 6))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x0 + 5, y: 6))
 
-        let x1 = gripX(renderToBuffer(view, context: context))
-        #expect(x1 == x0 + 5, "dragging right by 5 should widen the sidebar by 5 (before \(x0), after \(String(describing: x1)))")
+        let x1 = gripX(frame(view, context))
+        #expect(x1 == x0 + 5,
+            "dragging right by 5 should widen the sidebar by 5 and survive the GC (before \(x0), after \(String(describing: x1)))")
     }
 
     @Test("navigationSplitViewResizable(false) removes the handle and divider section")

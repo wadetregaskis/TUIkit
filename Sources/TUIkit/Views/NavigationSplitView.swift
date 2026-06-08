@@ -239,6 +239,15 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                 default: SplitViewWidths()
             ).value
             : nil
+        if resizable {
+            // Keep the persisted widths box AND the divider handlers (all keyed
+            // by this identity) alive across the run loop's per-frame
+            // StateStorage GC. `storage(for:)` does not mark the identity active,
+            // and nothing else marks the split's own identity (the columns mark
+            // their child identities, not the parent), so without this the box
+            // is collected every frame and a drag / arrow resize never sticks.
+            context.environment.stateStorage!.markActive(context.identity)
+        }
 
         // Calculate column widths
         let columnWidths = calculateColumnWidths(
@@ -331,6 +340,12 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             }
         }
 
+        // Read the pulse clock ONLY when a divider is focused, so the
+        // demand-driven loop keeps the pulse animating just for that case (a
+        // static split with no focused divider stays idle).
+        let anyDividerActive = dividerInfos.contains { $0.isActive }
+        let pulsePhase = anyDividerActive ? context.environment.pulsePhase : 0
+
         // Combine buffers horizontally, inserting the (possibly resizable)
         // dividers between them.
         return combineColumns(
@@ -339,6 +354,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             dividerInfos: dividerInfos,
             resizable: resizable,
             palette: context.environment.palette,
+            pulsePhase: pulsePhase,
             availableHeight: context.availableHeight
         )
     }
@@ -492,6 +508,7 @@ extension _NavigationSplitViewCore {
         dividerInfos: [DividerRenderInfo],
         resizable: Bool,
         palette: any Palette,
+        pulsePhase: Double,
         availableHeight: Int
     ) -> FrameBuffer {
         guard !buffers.isEmpty else { return FrameBuffer() }
@@ -514,7 +531,8 @@ extension _NavigationSplitViewCore {
                     ? dividerInfos[index - 1]
                     : DividerRenderInfo(isActive: false, mouseHandlerID: nil)
                 let dividerBuffer = buildDividerColumn(
-                    info: info, height: maxHeight, resizable: resizable, palette: palette)
+                    info: info, height: maxHeight, resizable: resizable,
+                    palette: palette, pulsePhase: pulsePhase)
                 result.appendHorizontally(dividerBuffer, spacing: 0)
                 result.appendHorizontally(paddedBuffer, spacing: 0)
             }
@@ -608,29 +626,36 @@ extension _NavigationSplitViewCore {
 
     /// Builds the one-column divider buffer for a gap.
     ///
-    /// Resizable dividers show a faint `┃` grip at their vertical centre so the
-    /// handle is discoverable without a full vertical line clashing with the
-    /// bordered columns either side; when focused/dragged the whole divider is
-    /// drawn as an accent line. A non-resizable divider is a plain space column
-    /// (the historical separator). The drag hit-test region spans the full
-    /// height so a drag works anywhere along the divider, not just on the grip.
+    /// A resizable divider is a full-height heavy bar (`┃`) — distinct from the
+    /// light `│` borders of the columns either side, so it reads as a grabbable
+    /// handle rather than a doubled border, and is a visible target for both the
+    /// mouse and the eye. Idle it is dim; when focused (Tab'd to, or mid-drag)
+    /// it **pulses** between dim and the accent colour, the same focus cue the
+    /// columns use. A non-resizable divider is a plain space column (the
+    /// historical separator). The drag hit-test region spans the full height, so
+    /// a drag works anywhere along the bar.
     fileprivate func buildDividerColumn(
         info: DividerRenderInfo,
         height: Int,
         resizable: Bool,
-        palette: any Palette
+        palette: any Palette,
+        pulsePhase: Double
     ) -> FrameBuffer {
-        let gripRow = height / 2
-        let color = info.isActive ? palette.accent : palette.border
-        let lines: [String] = (0..<max(0, height)).map { row in
-            guard resizable else { return " " }
-            if row == gripRow {
-                return ANSIRenderer.colorize("┃", foreground: color)
-            }
-            // A focused divider shows a full line; otherwise just the grip,
-            // leaving a plain space so adjacent column borders don't double up.
-            return info.isActive ? ANSIRenderer.colorize("│", foreground: color) : " "
+        let color: Color
+        if info.isActive {
+            // Pulse between a dim accent and full accent (mirrors the column
+            // focus-border cue). `pulsePhase` was read by `renderToBuffer` only
+            // when a divider is active, so the animation clock stays alive only
+            // while one is focused.
+            color = Color.lerp(
+                palette.accent.opacity(ViewConstants.focusBorderDim),
+                palette.accent,
+                phase: pulsePhase)
+        } else {
+            color = palette.border
         }
+        let bar = resizable ? ANSIRenderer.colorize("┃", foreground: color) : " "
+        let lines = Array(repeating: bar, count: max(0, height))
 
         var buffer = FrameBuffer(lines: lines)
         if let id = info.mouseHandlerID {
