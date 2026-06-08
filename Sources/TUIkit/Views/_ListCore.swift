@@ -297,14 +297,28 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
-        handler.clampScrollOffset()
-        // An "above" indicator that hides exactly one row wastes its
-        // line: that line could just show the row. So never rest at
-        // offset 1 — snap to 0, where the first row shows with no
-        // indicator. Removing the indicator frees a line, so the row
-        // that was at the bottom of the viewport is still shown.
-        if overflowing, handler.scrollOffset == 1 {
-            handler.scrollOffset = 0
+        // Mutating the *persistent* scroll position must happen only on the
+        // real render pass, never while measuring. A `List` with no explicit
+        // height that shares space with a flexible sibling (e.g. a trailing
+        // `Spacer`) is measured with the FULL available height — much larger
+        // than the height it ends up rendering into — so a measure-pass
+        // `clampScrollOffset()` would clamp `scrollOffset` against a viewport
+        // (and therefore a `maxOffset`) far smaller than the real one, pulling
+        // the offset back every frame. The symptom: the list can't be scrolled
+        // (wheel / arrows / Page Down / End) the last screenful to its bottom.
+        // The render pass below runs last and clamps with the true viewport, so
+        // legitimate clamping (e.g. a filter shrinking the row count) still
+        // happens every frame.
+        if !context.isMeasuring {
+            handler.clampScrollOffset()
+            // An "above" indicator that hides exactly one row wastes its
+            // line: that line could just show the row. So never rest at
+            // offset 1 — snap to 0, where the first row shows with no
+            // indicator. Removing the indicator frees a line, so the row
+            // that was at the bottom of the viewport is still shown.
+            if overflowing, handler.scrollOffset == 1 {
+                handler.scrollOffset = 0
+            }
         }
 
         var selectableIndices = Set<Int>()

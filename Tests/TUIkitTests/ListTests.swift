@@ -610,4 +610,58 @@ struct ListRenderingTests {
                 "offset 1 is dominated by offset 0 — never show '1 more above'; got:\n\(joined)")
         }
     }
+
+    /// Regression test for "the emoji list won't scroll the last screenful to
+    /// its bottom". A `List` with no explicit height that shares vertical space
+    /// with a flexible sibling (here a trailing `Spacer`) is *measured* with the
+    /// full available height — much taller than the height it actually renders
+    /// into. A measure-pass `clampScrollOffset()` therefore clamped the
+    /// persistent `scrollOffset` against a viewport (and `maxOffset`) far larger
+    /// than the real one, yanking the offset back every frame so the bottom rows
+    /// were unreachable by wheel / arrows / Page Down / End. The fix skips
+    /// persistent scroll mutation while measuring.
+    @Test("A list sharing space with a flexible sibling scrolls fully to the bottom")
+    func listWithFlexibleSiblingScrollsToBottom() {
+        var context = createTestContext(width: 30, height: 24)
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let items = (0..<100).map { String(format: "row-%03d", $0) }
+        // A fixed block on top + a trailing Spacer force the List to render into
+        // only part of the content area, so its measured height (the full area)
+        // exceeds its rendered height — the condition that triggered the bug.
+        let view = VStack(spacing: 1) {
+            Text("header").border()
+            List(selection: .constant(String?.none)) {
+                ForEach(items, id: \.self) { Text($0) }
+            }
+            Spacer()
+        }
+
+        let initial = renderToBuffer(view, context: context)
+        dispatcher.setRegions(initial.hitTestRegions)
+        guard let listRegion = initial.hitTestRegions.max(by: { $0.height < $1.height }) else {
+            Issue.record("expected a List hit-test region"); return
+        }
+        // Precondition: the List really is shorter than the content area (else
+        // the bug wouldn't reproduce and the test would be vacuous).
+        #expect(listRegion.height < context.availableHeight - 2,
+            "List should render into a sub-region for this test to be meaningful")
+
+        let cx = listRegion.offsetX + listRegion.width / 2
+        let cy = listRegion.offsetY + listRegion.height / 2
+        var joined = ""
+        for _ in 0..<80 {  // 80 wheel ticks * 3 lines >> 100 rows: reaches the end
+            _ = dispatcher.dispatch(
+                MouseEvent(button: .scrollDown, phase: .scrolled, x: cx, y: cy))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined(separator: "\n")
+        }
+
+        #expect(joined.contains("row-099"), "wheel-scrolling to the end must reveal the last row")
+        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+    }
 }
