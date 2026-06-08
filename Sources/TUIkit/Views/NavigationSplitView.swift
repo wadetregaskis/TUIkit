@@ -692,10 +692,17 @@ extension _NavigationSplitViewCore {
             : nil
 
         let lines: [String] = (0..<h).map { row in
-            let cell = gripRows.contains(row)
-                ? ANSIRenderer.colorize("◦", foreground: dotColor)
-                : " "
-            return cell.withPersistentBackground(background)
+            let isGrip = gripRows.contains(row)
+            // Render each cell as a self-contained styled string — it ends with
+            // a reset — so the pulsing background stays scoped to the divider's
+            // single column. `withPersistentBackground` deliberately does NOT
+            // emit a trailing reset (it is built for full-width row fills), so
+            // using it here let the background bleed into the next column to the
+            // end of the line.
+            return ANSIRenderer.colorize(
+                isGrip ? "◦" : " ",
+                foreground: isGrip ? dotColor : nil,
+                background: background)
         }
 
         var buffer = FrameBuffer(lines: lines)

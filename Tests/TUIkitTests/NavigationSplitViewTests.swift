@@ -682,6 +682,27 @@ struct NavigationSplitViewResizeTests {
             "focusing the divider should add a background to its column")
     }
 
+    @Test("A focused divider's background stays in its own column (no bleed)")
+    func backgroundDoesNotBleed() {
+        let context = resizeContext(width: 40, height: 8)
+        let fm = context.environment.focusManager
+        let view = NavigationSplitView { Text("S") } detail: { Text("D") }
+
+        _ = frame(view, context)
+        fm.activateSection(id: "nav-split-divider-0")
+        let raw = frame(view, context).lines[4]  // a grip row → has the pulsing bg
+
+        // After the divider cell's reset, the rest of the line (the next
+        // column) must carry no further ANSI — otherwise the background bled
+        // past the one-cell divider toward the end of line.
+        guard let lastReset = raw.range(of: "\u{1b}[0m", options: .backwards) else {
+            Issue.record("expected a reset in the focused divider line"); return
+        }
+        let tail = raw[lastReset.upperBound...]
+        #expect(!tail.contains("\u{1b}["),
+            "divider background bled into the next column: \(raw.debugDescription)")
+    }
+
     @Test("navigationSplitViewResizable(false) removes the handle and divider section")
     func optOut() {
         let context = resizeContext()
