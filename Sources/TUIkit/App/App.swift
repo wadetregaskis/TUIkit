@@ -135,7 +135,7 @@ extension AppRunner {
         // handler for the consumer side and TUIContext.swift's
         // `synthesizeKeyEvent` doc-comment for why this is a
         // closure threaded through the context.
-        tuiContext.synthesizeKeyEvent = { inputHandler.handle($0) }
+        tuiContext.synthesizeKeyEvent = { _ = inputHandler.handle($0) }
         let renderer = RenderLoop(
             app: app,
             terminal: terminal,
@@ -259,7 +259,15 @@ extension AppRunner {
                         renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
                         terminal.dumpLastFrame()
                     }
-                    inputHandler.handle(keyEvent)
+                    // A consumed key has changed something — and focus/scroll
+                    // moves go through plain (non-`@State`) handler properties
+                    // that don't call `setNeedsRender()` — so request a render
+                    // here, mirroring the mouse path below. Without this, e.g.
+                    // arrow-key navigation in a List would move the selection
+                    // but never repaint.
+                    if inputHandler.handle(keyEvent) {
+                        appState.setNeedsRender()
+                    }
 
                 case .mouse(let mouseEvent):
                     // Hit-test regions are in content-area coordinates; translate

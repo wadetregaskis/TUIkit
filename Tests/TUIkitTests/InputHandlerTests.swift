@@ -140,8 +140,12 @@ struct InputHandlerTests {
         fixture.dispatcher.addHandler { _ in false }
         let focusable = focusConsumer(fixture.focus)
 
-        fixture.handler.handle(KeyEvent(key: .character("x")))
+        // A focusable consuming the key is the List/Table-navigation case: the
+        // handler mutates plain (non-`@State`) focus/scroll state, so `handle`
+        // returning `true` is the run loop's only signal to repaint.
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("x")))
 
+        #expect(consumed, "a consumed key must report true so the run loop repaints")
         #expect(focusable.sawEvent)
         #expect(fixture.probe.quitCount == 0)
     }
@@ -184,8 +188,9 @@ struct InputHandlerTests {
         let paletteBefore = fixture.palette.current.id
         let appearanceBefore = fixture.appearance.current.id
 
-        fixture.handler.handle(KeyEvent(key: .character("z")))
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("z")))
 
+        #expect(!consumed, "an unconsumed key must report false so the loop doesn't repaint needlessly")
         #expect(fixture.probe.quitCount == 0)
         #expect(fixture.palette.current.id == paletteBefore)
         #expect(fixture.appearance.current.id == appearanceBefore)

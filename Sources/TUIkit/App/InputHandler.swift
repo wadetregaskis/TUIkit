@@ -49,7 +49,19 @@ extension InputHandler {
     /// Dispatches a key event through the five-layer priority chain.
     ///
     /// - Parameter event: The key event to handle.
-    func handle(_ event: KeyEvent) {
+    /// - Returns: `true` if some layer consumed the event. The run loop uses
+    ///   this to request a render — a consumed key has, by definition, done
+    ///   something (moved focus, activated a control, typed text, cycled the
+    ///   theme), and much of that mutates state the demand-driven loop can't
+    ///   otherwise observe. In particular `ItemListHandler`/`FocusManager` move
+    ///   their focus/scroll position through plain stored properties, not
+    ///   `@State`, so nothing calls `setNeedsRender()` for them; without this
+    ///   signal arrow-key navigation in a `List` would change the selection but
+    ///   never repaint. (Symmetric with the mouse path, which already re-renders
+    ///   when a handler consumes an event.) An unconsumed key returns `false`
+    ///   so a genuine no-op key doesn't wake the loop.
+    @discardableResult
+    func handle(_ event: KeyEvent) -> Bool {
         // Layer 0: Text input (conditional). When a text-input element
         // (TextField/SecureField) is focused, let it handle the event FIRST.
         // This ensures printable characters, backspace, delete, arrows, home,
@@ -62,7 +74,7 @@ extension InputHandler {
         // below when text input has focus.
         if focusManager.hasTextInputFocus {
             if focusManager.dispatchKeyEvent(event) {
-                return
+                return true
             }
         }
 
@@ -77,25 +89,25 @@ extension InputHandler {
             !focusManager.hasTextInputFocus
         {
             if focusManager.dispatchKeyEvent(event) {
-                return
+                return true
             }
         }
 
         // Layer 1: Status bar items with actions
         if statusBar.handleKeyEvent(event) {
-            return
+            return true
         }
 
         // Layer 2: View-registered key handlers (onKeyPress, Menu arrow keys)
         if keyEventDispatcher.dispatch(event) {
-            return
+            return true
         }
 
         // Layer 3: Focus system (Tab navigation, Enter/Space on focused buttons)
         // Skipped when text-input has focus since it was already dispatched above.
         if !focusManager.hasTextInputFocus {
             if focusManager.dispatchKeyEvent(event) {
-                return
+                return true
             }
         }
 
@@ -104,20 +116,23 @@ extension InputHandler {
             if statusBar.isQuitAllowed {
                 onQuit()
             }
-            return
+            return true
         }
 
         switch event.key {
         case .character(let character) where character == "t" || character == "T":
             if statusBar.showThemeItem {
                 paletteManager.cycleNext()
+                return true
             }
+            return false
 
         case .character(let character) where character == "a" || character == "A":
             appearanceManager.cycleNext()
+            return true
 
         default:
-            break
+            return false
         }
     }
 }
