@@ -387,7 +387,25 @@ extension String {
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells
     /// and zero-width characters (combining marks, variation selectors).
     public var strippedLength: Int {
-        visibleANSIRuns().reduce(0) { total, run in
+        // Fast path: a string with no ESC byte is a single visible run — the
+        // whole string — so grapheme-cluster it in place and sum cell widths
+        // with ZERO allocation. The general path below calls
+        // `visibleANSIRuns()`, which materializes a `[String]` plus a `String`
+        // copy per run and then discards them — pure churn for a width count.
+        // `strippedLength` runs per word during `Text.wordWrap` and per line
+        // during render, every frame (profiling the `nested` tree:
+        // `String.strippedLength` ~23% inclusive, `visibleANSIRuns()` ~15%,
+        // dominated by `_StringGuts.append` / `_uncheckedFromUTF8` /
+        // tiny_malloc), and the text being measured while wrapping is plain
+        // (unstyled), so this is the overwhelming common case. Byte-identical:
+        // a no-ESC string yields exactly one run equal to the whole string.
+        if !unicodeScalars.contains(where: { $0.value == 0x1B }) {
+            return reduce(0) { $0 + $1.terminalWidth }
+        }
+        // General path: ANSI present — measure each visible run independently
+        // (a trailing Extend scalar after an SGR terminator must not fuse onto
+        // the previous run; see `visibleANSIRuns()`).
+        return visibleANSIRuns().reduce(0) { total, run in
             total + run.reduce(0) { $0 + $1.terminalWidth }
         }
     }
