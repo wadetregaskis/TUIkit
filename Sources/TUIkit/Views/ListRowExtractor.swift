@@ -56,7 +56,8 @@ protocol ListRowExtractor {
 
 extension ForEach: ListRowExtractor {
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
-        data.enumerated().compactMap { (index, element) -> ListRow<RowID>? in
+        data.enumerated().compactMap { indexed -> ListRow<RowID>? in
+            let (index, element) = indexed
             // Resolve the row's selection ID up front — it's cheap (a key-path
             // read or the index) and the scroll / selection handler needs it
             // for EVERY row, on- or off-screen. Building and rendering the row

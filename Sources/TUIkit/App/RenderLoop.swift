@@ -251,50 +251,17 @@ extension RenderLoop {
         tuiContext.mouseEventDispatcher.setActiveSupport(baseMouseSupport)
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
-        // Determine header height. On the first frame, we perform a measurement
-        // pass to discover the actual header height before outputting anything.
-        // This prevents visible content jumping.
-        let appHeaderHeight: Int
-        if isFirstFrame {
-            let measureContext = RenderContext(
-                availableWidth: terminalWidth,
-                availableHeight: terminalHeight - statusBarHeight,
-                environment: environment
-            )
-            _ = renderScene(scene, context: measureContext.withChildIdentity(type: type(of: scene)))
-            appHeaderHeight = appHeader.height
-            isFirstFrame = false
-        } else {
-            appHeaderHeight = appHeader.estimatedHeight
-        }
-
-        let contentHeight = terminalHeight - statusBarHeight - appHeaderHeight
-
-        var context = RenderContext(
-            availableWidth: terminalWidth,
-            availableHeight: contentHeight,
-            environment: environment
-        )
-        context.hasExplicitWidth = true
-        context.hasExplicitHeight = true
-
-        var buffer = renderScene(scene, context: context.withChildIdentity(type: type(of: scene)))
-
-        // If the header height changed after rendering, re-render with the
-        // correct height so centering is accurate.
-        let actualHeaderHeight = appHeader.height
-        if actualHeaderHeight != appHeaderHeight {
-            diffWriter.invalidate()
-            let actualContentHeight = terminalHeight - statusBarHeight - actualHeaderHeight
-            var correctedContext = RenderContext(
-                availableWidth: terminalWidth,
-                availableHeight: actualContentHeight,
-                environment: environment
-            )
-            correctedContext.hasExplicitWidth = true
-            correctedContext.hasExplicitHeight = true
-            buffer = renderScene(scene, context: correctedContext.withChildIdentity(type: type(of: scene)))
-        }
+        // Render the scene into the content area — resolving the app-header
+        // height first (a first-frame measure pass), then re-rendering once if
+        // the header turned out a different height than estimated. See
+        // `renderContent`.
+        let (renderedBuffer, contentHeight) = renderContent(
+            scene: scene,
+            environment: environment,
+            terminalWidth: terminalWidth,
+            terminalHeight: terminalHeight,
+            statusBarHeight: statusBarHeight)
+        var buffer = renderedBuffer
 
         focusManager.endRenderPass()
 
@@ -373,6 +340,72 @@ extension RenderLoop {
         return RenderActivity(
             usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
             usesCursor: cursorTimer?.didReadThisFrame ?? false)
+    }
+
+    /// Renders the scene into the content area and returns the buffer together
+    /// with the content height it was laid out against.
+    ///
+    /// On the first frame this runs a throwaway measure pass to discover the
+    /// app header's real height before producing any visible output, which
+    /// prevents the content from jumping. Every frame it then renders at the
+    /// resolved content height and, if the header turned out a different height
+    /// than estimated, re-renders once at the corrected height so centering
+    /// stays accurate. The returned content height is the original
+    /// (pre-correction) value — the same one the caller uses to translate
+    /// status-bar hit-test regions into content-area coordinates.
+    private func renderContent(
+        scene: A.Body,
+        environment: EnvironmentValues,
+        terminalWidth: Int,
+        terminalHeight: Int,
+        statusBarHeight: Int
+    ) -> (buffer: FrameBuffer, contentHeight: Int) {
+        // Determine header height. On the first frame, we perform a measurement
+        // pass to discover the actual header height before outputting anything.
+        // This prevents visible content jumping.
+        let appHeaderHeight: Int
+        if isFirstFrame {
+            let measureContext = RenderContext(
+                availableWidth: terminalWidth,
+                availableHeight: terminalHeight - statusBarHeight,
+                environment: environment
+            )
+            _ = renderScene(scene, context: measureContext.withChildIdentity(type: type(of: scene)))
+            appHeaderHeight = appHeader.height
+            isFirstFrame = false
+        } else {
+            appHeaderHeight = appHeader.estimatedHeight
+        }
+
+        let contentHeight = terminalHeight - statusBarHeight - appHeaderHeight
+
+        var context = RenderContext(
+            availableWidth: terminalWidth,
+            availableHeight: contentHeight,
+            environment: environment
+        )
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+
+        var buffer = renderScene(scene, context: context.withChildIdentity(type: type(of: scene)))
+
+        // If the header height changed after rendering, re-render with the
+        // correct height so centering is accurate.
+        let actualHeaderHeight = appHeader.height
+        if actualHeaderHeight != appHeaderHeight {
+            diffWriter.invalidate()
+            let actualContentHeight = terminalHeight - statusBarHeight - actualHeaderHeight
+            var correctedContext = RenderContext(
+                availableWidth: terminalWidth,
+                availableHeight: actualContentHeight,
+                environment: environment
+            )
+            correctedContext.hasExplicitWidth = true
+            correctedContext.hasExplicitHeight = true
+            buffer = renderScene(scene, context: correctedContext.withChildIdentity(type: type(of: scene)))
+        }
+
+        return (buffer, contentHeight)
     }
 
     /// Invalidates the diff cache, forcing a full repaint on the next render.

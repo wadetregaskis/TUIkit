@@ -81,7 +81,7 @@ struct MemoizedRowGateTests {
         let buffer = renderToBuffer(row, context: context)
 
         #expect(!buffer.hitTestRegions.isEmpty)  // it really is interactive
-        #expect(cache.count == 0)  // gate refused to cache it
+        #expect(cache.isEmpty)  // gate refused to cache it
     }
 
     @Test("Row that reads pulsePhase is NOT memoized (volatile-read probe)")
@@ -96,7 +96,7 @@ struct MemoizedRowGateTests {
         #expect(buffer.hitTestRegions.isEmpty)
         #expect(buffer.overlays.isEmpty)
         // ...but the volatile-read probe caught the pulsePhase read.
-        #expect(cache.count == 0)
+        #expect(cache.isEmpty)
     }
 
     @Test("ForEach rows in a stack are auto-memoized by element value")

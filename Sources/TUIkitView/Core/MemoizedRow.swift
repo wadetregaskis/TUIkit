@@ -25,7 +25,7 @@ public struct AnyEquatableBox: Equatable {
         self.isEqual = { ($0 as? E) == value }
     }
 
-    public static func == (lhs: AnyEquatableBox, rhs: AnyEquatableBox) -> Bool {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.isEqual(rhs.value)
     }
 }

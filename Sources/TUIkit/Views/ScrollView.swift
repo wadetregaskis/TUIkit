@@ -200,6 +200,102 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     // MARK: Render
 
+    /// "Follow the focused control" — snap the viewport back to the focused
+    /// control when focus just moved (Tab / click / programmatic) or the
+    /// focused control just consumed a key (it was poked via the keyboard
+    /// while wheel-scrolled off-screen). Focus moves are detected by comparing
+    /// `focusManager.currentFocusedID`, keyboard pokes by comparing
+    /// `focusManager.focusedInteractionGeneration` (bumped inside
+    /// `FocusManager.dispatchKeyEvent` when the focused handler consumes a
+    /// key), each against the value seen at the previous render. Wheel
+    /// scrolling changes neither, so peek mode (scroll the focused control
+    /// off-screen, no snap-back) is preserved naturally.
+    ///
+    /// This is a render-pass-only side effect and is skipped while measuring:
+    /// `renderToBuffer` runs several times per frame in measuring mode, and
+    /// during those passes the inner controls do NOT emit their hit-test
+    /// regions (they gate on `!isMeasuring`), so the focused control's region
+    /// is absent. If the detection ran while measuring it would see "focus
+    /// changed", update its bookkeeping WITHOUT being able to scroll, and the
+    /// real render would then see no change and never snap — so a focused
+    /// control below the fold (a Slider after some Buttons, say) would never
+    /// scroll into view. Gating keeps the signal intact for the one render
+    /// that can act on it.
+    private func snapViewportToFocusedControl(
+        handler: ScrollViewHandler,
+        fullBuffer: FrameBuffer,
+        viewportHeight: Int,
+        context: RenderContext
+    ) {
+        let stateStorage = context.environment.stateStorage!
+        let lastFocusedKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastFocusedID
+        )
+        let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
+            for: lastFocusedKey, default: LastFocusedIDBox())
+
+        let lastInteractionKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastInteractionGen
+        )
+        let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
+            for: lastInteractionKey, default: LastInteractionGenBox())
+
+        guard !context.isMeasuring else { return }
+
+        let focusManager = context.environment.focusManager
+        let currentFocusedID = focusManager.currentFocusedID
+        let currentInteractionGen = focusManager.focusedInteractionGeneration
+
+        let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
+        let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
+        let shouldSnap = focusJustChanged || interactionJustFired
+
+        if shouldSnap,
+           let focusedID = currentFocusedID,
+           let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
+        {
+            let regionTop = region.offsetY
+            let regionBottom = region.offsetY + region.height
+            let viewportTop = handler.scrollOffset
+            let viewportBottom = handler.scrollOffset + viewportHeight
+
+            // When showsIndicators is true, the visible buffer overwrites its
+            // top and / or bottom rows with the 'N more above / below' chrome
+            // whenever there's content off-screen in that direction. Reserve a
+            // row for those indicators when computing the target scrollOffset,
+            // else the snap puts the focused control on the row the indicator
+            // then covers. The decision is bidirectional: after snapping there
+            // is still content above iff scrollOffset > 0 and below iff
+            // scrollOffset + viewportHeight < contentHeight.
+            if regionTop < viewportTop {
+                // Scroll-up: align the region's top with viewportTop, leaving
+                // 1 row of headroom for the top indicator when one appears.
+                let proposed = regionTop
+                let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
+                handler.scrollOffset =
+                    max(0, min(handler.maxOffset, proposed - topIndicatorRow))
+            } else if regionBottom > viewportBottom {
+                // Scroll-down: align the region's bottom with viewportBottom,
+                // leaving 1 row for the bottom indicator if one appears.
+                let proposed = regionBottom - viewportHeight
+                let bottomIndicatorWouldAppear =
+                    showsIndicators
+                    && (proposed + viewportHeight < handler.contentHeight)
+                handler.scrollOffset = max(
+                    0,
+                    min(
+                        handler.maxOffset,
+                        proposed + (bottomIndicatorWouldAppear ? 1 : 0)
+                    )
+                )
+            }
+        }
+        lastFocusedBox.value.value = currentFocusedID
+        lastInteractionBox.value.value = currentInteractionGen
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let viewportWidth = context.availableWidth
         let viewportHeight = max(0, context.availableHeight)
@@ -244,115 +340,15 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // between renders.
         handler.clampScrollOffset()
 
-        // "Follow the focused control" — snap the viewport back
-        // to the focused control when either of two things just
-        // happened:
-        //
-        //   - Focus moved (Tab into a different control, a click
-        //     that focused something else, programmatic focus
-        //     change). Detected by comparing
-        //     focusManager.currentFocusedID to the value we saw
-        //     at the previous render.
-        //
-        //   - The focused control consumed a key event (the user
-        //     poked the still-focused control via the keyboard
-        //     even though wheel scrolling has moved it
-        //     off-screen). Detected by comparing
-        //     focusManager.focusedInteractionGeneration to the
-        //     value we saw at the previous render — the
-        //     counter is bumped inside FocusManager.dispatchKeyEvent
-        //     when the focused handler returned true.
-        //
-        // Wheel scrolling does NOT change either signal, so peek
-        // mode (wheel-scroll the focused control off-screen, no
-        // snap-back) is preserved naturally.
-        let lastFocusedKey = StateStorage.StateKey(
-            identity: context.identity,
-            propertyIndex: StateIndex.lastFocusedID
-        )
-        let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
-            for: lastFocusedKey, default: LastFocusedIDBox())
-
-        let lastInteractionKey = StateStorage.StateKey(
-            identity: context.identity,
-            propertyIndex: StateIndex.lastInteractionGen
-        )
-        let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
-            for: lastInteractionKey, default: LastInteractionGenBox())
-
-        // The whole "follow the focused control" step is a render-pass-only
-        // side effect and MUST be skipped while measuring. This view's
-        // `renderToBuffer` is invoked several times per frame in measuring
-        // mode (parents render-to-measure it), and during those passes the
-        // inner controls do NOT emit their hit-test regions (they gate on
-        // `!isMeasuring`), so the focused control's region is absent. If the
-        // detection ran while measuring it would see "focus just changed",
-        // update `lastFocusedBox` WITHOUT being able to scroll (no region to
-        // align to), and then the real render — which does have the region —
-        // would see no change and never snap. Net effect: a focused control
-        // below the fold (a Slider after some Buttons, say) was never scrolled
-        // into view. Gating on `!isMeasuring` keeps the signal intact for the
-        // one render that can act on it.
-        if !context.isMeasuring {
-            let focusManager = context.environment.focusManager
-            let currentFocusedID = focusManager.currentFocusedID
-            let currentInteractionGen = focusManager.focusedInteractionGeneration
-
-            let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
-            let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
-            let shouldSnap = focusJustChanged || interactionJustFired
-
-            if shouldSnap,
-               let focusedID = currentFocusedID,
-               let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
-            {
-                let regionTop = region.offsetY
-                let regionBottom = region.offsetY + region.height
-                let viewportTop = handler.scrollOffset
-                let viewportBottom = handler.scrollOffset + viewportHeight
-
-                // When showsIndicators is true, the visible buffer
-                // overwrites its top and / or bottom rows with the
-                // 'N more above / below' chrome whenever there's
-                // content off-screen in the corresponding direction.
-                // We need to reserve room for those indicator rows
-                // when computing the target scrollOffset, otherwise
-                // the snap puts the focused control exactly on the
-                // row the indicator will then cover.
-                //
-                // The decision is bidirectional: after snapping there
-                // will still be content above iff the chosen
-                // scrollOffset > 0, and content below iff
-                // scrollOffset + viewportHeight < contentHeight.
-                //
-                // Scroll-up case: align the focused region's top with
-                // viewportTop, leaving 1 row of headroom for the top
-                // indicator when one would appear.
-                if regionTop < viewportTop {
-                    let proposed = regionTop
-                    let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
-                    handler.scrollOffset =
-                        max(0, min(handler.maxOffset, proposed - topIndicatorRow))
-                } else if regionBottom > viewportBottom {
-                    // Scroll-down case: align the region's bottom with
-                    // viewportBottom, leaving 1 row for the bottom
-                    // indicator if one would appear.
-                    let proposed = regionBottom - viewportHeight
-                    let bottomIndicatorWouldAppear =
-                        showsIndicators
-                        && (proposed + viewportHeight < handler.contentHeight)
-                    handler.scrollOffset = max(
-                        0,
-                        min(
-                            handler.maxOffset,
-                            proposed + (bottomIndicatorWouldAppear ? 1 : 0)
-                        )
-                    )
-                }
-            }
-            lastFocusedBox.value.value = currentFocusedID
-            lastInteractionBox.value.value = currentInteractionGen
-        }
+        // "Follow the focused control": snap the viewport to the focused
+        // control when focus moved or it just consumed a key. A render-pass-
+        // only side effect; the helper documents the full rationale and the
+        // measure-pass gate.
+        snapViewportToFocusedControl(
+            handler: handler,
+            fullBuffer: fullBuffer,
+            viewportHeight: viewportHeight,
+            context: context)
 
         // Register focus so the dispatchKeyEvent → handler chain
         // is wired up. The handler's own state controls what

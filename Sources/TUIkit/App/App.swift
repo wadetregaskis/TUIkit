@@ -243,52 +243,14 @@ extension AppRunner {
                 pendingRender = true
             }
 
-            // Read + dispatch all pending terminal events (non-blocking). Done
-            // BEFORE the render so a keypress / mouse action shows up in the same
-            // frame it triggers. A high cap avoids paste lag without spinning.
-            var eventsProcessed = 0
-            let maxEventsPerFrame = 128
-            while eventsProcessed < maxEventsPerFrame, let input = terminal.readEvent() {
-                switch input {
-                case .key(let keyEvent):
-                    // "`": dump the current frame to ~/tuikit-frame.ansi (debug
-                    // shortcut, not consumed). Force a full repaint first so the
-                    // snapshot captures every line.
-                    if keyEvent.key == .character("`") {
-                        renderer.invalidateDiffCache()
-                        renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
-                        terminal.dumpLastFrame()
-                    }
-                    // A consumed key has changed something — and focus/scroll
-                    // moves go through plain (non-`@State`) handler properties
-                    // that don't call `setNeedsRender()` — so request a render
-                    // here, mirroring the mouse path below. Without this, e.g.
-                    // arrow-key navigation in a List would move the selection
-                    // but never repaint.
-                    if inputHandler.handle(keyEvent) {
-                        appState.setNeedsRender()
-                    }
-
-                case .mouse(let mouseEvent):
-                    // Hit-test regions are in content-area coordinates; translate
-                    // the terminal-space y by the header height before dispatch.
-                    let translated = MouseEvent(
-                        button: mouseEvent.button,
-                        phase: mouseEvent.phase,
-                        x: mouseEvent.x,
-                        y: mouseEvent.y - appHeader.height,
-                        shift: mouseEvent.shift,
-                        ctrl: mouseEvent.ctrl,
-                        meta: mouseEvent.meta
-                    )
-                    // Re-render only when a handler consumed the event — with
-                    // any-event mouse mode the terminal reports every motion.
-                    if tuiContext.mouseEventDispatcher.dispatch(translated) {
-                        appState.setNeedsRender()
-                    }
-                }
-                eventsProcessed += 1
-            }
+            // Read + dispatch all pending terminal events (non-blocking),
+            // BEFORE the render so a keypress / mouse action shows up in the
+            // same frame it triggers. Extracted so the main loop stays legible.
+            drainTerminalEvents(
+                inputHandler: inputHandler,
+                renderer: renderer,
+                pulseTimer: pulseTimer,
+                cursorTimer: cursorTimer)
 
             // Fold a state-change request (incl. input handled above) into the
             // pending-render flag.
@@ -302,7 +264,7 @@ extension AppRunner {
             // remainder (the cap) instead of rendering now. With nothing pending,
             // leave `waitNanos` nil: the loop blocks until a wake (stdin or a
             // render-request), so a static screen does no work at all.
-            var waitNanos: UInt64? = nil
+            var waitNanos: UInt64?
             if pendingRender {
                 let now = DispatchTime.now().uptimeNanoseconds
                 let elapsed = now &- lastRenderAtNanos
@@ -339,6 +301,60 @@ extension AppRunner {
 // MARK: - Private Helpers
 
 extension AppRunner {
+    /// Reads and dispatches every terminal event currently pending (up to a
+    /// per-frame cap of 128, which avoids paste lag without letting a flood
+    /// spin the loop). Called BEFORE the frame renders so a keypress / mouse
+    /// action shows up in the same frame it triggers.
+    ///
+    /// A consumed key or mouse event requests a render: focus / scroll moves go
+    /// through plain (non-`@State`) handler properties that don't themselves
+    /// call `setNeedsRender()`, so without this an arrow-key List navigation
+    /// would move the selection but never repaint.
+    fileprivate func drainTerminalEvents(
+        inputHandler: InputHandler,
+        renderer: RenderLoop<A>,
+        pulseTimer: PulseTimer,
+        cursorTimer: CursorTimer
+    ) {
+        var eventsProcessed = 0
+        let maxEventsPerFrame = 128
+        while eventsProcessed < maxEventsPerFrame, let input = terminal.readEvent() {
+            switch input {
+            case .key(let keyEvent):
+                // "`": dump the current frame to ~/tuikit-frame.ansi (debug
+                // shortcut, not consumed). Force a full repaint first so the
+                // snapshot captures every line.
+                if keyEvent.key == .character("`") {
+                    renderer.invalidateDiffCache()
+                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                    terminal.dumpLastFrame()
+                }
+                if inputHandler.handle(keyEvent) {
+                    appState.setNeedsRender()
+                }
+
+            case .mouse(let mouseEvent):
+                // Hit-test regions are in content-area coordinates; translate
+                // the terminal-space y by the header height before dispatch.
+                let translated = MouseEvent(
+                    button: mouseEvent.button,
+                    phase: mouseEvent.phase,
+                    x: mouseEvent.x,
+                    y: mouseEvent.y - appHeader.height,
+                    shift: mouseEvent.shift,
+                    ctrl: mouseEvent.ctrl,
+                    meta: mouseEvent.meta
+                )
+                // Re-render only when a handler consumed the event — with
+                // any-event mouse mode the terminal reports every motion.
+                if tuiContext.mouseEventDispatcher.dispatch(translated) {
+                    appState.setNeedsRender()
+                }
+            }
+            eventsProcessed += 1
+        }
+    }
+
     fileprivate func cleanup() {
         terminal.disableRawMode()
         terminal.showCursor()

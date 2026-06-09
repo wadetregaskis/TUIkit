@@ -99,9 +99,9 @@ struct MeasureRenderEquivalenceTests {
         var divergedTypes: Set<String> = []
 
         func check<V: View>(_ view: V, _ label: String) {
-            let (s, f) = compare(view, label)
+            let (s, flex) = compare(view, label)
             if !s.isEmpty { divergedTypes.insert(label); sizeDiv += s }
-            flexDiv += f
+            flexDiv += flex
         }
 
         // — Leaves —

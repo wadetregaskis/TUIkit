@@ -550,8 +550,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// and the track in between. Static so it doesn't capture
     /// `self`, avoiding a reference cycle through the parent
     /// closure.
-    // swiftlint:disable:next function_parameter_count
-    private static func handleLeftButton(
+    private static func handleLeftButton( // swiftlint:disable:this function_parameter_count
         event: MouseEvent,
         value: Binding<Double>,
         bounds: ClosedRange<Double>,
