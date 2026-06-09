@@ -43,7 +43,7 @@ public struct ViewIdentity: Hashable, Sendable, CustomStringConvertible {
     ///
     /// - Parameter type: The type of the root view.
     public init<V>(rootType type: V.Type) {
-        self.path = String(describing: type)
+        self.path = cachedTypeName(type)
     }
 
     /// Creates an identity from a raw path string.
@@ -54,6 +54,35 @@ public struct ViewIdentity: Hashable, Sendable, CustomStringConvertible {
     }
 
     public var description: String { path }
+}
+
+// MARK: - Type-name memo
+
+/// Process-wide memo of `String(describing:)` for view types, keyed by the
+/// type's `ObjectIdentifier`.
+///
+/// Building a `ViewIdentity` path stringifies the child view's type name on
+/// every container / body descent — during BOTH the measure and the render
+/// pass — and `String(describing:)` on a metatype demangles the runtime type
+/// name, a runtime call that allocates a fresh `String` each time. Profiling
+/// the `nested` RenderHarness tree (Time Profiler) put `String.init(describing:)`
+/// at ~20% of total render time, almost entirely under
+/// `RenderContext.withChildIdentity`. The set of view types is fixed at
+/// compile time, so the first descent per type pays the demangle and every
+/// later one is a dictionary lookup. The cached string is byte-for-byte
+/// identical to `String(describing:)`, so identity paths — and therefore
+/// `StateStorage` keys and focus IDs — are unchanged.
+private let typeNameCache = Lock<[ObjectIdentifier: String]>(initialState: [:])
+
+/// Returns `String(describing: type)`, memoized per type (see ``typeNameCache``).
+func cachedTypeName<V>(_ type: V.Type) -> String {
+    let key = ObjectIdentifier(type)
+    return typeNameCache.withLock { cache in
+        if let cached = cache[key] { return cached }
+        let name = String(describing: type)
+        cache[key] = name
+        return name
+    }
 }
 
 // MARK: - Public API
@@ -69,7 +98,7 @@ extension ViewIdentity {
     ///   - index: The child's position within the container.
     /// - Returns: A new `ViewIdentity` for the child.
     public func child<V>(type: V.Type, index: Int) -> ViewIdentity {
-        ViewIdentity(path: "\(path)/\(String(describing: type)).\(index)")
+        ViewIdentity(path: "\(path)/\(cachedTypeName(type)).\(index)")
     }
 
     /// Returns a child identity by appending a type name without an index.
@@ -80,7 +109,7 @@ extension ViewIdentity {
     /// - Parameter type: The child view's type.
     /// - Returns: A new `ViewIdentity` for the child.
     public func child<V>(type: V.Type) -> ViewIdentity {
-        ViewIdentity(path: "\(path)/\(String(describing: type))")
+        ViewIdentity(path: "\(path)/\(cachedTypeName(type))")
     }
 
     /// Returns a child identity by appending a branch label.
