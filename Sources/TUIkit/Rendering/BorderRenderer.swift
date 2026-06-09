@@ -212,14 +212,72 @@ extension BorderRenderer {
         color: Color,
         backgroundColor: Color? = nil
     ) -> String {
+        contentLine(
+            content: content,
+            innerWidth: innerWidth,
+            vertical: ANSIRenderer.colorize(String(style.vertical), foreground: color),
+            backgroundColor: backgroundColor
+        )
+    }
+
+    /// Builds a run of bordered content lines that share one border style and
+    /// colour (a container's body or footer).
+    ///
+    /// Computes the coloured vertical border ONCE for the whole run instead of
+    /// per line: the bar is identical for every line of a border, but the
+    /// per-line ``standardContentLine`` re-ran `colorize(String(vertical))` —
+    /// a String allocation — for each one. A container body of N lines paid N
+    /// of those (plus N for the right bar's reuse) every frame; this pays one.
+    ///
+    /// - Parameters:
+    ///   - contents: The content strings, one per line.
+    ///   - innerWidth: The target content width (each line is fitted to it).
+    ///   - style: The border style (for the vertical character).
+    ///   - color: The border colour.
+    ///   - backgroundColor: Optional background applied to the content area.
+    /// - Returns: The bordered content lines, in order.
+    static func standardContentLines(
+        contents: [String],
+        innerWidth: Int,
+        style: BorderStyle,
+        color: Color,
+        backgroundColor: Color? = nil
+    ) -> [String] {
+        let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
+        return contents.map {
+            contentLine(
+                content: $0,
+                innerWidth: innerWidth,
+                vertical: vertical,
+                backgroundColor: backgroundColor
+            )
+        }
+    }
+
+    /// Fits one content string into a bordered line, given the already-coloured
+    /// vertical bar. Measures the content's visible width ONCE and reuses it for
+    /// both the truncate-vs-pad decision and the padding amount (the old code
+    /// measured it twice: once for the width check, once inside
+    /// `padToVisibleWidth`). For an already-styled line that second measure took
+    /// the allocating ANSI path, so the dedup removes real churn per line.
+    private static func contentLine(
+        content: String,
+        innerWidth: Int,
+        vertical: String,
+        backgroundColor: Color?
+    ) -> String {
         // Fit the content to exactly `innerWidth`: truncate if it is wider
         // (ANSI-aware) so it cannot displace the right border, pad if narrower.
-        let fittedLine =
-            content.strippedLength > innerWidth
-            ? content.ansiAwarePrefix(visibleCount: innerWidth)
-            : content.padToVisibleWidth(innerWidth)
+        let width = content.strippedLength
+        let fittedLine: String
+        if width > innerWidth {
+            fittedLine = content.ansiAwarePrefix(visibleCount: innerWidth)
+        } else if width == innerWidth {
+            fittedLine = content
+        } else {
+            fittedLine = content + String(repeating: " ", count: innerWidth - width)
+        }
         let styledContent = fittedLine.withPersistentBackground(backgroundColor)
-        let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
         return vertical + styledContent + ANSIRenderer.reset + vertical
     }
 }

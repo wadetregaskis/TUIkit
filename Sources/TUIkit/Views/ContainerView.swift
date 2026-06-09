@@ -618,17 +618,17 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             )
         }
 
-        // Body lines (no background color applied)
-        for line in bodyBuffer.lines {
-            lines.append(
-                BorderRenderer.standardContentLine(
-                    content: line,
-                    innerWidth: innerWidth,
-                    style: borderStyle,
-                    color: borderColor
-                )
+        // Body lines (no background color applied). One batch call so the
+        // coloured vertical border is built once for the whole body, not
+        // per line.
+        lines.append(
+            contentsOf: BorderRenderer.standardContentLines(
+                contents: bodyBuffer.lines,
+                innerWidth: innerWidth,
+                style: borderStyle,
+                color: borderColor
             )
-        }
+        )
 
         // Footer section (if present)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
@@ -643,16 +643,14 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             }
 
             // Footer lines (no background - footer has its own styling)
-            for line in footerBuf.lines {
-                lines.append(
-                    BorderRenderer.standardContentLine(
-                        content: line,
-                        innerWidth: innerWidth,
-                        style: borderStyle,
-                        color: borderColor
-                    )
+            lines.append(
+                contentsOf: BorderRenderer.standardContentLines(
+                    contents: footerBuf.lines,
+                    innerWidth: innerWidth,
+                    style: borderStyle,
+                    color: borderColor
                 )
-            }
+            )
         }
 
         // Bottom border
