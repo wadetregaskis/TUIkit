@@ -72,6 +72,28 @@ public struct ViewIdentity: Hashable, Sendable, CustomStringConvertible {
 /// later one is a dictionary lookup. The cached string is byte-for-byte
 /// identical to `String(describing:)`, so identity paths — and therefore
 /// `StateStorage` keys and focus IDs — are unchanged.
+///
+/// ## Lifecycle
+///
+/// Never flushed — this is a permanent memo, not an invalidating cache, and
+/// it needs no eviction:
+///
+/// - **Entries can't go stale.** The value (`String(describing: T)`) is a
+///   pure function of the type, fixed for the life of the process. And the
+///   key (`ObjectIdentifier(T.self)` — the type-metadata pointer) is stable
+///   and unique process-wide: unlike `ObjectIdentifier` of a class *instance*
+///   (whose address can be freed and reused), the Swift runtime never
+///   deallocates *type* metadata, so two types can't collide on a key and a
+///   type's key never changes. (The only way to reuse a type-metadata address
+///   is unloading a dynamic image via `dlclose`, which this library never
+///   does.)
+/// - **It's bounded.** One entry per distinct concrete view type whose
+///   identity is computed — a set fixed at compile time (Swift has no runtime
+///   type creation; generics are specialized during the build) — so it reaches
+///   steady state within the first few frames and stops growing.
+///
+/// Contrast `RenderCache`, which *does* invalidate: it caches rendered buffers
+/// that depend on mutable `@State` / environment, not a pure function.
 private let typeNameCache = Lock<[ObjectIdentifier: String]>(initialState: [:])
 
 /// Returns `String(describing: type)`, memoized per type (see ``typeNameCache``).
