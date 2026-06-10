@@ -82,7 +82,10 @@ extension FrameDiffWriter {
                 // survive the clip.
                 let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
                 let compensated = clipped.withTerminalAppCursorCompensation()
-                let mainWithBg = compensated.replacingOccurrences(of: reset, with: reset + bgCode)
+                // Native Swift `replacing(_:with:)` — NOT Foundation's
+                // `replacingOccurrences`, which bridges to `NSString` and was
+                // ~8% of the render loop in a Mode-B (live-app) profile.
+                let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
                 let padding = max(0, terminalWidth - clipped.strippedLength)
                 let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
                 lines.append(paddedLine)
