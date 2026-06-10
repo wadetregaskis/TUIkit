@@ -281,6 +281,17 @@ extension String {
     ///
     /// ANSI escape sequences in the input are preserved.
     public func withTerminalAppCursorCompensation() -> String {
+        // Fast path: every cursor-advance quirk is an emoji cluster, which is
+        // always non-ASCII, so a line whose bytes are all < 0x80 cannot need
+        // compensation — return it untouched and skip the char-by-char rebuild.
+        // `FrameDiffWriter.buildOutputLines` runs this on EVERY output line
+        // every frame, and most lines of a non-emoji UI are pure ASCII (text +
+        // ANSI escapes, which are also ASCII). The gate is a byte scan with no
+        // Unicode-property reads — far cheaper than the full
+        // `containsTerminalAppCursorAdvanceQuirk` predicate, which costs about
+        // as much as the rebuild it would guard.
+        guard utf8.contains(where: { $0 >= 0x80 }) else { return self }
+
         var result = ""
         result.reserveCapacity(self.count + 8)
         var index = startIndex
