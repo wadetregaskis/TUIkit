@@ -5,6 +5,8 @@
 //  License: MIT  only the lines that changed since the previous frame.
 //
 
+import Foundation
+
 // MARK: - Frame Diff Writer
 
 /// Compares rendered frames and writes only changed lines to the terminal.
@@ -31,6 +33,20 @@
 /// ```
 @MainActor
 final class FrameDiffWriter {
+    /// Whether the host terminal is macOS Terminal.app.
+    ///
+    /// Terminal.app has emoji cursor-advance and right-edge phantom-cell bugs
+    /// that the output path works around (see ``buildOutputLines`` and
+    /// ``repaintRightEdge``). EVERY other terminal — iTerm2, kitty, Alacritty,
+    /// WezTerm, VS Code's terminal, and all Linux/BSD consoles — advances the
+    /// cursor correctly, so applying those workarounds there does not merely
+    /// waste time, it CORRUPTS output: it injects spurious `CUF` cursor moves
+    /// (shifting everything after an emoji one cell right) and strips
+    /// Fitzpatrick skin-tone modifiers. Detected once from `TERM_PROGRAM`;
+    /// injectable so tests exercise both paths deterministically regardless of
+    /// which terminal runs them.
+    private let isAppleTerminal: Bool
+
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
 
@@ -39,6 +55,21 @@ final class FrameDiffWriter {
 
     /// The previous frame's app header lines.
     private var previousAppHeaderLines: [String] = []
+
+    init(isAppleTerminal: Bool = FrameDiffWriter.detectAppleTerminal()) {
+        self.isAppleTerminal = isAppleTerminal
+    }
+
+    /// `true` only when running under macOS Terminal.app
+    /// (`TERM_PROGRAM == "Apple_Terminal"`). Compile-time `false` off macOS,
+    /// where Terminal.app cannot run.
+    static func detectAppleTerminal() -> Bool {
+        #if os(macOS)
+        return ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "Apple_Terminal"
+        #else
+        return false
+        #endif
+    }
 }
 
 // MARK: - Internal API
@@ -80,8 +111,16 @@ extension FrameDiffWriter {
                 // right edge.  Cursor compensation is applied AFTER clipping
                 // so any CUF sequences are scoped to characters that actually
                 // survive the clip.
-                let clipped = buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
-                let compensated = clipped.withTerminalAppCursorCompensation()
+                // Terminal.app needs the cursor-aware clip + CUF / skin-tone
+                // compensation for its emoji bugs; every other terminal advances
+                // correctly, so use the plain clip and leave the line untouched
+                // (the compensation would corrupt it there — see isAppleTerminal).
+                let clipped = isAppleTerminal
+                    ? buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
+                    : buffer.lines[row].ansiAwarePrefix(visibleCount: terminalWidth)
+                let compensated = isAppleTerminal
+                    ? clipped.withTerminalAppCursorCompensation()
+                    : clipped
                 // Native Swift `replacing(_:with:)` — NOT Foundation's
                 // `replacingOccurrences`, which bridges to `NSString` and was
                 // ~8% of the render loop in a Mode-B (live-app) profile.
@@ -236,7 +275,9 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) {
-        guard terminalWidth > 1 else { return }
+        // The right-edge phantom-cell repaint is a Terminal.app-only workaround;
+        // on every other terminal the main pass already paints the edge.
+        guard isAppleTerminal, terminalWidth > 1 else { return }
         // Terminal.app leaves the rightmost 2 cells of a row at the default
         // terminal background whenever the row contains an emoji whose glyph
         // width and cursor advance disagree — VS-16 pictographic emoji

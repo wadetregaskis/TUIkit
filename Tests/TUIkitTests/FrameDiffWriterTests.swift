@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -240,5 +241,53 @@ struct DiffIntegrationTests {
             previousLines: []
         )
         #expect(changed == [0, 1])
+    }
+}
+
+// MARK: - Terminal.app Workaround Gating
+
+/// The emoji cursor-advance / right-edge workarounds in `buildOutputLines`
+/// (and `repaintRightEdge`) compensate for bugs that ONLY macOS Terminal.app
+/// has. Applied to any other terminal they corrupt output — injecting spurious
+/// `CUF` cursor moves and stripping skin-tone modifiers — so they must be gated
+/// on `isAppleTerminal`.
+@Suite("FrameDiffWriter Terminal.app gating")
+@MainActor
+struct FrameDiffWriterTerminalGatingTests {
+    /// A lone regional-indicator scalar is a *range-based* under-advancer
+    /// (Terminal.app advances the cursor by 1 but the glyph is 2 cells wide),
+    /// so it deterministically triggers the CUF compensation on every platform,
+    /// independent of the host's Unicode property tables.
+    private let underAdvancer = "\u{1F1E6}"  // 🇦
+
+    private func firstLine(isAppleTerminal: Bool) -> String {
+        FrameDiffWriter(isAppleTerminal: isAppleTerminal).buildOutputLines(
+            buffer: FrameBuffer(text: underAdvancer + "x"),
+            terminalWidth: 20, terminalHeight: 1, bgCode: "", reset: ""
+        )[0]
+    }
+
+    @Test("Apple_Terminal still gets cursor compensation (a CUF after the emoji)")
+    func appleTerminalCompensates() {
+        #expect(firstLine(isAppleTerminal: true).contains("\u{1B}[1C"))
+    }
+
+    @Test("Other terminals get NO compensation — it would corrupt them")
+    func otherTerminalsUntouched() {
+        let line = firstLine(isAppleTerminal: false)
+        #expect(!line.contains("\u{1B}[1C"))    // no spurious CUF injected
+        #expect(line.contains(underAdvancer))    // the emoji passes through verbatim
+    }
+
+    @Test("detectAppleTerminal is false off Apple_Terminal")
+    func detectionMatchesTermProgram() {
+        // Whatever runs the suite, detection must equal the TERM_PROGRAM check
+        // (and is compile-time false on non-macOS).
+        #if os(macOS)
+        let expected = ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "Apple_Terminal"
+        #else
+        let expected = false
+        #endif
+        #expect(FrameDiffWriter.detectAppleTerminal() == expected)
     }
 }

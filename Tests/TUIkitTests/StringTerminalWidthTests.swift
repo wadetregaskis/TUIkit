@@ -604,6 +604,10 @@ struct AnsiSGRContextAndCleanSuffixTests {
 
 /// Tests that verify the terminal sequences emitted by `repaintRightEdge`
 /// target exactly the last 2 cells and nothing more.
+///
+/// `repaintRightEdge` is a macOS Terminal.app-only workaround, so every writer
+/// here is built with `isAppleTerminal: true` to exercise that path
+/// deterministically regardless of which terminal runs the suite.
 @Suite("FrameDiffWriter repaintRightEdge column targeting")
 @MainActor
 struct RepaintRightEdgeColumnTests {
@@ -618,7 +622,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("Bare emoji row (no modifier): no repaint")
     func bareEmojiRowNotRepainted() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -645,7 +649,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("Skin-tone-stripped row: right-edge repaint targets baseRepaintCol")
     func skinToneStrippedRowRepainted() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -675,7 +679,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("Row without cursor-advance quirk: right-edge repaint is skipped")
     func plainRowNotRepainted() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -703,7 +707,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("VS-16 emoji row: right-edge repaint IS applied")
     func vs16EmojiGetsRepainted() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -728,7 +732,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("VS-16 repaint suffix covers at most 2 visible cells")
     func repaintSuffixExactly2Cells() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -764,7 +768,7 @@ struct RepaintRightEdgeColumnTests {
         // suffix displaced the cursor past the terminal edge, wrapping characters
         // to the next row.  Uses a VS-16 emoji at the right edge so CUF is
         // injected by withTerminalAppCursorCompensation.
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 12
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -792,7 +796,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("Repaint only applies to changed rows")
     func repaintOnlyForChangedRows() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
@@ -819,7 +823,7 @@ struct RepaintRightEdgeColumnTests {
 
     @Test("Multi-row frame: only quirky rows get repainted")
     func multiRowOnlyQuirkyRepainted() {
-        let writer = FrameDiffWriter()
+        let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 20
         let bgCode = "\u{1B}[48;2;5;9;5m"
