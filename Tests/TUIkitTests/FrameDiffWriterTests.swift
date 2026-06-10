@@ -291,3 +291,148 @@ struct FrameDiffWriterTerminalGatingTests {
         #expect(FrameDiffWriter.detectAppleTerminal() == expected)
     }
 }
+
+// MARK: - Incremental Build Reuse
+
+/// `buildOutputLines(…reusingFor:)` reuses the previous frame's built line for
+/// any row whose raw content + render params are unchanged. These tests pin
+/// the two guarantees: output stays byte-identical to the pure builder, and
+/// unchanged rows are genuinely skipped.
+@Suite("FrameDiffWriter incremental build reuse")
+@MainActor
+struct FrameDiffWriterIncrementalReuseTests {
+    private let bg = "[BG]"
+    private let reset = "[R]"
+
+    private func makeBuffer(_ rows: [String]) -> FrameBuffer {
+        var buffer = FrameBuffer(text: rows[0])
+        for row in rows.dropFirst() {
+            buffer.appendVertically(FrameBuffer(text: row))
+        }
+        return buffer
+    }
+
+    /// Build the content region via the reusing path, then run the matching
+    /// diff so `previousContentLines` is updated — mirroring RenderLoop's
+    /// build→writeContentDiff pairing (the reuse reads what the diff stores).
+    @discardableResult
+    private func buildAndCommit(
+        _ writer: FrameDiffWriter, _ rows: [String],
+        width: Int, height: Int, terminal: MockTerminal
+    ) -> [String] {
+        let lines = writer.buildOutputLines(
+            buffer: makeBuffer(rows), terminalWidth: width, terminalHeight: height,
+            bgCode: bg, reset: reset, reusingFor: .content
+        )
+        writer.writeContentDiff(
+            newLines: lines, terminal: terminal, startRow: 1,
+            terminalWidth: width, bgCode: bg, reset: reset
+        )
+        return lines
+    }
+
+    @Test("Reusing build is byte-identical to the pure build, frame over frame")
+    func reuseMatchesPureBuild() {
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let oracle = FrameDiffWriter(isAppleTerminal: false)   // stateless reference
+        let terminal = MockTerminal()
+        let width = 20, height = 6
+
+        // Content changes, no-ops, growth within `height`, and a shrink — every
+        // case the reuse logic distinguishes.
+        let frames: [[String]] = [
+            ["alpha", "beta", "gamma"],
+            ["alpha", "BETA!", "gamma"],            // one row changed
+            ["alpha", "BETA!", "gamma"],            // unchanged
+            ["alpha", "BETA!", "gamma", "delta"],   // a content row appears
+            ["x"],                                  // shrink to a single content row
+            ["alpha", "beta", "gamma"]              // grow again
+        ]
+        for rows in frames {
+            let got = buildAndCommit(writer, rows, width: width, height: height, terminal: terminal)
+            let want = oracle.buildOutputLines(
+                buffer: makeBuffer(rows), terminalWidth: width, terminalHeight: height,
+                bgCode: bg, reset: reset
+            )
+            #expect(got == want, "reusing build diverged from the pure build for \(rows)")
+        }
+    }
+
+    @Test("Unchanged rows are reused, not rebuilt")
+    func unchangedRowsAreReused() {
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let terminal = MockTerminal()
+        let width = 20, height = 6
+
+        // Frame 1: nothing cached → all `height` rows built (3 content + 3 empty).
+        buildAndCommit(writer, ["a", "b", "c"], width: width, height: height, terminal: terminal)
+        #expect(writer.rowsBuiltInLastBuild == height)
+
+        // Frame 2: identical buffer → every row reused.
+        buildAndCommit(writer, ["a", "b", "c"], width: width, height: height, terminal: terminal)
+        #expect(writer.rowsBuiltInLastBuild == 0)
+
+        // Frame 3: one content row changes → exactly one row rebuilt (the
+        // partial-update case this optimization targets).
+        buildAndCommit(writer, ["a", "B", "c"], width: width, height: height, terminal: terminal)
+        #expect(writer.rowsBuiltInLastBuild == 1)
+    }
+
+    @Test("A parameter change invalidates all reuse")
+    func parameterChangeRebuildsEveryRow() {
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let terminal = MockTerminal()
+        let rows = ["a", "b", "c"]
+        let height = 4
+
+        buildAndCommit(writer, rows, width: 20, height: height, terminal: terminal)
+        // Same content, wider terminal → no row can be reused (padding differs).
+        let lines = writer.buildOutputLines(
+            buffer: makeBuffer(rows), terminalWidth: 30, terminalHeight: height,
+            bgCode: bg, reset: reset, reusingFor: .content
+        )
+        #expect(writer.rowsBuiltInLastBuild == height)
+        // And it still matches the pure build at the new width.
+        let want = FrameDiffWriter(isAppleTerminal: false).buildOutputLines(
+            buffer: makeBuffer(rows), terminalWidth: 30, terminalHeight: height,
+            bgCode: bg, reset: reset
+        )
+        #expect(lines == want)
+    }
+
+    @Test("invalidate() forces a full rebuild on the next frame")
+    func invalidateForcesRebuild() {
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let terminal = MockTerminal()
+        let width = 20, height = 5
+
+        buildAndCommit(writer, ["a", "b"], width: width, height: height, terminal: terminal)
+        buildAndCommit(writer, ["a", "b"], width: width, height: height, terminal: terminal)
+        #expect(writer.rowsBuiltInLastBuild == 0)   // reused
+
+        writer.invalidate()
+        buildAndCommit(writer, ["a", "b"], width: width, height: height, terminal: terminal)
+        #expect(writer.rowsBuiltInLastBuild == height)   // cache cleared → all rebuilt
+    }
+
+    @Test("Regions reuse independently")
+    func regionsAreIndependent() {
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let height = 3
+        let contentBuffer = makeBuffer(["content"])
+        let statusBuffer = makeBuffer(["status"])
+
+        // Prime both regions.
+        _ = writer.buildOutputLines(buffer: contentBuffer, terminalWidth: 20, terminalHeight: height,
+                                    bgCode: bg, reset: reset, reusingFor: .content)
+        _ = writer.buildOutputLines(buffer: statusBuffer, terminalWidth: 20, terminalHeight: height,
+                                    bgCode: bg, reset: reset, reusingFor: .statusBar)
+
+        // Re-building content does NOT consult the status-bar cache: with no
+        // previousContentLines committed, content cannot reuse and rebuilds all,
+        // independent of the status-bar region's state.
+        _ = writer.buildOutputLines(buffer: contentBuffer, terminalWidth: 20, terminalHeight: height,
+                                    bgCode: bg, reset: reset, reusingFor: .content)
+        #expect(writer.rowsBuiltInLastBuild == height)
+    }
+}

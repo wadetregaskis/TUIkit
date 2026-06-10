@@ -56,6 +56,40 @@ final class FrameDiffWriter {
     /// The previous frame's app header lines.
     private var previousAppHeaderLines: [String] = []
 
+    /// The three independently-diffed terminal regions. Each keeps its own
+    /// previous built lines (above) and its own background colour, so the
+    /// incremental builder's reuse state is tracked per region.
+    enum OutputRegion {
+        case content, statusBar, appHeader
+    }
+
+    /// The parameters that feed every built line. If any differ from the
+    /// previous frame, no cached line can be reused (it would be stale).
+    private struct LineParams: Equatable {
+        let width: Int
+        let bgCode: String
+        let reset: String
+    }
+
+    /// Snapshot of one region's raw buffer input + build parameters from the
+    /// previous frame, used by `buildOutputLines(…reusingFor:)` to decide which
+    /// rows can reuse their previously-built line. `rawLines` is the buffer's
+    /// own array (an O(1) copy-on-write reference, not a per-element copy).
+    private struct LineReuseCache {
+        var rawLines: [String] = []
+        var rawHeight = 0
+        var params: LineParams?
+    }
+
+    private var contentReuse = LineReuseCache()
+    private var statusBarReuse = LineReuseCache()
+    private var appHeaderReuse = LineReuseCache()
+
+    /// Number of rows actually (re)built by the most recent
+    /// `buildOutputLines(…reusingFor:)` call; the remainder were reused from the
+    /// previous frame. Exposed for tests and profiling.
+    private(set) var rowsBuiltInLastBuild = 0
+
     init(isAppleTerminal: Bool = FrameDiffWriter.detectAppleTerminal()) {
         self.isAppleTerminal = isAppleTerminal
     }
@@ -98,42 +132,147 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) -> [String] {
-        var lines: [String] = []
-        lines.reserveCapacity(terminalHeight)
-
         let eraseLine = "\u{1B}[2K"
         let emptyLine = bgCode + eraseLine + reset
 
+        var lines: [String] = []
+        lines.reserveCapacity(terminalHeight)
         for row in 0..<terminalHeight {
-            if row < buffer.height {
-                // Clip first so over-wide content (a layout that does not
-                // shrink to fit a narrower terminal) cannot wrap past the
-                // right edge.  Cursor compensation is applied AFTER clipping
-                // so any CUF sequences are scoped to characters that actually
-                // survive the clip.
-                // Terminal.app needs the cursor-aware clip + CUF / skin-tone
-                // compensation for its emoji bugs; every other terminal advances
-                // correctly, so use the plain clip and leave the line untouched
-                // (the compensation would corrupt it there — see isAppleTerminal).
-                let clipped = isAppleTerminal
-                    ? buffer.lines[row].ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
-                    : buffer.lines[row].ansiAwarePrefix(visibleCount: terminalWidth)
-                let compensated = isAppleTerminal
-                    ? clipped.withTerminalAppCursorCompensation()
-                    : clipped
-                // Native Swift `replacing(_:with:)` — NOT Foundation's
-                // `replacingOccurrences`, which bridges to `NSString` and was
-                // ~8% of the render loop in a Mode-B (live-app) profile.
-                let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
-                let padding = max(0, terminalWidth - clipped.strippedLength)
-                let paddedLine = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
-                lines.append(paddedLine)
+            lines.append(buildLine(
+                raw: row < buffer.height ? buffer.lines[row] : nil,
+                terminalWidth: terminalWidth, bgCode: bgCode, reset: reset,
+                eraseLine: eraseLine, emptyLine: emptyLine
+            ))
+        }
+        return lines
+    }
+
+    /// Incremental twin of the pure builder that reuses the previous frame's
+    /// built line for any row whose raw buffer content — and the render
+    /// parameters (width, background, reset) — are unchanged.
+    ///
+    /// A built line is a pure function of `(rawLine, width, bgCode, reset,
+    /// isAppleTerminal)`, so when all of those match the previous frame the
+    /// previously-built line IS exactly what the builder would produce: output
+    /// is byte-identical to ``buildOutputLines(buffer:terminalWidth:terminalHeight:bgCode:reset:)``.
+    /// The downstream `writeXxxDiff` still compares the built lines to decide
+    /// what to write, so write behaviour is unchanged; this only skips the
+    /// per-line clip / compensation / pad work for rows that did not change —
+    /// the win for partial-update frames (a cursor blink, a spinner tick, or a
+    /// one-row selection move re-renders the whole screen but changes one row).
+    ///
+    /// Reuse state is keyed by `region` (each region has its own previous built
+    /// lines and background colour). Must be paired every frame with the
+    /// matching `writeXxxDiff`, which updates the built-line cache this reads —
+    /// as it is in `RenderLoop`.
+    func buildOutputLines(
+        buffer: FrameBuffer,
+        terminalWidth: Int,
+        terminalHeight: Int,
+        bgCode: String,
+        reset: String,
+        reusingFor region: OutputRegion
+    ) -> [String] {
+        let eraseLine = "\u{1B}[2K"
+        let emptyLine = bgCode + eraseLine + reset
+        let params = LineParams(width: terminalWidth, bgCode: bgCode, reset: reset)
+
+        let previousBuilt = previousLines(for: region)
+        let cache = reuseCache(for: region)
+        // A row is reusable only when every parameter feeding `buildLine` is
+        // unchanged; otherwise the cached built line is stale.
+        let canReuse = cache.params == params
+
+        var lines: [String] = []
+        lines.reserveCapacity(terminalHeight)
+        var builtCount = 0
+
+        for row in 0..<terminalHeight {
+            let isEmpty = row >= buffer.height
+            let wasEmpty = row >= cache.rawHeight
+            let rawUnchanged: Bool
+            if isEmpty || wasEmpty {
+                rawUnchanged = isEmpty && wasEmpty   // both empty → identical emptyLine
             } else {
-                lines.append(emptyLine)
+                rawUnchanged = row < cache.rawLines.count && cache.rawLines[row] == buffer.lines[row]
+            }
+
+            if canReuse, rawUnchanged, row < previousBuilt.count {
+                lines.append(previousBuilt[row])
+            } else {
+                lines.append(buildLine(
+                    raw: isEmpty ? nil : buffer.lines[row],
+                    terminalWidth: terminalWidth, bgCode: bgCode, reset: reset,
+                    eraseLine: eraseLine, emptyLine: emptyLine
+                ))
+                builtCount += 1
             }
         }
 
+        setReuseCache(
+            LineReuseCache(rawLines: buffer.lines, rawHeight: buffer.height, params: params),
+            for: region
+        )
+        rowsBuiltInLastBuild = builtCount
         return lines
+    }
+
+    /// Builds one terminal-ready output line from a raw buffer line (`nil` marks
+    /// an empty row past the buffer's height). Pure given the writer's
+    /// `isAppleTerminal`.
+    private func buildLine(
+        raw: String?,
+        terminalWidth: Int,
+        bgCode: String,
+        reset: String,
+        eraseLine: String,
+        emptyLine: String
+    ) -> String {
+        guard let raw else { return emptyLine }
+        // Clip first so over-wide content (a layout that does not shrink to fit
+        // a narrower terminal) cannot wrap past the right edge.  Cursor
+        // compensation is applied AFTER clipping so any CUF sequences are scoped
+        // to characters that actually survive the clip.
+        // Terminal.app needs the cursor-aware clip + CUF / skin-tone compensation
+        // for its emoji bugs; every other terminal advances correctly, so use the
+        // plain clip and leave the line untouched (the compensation would corrupt
+        // it there — see isAppleTerminal).
+        let clipped = isAppleTerminal
+            ? raw.ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
+            : raw.ansiAwarePrefix(visibleCount: terminalWidth)
+        let compensated = isAppleTerminal
+            ? clipped.withTerminalAppCursorCompensation()
+            : clipped
+        // Native Swift `replacing(_:with:)` — NOT Foundation's
+        // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
+        // render loop in a Mode-B (live-app) profile.
+        let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
+        let padding = max(0, terminalWidth - clipped.strippedLength)
+        return bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
+    }
+
+    private func previousLines(for region: OutputRegion) -> [String] {
+        switch region {
+        case .content: return previousContentLines
+        case .statusBar: return previousStatusBarLines
+        case .appHeader: return previousAppHeaderLines
+        }
+    }
+
+    private func reuseCache(for region: OutputRegion) -> LineReuseCache {
+        switch region {
+        case .content: return contentReuse
+        case .statusBar: return statusBarReuse
+        case .appHeader: return appHeaderReuse
+        }
+    }
+
+    private func setReuseCache(_ cache: LineReuseCache, for region: OutputRegion) {
+        switch region {
+        case .content: contentReuse = cache
+        case .statusBar: statusBarReuse = cache
+        case .appHeader: appHeaderReuse = cache
+        }
     }
 
     /// Compares new content lines with the previous frame and writes only changed lines.
@@ -207,6 +346,9 @@ extension FrameDiffWriter {
         previousContentLines = []
         previousStatusBarLines = []
         previousAppHeaderLines = []
+        contentReuse = LineReuseCache()
+        statusBarReuse = LineReuseCache()
+        appHeaderReuse = LineReuseCache()
     }
 
     /// Computes which row indices have changed between two frames.

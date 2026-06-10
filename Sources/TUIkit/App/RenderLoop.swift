@@ -520,7 +520,8 @@ extension RenderLoop {
             terminalWidth: terminalWidth,
             terminalHeight: contentHeight,
             bgCode: backgroundCodes.content,
-            reset: reset
+            reset: reset,
+            reusingFor: .content
         )
 
         terminal.beginFrame()
@@ -704,7 +705,8 @@ extension RenderLoop {
             terminalWidth: terminalWidth,
             terminalHeight: buffer.height,
             bgCode: bgCode,
-            reset: reset
+            reset: reset,
+            reusingFor: .appHeader
         )
         diffWriter.writeAppHeaderDiff(
             newLines: outputLines,
@@ -770,7 +772,8 @@ extension RenderLoop {
             terminalWidth: terminalWidth,
             terminalHeight: buffer.height,
             bgCode: bgCode,
-            reset: reset
+            reset: reset,
+            reusingFor: .statusBar
         )
         diffWriter.writeStatusBarDiff(
             newLines: outputLines,
