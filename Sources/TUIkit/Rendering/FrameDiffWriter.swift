@@ -237,9 +237,12 @@ extension FrameDiffWriter {
         // for its emoji bugs; every other terminal advances correctly, so use the
         // plain clip and leave the line untouched (the compensation would corrupt
         // it there — see isAppleTerminal).
-        let clipped = isAppleTerminal
-            ? raw.ansiAwarePrefixForTerminalApp(visibleCount: terminalWidth)
-            : raw.ansiAwarePrefix(visibleCount: terminalWidth)
+        // The clip returns its visible width (counted while clipping), so the
+        // padding below needs no separate `strippedLength` re-scan of `clipped`
+        // — which, for a styled line, would take the allocating ANSI-runs path.
+        let (clipped, clippedWidth) = isAppleTerminal
+            ? raw.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: terminalWidth)
+            : raw.ansiAwarePrefixWithWidth(visibleCount: terminalWidth)
         let compensated = isAppleTerminal
             ? clipped.withTerminalAppCursorCompensation()
             : clipped
@@ -247,7 +250,7 @@ extension FrameDiffWriter {
         // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
         // render loop in a Mode-B (live-app) profile.
         let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
-        let padding = max(0, terminalWidth - clipped.strippedLength)
+        let padding = max(0, terminalWidth - clippedWidth)
         return bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
     }
 

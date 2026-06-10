@@ -642,7 +642,18 @@ extension String {
     /// - Parameter visibleCount: The number of terminal cells to include.
     /// - Returns: A substring with ANSI codes intact up to the visible boundary.
     public func ansiAwarePrefix(visibleCount: Int) -> String {
-        guard visibleCount > 0 else { return "" }
+        ansiAwarePrefixWithWidth(visibleCount: visibleCount).prefix
+    }
+
+    /// Like ``ansiAwarePrefix(visibleCount:)`` but also returns the visible cell
+    /// width of the clipped result.
+    ///
+    /// The clip counts visible cells as it goes, so the width comes for free
+    /// here — a caller that needs it (e.g. to compute right-padding) avoids a
+    /// redundant `strippedLength` re-scan of the clipped string. The width is
+    /// exactly `prefix.strippedLength` by construction.
+    public func ansiAwarePrefixWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int) {
+        guard visibleCount > 0 else { return ("", 0) }
 
         var result = ""
         var visible = 0
@@ -653,13 +664,13 @@ extension String {
                 result += sequence
             case .visible(let character):
                 let charWidth = character.terminalWidth
-                if visible + charWidth > visibleCount { return result }
+                if visible + charWidth > visibleCount { return (result, visible) }
                 result.append(character)
                 visible += charWidth
             }
         }
 
-        return result
+        return (result, visible)
     }
 
     /// Like ``ansiAwarePrefix(visibleCount:)`` but cursor-aware — clips so
@@ -678,7 +689,15 @@ extension String {
     /// - Returns: A substring with ANSI codes intact, clipped so that no
     ///   character wraps off the right edge.
     public func ansiAwarePrefixForTerminalApp(visibleCount: Int) -> String {
-        guard visibleCount > 0 else { return "" }
+        ansiAwarePrefixForTerminalAppWithWidth(visibleCount: visibleCount).prefix
+    }
+
+    /// Width-returning twin of ``ansiAwarePrefixForTerminalApp(visibleCount:)``
+    /// — see ``ansiAwarePrefixWithWidth(visibleCount:)`` for why the visible
+    /// width is free. The width is exactly `prefix.strippedLength` (the space
+    /// substitution for an over-advancer keeps the visible width intact).
+    public func ansiAwarePrefixForTerminalAppWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int) {
+        guard visibleCount > 0 else { return ("", 0) }
 
         var result = ""
         var visible = 0
@@ -690,7 +709,7 @@ extension String {
                 result += sequence
             case .visible(let character):
                 let charWidth = character.terminalWidth
-                if visible + charWidth > visibleCount { return result }
+                if visible + charWidth > visibleCount { return (result, visible) }
                 let advance = character.terminalAppCursorAdvance
                 if advance > charWidth && cursor + advance > visibleCount {
                     // Over-advancer that would push Terminal.app's cursor past
@@ -710,7 +729,7 @@ extension String {
             }
         }
 
-        return result
+        return (result, visible)
     }
 
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset` visible cells,
