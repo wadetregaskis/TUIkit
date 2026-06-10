@@ -133,25 +133,51 @@ struct TextFieldContentRenderer {
             cursorTimer: cursorTimer
         )
 
-        // Build output character by character
+        // Build output, coalescing consecutive characters that share a colour
+        // into ONE ANSI run rather than wrapping each character in its own
+        // escape sequence. The per-character form was O(width) `colorize` calls
+        // (each an allocation + a full `ESC[…m char ESC[0m`) plus an O(width²)
+        // `result +=`; a focused field re-renders every frame for the cursor
+        // blink, so this was a render-pass hot spot (~22% of the settings-form
+        // profile). The cursor and the selection are the only colour
+        // boundaries, so a typical field collapses to a handful of runs. The
+        // visible result is identical — just fewer escape sequences.
         var result = ""
-        var outputWidth = 0
+        var runText = ""
+        var runForeground = palette.foreground
+        var runBackground = background
+        var hasRun = false
 
+        func flushRun() {
+            guard hasRun else { return }
+            result += ANSIRenderer.colorize(runText, foreground: runForeground, background: runBackground)
+            runText = ""
+            hasRun = false
+        }
+        func emit(_ piece: Character, foreground: Color, background: Color) {
+            if hasRun && (foreground != runForeground || background != runBackground) {
+                flushRun()
+            }
+            if !hasRun {
+                runForeground = foreground
+                runBackground = background
+                hasRun = true
+            }
+            runText.append(piece)
+        }
+
+        var outputWidth = 0
         for visibleIndex in 0..<width {
             let textIndex = visibleStart + visibleIndex
 
             if textIndex == clampedPosition {
                 if cursorVisible {
-                    let cursorChar = cursorStyle.shape.character
-                    result += ANSIRenderer.colorize(String(cursorChar), foreground: cursorColor, background: background)
+                    emit(cursorStyle.shape.character, foreground: cursorColor, background: background)
+                } else if textIndex < text.count {
+                    // Cursor hidden (blink off): show the underlying character.
+                    emit(displayCharacter(textIndex, text), foreground: palette.foreground, background: background)
                 } else {
-                    // Cursor hidden (blink off): show underlying character or space
-                    if textIndex < text.count {
-                        let char = displayCharacter(textIndex, text)
-                        result += ANSIRenderer.colorize(String(char), foreground: palette.foreground, background: background)
-                    } else {
-                        result += ANSIRenderer.colorize(" ", foreground: palette.foreground, background: background)
-                    }
+                    emit(" ", foreground: palette.foreground, background: background)
                 }
                 outputWidth += 1
             } else if textIndex < text.count && visibleIndex < width - (textIndex >= clampedPosition ? 0 : 1) {
@@ -161,17 +187,17 @@ struct TextFieldContentRenderer {
                 let isSelected = selectionRange.map { textIndex >= $0.lowerBound && textIndex < $0.upperBound } ?? false
 
                 if isSelected {
-                    result += ANSIRenderer.colorize(
-                        String(char),
+                    emit(
+                        char,
                         foreground: palette.background,
                         background: palette.accent.opacity(ViewConstants.selectionIndicator)
                     )
                 } else {
-                    result += ANSIRenderer.colorize(String(char), foreground: palette.foreground, background: background)
+                    emit(char, foreground: palette.foreground, background: background)
                 }
                 outputWidth += 1
             } else if outputWidth < width {
-                result += ANSIRenderer.colorize(" ", foreground: palette.foreground, background: background)
+                emit(" ", foreground: palette.foreground, background: background)
                 outputWidth += 1
             }
 
@@ -179,6 +205,7 @@ struct TextFieldContentRenderer {
                 break
             }
         }
+        flushRun()
 
         return result
     }
