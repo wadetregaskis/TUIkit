@@ -222,6 +222,37 @@ extension Character {
     }
 }
 
+private extension String {
+    /// `true` iff any UTF-8 byte has its high bit set — i.e. the string is not
+    /// pure ASCII.
+    ///
+    /// Scans 8 bytes per iteration by loading a `UInt64` and testing it against
+    /// the high-bit mask `0x8080…80`; any set bit means some byte was ≥ 0x80.
+    /// This is ~9× faster than `utf8.contains { $0 >= 0x80 }`, which walks the
+    /// `UTF8View` one element at a time through its index machinery rather than
+    /// a raw byte loop (microbenchmark: 0.068s vs 0.612s for 5M scans of a
+    /// 127-byte ASCII line, `-O`). Falls back to the element scan for the rare
+    /// string with no contiguous UTF-8 storage (e.g. a lazily-bridged
+    /// `NSString`), which `withContiguousStorageIfAvailable` reports as `nil`.
+    var utf8ContainsNonASCII: Bool {
+        utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+            guard let base = buffer.baseAddress else { return false }
+            let count = buffer.count
+            var i = 0
+            while i + 8 <= count {
+                let chunk = UnsafeRawPointer(base + i).loadUnaligned(as: UInt64.self)
+                if chunk & 0x8080_8080_8080_8080 != 0 { return true }
+                i += 8
+            }
+            while i < count {
+                if base[i] >= 0x80 { return true }
+                i += 1
+            }
+            return false
+        } ?? utf8.contains { $0 >= 0x80 }
+    }
+}
+
 extension String {
     /// Returns `true` if any character in this string has a Terminal.app
     /// cursor advance that differs from its visible cell width — VS-16
@@ -285,12 +316,13 @@ extension String {
         // always non-ASCII, so a line whose bytes are all < 0x80 cannot need
         // compensation — return it untouched and skip the char-by-char rebuild.
         // `FrameDiffWriter.buildOutputLines` runs this on EVERY output line
-        // every frame, and most lines of a non-emoji UI are pure ASCII (text +
-        // ANSI escapes, which are also ASCII). The gate is a byte scan with no
-        // Unicode-property reads — far cheaper than the full
-        // `containsTerminalAppCursorAdvanceQuirk` predicate, which costs about
-        // as much as the rebuild it would guard.
-        guard utf8.contains(where: { $0 >= 0x80 }) else { return self }
+        // every frame (on Apple_Terminal — it is gated off elsewhere), and most
+        // lines of a non-emoji UI are pure ASCII (text + ANSI escapes, which are
+        // also ASCII). The gate reads no Unicode properties — far cheaper than
+        // the full `containsTerminalAppCursorAdvanceQuirk` predicate, which costs
+        // about as much as the rebuild it would guard — and scans the bytes 8 at
+        // a time (see `utf8ContainsNonASCII`).
+        guard utf8ContainsNonASCII else { return self }
 
         var result = ""
         result.reserveCapacity(self.count + 8)
