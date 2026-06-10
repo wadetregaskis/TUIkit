@@ -234,13 +234,14 @@ public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> Child
 /// - Returns: The size this view needs.
 @MainActor
 public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
-    // Spacer is always flexible
-    if let spacer = view as? SpacerProtocol {
-        let min = spacer.spacerMinLength ?? 0
-        return ViewSize(width: min, height: min, isWidthFlexible: true, isHeightFlexible: true)
-    }
-
-    // Use Layoutable if available (mark as measuring to suppress side-effects)
+    // Use Layoutable if available (mark as measuring to suppress side-effects).
+    //
+    // Spacer is handled here too: it conforms to `Layoutable` and its
+    // `sizeThatFits` returns the same fully-flexible size a dedicated
+    // `SpacerProtocol` branch would build by hand — so checking `as?
+    // SpacerProtocol` first only added a redundant runtime conformance cast to
+    // EVERY measured child (Spacer is the sole conformer and is `Layoutable`).
+    // `SpacerProtocol` is still used by the stacks for fill distribution.
     if let layoutable = view as? Layoutable {
         var measureContext = context
         measureContext.isMeasuring = true
