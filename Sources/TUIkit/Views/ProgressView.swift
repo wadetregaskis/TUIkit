@@ -270,7 +270,7 @@ extension ProgressView {
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering of ProgressView.
-private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Renderable {
+private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Renderable, Layoutable {
     let fractionCompleted: Double?
     let style: TrackStyle
     let label: Label?
@@ -280,16 +280,35 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         fatalError("_ProgressViewCore renders via Renderable")
     }
 
+    /// Whether a label line is drawn above the bar — shared by `sizeThatFits`
+    /// and `renderToBuffer` so the height the two report cannot diverge.
+    private var hasLabelLine: Bool {
+        let hasLabel = label != nil && !(label is EmptyView)
+        let hasValueLabel = currentValueLabel != nil && !(currentValueLabel is EmptyView)
+        return hasLabel || hasValueLabel
+    }
+
+    /// The bar fills the available width; the height is one line for the bar plus
+    /// one for the optional label line. Reporting this directly avoids the
+    /// render-to-measure fallback — which rendered the whole bar (and, for an
+    /// indeterminate bar, started its animation task) just to read back a size
+    /// that is fully determined by the label's presence.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize(
+            width: proposal.width ?? context.availableWidth,
+            height: hasLabelLine ? 2 : 1,
+            isWidthFlexible: true,
+            isHeightFlexible: false
+        )
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let width = context.availableWidth
         var lines: [String] = []
 
-        // Label line (optional): label left, currentValueLabel right
-        let hasLabel = label != nil && !(label is EmptyView)
-        let hasValueLabel = currentValueLabel != nil && !(currentValueLabel is EmptyView)
-
-        if hasLabel || hasValueLabel {
+        // Label line (optional): label left, currentValueLabel right.
+        if hasLabelLine {
             lines.append(
                 renderLabelLine(
                     width: width,
