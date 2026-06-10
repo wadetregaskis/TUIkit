@@ -110,6 +110,10 @@ def build_scenario(name, rows, cols):
         # Sit on the emoji page (a heavy page) and let the pulse/cursor
         # timers re-render. Measures steady-state per-frame cost.
         return [(0.30, PAGE_KEYS["emoji"].encode())] + [(0.10, b"")] * 80
+    if name == "progress":
+        # Sit on the ProgressView page (key `) and let its many determinate +
+        # indeterminate bars self-drive re-renders. Steady-state per-frame cost.
+        return [(0.30, b"`")] + [(0.10, b"")] * 120
     raise SystemExit(f"unknown scenario: {name}")
 
 
@@ -140,7 +144,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("binary")
     ap.add_argument("--scenario", default="tour",
-                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "idle"])
+                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "idle", "progress"])
     ap.add_argument("--loops", type=int, default=1)
     ap.add_argument("--rows", type=int, default=50)
     ap.add_argument("--cols", type=int, default=160)
