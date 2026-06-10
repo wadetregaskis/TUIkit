@@ -117,6 +117,24 @@ def set_winsize(fd, rows, cols):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
 
+def login_tty_compat(fd):
+    """Make `fd` the child's controlling terminal and its stdin/stdout/stderr.
+
+    `os.login_tty` only exists on Python 3.11+; on older interpreters (this VM
+    has 3.9) do the equivalent by hand: detach from the old session, claim the
+    slave pty as the controlling terminal, and redirect the standard streams.
+    """
+    if hasattr(os, "login_tty"):
+        os.login_tty(fd)
+        return
+    os.setsid()
+    fcntl.ioctl(fd, termios.TIOCSCTTY, 0)
+    for target in (0, 1, 2):
+        os.dup2(fd, target)
+    if fd > 2:
+        os.close(fd)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -140,7 +158,7 @@ def main():
     pid = os.fork()
     if pid == 0:  # child
         os.close(master)
-        os.login_tty(slave)  # setsid + TIOCSCTTY + dup2(0,1,2) + close
+        login_tty_compat(slave)  # setsid + TIOCSCTTY + dup2(0,1,2) + close
         env = dict(os.environ)
         env.update(TERM="xterm-256color", COLUMNS=str(args.cols), LINES=str(args.rows))
         os.execve(args.binary, [args.binary], env)
