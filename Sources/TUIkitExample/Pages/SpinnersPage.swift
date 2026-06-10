@@ -24,7 +24,11 @@ struct SpinnersPage: View {
             }
 
             DemoSection("Custom Color") {
-                Spinner("Installing...", style: .bouncing, color: .palette.success)
+                // A literal colour, deliberately distinct from the theme accent
+                // (the default spinner colour) so the customisation is visible —
+                // the green theme's `.palette.success` is nearly identical to its
+                // `.palette.accent`, which made this look uncustomised.
+                Spinner("Installing...", style: .bouncing, color: .magenta)
             }
 
             Spacer()
