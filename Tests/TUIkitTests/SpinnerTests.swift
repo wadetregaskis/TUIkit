@@ -87,6 +87,35 @@ struct SpinnerStyleTests {
         // Should have ANSI escape codes for coloring
         #expect(frame.contains("\u{1B}["))
     }
+
+    @Test("Bouncing animation is left-right symmetric (both edges condense equally)")
+    func bouncingMirrorSymmetry() {
+        // The highlight sweeps right then left, so a horizontal mirror of the
+        // animation is the same animation, just phase-shifted: reversing every
+        // frame's cells must yield the same multiset of frames over a full cycle.
+        // A regression here means one edge condenses differently from the other
+        // — e.g. the left turnaround "resetting" a frame early (the trail flipping
+        // off-screen before the dots finish condensing into the leftmost cell).
+        let cycle = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth).count
+
+        // Split a rendered frame into its per-cell strings (each cell ends in a reset).
+        func cells(_ frame: String) -> [String] {
+            frame
+                .replacing("\u{1B}[0m", with: "\u{1B}[0m\u{1}")
+                .split(separator: "\u{1}")
+                .map(String.init)
+        }
+
+        let frames = (0..<cycle).map {
+            cells(SpinnerStyle.renderBouncingFrame(frameIndex: $0, color: .red, trackColor: .white))
+        }
+        // Every frame has one cell per visible track position.
+        #expect(frames.allSatisfy { $0.count == SpinnerStyle.trackWidth })
+
+        let forward = frames.map { $0.joined() }.sorted()
+        let mirrored = frames.map { Array($0.reversed()).joined() }.sorted()
+        #expect(forward == mirrored, "Bouncing animation is not left-right symmetric")
+    }
 }
 
 // MARK: - Spinner Rendering Tests

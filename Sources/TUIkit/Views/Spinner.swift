@@ -120,10 +120,17 @@ extension SpinnerStyle {
         let positions = bouncingPositions(trackLength: trackWidth)
         let currentPos = positions[frameIndex % positions.count]
 
-        // Determine direction: compare with previous position.
+        // Direction is the sign of the step from the previous frame. The bounce
+        // sequence has no consecutive duplicates, so this is unambiguous at every
+        // frame — including the wrap-around, where the step from the last frame
+        // (`-1`) to the first (`-2`) is still leftward. Treating that frame as
+        // already moving forward (an earlier special case did) flipped the trail
+        // off-screen one frame early, so the left edge never condensed the way
+        // the right edge does — the animation appeared to reset just short of the
+        // leftmost dot.
         let prevIndex = (frameIndex - 1 + positions.count) % positions.count
         let prevPos = positions[prevIndex]
-        let movingForward = currentPos > prevPos || (currentPos == -edgeOvershoot && prevPos == -edgeOvershoot + 1)
+        let movingForward = currentPos > prevPos
 
         var result = ""
         for trackIndex in 0..<trackWidth {
