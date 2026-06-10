@@ -14,8 +14,15 @@ import TUIkitCore
 /// then rendering with a specific size allocation.
 @MainActor
 public struct ChildView {
-    private let _measure: (ProposedSize, RenderContext) -> ViewSize
-    private let _render: (Int, Int, RenderContext) -> FrameBuffer
+    /// The wrapped child, stored as an existential so the (often large,
+    /// deeply-generic) view value is boxed ONCE here rather than copied into a
+    /// pair of measure / render closure contexts. `measureChild` / `renderChild`
+    /// open it back to a concrete type via implicit existential opening.
+    private let view: any View
+    /// The type whose name forms this child's identity-path component, or `nil`
+    /// when the child descends under the parent identity (no disambiguation).
+    private let identityType: Any.Type?
+    private let childIndex: Int
 
     /// Whether this child is a Spacer.
     public let isSpacer: Bool
@@ -32,12 +39,9 @@ public struct ChildView {
             self.spacerMinLength = nil
         }
 
-        self._measure = { proposal, context in
-            measureChild(view, proposal: proposal, context: context)
-        }
-        self._render = { width, height, context in
-            renderChild(view, width: width, height: height, context: context)
-        }
+        self.view = view
+        self.identityType = nil
+        self.childIndex = 0
     }
 
     /// Creates a child view wrapper with an explicit child index for identity propagation.
@@ -58,14 +62,9 @@ public struct ChildView {
             self.spacerMinLength = nil
         }
 
-        self._measure = { proposal, context in
-            let childContext = context.withChildIdentity(type: V.self, index: childIndex)
-            return measureChild(view, proposal: proposal, context: childContext)
-        }
-        self._render = { width, height, context in
-            let childContext = context.withChildIdentity(type: V.self, index: childIndex)
-            return renderChild(view, width: width, height: height, context: childContext)
-        }
+        self.view = view
+        self.identityType = V.self
+        self.childIndex = childIndex
     }
 
     /// Creates a child wrapper that renders `view` but derives its per-child
@@ -93,24 +92,27 @@ public struct ChildView {
             self.spacerMinLength = nil
         }
 
-        self._measure = { proposal, context in
-            let childContext = context.withChildIdentity(type: identityType, index: childIndex)
-            return measureChild(view, proposal: proposal, context: childContext)
-        }
-        self._render = { width, height, context in
-            let childContext = context.withChildIdentity(type: identityType, index: childIndex)
-            return renderChild(view, width: width, height: height, context: childContext)
-        }
+        self.view = view
+        self.identityType = identityType
+        self.childIndex = childIndex
     }
 
     /// Measures this child view without rendering.
     public func measure(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        _measure(proposal, context)
+        measureChild(view, proposal: proposal, context: childContext(context))
     }
 
     /// Renders this child view with the given size allocation.
     public func render(width: Int, height: Int, context: RenderContext) -> FrameBuffer {
-        _render(width, height, context)
+        renderChild(view, width: width, height: height, context: childContext(context))
+    }
+
+    /// The context to measure / render the child in: the parent context with
+    /// this child's identity appended, or the parent context unchanged when
+    /// `identityType` is `nil` (the no-disambiguation initializer).
+    private func childContext(_ context: RenderContext) -> RenderContext {
+        guard let identityType else { return context }
+        return context.withChildIdentity(erasedType: identityType, index: childIndex)
     }
 }
 

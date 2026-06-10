@@ -110,6 +110,14 @@ extension ViewIdentity {
         ViewIdentity(node: node.appending(.typed(type, index: index)))
     }
 
+    /// Type-erased form of ``child(type:index:)`` for when the child's type is
+    /// only known dynamically (e.g. a `ChildView` that stores `any View`). The
+    /// node keys on the same `ObjectIdentifier`, so the identity is byte-for-byte
+    /// the same as the generic form for the same concrete type.
+    public func child(erasedType type: Any.Type, index: Int) -> ViewIdentity {
+        ViewIdentity(node: node.appending(.typed(type, index: index)))
+    }
+
     /// Returns a child identity by appending a type name without an index.
     ///
     /// Used when traversing into a composite view's `body` where there

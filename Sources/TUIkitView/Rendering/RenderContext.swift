@@ -101,6 +101,15 @@ public struct RenderContext {
         return copy
     }
 
+    /// Type-erased form of ``withChildIdentity(type:index:)`` — used by
+    /// `ChildView`, which stores its child as `any View` and so only knows the
+    /// identity type dynamically. Produces the same identity as the generic form.
+    public func withChildIdentity(erasedType type: Any.Type, index: Int) -> Self {
+        var copy = self
+        copy.identity = identity.child(erasedType: type, index: index)
+        return copy
+    }
+
     /// Creates a new context with a child identity for a composite view's body.
     ///
     /// Used when descending into a view's `body` where there is exactly
