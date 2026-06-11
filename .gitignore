@@ -15,6 +15,8 @@ DerivedData/
 # committed — the profiling record lives in commit messages (see CLAUDE.md).
 /profiling-traces/
 *.trace
+# Frame dumps the example app writes on exit (one per Mode-B record run).
+tuikit-frame*.ansi
 __pycache__/
 # ordo-one/benchmark stores baselines here; local + machine-specific.
 /.benchmarkBaselines/
