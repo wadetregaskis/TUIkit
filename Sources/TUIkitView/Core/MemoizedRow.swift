@@ -111,7 +111,26 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
 
         let readVolatile = tracker.reads > readsBefore
-        if buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty && !readVolatile {
+        // Never store a buffer produced during a measure pass. Two reasons, both
+        // load-bearing:
+        //   • It is INCOMPLETE. Interactive controls suppress their hit-test
+        //     regions while `isMeasuring` (regions are meaningless without final
+        //     positions), so a measure-pass buffer of, say, a Button has none. If
+        //     the render pass then served that cached buffer, the control would
+        //     render with no clickable region and no focus rect — e.g. a
+        //     ScrollView could no longer locate a focused control to scroll it
+        //     into view.
+        //   • It CLOBBERS. A non-Layoutable ancestor (List, ScrollView) renders
+        //     its children once per measure and again per render — at different
+        //     available sizes. With a single entry per identity, the measure
+        //     store overwrites the render store every frame, so the render lookup
+        //     always misses on a different size and the row re-renders every
+        //     frame (0% hit rate on exactly the rows the memo exists for). Only
+        //     the render pass populates the cache, so its entry survives to the
+        //     next frame.
+        // The measure pass still benefits — it reads sizes through the size memo
+        // (`sizeThatFits`), which is keyed by proposal and so does not clobber.
+        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty && !readVolatile {
             cache.store(
                 identity: identity, view: element, buffer: buffer,
                 contextWidth: context.availableWidth, contextHeight: context.availableHeight)
