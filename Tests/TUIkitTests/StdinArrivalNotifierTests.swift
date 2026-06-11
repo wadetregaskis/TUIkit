@@ -110,4 +110,54 @@ struct StdinArrivalNotifierTests {
         await notifier.waitForArrival(timeoutNanoseconds: 30_000_000)  // 30 ms
         #expect(clock.now - start >= .milliseconds(15))
     }
+
+    @MainActor
+    @Test("a cancelled timeout never resumes a later waiter (no cascade spin)")
+    func cancelledTimeoutDoesNotCascade() async {
+        // Reproduces the run-loop shape that exposed the bug: a task that waits,
+        // is woken, and immediately waits again. Each wake() cancels the pending
+        // timeout; if a cancelled timeout still fell through to signal(), it would
+        // resume the NEXT wait early and cancel ITS timeout — a self-sustaining
+        // cascade. One real wake would then spin the loop indefinitely, each
+        // "wait" returning at once. We detect that by counting completed waits:
+        // with correct behaviour only a handful complete in the window; a cascade
+        // races straight to the loop's safety cap.
+        @MainActor final class Counter {
+            var completed = 0
+            var stop = false
+        }
+        let notifier = StdinArrivalNotifier()
+        let counter = Counter()
+
+        let loop = Task { @MainActor in
+            // Each wait is 50 ms; in the ~300 ms window below a correct notifier
+            // completes only a handful (timeouts + the explicit wakes).
+            for _ in 0..<10_000 {
+                if counter.stop { break }
+                await notifier.waitForArrival(timeoutNanoseconds: 50_000_000)
+                counter.completed += 1
+            }
+        }
+
+        // Wake repeatedly, as stdin / animation deadlines would. Each wake cancels
+        // the in-flight timeout — the precondition for the old cascade, where the
+        // cancelled timeout's stale signal() resumed the NEXT wait and cancelled
+        // ITS timeout, self-sustaining. Many tight wakes make the triggering race
+        // overwhelmingly likely to land at least once if the bug is present.
+        for _ in 0..<40 {
+            try? await Task.sleep(nanoseconds: 5_000_000)  // 5 ms
+            notifier.wake()
+        }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        counter.stop = true
+        notifier.wake()  // release the final wait so the loop exits
+        await loop.value
+
+        // Correct behaviour completes ~one wait per wake (≈40) plus a few 50 ms
+        // timeouts — well under 100. The cascade instead spins between wakes; the
+        // pre-fix code recorded 300+. The wide gap keeps the bound robust under
+        // load while still failing decisively on a regression.
+        #expect(counter.completed < 100)
+    }
 }

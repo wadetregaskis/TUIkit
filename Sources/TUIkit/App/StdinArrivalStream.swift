@@ -177,6 +177,17 @@ final class StdinArrivalNotifier {
             if let timeoutNanoseconds {
                 timeoutTask = Task { [weak self] in
                     try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                    // A cancelled timeout must NOT signal. `signal()` always
+                    // cancels `timeoutTask` before it resumes a waiter, so a
+                    // cancelled timeout is one whose waiter was already resumed
+                    // (by `wake()`, or by a newer wait superseding it). By now
+                    // `pendingContinuation` may belong to a *different, later*
+                    // wait — `try?` would otherwise swallow the cancellation and
+                    // fall through to `signal()`, resuming that wait early, which
+                    // cancels *its* timeout, which does the same on the next turn:
+                    // a self-sustaining cascade of early wakes that reads as a
+                    // busy spin on timer-driven (animating) screens.
+                    guard !Task.isCancelled else { return }
                     self?.signal()
                 }
             }
