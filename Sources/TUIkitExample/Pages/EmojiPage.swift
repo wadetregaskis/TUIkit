@@ -178,7 +178,7 @@ private struct EmojiRow: View {
 
 // MARK: - Model
 
-private struct EmojiEntry: Identifiable {
+private struct EmojiEntry: Identifiable, Equatable {
     let codepoint: UInt32
     let cluster: String
     let name: String

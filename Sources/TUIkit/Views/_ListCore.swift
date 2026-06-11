@@ -4,6 +4,55 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// MARK: - Row Source (windowed materialisation)
+
+/// A windowed view over a `List`'s rows.
+///
+/// Every row's ``ListRowType`` (and thus its id) is known eagerly and cheaply —
+/// that's all the scroll/selection handler needs for off-screen rows. Each row's
+/// content *buffer*, by contrast, is materialised lazily and memoised, so only
+/// the rows the overflow check and the visible window actually walk get built.
+/// For a large flat `List` that's O(viewport) row boxes per frame instead of
+/// O(total) — the dominant idle cost on long lists was allocating a content box
+/// for every row every frame even though ~viewport are shown.
+///
+/// The eager paths (Sections, heterogeneous content) wrap their already-built
+/// rows via ``eager(_:)``; ``row(at:)`` simply hands those back.
+@MainActor
+private final class RowSource<SelectionValue: Hashable & Sendable> {
+    /// Every row's type/id, resolved eagerly (no content built).
+    let types: [ListRowType<SelectionValue>]
+
+    /// Builds the deferred content box for a row index.
+    private let make: (Int) -> LazyListRowContent
+
+    /// Per-frame memo so a row touched by both the overflow check and the visible
+    /// window (or re-read by the compose pass) is built — and rendered — once.
+    private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
+
+    init(types: [ListRowType<SelectionValue>], make: @escaping (Int) -> LazyListRowContent) {
+        self.types = types
+        self.make = make
+    }
+
+    /// Wraps already-built rows (the eager Section / fallback paths).
+    static func eager(_ rows: [SelectableListRow<SelectionValue>]) -> RowSource {
+        RowSource(types: rows.map(\.type), make: { rows[$0].content })
+    }
+
+    var count: Int { types.count }
+    var isEmpty: Bool { types.isEmpty }
+
+    /// The fully-formed row at `index`, materialising (and memoising) its content
+    /// box on first access. Reading the row's `.buffer` renders it once (cached).
+    func row(at index: Int) -> SelectableListRow<SelectionValue> {
+        if let existing = materialized[index] { return existing }
+        let row = SelectableListRow(type: types[index], content: make(index))
+        materialized[index] = row
+        return row
+    }
+}
+
 // MARK: - List Core (Internal Rendering)
 
 /// Internal core view that handles list rendering inside a
@@ -67,7 +116,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let style = context.environment.listStyle
         let stateStorage = context.environment.stateStorage!
 
-        let rows = extractRows(from: content, context: context)
+        let source = extractRows(from: content, context: context)
 
         // Vertical chrome around the scrollable content; reserve
         // only what is actually present.
@@ -81,12 +130,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         let contentLines: [String]
         let renderState: PopulatedRenderState?
-        if rows.isEmpty {
+        if source.isEmpty {
             contentLines = buildEmptyStateLines(context: context)
             renderState = nil
         } else {
             let result = buildPopulatedContent(
-                rows: rows,
+                source: source,
                 context: context,
                 stateStorage: stateStorage,
                 palette: palette,
@@ -159,7 +208,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the persisted focus ID, and the per-row y-ranges so
     /// clicks can be translated back to a row index).
     private func buildPopulatedContent(
-        rows: [SelectableListRow<SelectionValue>],
+        source: RowSource<SelectionValue>,
         context: RenderContext,
         stateStorage: StateStorage,
         palette: any Palette,
@@ -168,7 +217,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     ) -> (lines: [String], state: PopulatedRenderState) {
         // A list only scrolls (and shows indicators) when its rows
         // don't all fit in the content area.
-        let overflowing = rowsOverflow(rows, targetContentHeight: targetContentHeight)
+        let overflowing = rowsOverflow(source, targetContentHeight: targetContentHeight)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -177,7 +226,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             propertyIndex: 1  // focusID
         )
         let handler = resolvePopulatedHandler(
-            rows: rows,
+            source: source,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
@@ -194,7 +243,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // ends (which used to push the "N more below" indicator one
         // row too high), and no overflow in the middle.
         let visibleRows = resolveVisibleWindow(
-            rows: rows,
+            source: source,
             handler: handler,
             contentHeight: targetContentHeight,
             overflowing: overflowing
@@ -246,12 +295,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// It walks all rows only when their total height genuinely fits the area
     /// (a short list, which is rendered in full anyway).
     private func rowsOverflow(
-        _ rows: [SelectableListRow<SelectionValue>],
+        _ source: RowSource<SelectionValue>,
         targetContentHeight: Int
     ) -> Bool {
         var totalRowLines = 0
-        for row in rows {
-            totalRowLines += row.buffer.height
+        for index in 0..<source.count {
+            totalRowLines += source.row(at: index).buffer.height
             if totalRowLines > targetContentHeight { return true }
         }
         return false
@@ -268,7 +317,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// Finder / Explorer / VS Code), and the focus-changing
     /// paths inside the handler already call it themselves.
     private func resolvePopulatedHandler(
-        rows: [SelectableListRow<SelectionValue>],
+        source: RowSource<SelectionValue>,
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
@@ -286,14 +335,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             for: handlerKey,
             default: ItemListHandler(
                 focusID: persistedFocusID,
-                itemCount: rows.count,
+                itemCount: source.count,
                 viewportHeight: provisionalViewport,
                 selectionMode: selectionMode,
                 canBeFocused: !isDisabled
             )
         )
         let handler = handlerBox.value
-        handler.itemCount = rows.count
+        handler.itemCount = source.count
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
@@ -321,10 +370,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
         }
 
+        // Built from the eager `types` — no row content is materialised, so this
+        // stays O(total) in cheap id reads while the expensive row buffers remain
+        // O(visible).
         var selectableIndices = Set<Int>()
         var itemIDs: [SelectionValue?] = []
-        for (index, row) in rows.enumerated() {
-            if let id = row.id {
+        itemIDs.reserveCapacity(source.count)
+        for (index, type) in source.types.enumerated() {
+            if case .content(let id) = type {
                 itemIDs.append(id)
                 selectableIndices.insert(index)
             } else {
@@ -493,34 +546,45 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     // MARK: - Row Extraction
 
-    private func extractRows(from content: Content, context: RenderContext) -> [SelectableListRow<SelectionValue>] {
-        // Check for SectionRowExtractor first (Section view)
-        // This must come before ChildInfoProvider because Section conforms to both
+    private func extractRows(from content: Content, context: RenderContext) -> RowSource<SelectionValue> {
+        // Section first (it conforms to both Section- and List-RowExtractor, and
+        // its row set — header/content/footer — is small and built eagerly).
         if let section = content as? SectionRowExtractor {
-            return extractSectionRows(from: section, context: context)
+            return .eager(extractSectionRows(from: section, context: context))
         }
 
-        // Check for ListRowExtractor (ForEach)
+        // Windowed path (ForEach): resolve every row's id cheaply up front, but
+        // materialise a row's content box only when the overflow check or the
+        // visible window walks to it. This is the hot path for a large flat List
+        // and what makes per-frame cost O(visible), not O(total). Falls through
+        // to the eager path when the ids can't all be resolved.
+        if let windowed = content as? WindowedListRowExtractor,
+            let ids = windowed.listRowIDs(context: context) as [SelectionValue]?
+        {
+            let types = ids.map { ListRowType<SelectionValue>.content(id: $0) }
+            return RowSource(types: types) { index in
+                windowed.makeListRowContent(at: index, context: context)
+            }
+        }
+
+        // Eager ListRowExtractor (e.g. a ForEach whose ids couldn't all resolve).
         if let extractor = content as? ListRowExtractor {
             let rows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
-            // Thread the lazy content box through unchanged — reading `.buffer`
-            // / `.badge` here would force a render of every row, defeating the
-            // windowing. Only the visible window forces its rows.
-            return rows.map { SelectableListRow(type: .content(id: $0.id), content: $0.content) }
+            return .eager(
+                rows.map { SelectableListRow(type: .content(id: $0.id), content: $0.content) })
         }
 
-        // Check for ChildInfoProvider (handles TupleView with multiple children)
+        // ChildInfoProvider (TupleView with multiple children).
         if let provider = content as? ChildInfoProvider {
-            return extractFromChildren(provider: provider, context: context)
+            return .eager(extractFromChildren(provider: provider, context: context))
         }
 
-        // Fallback: render as single content row
+        // Fallback: render as a single content row.
         let buffer = TUIkit.renderToBuffer(content, context: context)
         if let zeroID = 0 as? SelectionValue {
-            return [SelectableListRow(type: .content(id: zeroID), buffer: buffer)]
+            return .eager([SelectableListRow(type: .content(id: zeroID), buffer: buffer)])
         }
-
-        return []
+        return .eager([])
     }
 
     /// Extracts rows from a ChildInfoProvider, handling Sections specially.
@@ -594,33 +658,33 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// wasted blank line at the ends that used to bump the "N more
     /// below" indicator one row too high.
     private func resolveVisibleWindow(
-        rows: [SelectableListRow<SelectionValue>],
+        source: RowSource<SelectionValue>,
         handler: ItemListHandler<SelectionValue>,
         contentHeight: Int,
         overflowing: Bool
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         guard overflowing else {
             return calculateVisibleRows(
-                rows: rows, handler: handler, viewportHeight: contentHeight)
+                source: source, handler: handler, viewportHeight: contentHeight)
         }
         let aboveLines = handler.scrollOffset > 0 ? 1 : 0
         // First fill assuming no "below" indicator…
         let withoutBelow = calculateVisibleRows(
-            rows: rows,
+            source: source,
             handler: handler,
             viewportHeight: max(1, contentHeight - aboveLines))
         // …then, if rows remain past that window, a "below" indicator
         // is needed, so reserve its line and refill.
-        let belowShown = handler.scrollOffset + withoutBelow.count < rows.count
+        let belowShown = handler.scrollOffset + withoutBelow.count < source.count
         guard belowShown else { return withoutBelow }
         return calculateVisibleRows(
-            rows: rows,
+            source: source,
             handler: handler,
             viewportHeight: max(1, contentHeight - aboveLines - 1))
     }
 
     private func calculateVisibleRows(
-        rows: [SelectableListRow<SelectionValue>],
+        source: RowSource<SelectionValue>,
         handler: ItemListHandler<SelectionValue>,
         viewportHeight: Int
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
@@ -628,8 +692,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var linesUsed = 0
         var currentIndex = handler.scrollOffset
 
-        while currentIndex < rows.count && linesUsed < viewportHeight {
-            let row = rows[currentIndex]
+        // Only these rows are materialised — `source.row(at:)` builds (and
+        // renders) the content box on demand and memoises it.
+        while currentIndex < source.count && linesUsed < viewportHeight {
+            let row = source.row(at: currentIndex)
             let rowHeight = row.buffer.height
 
             if linesUsed + rowHeight <= viewportHeight {

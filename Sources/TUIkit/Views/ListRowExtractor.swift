@@ -45,77 +45,113 @@ struct ListRow<ID: Hashable> {
 
 // MARK: - List Row Extractor Protocol
 
-/// Protocol for views that can provide list rows with IDs.
+/// Protocol for views that can provide list rows with IDs (eagerly).
+///
+/// Used by `Section`, whose row set is small and structured. The hot path for a
+/// large flat `List` is ``WindowedListRowExtractor`` instead.
 @MainActor
 protocol ListRowExtractor {
-    /// Extracts list rows with their associated IDs.
+    /// Extracts every list row eagerly, with its associated ID.
     func extractListRows<ID: Hashable>(context: RenderContext) -> [ListRow<ID>]
+}
+
+/// A row extractor that supports *windowed* materialisation: resolve all row
+/// ids up front (cheap — that's all the scroll/selection handler needs for
+/// off-screen rows), but build a row's content box only when that row enters
+/// the overflow check or the visible window. A 2,000-row `List` then allocates
+/// ~viewport row boxes per frame instead of 2,000 — O(visible), not O(total).
+/// `ForEach` conforms; `List` prefers this path and falls back to the eager
+/// ``ListRowExtractor`` when it isn't available (e.g. heterogeneous content) or
+/// can't resolve every id. See ``RowSource``.
+@MainActor
+protocol WindowedListRowExtractor {
+    /// The ID of every row, resolved cheaply without building or rendering any
+    /// row content. Returns `nil` if some element's ID can't be expressed as
+    /// `ID` (the same rows the eager path would drop) — the caller then falls
+    /// back to eager extraction. Element-natural IDs are preferred, with the row
+    /// index as the fallback (matching ``ListRowExtractor/extractListRows``).
+    func listRowIDs<ID: Hashable>(context: RenderContext) -> [ID]?
+
+    /// Builds the deferred content for the row at `index` (0-based over the
+    /// data). Only called for rows that are actually shown.
+    func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent
 }
 
 // MARK: - ForEach Conformance
 
-extension ForEach: ListRowExtractor {
+extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
-        data.enumerated().compactMap { indexed -> ListRow<RowID>? in
-            let (index, element) = indexed
+        (0..<data.count).compactMap { index -> ListRow<RowID>? in
             // Resolve the row's selection ID up front — it's cheap (a key-path
-            // read or the index) and the scroll / selection handler needs it
-            // for EVERY row, on- or off-screen. Building and rendering the row
-            // view, by contrast, is deferred into the lazy box below so a long
-            // List only pays for the rows in its visible window.
-            let elementID = element[keyPath: idKeyPath]
-            let rowID: RowID
-            if let id = elementID as? RowID {
-                // Prefer the element's natural ID when its type matches the row
-                // ID type the caller asked for.
-                rowID = id
-            } else if let id = index as? RowID {
-                // Otherwise fall back to the row index. This makes selectionless
-                // Lists with the Int-defaulted overload pick up ForEach rows
-                // whose natural IDs are of a different type (e.g. String). The
-                // Int-defaulted overload is what Swift's overload resolution
-                // picks for `List("title") { ForEach(strings, id: \.self) {…} }`
-                // because there's no other constraint to pin SelectionValue, so
-                // without this fallback every element's cast would fail and the
-                // list would render as empty.
-                rowID = id
-            } else {
-                return nil
-            }
-
-            // Defer view construction, badge extraction, and rendering until the
-            // row enters the visible window (see ``LazyListRowContent``).
-            let rowContent = LazyListRowContent { [content] in
-                let view = content(element)
-
-                // Extract badge if the view is wrapped in a BadgeModifier. Done
-                // on the bare view, before any memo wrapper, so the modifier is
-                // found.
-                let badge = extractBadgeValue(from: view)
-
-                // Render the view under a per-row child identity (matching
-                // ForEach.childViews) so each row's @State / focus / cache entry
-                // is distinct — previously every row shared `context`'s identity.
-                let rowContext = context.withChildIdentity(type: Content.self, index: index)
-
-                // When the element is Equatable, wrap the row in a value-memo
-                // keyed by the element, so an unchanged row is served from the
-                // render cache instead of re-rendered. The wrapper is Renderable
-                // (adds no child identity), so the inner view keeps the same
-                // `rowContext` identity it would have unwrapped — the memo is
-                // identity-transparent. _MemoizedRow's own gate declines to
-                // cache interactive / volatile rows.
-                let buffer: FrameBuffer
-                if let equatableElement = element as? any Equatable {
-                    buffer = TUIkit.renderToBuffer(
-                        _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
-                        context: rowContext)
-                } else {
-                    buffer = TUIkit.renderToBuffer(view, context: rowContext)
-                }
-                return (buffer, badge)
-            }
-            return ListRow(id: rowID, content: rowContent)
+            // read or the index) and the scroll / selection handler needs it for
+            // EVERY row, on- or off-screen. Building and rendering the row view,
+            // by contrast, is deferred into the lazy box below so a long List
+            // only pays for the rows in its visible window.
+            guard let rowID: RowID = rowID(at: index) else { return nil }
+            return ListRow(id: rowID, content: makeListRowContent(at: index, context: context))
         }
+    }
+
+    // `RowID`, not `ID` — `ForEach`'s own `ID` generic parameter is in scope here.
+    func listRowIDs<RowID: Hashable>(context: RenderContext) -> [RowID]? {
+        var ids: [RowID] = []
+        ids.reserveCapacity(data.count)
+        for index in 0..<data.count {
+            // Bail to the eager path if any element's ID can't be expressed as
+            // `RowID` — that's exactly the row `extractListRows` would drop, and
+            // dropping rows would misalign the windowed indices.
+            guard let id: RowID = rowID(at: index) else { return nil }
+            ids.append(id)
+        }
+        return ids
+    }
+
+    func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {
+        let element = self.element(at: index)
+        // Defer view construction, badge extraction, and rendering until the row
+        // enters the visible window (see ``LazyListRowContent``).
+        return LazyListRowContent { [content] in
+            let view = content(element)
+
+            // Extract badge if the view is wrapped in a BadgeModifier. Done on
+            // the bare view, before any memo wrapper, so the modifier is found.
+            let badge = extractBadgeValue(from: view)
+
+            // Render the view under a per-row child identity (matching
+            // ForEach.childViews) so each row's @State / focus / cache entry is
+            // distinct — previously every row shared `context`'s identity.
+            let rowContext = context.withChildIdentity(type: Content.self, index: index)
+
+            // When the element is Equatable, wrap the row in a value-memo keyed
+            // by the element, so an unchanged row is served from the render cache
+            // instead of re-rendered. The wrapper is Renderable (adds no child
+            // identity), so the inner view keeps the same `rowContext` identity
+            // it would have unwrapped — the memo is identity-transparent.
+            // _MemoizedRow's own gate declines to cache interactive / volatile rows.
+            let buffer: FrameBuffer
+            if let equatableElement = element as? any Equatable {
+                buffer = TUIkit.renderToBuffer(
+                    _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                    context: rowContext)
+            } else {
+                buffer = TUIkit.renderToBuffer(view, context: rowContext)
+            }
+            return (buffer, badge)
+        }
+    }
+
+    /// The element at a 0-based offset (O(1) — `Data` is `RandomAccessCollection`).
+    private func element(at index: Int) -> Data.Element {
+        data[data.index(data.startIndex, offsetBy: index)]
+    }
+
+    /// Resolves the row ID for the element at `index`: its natural ID when that
+    /// matches the requested type, else the index (see ``extractListRows`` for
+    /// why the index fallback matters), else `nil`.
+    private func rowID<RowID: Hashable>(at index: Int) -> RowID? {
+        let elementID = element(at: index)[keyPath: idKeyPath]
+        if let id = elementID as? RowID { return id }
+        if let id = index as? RowID { return id }
+        return nil
     }
 }

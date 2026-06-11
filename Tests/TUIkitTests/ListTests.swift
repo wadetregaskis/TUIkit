@@ -664,4 +664,28 @@ struct ListRenderingTests {
         #expect(joined.contains("row-099"), "wheel-scrolling to the end must reveal the last row")
         #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
     }
+
+    @Test("A large List builds only ~viewport rows, not every row")
+    func largeListIsWindowed() {
+        // A 1,000-row List in a ~12-line viewport must build (and render) only the
+        // rows in / probed around the visible window. The windowed extraction keeps
+        // per-frame cost O(visible), not O(total): a regression that materialised
+        // every row would push this count toward 1,000.
+        final class BuildCounter { var built = 0 }
+        let counter = BuildCounter()
+        let context = createTestContext(width: 40, height: 14)
+
+        let view = List(selection: .constant(Int?.none)) {
+            ForEach(0..<1000, id: \.self) { i in
+                counter.built += 1  // runs when this row's content is actually built
+                return Text("row \(i)")
+            }
+        }
+
+        _ = renderToBuffer(view, context: context)
+
+        #expect(
+            counter.built < 60,
+            "built \(counter.built) of 1000 rows; a windowed List renders only ~viewport")
+    }
 }
