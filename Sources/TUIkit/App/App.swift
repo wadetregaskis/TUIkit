@@ -148,6 +148,11 @@ extension AppRunner {
         )
         let pulseTimer = PulseTimer(renderNotifier: appState)
         let cursorTimer = CursorTimer(renderNotifier: appState)
+        // Coalesces the periodic re-render requests of every animating view
+        // (Spinner, indeterminate ProgressView, …) into the fewest distinct render
+        // instants, and tells the loop when the next one is due. See
+        // AnimationScheduler / RenderContext.requestAnimation.
+        let animationScheduler = AnimationScheduler()
 
         // Setup
         signals.install()
@@ -192,16 +197,6 @@ extension AppRunner {
 
         isRunning = true
 
-        // Animation clocks are demand-driven: after each render the loop keeps a
-        // clock ticking only while that frame actually consumed it. A static
-        // screen (no focus pulse, no text cursor) leaves both stopped, so it
-        // requests no further frames and the loop idles instead of re-rendering
-        // identical output ~30×/sec.
-        let applyAnimationActivity: (RenderActivity) -> Void = { activity in
-            if activity.usesPulse { pulseTimer.start() } else { pulseTimer.stop() }
-            if activity.usesCursor { cursorTimer.start() } else { cursorTimer.stop() }
-        }
-
         // Frame-rate cap: never render more than `frameIntervalNanos` apart, so a
         // burst of render-requests (e.g. an animation ticking faster than the
         // cap) coalesces into at most one render per frame. Otherwise purely
@@ -210,10 +205,23 @@ extension AppRunner {
         let frameIntervalNanos: UInt64 = 1_000_000_000 / UInt64(max(1, app.maxFrameRate))
         var lastRenderAtNanos = DispatchTime.now().uptimeNanoseconds
         var pendingRender = false
+        // The soonest instant any live animation grid next fires, or nil when
+        // nothing is animating (the loop then blocks until woken — zero idle work).
+        // Set by `renderFrame` from the scheduler each render.
+        var animationDeadlineNanos: UInt64?
+
+        // Renders one frame and adopts the per-frame state it produces: the time
+        // of this render (for the frame-rate cap) and the next animation deadline.
+        let renderOneFrame = {
+            (lastRenderAtNanos, animationDeadlineNanos) = self.renderFrame(
+                renderer: renderer,
+                pulseTimer: pulseTimer,
+                cursorTimer: cursorTimer,
+                scheduler: animationScheduler)
+        }
 
         // Initial render
-        applyAnimationActivity(
-            renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
+        renderOneFrame()
 
         // Main loop
         while isRunning {
@@ -259,34 +267,38 @@ extension AppRunner {
                 pendingRender = true
             }
 
-            // Render at most once per frame interval. If a render is pending but
-            // the previous one was less than one interval ago, wait out the
-            // remainder (the cap) instead of rendering now. With nothing pending,
-            // leave `waitNanos` nil: the loop blocks until a wake (stdin or a
-            // render-request), so a static screen does no work at all.
-            var waitNanos: UInt64?
-            if pendingRender {
-                let now = DispatchTime.now().uptimeNanoseconds
-                let elapsed = now &- lastRenderAtNanos
-                if elapsed >= frameIntervalNanos {
-                    applyAnimationActivity(
-                        renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer))
-                    // Re-evaluate the mouse-tracking mode (modifiers may elevate
-                    // it this frame); only re-emitted when it actually changes.
-                    let effective = renderer.effectiveMouseSupport()
-                    terminal.applyMouseSupport(effective)
-                    tuiContext.mouseEventDispatcher.setActiveSupport(effective)
-                    lastRenderAtNanos = DispatchTime.now().uptimeNanoseconds
-                    pendingRender = false
-                } else {
-                    waitNanos = frameIntervalNanos &- elapsed
-                }
+            // One monotonic reading drives every decision this iteration — the
+            // animation-fired test, the render-now test, and the wait length all
+            // share it, so none can disagree about whether a deadline has passed.
+            let now = DispatchTime.now().uptimeNanoseconds
+
+            // An animation grid fired (its deadline arrived): a frame is due.
+            if let deadline = animationDeadlineNanos, now >= deadline {
+                pendingRender = true
             }
 
+            // Render if one is due AND the frame-rate cap has cleared. The render
+            // moves `lastRenderAtNanos` and the next deadline strictly past `now`,
+            // so the wait computed below is always a real positive interval — never
+            // a spurious "block forever" right after a render.
+            if pendingRender, now >= lastRenderAtNanos &+ frameIntervalNanos {
+                renderOneFrame()
+                pendingRender = false
+            }
+
+            // How long to wait until the next render is due (cap and/or animation
+            // folded into one instant), or nil to block until woken.
+            let waitNanos = Self.waitUntilNextRender(
+                now: now,
+                pendingRender: pendingRender,
+                lastRenderAtNanos: lastRenderAtNanos,
+                frameIntervalNanos: frameIntervalNanos,
+                animationDeadlineNanos: animationDeadlineNanos)
+
             // Block until woken (stdin data or a render-request `wake()`), or —
-            // when rate-limited — until the frame deadline. The wait releases the
-            // main actor, so the observer's `wake()` hop and other queued
-            // main-actor work run between frames.
+            // when a render is pending or an animation is due — until that target.
+            // The wait releases the main actor, so the observer's `wake()` hop and
+            // other queued main-actor work run between frames.
             await stdinArrival.waitForArrival(timeoutNanoseconds: waitNanos)
         }
 
@@ -301,6 +313,72 @@ extension AppRunner {
 // MARK: - Private Helpers
 
 extension AppRunner {
+    /// Renders one frame and returns the per-frame state the run loop tracks: the
+    /// timestamp of this render (for the frame-rate cap) and the soonest instant
+    /// any live animation grid next fires (`nil` if nothing is animating).
+    ///
+    /// The scheduler is fenced begin…end around the render: animating views
+    /// re-declare their rates *during* the render (via `requestAnimation`), then
+    /// the next-firing query reads the union of every still-live grid. Both the
+    /// grids and the query use `frameNow`, so "soonest firing after this frame" is
+    /// exact integer arithmetic, not a clock that drifted between the two. Also
+    /// republishes the demand-driven pulse/cursor clocks (kept ticking only while
+    /// a frame consumed them) and the mouse-tracking mode.
+    fileprivate func renderFrame(
+        renderer: RenderLoop<A>,
+        pulseTimer: PulseTimer,
+        cursorTimer: CursorTimer,
+        scheduler: AnimationScheduler
+    ) -> (lastRenderAtNanos: UInt64, animationDeadlineNanos: UInt64?) {
+        scheduler.beginFrame()
+        let frameNow = Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)
+        let activity = renderer.render(
+            pulsePhase: pulseTimer.phase,
+            cursorTimer: cursorTimer,
+            animationScheduler: scheduler,
+            frameNowNanos: frameNow)
+        scheduler.endFrame()
+        // Demand-driven animation clocks: keep each ticking only while a frame
+        // actually consumed it, so a static screen drives no further frames.
+        if activity.usesPulse { pulseTimer.start() } else { pulseTimer.stop() }
+        if activity.usesCursor { cursorTimer.start() } else { cursorTimer.stop() }
+        let deadline = scheduler.nextFiring(after: frameNow).map { UInt64(bitPattern: $0) }
+        // Re-evaluate the mouse-tracking mode (modifiers may elevate it this
+        // frame); only re-emitted when it actually changes.
+        let effective = renderer.effectiveMouseSupport()
+        terminal.applyMouseSupport(effective)
+        tuiContext.mouseEventDispatcher.setActiveSupport(effective)
+        return (DispatchTime.now().uptimeNanoseconds, deadline)
+    }
+
+    /// The delay until the next render is due, or `nil` to block until woken.
+    ///
+    /// Folds the frame-rate cap and the next animation deadline into ONE instant:
+    /// `pendingRender` wants a frame as soon as the cap clears; an animation wants
+    /// one at its deadline but never sooner than the cap (so `max` there). Waiting
+    /// to this single target — rather than to the deadline, waking, finding the cap
+    /// not yet cleared, and waiting again — is what holds the loop to one wait per
+    /// render. With nothing pending and nothing animating the target is `nil` and
+    /// the loop blocks until woken, so a static screen does no work at all.
+    fileprivate static func waitUntilNextRender(
+        now: UInt64,
+        pendingRender: Bool,
+        lastRenderAtNanos: UInt64,
+        frameIntervalNanos: UInt64,
+        animationDeadlineNanos: UInt64?
+    ) -> UInt64? {
+        let capDeadline = lastRenderAtNanos &+ frameIntervalNanos
+        var target: UInt64?
+        if pendingRender {
+            target = capDeadline
+        }
+        if let deadline = animationDeadlineNanos {
+            let animTarget = max(deadline, capDeadline)
+            target = min(target ?? animTarget, animTarget)
+        }
+        return target.map { $0 > now ? $0 &- now : 0 }
+    }
+
     /// Reads and dispatches every terminal event currently pending (up to a
     /// per-frame cap of 128, which avoids paste lag without letting a flood
     /// spin the loop). Called BEFORE the frame renders so a keypress / mouse

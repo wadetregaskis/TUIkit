@@ -200,8 +200,19 @@ extension RenderLoop {
     ///   - pulsePhase: The current breathing indicator phase (0–1).
     ///     Passed from `PulseTimer` via `AppRunner`.
     ///   - cursorTimer: The cursor timer for TextField/SecureField animations.
+    ///   - animationScheduler: The run loop's animation scheduler, made available
+    ///     to animating views via `context.requestAnimation(...)`. `nil` for
+    ///     one-off renders (the backtick frame dump) that schedule no animation.
+    ///   - frameNowNanos: The monotonic-clock timestamp (ns) this frame's
+    ///     animation grids anchor to — the same `now` the run loop uses to compute
+    ///     the next animation deadline, so grid and deadline agree exactly.
     @discardableResult
-    func render(pulsePhase: Double = 0, cursorTimer: CursorTimer? = nil) -> RenderActivity {
+    func render(
+        pulsePhase: Double = 0,
+        cursorTimer: CursorTimer? = nil,
+        animationScheduler: AnimationScheduler? = nil,
+        frameNowNanos: Int64 = 0
+    ) -> RenderActivity {
         beginRenderPass()
 
         // If an @Published property changed, clear the entire render cache
@@ -220,6 +231,11 @@ extension RenderLoop {
         var environment = buildEnvironment()
         environment.pulsePhase = pulsePhase
         environment.cursorTimer = cursorTimer
+        // Animating views declare their re-render rate through the scheduler
+        // (see `RenderContext.requestAnimation`); they anchor new grids to this
+        // frame's `now` so the loop's next-firing query agrees with them exactly.
+        environment.animationScheduler = animationScheduler
+        environment.frameNowNanos = frameNowNanos
         // Install a fresh volatile-read tracker at the render root so that, after
         // the frame, we can tell whether anything actually consumed the pulse
         // clock (the row memo reuses this same tracker further down). Likewise

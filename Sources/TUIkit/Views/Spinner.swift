@@ -233,9 +233,6 @@ public struct Spinner: View {
     /// The spinner color (uses theme accent if nil).
     let color: Color?
 
-    /// Unique lifecycle token for this spinner instance.
-    let token: String
-
     /// Creates a spinner with an optional label.
     ///
     /// - Parameters:
@@ -250,15 +247,13 @@ public struct Spinner: View {
         self.label = label
         self.style = style
         self.color = color
-        self.token = "spinner-\(UUID().uuidString)"
     }
 
     public var body: some View {
         _SpinnerCore(
             label: label,
             style: style,
-            color: color,
-            token: token
+            color: color
         )
     }
 }
@@ -270,14 +265,12 @@ private struct _SpinnerCore: View, Renderable {
     let label: String?
     let style: SpinnerStyle
     let color: Color?
-    let token: String
 
     var body: Never {
         fatalError("_SpinnerCore renders via Renderable")
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let lifecycle = context.environment.lifecycle!
         let stateStorage = context.environment.stateStorage!
 
         // Retrieve or create persistent start time for this spinner.
@@ -285,26 +278,16 @@ private struct _SpinnerCore: View, Renderable {
         let startTimeBox: StateBox<Double> = stateStorage.storage(for: timeKey, default: Date().timeIntervalSinceReferenceDate)
         stateStorage.markActive(context.identity)
 
-        // Start render-trigger task on first appearance.
-        if !lifecycle.hasAppeared(token: token) {
-            _ = lifecycle.recordAppear(token: token) {}
-
-            let triggerNanos: UInt64 = 23_800_000  // ~24ms — matches run loop poll rate (~42 FPS)
-            lifecycle.startTask(token: token, priority: .medium) {
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: triggerNanos)
-                    guard !Task.isCancelled else { break }
-                    AppState.shared.setNeedsRender()
-                }
-            }
-        } else {
-            _ = lifecycle.recordAppear(token: token) {}
-        }
-
-        // Register disappear callback to cancel the animation task.
-        lifecycle.registerDisappear(token: token) { [lifecycle] in
-            lifecycle.cancelTask(token: token)
-        }
+        // The frame shown is derived from elapsed wall-clock time, so the spinner
+        // only advances when re-rendered over time. Ask the run loop's scheduler
+        // to re-render us at the style's own rate — replacing a per-spinner task
+        // that fired ~42 Hz regardless of the ~7–10 Hz the styles actually want.
+        // Keyed by structural identity; several spinners at one rate coalesce onto
+        // a single render, and a spinner that scrolls off stops re-declaring and
+        // is dropped (so a screen with no spinners renders nothing).
+        context.requestAnimation(
+            token: "spinner-\(context.identity.path)",
+            frequency: 1.0 / style.interval)
 
         // Calculate frame index from elapsed time.
         let elapsed = Date().timeIntervalSinceReferenceDate - startTimeBox.value

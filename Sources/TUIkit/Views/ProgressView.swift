@@ -324,28 +324,15 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // The indeterminate animation derives its phase from the wall clock, so
         // it only advances when the view is re-rendered over time. The run loop
         // is demand-driven (it won't re-render a static screen), so — like
-        // Spinner — drive periodic re-renders while this indeterminate bar is on
-        // screen. Keyed by the stable view identity: the task starts once on
-        // appearance and is cancelled when the bar leaves the tree. (Determinate
-        // bars don't animate, so they need none of this.)
-        if fractionCompleted == nil, let lifecycle = context.environment.lifecycle {
-            let token = "progress-indeterminate-\(context.identity.path)"
-            if lifecycle.hasAppeared(token: token) {
-                _ = lifecycle.recordAppear(token: token) {}
-            } else {
-                _ = lifecycle.recordAppear(token: token) {}
-                lifecycle.startTask(token: token, priority: .medium) {
-                    while !Task.isCancelled {
-                        // ~30 FPS; the run loop caps the actual rate to maxFrameRate.
-                        try? await Task.sleep(nanoseconds: 33_000_000)
-                        guard !Task.isCancelled else { break }
-                        AppState.shared.setNeedsRender()
-                    }
-                }
-            }
-            lifecycle.registerDisappear(token: token) { [lifecycle] in
-                lifecycle.cancelTask(token: token)
-            }
+        // Spinner — ask the scheduler to re-render this bar while it is on screen.
+        // Keyed by the stable view identity: several indeterminate bars at this
+        // rate coalesce onto a single render, and a bar that leaves the tree stops
+        // re-declaring and is dropped. (Determinate bars don't animate — they make
+        // no such request, so they drive no frames.)
+        if fractionCompleted == nil {
+            context.requestAnimation(
+                token: "progress-indeterminate-\(context.identity.path)",
+                frequency: 30)
         }
 
         return FrameBuffer(lines: lines)

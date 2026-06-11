@@ -114,6 +114,11 @@ def build_scenario(name, rows, cols):
         # Sit on the ProgressView page (key `) and let its many determinate +
         # indeterminate bars self-drive re-renders. Steady-state per-frame cost.
         return [(0.30, b"`")] + [(0.10, b"")] * 120
+    if name == "spinners":
+        # Sit on the Spinners page (key 0) and let its spinners self-drive
+        # re-renders. The cheap-render / fast-timer case the animation scheduler
+        # most helps (the old per-spinner task over-fired regardless of rate).
+        return [(0.30, b"0")] + [(0.10, b"")] * 120
     raise SystemExit(f"unknown scenario: {name}")
 
 
