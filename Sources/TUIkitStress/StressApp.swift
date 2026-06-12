@@ -100,10 +100,20 @@ private struct RootView: View {
         }
     }
 
+    /// Autopilot status string. Reading `clock.tick` here while autopilot is on
+    /// is **load-bearing**: it is what makes the tick *observed*, so each bump
+    /// (~30/s) actually invalidates and re-renders the tree. Without a live
+    /// reader on screen, autopilot would increment an unobserved counter and
+    /// generate no re-render load at all — i.e. do nothing visible. The live
+    /// frame number is also the user's signal that autopilot is running.
+    private var autopilotStatus: String {
+        clock.autopilot ? "on · frame \(clock.tick)" : "off"
+    }
+
     private var menu: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("TUIkit — Stress Test").bold()
-            Text("scale \(scale) · seed \(config.seed) · autopilot \(clock.autopilot ? "on" : "off")")
+            Text("scale \(scale) · seed \(config.seed) · autopilot \(autopilotStatus)")
                 .foregroundStyle(.secondary)
             Divider()
             ForEach(0..<Scenarios.all.count, id: \.self) { index in
@@ -124,7 +134,7 @@ private struct RootView: View {
 
     private func footer(for id: String) -> String {
         let title = Scenarios.byID(id)?.title ?? id
-        return "\(title) · scale \(scale) · autopilot \(clock.autopilot ? "on" : "off")"
+        return "\(title) · scale \(scale) · autopilot \(autopilotStatus)"
             + "   [esc back · +/− scale · a autopilot]"
     }
 
