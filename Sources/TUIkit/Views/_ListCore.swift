@@ -110,9 +110,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// filling — so a parent stack fills around it. Hugging content is opt-in via
     /// `.fixedSize(horizontal:)`, which proposes an unbounded width.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        ViewSize.flexibleWidth(
-            minWidth: proposal.width ?? context.availableWidth,
-            height: proposal.height ?? context.availableHeight)
+        let height = proposal.height ?? context.availableHeight
+        // Default: greedy width, no rows built — the O(1) measure that makes the
+        // layout pass cheap.
+        guard context.environment.fixedSizeWidth else {
+            return ViewSize.flexibleWidth(
+                minWidth: proposal.width ?? context.availableWidth, height: height)
+        }
+        // `.fixedSize(horizontal:)`: hug content — the widest of ALL rows, stable
+        // across scroll. Opt-in, so building the rows to measure them is fine, and
+        // the reported width is fixed (not flexible) so a stack hugs around it.
+        return ViewSize.fixed(allRowsContentWidth(context: context), height)
+    }
+
+    /// The List's hugged width: the widest of every row (plus a title and the
+    /// border), independent of the scroll position. Only used on the
+    /// `.fixedSize(horizontal:)` path. Clears the fixed-size flag for the rows so
+    /// the request doesn't leak into their own content.
+    private func allRowsContentWidth(context: RenderContext) -> Int {
+        var rowContext = context
+        rowContext.environment.fixedSizeWidth = false
+        let source = extractRows(from: content, context: rowContext)
+        let widest = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
+        let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
+        let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
+        return max(widest, titleWidth) + borderOverhead
     }
 
     /// Captures the populated-state values that the mouse-
@@ -133,7 +155,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let style = context.environment.listStyle
         let stateStorage = context.environment.stateStorage!
 
-        let source = extractRows(from: content, context: context)
+        // `.fixedSize(horizontal:)` makes the List hug its content; clear the flag
+        // before extracting so it doesn't leak into the rows' own content (only
+        // copying the context when the flag is actually set — the common path
+        // extracts straight from `context`). The List's own honouring of it reads
+        // `context.environment.fixedSizeWidth` (still set) in `buildPopulatedContent`.
+        let source: RowSource<SelectionValue>
+        if context.environment.fixedSizeWidth {
+            var rowContext = context
+            rowContext.environment.fixedSizeWidth = false
+            source = extractRows(from: content, context: rowContext)
+        } else {
+            source = extractRows(from: content, context: context)
+        }
 
         // Vertical chrome around the scrollable content; reserve
         // only what is actually present.
@@ -273,11 +307,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // available interior, growing past it only when a row is itself wider
         // than the space offered. Sizing to the widest *visible* row (the old
         // non-explicit path) made the List's box jump width as you scrolled past
-        // wider/narrower rows; filling keeps it stable. To hug content instead,
-        // a caller uses `.fixedSize(horizontal:)` (which proposes an unbounded
-        // width, so the interior collapses to `maxRowWidth`).
+        // wider/narrower rows; filling keeps it stable.
+        //
+        // `.fixedSize(horizontal:)` instead hugs content: the widest of ALL rows
+        // (not just the visible ones — that's what keeps it stable), so the box is
+        // content-sized and constant.
         let maxRowWidth = visibleRows.map { $0.row.buffer.width }.max() ?? 0
-        let rowWidth = max(maxRowWidth, context.availableWidth - 2)
+        let rowWidth: Int
+        if context.environment.fixedSizeWidth {
+            rowWidth = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
+        } else {
+            rowWidth = max(maxRowWidth, context.availableWidth - 2)
+        }
 
         let (lines, visibleRowYRanges) = composeRowLines(
             handler: handler,

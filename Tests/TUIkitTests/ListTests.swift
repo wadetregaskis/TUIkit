@@ -706,4 +706,38 @@ struct ListRenderingTests {
         let w1 = renderToBuffer(view, context: context).width  // wide row scrolled off
         #expect(w0 == w1, "list width changed \(w0) -> \(w1) on scroll")
     }
+
+    @Test(".fixedSize(horizontal:) hugs content instead of filling the width")
+    func fixedSizeListHugsContent() {
+        let context = createTestContext(width: 60, height: 6)
+        let items = ["short", "mid row", "x", "y", "z", "w"]
+        let filled = renderToBuffer(
+            List(selection: .constant(String?.none)) {
+                ForEach(items, id: \.self) { Text($0) }
+            }, context: context
+        ).width
+        let hugged = renderToBuffer(
+            List(selection: .constant(String?.none)) {
+                ForEach(items, id: \.self) { Text($0) }
+            }.fixedSize(horizontal: true), context: context
+        ).width
+        #expect(filled == 60, "a default List fills the available width; got \(filled)")
+        #expect(hugged < filled, "a fixedSize List hugs content; got \(hugged) vs \(filled)")
+    }
+
+    @Test(".fixedSize(horizontal:) sizes to the widest of ALL rows, not just visible")
+    func fixedSizeListSizesToAllRows() {
+        let context = createTestContext(width: 80, height: 6)  // only ~4 rows visible
+        let items = [
+            "a", "b", "c", "d", "e",
+            "a very wide row that starts off-screen",  // widest, below the fold
+        ]
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }.fixedSize(horizontal: true)
+        let width = renderToBuffer(view, context: context).width
+        // Visible rows are 1 char; only the off-screen row is wide. A correct hug
+        // accounts for it (and so is stable as you scroll).
+        #expect(width > 30, "fixedSize must size to the widest of ALL rows; got \(width)")
+    }
 }
