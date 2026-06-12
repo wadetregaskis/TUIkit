@@ -319,7 +319,6 @@ extension View {
     public func onAppear(perform action: @escaping () -> Void) -> some View {
         OnAppearModifier(
             content: self,
-            token: UUID().uuidString,
             action: action
         )
     }
@@ -346,7 +345,6 @@ extension View {
     public func onDisappear(perform action: @escaping () -> Void) -> some View {
         OnDisappearModifier(
             content: self,
-            token: UUID().uuidString,
             action: action
         )
     }
@@ -378,7 +376,6 @@ extension View {
     ) -> some View {
         TaskModifier(
             content: self,
-            token: UUID().uuidString,
             task: action,
             priority: priority
         )

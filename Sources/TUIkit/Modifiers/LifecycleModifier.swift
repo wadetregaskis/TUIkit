@@ -4,15 +4,38 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// MARK: - Lifecycle Tokens
+
+/// Derives the stable lifecycle token for a view's `.onAppear` / `.onDisappear`
+/// / `.task` from its **structural identity**, not a per-construction `UUID`.
+///
+/// This matters because a modifier value is rebuilt every time its parent's
+/// `body` is evaluated — i.e. on every frame. A `UUID()` baked in at
+/// construction would therefore change every frame, so `LifecycleManager` would
+/// see a brand-new token each time: `.task` would restart every frame (and, when
+/// the task mutates `@State`, spin the render loop forever), `.onAppear` would
+/// re-fire every frame, and `.onDisappear` would fire spuriously for views that
+/// never left (their old token "disappears" the instant a new one appears). The
+/// identity path is stable across frames for a fixed structural position, so the
+/// token is too — the view appears, fires, and disappears exactly once.
+///
+/// This mirrors how `Spinner`, `ProgressView`, and `_ImageCore` already key
+/// their lifecycle/animation tasks (`"spinner-\(context.identity.path)"` etc.).
+///
+/// - Note: Two lifecycle modifiers of the *same* kind chained on a single view
+///   (`Text().task { a }.task { b }`) share an identity path and therefore a
+///   token, so only the first fires. That is vanishingly rare — distinct kinds
+///   (`.onAppear` + `.task`) use distinct prefixes and never collide.
+private func lifecycleToken(_ prefix: String, _ context: RenderContext) -> String {
+    "\(prefix)-\(context.identity.path)"
+}
+
 // MARK: - OnAppear Modifier
 
 /// A modifier that executes an action when a view first appears.
 struct OnAppearModifier<Content: View>: View {
     /// The content view.
     let content: Content
-
-    /// Unique token to track this view's lifecycle.
-    let token: String
 
     /// The action to execute on first appearance.
     let action: () -> Void
@@ -24,10 +47,13 @@ struct OnAppearModifier<Content: View>: View {
 
 extension OnAppearModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Record appearance and execute action if first time
-        _ = context.environment.lifecycle!.recordAppear(token: token, action: action)
-
-        // Render content
+        // Lifecycle bookkeeping is a render-pass side effect: a measure pass must
+        // not record appearance, or it would mark the view "appeared" before the
+        // real render and suppress the action. See the measure-side-effect rule.
+        if !context.isMeasuring {
+            let token = lifecycleToken("appear", context)
+            _ = context.environment.lifecycle!.recordAppear(token: token, action: action)
+        }
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
@@ -39,9 +65,6 @@ struct OnDisappearModifier<Content: View>: View {
     /// The content view.
     let content: Content
 
-    /// Unique token to track this view's lifecycle.
-    let token: String
-
     /// The action to execute when the view disappears.
     let action: () -> Void
 
@@ -52,13 +75,14 @@ struct OnDisappearModifier<Content: View>: View {
 
 extension OnDisappearModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Register the disappear callback
-        context.environment.lifecycle!.registerDisappear(token: token, action: action)
-
-        // Mark as visible in current render
-        _ = context.environment.lifecycle!.recordAppear(token: token, action: {})
-
-        // Render content
+        if !context.isMeasuring {
+            let token = lifecycleToken("disappear", context)
+            // Register the disappear callback…
+            context.environment.lifecycle!.registerDisappear(token: token, action: action)
+            // …and mark the view visible this render so it only "disappears"
+            // (firing the callback) once it is actually removed from the tree.
+            _ = context.environment.lifecycle!.recordAppear(token: token, action: {})
+        }
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
@@ -71,9 +95,6 @@ extension OnDisappearModifier: Renderable {
 struct TaskModifier<Content: View>: View {
     /// The content view.
     let content: Content
-
-    /// Unique token to track this view's lifecycle.
-    let token: String
 
     /// The async task to execute.
     let task: @Sendable () async -> Void
@@ -88,25 +109,22 @@ struct TaskModifier<Content: View>: View {
 
 extension TaskModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let lifecycle = context.environment.lifecycle!
+        if !context.isMeasuring {
+            let lifecycle = context.environment.lifecycle!
+            let token = lifecycleToken("task", context)
 
-        // Start task on first appearance
-        let isFirstAppear = !lifecycle.hasAppeared(token: token)
+            // Start the task only on the first appearance for this identity.
+            let isFirstAppear = !lifecycle.hasAppeared(token: token)
+            _ = lifecycle.recordAppear(token: token) {}
+            if isFirstAppear {
+                lifecycle.startTask(token: token, priority: priority, operation: task)
+            }
 
-        _ = lifecycle.recordAppear(token: token) {
-            // Only start task on first appear
+            // Cancel the task when the view leaves the tree.
+            lifecycle.registerDisappear(token: token) { [lifecycle] in
+                lifecycle.cancelTask(token: token)
+            }
         }
-
-        if isFirstAppear {
-            lifecycle.startTask(token: token, priority: priority, operation: task)
-        }
-
-        // Register disappear callback to cancel task
-        lifecycle.registerDisappear(token: token) { [lifecycle] in
-            lifecycle.cancelTask(token: token)
-        }
-
-        // Render content
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
