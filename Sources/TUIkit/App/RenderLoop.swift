@@ -142,6 +142,20 @@ internal final class RenderLoop<A: App> {
     /// The central dependency container (lifecycle, key dispatch, preferences).
     let tuiContext: TUIContext
 
+    /// The identity at the root of the view tree.
+    ///
+    /// **Load-bearing invariant:** ``evaluateAppBody`` hydrates the app's
+    /// `@State` under this identity, and ``renderContent`` renders the scene
+    /// under it too. The two MUST agree. If they diverge, App-level `@State`
+    /// (e.g. a root view's selection index) lives at one root while the views it
+    /// drives render under another — so it is not an ancestor of them, and
+    /// `StateBox.didSet → RenderCache.clearAffected` matches none of their cache
+    /// entries. The visible symptom is a value-memoized child (a `ForEach`
+    /// selection highlight) frozen on its old value even though the state
+    /// changed. Deriving both from this single property is what guarantees they
+    /// can't drift apart.
+    private var rootIdentity: ViewIdentity { ViewIdentity(rootType: A.self) }
+
     /// The diff writer that tracks previous frames and writes only changed lines.
     private let diffWriter = FrameDiffWriter()
 
@@ -381,12 +395,15 @@ extension RenderLoop {
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.
+        // The render tree is rooted at `rootIdentity` — the SAME identity
+        // `evaluateAppBody` hydrates `@State` under (see that property's note).
         let appHeaderHeight: Int
         if isFirstFrame {
             let measureContext = RenderContext(
                 availableWidth: terminalWidth,
                 availableHeight: terminalHeight - statusBarHeight,
-                environment: environment
+                environment: environment,
+                identity: rootIdentity
             )
             _ = renderScene(scene, context: measureContext.withChildIdentity(type: type(of: scene)))
             appHeaderHeight = appHeader.height
@@ -400,7 +417,8 @@ extension RenderLoop {
         var context = RenderContext(
             availableWidth: terminalWidth,
             availableHeight: contentHeight,
-            environment: environment
+            environment: environment,
+            identity: rootIdentity
         )
         context.hasExplicitWidth = true
         context.hasExplicitHeight = true
@@ -416,7 +434,8 @@ extension RenderLoop {
             var correctedContext = RenderContext(
                 availableWidth: terminalWidth,
                 availableHeight: actualContentHeight,
-                environment: environment
+                environment: environment,
+                identity: rootIdentity
             )
             correctedContext.hasExplicitWidth = true
             correctedContext.hasExplicitHeight = true
@@ -498,7 +517,6 @@ extension RenderLoop {
     /// and `@Environment` reads from the current environment. Clears both
     /// contexts after body evaluation.
     fileprivate func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
-        let rootIdentity = ViewIdentity(rootType: A.self)
         StateRegistration.activeContext = HydrationContext(
             identity: rootIdentity,
             storage: tuiContext.stateStorage
