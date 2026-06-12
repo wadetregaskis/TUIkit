@@ -348,14 +348,24 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.itemIDs = data.map { $0.id }
-        handler.clampScrollOffset()
-        // An "above" indicator that hides exactly one row wastes its
-        // line: that line could just show the row. So never rest at
-        // offset 1 — snap to 0, where the first row shows with no
-        // indicator (the freed line keeps the bottom row visible).
-        // Mirrors _ListCore.
-        if overflowing, handler.scrollOffset == 1 {
-            handler.scrollOffset = 0
+        // Mutate the *persistent* scroll offset only on the real render pass.
+        // A measure pass may be offered a larger height than the Table finally
+        // renders into (e.g. when it shares space with fixed siblings), so a
+        // measure-time clamp computes `maxOffset` against too large a viewport
+        // and pulls the offset back every frame — the last rows then can't be
+        // reached. The render pass runs last and clamps with the true viewport,
+        // so legitimate clamping (e.g. the data shrinking) still happens.
+        // Mirrors _ListCore / ScrollView.
+        if !context.isMeasuring {
+            handler.clampScrollOffset()
+            // An "above" indicator that hides exactly one row wastes its
+            // line: that line could just show the row. So never rest at
+            // offset 1 — snap to 0, where the first row shows with no
+            // indicator (the freed line keeps the bottom row visible).
+            // Mirrors _ListCore.
+            if overflowing, handler.scrollOffset == 1 {
+                handler.scrollOffset = 0
+            }
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection

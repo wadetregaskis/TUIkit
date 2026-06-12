@@ -219,6 +219,56 @@ struct ScrollViewRenderingTests {
         )
     }
 
+    /// Regression: a `ScrollView` that shares vertical space with a flexible
+    /// sibling (here a trailing `Spacer`) is *measured* with the full available
+    /// height — taller than the height it renders into. A measure-pass
+    /// `clampScrollOffset()` then clamped the persistent offset against too large
+    /// a viewport, pulling it back every frame so the last screenful was
+    /// unreachable ("N more below"). The fix gates the clamp on `!isMeasuring`.
+    /// Mirrors `ListTests.listWithFlexibleSiblingScrollsToBottom`.
+    @Test("A ScrollView sharing space with a flexible sibling scrolls fully to the bottom")
+    func scrollViewWithFlexibleSiblingScrollsToBottom() {
+        var context = makeContext(width: 30, height: 24)
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let view = VStack(spacing: 1) {
+            Text("header").border()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<100, id: \.self) { Text("Row \($0)") }
+                }
+            }
+            Spacer()
+        }
+
+        let initial = renderToBuffer(view, context: context)
+        dispatcher.setRegions(initial.hitTestRegions)
+        guard let region = initial.hitTestRegions.max(by: { $0.height < $1.height }) else {
+            Issue.record("expected a ScrollView hit-test region"); return
+        }
+        // Precondition: the ScrollView really renders into a sub-region (else the
+        // bug can't reproduce and the test would be vacuous).
+        #expect(region.height < context.availableHeight - 2,
+            "ScrollView should render into a sub-region for this test to be meaningful")
+
+        let cx = region.offsetX + region.width / 2
+        let cy = region.offsetY + region.height / 2
+        var joined = ""
+        for _ in 0..<80 {  // 80 wheel ticks * 3 lines >> 100 rows: reaches the end
+            _ = dispatcher.dispatch(
+                MouseEvent(button: .scrollDown, phase: .scrolled, x: cx, y: cy))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined(separator: "\n")
+        }
+
+        #expect(joined.contains("Row 99"), "wheel-scrolling to the end must reveal the last row")
+        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+    }
+
     @Test("Emits a viewport-wide mouse hit-test region")
     func emitsHitTestRegion() {
         let view = ScrollView {

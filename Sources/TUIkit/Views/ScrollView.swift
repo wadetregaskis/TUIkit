@@ -335,10 +335,18 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
 
         handler.contentHeight = fullBuffer.height
-        // Re-clamp the offset against the now-known content
-        // height; the user may have grown / shrunk the content
-        // between renders.
-        handler.clampScrollOffset()
+        // Re-clamp the offset against the now-known content height — but only on
+        // the real render pass. A measure pass may be offered a larger height
+        // than the ScrollView finally renders into (e.g. when it shares space
+        // with fixed siblings like a trailing footer), so clamping against that
+        // measure-time viewport computes too small a `maxOffset` and pulls the
+        // offset back every frame, making the content's last screenful
+        // unreachable. The render pass runs last and clamps with the true
+        // viewport, so legitimate clamping (content grew/shrank) still happens.
+        // Mirrors _ListCore / Table.
+        if !context.isMeasuring {
+            handler.clampScrollOffset()
+        }
 
         // "Follow the focused control": snap the viewport to the focused
         // control when focus moved or it just consumed a key. A render-pass-

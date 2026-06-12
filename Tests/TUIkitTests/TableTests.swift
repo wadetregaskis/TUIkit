@@ -225,6 +225,55 @@ struct TableRenderingTests {
         // With trailing alignment, "1 KB" should appear in the table content
         #expect(content.contains("1 KB"))
     }
+
+    /// Regression: a `Table` that shares vertical space with a flexible sibling
+    /// (a trailing `Spacer`) is *measured* with the full available height —
+    /// taller than the height it renders into — so a measure-pass
+    /// `clampScrollOffset()` pulled the persistent offset back every frame and
+    /// the last rows were unreachable. The fix gates the clamp on `!isMeasuring`.
+    /// Mirrors `ListTests.listWithFlexibleSiblingScrollsToBottom`.
+    @Test("A Table sharing space with a flexible sibling scrolls fully to the bottom")
+    func tableWithFlexibleSiblingScrollsToBottom() {
+        var context = createTestContext(width: 30, height: 24)
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let files = (0..<100).map {
+            FileInfo(id: "\($0)", name: "name-\($0)", size: "1 KB", modified: "2026")
+        }
+        var selection: String?
+        let view = VStack(spacing: 1) {
+            Text("header").border()
+            Table(files, selection: Binding(get: { selection }, set: { selection = $0 })) {
+                TableColumn("Name", value: \FileInfo.name)
+            }
+            Spacer()
+        }
+
+        let initial = renderToBuffer(view, context: context)
+        dispatcher.setRegions(initial.hitTestRegions)
+        guard let region = initial.hitTestRegions.max(by: { $0.height < $1.height }) else {
+            Issue.record("expected a Table hit-test region"); return
+        }
+        #expect(region.height < context.availableHeight - 2,
+            "Table should render into a sub-region for this test to be meaningful")
+
+        let cx = region.offsetX + region.width / 2
+        let cy = region.offsetY + region.height / 2
+        var joined = ""
+        for _ in 0..<120 {
+            _ = dispatcher.dispatch(
+                MouseEvent(button: .scrollDown, phase: .scrolled, x: cx, y: cy))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined(separator: "\n")
+        }
+
+        #expect(joined.contains("name-99"), "wheel-scrolling to the end must reveal the last row")
+        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+    }
 }
 
 // MARK: - Table Selection Tests
