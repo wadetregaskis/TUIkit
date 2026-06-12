@@ -82,7 +82,7 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 /// - **Selection visibility when unfocused** defaults to hidden
 ///   (a desaturated highlight is too noisy in many contexts).
 ///   Opt-in with ``View/unfocusedSelectionVisibility(_:)``.
-struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: View>: View, Renderable {
+struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: View>: View, Renderable, Layoutable {
     let title: String?
     let content: Content
     let footer: Footer?
@@ -96,6 +96,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     var body: Never {
         fatalError("_ListCore renders via Renderable")
+    }
+
+    /// The List is greedy on both axes: it fills the width it is offered and pads
+    /// to fill the height. So its size is simply the offered space — and crucially
+    /// no rows are built or measured here. Previously, being `Renderable`-only,
+    /// the layout measure pass discovered the List's size by rendering the whole
+    /// list (windowed, but still the visible rows) every frame; now the measure
+    /// pass is O(1).
+    ///
+    /// Width is reported flexible (and height fixed at the filled height) — the
+    /// same shape the render-to-measure fallback reported once the List began
+    /// filling — so a parent stack fills around it. Hugging content is opt-in via
+    /// `.fixedSize(horizontal:)`, which proposes an unbounded width.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize.flexibleWidth(
+            minWidth: proposal.width ?? context.availableWidth,
+            height: proposal.height ?? context.availableHeight)
     }
 
     /// Captures the populated-state values that the mouse-
@@ -252,15 +269,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // handler's indicator predicates match the rendering.
         handler.viewportHeight = max(1, visibleRows.count)
 
-        // Row width — explicit-frame lists fill the available
-        // interior; otherwise we shrink to the widest visible row.
+        // Row width — the List is greedy on width (SwiftUI parity): fill the
+        // available interior, growing past it only when a row is itself wider
+        // than the space offered. Sizing to the widest *visible* row (the old
+        // non-explicit path) made the List's box jump width as you scrolled past
+        // wider/narrower rows; filling keeps it stable. To hug content instead,
+        // a caller uses `.fixedSize(horizontal:)` (which proposes an unbounded
+        // width, so the interior collapses to `maxRowWidth`).
         let maxRowWidth = visibleRows.map { $0.row.buffer.width }.max() ?? 0
-        let rowWidth: Int
-        if context.hasExplicitWidth {
-            rowWidth = max(maxRowWidth, context.availableWidth - 2)
-        } else {
-            rowWidth = maxRowWidth
-        }
+        let rowWidth = max(maxRowWidth, context.availableWidth - 2)
 
         let (lines, visibleRowYRanges) = composeRowLines(
             handler: handler,

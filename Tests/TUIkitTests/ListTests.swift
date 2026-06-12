@@ -688,4 +688,22 @@ struct ListRenderingTests {
             counter.built < 60,
             "built \(counter.built) of 1000 rows; a windowed List renders only ~viewport")
     }
+
+    @Test("List width is stable across scroll (fills, doesn't track the widest visible row)")
+    func listWidthStableOnScroll() {
+        let context = createTestContext(width: 60, height: 6)  // ~4 content rows
+        let items = [
+            "a really really really long first row label",  // wide
+            "b", "c", "d", "e", "f", "g", "h", "i", "j",  // narrow
+        ]
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        let w0 = renderToBuffer(view, context: context).width  // wide row visible
+        for _ in 0..<6 {
+            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+        }
+        let w1 = renderToBuffer(view, context: context).width  // wide row scrolled off
+        #expect(w0 == w1, "list width changed \(w0) -> \(w1) on scroll")
+    }
 }
