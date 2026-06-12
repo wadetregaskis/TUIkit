@@ -48,16 +48,26 @@ internal struct _MouseSupportScene<Content: Scene>: Scene {  // swiftlint:disabl
 /// tracking mode to apply each frame.
 @MainActor
 internal protocol MouseSupportProvidingScene: Scene {
-    func resolvedMouseSupport() -> MouseSupport
+    /// The configuration this scene contributes, or `nil` if it has no opinion
+    /// (a pass-through wrapper such as `_PaletteScene` whose content specifies
+    /// no `.mouseSupport`). Returning `nil` rather than a default lets an
+    /// enclosing `.mouseSupport(...)` survive being wrapped — see
+    /// ``_PaletteScene``. `RenderLoop` substitutes `.standard` for a top-level
+    /// `nil`.
+    func resolvedMouseSupport() -> MouseSupport?
 }
 
 extension _MouseSupportScene: MouseSupportProvidingScene {
     /// Inner `.mouseSupport` calls shadow outer ones — the closest
     /// (innermost) modifier to the content wins, mirroring how
-    /// SwiftUI environment-style modifiers compose.
-    func resolvedMouseSupport() -> MouseSupport {
-        if let inner = content as? MouseSupportProvidingScene {
-            return inner.resolvedMouseSupport()
+    /// SwiftUI environment-style modifiers compose. A pass-through wrapper
+    /// inside (one that reports `nil`) does not shadow: this scene's own
+    /// `support` then applies.
+    func resolvedMouseSupport() -> MouseSupport? {
+        if let inner = content as? MouseSupportProvidingScene,
+            let innerSupport = inner.resolvedMouseSupport()
+        {
+            return innerSupport
         }
         return support
     }

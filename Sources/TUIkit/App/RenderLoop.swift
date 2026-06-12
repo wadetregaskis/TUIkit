@@ -257,7 +257,9 @@ extension RenderLoop {
         // AppRunner consults `effectiveMouseSupport` after the render
         // pass completes to update the terminal tracking mode.
         if let scene = scene as? MouseSupportProvidingScene {
-            baseMouseSupport = scene.resolvedMouseSupport()
+            // `nil` means no `.mouseSupport(...)` was applied (only pass-through
+            // scene wrappers like `.palette(...)`); fall back to `.standard`.
+            baseMouseSupport = scene.resolvedMouseSupport() ?? .standard
         } else {
             baseMouseSupport = .standard
         }
