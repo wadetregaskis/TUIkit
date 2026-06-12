@@ -443,10 +443,16 @@ extension FrameBuffer {
     ///   shifted hit-test regions.
     public func replacingLines(
         _ newLines: [String],
+        width: Int? = nil,
         overlayShiftX: Int = 0,
         overlayShiftY: Int = 0
     ) -> FrameBuffer {
-        var result = FrameBuffer(lines: newLines)
+        // When the caller already knows the result width (e.g. padding: the
+        // input width plus the horizontal insets), pass it to skip the
+        // re-measure of every line that `FrameBuffer(lines:)` → `computeWidth`
+        // would do. `nil` keeps the original recompute behaviour.
+        var result = width.map { FrameBuffer(lines: newLines, width: $0) }
+            ?? FrameBuffer(lines: newLines)
         result.overlays = shiftedOverlays(byX: overlayShiftX, y: overlayShiftY)
         result.hitTestRegions = shiftedHitTestRegions(
             byX: overlayShiftX, y: overlayShiftY)

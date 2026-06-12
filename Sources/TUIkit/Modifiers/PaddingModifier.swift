@@ -142,8 +142,11 @@ public struct PaddingModifier: ViewModifier {
         }
 
         // Content shifted right by `leading` and down by `top`; carry any
-        // overlay layers by the same amount so they stay anchored.
+        // overlay layers by the same amount so they stay anchored. The padded
+        // width is exactly `lineWidth` (the widest input line is `buffer.width`,
+        // and the empty pad lines are built to `lineWidth`), so pass it and skip
+        // re-measuring every line — a hot recompute in deeply-nested layouts.
         return buffer.replacingLines(
-            result, overlayShiftX: insets.leading, overlayShiftY: insets.top)
+            result, width: lineWidth, overlayShiftX: insets.leading, overlayShiftY: insets.top)
     }
 }

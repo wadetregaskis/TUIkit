@@ -662,7 +662,21 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             )
         )
 
-        var result = FrameBuffer(lines: lines)
+        // The width is known without re-measuring every line: the top/bottom
+        // borders, the divider, and `standardContentLines` all sit between two
+        // border cells with content padded to `innerWidth`, so each line is
+        // exactly `innerWidth + 2` cells — EXCEPT a titled top border, which can
+        // overflow `innerWidth + 2` when the box is squeezed narrower than its
+        // title. So only a present title needs the top line (`lines.first`)
+        // measured; the common border (no title) needs no measurement at all.
+        // This matters because `FrameBuffer(lines:)` → `computeWidth` re-measures
+        // every line's Unicode/ANSI width, and on the deeply-nested `deep` stress
+        // scenario that recompute was ~51% inclusive — each enclosing border
+        // re-measured the whole growing buffer.
+        let knownWidth = title == nil
+            ? innerWidth + 2
+            : max(innerWidth + 2, lines.first?.strippedLength ?? 0)
+        var result = FrameBuffer(lines: lines, width: knownWidth)
         // Carry overlay layers and hit-test regions from the body and
         // footer. The body content sits one row below the top border
         // and one column inside the left border; the footer follows
