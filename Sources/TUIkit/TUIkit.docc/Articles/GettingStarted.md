@@ -11,14 +11,14 @@ TUIkit is a Swift package that lets you create terminal user interfaces with a d
 Add TUIkit as a dependency in your `Package.swift`:
 
 ```swift
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "MyTUIApp",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(url: "https://github.com/phranck/TUIkit.git", from: "0.1.0"),
+        .package(url: "https://github.com/wadetregaskis/TUIkit.git", branch: "main"),
     ],
     targets: [
         .executableTarget(
