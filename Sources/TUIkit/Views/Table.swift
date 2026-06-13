@@ -347,7 +347,15 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
-        handler.itemIDs = data.map { $0.id }
+        // Resolve row ids lazily: the selection handler only ever asks for the
+        // visible window + the focused row (O(1) each via `data[index].id`), so
+        // materialising a full id array here was O(total) waste — and `_TableCore`
+        // is render-to-measure, so it ran in *both* the measure and render passes
+        // every frame (~30% of the 20k-row frame). All Table rows are content, so
+        // an empty `selectableIndices` already means "all selectable". Mirrors the
+        // windowed List path (_ListCore.resolvePopulatedHandler).
+        handler.idAt = { data[$0].id }
+        handler.itemIDs = []
         // Mutate the *persistent* scroll offset only on the real render pass.
         // A measure pass may be offered a larger height than the Table finally
         // renders into (e.g. when it shares space with fixed siblings), so a
