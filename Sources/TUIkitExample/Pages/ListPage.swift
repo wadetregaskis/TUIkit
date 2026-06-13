@@ -43,7 +43,6 @@ private struct FileItem: Identifiable {
 ///   scrolls the viewport, arrow keys move the selection)
 /// - Unfocused selection visibility (`.automatic` vs `.hidden`)
 /// - Scroll indicators
-/// - Empty state placeholder
 struct ListPage: View {
     @State var singleSelection: String?
     @State var multiSelection: Set<String> = []
@@ -162,27 +161,6 @@ struct ListPage: View {
                         "Bound value:",
                         transientSelection ?? "(none)"
                     )
-                }
-            }
-
-            DemoSection("Empty state") {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "A List with no rows shows a placeholder instead of a blank "
-                            + "box. Customise the text with .listEmptyPlaceholder(_:)."
-                    )
-                    .foregroundStyle(.palette.foregroundSecondary)
-
-                    // A genuinely empty list: an empty data set, so it has zero
-                    // rows and shows the placeholder. (`{ EmptyView() }` would be
-                    // treated as one blank row, not an empty list.)
-                    List("Tasks") {
-                        ForEach([String](), id: \.self) { task in
-                            Text(task)
-                        }
-                    }
-                    .listEmptyPlaceholder("No tasks yet — you're all caught up!")
-                    .frame(height: 5)
                 }
             }
 
