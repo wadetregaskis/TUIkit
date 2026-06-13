@@ -31,6 +31,17 @@ public enum ChromeRole: Sendable, Hashable {
     case sectionHeader
     case sectionFooter
     case listRow
+
+    /// The text attributes this role renders with by default — the baseline the
+    /// style cascade overrides. Preserves TUIkit's established look: section
+    /// headers are bold + dim, footers dim.
+    public var defaultTextAttributes: StyleAttributes {
+        switch self {
+        case .sectionHeader: return StyleAttributes(bold: true, dim: true)
+        case .sectionFooter: return StyleAttributes(dim: true)
+        case .listRow: return StyleAttributes()
+        }
+    }
 }
 
 // MARK: - Style scope

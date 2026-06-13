@@ -171,42 +171,34 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var lines: [String] = []
 
-        // Render header (if not EmptyView)
+        // Header and footer render under a chrome role, so their text resolves
+        // the role's default styling (header bold+dim, footer dim) plus any
+        // `.chrome(...)` theme overrides through the normal cascade — see
+        // ``ChromeRole`` and ``Text``.
         if !(header is EmptyView) {
-            let headerBuffer = TUIkit.renderToBuffer(header, context: context)
-            // Apply dimmed + bold styling to header
-            for line in headerBuffer.lines {
-                let styled = applyHeaderFooterStyle(line, bold: true)
-                lines.append(styled)
-            }
+            let headerBuffer = TUIkit.renderToBuffer(
+                header, context: sectionChromeContext(context, .sectionHeader))
+            lines.append(contentsOf: headerBuffer.lines)
         }
 
-        // Render content
         let contentBuffer = TUIkit.renderToBuffer(content, context: context)
         lines.append(contentsOf: contentBuffer.lines)
 
-        // Render footer (if not EmptyView)
         if !(footer is EmptyView) {
-            let footerBuffer = TUIkit.renderToBuffer(footer, context: context)
-            // Apply dimmed styling to footer
-            for line in footerBuffer.lines {
-                let styled = applyHeaderFooterStyle(line, bold: false)
-                lines.append(styled)
-            }
+            let footerBuffer = TUIkit.renderToBuffer(
+                footer, context: sectionChromeContext(context, .sectionFooter))
+            lines.append(contentsOf: footerBuffer.lines)
         }
 
         return FrameBuffer(lines: lines)
     }
+}
 
-    /// Applies dim styling (and optionally bold) to a line.
-    ///
-    /// Wraps the line in ANSI dim code, with optional bold.
-    private func applyHeaderFooterStyle(_ line: String, bold: Bool) -> String {
-        var style = TextStyle()
-        style.isDim = true
-        style.isBold = bold
-        return ANSIRenderer.render(line, with: style)
-    }
+/// Returns `context` with `role` set as its chrome role, so a `Section`'s
+/// header/footer text styles via the cascade (the ``ChromeRole`` defaults plus
+/// any `.chrome(...)` overrides) rather than being post-styled with fixed ANSI.
+private func sectionChromeContext(_ context: RenderContext, _ role: ChromeRole) -> RenderContext {
+    context.withEnvironment(context.environment.setting(\.chromeRole, to: role))
 }
 
 // MARK: - Section Row Extractor
@@ -238,34 +230,19 @@ struct SectionInfo {
 
 extension Section: SectionRowExtractor {
     func extractSectionInfo(context: RenderContext) -> SectionInfo {
-        // Render header with styling. Styling is a per-line ANSI
-        // wrap — no horizontal or vertical shift — so overlays and
-        // hit-test regions carry through unshifted. The bare
-        // FrameBuffer(lines:) initializer would drop them.
-        let headerBuffer: FrameBuffer?
-        if !(header is EmptyView) {
-            let raw = TUIkit.renderToBuffer(header, context: context)
-            let styledLines = raw.lines.map { line in
-                applyHeaderFooterStyle(line, bold: true)
-            }
-            headerBuffer = raw.replacingLines(styledLines)
-        } else {
-            headerBuffer = nil
-        }
+        // Header/footer render under a chrome role so their text styles through
+        // the cascade (see ``ChromeRole`` / ``Text``). The styling is per-line
+        // and unshifted, so overlays and hit-test regions carry through.
+        let headerBuffer: FrameBuffer? =
+            (header is EmptyView)
+            ? nil
+            : TUIkit.renderToBuffer(header, context: sectionChromeContext(context, .sectionHeader))
 
-        // Render footer with styling. See header comment above.
-        let footerBuffer: FrameBuffer?
-        if !(footer is EmptyView) {
-            let raw = TUIkit.renderToBuffer(footer, context: context)
-            let styledLines = raw.lines.map { line in
-                applyHeaderFooterStyle(line, bold: false)
-            }
-            footerBuffer = raw.replacingLines(styledLines)
-        } else {
-            footerBuffer = nil
-        }
+        let footerBuffer: FrameBuffer? =
+            (footer is EmptyView)
+            ? nil
+            : TUIkit.renderToBuffer(footer, context: sectionChromeContext(context, .sectionFooter))
 
-        // Render content
         let contentBuffer = TUIkit.renderToBuffer(content, context: context)
 
         return SectionInfo(
@@ -273,14 +250,6 @@ extension Section: SectionRowExtractor {
             footerBuffer: footerBuffer,
             contentBuffer: contentBuffer
         )
-    }
-
-    /// Applies dim styling (and optionally bold) to a line.
-    private func applyHeaderFooterStyle(_ line: String, bold: Bool) -> String {
-        var style = TextStyle()
-        style.isDim = true
-        style.isBold = bold
-        return ANSIRenderer.render(line, with: style)
     }
 }
 

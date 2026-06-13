@@ -82,12 +82,13 @@ struct SectionListIntegrationTests {
         let buffer = renderToBuffer(list, context: context)
         let content = buffer.lines.joined()
 
-        // Header should contain ANSI dim code - may be combined as [1;2m or separate
-        let hasDimCode = content.contains("\u{1B}[2m") || content.contains(";2m")
-        #expect(hasDimCode)
-        // Header should contain ANSI bold code - may be combined as [1;2m or separate
-        let hasBoldCode = content.contains("\u{1B}[1m") || content.contains("[1;")
-        #expect(hasBoldCode)
+        // The header renders bold + dim. ANSIRenderer emits style codes (bold=1,
+        // dim=2) before any colour and combines them with the foreground into one
+        // SGR, so a bold+dim header leads with "1;2" — "[1;2m" (no colour) or
+        // "[1;2;…" (followed by the foreground). This requires "1;2" right after
+        // "[", so it won't false-match the truecolour "38;2".
+        let hasBoldDim = content.contains("\u{1B}[1;2m") || content.contains("\u{1B}[1;2;")
+        #expect(hasBoldDim, "header should render bold (1) + dim (2) as leading style codes")
     }
 
     @Test("Section footer renders in List")

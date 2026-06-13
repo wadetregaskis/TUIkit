@@ -285,18 +285,25 @@ extension Text: Renderable, Layoutable {
         }
 
         // Merge cascading text attributes (container-level .bold()/.italic()/
-        // .style(...) etc.) beneath this Text's own explicit attributes. A
-        // per-Text attribute always wins; otherwise the cascade's resolved value
-        // (the closest matching scope) applies. The text's semantic colour role,
-        // if any, lets role-scoped entries (e.g. "secondary text is dim") match.
+        // .style(...) etc.) and any chrome-role default (e.g. a Section header's
+        // bold+dim) beneath this Text's own explicit attributes. A per-Text
+        // attribute always wins; otherwise the cascade's resolved value (closest
+        // matching scope) wins over the chrome-role default. The text's semantic
+        // colour role, if any, lets `.semanticColor` entries match; its chrome
+        // role lets `.chrome(...)` entries match.
         let cascade = context.environment.styleCascade
-        if !cascade.isEmpty {
+        let chromeRole = context.environment.chromeRole
+        if !cascade.isEmpty || chromeRole != nil {
             var scopes: Set<StyleScope> = [.all, .text]
             if let role = Self.semanticRole(
                 explicit: style.foregroundColor, environment: context.environment) {
                 scopes.insert(.semanticColor(role))
             }
-            let attributes = cascade.resolve(for: scopes)
+            if let chromeRole {
+                scopes.insert(.chrome(chromeRole))
+            }
+            let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
+            let attributes = cascade.resolve(for: scopes).merged(over: base)
             effectiveStyle.isBold = effectiveStyle.isBold || (attributes.bold ?? false)
             effectiveStyle.isItalic = effectiveStyle.isItalic || (attributes.italic ?? false)
             effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (attributes.underline ?? false)

@@ -125,4 +125,32 @@ struct StyleCascadeTests {
         #expect(sgrCodes(renderToBuffer(Text("Hi").fontWeight(.bold), context: context())).contains("1"))
         #expect(sgrCodes(renderToBuffer(Text("Hi").fontWeight(.light), context: context())).contains("2"))
     }
+
+    // MARK: - Chrome roles (Section header/footer)
+
+    @Test("A section header is bold + dim by default")
+    func chromeHeaderDefault() {
+        let section = Section("Header") { Text("Body") }
+        let header = renderToBuffer(section, context: context()).lines.first ?? ""
+        // bold (1) then dim (2) as the leading style codes.
+        #expect(header.contains("\u{1B}[1;2"))
+    }
+
+    @Test("A .chrome(.sectionHeader) override turns off the default bold, keeping dim")
+    func chromeHeaderBoldOff() {
+        let section = Section("Header") { Text("Body") }
+            .style(.chrome(.sectionHeader)) { $0.bold = false }
+        let header = renderToBuffer(section, context: context()).lines.first ?? ""
+        #expect(!header.contains("\u{1B}[1;2"), "bold should be off")
+        #expect(header.contains("\u{1B}[2;") || header.contains("\u{1B}[2m"), "dim should remain")
+    }
+
+    @Test("A .chrome(.sectionHeader) override can uppercase the header")
+    func chromeHeaderUppercase() {
+        let section = Section("Header") { Text("Body") }
+            .style(.chrome(.sectionHeader)) { $0.textCase = .uppercase }
+        let lines = renderToBuffer(section, context: context()).lines
+        #expect(lines.contains { $0.contains("HEADER") }, "header should be uppercased")
+        #expect(lines.contains { $0.contains("Body") }, "body should be unaffected")
+    }
 }

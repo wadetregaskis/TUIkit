@@ -21,3 +21,21 @@ extension EnvironmentValues {
         set { self[StyleCascadeKey.self] = newValue }
     }
 }
+
+// MARK: - Chrome role
+
+/// Environment key marking the structural chrome role a subtree renders (e.g. a
+/// `Section` header). `Text` reads it to apply the role's default attributes and
+/// to match `.chrome(role)` style-cascade entries.
+private struct ChromeRoleKey: EnvironmentKey {
+    static let defaultValue: ChromeRole? = nil
+}
+
+extension EnvironmentValues {
+    /// The chrome role of the current subtree, if any (set by `Section` around
+    /// its header/footer). Drives chrome text styling (see ``ChromeRole``).
+    public var chromeRole: ChromeRole? {
+        get { self[ChromeRoleKey.self] }
+        set { self[ChromeRoleKey.self] = newValue }
+    }
+}
