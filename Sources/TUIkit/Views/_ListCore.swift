@@ -20,8 +20,22 @@
 /// rows via ``eager(_:)``; ``row(at:)`` simply hands those back.
 @MainActor
 private final class RowSource<SelectionValue: Hashable & Sendable> {
-    /// Every row's type/id, resolved eagerly (no content built).
-    let types: [ListRowType<SelectionValue>]
+    /// The number of rows. Known cheaply — O(1) for the windowed path
+    /// (`ForEach.listRowCount`); the array length for the eager paths.
+    let count: Int
+
+    /// Whether every row is selectable content — true for the windowed `ForEach`
+    /// path and the all-content fallbacks, false only for a heterogeneous row set
+    /// (Sections, which interleave non-selectable header/footer rows). The
+    /// handler reads this to skip building a per-row id map and selectable-index
+    /// set for the all-content case, which is what keeps a huge flat list O(1) to
+    /// set up. See ``_ListCore/resolvePopulatedHandler``.
+    let allContent: Bool
+
+    /// Resolves a row's type/id on demand — builds no content. O(1) per call, so
+    /// the windowed path resolves ids only for the rows the handler / window
+    /// actually touch (the visible window + the focused row), not all N.
+    private let typeAt: (Int) -> ListRowType<SelectionValue>
 
     /// Builds the deferred content box for a row index.
     private let make: (Int) -> LazyListRowContent
@@ -30,24 +44,39 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// window (or re-read by the compose pass) is built — and rendered — once.
     private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
 
-    init(types: [ListRowType<SelectionValue>], make: @escaping (Int) -> LazyListRowContent) {
-        self.types = types
+    init(
+        count: Int,
+        allContent: Bool,
+        typeAt: @escaping (Int) -> ListRowType<SelectionValue>,
+        make: @escaping (Int) -> LazyListRowContent
+    ) {
+        self.count = count
+        self.allContent = allContent
+        self.typeAt = typeAt
         self.make = make
     }
 
-    /// Wraps already-built rows (the eager Section / fallback paths).
+    /// Wraps an already-built, materialised row array (the eager Section /
+    /// fallback paths). The set is small, so indexing it for `typeAt` and
+    /// scanning it for `allContent` are both cheap.
     static func eager(_ rows: [SelectableListRow<SelectionValue>]) -> RowSource {
-        RowSource(types: rows.map(\.type), make: { rows[$0].content })
+        RowSource(
+            count: rows.count,
+            allContent: rows.allSatisfy(\.isSelectable),
+            typeAt: { rows[$0].type },
+            make: { rows[$0].content })
     }
 
-    var count: Int { types.count }
-    var isEmpty: Bool { types.isEmpty }
+    var isEmpty: Bool { count == 0 }
+
+    /// The row's type/id at `index` — cheap, builds no content.
+    func type(at index: Int) -> ListRowType<SelectionValue> { typeAt(index) }
 
     /// The fully-formed row at `index`, materialising (and memoising) its content
     /// box on first access. Reading the row's `.buffer` renders it once (cached).
     func row(at index: Int) -> SelectableListRow<SelectionValue> {
         if let existing = materialized[index] { return existing }
-        let row = SelectableListRow(type: types[index], content: make(index))
+        let row = SelectableListRow(type: typeAt(index), content: make(index))
         materialized[index] = row
         return row
     }
@@ -428,22 +457,37 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
         }
 
-        // Built from the eager `types` — no row content is materialised, so this
-        // stays O(total) in cheap id reads while the expensive row buffers remain
-        // O(visible).
-        var selectableIndices = Set<Int>()
-        var itemIDs: [SelectionValue?] = []
-        itemIDs.reserveCapacity(source.count)
-        for (index, type) in source.types.enumerated() {
-            if case .content(let id) = type {
-                itemIDs.append(id)
-                selectableIndices.insert(index)
-            } else {
-                itemIDs.append(nil)
+        // Wire up id resolution + the selectable-index set. For an all-content
+        // windowed list (the hot path) both are O(1): ids resolve lazily per
+        // visible row through `idAt`, and an empty `selectableIndices` already
+        // means "every row is selectable" (see ItemListHandler) — so we never
+        // materialise a 50k-entry id array or a 50k-index Set per frame. The id
+        // reads that remain are O(visible). A heterogeneous row set (Sections,
+        // with non-selectable headers/footers) is small, so it builds the
+        // explicit maps eagerly as before.
+        if source.allContent {
+            handler.idAt = { index in
+                if case .content(let id) = source.type(at: index) { return id }
+                return nil
             }
+            handler.itemIDs = []
+            handler.selectableIndices = []
+        } else {
+            var selectableIndices = Set<Int>()
+            var itemIDs: [SelectionValue?] = []
+            itemIDs.reserveCapacity(source.count)
+            for index in 0..<source.count {
+                if case .content(let id) = source.type(at: index) {
+                    itemIDs.append(id)
+                    selectableIndices.insert(index)
+                } else {
+                    itemIDs.append(nil)
+                }
+            }
+            handler.idAt = nil
+            handler.itemIDs = itemIDs
+            handler.selectableIndices = selectableIndices
         }
-        handler.itemIDs = itemIDs
-        handler.selectableIndices = selectableIndices
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         return handler
@@ -611,17 +655,29 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             return .eager(extractSectionRows(from: section, context: context))
         }
 
-        // Windowed path (ForEach): resolve every row's id cheaply up front, but
-        // materialise a row's content box only when the overflow check or the
-        // visible window walks to it. This is the hot path for a large flat List
-        // and what makes per-frame cost O(visible), not O(total). Falls through
-        // to the eager path when the ids can't all be resolved.
-        if let windowed = content as? WindowedListRowExtractor,
-            let ids = windowed.listRowIDs(context: context) as [SelectionValue]?
-        {
-            let types = ids.map { ListRowType<SelectionValue>.content(id: $0) }
-            return RowSource(types: types) { index in
-                windowed.makeListRowContent(at: index, context: context)
+        // Windowed path (ForEach): the row count is known in O(1) and each row's
+        // id is resolved lazily, so the handler/window touch only ~viewport ids
+        // (plus the focused row) instead of all N. A row's content box is still
+        // built only when the overflow check or the visible window walks to it.
+        // This is the hot path for a large flat List and what makes per-frame
+        // cost O(visible), not O(total). Falls through to the eager path when the
+        // ids can't be expressed as SelectionValue.
+        if let windowed = content as? WindowedListRowExtractor {
+            let count = windowed.listRowCount
+            // The conformer is id-homogeneous (see WindowedListRowExtractor), so
+            // row 0's resolvability decides the whole list: probe it once rather
+            // than resolving all N ids up front. An empty list windows trivially.
+            if count == 0 || (windowed.listRowID(at: 0) as SelectionValue?) != nil {
+                return RowSource(
+                    count: count,
+                    allContent: true,
+                    typeAt: { index in
+                        // Force-unwrap is safe: row 0 resolved and the data is
+                        // id-homogeneous, so every index resolves as SelectionValue.
+                        let id: SelectionValue = windowed.listRowID(at: index)!
+                        return .content(id: id)
+                    },
+                    make: { index in windowed.makeListRowContent(at: index, context: context) })
             }
         }
 

@@ -105,13 +105,28 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// Maps item indices to their IDs for selection management.
     ///
     /// Entries are `nil` for non-selectable rows (e.g. section headers/footers in List).
+    ///
+    /// Eager backing for the small/structured cases (Table, Sections, tests). A
+    /// large flat windowed `List` leaves this empty and supplies ``idAt`` instead,
+    /// so it never materialises an id per off-screen row. Read ids through
+    /// ``id(at:)`` / ``index(of:)``, never this array directly.
     var itemIDs: [SelectionValue?] = []
+
+    /// Lazy id resolver used in place of ``itemIDs`` by the windowed `List` path.
+    ///
+    /// When set, ``id(at:)`` resolves a row's id on demand (only the visible
+    /// window and the focused row are ever asked), so a 50k-row list pays O(1)
+    /// for handler setup instead of building a 50k-entry ``itemIDs``. `nil` for
+    /// the eager paths, which use ``itemIDs``.
+    var idAt: ((Int) -> SelectionValue?)?
 
     /// The set of indices that can be selected and focused.
     ///
     /// Headers and footers have non-selectable indices (not in this set).
     /// Only content rows have indices in `selectableIndices`.
-    /// When empty, all items are considered selectable (backward compatibility).
+    /// When empty, all items are considered selectable (backward compatibility) —
+    /// which is exactly what the all-content windowed `List` wants, so it leaves
+    /// this empty rather than allocating a full `Set(0..<count)`.
     var selectableIndices: Set<Int> = []
 
     /// Creates an item list handler.
@@ -137,6 +152,38 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     }
 }
 
+// MARK: - Item ID Resolution
+
+extension ItemListHandler {
+    /// The id of the row at `index`, or `nil` for a non-selectable / out-of-range
+    /// row. Resolves through the lazy ``idAt`` when present (windowed `List`),
+    /// else the eager ``itemIDs`` (Table / Sections). O(1) either way — only the
+    /// visible window and the focused row are ever asked.
+    func id(at index: Int) -> SelectionValue? {
+        guard index >= 0 else { return nil }
+        if let idAt {
+            guard index < itemCount else { return nil }
+            return idAt(index)
+        }
+        guard index < itemIDs.count else { return nil }
+        return itemIDs[index]
+    }
+
+    /// The index of the row whose id equals `id`, or `nil`.
+    ///
+    /// Backed by ``itemIDs`` (O(total) hash-free scan) for the eager paths. The
+    /// windowed path scans `0..<itemCount` through ``idAt`` — O(total) too, but
+    /// only ever invoked on focus-lost under an active selection, never per
+    /// frame, so it stays off the hot path.
+    func index(of id: SelectionValue) -> Int? {
+        if let idAt {
+            for index in 0..<itemCount where idAt(index) == id { return index }
+            return nil
+        }
+        return itemIDs.firstIndex(of: id)
+    }
+}
+
 // MARK: - Focus Lifecycle
 
 extension ItemListHandler {
@@ -146,14 +193,14 @@ extension ItemListHandler {
         switch selectionMode {
         case .single:
             if let selection = singleSelection?.wrappedValue,
-                let index = itemIDs.firstIndex(of: selection)
+                let index = index(of: selection)
             {
                 focusedIndex = index
             }
         case .multi:
             if let selection = multiSelection?.wrappedValue,
                 let firstSelected = selection.first,
-                let index = itemIDs.firstIndex(of: firstSelected)
+                let index = index(of: firstSelected)
             {
                 focusedIndex = index
             }
@@ -377,9 +424,7 @@ extension ItemListHandler {
 extension ItemListHandler {
     /// Toggles the selection state at the focused index.
     func toggleSelectionAtFocusedIndex() {
-        guard focusedIndex >= 0 && focusedIndex < itemIDs.count,
-            let itemID = itemIDs[focusedIndex]
-        else { return }
+        guard let itemID = id(at: focusedIndex) else { return }
 
         switch selectionMode {
         case .single:
@@ -408,9 +453,7 @@ extension ItemListHandler {
     /// - Parameter index: The item index.
     /// - Returns: True if the item is selected.
     func isSelected(at index: Int) -> Bool {
-        guard index >= 0 && index < itemIDs.count,
-            let itemID = itemIDs[index]
-        else { return false }
+        guard let itemID = id(at: index) else { return false }
 
         switch selectionMode {
         case .single:

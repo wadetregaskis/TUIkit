@@ -55,22 +55,31 @@ protocol ListRowExtractor {
     func extractListRows<ID: Hashable>(context: RenderContext) -> [ListRow<ID>]
 }
 
-/// A row extractor that supports *windowed* materialisation: resolve all row
-/// ids up front (cheap — that's all the scroll/selection handler needs for
-/// off-screen rows), but build a row's content box only when that row enters
-/// the overflow check or the visible window. A 2,000-row `List` then allocates
-/// ~viewport row boxes per frame instead of 2,000 — O(visible), not O(total).
-/// `ForEach` conforms; `List` prefers this path and falls back to the eager
-/// ``ListRowExtractor`` when it isn't available (e.g. heterogeneous content) or
-/// can't resolve every id. See ``RowSource``.
+/// A row extractor that supports *windowed* materialisation: the row count and
+/// each row's id are resolved on demand (cheap — a count and a key-path read),
+/// and a row's content box is built only when that row enters the overflow check
+/// or the visible window. A 50,000-row `List` then touches ~viewport rows per
+/// frame instead of 50,000 — both id resolution and content are O(visible), not
+/// O(total). `ForEach` conforms; `List` prefers this path and falls back to the
+/// eager ``ListRowExtractor`` when it isn't available (e.g. heterogeneous
+/// content) or the ids can't be expressed as the list's selection type.
+///
+/// - Important: Conformers must be *id-homogeneous* — whether ``listRowID(at:)``
+///   resolves to a given `ID` must not vary by index. `List` relies on this:
+///   it probes row 0 once to decide windowability and force-unwraps the rest.
+///   `ForEach` satisfies this (one element type, one id key-path).
 @MainActor
 protocol WindowedListRowExtractor {
-    /// The ID of every row, resolved cheaply without building or rendering any
-    /// row content. Returns `nil` if some element's ID can't be expressed as
-    /// `ID` (the same rows the eager path would drop) — the caller then falls
-    /// back to eager extraction. Element-natural IDs are preferred, with the row
-    /// index as the fallback (matching ``ListRowExtractor/extractListRows``).
-    func listRowIDs<ID: Hashable>(context: RenderContext) -> [ID]?
+    /// The number of rows, in O(1), without building or rendering any content.
+    var listRowCount: Int { get }
+
+    /// The id of the row at `index`, resolved cheaply (a key-path read or the
+    /// index) without building content. Returns `nil` if the element's id can't
+    /// be expressed as `ID` (the same rows the eager path would drop) — the
+    /// caller then falls back to eager extraction. Element-natural ids are
+    /// preferred, with the row index as the fallback (matching
+    /// ``ListRowExtractor/extractListRows``).
+    func listRowID<ID: Hashable>(at index: Int) -> ID?
 
     /// Builds the deferred content for the row at `index` (0-based over the
     /// data). Only called for rows that are actually shown.
@@ -92,18 +101,15 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         }
     }
 
+    var listRowCount: Int { data.count }
+
     // `RowID`, not `ID` — `ForEach`'s own `ID` generic parameter is in scope here.
-    func listRowIDs<RowID: Hashable>(context: RenderContext) -> [RowID]? {
-        var ids: [RowID] = []
-        ids.reserveCapacity(data.count)
-        for index in 0..<data.count {
-            // Bail to the eager path if any element's ID can't be expressed as
-            // `RowID` — that's exactly the row `extractListRows` would drop, and
-            // dropping rows would misalign the windowed indices.
-            guard let id: RowID = rowID(at: index) else { return nil }
-            ids.append(id)
-        }
-        return ids
+    // Resolves one row's id lazily (the windowed `List` asks only for the visible
+    // window + the focused row). `nil` when the element's id can't be expressed
+    // as `RowID` — that's exactly the row `extractListRows` would drop; the list
+    // probes row 0 and bails to the eager path when it's `nil`.
+    func listRowID<RowID: Hashable>(at index: Int) -> RowID? {
+        rowID(at: index)
     }
 
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {
