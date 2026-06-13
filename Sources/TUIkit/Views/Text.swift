@@ -273,6 +273,7 @@ extension Text: Renderable, Layoutable {
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var effectiveStyle = style
+        var effectiveCase: TextCase?
 
         // If no explicit foreground color is set on the Text itself,
         // inherit from the environment (set by .foregroundStyle() on parent views),
@@ -283,13 +284,35 @@ extension Text: Renderable, Layoutable {
                 ?? context.environment.palette.foreground
         }
 
+        // Merge cascading text attributes (container-level .bold()/.italic()/
+        // .style(...) etc.) beneath this Text's own explicit attributes. A
+        // per-Text attribute always wins; otherwise the cascade's resolved value
+        // (the closest matching scope) applies. The text's semantic colour role,
+        // if any, lets role-scoped entries (e.g. "secondary text is dim") match.
+        let cascade = context.environment.styleCascade
+        if !cascade.isEmpty {
+            var scopes: Set<StyleScope> = [.all, .text]
+            if let role = Self.semanticRole(
+                explicit: style.foregroundColor, environment: context.environment) {
+                scopes.insert(.semanticColor(role))
+            }
+            let attributes = cascade.resolve(for: scopes)
+            effectiveStyle.isBold = effectiveStyle.isBold || (attributes.bold ?? false)
+            effectiveStyle.isItalic = effectiveStyle.isItalic || (attributes.italic ?? false)
+            effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (attributes.underline ?? false)
+            effectiveStyle.isStrikethrough =
+                effectiveStyle.isStrikethrough || (attributes.strikethrough ?? false)
+            effectiveStyle.isDim = effectiveStyle.isDim || (attributes.dim ?? false)
+            effectiveCase = attributes.textCase
+        }
+
         let resolvedStyle = effectiveStyle.resolved(with: context.environment.palette)
 
         // Word-wrap text to fit available width.
         let maxWidth = context.availableWidth
         let mode = style.truncationMode
         let atWordBoundary = style.truncatesAtWordBoundary
-        var lines = wordWrap(content, maxWidth: maxWidth)
+        var lines = wordWrap(Self.applyingCase(effectiveCase, to: content), maxWidth: maxWidth)
 
         // Height constraint: if the wrapped text is taller than the space
         // it was given — or than an explicit line limit — keep the lines
@@ -323,6 +346,28 @@ extension Text: Renderable, Layoutable {
         let styledLines = truncated.map { ANSIRenderer.render($0, with: resolvedStyle) }
 
         return FrameBuffer(lines: styledLines)
+    }
+
+    /// The palette role this text draws with, used to match `.semanticColor`
+    /// style-cascade entries. A `.semantic(...)` foreground (explicit on the
+    /// Text, or inherited via `.foregroundStyle`) reports its role; an explicit
+    /// concrete colour reports `nil` (no role); no foreground at all reports
+    /// `.foreground` (the palette default this text will use).
+    private static func semanticRole(
+        explicit: Color?, environment: EnvironmentValues
+    ) -> SemanticColor? {
+        guard let color = explicit ?? environment.foregroundStyle else { return .foreground }
+        if case .semantic(let role) = color.value { return role }
+        return nil
+    }
+
+    /// Applies a `TextCase` transform, or returns the string unchanged for `nil`.
+    private static func applyingCase(_ textCase: TextCase?, to string: String) -> String {
+        switch textCase {
+        case .uppercase: return string.uppercased()
+        case .lowercase: return string.lowercased()
+        case nil: return string
+        }
     }
 
     /// Wraps text into lines that fit a maximum terminal cell width.
