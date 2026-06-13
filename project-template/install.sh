@@ -7,7 +7,7 @@ set -e
 
 VERSION="1.0.0"
 SCRIPT_NAME="tuikit"
-TUIKIT_URL="https://raw.githubusercontent.com/phranck/TUIkit/main/project-template/tuikit"
+TUIKIT_URL="https://raw.githubusercontent.com/wadetregaskis/TUIkit/main/project-template/tuikit"
 
 # Colors (friendly pastels)
 CYAN='\033[0;96m'
