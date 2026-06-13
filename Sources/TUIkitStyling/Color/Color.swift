@@ -254,47 +254,6 @@ extension Color {
         return .hex(hexValue)
     }
 
-    /// Creates a color from HSL values.
-    ///
-    /// - Parameters:
-    ///   - hue: The hue component (0-360).
-    ///   - saturation: The saturation component (0-100).
-    ///   - lightness: The lightness component (0-100).
-    /// - Returns: The corresponding RGB color.
-    public static func hsl(_ hue: Double, _ saturation: Double, _ lightness: Double) -> Self {
-        let normalizedHue = hue / 360.0
-        let normalizedSaturation = saturation / 100.0
-        let normalizedLightness = lightness / 100.0
-
-        if normalizedSaturation == 0 {
-            // Achromatic (gray)
-            let gray = UInt8(normalizedLightness * 255)
-            return .rgb(gray, gray, gray)
-        }
-
-        let chromaFactor =
-            normalizedLightness < 0.5
-            ? normalizedLightness * (1 + normalizedSaturation)
-            : normalizedLightness + normalizedSaturation - normalizedLightness * normalizedSaturation
-        let luminanceFactor = 2 * normalizedLightness - chromaFactor
-
-        func hueToRGB(_ luminance: Double, _ chroma: Double, _ hueComponent: Double) -> Double {
-            var adjustedHue = hueComponent
-            if adjustedHue < 0 { adjustedHue += 1 }
-            if adjustedHue > 1 { adjustedHue -= 1 }
-            if adjustedHue < 1 / 6 { return luminance + (chroma - luminance) * 6 * adjustedHue }
-            if adjustedHue < 1 / 2 { return chroma }
-            if adjustedHue < 2 / 3 { return luminance + (chroma - luminance) * (2 / 3 - adjustedHue) * 6 }
-            return luminance
-        }
-
-        let red = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue + 1 / 3) * 255)
-        let green = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue) * 255)
-        let blue = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue - 1 / 3) * 255)
-
-        return .rgb(red, green, blue)
-    }
-
     /// Returns a lighter version of this color.
     ///
     /// The percentage is relative to the remaining lightness headroom.
@@ -369,54 +328,6 @@ extension Color {
         )
 
         return .rgb(red, green, blue)
-    }
-}
-
-// MARK: - Internal API
-
-extension Color {
-    /// Converts RGB components to HSL (hue 0–360, saturation 0–100, lightness 0–100).
-    ///
-    /// - Parameters:
-    ///   - red: Red component (0–255).
-    ///   - green: Green component (0–255).
-    ///   - blue: Blue component (0–255).
-    /// - Returns: A tuple of (hue, saturation, lightness) in their standard ranges.
-    public static func rgbToHSL(red: UInt8, green: UInt8, blue: UInt8) -> (hue: Double, saturation: Double, lightness: Double) {
-        let normalizedRed = Double(red) / 255.0
-        let normalizedGreen = Double(green) / 255.0
-        let normalizedBlue = Double(blue) / 255.0
-
-        let maxComponent = max(normalizedRed, normalizedGreen, normalizedBlue)
-        let minComponent = min(normalizedRed, normalizedGreen, normalizedBlue)
-        let delta = maxComponent - minComponent
-
-        let lightness = (maxComponent + minComponent) / 2.0
-
-        guard delta > 0 else {
-            // Achromatic (gray)
-            return (hue: 0, saturation: 0, lightness: lightness * 100)
-        }
-
-        let saturation: Double
-        if lightness < 0.5 {
-            saturation = delta / (maxComponent + minComponent)
-        } else {
-            saturation = delta / (2.0 - maxComponent - minComponent)
-        }
-
-        let hue: Double
-        switch maxComponent {
-        case normalizedRed:
-            let segment = (normalizedGreen - normalizedBlue) / delta
-            hue = 60 * (segment < 0 ? segment + 6 : segment)
-        case normalizedGreen:
-            hue = 60 * ((normalizedBlue - normalizedRed) / delta + 2)
-        default:
-            hue = 60 * ((normalizedRed - normalizedGreen) / delta + 4)
-        }
-
-        return (hue: hue, saturation: saturation * 100, lightness: lightness * 100)
     }
 }
 
