@@ -185,6 +185,12 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
     if V.Body.self != Never.self {
         let childContext = context.withChildIdentity(type: V.Body.self)
 
+        // Resolve this view's @Environment properties against the environment it
+        // renders in, storing each into its (reference) box. The box is shared
+        // with any closure `body` creates that captures the view, so @Environment
+        // reads correctly inside event handlers / actions, not just during body.
+        resolveEnvironmentProperties(of: view, in: context.environment)
+
         // Wrap body evaluation in observation tracking so that any @Observable
         // property accessed during body triggers a re-render when mutated.
         let body = StateRegistration.withHydration(context: context) {

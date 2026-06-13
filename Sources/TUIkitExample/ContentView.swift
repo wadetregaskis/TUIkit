@@ -58,13 +58,6 @@ struct ContentView: View {
     var body: some View {
         // Capture bindings for use in closures
         let pageSetter = $currentPage
-        // Capture the live theme managers HERE, during body evaluation, where
-        // `@Environment` resolves to the real render environment. The key handler
-        // runs later (during input dispatch), when `@Environment` would resolve to
-        // an empty default — so reading the managers inside the closure would hit
-        // no-op instances. Capturing the references now binds to the real ones.
-        let paletteMgr = paletteManager
-        let appearanceMgr = appearanceManager
 
         // Show current page based on state
         // Note: Background color is set by AppRunner using theme.background
@@ -82,11 +75,12 @@ struct ContentView: View {
                     // Cycle the colour palette globally. Function keys are used
                     // (rather than a letter) so the shortcut works on EVERY page
                     // without colliding with TextField / SecureField text entry.
-                    paletteMgr.cycleNext()
+                    // `@Environment` resolves correctly inside this handler.
+                    paletteManager.cycleNext()
                     return true
                 case .f3:
                     // Cycle the border appearance globally (same rationale).
-                    appearanceMgr.cycleNext()
+                    appearanceManager.cycleNext()
                     return true
                 default:
                     // Quick-jump shortcuts only work from the menu page.

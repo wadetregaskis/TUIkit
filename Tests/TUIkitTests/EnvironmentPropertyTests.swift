@@ -142,4 +142,32 @@ struct EnvironmentPropertyTests {
 
         StateRegistration.activeEnvironment = nil
     }
+
+    @Test("@Environment resolves inside a closure created during body (event-handler parity)")
+    func resolvesInDeferredClosure() {
+        // Box the probe stashes a closure into during `body`, mimicking an
+        // .onKeyPress / Button action that runs AFTER render — when the active
+        // environment has been cleared.
+        final class Sink { var read: (() -> String)? }
+        let sink = Sink()
+
+        struct ProbeView: View {
+            @Environment(\.testColor) var color
+            let sink: Sink
+            var body: some View {
+                sink.read = { color }  // captures self; reads @Environment when invoked
+                return Text(color)
+            }
+        }
+
+        StateRegistration.activeEnvironment = nil
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        _ = renderToBuffer(ProbeView(sink: sink).environment(\.testColor, "teal"), context: context)
+
+        // Render finished → the active environment is nil, exactly as when an
+        // event handler runs. The captured closure must still read the value
+        // resolved at render (via the wrapper's box), not the default.
+        StateRegistration.activeEnvironment = nil
+        #expect(sink.read?() == "teal")
+    }
 }

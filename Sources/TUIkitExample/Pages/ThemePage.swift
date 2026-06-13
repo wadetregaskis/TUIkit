@@ -25,27 +25,23 @@ struct ThemePage: View {
     var body: some View {
         let palettes = PaletteRegistry.all
         let appearances = AppearanceRegistry.all
-        // Capture the live managers during body evaluation, where `@Environment`
-        // resolves to the real render environment. The pickers' `set` closures run
-        // later, at commit time, when `@Environment` would resolve to a no-op
-        // default — so they must use these captured references, not re-read the
-        // wrappers. (Same reason ContentView captures them for its F2/F3 keys.)
-        let paletteMgr = paletteManager
-        let appearanceMgr = appearanceManager
 
+        // The pickers bind directly to the shared managers. `@Environment`
+        // resolves correctly inside these `set` closures (they run at commit
+        // time, outside `body`) — so no local capture is needed.
         let paletteSelection = Binding(
-            get: { paletteMgr.current.id },
+            get: { paletteManager.current.id },
             set: { id in
                 if let palette = palettes.first(where: { $0.id == id }) {
-                    paletteMgr.setCurrent(palette)
+                    paletteManager.setCurrent(palette)
                 }
             }
         )
         let appearanceSelection = Binding(
-            get: { appearanceMgr.current.id },
+            get: { appearanceManager.current.id },
             set: { id in
                 if let appearance = appearances.first(where: { $0.id == id }) {
-                    appearanceMgr.setCurrent(appearance)
+                    appearanceManager.setCurrent(appearance)
                 }
             }
         )
@@ -90,7 +86,7 @@ struct ThemePage: View {
 
             ValueDisplayRow(
                 "Active theme:",
-                "\(paletteMgr.currentName) · \(appearanceMgr.currentName)")
+                "\(paletteManager.currentName) · \(appearanceManager.currentName)")
 
             KeyboardHelpSection(
                 "Theme",
