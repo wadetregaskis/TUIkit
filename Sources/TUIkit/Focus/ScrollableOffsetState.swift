@@ -113,11 +113,24 @@ extension ScrollableOffsetState {
 
     /// Routes a mouse event through the wheel-scroll path.
     ///
-    /// Returns `true` if the event was a wheel event and was
-    /// consumed (so the caller's mouse-handler closure can
-    /// also return `true`). Returns `false` for everything
-    /// else, letting the caller continue with its own handling
-    /// — click, drag, hover, etc.
+    /// Returns `true` only if the event was a wheel event that
+    /// actually moved the viewport. Returns `false` for non-wheel
+    /// events (letting the caller continue with click / drag /
+    /// hover handling) **and** for a wheel event that couldn't
+    /// scroll — already at the top scrolling up, at the bottom
+    /// scrolling down, or content that fits entirely so there is
+    /// nothing to scroll.
+    ///
+    /// That "no-op ⇒ not consumed" rule is what gives nested
+    /// scrollers **scroll chaining**: the dispatcher bubbles a
+    /// wheel event to the next (enclosing) region only when a
+    /// handler returns `false`, so a child list that has hit its
+    /// limit passes the wheel up to its parent `ScrollView`
+    /// instead of swallowing it — the behaviour every desktop UI
+    /// (browsers, Finder, AppKit, SwiftUI) has. Returning `true`
+    /// unconditionally — the previous behaviour — trapped the
+    /// wheel in whichever scroller the cursor happened to be over,
+    /// making the parent's lower content unreachable by wheel.
     @discardableResult
     public func handleWheelEvent(
         _ event: MouseEvent,
@@ -125,11 +138,13 @@ extension ScrollableOffsetState {
     ) -> Bool {
         switch event.button {
         case .scrollUp:
+            let before = scrollOffset
             scroll(by: -linesPerTick)
-            return true
+            return scrollOffset != before
         case .scrollDown:
+            let before = scrollOffset
             scroll(by: linesPerTick)
-            return true
+            return scrollOffset != before
         default:
             return false
         }

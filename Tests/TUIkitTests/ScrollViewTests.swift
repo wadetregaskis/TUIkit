@@ -157,6 +157,37 @@ struct ScrollViewHandlerTests {
         #expect(handler.hasContentAbove)
         #expect(!handler.hasContentBelow)
     }
+
+    @Test("Wheel is consumed only when it actually moves the viewport (scroll chaining)")
+    func wheelConsumedOnlyWhenItMoves() {
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+
+        // Mid-content: a wheel tick moves the viewport → consumed.
+        handler.scrollOffset = 50
+        #expect(handler.handleWheelEvent(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 0, y: 0)))
+
+        // At the bottom, scrolling down can't move → NOT consumed, so the
+        // dispatcher bubbles the wheel to the enclosing scroller (chaining).
+        handler.scrollOffset = handler.maxOffset
+        #expect(!handler.handleWheelEvent(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 0, y: 0)))
+        #expect(handler.scrollOffset == handler.maxOffset, "offset must be unchanged")
+
+        // At the top, scrolling up can't move → NOT consumed.
+        handler.scrollOffset = 0
+        #expect(!handler.handleWheelEvent(
+            MouseEvent(button: .scrollUp, phase: .scrolled, x: 0, y: 0)))
+
+        // Content that fits the viewport entirely never consumes the wheel.
+        let fits = ScrollViewHandler(focusID: "fits")
+        fits.contentHeight = 5
+        fits.viewportHeight = 10
+        #expect(!fits.handleWheelEvent(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 0, y: 0)))
+    }
 }
 
 // MARK: - ScrollView rendering
@@ -267,6 +298,67 @@ struct ScrollViewRenderingTests {
 
         #expect(joined.contains("Row 99"), "wheel-scrolling to the end must reveal the last row")
         #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+    }
+
+    /// Scroll chaining: a nested scroller that has reached its own limit must
+    /// pass further wheel ticks up to its parent `ScrollView`, so the parent's
+    /// content *below* the nested scroller stays reachable by wheel. Regression
+    /// for the example List page's "can't scroll past the inner lists" trap —
+    /// previously the inner scroller swallowed every wheel tick (its handler
+    /// returned `true` unconditionally), so the outer viewport never moved while
+    /// the cursor was over it.
+    @Test("A nested scroller at its limit chains the wheel to its parent")
+    func nestedScrollerChainsWheelToParent() {
+        var context = makeContext(width: 30, height: 10)
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        // A short inner ScrollView at the top, then a tall run of outer rows.
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<40, id: \.self) { Text("Inner \($0)") }
+                    }
+                }
+                .frame(height: 4)
+                ForEach(0..<60, id: \.self) { Text("Outer \($0)") }
+            }
+        }
+
+        let initial = renderToBuffer(view, context: context)
+        dispatcher.setRegions(initial.hitTestRegions)
+        // The cursor sits over the inner scroller (top of the viewport). It
+        // never moves, so every tick is delivered to the inner region first.
+        guard let outer = initial.hitTestRegions.max(by: { $0.height < $1.height }) else {
+            Issue.record("expected a ScrollView hit-test region"); return
+        }
+        let cx = outer.offsetX + 2
+        let cy = outer.offsetY + 1
+
+        // One tick scrolls the *inner* list; the outer hasn't moved yet, so the
+        // last outer row is still far below.
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: cx, y: cy))
+        let afterOne = renderToBuffer(view, context: context)
+        dispatcher.setRegions(afterOne.hitTestRegions)
+        #expect(
+            !afterOne.lines.map(\.stripped).joined().contains("Outer 59"),
+            "the outer viewport should not have reached its end after a single tick")
+
+        // Keep scrolling over the same (inner) spot. Once the inner hits its
+        // limit the wheel must chain to the outer, revealing the last outer row.
+        var joined = ""
+        for _ in 0..<60 {
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: cx, y: cy))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined(separator: "\n")
+        }
+        #expect(
+            joined.contains("Outer 59"),
+            "wheel over a maxed-out inner scroller must chain to the parent and reach its end; got:\n\(joined)")
     }
 
     @Test("Emits a viewport-wide mouse hit-test region")
