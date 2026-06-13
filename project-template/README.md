@@ -5,7 +5,7 @@ CLI tool for creating TUIkit terminal applications.
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/phranck/TUIkit/main/project-template/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/wadetregaskis/TUIkit/main/project-template/install.sh | bash
 ```
 
 This installs the `tuikit` command globally on your system.
@@ -54,7 +54,7 @@ The installer:
 ## Manual Installation
 
 ```bash
-git clone https://github.com/phranck/TUIkit.git
+git clone https://github.com/wadetregaskis/TUIkit.git
 cd TUIkit/project-template
 ./install.sh
 ```
@@ -73,8 +73,8 @@ tuikit-uninstall
 
 ## Documentation
 
-- [TUIkit Documentation](https://docs.tuikit.dev/documentation/tuikit/)
-- [TUIkit GitHub](https://github.com/phranck/TUIkit)
+- [TUIkit Documentation]([https://docs.tuikit.dev/documentation/tuikit/](https://swiftpackageindex.com/wadetregaskis/TUIkit/main/documentation/tuikit))
+- [TUIkit GitHub](https://github.com/wadetregaskis/TUIkit)
 
 ## License
 
