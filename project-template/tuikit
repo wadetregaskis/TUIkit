@@ -412,7 +412,7 @@ PROJECT_NAME="$PROJECT_BASE"
 echo -e "${GREEN}Creating Package.swift...${NC}"
 
 # Build dependencies array
-DEPENDENCIES="        .package(url: \"https://github.com/phranck/TUIkit.git\", branch: \"main\")"
+DEPENDENCIES="        .package(url: \"https://github.com/wadetregaskis/TUIkit.git\", branch: \"main\")"
 if [ "$INCLUDE_SQLITE" = true ]; then
     DEPENDENCIES="${DEPENDENCIES},
         .package(url: \"https://github.com/groue/GRDB.swift.git\", from: \"7.0.0\")"
@@ -633,8 +633,8 @@ cat >> README.md << 'EOF'
 
 ## Learn More
 
-- [TUIkit Documentation](https://tuikit.layered.work/documentation/tuikit/)
-- [TUIkit GitHub](https://github.com/phranck/TUIkit)
+- [TUIkit Documentation](https://swiftpackageindex.com/wadetregaskis/TUIkit/main/documentation/tuikit)
+- [TUIkit GitHub](https://github.com/wadetregaskis/TUIkit)
 EOF
 
 # Create .gitignore
