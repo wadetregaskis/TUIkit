@@ -469,8 +469,10 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    `.bold/.italic/.underline/.strikethrough/.fontWeight/.textCase` (+ `FontWeight`,
    `TextCase`) and the generic `.style(_:_:)`. Delivers (a), (e), (f-text).
    `Text.bold()` unchanged. (TUIkitExample: Text Styles page "Cascading styles".)
-2. **Chrome roles** — `Section` header/footer resolve via `.chrome(...)`; defaults
-   preserve the current look.
+2. ✅ **(shipped)** **Chrome roles** — `Section` header/footer resolve via an
+   environment `chromeRole` + `.chrome(...)` scope; defaults preserve the current
+   look (header bold+dim, footer dim) and are now overridable (e.g. uppercase /
+   un-bold headers). (TUIkitExample: Text Styles page "Themeable chrome".)
 3. **Control targeting, control by control** — soft-default styles + cascade
    resolution + typed `*TextStyle`/`*Style` conveniences, one control per commit:
    Button, then Toggle, Slider, Picker, Stepper, TextField, List/Table rows, … until

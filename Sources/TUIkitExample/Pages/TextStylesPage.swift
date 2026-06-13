@@ -100,6 +100,33 @@ struct TextStylesPage: View {
                     .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
                 }
             }
+
+            DemoSection("Themeable chrome — section headers") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "A Section's header/footer styling is themeable via "
+                            + ".style(.chrome(...)); headers are bold + dim by default."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    Section {
+                        Text("Body line")
+                    } header: {
+                        Text("Default header")
+                    }
+
+                    // The same header, re-themed: uppercased and not bold.
+                    Section {
+                        Text("Body line")
+                    } header: {
+                        Text("Themed header")
+                    }
+                    .style(.chrome(.sectionHeader)) {
+                        $0.textCase = .uppercase
+                        $0.bold = false
+                    }
+                }
+            }
         }
     }
 }
