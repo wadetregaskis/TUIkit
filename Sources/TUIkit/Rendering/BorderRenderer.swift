@@ -236,12 +236,18 @@ extension BorderRenderer {
     ///   - color: The border colour.
     ///   - backgroundColor: Optional background applied to the content area.
     /// - Returns: The bordered content lines, in order.
+    /// - Parameter contentWidth: When non-`nil`, the known visible width of
+    ///   *every* line in `contents` (they are uniform). Lets each line skip its
+    ///   own `strippedLength` re-measure — the dominant cost when a deeply-nested
+    ///   layout re-borders the same lines at every level. Pass `nil` (the
+    ///   default) when the lines may be ragged, to measure each individually.
     static func standardContentLines(
         contents: [String],
         innerWidth: Int,
         style: BorderStyle,
         color: Color,
-        backgroundColor: Color? = nil
+        backgroundColor: Color? = nil,
+        contentWidth: Int? = nil
     ) -> [String] {
         let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
         return contents.map {
@@ -249,7 +255,8 @@ extension BorderRenderer {
                 content: $0,
                 innerWidth: innerWidth,
                 vertical: vertical,
-                backgroundColor: backgroundColor
+                backgroundColor: backgroundColor,
+                knownWidth: contentWidth
             )
         }
     }
@@ -264,11 +271,16 @@ extension BorderRenderer {
         content: String,
         innerWidth: Int,
         vertical: String,
-        backgroundColor: Color?
+        backgroundColor: Color?,
+        knownWidth: Int? = nil
     ) -> String {
         // Fit the content to exactly `innerWidth`: truncate if it is wider
         // (ANSI-aware) so it cannot displace the right border, pad if narrower.
-        let width = content.strippedLength
+        // `knownWidth` is the caller-supplied visible width when the line is part
+        // of a uniform-width run — using it skips the per-line re-measure. It is
+        // safe even when it exceeds `innerWidth`: the truncate branch clips to
+        // `innerWidth` regardless, and a uniform run clips identically.
+        let width = knownWidth ?? content.strippedLength
         let fittedLine: String
         if width > innerWidth {
             fittedLine = content.ansiAwarePrefix(visibleCount: innerWidth)

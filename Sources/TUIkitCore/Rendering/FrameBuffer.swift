@@ -19,7 +19,8 @@
 public struct FrameBuffer: Sendable, Equatable {
     /// The lines of rendered content (may contain ANSI escape codes).
     ///
-    /// Mutating `lines` directly recomputes the cached ``width``.
+    /// Mutating `lines` directly recomputes the cached ``width`` and
+    /// ``linesAreUniformWidth``.
     public var lines: [String] {
         didSet { recomputeWidth() }
     }
@@ -30,6 +31,24 @@ public struct FrameBuffer: Sendable, Equatable {
     /// ``lines`` is mutated. Accessing `width` is O(1) — the expensive
     /// ANSI-stripping regex runs only once per mutation, not per access.
     public private(set) var width: Int
+
+    /// Whether every line in ``lines`` has the same visible width (``width``).
+    ///
+    /// A performance hint with a deliberately conservative meaning: `true` means
+    /// "definitely uniform", `false` means "unknown — measure per line". A parent
+    /// that pads or borders these lines to a target width can, when this is
+    /// `true`, skip re-measuring each line's visible width (it already knows each
+    /// is exactly ``width``). That per-line `strippedLength` is the dominant cost
+    /// in deeply-nested bordered layouts, where the same lines are otherwise
+    /// re-measured at every enclosing level — O(depth²).
+    ///
+    /// Empty and single-line buffers are trivially uniform. Combining operations
+    /// propagate it via cheap width comparisons, never by re-measuring, so it
+    /// never reintroduces the cost it exists to remove. It is intentionally
+    /// excluded from ``==`` (see the custom `Equatable` conformance): two buffers
+    /// with identical lines are interchangeable, and `true` is only ever set when
+    /// the lines genuinely are uniform.
+    public private(set) var linesAreUniformWidth: Bool
 
     /// The height of the buffer (number of lines).
     public var height: Int {
@@ -68,6 +87,7 @@ public struct FrameBuffer: Sendable, Equatable {
     public init() {
         self.lines = []
         self.width = 0
+        self.linesAreUniformWidth = true  // vacuously uniform
     }
 
     /// Creates a buffer from an array of lines.
@@ -75,15 +95,23 @@ public struct FrameBuffer: Sendable, Equatable {
     /// - Parameter lines: The text lines.
     public init(lines: [String]) {
         self.lines = lines
-        self.width = Self.computeWidth(lines)
+        let measured = Self.measure(lines)
+        self.width = measured.width
+        self.linesAreUniformWidth = measured.uniform
     }
 
     /// Initializer that accepts pre-computed width.
     ///
     /// Use this when the width is already known to avoid redundant computation.
-    public init(lines: [String], width: Int) {
+    ///
+    /// - Parameter uniformWidth: Pass `true` only when the caller knows every
+    ///   line in `lines` is exactly `width` visible columns (e.g. it just padded
+    ///   them to that width). Defaults to `false` — "unknown", the safe value
+    ///   that makes any consumer fall back to measuring per line.
+    public init(lines: [String], width: Int, uniformWidth: Bool = false) {
         self.lines = lines
         self.width = width
+        self.linesAreUniformWidth = uniformWidth
     }
 
     /// Creates a buffer containing a single line.
@@ -92,6 +120,7 @@ public struct FrameBuffer: Sendable, Equatable {
     public init(text: String) {
         self.lines = [text]
         self.width = text.strippedLength
+        self.linesAreUniformWidth = true  // a single line is trivially uniform
     }
 
     /// Creates a spacer buffer with the specified height.
@@ -107,6 +136,7 @@ public struct FrameBuffer: Sendable, Equatable {
         // is not considered "empty" by appendVertically
         self.lines = Array(repeating: " ", count: height)
         self.width = 1
+        self.linesAreUniformWidth = true  // all lines are a single space
     }
 
     /// Creates a buffer of empty spaces with the specified width and height.
@@ -120,6 +150,7 @@ public struct FrameBuffer: Sendable, Equatable {
     public init(emptyWithWidth width: Int, height: Int) {
         self.lines = Array(repeating: String(repeating: " ", count: width), count: height)
         self.width = width
+        self.linesAreUniformWidth = true  // every line is `width` spaces
     }
 
     // MARK: - Combining Arrays
@@ -135,6 +166,25 @@ public struct FrameBuffer: Sendable, Equatable {
         for buffer in buffers {
             appendVertically(buffer)
         }
+    }
+}
+
+// MARK: - Equatable
+
+extension FrameBuffer {
+    /// Equality compares rendered content only: ``lines``, ``overlays``, and
+    /// ``hitTestRegions``.
+    ///
+    /// ``width`` is a pure function of ``lines`` so it adds nothing, and
+    /// ``linesAreUniformWidth`` is a conservative performance hint excluded by
+    /// design — two buffers with identical lines are interchangeable, and the
+    /// hint is only ever `true` when the lines genuinely are uniform. Including
+    /// it would spuriously distinguish otherwise-equal buffers and could defeat
+    /// the render / measure memo that keys on buffer equality.
+    public static func == (lhs: FrameBuffer, rhs: FrameBuffer) -> Bool {
+        lhs.lines == rhs.lines
+            && lhs.overlays == rhs.overlays
+            && lhs.hitTestRegions == rhs.hitTestRegions
     }
 }
 
@@ -188,17 +238,31 @@ extension FrameBuffer {
 
         // Build combined array
         var combined = lines
-        if !combined.isEmpty && spacing > 0 {
+        let selfWasEmpty = combined.isEmpty
+        if !selfWasEmpty && spacing > 0 {
             combined.append(contentsOf: repeatElement("", count: spacing))
         }
         combined.append(contentsOf: other.lines)
+
+        // Propagate uniform-width cheaply (no re-measure). The stack is uniform
+        // only when both sides are uniform AT THE SAME width and no empty spacer
+        // line (visible width 0) was inserted between them. When self was empty,
+        // the result is simply `other`. Anything else is "unknown" (false).
+        let resultUniform: Bool
+        if selfWasEmpty {
+            resultUniform = other.linesAreUniformWidth
+        } else {
+            resultUniform =
+                linesAreUniformWidth && other.linesAreUniformWidth
+                && width == other.width && spacing == 0
+        }
 
         let carriedOverlays = overlays + other.shiftedOverlays(byX: 0, y: verticalShift)
         let carriedRegions =
             hitTestRegions + other.shiftedHitTestRegions(byX: 0, y: verticalShift)
 
         // Replace self with new buffer using pre-computed width
-        self = FrameBuffer(lines: combined, width: newWidth)
+        self = FrameBuffer(lines: combined, width: newWidth, uniformWidth: resultUniform)
         overlays = carriedOverlays
         hitTestRegions = carriedRegions
     }
@@ -444,14 +508,17 @@ extension FrameBuffer {
     public func replacingLines(
         _ newLines: [String],
         width: Int? = nil,
+        uniformWidth: Bool = false,
         overlayShiftX: Int = 0,
         overlayShiftY: Int = 0
     ) -> FrameBuffer {
         // When the caller already knows the result width (e.g. padding: the
         // input width plus the horizontal insets), pass it to skip the
         // re-measure of every line that `FrameBuffer(lines:)` → `computeWidth`
-        // would do. `nil` keeps the original recompute behaviour.
-        var result = width.map { FrameBuffer(lines: newLines, width: $0) }
+        // would do. `nil` keeps the original recompute behaviour. `uniformWidth`
+        // is only honoured alongside an explicit `width`; the measuring path
+        // computes uniformity itself.
+        var result = width.map { FrameBuffer(lines: newLines, width: $0, uniformWidth: uniformWidth) }
             ?? FrameBuffer(lines: newLines)
         result.overlays = shiftedOverlays(byX: overlayShiftX, y: overlayShiftY)
         result.hitTestRegions = shiftedHitTestRegions(
@@ -486,19 +553,36 @@ extension FrameBuffer {
 
     /// ANSI SGR reset sequence. Inlined to avoid depending on ANSIRenderer.
     fileprivate static let ansiReset = "\u{1B}[0m"
-    /// Recomputes the cached ``width`` from the current ``lines``.
+    /// Recomputes the cached ``width`` and ``linesAreUniformWidth`` from the
+    /// current ``lines``.
     ///
     /// Called automatically by the `didSet` observer on ``lines``.
     fileprivate mutating func recomputeWidth() {
-        width = Self.computeWidth(lines)
+        let measured = Self.measure(lines)
+        width = measured.width
+        linesAreUniformWidth = measured.uniform
     }
 
-    /// Computes the visible width of a set of lines.
+    /// Measures a set of lines in a single pass: the widest line's visible width
+    /// and whether every line shares that width.
+    ///
+    /// Uniformity falls out of tracking the min and max visible width together —
+    /// they are equal iff all lines match — so it costs nothing beyond the
+    /// per-line `strippedLength` the width already needs. Empty / single-line
+    /// inputs are trivially uniform.
     ///
     /// - Parameter lines: The lines to measure.
-    /// - Returns: The length of the longest line in visible characters.
-    fileprivate static func computeWidth(_ lines: [String]) -> Int {
-        lines.map { $0.strippedLength }.max() ?? 0
+    /// - Returns: The widest line's visible width and whether all lines match it.
+    fileprivate static func measure(_ lines: [String]) -> (width: Int, uniform: Bool) {
+        guard let first = lines.first else { return (0, true) }
+        var minWidth = first.strippedLength
+        var maxWidth = minWidth
+        for line in lines.dropFirst() {
+            let w = line.strippedLength
+            if w < minWidth { minWidth = w }
+            if w > maxWidth { maxWidth = w }
+        }
+        return (maxWidth, minWidth == maxWidth)
     }
 
     /// Inserts overlay text into base text at the specified column position.

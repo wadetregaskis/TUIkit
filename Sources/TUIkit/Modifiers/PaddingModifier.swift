@@ -146,7 +146,13 @@ public struct PaddingModifier: ViewModifier {
         // width is exactly `lineWidth` (the widest input line is `buffer.width`,
         // and the empty pad lines are built to `lineWidth`), so pass it and skip
         // re-measuring every line — a hot recompute in deeply-nested layouts.
+        //
+        // The output is uniform-width exactly when the input is: each content
+        // line becomes `leading + line + trailing`, so equal-width input lines
+        // give equal-width output lines (all `lineWidth`, matching the pad rows).
+        // Propagating this lets an enclosing border skip re-measuring in turn.
         return buffer.replacingLines(
-            result, width: lineWidth, overlayShiftX: insets.leading, overlayShiftY: insets.top)
+            result, width: lineWidth, uniformWidth: buffer.linesAreUniformWidth,
+            overlayShiftX: insets.leading, overlayShiftY: insets.top)
     }
 }

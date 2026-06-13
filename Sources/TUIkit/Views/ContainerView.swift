@@ -620,13 +620,17 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
 
         // Body lines (no background color applied). One batch call so the
         // coloured vertical border is built once for the whole body, not
-        // per line.
+        // per line. When the body buffer is uniform-width, hand its known width
+        // through so each line skips its own `strippedLength` re-measure — the
+        // dominant cost down a deeply-nested bordered spine, where each level
+        // otherwise re-measures the whole growing body.
         lines.append(
             contentsOf: BorderRenderer.standardContentLines(
                 contents: bodyBuffer.lines,
                 innerWidth: innerWidth,
                 style: borderStyle,
-                color: borderColor
+                color: borderColor,
+                contentWidth: bodyBuffer.linesAreUniformWidth ? bodyBuffer.width : nil
             )
         )
 
@@ -676,7 +680,15 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let knownWidth = title == nil
             ? innerWidth + 2
             : max(innerWidth + 2, lines.first?.strippedLength ?? 0)
-        var result = FrameBuffer(lines: lines, width: knownWidth)
+        // Every line a border emits — top/bottom border, divider, and each
+        // `standardContentLines` line — is forced to exactly `innerWidth + 2`
+        // visible cells, so the assembled buffer is uniform-width UNLESS a titled
+        // top border overflowed (then `knownWidth` exceeds `innerWidth + 2`).
+        // Flagging it lets an enclosing padding/border skip re-measuring this
+        // whole buffer — bordering is thus a uniformity *producer*, which is what
+        // collapses the O(depth²) re-measure down a nested spine to O(depth).
+        var result = FrameBuffer(
+            lines: lines, width: knownWidth, uniformWidth: knownWidth == innerWidth + 2)
         // Carry overlay layers and hit-test regions from the body and
         // footer. The body content sits one row below the top border
         // and one column inside the left border; the footer follows
