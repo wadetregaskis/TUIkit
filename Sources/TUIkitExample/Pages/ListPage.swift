@@ -165,8 +165,25 @@ struct ListPage: View {
                 }
             }
 
-            List("Empty List") {
-                EmptyView()
+            DemoSection("Empty state") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "A List with no rows shows a placeholder instead of a blank "
+                            + "box. Customise the text with .listEmptyPlaceholder(_:)."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    // A genuinely empty list: an empty data set, so it has zero
+                    // rows and shows the placeholder. (`{ EmptyView() }` would be
+                    // treated as one blank row, not an empty list.)
+                    List("Tasks") {
+                        ForEach([String](), id: \.self) { task in
+                            Text(task)
+                        }
+                    }
+                    .listEmptyPlaceholder("No tasks yet — you're all caught up!")
+                    .frame(height: 5)
+                }
             }
 
             KeyboardHelpSection(
