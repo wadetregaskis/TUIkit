@@ -128,3 +128,31 @@ extension TaskModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
+
+// MARK: - Layoutable
+
+// These modifiers impose no geometry of their own — they render `content` under
+// the unchanged context, and their lifecycle bookkeeping is already gated on
+// `!context.isMeasuring` (the measure-side-effect rule). So forwarding the
+// measurement to `content` is exactly render-consistent, and it keeps the
+// wrapped subtree out of `measureChild`'s render-to-measure fallback, which
+// would otherwise render the content twice per measure (once at the proposal,
+// once at `naturalWidth + 8` to probe flexibility) on top of the real render.
+
+extension OnAppearModifier: Layoutable {
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
+extension OnDisappearModifier: Layoutable {
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
+extension TaskModifier: Layoutable {
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

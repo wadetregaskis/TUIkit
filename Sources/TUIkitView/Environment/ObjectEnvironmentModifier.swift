@@ -51,3 +51,21 @@ extension ObjectEnvironmentModifier: Renderable {
         return TUIkitView.renderToBuffer(content, context: modifiedContext)
     }
 }
+
+// MARK: - Layoutable
+
+extension ObjectEnvironmentModifier: Layoutable {
+    /// Measures the wrapped content under the injected observable, without
+    /// rendering. This wrapper imposes no geometry of its own — its size is
+    /// exactly the content's — so forwarding the measurement matches the render
+    /// path and keeps the subtree out of `measureChild`'s render-to-measure
+    /// fallback (which would render the content twice per measure). Mirrors
+    /// ``EnvironmentModifier``'s conformance; injecting an observable has no
+    /// layout effect, only an environment one.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        var modifiedEnvironment = context.environment
+        modifiedEnvironment[observable: T.self] = object
+        let modifiedContext = context.withEnvironment(modifiedEnvironment)
+        return measureChild(content, proposal: proposal, context: modifiedContext)
+    }
+}
