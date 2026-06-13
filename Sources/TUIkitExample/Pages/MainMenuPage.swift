@@ -76,6 +76,7 @@ struct MainMenuPage: View {
                         MenuItem(label: "Picker", shortcut: "/"),
                         MenuItem(label: "Progress", shortcut: "`"),
                         MenuItem(label: "Mouse", shortcut: "m"),
+                        MenuItem(label: "Theme", shortcut: "t"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in

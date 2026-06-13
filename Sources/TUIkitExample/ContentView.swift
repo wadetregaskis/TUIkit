@@ -34,6 +34,7 @@ enum DemoPage: Int, CaseIterable {
     case pickers
     case progress
     case mouse
+    case theme
 }
 
 // MARK: - Content View (Page Router)
@@ -47,9 +48,22 @@ struct ContentView: View {
     @State var currentPage: DemoPage = .menu
     @State var menuSelection: Int = 0
 
+    // The shared, app-wide theme managers. Cycling these re-themes every page,
+    // the app header, and the status bar (the render loop reads them when
+    // building each frame's environment). See ThemePage for explicit selection.
+    @Environment(\.paletteManager) private var paletteManager
+    @Environment(\.appearanceManager) private var appearanceManager
+
     var body: some View {
         // Capture bindings for use in closures
         let pageSetter = $currentPage
+        // Capture the live theme managers HERE, during body evaluation, where
+        // `@Environment` resolves to the real render environment. The key handler
+        // runs later (during input dispatch), when `@Environment` would resolve to
+        // an empty default — so reading the managers inside the closure would hit
+        // no-op instances. Capturing the references now binds to the real ones.
+        let paletteMgr = paletteManager
+        let appearanceMgr = appearanceManager
 
         // Show current page based on state
         // Note: Background color is set by AppRunner using theme.background
@@ -63,6 +77,16 @@ struct ContentView: View {
                         return true  // Consumed
                     }
                     return false  // Let default handler exit the app
+                case .f2:
+                    // Cycle the colour palette globally. Function keys are used
+                    // (rather than a letter) so the shortcut works on EVERY page
+                    // without colliding with TextField / SecureField text entry.
+                    paletteMgr.cycleNext()
+                    return true
+                case .f3:
+                    // Cycle the border appearance globally (same rationale).
+                    appearanceMgr.cycleNext()
+                    return true
                 default:
                     // Quick-jump shortcuts only work from the menu page.
                     // On sub-pages they would conflict with text input
@@ -155,6 +179,9 @@ struct ContentView: View {
         case .mouse:
             MousePage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .theme:
+            ThemePage()
+                .statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
@@ -181,7 +208,7 @@ struct ContentView: View {
             "[": .sliders, "]": .steppers,
             ";": .splitView, "'": .imageFile, ",": .imageURL,
             ".": .emoji, "/": .pickers, "`": .progress,
-            "m": .mouse,
+            "m": .mouse, "t": .theme,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
