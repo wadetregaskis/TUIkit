@@ -13,10 +13,19 @@ import TUIkit
 
 /// The main example application.
 struct ExampleApp: App {
+    /// The whole app's colour palette, held as editable `@State` and applied to
+    /// the scene with `.palette(...)`. The Theme page edits it — presets load a
+    /// `SystemPalette`'s colours, the colour pickers tweak individual ones — so a
+    /// change re-themes every page, the app header, and the status bar live.
+    /// (App-level `@State` is re-evaluated each frame, so the scene's `.palette`
+    /// override stays in sync.)
+    @State private var palette = CustomizablePalette(from: SystemPalette(.green))
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(palette: $palette)
         }
+        .palette(palette)
     }
 }
 

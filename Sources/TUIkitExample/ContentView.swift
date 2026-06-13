@@ -46,14 +46,22 @@ enum DemoPage: Int, CaseIterable {
 /// based on the current state. It uses `@State` for all reactive
 /// properties — exactly like SwiftUI.
 struct ContentView: View {
+    /// The app-wide palette, owned by `ExampleApp` and applied to the scene.
+    /// F2 loads the next preset into it; the Theme page edits it. Editing this
+    /// re-themes every page (it drives the scene's `.palette`).
+    @Binding var palette: CustomizablePalette
     @State var currentPage: DemoPage = .menu
     @State var menuSelection: Int = 0
+    /// Which built-in preset F2 last loaded — so F2 can cycle from there.
+    @State private var presetIndex: Int = 0
 
-    // The shared, app-wide theme managers. Cycling these re-themes every page,
-    // the app header, and the status bar (the render loop reads them when
-    // building each frame's environment). See ThemePage for explicit selection.
-    @Environment(\.paletteManager) private var paletteManager
+    // Appearance (border style) is the other app-wide theme axis; cycling it
+    // re-renders every page. (Palette lives in `palette` above, not here.)
     @Environment(\.appearanceManager) private var appearanceManager
+
+    init(palette: Binding<CustomizablePalette>) {
+        self._palette = palette
+    }
 
     var body: some View {
         // Capture bindings for use in closures
@@ -72,14 +80,15 @@ struct ContentView: View {
                     }
                     return false  // Let default handler exit the app
                 case .f2:
-                    // Cycle the colour palette globally. Function keys are used
-                    // (rather than a letter) so the shortcut works on EVERY page
-                    // without colliding with TextField / SecureField text entry.
-                    // `@Environment` resolves correctly inside this handler.
-                    paletteManager.cycleNext()
+                    // Load the next built-in preset into the app palette. Function
+                    // keys are used (not a letter) so the shortcut works on EVERY
+                    // page without colliding with TextField / SecureField input.
+                    presetIndex = (presetIndex + 1) % PaletteRegistry.all.count
+                    palette = CustomizablePalette(from: PaletteRegistry.all[presetIndex])
                     return true
                 case .f3:
-                    // Cycle the border appearance globally (same rationale).
+                    // Cycle the border appearance globally. `@Environment`
+                    // resolves correctly inside this handler.
                     appearanceManager.cycleNext()
                     return true
                 default:
@@ -175,7 +184,7 @@ struct ContentView: View {
             MousePage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .theme:
-            ThemePage()
+            ThemePage(palette: $palette)
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .emptyState:
             ContentUnavailablePage()
