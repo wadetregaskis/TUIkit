@@ -20,9 +20,15 @@ import Testing
 /// full report for diagnosis. This is the oracle that caught the identity-keyed
 /// measure-cache mis-sizing and the container measure bugs.
 ///
-/// Flexibility is reported separately and NOT asserted: a single render can't
-/// reveal it, and the render-twice "+8" probe is imprecise (it calls any
-/// wrapping view flexible). That awaits the flexibility-contract decision.
+/// The flexibility contract (see ``ViewSize``) is now settled: an axis is
+/// flexible iff the render *fills* the offered extent past the view's ideal, and
+/// `sizeThatFits` is canonical. The size invariant here already enforces it
+/// (`flexible ⟹ rendered == available`; `fixed ⟹ rendered == measured`), and
+/// ``flexibilityContract()`` pins the exact flag per canonical view. The "+8"
+/// probe below is kept only as a *descriptive* diagnostic of the render-to-
+/// measure fallback's heuristic — it over-reports flexibility for wrapping
+/// content (it calls any view that reflows wider "flexible"), so it is NOT the
+/// contract and is intentionally not asserted against.
 @MainActor
 @Suite("Measure/render equivalence")
 struct MeasureRenderEquivalenceTests {
@@ -185,5 +191,38 @@ struct MeasureRenderEquivalenceTests {
         #expect(
             unexpected.isEmpty,
             "Unexpected measure/render size divergence (see report above): \(unexpected)")
+    }
+
+    /// Pins the canonical flexibility values from the ``ViewSize`` contract.
+    ///
+    /// The size-invariant test above asserts the *relationship* `flexible ⟹
+    /// fills`, but a view whose content always fills the proposal (long wrapping
+    /// `Text`) would satisfy that relationship even if it wrongly claimed
+    /// `flexible`. This nails down the exact `isWidthFlexible` each canonical view
+    /// must report, so the "wrapping is fixed, not flexible" decision can't drift.
+    /// `sizeThatFits` is the canonical source (per the contract), so these read it
+    /// via `measureChild`.
+    @Test("Flexibility contract: canonical views report the contracted flag")
+    func flexibilityContract() {
+        func widthFlexible<V: View>(_ view: V, width: Int = 40) -> Bool {
+            measureChild(
+                view, proposal: ProposedSize(width: width, height: nil),
+                context: makeContext(width: width, height: height)
+            ).isWidthFlexible
+        }
+
+        // Fixed: render at a specific size, never grow past their ideal.
+        #expect(!widthFlexible(Text("Hello")), "short Text is fixed")
+        #expect(
+            !widthFlexible(Text("A fairly long line of text that wraps when the width is narrow")),
+            "wrapping Text is fixed — it reflows up to its ideal but does not fill unbounded space")
+        #expect(!widthFlexible(Text("hi").frame(width: 20)), "frame(width:) is fixed")
+        #expect(!widthFlexible(VStack { Text("a"); Text("bb") }), "VStack of fixed children is fixed")
+
+        // Flexible: fill the offered width past their ideal.
+        #expect(widthFlexible(Text("hi").frame(maxWidth: .infinity)), "frame(maxWidth:.infinity) is flexible")
+        #expect(
+            widthFlexible(VStack { Text("x").frame(maxWidth: .infinity) }),
+            "VStack with a flexible child is flexible")
     }
 }

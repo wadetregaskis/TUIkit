@@ -38,19 +38,47 @@ public struct ProposedSize: Equatable, Sendable {
 /// The size a view needs and whether it can flex.
 ///
 /// Views return this from `sizeThatFits` to communicate their space requirements.
-/// Flexible views (like Spacer, TextField) can expand to fill available space.
-/// Fixed views (like Text, Button) have a specific size they need.
+///
+/// ## Flexibility contract
+///
+/// An axis is **flexible** iff, when offered more space than the view's ideal
+/// along that axis, the view's *rendered output fills the offered extent*. The
+/// reported `width`/`height` is then a **minimum**. Examples: `Spacer`,
+/// `.frame(maxWidth: .infinity)`, `List` (fills its column).
+///
+/// An axis is **fixed** iff the view renders at a specific size and does *not*
+/// grow past its ideal when offered more. The reported `width`/`height` is then
+/// **exactly** what it renders.
+///
+/// - Important: A *wrapping* `Text` is **fixed**, not flexible. It reflows to
+///   use width up to its ideal (single-line) width — so a render-twice "+8"
+///   probe sees the width grow when the proposal is *below* that ideal and may
+///   wrongly call it flexible — but it never grows *past* the ideal, so it does
+///   not fill arbitrary space. Flexibility means "fills unbounded available
+///   space", not "reflows within it".
+///
+/// This yields the invariant the measure/render equivalence harness asserts, for
+/// available extent `E`:
+/// - flexible axis ⟹ `rendered == E` (it fills) and `reported ≤ E` (a minimum);
+/// - fixed axis ⟹ `rendered == reported` (exact).
+///
+/// For a `Layoutable` view, `sizeThatFits` is the **canonical** source of this
+/// flag. The `measureChild` render-to-measure fallback (for `Renderable`-only
+/// views) derives it from a "+8" probe, an approximation that can over-report
+/// flexibility for wrapping content; that heuristic is *not* the contract.
 public struct ViewSize: Equatable, Sendable {
-    /// The width this view needs (minimum if flexible).
+    /// The width this view needs — a *minimum* when ``isWidthFlexible``, else exact.
     public var width: Int
 
-    /// The height this view needs (minimum if flexible).
+    /// The height this view needs — a *minimum* when ``isHeightFlexible``, else exact.
     public var height: Int
 
-    /// Whether this view can expand horizontally to fill available space.
+    /// Whether this view fills extra horizontal space past its ideal (see the
+    /// flexibility contract on ``ViewSize``). `true` ⟹ ``width`` is a minimum.
     public var isWidthFlexible: Bool
 
-    /// Whether this view can expand vertically to fill available space.
+    /// Whether this view fills extra vertical space past its ideal (see the
+    /// flexibility contract on ``ViewSize``). `true` ⟹ ``height`` is a minimum.
     public var isHeightFlexible: Bool
 
     /// Creates a view size with explicit flexibility flags.
