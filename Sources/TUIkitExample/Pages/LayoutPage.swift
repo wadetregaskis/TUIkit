@@ -80,6 +80,27 @@ struct LayoutPage: View {
                 .border(color: .brightBlack)
             }
 
+            DemoSection("ZStack (Layering)") {
+                // Children stack back-to-front; alignment positions them within
+                // the union of their sizes. Here a label is centred over a band.
+                ZStack(alignment: .center) {
+                    Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
+                    Text(" on top ").bold().inverted()
+                }
+                .border(color: .brightBlack)
+            }
+
+            DemoSection("Divider") {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Above")
+                    Divider()
+                    Text("Between")
+                    Divider(character: "═")
+                    Text("Below")
+                }
+                .border(color: .brightBlack)
+            }
+
             Spacer()
         }
         .appHeader {

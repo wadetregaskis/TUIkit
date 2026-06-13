@@ -37,6 +37,25 @@ struct TextStylesPage: View {
                 Text("Inverted colors").inverted()
             }
 
+            DemoSection("Truncation & Line Limits") {
+                VStack(alignment: .leading, spacing: 1) {
+                    let long = "A long line that will not fit inside a 30-column frame"
+                    // Single-line truncation, cut at different ends (note the ellipsis).
+                    // `lineLimit`/`truncationMode` are Text modifiers, so they come
+                    // before `.frame` (which returns `some View`).
+                    Text(long).lineLimit(1).truncationMode(.tail).frame(width: 30)
+                    Text(long).lineLimit(1).truncationMode(.head).frame(width: 30)
+                    Text(long).lineLimit(1).truncationMode(.middle).frame(width: 30)
+                    // Multi-line wrap clamped to two lines.
+                    Text(
+                        "This paragraph wraps across several lines, but .lineLimit(2) "
+                            + "clamps it to the first two and drops the rest of the text."
+                    )
+                    .lineLimit(2)
+                    .frame(width: 46)
+                }
+            }
+
             Spacer()
         }
         .appHeader {
