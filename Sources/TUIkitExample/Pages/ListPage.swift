@@ -50,6 +50,20 @@ struct ListPage: View {
     @State var transientSelection: String?
 
     var body: some View {
+        // The page is taller than most terminals, so it's wrapped in a
+        // ScrollView (greedy on both axes) — scroll the wheel, or Tab through the
+        // controls and the viewport follows focus. The two selection lists below
+        // are given a fixed height so they don't consume the whole viewport
+        // (an unconstrained List fills its available height).
+        ScrollView {
+            content
+        }
+        .appHeader {
+            DemoAppHeader("List Demo")
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
             HStack(spacing: 2) {
@@ -65,6 +79,7 @@ struct ListPage: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .frame(height: 10)
 
                 List(
                     "Multi Selection",
@@ -78,6 +93,7 @@ struct ListPage: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .frame(height: 10)
             }
 
             DemoSection("Current Selections") {
@@ -166,11 +182,6 @@ struct ListPage: View {
                         + "and whether or not it has a selection binding)",
                 ]
             )
-
-            Spacer()
-        }
-        .appHeader {
-            DemoAppHeader("List Demo")
         }
     }
 
