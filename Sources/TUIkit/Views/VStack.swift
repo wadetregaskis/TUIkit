@@ -211,17 +211,29 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         }
 
         let leftPadding = String(repeating: " ", count: bufferOffset)
-        let rightPaddingCount = width - bufferOffset - buffer.width
+        let rightPadding = String(repeating: " ", count: max(0, width - bufferOffset - buffer.width))
 
+        // When the input is already uniform every line is exactly `buffer.width`,
+        // so the inner pad is empty — skip the per-line `strippedLength` entirely.
+        let inputIsUniform = buffer.linesAreUniformWidth
         for line in buffer.lines {
-            let lineWidth = line.strippedLength
-            let paddedLine = line + String(repeating: " ", count: max(0, buffer.width - lineWidth))
-            alignedLines.append(leftPadding + paddedLine + String(repeating: " ", count: max(0, rightPaddingCount)))
+            let paddedLine =
+                inputIsUniform
+                ? line
+                : line + String(repeating: " ", count: max(0, buffer.width - line.strippedLength))
+            alignedLines.append(leftPadding + paddedLine + rightPadding)
         }
 
-        // The content shifted right by `bufferOffset`; carry overlay layers
-        // (e.g. a Picker drop-down) by the same amount so they stay anchored.
-        return buffer.replacingLines(alignedLines, overlayShiftX: bufferOffset, overlayShiftY: 0)
+        // Each aligned line is exactly `width` wide (leftPad + buffer.width +
+        // rightPad), so hand that known width through — and flag it uniform — to
+        // skip re-measuring every line in `replacingLines`. That re-measure was
+        // ~32% of the AnyView-storm frame (a VStack aligning 500 rows), redundant
+        // with the widths just used above. The content shifted right by
+        // `bufferOffset`; carry overlay layers by the same amount so they stay
+        // anchored.
+        return buffer.replacingLines(
+            alignedLines, width: width, uniformWidth: true,
+            overlayShiftX: bufferOffset, overlayShiftY: 0)
     }
 }
 
