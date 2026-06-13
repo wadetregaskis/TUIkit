@@ -173,7 +173,8 @@ extension Table {
 // MARK: - Table Core (Internal Rendering)
 
 /// Internal core view that handles table rendering inside a ContainerView.
-private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable where Value.ID: Hashable {
+private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable, Layoutable
+where Value.ID: Hashable {
     let data: [Value]
     let columns: [TableColumn<Value>]
     let singleSelection: Binding<Value.ID?>?
@@ -186,6 +187,45 @@ private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable wher
 
     var body: Never {
         fatalError("_TableCore renders via Renderable")
+    }
+
+    /// Sizes the table without the render-to-measure fallback's *second* render.
+    ///
+    /// Being `Renderable`-only, `_TableCore` previously fell through `measureChild`
+    /// to the fallback, which renders the table TWICE per measure — once at the
+    /// proposal for its natural size, once at `naturalWidth + 8` purely to probe
+    /// width-flexibility — on top of the real render. On a 20k-row table that was
+    /// ~72% of the frame (`measureChild`).
+    ///
+    /// The probe is unnecessary here: a table grows with the available width iff a
+    /// column is `.flexible`/`.ratio` (those scale the content, which makes the
+    /// hugging container fill; all-`.fixed` columns give a fixed-width content the
+    /// container hugs). So flexibility is derived analytically and only the natural
+    /// render remains — a single render whose context mirrors the fallback's first
+    /// render exactly (`isMeasuring`, cleared `hasExplicitWidth`, proposed size),
+    /// so the reported size is identical to what the fallback produced.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        var measureContext = context
+        measureContext.isMeasuring = true
+        // Match the fallback: report the natural (minimum) size, not an expanded one.
+        measureContext.hasExplicitWidth = false
+        if let width = proposal.width {
+            measureContext.availableWidth = width
+        }
+        if let height = proposal.height {
+            measureContext.availableHeight = height
+        }
+        let buffer = renderToBuffer(context: measureContext)
+
+        let fillsWidth = columns.contains { column in
+            switch column.width {
+            case .flexible, .ratio: return true
+            case .fixed: return false
+            }
+        }
+        return fillsWidth
+            ? ViewSize.flexibleWidth(minWidth: buffer.width, height: buffer.height)
+            : ViewSize.fixed(buffer.width, buffer.height)
     }
 
     /// Populated-state snapshot the mouse handler needs.
