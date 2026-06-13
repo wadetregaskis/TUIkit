@@ -138,6 +138,54 @@ func renderToBuffer(context: RenderContext) -> FrameBuffer {
 
 > Important: Unresolved semantic colors hitting the `ANSIRenderer` trigger a `fatalError`. Always resolve via `Color.resolve(with:)` or use `context.environment.palette.*` in rendering code.
 
+## Text Styling
+
+Text emphasis can be applied per-``Text``, or **cascaded** to a whole subtree
+through the environment — exactly like ``View/foregroundStyle(_:)``.
+
+### Per-Text
+
+```swift
+Text("Bold").bold()
+Text("Quiet").dim().italic()
+```
+
+### Cascading (container-level)
+
+Container-level modifiers apply to every descendant ``Text`` and can be
+overridden closer to the content — the nearest modifier wins, per attribute:
+
+```swift
+VStack {
+    Text("Title")
+    Text("Subtitle")
+}
+.bold()                  // both lines bold
+.textCase(.uppercase)    // …and uppercased
+
+// A descendant opts out:
+VStack {
+    Text("Bold")
+    Text("Not bold").bold(false)   // closer wins
+}
+.bold()
+```
+
+Available cascading modifiers: `bold(_:)`, `italic(_:)`, `underline(_:)`,
+`strikethrough(_:)`, `fontWeight(_:)` (weight maps to bold / normal / faint on a
+terminal), and `textCase(_:)`.
+
+### Scoped styling
+
+``View/style(_:_:)`` targets a subset of views by ``StyleScope`` — including a
+semantic colour role, so you can, for example, dim every secondary-coloured text
+app-wide without touching primary text:
+
+```swift
+RootView()
+    .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
+```
+
 ## BorderStyle
 
 ``BorderStyle`` defines the actual Unicode characters for border rendering:

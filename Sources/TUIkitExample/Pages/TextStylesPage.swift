@@ -12,8 +12,18 @@ import TUIkit
 /// - Basic styles (bold, italic, underline, etc.)
 /// - Combined styles
 /// - Special effects (blink, inverted)
+/// - Cascading styles (container-level modifiers that apply to a whole subtree)
 struct TextStylesPage: View {
     var body: some View {
+        ScrollView {
+            content
+        }
+        .appHeader {
+            DemoAppHeader("Text Styles Demo")
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
             DemoSection("Basic Styles") {
                 Text("Normal text - no styling applied")
@@ -56,10 +66,40 @@ struct TextStylesPage: View {
                 }
             }
 
-            Spacer()
-        }
-        .appHeader {
-            DemoAppHeader("Text Styles Demo")
+            DemoSection("Cascading styles — applied to a whole subtree") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "Container-level modifiers cascade to every descendant, "
+                            + "like SwiftUI's — and a descendant can override."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    // .bold() on the VStack makes all three lines bold; the middle
+                    // one opts out with .bold(false) (the closer modifier wins).
+                    VStack(alignment: .leading) {
+                        Text("Bold by inheritance")
+                        Text("…but this line opts out").bold(false)
+                        Text("Bold again")
+                    }
+                    .bold()
+
+                    // A whole block uppercased via .textCase.
+                    VStack(alignment: .leading) {
+                        Text("uppercased as a block")
+                        Text("via .textCase(.uppercase)")
+                    }
+                    .textCase(.uppercase)
+
+                    // Role-scoped: dim ALL secondary-coloured text in this block,
+                    // without touching the primary line.
+                    VStack(alignment: .leading) {
+                        Text("Primary text stays normal")
+                        Text("Secondary text is dimmed by its role")
+                            .foregroundStyle(.palette.foregroundSecondary)
+                    }
+                    .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
+                }
+            }
         }
     }
 }

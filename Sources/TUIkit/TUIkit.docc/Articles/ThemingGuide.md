@@ -17,7 +17,16 @@ TUIkit includes a full theming system with six built-in palettes inspired by cla
 | Blue | `.blue` | VFD displays |
 | White | `.white` | DEC VT100, VT220 |
 
-All built-in palettes are instances of ``SystemPalette``.
+These six classic-phosphor presets are instances of ``SystemPalette``.
+
+In addition, TUIkit ships recreations of the ten built-in **macOS Terminal.app**
+profiles as ``TerminalProfilePalette`` — Basic, Grass, Homebrew, Man Page, Novel,
+Ocean, Pro, Red Sands, Silver Aerogel and Solid Colors — built from the exact
+colours those profiles ship with.
+
+``PaletteRegistry/all`` lists every built-in palette (the six presets followed by
+the ten profiles); ``PaletteRegistry/phosphorPresets`` and
+``PaletteRegistry/terminalProfiles`` expose the two groups separately.
 
 ## Using Palettes
 

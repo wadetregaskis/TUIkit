@@ -463,10 +463,12 @@ Each is behaviour-preserving by default and individually testable:
 Comprehensive coverage of all built-in controls, delivered incrementally. Order
 reflects: colour-role attributes early; `disabled` late but before tint; tint last.
 
-1. **`StyleAttributes` + scoped-cascade core** — env value, `StyleScope`, the
-   resolver (proximity-per-property); wire into `Text` (`.all`/`.text` +
-   `.semanticColor`). Broad modifiers `.bold/.italic/.underline/.fontWeight/.textCase`
-   (+ `FontWeight`, `TextCase`). Delivers (a), (e), (f-text). `Text.bold()` unchanged.
+1. ✅ **(shipped)** **`StyleAttributes` + scoped-cascade core** — env value,
+   `StyleScope`, the resolver (proximity-per-property); wired into `Text`
+   (`.all`/`.text` + `.semanticColor`). Broad modifiers
+   `.bold/.italic/.underline/.strikethrough/.fontWeight/.textCase` (+ `FontWeight`,
+   `TextCase`) and the generic `.style(_:_:)`. Delivers (a), (e), (f-text).
+   `Text.bold()` unchanged. (TUIkitExample: Text Styles page "Cascading styles".)
 2. **Chrome roles** — `Section` header/footer resolve via `.chrome(...)`; defaults
    preserve the current look.
 3. **Control targeting, control by control** — soft-default styles + cascade
