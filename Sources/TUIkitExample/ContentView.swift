@@ -35,6 +35,7 @@ enum DemoPage: Int, CaseIterable {
     case progress
     case mouse
     case theme
+    case emptyState
 }
 
 // MARK: - Content View (Page Router)
@@ -182,6 +183,9 @@ struct ContentView: View {
         case .theme:
             ThemePage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .emptyState:
+            ContentUnavailablePage()
+                .statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
@@ -208,7 +212,7 @@ struct ContentView: View {
             "[": .sliders, "]": .steppers,
             ";": .splitView, "'": .imageFile, ",": .imageURL,
             ".": .emoji, "/": .pickers, "`": .progress,
-            "m": .mouse, "t": .theme,
+            "m": .mouse, "t": .theme, "e": .emptyState,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
