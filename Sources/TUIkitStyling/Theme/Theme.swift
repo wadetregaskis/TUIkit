@@ -112,10 +112,23 @@ extension Palette {
 
 /// Registry of available palettes.
 public struct PaletteRegistry {
-    /// All available palettes in cycling order, built from ``SystemPalette/Preset``.
+    /// The classic-phosphor presets, built from ``SystemPalette/Preset``.
     ///
     /// Order: Green → Amber → Red → Violet → Blue → White
-    public static let all: [any Palette] = SystemPalette.Preset.allCases.map { SystemPalette($0) }
+    public static let phosphorPresets: [any Palette] = SystemPalette.Preset.allCases.map { SystemPalette($0) }
+
+    /// Recreations of the built-in macOS Terminal.app profiles, built from
+    /// ``TerminalProfilePalette/Profile``.
+    ///
+    /// Order: Basic → Grass → Homebrew → Man Page → Novel → Ocean → Pro →
+    /// Red Sands → Silver Aerogel → Solid Colors
+    public static let terminalProfiles: [any Palette] = TerminalProfilePalette.Profile.allCases.map {
+        TerminalProfilePalette($0)
+    }
+
+    /// All built-in palettes in cycling order: the phosphor presets first, then
+    /// the Terminal.app profiles.
+    public static let all: [any Palette] = phosphorPresets + terminalProfiles
 
     /// Finds a palette by ID.
     public static func palette(withId id: String) -> (any Palette)? {

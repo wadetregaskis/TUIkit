@@ -14,18 +14,23 @@ struct PaletteRegistryTests {
 
     @Test("Registry contains all predefined palettes")
     func registryCount() {
-        // Green, Amber, Red, Violet, Blue, White = 6
-        #expect(PaletteRegistry.all.count == 6)
+        // 6 phosphor presets + 10 Terminal.app profiles = 16.
+        #expect(PaletteRegistry.phosphorPresets.count == 6)
+        #expect(PaletteRegistry.terminalProfiles.count == 10)
+        #expect(PaletteRegistry.all.count == 16)
     }
 
     @Test("Registry cycling order follows color spectrum")
     func registryCyclingOrder() {
+        // Phosphor presets lead the cycle, in spectrum order.
         #expect(PaletteRegistry.all[0].id == "green")
         #expect(PaletteRegistry.all[1].id == "amber")
         #expect(PaletteRegistry.all[2].id == "red")
         #expect(PaletteRegistry.all[3].id == "violet")
         #expect(PaletteRegistry.all[4].id == "blue")
         #expect(PaletteRegistry.all[5].id == "white")
+        // Terminal.app profiles follow.
+        #expect(PaletteRegistry.all[6].id == "terminal.basic")
     }
 
     @Test("Registry finds palette by ID")
