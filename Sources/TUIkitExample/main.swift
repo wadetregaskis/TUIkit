@@ -21,11 +21,17 @@ struct ExampleApp: App {
     /// override stays in sync.)
     @State private var palette = CustomizablePalette(from: SystemPalette(.green))
 
+    /// App-wide styling (tint + text-attribute toggles), edited on the Theme
+    /// page. The scene's `.theme` folds the tint into the palette so the app
+    /// header and status bar pick it up too; ContentView applies the chrome and
+    /// control text styling to the pages.
+    @State private var styling = ExampleStyling()
+
     var body: some Scene {
         WindowGroup {
-            ContentView(palette: $palette)
+            ContentView(palette: $palette, styling: $styling)
         }
-        .palette(palette)
+        .theme(Theme(palette: palette, tint: styling.tint))
     }
 }
 

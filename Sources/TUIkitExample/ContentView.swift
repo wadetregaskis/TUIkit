@@ -38,6 +38,18 @@ enum DemoPage: Int, CaseIterable {
     case emptyState
 }
 
+// MARK: - App-wide styling
+
+/// App-wide styling toggles edited on the Theme page and applied to every page,
+/// demonstrating the styling cascade: a tint (accent override), uppercase
+/// section headers (a `.chrome` role), and bold button text (a `.control`
+/// scope).
+struct ExampleStyling: Equatable {
+    var tint: Color?
+    var uppercaseSectionHeaders = false
+    var boldButtons = false
+}
+
 // MARK: - Content View (Page Router)
 
 /// The main content view that switches between pages.
@@ -50,6 +62,9 @@ struct ContentView: View {
     /// F2 loads the next preset into it; the Theme page edits it. Editing this
     /// re-themes every page (it drives the scene's `.palette`).
     @Binding var palette: CustomizablePalette
+    /// App-wide styling toggles (tint, uppercase headers, bold buttons), edited on
+    /// the Theme page and applied to every page via the styling cascade.
+    @Binding var styling: ExampleStyling
     @State var currentPage: DemoPage = .menu
     @State var menuSelection: Int = 0
     /// Which built-in preset F2 last loaded — so F2 can cycle from there.
@@ -59,8 +74,9 @@ struct ContentView: View {
     // re-renders every page. (Palette lives in `palette` above, not here.)
     @Environment(\.appearanceManager) private var appearanceManager
 
-    init(palette: Binding<CustomizablePalette>) {
+    init(palette: Binding<CustomizablePalette>, styling: Binding<ExampleStyling>) {
         self._palette = palette
+        self._styling = styling
     }
 
     var body: some View {
@@ -70,6 +86,13 @@ struct ContentView: View {
         // Show current page based on state
         // Note: Background color is set by AppRunner using theme.background
         pageContent(for: currentPage, pageSetter: pageSetter)
+            // App-wide styling from the Theme page: the scene's `.theme` handles
+            // tint; these add chrome + control text styling across every page.
+            // `nil` attributes mean "no override", so the toggles are off by default.
+            .style(.chrome(.sectionHeader)) {
+                $0.textCase = styling.uppercaseSectionHeaders ? .uppercase : nil
+            }
+            .buttonTextStyle { $0.bold = styling.boldButtons ? true : nil }
             .onKeyPress { event in
                 switch event.key {
                 case .escape:
@@ -184,7 +207,7 @@ struct ContentView: View {
             MousePage()
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .theme:
-            ThemePage(palette: $palette)
+            ThemePage(palette: $palette, styling: $styling)
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .emptyState:
             ContentUnavailablePage()

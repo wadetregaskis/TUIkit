@@ -17,7 +17,17 @@ import TUIkit
 /// axis, cycled through the shared `appearanceManager`.
 struct ThemePage: View {
     @Binding var palette: CustomizablePalette
+    @Binding var styling: ExampleStyling
     @Environment(\.appearanceManager) private var appearanceManager
+
+    /// Tint options offered in the live-styling section (name + colour).
+    private static let tintOptions: [(name: String, color: Color?)] = [
+        ("None", nil),
+        ("Success", .palette.success),
+        ("Warning", .palette.warning),
+        ("Error", .palette.error),
+        ("Info", .palette.info),
+    ]
 
     /// The semantic colours, paired with editable key paths, for display + editing.
     private static let semanticColors: [(name: String, keyPath: WritableKeyPath<CustomizablePalette, Color>)] = [
@@ -69,6 +79,10 @@ struct ThemePage: View {
                 }
             }
         )
+        let tintSelection = Binding(
+            get: { Self.tintOptions.first { $0.color == styling.tint }?.name ?? "None" },
+            set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color ?? nil }
+        )
 
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
@@ -89,6 +103,35 @@ struct ThemePage: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
+                }
+
+                DemoSection("Live styling — applies to every page") {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(
+                            "These use the styling cascade: tint overrides the "
+                                + "accent app-wide; the toggles add a chrome and a "
+                                + "control-scoped text style across all pages."
+                        )
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                        Picker("Tint", selection: tintSelection) {
+                            ForEach(0..<Self.tintOptions.count, id: \.self) { index in
+                                Text(Self.tintOptions[index].name).tag(Self.tintOptions[index].name)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+
+                        Toggle(
+                            "UPPERCASE section headers",
+                            isOn: Binding(
+                                get: { styling.uppercaseSectionHeaders },
+                                set: { styling.uppercaseSectionHeaders = $0 }))
+                        Toggle(
+                            "Bold button text",
+                            isOn: Binding(
+                                get: { styling.boldButtons },
+                                set: { styling.boldButtons = $0 }))
+                    }
                 }
 
                 DemoSection("Semantic Colours — full set") {

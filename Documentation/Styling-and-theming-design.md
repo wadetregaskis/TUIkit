@@ -1,8 +1,9 @@
 # TUIkit styling & theming — design
 
-Status: **design agreed; implementation in progress (phased).** This document is
-the reference for the styling/theming work: the model, the public API shape,
-resolution rules, a SwiftUI comparison, worked examples, and the phased plan.
+Status: **implemented** (phases 1–7 shipped; one follow-up noted below — List/Table
+container-attribute cascade). This document is the reference for the
+styling/theming work: the model, the public API shape, resolution rules, a
+SwiftUI comparison, worked examples, and the phased plan.
 
 ## 1. Goal & principles
 
@@ -511,8 +512,12 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    specificity); the Scene modifier applies the resolved (tinted) palette
    app-wide via the existing scene-palette mechanism. Built from any palette
    (phosphor presets / Terminal profiles).
-7. **Example UI** — theme editor exercising broad, role-based, and control/variant
-   overrides + per-section demos.
+7. ✅ **(shipped) Example UI** — the Theme page's "Live styling" section drives
+   app-wide `ExampleStyling` (tint + uppercase-headers + bold-buttons): the scene
+   `.theme` folds the tint into the palette (app header/status bar included), and
+   ContentView applies a `.chrome(.sectionHeader)` and a `.buttonTextStyle` across
+   every page. Plus the per-control demos (Buttons/Toggle/Slider/Picker/Stepper/
+   TextField/RadioButton pages).
 
 ## Variant — typed-per-control vs. one shared enum
 
