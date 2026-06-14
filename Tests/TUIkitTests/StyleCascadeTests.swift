@@ -174,3 +174,33 @@ struct StyleCascadeTests {
         #expect(lines.contains { $0.contains("Body") }, "body should be unaffected")
     }
 }
+
+@MainActor
+@Suite("Button style cascade")
+struct ButtonStyleCascadeTests {
+
+    @Test(".buttonTextStyle colours the button label")
+    func buttonTextForeground() {
+        let view = Button("Save") {}.buttonTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("A destructive role keeps its colour despite a broad button override")
+    func destructiveStaysLoadBearing() {
+        let view = Button("Delete", role: .destructive) {}
+            .buttonTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(!line.contains("38;2;7;8;9"), "destructive label must not take the broad override")
+    }
+
+    @Test("Variant scoping targets only the matching button variant")
+    func variantScoping() {
+        // .automatic targets the default style → applies.
+        let matched = Button("A") {}.buttonTextStyle(.automatic) { $0.foreground = .rgb(7, 8, 9) }
+        #expect(renderToBuffer(matched, context: makeRenderContext()).lines.joined().contains("38;2;7;8;9"))
+        // .primary targets the primary style → does not apply to a default button.
+        let unmatched = Button("A") {}.buttonTextStyle(.primary) { $0.foreground = .rgb(7, 8, 9) }
+        #expect(!renderToBuffer(unmatched, context: makeRenderContext()).lines.joined().contains("38;2;7;8;9"))
+    }
+}

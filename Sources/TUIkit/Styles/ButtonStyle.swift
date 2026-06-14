@@ -256,12 +256,17 @@ private struct _ButtonAppearance {
     /// Whether the button renders without brackets or background.
     var isPlain: Bool
 
+    /// The variant token used to scope `.controlVariant(.button, …)` style
+    /// entries (see ``Button/Variant``).
+    var variant: String
+
     /// The default appearance — dimmed foreground, not bold.
     static let `default` = Self(
         foregroundColor: Color.palette.foregroundSecondary,
         isBold: false,
         horizontalPadding: 1,
-        isPlain: false
+        isPlain: false,
+        variant: "default"
     )
 
     /// The primary appearance — bold, accent-coloured.
@@ -269,7 +274,8 @@ private struct _ButtonAppearance {
         foregroundColor: Color.palette.accent,
         isBold: true,
         horizontalPadding: 1,
-        isPlain: false
+        isPlain: false,
+        variant: "primary"
     )
 
     /// The destructive appearance — error-coloured.
@@ -277,7 +283,8 @@ private struct _ButtonAppearance {
         foregroundColor: Color.palette.error,
         isBold: false,
         horizontalPadding: 1,
-        isPlain: false
+        isPlain: false,
+        variant: "destructive"
     )
 
     /// The success appearance — success-coloured.
@@ -285,7 +292,8 @@ private struct _ButtonAppearance {
         foregroundColor: Color.palette.success,
         isBold: false,
         horizontalPadding: 1,
-        isPlain: false
+        isPlain: false,
+        variant: "success"
     )
 
     /// The plain appearance — no brackets, no background, no padding.
@@ -293,7 +301,8 @@ private struct _ButtonAppearance {
         foregroundColor: nil,
         isBold: false,
         horizontalPadding: 0,
-        isPlain: true
+        isPlain: true,
+        variant: "plain"
     )
 }
 
@@ -332,9 +341,19 @@ private struct _ButtonStyleBody: View, Renderable {
             ? Color.palette.error
             : appearance.foregroundColor
 
-        // Focused buttons render bold — this replaces the old explicit
-        // "focused style" that was a bold variant of the normal style.
-        let isBold = appearance.isBold || isFocused
+        // Scoped style cascade for this button (.control(.button) + this style's
+        // variant). The label's colour/weight inherit it as soft overrides — but
+        // a destructive role's error colour stays load-bearing (not broadly
+        // overridable), so it's excluded from the cascade foreground.
+        let cascaded = context.environment.styleCascade.resolve(
+            for: [.all, .text, .control(.button), .controlVariant(.button, appearance.variant)])
+        let cascadeForeground: Color? =
+            configuration.role == .destructive ? nil : cascaded.foreground
+
+        // Focused buttons render bold — this replaces the old explicit "focused
+        // style" that was a bold variant of the normal style. A cascade `.bold`
+        // (e.g. `.buttonTextStyle { $0.bold = true }`) adds to that.
+        let isBold = appearance.isBold || isFocused || (cascaded.bold ?? false)
 
         let padding = String(repeating: " ", count: appearance.horizontalPadding)
 
@@ -352,7 +371,8 @@ private struct _ButtonStyleBody: View, Renderable {
             let foregroundColor: Color =
                 isDisabled
                 ? palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-                : (baseForeground?.resolve(with: palette) ?? palette.accent)
+                : (cascadeForeground?.resolve(with: palette)
+                    ?? baseForeground?.resolve(with: palette) ?? palette.accent)
 
             var textStyle = TextStyle()
             textStyle.foregroundColor = foregroundColor
@@ -385,10 +405,13 @@ private struct _ButtonStyleBody: View, Renderable {
             : ViewConstants.focusBorderDim
         let buttonBg = palette.accent.opacity(buttonBgOpacity)
 
-        // Label foreground: bold = tinted, otherwise a dimmed foreground.
+        // Label foreground: a scoped cascade colour wins (in every state);
+        // otherwise bold = tinted, unfocused = a dimmed foreground.
         let labelFg: Color
         if isDisabled {
             labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        } else if let cascadeForeground {
+            labelFg = cascadeForeground.resolve(with: palette)
         } else if isBold {
             labelFg = baseForeground?.resolve(with: palette) ?? palette.accent
         } else {
@@ -482,5 +505,63 @@ extension View {
     /// - Returns: A view whose buttons use the specified style.
     public func buttonStyle<S: ButtonStyle>(_ style: S) -> some View {
         environment(\.buttonStyle, style)
+    }
+}
+
+// MARK: - Button Variants & Targeted Text Styling
+
+extension Button {
+    /// A built-in button visual variant, used to scope styling to a specific
+    /// kind of button via ``SwiftUI/View/buttonTextStyle(_:_:)``.
+    public enum Variant: Sendable, Hashable {
+        /// The default bracketed style (``DefaultButtonStyle``).
+        case automatic
+        /// The bold, accent-emphasised style (``PrimaryButtonStyle``).
+        case primary
+        /// The error-coloured style (``DestructiveButtonStyle``).
+        case destructive
+        /// The success-coloured style (``SuccessButtonStyle``).
+        case success
+        /// The minimal, bracket-less style (``PlainButtonStyle``).
+        case plain
+
+        /// The type-erased token stored in `.controlVariant(.button, _)`.
+        var token: String {
+            switch self {
+            case .automatic: return "default"
+            case .primary: return "primary"
+            case .destructive: return "destructive"
+            case .success: return "success"
+            case .plain: return "plain"
+            }
+        }
+    }
+}
+
+extension View {
+    /// Styles the *text* of every button in this view's subtree (a
+    /// `.control(.button)`-scoped style entry).
+    ///
+    /// ```swift
+    /// Sidebar().buttonTextStyle { $0.bold = true; $0.foreground = .green }
+    /// ```
+    ///
+    /// The button's structure (brackets, background, focus glow) is unchanged;
+    /// only its label colour/attributes are overridden. A `.destructive` role's
+    /// error colour stays load-bearing and is not overridden by a broad entry.
+    public func buttonTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.button), build)
+    }
+
+    /// Styles the text of buttons of a specific ``Button/Variant`` in this
+    /// view's subtree (a `.controlVariant(.button, …)`-scoped entry).
+    ///
+    /// ```swift
+    /// RootView().buttonTextStyle(.automatic) { $0.foreground = .blue }
+    /// ```
+    public func buttonTextStyle(
+        _ variant: Button.Variant, _ build: (inout StyleAttributes) -> Void
+    ) -> some View {
+        style(.controlVariant(.button, variant.token), build)
     }
 }
