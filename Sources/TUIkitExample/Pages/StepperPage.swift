@@ -25,13 +25,15 @@ struct StepperPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Basic Stepper") {
+            DemoSection("Basic Stepper (+ .stepperTextStyle)") {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
                         Text("Quantity:").foregroundStyle(.palette.foregroundSecondary)
                         Stepper("Quantity", value: $quantity)
                     }
                 }
+                // .stepperTextStyle re-themes the value read-out (arrows unaffected).
+                .stepperTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
             DemoSection("With Range Constraints") {

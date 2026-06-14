@@ -363,7 +363,9 @@ private struct _StepperCore<Label: View>: View, Renderable {
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
-            pulsePhase: context.environment.pulsePhase
+            pulsePhase: context.environment.pulsePhase,
+            valueStyle: context.environment.styleCascade.resolve(
+                for: [.all, .text, .control(.stepper)])
         )
 
         var buffer = FrameBuffer(text: content)
@@ -567,7 +569,8 @@ private struct _StepperCore<Label: View>: View, Renderable {
         isFocused: Bool,
         isHovered: Bool,
         palette: any Palette,
-        pulsePhase: Double
+        pulsePhase: Double,
+        valueStyle: StyleAttributes
     ) -> String {
         // Arrow and value colors:
         //   - Focused: pulsing accent
@@ -597,10 +600,26 @@ private struct _StepperCore<Label: View>: View, Renderable {
         let leftArrow = ANSIRenderer.colorize(TerminalSymbols.leftArrow, foreground: arrowColor)
         let rightArrow = ANSIRenderer.colorize(TerminalSymbols.rightArrow, foreground: arrowColor)
 
-        // Build value display
-        let valueText = ANSIRenderer.colorize(" \(value.wrappedValue) ", foreground: valueColor)
+        // Build value display — its colour/weight inherit the stepper's scoped
+        // style cascade (`.stepperTextStyle { … }`) as soft overrides.
+        let effectiveValueColor =
+            isDisabled ? valueColor : (valueStyle.foreground?.resolve(with: palette) ?? valueColor)
+        let valueText = ANSIRenderer.colorize(
+            " \(value.wrappedValue) ",
+            foreground: effectiveValueColor,
+            bold: !isDisabled && (valueStyle.bold ?? false),
+            underline: !isDisabled && (valueStyle.underline ?? false))
 
         // Pulsing arrows indicate focus - no extra markers needed
         return "\(leftArrow)\(valueText)\(rightArrow)"
+    }
+}
+
+extension View {
+    /// Styles the *value read-out* text of every stepper in this view's subtree
+    /// (a `.control(.stepper)`-scoped style entry). The +/- arrows are
+    /// unaffected.
+    public func stepperTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.stepper), build)
     }
 }

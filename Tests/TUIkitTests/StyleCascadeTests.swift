@@ -254,3 +254,16 @@ struct PickerStyleCascadeTests {
         #expect(line.contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("Stepper style cascade")
+struct StepperStyleCascadeTests {
+
+    @Test(".stepperTextStyle colours the value read-out")
+    func stepperValueForeground() {
+        let view = Stepper("Quantity", value: .constant(5))
+            .stepperTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+}

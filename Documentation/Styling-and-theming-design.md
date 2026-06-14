@@ -483,8 +483,9 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    resolve `.control(.toggle)`; `.toggleTextStyle`. ✅ **Slider** — its value
    read-out resolves `.control(.slider)`; `.sliderTextStyle`. ✅ **Picker** — its
    subtree is tagged `.picker` so label/option Text resolves `.control(.picker)`;
-   `.pickerTextStyle`. Then Stepper, TextField, RadioButton, List/Table rows, …
-   until **all built-in controls** are covered. Delivers (b), (c), (g).
+   `.pickerTextStyle`. ✅ **Stepper** — value read-out resolves `.control(.stepper)`;
+   `.stepperTextStyle`. Then TextField, RadioButton, List/Table rows, … until
+   **all built-in controls** are covered. Delivers (b), (c), (g).
 4. **Cascading `.disabled`** — env `isEnabled`; controls AND-combine.
 5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
    (control by control).
