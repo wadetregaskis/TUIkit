@@ -489,8 +489,11 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    keep their colours); `.textFieldTextStyle` / `.secureFieldTextStyle`. ✅
    **RadioButton** — labels resolve `.control(.radioButton)` (claimed only when
    not already inside another control, so a Picker's radio options stay
-   `.picker`); `.radioButtonTextStyle`. Then List/Table rows … until **all
-   built-in controls** are covered. Delivers (b), (c), (g).
+   `.picker`); `.radioButtonTextStyle`. ✅ **List/Table rows** — row content is
+   ordinary Text: per-row styling and broad `.foregroundStyle` reach it (verified).
+   **Follow-up:** container-level *attribute* cascade (e.g. `.bold()` on the List)
+   does not yet reach rows — the lazy row-buffer path doesn't re-key on the style
+   cascade; tracked below. All interactive controls covered. Delivers (b), (c), (g).
 4. **Cascading `.disabled`** — env `isEnabled`; controls AND-combine.
 5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
    (control by control).
@@ -521,6 +524,16 @@ Cons / cost:
 Shared `StyleVariant` was rejected: variants don't map across controls (a button's
 `.bordered` is meaningless for a slider), so a shared enum is either too generic to
 be useful or a grab-bag that permits invalid combinations.
+
+## Follow-ups
+
+- **List/Table row attribute cascade.** Broad `.foregroundStyle` and per-row Text
+  styling reach row content, but container-level *attribute* entries (e.g.
+  `.bold()` / `.style(.control(.list)) { … }` on the List) don't yet reach row
+  text: the lazy/cached row-buffer path doesn't re-key on `styleCascade`. Wiring
+  it needs the row content cache to include the cascade in its key (carefully, to
+  preserve the List's per-frame row memoisation). Until then, style row text
+  per-row or via the palette.
 
 ## Resolved decisions (was: open questions)
 

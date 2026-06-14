@@ -282,6 +282,38 @@ struct TextFieldStyleCascadeTests {
 }
 
 @MainActor
+@Suite("List/Table row style cascade")
+struct ListRowStyleCascadeTests {
+
+    // List/Table row content is ordinary Text. Its colour is styleable both
+    // per-row (on the row's own Text) and broadly (`.foregroundStyle` reaches
+    // rows). NOTE: container-level *attribute* cascade (e.g. `.bold()` on the
+    // List itself) does not yet reach row text — the lazy row-buffer path does
+    // not re-key on the style cascade. Tracked as a follow-up in
+    // Documentation/Styling-and-theming-design.md. Per-row attributes and broad
+    // foreground (below) are the supported styling for rows today.
+
+    @Test("Broad .foregroundStyle reaches List row text")
+    func listRowForeground() {
+        let view = List {
+            ForEach(["Alpha"], id: \.self) { Text($0) }
+        }
+        .foregroundStyle(.rgb(7, 8, 9))
+        let line = renderToBuffer(view, context: makeRenderContext(width: 30, height: 8)).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("A row's own Text styling renders in the List")
+    func perRowStyling() {
+        let view = List {
+            ForEach(["Alpha"], id: \.self) { Text($0).foregroundStyle(.rgb(7, 8, 9)) }
+        }
+        let line = renderToBuffer(view, context: makeRenderContext(width: 30, height: 8)).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+}
+
+@MainActor
 @Suite("RadioButton style cascade")
 struct RadioButtonStyleCascadeTests {
 
