@@ -273,6 +273,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     private typealias StateIndex = TextFieldStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
         let cursorStyle = context.environment.textCursorStyle

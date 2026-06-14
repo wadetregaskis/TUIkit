@@ -61,6 +61,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
 

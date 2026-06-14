@@ -345,6 +345,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     private typealias StateIndex = SliderStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
 

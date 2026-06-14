@@ -494,7 +494,11 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    **Follow-up:** container-level *attribute* cascade (e.g. `.bold()` on the List)
    does not yet reach rows — the lazy row-buffer path doesn't re-key on the style
    cascade; tracked below. All interactive controls covered. Delivers (b), (c), (g).
-4. **Cascading `.disabled`** — env `isEnabled`; controls AND-combine.
+4. ✅ **(shipped) Cascading `.disabled`** — env `isEnabled` + an additive
+   `DisabledModifier` (`.disabled(_:)` on any View); every interactive control
+   combines `self.isDisabled || !environment.isEnabled`. A descendant can't
+   re-enable what an ancestor disabled. (TUIkitExample: Buttons page "Cascading
+   .disabled".)
 5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
    (control by control).
 6. **`Theme` + `.theme(_:)`** (View + Scene) — expands to env keys + scoped entries;

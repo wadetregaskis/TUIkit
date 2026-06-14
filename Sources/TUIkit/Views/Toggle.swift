@@ -263,6 +263,7 @@ private struct _ToggleCore<Label: View>: View, Renderable {
     private typealias StateIndex = ToggleStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
 

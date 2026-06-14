@@ -178,6 +178,9 @@ private struct _ButtonCore: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Combine this button's own disabled state with the cascading
+        // `.disabled(_:)` environment value (a container can disable it).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,

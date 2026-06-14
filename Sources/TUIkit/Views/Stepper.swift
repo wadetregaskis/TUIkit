@@ -316,6 +316,7 @@ private struct _StepperCore<Label: View>: View, Renderable {
     private typealias StateIndex = StepperStateIndex
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
 

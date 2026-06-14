@@ -227,6 +227,37 @@ struct ToggleStyleCascadeTests {
 }
 
 @MainActor
+@Suite("Cascading disabled")
+struct CascadingDisabledTests {
+
+    @Test("A container .disabled() disables a control like its own .disabled()")
+    func containerDisablesControl() {
+        let viaContainer = VStack { Button("Save") {} }.disabled()
+        let viaInstance = VStack { Button("Save") {}.disabled() }
+        let a = renderToBuffer(viaContainer, context: makeRenderContext()).lines
+        let b = renderToBuffer(viaInstance, context: makeRenderContext()).lines
+        #expect(a == b)
+    }
+
+    @Test("Disabled is additive — a descendant cannot re-enable")
+    func disabledIsAdditive() {
+        // Inner .disabled(false) must NOT re-enable inside a disabled container.
+        let reEnabled = VStack { Button("Save") {}.disabled(false) }.disabled(true)
+        let plainDisabled = VStack { Button("Save") {} }.disabled(true)
+        let a = renderToBuffer(reEnabled, context: makeRenderContext()).lines
+        let b = renderToBuffer(plainDisabled, context: makeRenderContext()).lines
+        #expect(a == b)
+    }
+
+    @Test("An enabled control renders differently from a disabled one")
+    func enabledDiffersFromDisabled() {
+        let enabled = renderToBuffer(VStack { Button("Save") {} }, context: makeRenderContext()).lines
+        let disabled = renderToBuffer(VStack { Button("Save") {} }.disabled(), context: makeRenderContext()).lines
+        #expect(enabled != disabled)
+    }
+}
+
+@MainActor
 @Suite("Slider style cascade")
 struct SliderStyleCascadeTests {
 

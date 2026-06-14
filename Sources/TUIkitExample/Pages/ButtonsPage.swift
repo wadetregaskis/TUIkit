@@ -77,6 +77,15 @@ struct ButtonsPage: View {
                 }
             }
 
+            DemoSection("Cascading .disabled (whole group)") {
+                // .disabled on a container cascades to every control inside.
+                VStack(alignment: .leading, spacing: 1) {
+                    Button("Can't click me") { clickCount += 1 }
+                    Toggle("Can't toggle me", isOn: .constant(true))
+                }
+                .disabled(true)
+            }
+
             DemoSection("Plain Style (No Border)") {
                 HStack(spacing: 2) {
                     Button("Link 1") { clickCount += 1 }

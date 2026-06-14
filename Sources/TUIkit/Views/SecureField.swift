@@ -259,6 +259,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
         let cursorStyle = context.environment.textCursorStyle
