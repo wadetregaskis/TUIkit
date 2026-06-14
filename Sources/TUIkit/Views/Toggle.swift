@@ -106,6 +106,17 @@ extension View {
     public func toggleStyle<S: ToggleStyle>(_ style: S) -> some View {
         environment(\.toggleStyle, style)
     }
+
+    /// Styles the *label* text of every toggle in this view's subtree (a
+    /// `.control(.toggle)`-scoped style entry). The checkbox indicator is
+    /// unaffected.
+    ///
+    /// ```swift
+    /// SettingsForm().toggleTextStyle { $0.italic = true }
+    /// ```
+    public func toggleTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.toggle), build)
+    }
 }
 
 // MARK: - Toggle
@@ -287,6 +298,9 @@ private struct _ToggleCore<Label: View>: View, Renderable {
         // background. A disabled toggle dims its label; otherwise the label
         // inherits the normal foreground colour.
         var labelContext = context
+        // Tag the label subtree so its Text resolves `.control(.toggle)` style
+        // entries (e.g. `.toggleTextStyle { … }`).
+        labelContext.environment.controlKind = .toggle
         if isDisabled {
             labelContext.environment.foregroundStyle =
                 palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)

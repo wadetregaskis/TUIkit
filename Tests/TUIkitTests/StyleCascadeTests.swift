@@ -204,3 +204,24 @@ struct ButtonStyleCascadeTests {
         #expect(!renderToBuffer(unmatched, context: makeRenderContext()).lines.joined().contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("Toggle style cascade")
+struct ToggleStyleCascadeTests {
+
+    @Test(".toggleTextStyle colours the toggle label")
+    func toggleTextForeground() {
+        let view = Toggle("Wi-Fi", isOn: .constant(true))
+            .toggleTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("A broad .control(.button) entry does not touch a toggle label")
+    func toggleIgnoresButtonScope() {
+        let view = Toggle("Wi-Fi", isOn: .constant(true))
+            .buttonTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(!line.contains("38;2;7;8;9"))
+    }
+}

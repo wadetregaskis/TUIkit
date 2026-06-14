@@ -294,6 +294,14 @@ extension Text: Renderable, Layoutable {
             if let chromeRole {
                 scopes.insert(.chrome(chromeRole))
             }
+            // A control's label (set by the control around its label subtree)
+            // matches `.control(kind)` and, with a variant, `.controlVariant`.
+            if let controlKind = context.environment.controlKind {
+                scopes.insert(.control(controlKind))
+                if let variant = context.environment.controlVariant {
+                    scopes.insert(.controlVariant(controlKind, variant))
+                }
+            }
             let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
             cascaded = cascade.resolve(for: scopes).merged(over: base)
             effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)

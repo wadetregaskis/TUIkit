@@ -25,6 +25,15 @@ struct TogglePage: View {
                 }
             }
 
+            DemoSection("Themeable label text (.toggleTextStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    // Only the labels are restyled; the [x] indicator is unaffected.
+                    Toggle("Italic, info-coloured label", isOn: $darkModeEnabled)
+                    Toggle("…and this one too", isOn: $showHiddenFiles)
+                }
+                .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
+            }
+
             DemoSection("Keyboard Controls") {
                 VStack(alignment: .leading) {
                     Text("[Tab] Move focus between toggles").dim()
