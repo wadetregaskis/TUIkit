@@ -505,8 +505,12 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    focus highlights, accent-coloured text — follows the tint with no per-control
    wiring. Nested tints override; `.tint(nil)` inherits. (TUIkitExample: Buttons
    page "Tinted group".)
-6. **`Theme` + `.theme(_:)`** (View + Scene) — expands to env keys + scoped entries;
-   built-in theme bundles wrapping the existing palettes/profiles.
+6. ✅ **(shipped) `Theme` + `.theme(_:)`** — a `Theme` bundle (palette, appearance,
+   tint, scoped `styles`, optional control styles); the View modifier expands it
+   into the individual env keys + cascade entries (bundle entries ordered by
+   specificity); the Scene modifier applies the resolved (tinted) palette
+   app-wide via the existing scene-palette mechanism. Built from any palette
+   (phosphor presets / Terminal profiles).
 7. **Example UI** — theme editor exercising broad, role-based, and control/variant
    overrides + per-section demos.
 

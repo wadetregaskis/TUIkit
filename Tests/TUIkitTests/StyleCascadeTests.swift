@@ -227,6 +227,45 @@ struct ToggleStyleCascadeTests {
 }
 
 @MainActor
+@Suite("Theme bundle")
+struct ThemeBundleTests {
+
+    @Test(".theme applies palette + tint + scoped styles together")
+    func themeBundle() {
+        let theme = Theme(
+            palette: TerminalProfilePalette(.ocean),
+            tint: .rgb(7, 8, 9),
+            styles: [
+                StyleCascade.Entry(
+                    scope: .chrome(.sectionHeader),
+                    attributes: StyleAttributes(textCase: .uppercase))
+            ])
+        let view = VStack {
+            Button("Save") {}.buttonStyle(.primary)
+            Section("settings") { Text("body") }
+        }
+        .theme(theme)
+        let buffer = renderToBuffer(view, context: makeRenderContext(width: 40, height: 12))
+        let joined = buffer.lines.joined()
+        #expect(joined.contains("38;2;7;8;9"), "theme tint reaches the button accent")
+        #expect(
+            buffer.lines.contains { $0.contains("SETTINGS") },
+            "theme's chrome style uppercases the section header")
+    }
+
+    @Test(".theme installs a control style for the subtree")
+    func themeControlStyle() {
+        let theme = Theme(palette: SystemPalette(.green), buttonStyle: PlainButtonStyle())
+        // Plain buttons have no bracket caps; the default style does. Applying the
+        // theme should make the button render plain (no caps).
+        let themed = renderToBuffer(
+            VStack { Button("X") {} }.theme(theme), context: makeRenderContext()
+        ).lines.joined().stripped
+        #expect(!themed.contains("▐") && !themed.contains("▌"), "theme buttonStyle should make it plain")
+    }
+}
+
+@MainActor
 @Suite("Tint")
 struct TintTests {
 
