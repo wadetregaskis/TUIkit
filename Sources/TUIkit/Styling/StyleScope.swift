@@ -18,6 +18,7 @@ public enum ControlKind: Sendable, Hashable {
     case stepper
     case textField
     case secureField
+    case radioButton
     case list
     case table
     case colorPicker

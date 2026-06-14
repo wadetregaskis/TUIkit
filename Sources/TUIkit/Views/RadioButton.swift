@@ -489,9 +489,15 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
 
         let styledIndicator = ANSIRenderer.colorize(indicator, foreground: indicatorColor)
 
-        // Render label with theme color
+        // Render label, tagged so its Text resolves `.control(.radioButton)`
+        // style entries — but only when not already inside another control (e.g.
+        // a Picker's radio-group style, which keeps its `.picker` identity).
+        var labelContext = context
+        if labelContext.environment.controlKind == nil {
+            labelContext.environment.controlKind = .radioButton
+        }
         let labelView = item.labelBuilder()
-        let labelBuffer = labelView.renderToBuffer(context: context)
+        let labelBuffer = labelView.renderToBuffer(context: labelContext)
         let labelText = labelBuffer.lines.first ?? ""
 
         // Combine: indicator + label
@@ -617,5 +623,14 @@ extension RadioButtonGroup {
         var copy = self
         copy.focusID = id
         return copy
+    }
+}
+
+extension View {
+    /// Styles the *label* text of every radio button in this view's subtree
+    /// (a `.control(.radioButton)`-scoped style entry). The ●/○ indicator is
+    /// unaffected.
+    public func radioButtonTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.radioButton), build)
     }
 }

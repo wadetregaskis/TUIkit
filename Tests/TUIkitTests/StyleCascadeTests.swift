@@ -280,3 +280,33 @@ struct TextFieldStyleCascadeTests {
         #expect(line.contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("RadioButton style cascade")
+struct RadioButtonStyleCascadeTests {
+
+    @Test(".radioButtonTextStyle colours the radio labels")
+    func radioForeground() {
+        let view = RadioButtonGroup(selection: .constant("a")) {
+            RadioButtonItem("a", "Alpha")
+            RadioButtonItem("b", "Beta")
+        }
+        .radioButtonTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("A picker's radio options keep the .picker identity, not .radioButton")
+    func pickerRadioKeepsPickerIdentity() {
+        // .radioButtonTextStyle must NOT reach a picker's radio-group options —
+        // RadioButton claims `.radioButton` only when not already inside a control.
+        let view = Picker("X", selection: .constant(1)) {
+            Text("One").tag(1)
+            Text("Two").tag(2)
+        }
+        .pickerStyle(.radioGroup)
+        .radioButtonTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(!line.contains("38;2;7;8;9"))
+    }
+}

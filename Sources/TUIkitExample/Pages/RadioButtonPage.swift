@@ -40,11 +40,13 @@ struct RadioButtonPage: View {
                 }
             }
 
-            DemoSection("Layout Style (Horizontal)") {
+            DemoSection("Layout Style (Horizontal, + .radioButtonTextStyle)") {
                 RadioButtonGroup(selection: $layoutChoice, orientation: .horizontal) {
                     RadioButtonItem("vertical", "Vertical")
                     RadioButtonItem("horizontal", "Horizontal")
                 }
+                // .radioButtonTextStyle re-themes the labels (●/○ indicator unaffected).
+                .radioButtonTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
             DemoSection("Disabled Group") {

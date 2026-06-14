@@ -486,9 +486,11 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    `.pickerTextStyle`. ✅ **Stepper** — value read-out resolves `.control(.stepper)`;
    `.stepperTextStyle`. ✅ **TextField / SecureField** — entered text resolves
    `.control(.textField)` / `.control(.secureField)` (cursor/selection/prompt
-   keep their colours); `.textFieldTextStyle` / `.secureFieldTextStyle`. Then
-   RadioButton, List/Table rows, … until **all built-in controls** are covered.
-   Delivers (b), (c), (g).
+   keep their colours); `.textFieldTextStyle` / `.secureFieldTextStyle`. ✅
+   **RadioButton** — labels resolve `.control(.radioButton)` (claimed only when
+   not already inside another control, so a Picker's radio options stay
+   `.picker`); `.radioButtonTextStyle`. Then List/Table rows … until **all
+   built-in controls** are covered. Delivers (b), (c), (g).
 4. **Cascading `.disabled`** — env `isEnabled`; controls AND-combine.
 5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
    (control by control).
