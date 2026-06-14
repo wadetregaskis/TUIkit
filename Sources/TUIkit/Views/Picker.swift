@@ -148,6 +148,12 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
     }
 
     public var body: some View {
+        // Tag the picker subtree so its label/option Text resolves
+        // `.control(.picker)` style entries (`.pickerTextStyle { … }`).
+        pickerBody.environment(\.controlKind, .picker)
+    }
+
+    @ViewBuilder private var pickerBody: some View {
         let entries = resolvedEntries()
         if pickerStyle.resolvesToMenu {
             VStack(alignment: .leading, spacing: 0) {
@@ -231,5 +237,17 @@ extension Picker {
         var copy = self
         copy.focusID = id
         return copy
+    }
+}
+
+extension View {
+    /// Styles the *label and option* text of every picker in this view's subtree
+    /// (a `.control(.picker)`-scoped style entry).
+    ///
+    /// ```swift
+    /// SettingsForm().pickerTextStyle { $0.foreground = .palette.accent }
+    /// ```
+    public func pickerTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.picker), build)
     }
 }

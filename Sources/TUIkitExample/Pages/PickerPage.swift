@@ -39,13 +39,15 @@ struct PickerPage: View {
                 .pickerStyle(.radioGroup)
             }
 
-            DemoSection("Inline Style (ForEach options)") {
+            DemoSection("Inline Style (+ .pickerTextStyle)") {
                 Picker("Priority", selection: $priority) {
                     ForEach(1..<4) { level in
                         Text("Level \(level)").tag(level)
                     }
                 }
                 .pickerStyle(.inline)
+                // .pickerTextStyle re-themes the picker's label + option text.
+                .pickerTextStyle { $0.foreground = .palette.accent }
             }
 
             DemoSection("Current Selections") {

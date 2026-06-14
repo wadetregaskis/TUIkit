@@ -237,3 +237,20 @@ struct SliderStyleCascadeTests {
         #expect(line.contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("Picker style cascade")
+struct PickerStyleCascadeTests {
+
+    @Test(".pickerTextStyle colours the picker's option text")
+    func pickerOptionForeground() {
+        let view = Picker("Theme", selection: .constant(1)) {
+            Text("One").tag(1)
+            Text("Two").tag(2)
+        }
+        .pickerStyle(.radioGroup)
+        .pickerTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+}
