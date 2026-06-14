@@ -499,8 +499,12 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    combines `self.isDisabled || !environment.isEnabled`. A descendant can't
    re-enable what an ancestor disabled. (TUIkitExample: Buttons page "Cascading
    .disabled".)
-5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
-   (control by control).
+5. ✅ **(shipped) Tint** — `.tint(_:)` + env `tint`, implemented by overriding the
+   subtree palette's `accent` (a `TintedPalette` wrapper) so *every* `palette.accent`
+   read — button caps/focus, toggle ON mark, slider/stepper arrows, radio dot,
+   focus highlights, accent-coloured text — follows the tint with no per-control
+   wiring. Nested tints override; `.tint(nil)` inherits. (TUIkitExample: Buttons
+   page "Tinted group".)
 6. **`Theme` + `.theme(_:)`** (View + Scene) — expands to env keys + scoped entries;
    built-in theme bundles wrapping the existing palettes/profiles.
 7. **Example UI** — theme editor exercising broad, role-based, and control/variant

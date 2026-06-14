@@ -86,6 +86,15 @@ struct ButtonsPage: View {
                 .disabled(true)
             }
 
+            DemoSection("Tinted group (.tint)") {
+                // .tint cascades the accent to every control inside.
+                VStack(alignment: .leading, spacing: 1) {
+                    Button("Primary") { clickCount += 1 }.buttonStyle(.primary)
+                    Toggle("Toggle", isOn: .constant(true))
+                }
+                .tint(.palette.success)
+            }
+
             DemoSection("Plain Style (No Border)") {
                 HStack(spacing: 2) {
                     Button("Link 1") { clickCount += 1 }

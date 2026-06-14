@@ -227,6 +227,35 @@ struct ToggleStyleCascadeTests {
 }
 
 @MainActor
+@Suite("Tint")
+struct TintTests {
+
+    @Test("tint recolours a control's accent affordance")
+    func tintButtonAccent() {
+        let view = Button("Save") {}.buttonStyle(.primary).tint(.rgb(7, 8, 9))
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("tint cascades from a container to a toggle's ON mark")
+    func tintCascadesToToggle() {
+        let view = VStack { Toggle("Wi-Fi", isOn: .constant(true)) }.tint(.rgb(7, 8, 9))
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+
+    @Test("A nested tint overrides an outer one")
+    func nestedTintWins() {
+        let view = VStack {
+            VStack { Toggle("Inner", isOn: .constant(true)) }.tint(.rgb(7, 8, 9))
+        }
+        .tint(.rgb(1, 2, 3))
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))      // inner tint
+    }
+}
+
+@MainActor
 @Suite("Cascading disabled")
 struct CascadingDisabledTests {
 
