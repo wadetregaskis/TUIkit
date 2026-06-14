@@ -117,3 +117,35 @@ struct ColorPickerPanelRenderTests {
         #expect(text.contains("160"))
     }
 }
+
+@MainActor
+@Suite("ColorPickerPanel — semantic tab")
+struct ColorPickerPanelSemanticTests {
+
+    @Test("Semantic is a tab with no numeric channels")
+    func semanticIsChannelless() {
+        #expect(ColorPickerPanel.Mode.allCases.contains(.semantic))
+        #expect(ColorPickerPanel.Mode.semantic.channels.isEmpty)
+    }
+
+    @Test("Semantic table maps names to palette-role references")
+    func semanticTable() {
+        let table = ColorPickerPanel.semanticColors
+        #expect(table.contains { $0.name == "Accent" && $0.color == .palette.accent })
+        #expect(table.contains { $0.name == "Error" && $0.color == .palette.error })
+        // Distinct roles are distinct colour references.
+        #expect(Color.palette.accent != Color.palette.success)
+        // The core roles are offered.
+        let names = Set(table.map(\.name))
+        #expect(names.isSuperset(of: ["Foreground", "Accent", "Success", "Warning", "Error", "Background"]))
+    }
+
+    @Test("A semantic selection resolves to a concrete read-out, and the tab shows")
+    func semanticPreviewResolves() {
+        let view = ColorPickerPanel(
+            "Tint", selection: .constant(.palette.accent), isPresented: .constant(true))
+        let text = renderToBuffer(view, context: makeRenderContext()).lines.joined(separator: "\n")
+        #expect(!text.contains("#------"), "a semantic colour should resolve, not blank out")
+        #expect(text.contains("Semantic"), "the Semantic tab should be present")
+    }
+}

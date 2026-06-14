@@ -44,8 +44,11 @@ public struct ColorPickerPanel: View {
     private let selection: Binding<Color>
     private let isPresented: Binding<Bool>
 
-    /// Which colour model the channel editor is currently showing.
+    /// Which tab is currently showing.
     @State private var mode: Mode = .rgb
+
+    /// Resolves a semantic ``selection`` to concrete RGB for the read-out.
+    @Environment(\.palette) private var palette
 
     /// The editor tabs. `rawValue` doubles as the tab's button label.
     public enum Mode: String, CaseIterable, Sendable {
@@ -53,15 +56,18 @@ public struct ColorPickerPanel: View {
         case hsl = "HSL"
         case hsb = "HSB"
         case cmyk = "CMYK"
+        case semantic = "Semantic"
 
         /// The channels of this colour model: a one-letter label and the
-        /// slider's upper bound (the lower bound is always 0).
+        /// slider's upper bound (the lower bound is always 0). Empty for tabs
+        /// that aren't channel editors (e.g. ``semantic``).
         var channels: [(label: String, upperBound: Double)] {
             switch self {
             case .rgb: [("R", 255), ("G", 255), ("B", 255)]
             case .hsl: [("H", 360), ("S", 100), ("L", 100)]
             case .hsb: [("H", 360), ("S", 100), ("B", 100)]
             case .cmyk: [("C", 100), ("M", 100), ("Y", 100), ("K", 100)]
+            case .semantic: []
             }
         }
     }
@@ -101,9 +107,11 @@ public struct ColorPickerPanel: View {
 
     // MARK: Preview
 
-    /// A live swatch plus the colour's hex and `rgb(…)` read-outs.
+    /// A live swatch plus the colour's hex and `rgb(…)` read-outs. A semantic
+    /// selection is resolved against the palette so the read-out shows its
+    /// concrete value rather than blanks.
     private var previewRow: some View {
-        let components = selection.wrappedValue.rgbComponents
+        let components = selection.wrappedValue.resolve(with: palette).rgbComponents
         return HStack(spacing: 1) {
             Text("█████").foregroundStyle(selection.wrappedValue)
             VStack(alignment: .leading, spacing: 0) {
@@ -137,9 +145,54 @@ public struct ColorPickerPanel: View {
 
     @ViewBuilder
     private var editor: some View {
+        if mode == .semantic {
+            semanticEditor
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
+                    channel(spec.label, channelBinding(index), 0...spec.upperBound)
+                }
+            }
+        }
+    }
+
+    // MARK: Semantic tab
+
+    /// The palette roles offered on the semantic tab. Selecting one sets the
+    /// colour to that *reference* (`.semantic(role)`) rather than a snapshot,
+    /// so the edited colour tracks the palette. (`Color.palette.accent` already
+    /// *is* `.semantic(.accent)`, so each entry doubles as swatch and value.)
+    static let semanticColors: [(name: String, color: Color)] = [
+        ("Foreground", .palette.foreground),
+        ("Secondary", .palette.foregroundSecondary),
+        ("Accent", .palette.accent),
+        ("Success", .palette.success),
+        ("Warning", .palette.warning),
+        ("Error", .palette.error),
+        ("Info", .palette.info),
+        ("Border", .palette.border),
+        ("Background", .palette.background),
+    ]
+
+    private var semanticEditor: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
-                channel(spec.label, channelBinding(index), 0...spec.upperBound)
+            ForEach(Self.semanticColors, id: \.name) { entry in
+                semanticRow(entry.name, entry.color)
+            }
+        }
+    }
+
+    /// A swatch + name row that selects the semantic colour; the active role is
+    /// marked and uses the primary button style.
+    @ViewBuilder
+    private func semanticRow(_ name: String, _ color: Color) -> some View {
+        let isSelected = selection.wrappedValue == color
+        HStack(spacing: 1) {
+            Text("██").foregroundStyle(color)
+            if isSelected {
+                Button("● " + name) { selection.wrappedValue = color }.buttonStyle(.primary)
+            } else {
+                Button("  " + name) { selection.wrappedValue = color }.buttonStyle(.plain)
             }
         }
     }
@@ -193,6 +246,8 @@ public struct ColorPickerPanel: View {
         case .cmyk:
             let k = Color.rgbToCMYK(red: c.red, green: c.green, blue: c.blue)
             return [k.cyan, k.magenta, k.yellow, k.black][index]
+        case .semantic:
+            return 0  // no numeric channels; the semantic tab edits selection directly
         }
     }
 
@@ -221,6 +276,8 @@ public struct ColorPickerPanel: View {
             var v = [k.cyan, k.magenta, k.yellow, k.black]
             v[index] = value
             return .cmyk(v[0], v[1], v[2], v[3])
+        case .semantic:
+            return color  // edited via selection directly, not channels
         }
     }
 
