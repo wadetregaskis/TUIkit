@@ -100,6 +100,31 @@ struct Color256GridRenderTests {
 }
 
 @MainActor
+@Suite("Color256Grid — focus integration")
+struct Color256GridFocusTests {
+
+    @Test("Once focused, arrows route to the grid, move the cursor, and select live")
+    func focusedNavigation() {
+        let box = ColorBox(.rgb(0, 0, 0))
+        let ctx = makeRenderContext()
+        let focusManager = ctx.environment.focusManager
+        let grid = _Color256GridCore(selection: box.binding, focusID: "grid-test")
+
+        // Rendering registers the handler; as the sole focusable it auto-focuses,
+        // so the cursor cell is framed [] (the focused marker, not ()).
+        let rendered = renderToBuffer(grid, context: ctx).lines.joined()
+        #expect(focusManager.isFocused(id: "grid-test"), "the grid is focusable")
+        #expect(rendered.contains("[]"), "focused cursor frame")
+
+        // Arrow keys route to the grid and write the colour live.
+        #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .down)))
+        #expect(box.color == .palette(16))
+        #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .right)))
+        #expect(box.color == .palette(17))
+    }
+}
+
+@MainActor
 @Suite("ColorPickerPanel — 256 tab")
 struct ColorPickerPanel256TabTests {
 

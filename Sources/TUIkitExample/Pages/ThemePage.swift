@@ -8,7 +8,9 @@ import TUIkit
 
 /// Theme demo page — switch presets, change the border appearance, inspect the
 /// **full set** of semantic colours, and build a **custom theme** by editing
-/// them with `ColorPicker`s.
+/// them with the compact inline `ColorPicker` or the full modal
+/// `ColorPickerPanel` (RGB / HSL / HSB / CMYK tabs, the palette's semantic
+/// roles, and the 256-colour grid).
 ///
 /// Everything here is **global and live**: the page edits `ExampleApp`'s
 /// app-wide `palette` (`@Binding`), which drives the scene's `.palette(...)`, so
@@ -19,6 +21,10 @@ struct ThemePage: View {
     @Binding var palette: CustomizablePalette
     @Binding var styling: ExampleStyling
     @Environment(\.appearanceManager) private var appearanceManager
+
+    /// Index into ``editableColors`` currently open in the full modal colour
+    /// editor (``ColorPickerPanel``), or `nil` when it is dismissed.
+    @State private var editing: Int? = nil
 
     /// Tint options offered in the live-styling section (name + colour).
     private static let tintOptions: [(name: String, color: Color?)] = [
@@ -83,6 +89,11 @@ struct ThemePage: View {
             get: { Self.tintOptions.first { $0.color == styling.tint }?.name ?? "None" },
             set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color ?? nil }
         )
+        // Drives the modal colour editor: true while a colour is open for editing.
+        let editingBinding = Binding(
+            get: { editing != nil },
+            set: { if !$0 { editing = nil } }
+        )
 
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
@@ -144,12 +155,22 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Customise — edits apply app-wide, live") {
+                DemoSection("Customise (compact inline editor)") {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(0..<Self.editableColors.count, id: \.self) { index in
                             ColorPicker(
                                 Self.editableColors[index].name,
                                 selection: colorBinding(Self.editableColors[index].keyPath))
+                        }
+                    }
+                }
+
+                DemoSection("Full colour editor (RGB · HSL · HSB · CMYK · semantic · 256)") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Open the modal editor for any colour — tabs for every colour model, the palette's semantic roles, and the 256-colour grid.")
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        ForEach(0..<Self.editableColors.count, id: \.self) { index in
+                            editorRow(index)
                         }
                     }
                 }
@@ -181,8 +202,27 @@ struct ThemePage: View {
                 )
             }
         }
+        .modal(isPresented: editingBinding) {
+            if let index = editing {
+                ColorPickerPanel(
+                    Self.editableColors[index].name,
+                    selection: colorBinding(Self.editableColors[index].keyPath),
+                    isPresented: editingBinding)
+            }
+        }
         .appHeader {
             DemoAppHeader("Theme Demo")
+        }
+    }
+
+    /// A row in the full-editor section: a live swatch, the colour's name, and a
+    /// button that opens the modal ``ColorPickerPanel`` for that colour.
+    @ViewBuilder
+    private func editorRow(_ index: Int) -> some View {
+        let entry = Self.editableColors[index]
+        HStack(spacing: 1) {
+            Text("███").foregroundStyle(palette[keyPath: entry.keyPath])
+            Button("Edit \(entry.name)…") { editing = index }
         }
     }
 
