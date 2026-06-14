@@ -338,13 +338,17 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 """)
         }
 
-        // Build the text field content using shared renderer
+        // Build the text field content using shared renderer. The entered text
+        // honours a `.control(.textField)` cascade foreground (`.textFieldTextStyle`).
+        let cascaded = context.environment.styleCascade.resolve(
+            for: [.all, .text, .control(.textField)])
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
             isDisabled: isDisabled,
             displayCharacter: { index, text in
                 text[text.index(text.startIndex, offsetBy: index)]
-            }
+            },
+            contentForeground: cascaded.foreground
         )
 
         let fieldContent = renderer.buildContent(
@@ -445,5 +449,14 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 focusID: persistedFocusID
             )
         )
+    }
+}
+
+extension View {
+    /// Styles the entered *text* of every text field in this view's subtree
+    /// (a `.control(.textField)`-scoped style entry). The cursor, selection
+    /// highlight, and the (dim) prompt keep their own colours.
+    public func textFieldTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.textField), build)
     }
 }

@@ -267,3 +267,16 @@ struct StepperStyleCascadeTests {
         #expect(line.contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("TextField style cascade")
+struct TextFieldStyleCascadeTests {
+
+    @Test(".textFieldTextStyle colours the entered text")
+    func textFieldForeground() {
+        let view = TextField("Name", text: .constant("hello"))
+            .textFieldTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+}

@@ -308,10 +308,13 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         let isHovered = !isDisabled && !isFocused && hoverBox.value
 
         // Build the secure field content using shared renderer
+        let cascaded = context.environment.styleCascade.resolve(
+            for: [.all, .text, .control(.secureField)])
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
             isDisabled: isDisabled,
-            displayCharacter: { _, _ in TerminalSymbols.maskBullet }
+            displayCharacter: { _, _ in TerminalSymbols.maskBullet },
+            contentForeground: cascaded.foreground
         )
 
         let fieldContent = renderer.buildContent(
@@ -383,5 +386,13 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         }
 
         return buffer
+    }
+}
+
+extension View {
+    /// Styles the masked *text* of every secure field in this view's subtree
+    /// (a `.control(.secureField)`-scoped style entry).
+    public func secureFieldTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.secureField), build)
     }
 }

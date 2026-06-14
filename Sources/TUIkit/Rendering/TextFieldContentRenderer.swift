@@ -28,6 +28,11 @@ struct TextFieldContentRenderer {
     /// For TextField: the actual character. For SecureField: a bullet.
     let displayCharacter: (_ index: Int, _ text: String) -> Character
 
+    /// A scoped style-cascade override for the entered text's colour
+    /// (`.textFieldTextStyle { … }`), or `nil` to use the palette foreground.
+    /// The cursor, selection, and (dim) prompt keep their own colours.
+    var contentForeground: Color? = nil
+
     // MARK: - Content Building
 
     /// Builds the complete field content based on current state.
@@ -93,7 +98,8 @@ struct TextFieldContentRenderer {
             displayText.append(displayCharacter(i, text))
         }
         let paddedText = displayText.padding(toLength: width, withPad: " ", startingAt: 0)
-        let foreground = isDisabled ? palette.foregroundTertiary : palette.foreground
+        let foreground =
+            isDisabled ? palette.foregroundTertiary : (contentForeground ?? palette.foreground)
         return ANSIRenderer.colorize(paddedText, foreground: foreground, background: background)
     }
 
@@ -142,9 +148,12 @@ struct TextFieldContentRenderer {
         // profile). The cursor and the selection are the only colour
         // boundaries, so a typical field collapses to a handful of runs. The
         // visible result is identical — just fewer escape sequences.
+        // Entered text honours the `.textFieldTextStyle` cascade override; the
+        // cursor and selection keep their own colours.
+        let textForeground = contentForeground ?? palette.foreground
         var result = ""
         var runText = ""
-        var runForeground = palette.foreground
+        var runForeground = textForeground
         var runBackground = background
         var hasRun = false
 
@@ -175,9 +184,9 @@ struct TextFieldContentRenderer {
                     emit(cursorStyle.shape.character, foreground: cursorColor, background: background)
                 } else if textIndex < text.count {
                     // Cursor hidden (blink off): show the underlying character.
-                    emit(displayCharacter(textIndex, text), foreground: palette.foreground, background: background)
+                    emit(displayCharacter(textIndex, text), foreground: textForeground, background: background)
                 } else {
-                    emit(" ", foreground: palette.foreground, background: background)
+                    emit(" ", foreground: textForeground, background: background)
                 }
                 outputWidth += 1
             } else if textIndex < text.count && visibleIndex < width - (textIndex >= clampedPosition ? 0 : 1) {
@@ -193,11 +202,11 @@ struct TextFieldContentRenderer {
                         background: palette.accent.opacity(ViewConstants.selectionIndicator)
                     )
                 } else {
-                    emit(char, foreground: palette.foreground, background: background)
+                    emit(char, foreground: textForeground, background: background)
                 }
                 outputWidth += 1
             } else if outputWidth < width {
-                emit(" ", foreground: palette.foreground, background: background)
+                emit(" ", foreground: textForeground, background: background)
                 outputWidth += 1
             }
 

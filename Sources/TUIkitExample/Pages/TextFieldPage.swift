@@ -89,6 +89,9 @@ struct TextFieldPage: View {
                     }
                     Text("Cursor style set on container, inherited by all fields").dim()
                 }
+                // .textFieldTextStyle re-themes the entered text of all fields
+                // in this section (cursor, selection and prompt keep their colours).
+                .textFieldTextStyle { $0.foreground = .palette.accent }
             }
 
             DemoSection("Disabled TextField") {
