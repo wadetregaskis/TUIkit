@@ -239,6 +239,19 @@ extension Slider {
     }
 }
 
+extension View {
+    /// Styles the *value read-out* text of every slider in this view's subtree
+    /// (a `.control(.slider)`-scoped style entry). The track and arrows are
+    /// unaffected — their accent is the tint axis.
+    ///
+    /// ```swift
+    /// Mixer().sliderTextStyle { $0.bold = true; $0.foreground = .palette.accent }
+    /// ```
+    public func sliderTextStyle(_ build: (inout StyleAttributes) -> Void) -> some View {
+        style(.control(.slider), build)
+    }
+}
+
 // MARK: - Internal Core View
 
 /// StateStorage property indices for ``_SliderCore``. Lifted
@@ -388,7 +401,9 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             isHovered: isHovered,
             palette: palette,
             pulsePhase: context.environment.pulsePhase,
-            trackWidth: trackWidth
+            trackWidth: trackWidth,
+            valueStyle: context.environment.styleCascade.resolve(
+                for: [.all, .text, .control(.slider)])
         )
 
         var buffer = FrameBuffer(text: content)
@@ -657,7 +672,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         isHovered: Bool,
         palette: any Palette,
         pulsePhase: Double,
-        trackWidth: Int
+        trackWidth: Int,
+        valueStyle: StyleAttributes
     ) -> String {
         // Arrow colors:
         //   - Focused: pulsing accent
@@ -695,9 +711,18 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
 
         // Build value label (percentage) — the same source of truth that
         // `chromeWidth` measures, so the label always fits the space reserved.
+        // Its colour/weight inherit the slider's scoped style cascade
+        // (`.sliderTextStyle { … }`) as soft overrides.
         let valueText = valueLabelText
-        let valueLabelColor = isDisabled ? palette.foregroundTertiary : palette.foregroundSecondary
-        let valueLabel = ANSIRenderer.colorize(valueText, foreground: valueLabelColor)
+        let valueLabelColor =
+            isDisabled
+            ? palette.foregroundTertiary
+            : (valueStyle.foreground?.resolve(with: palette) ?? palette.foregroundSecondary)
+        let valueLabel = ANSIRenderer.colorize(
+            valueText,
+            foreground: valueLabelColor,
+            bold: !isDisabled && (valueStyle.bold ?? false),
+            underline: !isDisabled && (valueStyle.underline ?? false))
 
         // Pulsing arrows indicate focus - no extra markers needed
         return "\(leftArrow) \(track) \(rightArrow) \(valueLabel)"

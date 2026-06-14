@@ -225,3 +225,15 @@ struct ToggleStyleCascadeTests {
         #expect(!line.contains("38;2;7;8;9"))
     }
 }
+
+@MainActor
+@Suite("Slider style cascade")
+struct SliderStyleCascadeTests {
+
+    @Test(".sliderTextStyle colours the value read-out")
+    func sliderValueForeground() {
+        let view = Slider(value: .constant(0.5)).sliderTextStyle { $0.foreground = .rgb(7, 8, 9) }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))
+    }
+}

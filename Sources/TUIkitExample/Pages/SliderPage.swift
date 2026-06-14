@@ -20,6 +20,15 @@ struct SliderPage: View {
     @State var precision: Double = 0.5
 
     var body: some View {
+        ScrollView {
+            content
+        }
+        .appHeader {
+            DemoAppHeader("Slider Demo")
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection("Basic Slider (Block Style)") {
@@ -78,6 +87,18 @@ struct SliderPage: View {
                 }
             }
 
+            DemoSection("Themed value read-out (.sliderTextStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    // .sliderTextStyle re-themes the percentage read-out; the
+                    // track and arrows are unaffected.
+                    HStack(spacing: 1) {
+                        Text("Volume:").foregroundStyle(.palette.foregroundSecondary)
+                        Slider(value: $volume)
+                    }
+                    .sliderTextStyle { $0.bold = true; $0.foreground = .palette.accent }
+                }
+            }
+
             KeyboardHelpSection(shortcuts: [
                 "[<-] [->] Decrease/Increase by step",
                 "[-] [+] Decrease/Increase by step",
@@ -85,11 +106,6 @@ struct SliderPage: View {
                 "[End] Jump to maximum",
                 "[Tab] Move to next slider",
             ])
-
-            Spacer()
-        }
-        .appHeader {
-            DemoAppHeader("Slider Demo")
         }
     }
 }
