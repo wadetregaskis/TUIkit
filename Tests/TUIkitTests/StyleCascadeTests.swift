@@ -126,6 +126,26 @@ struct StyleCascadeTests {
         #expect(sgrCodes(renderToBuffer(Text("Hi").fontWeight(.light), context: context())).contains("2"))
     }
 
+    // MARK: - Scoped colour
+
+    @Test("A scoped foreground colours text via the cascade")
+    func cascadeForeground() {
+        let view = VStack { Text("Hi") }.style(.text, StyleAttributes(foreground: .rgb(10, 20, 30)))
+        let line = renderToBuffer(view, context: context()).lines.joined()
+        #expect(line.contains("38;2;10;20;30"))
+    }
+
+    @Test("A role-scoped foreground recolours only text with that palette role")
+    func cascadeSemanticForeground() {
+        let view = VStack {
+            Text("primary")
+            Text("secondary").foregroundStyle(.palette.foregroundSecondary)
+        }
+        .style(.semanticColor(.foregroundSecondary), StyleAttributes(foreground: .rgb(1, 2, 3)))
+        let line = renderToBuffer(view, context: context()).lines.joined()
+        #expect(line.contains("38;2;1;2;3"), "secondary text should be recoloured")
+    }
+
     // MARK: - Chrome roles (Section header/footer)
 
     @Test("A section header is bold + dim by default")

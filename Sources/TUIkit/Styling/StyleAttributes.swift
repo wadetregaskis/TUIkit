@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import TUIkitStyling
+
 // MARK: - Text case
 
 /// A case transform applied to text, mirroring SwiftUI's `Text.Case`.
@@ -59,6 +61,8 @@ public enum FontWeight: Sendable, Hashable {
 /// descendant turn it **off** (e.g. `.bold()` then `.bold(false)` deeper),
 /// matching SwiftUI.
 public struct StyleAttributes: Sendable, Equatable {
+    public var foreground: Color?
+    public var background: Color?
     public var bold: Bool?
     public var italic: Bool?
     public var underline: Bool?
@@ -67,6 +71,8 @@ public struct StyleAttributes: Sendable, Equatable {
     public var textCase: TextCase?
 
     public init(
+        foreground: Color? = nil,
+        background: Color? = nil,
         bold: Bool? = nil,
         italic: Bool? = nil,
         underline: Bool? = nil,
@@ -74,6 +80,8 @@ public struct StyleAttributes: Sendable, Equatable {
         dim: Bool? = nil,
         textCase: TextCase? = nil
     ) {
+        self.foreground = foreground
+        self.background = background
         self.bold = bold
         self.italic = italic
         self.underline = underline
@@ -84,8 +92,8 @@ public struct StyleAttributes: Sendable, Equatable {
 
     /// Whether no attribute is set (every field is `nil`).
     public var isEmpty: Bool {
-        bold == nil && italic == nil && underline == nil
-            && strikethrough == nil && dim == nil && textCase == nil
+        foreground == nil && background == nil && bold == nil && italic == nil
+            && underline == nil && strikethrough == nil && dim == nil && textCase == nil
     }
 
     /// Returns a copy where `self`'s non-`nil` fields win over `base` — the
@@ -94,6 +102,8 @@ public struct StyleAttributes: Sendable, Equatable {
     /// setter of each property win (proximity, per property).
     public func merged(over base: StyleAttributes) -> StyleAttributes {
         StyleAttributes(
+            foreground: foreground ?? base.foreground,
+            background: background ?? base.background,
             bold: bold ?? base.bold,
             italic: italic ?? base.italic,
             underline: underline ?? base.underline,

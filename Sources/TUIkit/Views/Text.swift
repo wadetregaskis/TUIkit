@@ -275,24 +275,16 @@ extension Text: Renderable, Layoutable {
         var effectiveStyle = style
         var effectiveCase: TextCase?
 
-        // If no explicit foreground color is set on the Text itself,
-        // inherit from the environment (set by .foregroundStyle() on parent views),
-        // or fall back to the palette's default foreground color
-        if effectiveStyle.foregroundColor == nil {
-            effectiveStyle.foregroundColor =
-                context.environment.foregroundStyle
-                ?? context.environment.palette.foreground
-        }
-
-        // Merge cascading text attributes (container-level .bold()/.italic()/
-        // .style(...) etc.) and any chrome-role default (e.g. a Section header's
-        // bold+dim) beneath this Text's own explicit attributes. A per-Text
-        // attribute always wins; otherwise the cascade's resolved value (closest
-        // matching scope) wins over the chrome-role default. The text's semantic
-        // colour role, if any, lets `.semanticColor` entries match; its chrome
-        // role lets `.chrome(...)` entries match.
+        // Resolve cascading attributes (container-level .bold()/.style(...) etc.)
+        // and any chrome-role default (e.g. a Section header's bold+dim) beneath
+        // this Text's own explicit attributes. A per-Text attribute always wins;
+        // otherwise the cascade's resolved value (closest matching scope) wins
+        // over the chrome-role default. The text's semantic colour role lets
+        // `.semanticColor` entries match; its chrome role lets `.chrome(...)`
+        // entries match.
         let cascade = context.environment.styleCascade
         let chromeRole = context.environment.chromeRole
+        var cascaded = StyleAttributes()
         if !cascade.isEmpty || chromeRole != nil {
             var scopes: Set<StyleScope> = [.all, .text]
             if let role = Self.semanticRole(
@@ -303,14 +295,35 @@ extension Text: Renderable, Layoutable {
                 scopes.insert(.chrome(chromeRole))
             }
             let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
-            let attributes = cascade.resolve(for: scopes).merged(over: base)
-            effectiveStyle.isBold = effectiveStyle.isBold || (attributes.bold ?? false)
-            effectiveStyle.isItalic = effectiveStyle.isItalic || (attributes.italic ?? false)
-            effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (attributes.underline ?? false)
+            cascaded = cascade.resolve(for: scopes).merged(over: base)
+            effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
+            effectiveStyle.isItalic = effectiveStyle.isItalic || (cascaded.italic ?? false)
+            effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (cascaded.underline ?? false)
             effectiveStyle.isStrikethrough =
-                effectiveStyle.isStrikethrough || (attributes.strikethrough ?? false)
-            effectiveStyle.isDim = effectiveStyle.isDim || (attributes.dim ?? false)
-            effectiveCase = attributes.textCase
+                effectiveStyle.isStrikethrough || (cascaded.strikethrough ?? false)
+            effectiveStyle.isDim = effectiveStyle.isDim || (cascaded.dim ?? false)
+            effectiveCase = cascaded.textCase
+        }
+
+        // Foreground precedence: an explicit *concrete* colour on this Text wins;
+        // an explicit *semantic* colour (a palette-role reference) may be remapped
+        // by a same-role `.semanticColor(role)` cascade entry; otherwise a scoped
+        // cascade colour > the broad `.foregroundStyle` environment value >
+        // palette default fills it. Background: explicit > cascade (Text has no
+        // environment background — nil means "no background").
+        if let explicit = style.foregroundColor {
+            if case .semantic(let role) = explicit.value {
+                effectiveStyle.foregroundColor =
+                    cascade.resolve(for: [.semanticColor(role)]).foreground ?? explicit
+            }
+        } else {
+            effectiveStyle.foregroundColor =
+                cascaded.foreground
+                ?? context.environment.foregroundStyle
+                ?? context.environment.palette.foreground
+        }
+        if effectiveStyle.backgroundColor == nil {
+            effectiveStyle.backgroundColor = cascaded.background
         }
 
         let resolvedStyle = effectiveStyle.resolved(with: context.environment.palette)
