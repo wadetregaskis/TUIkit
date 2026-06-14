@@ -283,6 +283,20 @@ struct TintTests {
         #expect(line.contains("38;2;7;8;9"))
     }
 
+    @Test("A semantic tint (.palette.success) resolves and doesn't trap the renderer")
+    func semanticTintResolves() {
+        // Regression: a `.semantic` tint reached the ANSI renderer unresolved and
+        // trapped (fatalError). TintedPalette now resolves the tint against its base.
+        let context = makeRenderContext()
+        let view = Button("Save") {}.buttonStyle(.primary).tint(.palette.success)
+        let buffer = renderToBuffer(view, context: context)
+        #expect(!buffer.isEmpty)
+        // It resolves to the palette's concrete success colour.
+        if let (r, g, b) = Color.palette.success.resolve(with: context.environment.palette).rgbComponents {
+            #expect(buffer.lines.joined().contains("38;2;\(r);\(g);\(b)"))
+        }
+    }
+
     @Test("A nested tint overrides an outer one")
     func nestedTintWins() {
         let view = VStack {

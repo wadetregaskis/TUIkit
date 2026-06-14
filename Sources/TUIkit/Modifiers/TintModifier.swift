@@ -35,7 +35,12 @@ struct TintedPalette: Palette {
     var foregroundTertiary: Color { base.foregroundTertiary }
     var foregroundQuaternary: Color { base.foregroundQuaternary }
 
-    var accent: Color { tint }
+    // Resolve the tint against the base palette so the accent is always a
+    // concrete colour. A *semantic* tint (e.g. `.tint(.palette.success)`) would
+    // otherwise reach the ANSI renderer unresolved and trap — `.resolve(with:)`
+    // returns a concrete colour unchanged, and maps `.semantic(role)` to the
+    // base palette's colour for that role.
+    var accent: Color { tint.resolve(with: base) }
 
     var success: Color { base.success }
     var warning: Color { base.warning }
