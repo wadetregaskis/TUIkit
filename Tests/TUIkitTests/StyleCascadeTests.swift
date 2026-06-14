@@ -88,6 +88,17 @@ struct StyleCascadeTests {
         #expect(sgrCodes(renderToBuffer(Text("Hi").strikethrough(), context: context())).contains("9"))
     }
 
+    @Test("The broad .italic() modifier italicises text, and an inner .italic(false) wins")
+    func broadItalicModifier() {
+        // The bare modifier emits SGR 3 (its siblings .underline()/.strikethrough()
+        // are covered above; .italic() was previously only reached via .style()).
+        #expect(sgrCodes(renderToBuffer(Text("Hi").italic(), context: context())).contains("3"))
+        // Proximity override, mirroring .bold(): an inner .italic(false) beats an
+        // outer .italic().
+        let nested = VStack { Text("Hi").italic(false) }.italic()
+        #expect(!sgrCodes(renderToBuffer(nested, context: context())).contains("3"))
+    }
+
     @Test("Proximity: an inner .bold(false) overrides an outer .bold()")
     func innerOverridesOuter() {
         let view = VStack { Text("Hi").bold(false) }.bold()
