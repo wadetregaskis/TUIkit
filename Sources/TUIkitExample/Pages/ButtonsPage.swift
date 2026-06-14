@@ -19,6 +19,15 @@ struct ButtonsPage: View {
     @State var clickCount: Int = 0
 
     var body: some View {
+        ScrollView {
+            content
+        }
+        .appHeader {
+            DemoAppHeader("Buttons & Focus Demo")
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection("Interactive Counter (@State)") {
@@ -85,6 +94,26 @@ struct ButtonsPage: View {
                 .buttonStyle(.primary)
             }
 
+            DemoSection("Themeable button text (.buttonTextStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    // .buttonTextStyle re-themes the label text of every button in
+                    // the subtree; the brackets/background stay as the style draws
+                    // them.
+                    HStack(spacing: 2) {
+                        Button("One") { clickCount += 1 }
+                        Button("Two") { clickCount += 1 }
+                        Button("Delete", role: .destructive) { clickCount += 1 }
+                    }
+                    .buttonTextStyle { $0.bold = true; $0.foreground = .green }
+
+                    Text(
+                        "Labels go green + bold — except the destructive one, "
+                            + "whose colour is load-bearing."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+                }
+            }
+
             KeyboardHelpSection(
                 "Focus Navigation",
                 shortcuts: [
@@ -92,11 +121,6 @@ struct ButtonsPage: View {
                     "Use [Enter] or [Space] to press the focused button",
                 ]
             )
-
-            Spacer()
-        }
-        .appHeader {
-            DemoAppHeader("Buttons & Focus Demo")
         }
     }
 }

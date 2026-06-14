@@ -196,6 +196,17 @@ List {
 .style(.chrome(.sectionHeader)) { $0.textCase = .uppercase }   // UPPERCASE headers
 ```
 
+**Controls** expose typed conveniences over the scope mechanism. For example, a
+button's label text:
+
+```swift
+Sidebar().buttonTextStyle { $0.bold = true; $0.foreground = .green }  // all buttons
+RootView().buttonTextStyle(.automatic) { $0.foreground = .blue }      // default-style only
+```
+
+A load-bearing colour (e.g. a `.destructive` button's error red) stays asserted by
+the control's style and is not overridden by a broad cascade entry.
+
 ## BorderStyle
 
 ``BorderStyle`` defines the actual Unicode characters for border rendering:

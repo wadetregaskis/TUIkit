@@ -473,10 +473,15 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    environment `chromeRole` + `.chrome(...)` scope; defaults preserve the current
    look (header bold+dim, footer dim) and are now overridable (e.g. uppercase /
    un-bold headers). (TUIkitExample: Text Styles page "Themeable chrome".)
-3. **Control targeting, control by control** — soft-default styles + cascade
-   resolution + typed `*TextStyle`/`*Style` conveniences, one control per commit:
-   Button, then Toggle, Slider, Picker, Stepper, TextField, List/Table rows, … until
+3. ▶︎ **Control targeting, control by control** (in progress) — soft-default
+   styles + cascade resolution + typed conveniences, one control per commit.
+   First landed `StyleAttributes.foreground/background` (the deferred half of the
+   cascade) so controls can resolve scoped colour. ✅ **Button** — its label
+   resolves `.control(.button)` / `.controlVariant(.button, …)` as soft overrides
+   (destructive red stays load-bearing); `Button.Variant` + `.buttonTextStyle`.
+   Then Toggle, Slider, Picker, Stepper, TextField, List/Table rows, … until
    **all built-in controls** are covered. Delivers (b), (c), (g).
+   (TUIkitExample: Buttons page "Themeable button text".)
 4. **Cascading `.disabled`** — env `isEnabled`; controls AND-combine.
 5. **Tint** — env `tint`, `.tint(_:)`, resolved wherever tinting makes sense
    (control by control).
