@@ -404,7 +404,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             pulsePhase: context.environment.pulsePhase,
             trackWidth: trackWidth,
             valueStyle: context.environment.styleCascade.resolve(
-                for: [.all, .text, .control(.slider)])
+                for: [.all, .text, .control(.slider)]),
+            isDisabled: isDisabled
         )
 
         var buffer = FrameBuffer(text: content)
@@ -674,7 +675,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         palette: any Palette,
         pulsePhase: Double,
         trackWidth: Int,
-        valueStyle: StyleAttributes
+        valueStyle: StyleAttributes,
+        isDisabled: Bool
     ) -> String {
         // Arrow colors:
         //   - Focused: pulsing accent

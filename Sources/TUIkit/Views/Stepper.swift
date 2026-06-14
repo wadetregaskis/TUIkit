@@ -366,7 +366,8 @@ private struct _StepperCore<Label: View>: View, Renderable {
             palette: palette,
             pulsePhase: context.environment.pulsePhase,
             valueStyle: context.environment.styleCascade.resolve(
-                for: [.all, .text, .control(.stepper)])
+                for: [.all, .text, .control(.stepper)]),
+            isDisabled: isDisabled
         )
 
         var buffer = FrameBuffer(text: content)
@@ -571,7 +572,8 @@ private struct _StepperCore<Label: View>: View, Renderable {
         isHovered: Bool,
         palette: any Palette,
         pulsePhase: Double,
-        valueStyle: StyleAttributes
+        valueStyle: StyleAttributes,
+        isDisabled: Bool
     ) -> String {
         // Arrow and value colors:
         //   - Focused: pulsing accent

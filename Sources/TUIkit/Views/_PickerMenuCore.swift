@@ -144,6 +144,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         stateStorage: StateStorage,
         context: RenderContext
     ) -> _PickerMenuHandler {
+        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
+        // not reach this helper).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         let erasedSelection = Binding<AnyHashable>(
             get: { AnyHashable(selection.wrappedValue) },
             set: { newValue in
@@ -213,6 +216,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         persistedFocusID: String,
         collapsedWidth: Int
     ) {
+        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
+        // not reach this helper).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
@@ -305,6 +311,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         persistedFocusID: String,
         innerWidth: Int
     ) {
+        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
+        // not reach this helper).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
@@ -365,6 +374,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         context: RenderContext,
         palette: any Palette
     ) -> String {
+        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
+        // not reach this helper).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         // The text of the currently selected option, if any.
         let selectedText: String
         if let index = entries.firstIndex(where: { $0.tag == selection.wrappedValue }) {
