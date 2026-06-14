@@ -403,6 +403,22 @@ struct TextFieldStyleCascadeTests {
         let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
         #expect(line.contains("38;2;7;8;9"))
     }
+
+    @Test("A semantic .textFieldTextStyle foreground resolves instead of trapping")
+    func textFieldSemanticForegroundResolves() {
+        // Regression: `.textFieldTextStyle { $0.foreground = .palette.accent }`
+        // put a *semantic* colour in the cascade, which the field handed to
+        // ANSIRenderer unresolved — and ANSIRenderer traps on `.semantic`. (This
+        // is what crashed TUIkitExample's Text Fields page.) The semantic accent
+        // must resolve to a concrete RGB. Non-empty text guarantees the entered-
+        // text path runs rather than the dim-prompt branch.
+        let view = TextField("Name", text: .constant("Ada"))
+            .textFieldTextStyle { $0.foreground = .palette.accent }
+        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        // Reaching this line at all proves it didn't trap; a concrete foreground
+        // SGR (38;2;r;g;b) proves the semantic accent was resolved, not raw.
+        #expect(line.contains("38;2;"))
+    }
 }
 
 @MainActor

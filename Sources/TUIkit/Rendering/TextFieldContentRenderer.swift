@@ -33,6 +33,15 @@ struct TextFieldContentRenderer {
     /// The cursor, selection, and (dim) prompt keep their own colours.
     var contentForeground: Color? = nil
 
+    /// The entered-text foreground, resolved to a concrete colour. A
+    /// `.textFieldTextStyle` override may be a *semantic* colour (e.g.
+    /// `.palette.accent`); resolving it against the palette here keeps a
+    /// semantic value from reaching ``ANSIRenderer``, which traps on
+    /// `.semantic`. A concrete colour resolves to itself.
+    private func resolvedContentForeground(_ palette: any Palette) -> Color {
+        (contentForeground ?? palette.foreground).resolve(with: palette)
+    }
+
     // MARK: - Content Building
 
     /// Builds the complete field content based on current state.
@@ -99,7 +108,7 @@ struct TextFieldContentRenderer {
         }
         let paddedText = displayText.padding(toLength: width, withPad: " ", startingAt: 0)
         let foreground =
-            isDisabled ? palette.foregroundTertiary : (contentForeground ?? palette.foreground)
+            isDisabled ? palette.foregroundTertiary : resolvedContentForeground(palette)
         return ANSIRenderer.colorize(paddedText, foreground: foreground, background: background)
     }
 
@@ -150,7 +159,7 @@ struct TextFieldContentRenderer {
         // visible result is identical — just fewer escape sequences.
         // Entered text honours the `.textFieldTextStyle` cascade override; the
         // cursor and selection keep their own colours.
-        let textForeground = contentForeground ?? palette.foreground
+        let textForeground = resolvedContentForeground(palette)
         var result = ""
         var runText = ""
         var runForeground = textForeground
