@@ -57,17 +57,18 @@ public struct ColorPickerPanel: View {
         case hsb = "HSB"
         case cmyk = "CMYK"
         case semantic = "Semantic"
+        case palette256 = "256"
 
         /// The channels of this colour model: a one-letter label and the
         /// slider's upper bound (the lower bound is always 0). Empty for tabs
-        /// that aren't channel editors (e.g. ``semantic``).
+        /// that aren't channel editors (``semantic``, ``palette256``).
         var channels: [(label: String, upperBound: Double)] {
             switch self {
             case .rgb: [("R", 255), ("G", 255), ("B", 255)]
             case .hsl: [("H", 360), ("S", 100), ("L", 100)]
             case .hsb: [("H", 360), ("S", 100), ("B", 100)]
             case .cmyk: [("C", 100), ("M", 100), ("Y", 100), ("K", 100)]
-            case .semantic: []
+            case .semantic, .palette256: []
             }
         }
     }
@@ -102,7 +103,6 @@ public struct ColorPickerPanel: View {
                     .buttonStyle(.primary)
             }
         }
-        .frame(width: 46)
     }
 
     // MARK: Preview
@@ -132,12 +132,15 @@ public struct ColorPickerPanel: View {
         }
     }
 
+    /// A compact, constant-width tab: the active one is bracketed `[RGB]`, the
+    /// rest padded ` RGB ` so switching tabs doesn't reflow the strip. Plain
+    /// style keeps six tabs within a sensibly sized dialog.
     @ViewBuilder
     private func tabButton(_ tab: Mode) -> some View {
         if tab == mode {
-            Button(tab.rawValue) { mode = tab }.buttonStyle(.primary)
+            Button("[\(tab.rawValue)]") { mode = tab }.buttonStyle(.plain).bold()
         } else {
-            Button(tab.rawValue) { mode = tab }.buttonStyle(.plain)
+            Button(" \(tab.rawValue) ") { mode = tab }.buttonStyle(.plain)
         }
     }
 
@@ -147,6 +150,8 @@ public struct ColorPickerPanel: View {
     private var editor: some View {
         if mode == .semantic {
             semanticEditor
+        } else if mode == .palette256 {
+            _Color256GridCore(selection: selection)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
@@ -246,8 +251,8 @@ public struct ColorPickerPanel: View {
         case .cmyk:
             let k = Color.rgbToCMYK(red: c.red, green: c.green, blue: c.blue)
             return [k.cyan, k.magenta, k.yellow, k.black][index]
-        case .semantic:
-            return 0  // no numeric channels; the semantic tab edits selection directly
+        case .semantic, .palette256:
+            return 0  // no numeric channels; these tabs edit selection directly
         }
     }
 
@@ -276,7 +281,7 @@ public struct ColorPickerPanel: View {
             var v = [k.cyan, k.magenta, k.yellow, k.black]
             v[index] = value
             return .cmyk(v[0], v[1], v[2], v[3])
-        case .semantic:
+        case .semantic, .palette256:
             return color  // edited via selection directly, not channels
         }
     }
