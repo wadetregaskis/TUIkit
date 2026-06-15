@@ -97,11 +97,11 @@ public struct ColorPickerPanel: View {
                 editor
             }
         } footer: {
-            HStack {
-                Spacer()
-                Button("Done") { isPresented.wrappedValue = false }
-                    .buttonStyle(.primary)
-            }
+            // No leading Spacer: a Spacer is width-flexible, which would make the
+            // dialog claim the full available width instead of sizing to its
+            // content. The footer sizes to the button; the dialog fits its tabs.
+            Button("Done") { isPresented.wrappedValue = false }
+                .buttonStyle(.primary)
         }
     }
 

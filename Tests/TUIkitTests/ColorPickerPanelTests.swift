@@ -401,3 +401,25 @@ struct ColorPickerPanelCrashSafetyTests {
         #expect(holder.color != .rgb(0, 0, 255), "clicking a role actually changed the selection")
     }
 }
+
+// MARK: - Layout
+
+@MainActor
+@Suite("ColorPickerPanel — layout")
+struct ColorPickerPanelLayoutTests {
+
+    private func width(at available: Int) -> Int {
+        renderToBuffer(
+            ColorPickerPanel("Pick", selection: .constant(.rgb(10, 20, 30)), isPresented: .constant(true)),
+            context: makeRenderContext(width: available, height: 40)
+        ).width
+    }
+
+    @Test("The panel sizes to its content, not the full available width")
+    func sizesToFit() {
+        let narrow = width(at: 80)
+        #expect(narrow < 80, "panel should not fill the width, got \(narrow)")
+        // And it does not grow with extra available width — it fits its content.
+        #expect(width(at: 120) == narrow, "panel width must not depend on available width")
+    }
+}
