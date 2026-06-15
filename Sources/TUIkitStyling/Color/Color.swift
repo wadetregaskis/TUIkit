@@ -185,14 +185,31 @@ public struct Color: Sendable, Equatable {
 extension Color {
     /// Resolves this color against a palette.
     ///
-    /// Non-semantic colors are returned unchanged. Semantic colors
-    /// are mapped to the corresponding palette property.
+    /// Non-semantic colors are returned unchanged. Semantic colors are mapped to
+    /// the corresponding palette property — *transitively*, because a palette
+    /// slot may itself hold a semantic reference (a palette editor can set
+    /// `accent` to `.semantic(.success)`, so resolving `.accent` yields another
+    /// semantic colour that must be resolved in turn).
+    ///
+    /// The result is **always concrete**. A reference cycle (e.g. a slot set to
+    /// its own role, `accent` → `.semantic(.accent)`) is broken after a bounded
+    /// number of hops and falls back to a neutral RGB, so resolution can neither
+    /// loop forever nor return a `.semantic` colour to the renderer — which
+    /// `ANSIRenderer` traps on. (Without this, clicking a role in a colour
+    /// picker's semantic tab while editing that same role crashed the app.)
     ///
     /// - Parameter palette: The palette to resolve against.
     /// - Returns: A concrete (non-semantic) color.
     public func resolve(with palette: any Palette) -> Color {
-        guard case .semantic(let token) = value else { return self }
-        return token.resolve(with: palette)
+        var resolved = self
+        // 16 > the number of palette roles, so any acyclic reference chain
+        // resolves fully within the cap; only a cycle reaches it.
+        for _ in 0..<16 {
+            guard case .semantic(let token) = resolved.value else { return resolved }
+            resolved = token.resolve(with: palette)
+        }
+        if case .semantic = resolved.value { return .rgb(128, 128, 128) }
+        return resolved
     }
 
     /// Creates a color from the 256-color palette.
