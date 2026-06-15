@@ -26,44 +26,31 @@ struct StepperPage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection("Basic Stepper (+ .stepperTextStyle)") {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text("Quantity:").foregroundStyle(.palette.foregroundSecondary)
-                        Stepper("Quantity", value: $quantity)
-                    }
-                }
-                // .stepperTextStyle re-themes the value read-out (arrows unaffected).
-                .stepperTextStyle { $0.bold = true; $0.foreground = .palette.accent }
+                // The label renders inline (SwiftUI parity); no separate Text needed.
+                Stepper("Quantity", value: $quantity)
+                    // .stepperTextStyle re-themes the stepper's text (arrows unaffected).
+                    .stepperTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
             DemoSection("With Range Constraints") {
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text("Rating (1-5):").foregroundStyle(.palette.foregroundSecondary)
-                        Stepper("Rating", value: $rating, in: 1...5)
-                    }
-                    HStack(spacing: 1) {
-                        Text("Volume (0-100, step 10):").foregroundStyle(.palette.foregroundSecondary)
-                        Stepper("Volume", value: $volume, in: 0...100, step: 10)
-                    }
+                    Stepper("Rating (1-5)", value: $rating, in: 1...5)
+                    Stepper("Volume (0-100, step 10)", value: $volume, in: 0...100, step: 10)
                 }
             }
 
             DemoSection("With Custom Callbacks") {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text("Color:").foregroundStyle(.palette.foregroundSecondary)
-                        Stepper(
-                            "Color",
-                            onIncrement: {
-                                colorIndex = (colorIndex + 1) % colors.count
-                            },
-                            onDecrement: {
-                                colorIndex = (colorIndex - 1 + colors.count) % colors.count
-                            }
-                        )
-                        Text(colors[colorIndex]).foregroundStyle(.palette.accent)
-                    }
+                HStack(spacing: 1) {
+                    Stepper(
+                        "Color",
+                        onIncrement: {
+                            colorIndex = (colorIndex + 1) % colors.count
+                        },
+                        onDecrement: {
+                            colorIndex = (colorIndex - 1 + colors.count) % colors.count
+                        }
+                    )
+                    Text(colors[colorIndex]).foregroundStyle(.palette.accent)
                 }
             }
 

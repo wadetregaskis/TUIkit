@@ -81,17 +81,44 @@ public struct Stepper<Label: View>: View {
     let onEditingChanged: ((Bool) -> Void)?
 
     public var body: some View {
-        _StepperCore(
-            value: value,
-            bounds: bounds,
-            step: step,
-            label: label,
-            onIncrement: onIncrement,
-            onDecrement: onDecrement,
-            focusID: focusID,
-            isDisabled: isDisabled,
-            onEditingChanged: onEditingChanged
-        )
+        // The label renders inline to the left of the control (SwiftUI parity):
+        // "Qty ◀ 5 ▶". An empty/absent label collapses so there's no stray
+        // leading space ("◀ 5 ▶"). The control's mouse regions are offset by the
+        // composing HStack, so `_StepperCore` is unchanged. `controlKind` lets the
+        // label resolve `.stepperTextStyle` like the value.
+        HStack(spacing: 0) {
+            _CollapsingLabel(label: label)
+            _StepperCore(
+                value: value,
+                bounds: bounds,
+                step: step,
+                label: Optional<EmptyView>.none,
+                onIncrement: onIncrement,
+                onDecrement: onDecrement,
+                focusID: focusID,
+                isDisabled: isDisabled,
+                onEditingChanged: onEditingChanged
+            )
+        }
+        .environment(\.controlKind, .stepper)
+    }
+}
+
+/// Renders an inline control label followed by one separating space — or
+/// nothing when the label is empty/blank/absent, so the control isn't preceded
+/// by a stray space. Used by ``Stepper`` (and reusable by other inline-labelled
+/// controls).
+private struct _CollapsingLabel<Label: View>: View, Renderable {
+    let label: Label?
+
+    var body: Never { fatalError("_CollapsingLabel renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        guard let label, !(label is EmptyView) else { return FrameBuffer() }
+        let buffer = TUIkit.renderToBuffer(label, context: context)
+        let isBlank = buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
+        guard !isBlank else { return FrameBuffer() }
+        return FrameBuffer(lines: buffer.lines.map { $0 + " " })
     }
 }
 
