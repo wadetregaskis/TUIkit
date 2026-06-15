@@ -206,7 +206,7 @@ private func sectionChromeContext(_ context: RenderContext, _ role: ChromeRole) 
 /// Whether a rendered header/footer buffer is entirely blank — so it should be
 /// dropped rather than shown as an empty line (e.g. an empty `Text("")` header).
 private func sectionBufferIsBlank(_ buffer: FrameBuffer) -> Bool {
-    buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
+    buffer.isBlank
 }
 
 // MARK: - Section Row Extractor

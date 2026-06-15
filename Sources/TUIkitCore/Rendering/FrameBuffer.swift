@@ -64,6 +64,21 @@ public struct FrameBuffer: Sendable, Equatable {
         lines.isEmpty || lines.allSatisfy { $0.isEmpty }
     }
 
+    /// Whether the buffer is *visually* empty: every line is blank or
+    /// whitespace-only once ANSI codes are stripped.
+    ///
+    /// Stronger than ``isEmpty``, which only treats zero-length lines as
+    /// empty. A line of spaces (or ANSI-styled blanks, e.g. a `Text("")` that
+    /// padded itself) is blank here but not "empty". Containers use this to
+    /// decide whether optional chrome — a header, a label, a footer — actually
+    /// draws anything, so an empty title doesn't reserve a blank row.
+    ///
+    /// - Note: Considers only the in-flow ``lines``; a buffer carrying only
+    ///   ``overlays`` is still reported blank.
+    public var isBlank: Bool {
+        lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
+    }
+
     /// Free-floating layers composited above the content at render time.
     ///
     /// Most buffers carry none. A view emits a layer to draw outside its own

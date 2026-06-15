@@ -119,6 +119,15 @@ struct ContentUnavailableViewRenderTests {
         #expect(buffer.height == 0)
     }
 
+    @Test("An empty-string title (a blank Text label) draws no line")
+    func emptyStringTitleProducesNothing() {
+        // The label is Text("") which pads to blanks rather than zero length;
+        // it must still be dropped (blank, not merely empty) so no row shows.
+        let buffer = renderToBuffer(ContentUnavailableView(""), context: createTestContext())
+        #expect(buffer.isBlank, "no visible content for an empty title")
+        #expect(strippedLines(ContentUnavailableView("")).allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty })
+    }
+
     // MARK: Centring
 
     @Test("Content is horizontally centred via a uniform block shift")

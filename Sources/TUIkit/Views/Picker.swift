@@ -210,8 +210,7 @@ private struct _PickerLabel<Label: View>: View, Renderable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(label, context: context)
-        let isBlank = buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
-        return isBlank ? FrameBuffer() : buffer
+        return buffer.isBlank ? FrameBuffer() : buffer
     }
 }
 

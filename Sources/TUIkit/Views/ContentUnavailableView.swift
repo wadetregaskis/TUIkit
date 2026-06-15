@@ -180,15 +180,18 @@ private struct _ContentUnavailableViewCore<Label: View, Description: View, Actio
         // Combine vertically with spacing
         var result = FrameBuffer()
 
-        if !labelBuffer.isEmpty {
+        // A *visually blank* part (e.g. ContentUnavailableView("") whose label
+        // is a Text("") that padded itself to spaces) is dropped, not just a
+        // zero-length one — otherwise it would reserve an empty row.
+        if !labelBuffer.isBlank {
             result.appendVertically(labelBuffer)
         }
 
-        if !descBuffer.isEmpty {
+        if !descBuffer.isBlank {
             result.appendVertically(descBuffer, spacing: 1)
         }
 
-        if !actionsBuffer.isEmpty {
+        if !actionsBuffer.isBlank {
             result.appendVertically(actionsBuffer, spacing: 1)
         }
 

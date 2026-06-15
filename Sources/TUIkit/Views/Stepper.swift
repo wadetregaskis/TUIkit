@@ -116,8 +116,7 @@ private struct _CollapsingLabel<Label: View>: View, Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         guard let label, !(label is EmptyView) else { return FrameBuffer() }
         let buffer = TUIkit.renderToBuffer(label, context: context)
-        let isBlank = buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
-        guard !isBlank else { return FrameBuffer() }
+        guard !buffer.isBlank else { return FrameBuffer() }
         return FrameBuffer(lines: buffer.lines.map { $0 + " " })
     }
 }
