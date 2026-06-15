@@ -89,13 +89,23 @@ struct SliderPage: View {
 
             DemoSection("Themed value read-out (.sliderTextStyle)") {
                 VStack(alignment: .leading, spacing: 1) {
-                    // .sliderTextStyle re-themes the percentage read-out; the
-                    // track and arrows are unaffected.
+                    // .sliderTextStyle re-themes only the percentage read-out;
+                    // the track and arrows are unaffected. Shown directly below a
+                    // default slider (same value) so the difference is visible:
+                    // the themed "%" is bold, underlined and success-coloured.
                     HStack(spacing: 1) {
-                        Text("Volume:").foregroundStyle(.palette.foregroundSecondary)
+                        Text("Default:").foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume)
                     }
-                    .sliderTextStyle { $0.bold = true; $0.foreground = .palette.accent }
+                    HStack(spacing: 1) {
+                        Text("Themed: ").foregroundStyle(.palette.foregroundSecondary)
+                        Slider(value: $volume)
+                            .sliderTextStyle {
+                                $0.bold = true
+                                $0.underline = true
+                                $0.foreground = .palette.success
+                            }
+                    }
                 }
             }
 

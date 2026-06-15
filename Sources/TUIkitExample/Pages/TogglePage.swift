@@ -12,6 +12,12 @@ struct TogglePage: View {
     @State var darkModeEnabled: Bool = true
     @State var showHiddenFiles: Bool = false
 
+    // Distinct state for the "themeable label" demo so toggling those rows
+    // doesn't alias (and visibly flip) the "Dark Mode" / "Show Hidden Files"
+    // toggles above.
+    @State var styledLabelA: Bool = true
+    @State var styledLabelB: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -28,8 +34,8 @@ struct TogglePage: View {
             DemoSection("Themeable label text (.toggleTextStyle)") {
                 VStack(alignment: .leading, spacing: 1) {
                     // Only the labels are restyled; the [x] indicator is unaffected.
-                    Toggle("Italic, info-coloured label", isOn: $darkModeEnabled)
-                    Toggle("…and this one too", isOn: $showHiddenFiles)
+                    Toggle("Italic, info-coloured label", isOn: $styledLabelA)
+                    Toggle("…and this one too", isOn: $styledLabelB)
                 }
                 .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
             }

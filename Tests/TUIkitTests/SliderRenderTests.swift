@@ -167,6 +167,26 @@ struct SliderRenderTests {
         #expect(f.count == 1)
     }
 
+    // MARK: - Themed value read-out (.sliderTextStyle)
+
+    @Test(".sliderTextStyle bolds + recolours the value read-out (and only that)")
+    func sliderTextStyleChangesReadout() {
+        // ANSI-laden output: the themed read-out must differ from the default.
+        func ansi(_ v: some View) -> String {
+            renderToBuffer(v, context: makeBareRenderContext(width: 30, height: 3)).lines.joined()
+        }
+        let plain = ansi(Slider(value: .constant(0.5)))
+        let themed = ansi(
+            Slider(value: .constant(0.5))
+                .sliderTextStyle { $0.bold = true; $0.foreground = .palette.accent })
+        #expect(plain != themed, "the .sliderTextStyle read-out should render differently")
+        // The stripped text is identical — only colour/weight changed, on the value.
+        #expect(plain.stripped == themed.stripped, "layout/text unchanged; only styling differs")
+        // The themed read-out carries a bold SGR that the plain one does not.
+        #expect(themed.contains("\u{1b}[1") && !plain.contains("\u{1b}[1"),
+                "themed value is bold, plain is not")
+    }
+
     // MARK: - Disabled
 
     @Test("A disabled slider still renders the full track, arrows and value")
