@@ -23,7 +23,7 @@ struct ButtonRowRenderTests {
         environment.focusManager = FocusManager()
         return RenderContext(
             availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext())
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     private func lines(_ view: some View, width: Int = 40, height: Int = 8) -> [String] {

@@ -32,7 +32,7 @@ func makeRenderContext(width: Int = 80, height: Int = 24) -> RenderContext {
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 /// Builds a *bare* render context: a fresh `TUIContext` with the default
@@ -51,6 +51,7 @@ func makeRenderContext(width: Int = 80, height: Int = 24) -> RenderContext {
 /// - Returns: A render context with only a backing TUI context.
 func makeBareRenderContext(width: Int = 40, height: Int = 24) -> RenderContext {
     RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        .isolatingRenderCache()
 }
 
 /// Builds a render context (as ``makeRenderContext(width:height:)``) and then
@@ -80,5 +81,23 @@ func makeRenderContext(
         availableHeight: height,
         environment: environment,
         tuiContext: tuiContext
-    )
+    ).isolatingRenderCache()
+}
+
+// MARK: - Render-cache isolation
+
+extension RenderContext {
+    /// Returns a copy whose render cache is a fresh, test-local `RenderCache`.
+    ///
+    /// `TUIContext()` installs the process-wide `RenderCache.shared` singleton,
+    /// so without this every test shares one cache. Under Swift Testing's
+    /// parallel execution that lets a memoized buffer from one suite satisfy a
+    /// same-identity lookup in another (e.g. a Spinner's `▇` frame surfacing in
+    /// a Text render), producing rare, confusing cross-suite failures. Each
+    /// render context getting its own cache makes suites independent.
+    func isolatingRenderCache() -> RenderContext {
+        var copy = self
+        copy.environment.renderCache = RenderCache()
+        return copy
+    }
 }

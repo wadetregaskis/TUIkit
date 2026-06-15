@@ -16,7 +16,7 @@ import Testing
 struct ScrollViewRenderTests {
 
     private func ctx(width: Int, height: Int) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Fills its viewport

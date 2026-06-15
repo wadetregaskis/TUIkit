@@ -19,7 +19,7 @@ import Testing
 struct DividerRenderTests {
 
     private func context(width: Int = 30, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Default

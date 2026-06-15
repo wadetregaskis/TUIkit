@@ -8,10 +8,9 @@
 //  (which covers the style frame tables and the bounce maths) by asserting
 //  the rendered FrameBuffer: a single row for every style, a label rendered
 //  after a single separating space, colour emitted as ANSI, and no overflow
-//  past a narrow available width.
-//
-//  NOTE: the empty-string-label case (`Spinner("")`) is intentionally NOT
-//  asserted here — it produces a stray trailing space (see suspectedBugs).
+//  past a narrow available width. The empty-string-label case (`Spinner("")`)
+//  is covered by `emptyStringLabel` — it renders the bare glyph, no stray
+//  trailing space.
 
 import Testing
 
@@ -22,7 +21,7 @@ import Testing
 struct SpinnerRenderTests {
 
     private func context(width: Int = 30, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Single row invariant

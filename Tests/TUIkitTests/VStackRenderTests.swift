@@ -13,7 +13,7 @@ import Testing
 struct VStackRenderTests {
 
     private func ctx(width: Int = 30, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Default stacking

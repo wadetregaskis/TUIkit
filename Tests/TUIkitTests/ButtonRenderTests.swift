@@ -27,7 +27,7 @@ struct ButtonRenderTests {
         environment.focusManager = FocusManager()
         return RenderContext(
             availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext())
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     /// Renders `view` and returns its visible (ANSI-stripped) lines.

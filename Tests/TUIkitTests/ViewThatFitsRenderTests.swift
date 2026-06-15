@@ -16,7 +16,7 @@ import Testing
 struct ViewThatFitsRenderTests {
 
     private func ctx(width: Int, height: Int) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Picks the first fitting candidate
