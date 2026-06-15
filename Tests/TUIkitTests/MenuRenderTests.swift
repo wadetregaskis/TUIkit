@@ -102,6 +102,26 @@ struct MenuRenderTests {
                 "No fully-blank content row in an untitled menu")
     }
 
+    @Test("An empty-string title is treated as no title — no blank title row or divider")
+    func emptyTitleMenu() {
+        let menu = Menu(
+            title: "",
+            items: [
+                MenuItem(label: "One"),
+                MenuItem(label: "Two"),
+            ],
+            selectedIndex: 0
+        )
+        let result = lines(renderToBuffer(menu, context: makeContext()))
+
+        // Identical shape to an untitled menu: top + 2 items + bottom.
+        #expect(result.count == 4, "An empty title must not reserve a title row + divider: \(result)")
+        #expect(result[0].hasPrefix(tl))
+        #expect(!result.contains(where: { $0.hasPrefix(lt) }), "No divider for an empty title")
+        #expect(!result.contains(where: { $0.dropFirst().dropLast().allSatisfy { $0 == " " } && $0.count > 2 }),
+                "No fully-blank content row for an empty title")
+    }
+
     // MARK: - Shortcuts / labels
 
     @Test("Items with shortcuts render the [x] prefix; items without get 4 leading spaces")

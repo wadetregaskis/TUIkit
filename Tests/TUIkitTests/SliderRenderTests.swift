@@ -46,6 +46,17 @@ struct SliderRenderTests {
         #expect(out[0].hasPrefix("◀ "), "left arrow then a space leads the row: |\(out[0])|")
     }
 
+    @Test("The string title is a description only — it is NOT drawn on the track (SwiftUI parity)")
+    func titleNotDrawn() {
+        // SwiftUI's Slider label is for accessibility, not display; TUIkit
+        // matches that. The title text must not appear on the rendered track.
+        let out = lines(Slider("Volume", value: .constant(0.5)))
+        #expect(out.count == 1, "still a single line, got: \(out)")
+        #expect(!out[0].contains("Volume"), "title must not be drawn: |\(out[0])|")
+        #expect(out[0].hasPrefix("◀ "), "row leads with the arrow, not the title: |\(out[0])|")
+        #expect(out[0].contains("50%"))
+    }
+
     @Test("A default-width slider fills exactly the available width")
     func fillsAvailableWidth() {
         // chrome = 5 + 4 (value field) = 9; track = 30 - 9 = 21.

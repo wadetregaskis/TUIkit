@@ -43,10 +43,18 @@
 /// Slider(value: $brightness, in: 0...100, step: 5)
 /// ```
 ///
-/// ## With Title
+/// ## With a Description
+///
+/// The `label` (or string title) describes the slider's purpose. As in
+/// SwiftUI, it is **not drawn on the track** — only the value readout is. For
+/// a visible caption, place a `Text` (or a `Section` header) next to the
+/// slider:
 ///
 /// ```swift
-/// Slider("Volume", value: $volume, in: 0...1)
+/// VStack(alignment: .leading) {
+///     Text("Volume")
+///     Slider(value: $volume, in: 0...1)
+/// }
 /// ```
 ///
 /// ## With Editing Callback
@@ -66,7 +74,8 @@ public struct Slider<Label: View, ValueLabel: View>: View {
     /// The step size for increment/decrement.
     let step: Double
 
-    /// The label view describing the slider's purpose.
+    /// The label view describing the slider's purpose. As in SwiftUI this is a
+    /// description only — it is not drawn on the track.
     let label: Label?
 
     /// The value label showing the current value.
@@ -138,8 +147,11 @@ extension Slider where Label == EmptyView, ValueLabel == EmptyView {
 extension Slider where Label == Text, ValueLabel == EmptyView {
     /// Creates a slider with a title string.
     ///
+    /// The title describes the slider but, as in SwiftUI, is not drawn on the
+    /// track. Pair the slider with a `Text` for a visible caption.
+    ///
     /// - Parameters:
-    ///   - title: The title of the slider.
+    ///   - title: A description of the slider's purpose (not rendered).
     ///   - value: The selected value within `bounds`.
     ///   - bounds: The range of valid values. Defaults to `0...1`.
     ///   - step: The distance between each valid value. Defaults to `0.01`.

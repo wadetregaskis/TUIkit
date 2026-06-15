@@ -215,8 +215,9 @@ private struct _MenuCore: View, Renderable {
         // Track the divider line index (for T-junction rendering)
         var dividerLineIndex: Int?
 
-        // Title if present
-        if let menuTitle = title {
+        // Title if present (a blank/whitespace title is treated as no title —
+        // otherwise it would reserve an empty title row plus a divider).
+        if let menuTitle = title, !menuTitle.allSatisfy(\.isWhitespace) {
             let titleStyled = ANSIRenderer.render(
                 menuTitle,
                 with: {

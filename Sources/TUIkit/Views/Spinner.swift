@@ -321,10 +321,12 @@ private struct _SpinnerCore: View, Renderable {
         }
 
         let output: String
-        if let label {
+        if let label, !label.allSatisfy(\.isWhitespace) {
             let styledLabel = ANSIRenderer.colorize(label, foreground: context.environment.palette.foreground)
             output = coloredSpinner + " " + styledLabel
         } else {
+            // No label (or a blank one) — render just the spinner glyph, with no
+            // trailing separator space.
             output = coloredSpinner
         }
 

@@ -56,6 +56,16 @@ struct SpinnerRenderTests {
         #expect(line.strippedLength == 1)
     }
 
+    @Test("An empty-string label renders the bare glyph with no trailing space")
+    func emptyStringLabel() {
+        // Distinct from `lineNoLabel` (label == nil): here the label is an
+        // empty string, which previously still emitted a separator space.
+        let buffer = renderToBuffer(Spinner("", style: .line), context: context())
+        let line = buffer.lines[0].stripped
+        #expect(line == "|", "Empty-label spinner must be the bare glyph, got >>\(line)<<")
+        #expect(line.strippedLength == 1)
+    }
+
     // MARK: - With label
 
     @Test("Label is rendered after the spinner with exactly one separating space")
