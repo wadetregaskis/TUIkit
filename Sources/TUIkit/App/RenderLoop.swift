@@ -511,22 +511,14 @@ extension RenderLoop {
         tuiContext.renderCache.beginRenderPass()
     }
 
-    /// Evaluates `App.body` with hydration and environment context active.
-    ///
-    /// Sets up ``StateRegistration`` so `@State` self-hydrates from `StateStorage`
-    /// and `@Environment` reads from the current environment. Clears both
-    /// contexts after body evaluation.
+    /// Evaluates `App.body` with the environment published so `@Environment`
+    /// reads from it. (`@State` binds to each view's render identity later, in
+    /// `renderToBuffer` — not at construction here.)
     fileprivate func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
-        StateRegistration.activeContext = HydrationContext(
-            identity: rootIdentity,
-            storage: tuiContext.stateStorage
-        )
-        StateRegistration.counter = 0
         StateRegistration.activeEnvironment = environment
 
         let scene = app.body
 
-        StateRegistration.activeContext = nil
         StateRegistration.activeEnvironment = nil
         tuiContext.stateStorage.markActive(rootIdentity)
 

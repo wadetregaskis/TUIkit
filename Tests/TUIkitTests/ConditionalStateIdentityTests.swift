@@ -5,12 +5,11 @@
 //  License: MIT
 //
 //  Two views swapped by a conditional (if-else / switch) must not share @State.
-//  @State self-hydrates at *construction* against the active hydration scope
-//  (the enclosing body) plus a sequential counter — so two branches constructed
-//  in the same parent body, at the same counter origin, collide on their state
-//  keys. Deferring a branch's construction into its own view body (a LazyView)
-//  gives it the branch-distinguished render identity, isolating its @State.
-//  This guards the pattern the example app uses to host swappable pages.
+//  @State binds to the *view's own render identity* (in renderToBuffer /
+//  measureChild, via `bindStateProperties`), and a conditional branch carries a
+//  distinct identity (`#true` / `#false`) — so each branch's @State lives in its
+//  own slot. This holds whether the branches are constructed directly in the
+//  body or deferred through a wrapper; both are guarded below.
 
 import Testing
 
@@ -32,7 +31,7 @@ private struct TestLazy<Content: View>: View {
     var body: some View { content() }
 }
 
-/// Swaps two stateful views directly in the body (shared construction scope).
+/// Swaps two stateful views directly in the body.
 private struct DirectHost: View {
     let showA: Bool
     var body: some View {
@@ -40,7 +39,7 @@ private struct DirectHost: View {
     }
 }
 
-/// Swaps them via deferred construction (each branch gets its own scope).
+/// Swaps them through a deferring wrapper.
 private struct LazyHost: View {
     let showA: Bool
     var body: some View {
@@ -60,29 +59,24 @@ struct ConditionalStateIdentityTests {
         buffer.lines.joined(separator: "\n")
     }
 
-    @Test("Deferred construction isolates @State across a conditional swap")
-    func lazyDeferralIsolatesState() {
-        // Reuse ONE context (and its StateStorage) across both renders, the way
-        // a page switch persists state between frames.
+    @Test("Directly-swapped conditional branches keep independent @State")
+    func directConstructionIsolatesState() {
+        // Reuse ONE context (and its StateStorage) across both renders, the way a
+        // page switch persists state between frames. Render branch A (creates A's
+        // slot = "A"), then switch to B: B must read its OWN default, not A's slot.
         let ctx = makeRenderContext()
-        // Render branch A: creates A's @State slot with its default ("A").
-        let a = text(renderToBuffer(LazyHost(showA: true), context: ctx))
+        let a = text(renderToBuffer(DirectHost(showA: true), context: ctx))
         #expect(a.contains("A=A"))
-        // Switch to branch B: B must read its OWN default, not A's slot.
-        let b = text(renderToBuffer(LazyHost(showA: false), context: ctx))
-        #expect(b.contains("B=B"), "B's @State must be independent of A's")
+        let b = text(renderToBuffer(DirectHost(showA: false), context: ctx))
+        #expect(b.contains("B=B"), "B's @State must be independent of A's (render-identity keyed)")
     }
 
-    @Test("Direct construction shares one @State scope (the limitation LazyView avoids)")
-    func directConstructionCollides() {
-        // Characterization of the construction-scope behavior: without deferral,
-        // both branches hydrate at the same (parent-body identity, counter 0),
-        // so B reads the slot A created — it shows A's stored value, not "B".
-        // (If this ever flips to "B=B", @State became branch-identity-aware and
-        // the LazyView page wrapper in the example is no longer required.)
+    @Test("Deferred construction also keeps independent @State")
+    func deferredConstructionIsolatesState() {
         let ctx = makeRenderContext()
-        _ = renderToBuffer(DirectHost(showA: true), context: ctx)
-        let b = text(renderToBuffer(DirectHost(showA: false), context: ctx))
-        #expect(b.contains("B=A"), "documents the shared-scope collision")
+        let a = text(renderToBuffer(LazyHost(showA: true), context: ctx))
+        #expect(a.contains("A=A"))
+        let b = text(renderToBuffer(LazyHost(showA: false), context: ctx))
+        #expect(b.contains("B=B"), "deferral via a wrapper is equally isolated")
     }
 }

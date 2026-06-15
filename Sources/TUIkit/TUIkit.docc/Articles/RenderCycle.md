@@ -178,13 +178,12 @@ func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
         return renderable.renderToBuffer(context: context)
     }
 
-    // Priority 2: Composite: set up hydration context and recurse into body.
-    // @State.init self-hydrates from StateStorage during body evaluation.
+    // Priority 2: Composite: bind this view's @State to its own identity,
+    // resolve @Environment, then recurse into body.
     if V.Body.self != Never.self {
         let childContext = context.withChildIdentity(type: V.Body.self)
-        // ... activate StateRegistration.activeContext ...
-        let body = view.body
-        // ... restore previous context, mark identity active ...
+        bindStateProperties(of: view, identity: context.identity, storage: storage)
+        // ... resolve @Environment, evaluate view.body, mark identity active ...
         return renderToBuffer(body, context: childContext)
     }
 

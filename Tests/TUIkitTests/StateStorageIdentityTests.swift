@@ -8,6 +8,7 @@
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitView
 
 @MainActor
 @Suite("State Storage Identity Tests", .serialized)
@@ -22,66 +23,54 @@ struct StateStorageIdentityTests {
         StateStorage()
     }
 
-    // MARK: - Self-Hydrating State
+    // MARK: - Render-time @State binding
 
-    @Test("State self-hydrates from StateStorage when active context is set")
-    func selfHydrationFromStorage() {
+    @Test("@State binds to storage by render identity and persists across rebinds")
+    func stateBindsByRenderIdentity() {
         let storage = testStorage()
         let identity = ViewIdentity(path: "TestView")
 
-        // First construction: creates new entry in storage
-        StateRegistration.activeContext = HydrationContext(identity: identity, storage: storage)
-        StateRegistration.counter = 0
-        let firstState = State(wrappedValue: 42)
-        StateRegistration.activeContext = nil
+        // Bind a freshly-constructed view's @State to its render identity, then
+        // mutate through it (writing to the persistent storage box).
+        let first = OneStateView()
+        bindStateProperties(of: first, identity: identity, storage: storage)
+        first.value = 99
 
-        // Mutate value through the first state
-        firstState.wrappedValue = 99
+        // A reconstructed view bound at the SAME identity sees the persisted value
+        // — even though its own default is 42.
+        let second = OneStateView()
+        bindStateProperties(of: second, identity: identity, storage: storage)
+        #expect(second.value == 99)
 
-        // Second construction at same identity: should get the persisted value (99)
-        StateRegistration.activeContext = HydrationContext(identity: identity, storage: storage)
-        StateRegistration.counter = 0
-        let secondState = State(wrappedValue: 42)
-        StateRegistration.activeContext = nil
-
-        #expect(secondState.wrappedValue == 99)
+        // A different identity is independent (gets its own default).
+        let other = OneStateView()
+        bindStateProperties(of: other, identity: ViewIdentity(path: "OtherView"), storage: storage)
+        #expect(other.value == 42)
     }
 
-    @Test("State uses local box when no active context is set")
-    func localBoxWithoutContext() {
-        StateRegistration.activeContext = nil
-
-        let state = State(wrappedValue: "hello")
-        #expect(state.wrappedValue == "hello")
-
-        state.wrappedValue = "world"
-        #expect(state.wrappedValue == "world")
+    @Test("@State uses a local box until it is bound")
+    func localBoxUntilBound() {
+        let state = OneStateView()  // not bound to any storage
+        #expect(state.value == 42)
+        state.value = 7
+        #expect(state.value == 7)
     }
 
-    @Test("Multiple @State properties get distinct indices")
-    func multipleStateDistinctIndices() {
+    @Test("Multiple @State on a view bind to distinct storage slots (declaration order)")
+    func multipleStateDistinctSlots() {
         let storage = testStorage()
         let identity = ViewIdentity(path: "MultiStateView")
 
-        // Simulate a view with two @State properties
-        StateRegistration.activeContext = HydrationContext(identity: identity, storage: storage)
-        StateRegistration.counter = 0
-        let firstState = State(wrappedValue: 10)
-        let secondState = State(wrappedValue: "hello")
-        StateRegistration.activeContext = nil
+        let first = TwoStateView()
+        bindStateProperties(of: first, identity: identity, storage: storage)
+        first.number = 20
+        first.text = "world"
 
-        firstState.wrappedValue = 20
-        secondState.wrappedValue = "world"
-
-        // Reconstruct: both should get their persisted values
-        StateRegistration.activeContext = HydrationContext(identity: identity, storage: storage)
-        StateRegistration.counter = 0
-        let firstReconstructed = State(wrappedValue: 10)
-        let secondReconstructed = State(wrappedValue: "hello")
-        StateRegistration.activeContext = nil
-
-        #expect(firstReconstructed.wrappedValue == 20)
-        #expect(secondReconstructed.wrappedValue == "world")
+        // Reconstruct + rebind at the same identity: each @State keeps its own slot.
+        let second = TwoStateView()
+        bindStateProperties(of: second, identity: identity, storage: storage)
+        #expect(second.number == 20)
+        #expect(second.text == "world")
     }
 
     // MARK: - View Identity
@@ -297,4 +286,17 @@ private struct CounterB: View {
         if value == 0 { value = 20 }
         return Text("B:\(value)")
     }
+}
+
+/// A view with a single `@State` (default 42), for render-time binding tests.
+private struct OneStateView: View {
+    @State var value = 42
+    var body: some View { Text("\(value)") }
+}
+
+/// A view with two `@State` properties, for distinct-slot tests.
+private struct TwoStateView: View {
+    @State var number = 10
+    @State var text = "hello"
+    var body: some View { Text("\(number):\(text)") }
 }

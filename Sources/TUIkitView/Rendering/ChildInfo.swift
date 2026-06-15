@@ -266,6 +266,8 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
         // rendered. Hydration still keys off `context` (the parent), exactly as
         // render does; only the recursion descends with the child identity.
         let childContext = context.withChildIdentity(type: V.Body.self)
+        bindStateProperties(
+            of: view, identity: context.identity, storage: context.environment.stateStorage!)
         let body = StateRegistration.withHydration(context: context) {
             view.body
         }

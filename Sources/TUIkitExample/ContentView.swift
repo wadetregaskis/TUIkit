@@ -129,76 +129,72 @@ struct ContentView: View {
     // want to see when adding or removing a page; splitting fragments it.
     // swiftlint:disable:next cyclomatic_complexity
     private func pageContent(for page: DemoPage, pageSetter: Binding<DemoPage>) -> some View {
-        // Each page is built inside a `LazyPage` so its `@State` hydrates in
-        // that page's own (conditional-branch) identity scope. Constructing the
-        // pages directly here would hydrate every page's `@State` in this one
-        // body scope, aliasing their slots across pages. See ``LazyPage``.
+        // Pages are constructed directly per case. Their `@State` no longer
+        // collides across pages: the framework binds each view's `@State` to its
+        // own render identity (a conditional branch carries a distinct identity),
+        // so the page switch keeps each page's state independent.
         switch page {
         case .menu:
             // The 1–9 / 0 quick-jump shortcuts are still wired up via
             // `handleMenuShortcut`, but the menu page already lists each
             // page's shortcut next to its title — repeating them in the
             // status bar would be noise.
-            LazyPage {
-                MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
-                    .statusBarItems {
-                        StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
-                        StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
-                    }
-            }
+            MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
+                .statusBarItems {
+                    StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
+                    StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
+                }
         case .textStyles:
-            LazyPage { TextStylesPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            TextStylesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .colors:
-            LazyPage { ColorsPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ColorsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .containers:
-            LazyPage { ContainersPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ContainersPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .overlays:
-            LazyPage { OverlaysPage(onBack: { pageSetter.wrappedValue = .menu }) }
+            OverlaysPage(onBack: { pageSetter.wrappedValue = .menu })
         case .layout:
-            LazyPage { LayoutPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            LayoutPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .buttons:
-            LazyPage { ButtonsPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ButtonsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .toggles:
-            LazyPage { TogglePage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            TogglePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .textFields:
-            LazyPage { TextFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            TextFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .secureFields:
-            LazyPage { SecureFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            SecureFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .radioButtons:
-            LazyPage { RadioButtonPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            RadioButtonPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .spinners:
-            LazyPage { SpinnersPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            SpinnersPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .lists:
-            LazyPage { ListPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ListPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .tables:
-            LazyPage { TablePage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            TablePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .scrollView:
-            LazyPage { ScrollViewPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ScrollViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .sliders:
-            LazyPage { SliderPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            SliderPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .steppers:
-            LazyPage { StepperPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            StepperPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .splitView:
-            LazyPage { SplitViewPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            SplitViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .imageFile:
-            LazyPage { ImageFilePage() }
+            ImageFilePage()
         case .imageURL:
-            LazyPage { ImageURLPage() }
+            ImageURLPage()
         case .emoji:
-            LazyPage { EmojiPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            EmojiPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .pickers:
-            LazyPage { PickerPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            PickerPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .progress:
-            LazyPage { ProgressViewPage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ProgressViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .mouse:
-            LazyPage { MousePage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            MousePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .theme:
-            LazyPage {
-                ThemePage(palette: $palette, styling: $styling)
-                    .statusBarItems(subPageItems(pageSetter: pageSetter))
-            }
+            ThemePage(palette: $palette, styling: $styling)
+                .statusBarItems(subPageItems(pageSetter: pageSetter))
         case .emptyState:
-            LazyPage { ContentUnavailablePage().statusBarItems(subPageItems(pageSetter: pageSetter)) }
+            ContentUnavailablePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 

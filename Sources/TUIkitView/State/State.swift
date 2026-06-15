@@ -158,88 +158,30 @@ extension AppState {
     }
 }
 
-// MARK: - Hydration Context
+// MARK: - Environment Registration
 
-/// The active render context used by `@State` during self-hydration.
+/// Publishes the active environment during a composite view's `body` evaluation
+/// so `@Environment` resolves against it.
 ///
-/// Set by `renderToBuffer(_:context:)` before evaluating a composite view's `body`,
-/// and cleared immediately after. Provides the view identity and state storage
-/// that `@State.init` needs to retrieve or create persistent state.
-public struct HydrationContext {
-    /// The current view's structural identity.
-    public let identity: ViewIdentity
-
-    /// The persistent state storage.
-    public let storage: StateStorage
-
-    /// Creates a new hydration context.
-    public init(identity: ViewIdentity, storage: StateStorage) {
-        self.identity = identity
-        self.storage = storage
-    }
-}
-
-// MARK: - State Registration
-
-/// Framework-internal state for `@State` self-hydration during rendering.
-///
-/// When `renderToBuffer(_:context:)` is about to evaluate a composite view's `body`,
-/// it sets ``activeContext`` and resets ``counter`` to 0. Each `@State.init` that runs
-/// during `body` evaluation checks ``activeContext``:
-///
-/// - **Non-nil:** Claims the next property index from ``counter`` and retrieves a
-///   persistent `StateBox` from `StateStorage`.
-/// - **Nil:** Creates a local `StateBox` (pre-render or outside the render tree).
-///
-/// This is safe because TUIKit runs on a single thread — no concurrent access.
+/// `@State` no longer self-hydrates here: it binds to its view's *own* render
+/// identity in `renderToBuffer` / `measureChild` (see
+/// ``bindStateProperties(of:identity:storage:)``), not by construction order in
+/// an enclosing scope. Single-threaded (`@MainActor` render), so a plain
+/// `static var` is safe.
 public enum StateRegistration {
-    /// The active hydration context, set during composite view body evaluation.
-    ///
-    /// - Important: Must be set before and cleared after each `body` call.
-    ///   Nested composite views save/restore the previous context.
-    nonisolated(unsafe) public static var activeContext: HydrationContext?
-
-    /// The current property index, incremented by each `@State` during hydration.
-    nonisolated(unsafe) public static var counter: Int = 0
-
-    /// The active environment values, set during composite view body evaluation.
-    ///
-    /// Used by `@Environment` to read environment values during `body` evaluation.
-    /// Set alongside ``activeContext`` in `renderToBuffer(_:context:)`.
+    /// The active environment, set during composite view body evaluation and
+    /// read by `@Environment` (and its event-closure fallback).
     nonisolated(unsafe) public static var activeEnvironment: EnvironmentValues?
-    /// Evaluates a closure with a hydration context active.
-    ///
-    /// Sets up `activeContext`, `counter`, and `activeEnvironment` before
-    /// calling the closure, then restores the previous state. This pattern
-    /// is needed whenever `view.body` is evaluated outside the normal
-    /// `renderToBuffer` dispatch (e.g., in `measureChild`).
-    ///
-    /// - Parameters:
-    ///   - context: The render context providing identity and environment.
-    ///   - block: The closure to execute with hydration active.
-    /// - Returns: The result of the closure.
-    public static func withHydration<R>(
-        context: RenderContext,
-        _ block: () -> R
-    ) -> R {
-        let previousContext = activeContext
-        let previousCounter = counter
-        let previousEnvironment = activeEnvironment
 
-        activeContext = HydrationContext(
-            identity: context.identity,
-            storage: context.environment.stateStorage!
-        )
-        counter = 0
+    /// Evaluates `block` with `context`'s environment published as
+    /// ``activeEnvironment`` (saved/restored for nesting). Needed whenever
+    /// `view.body` is evaluated outside the normal `renderToBuffer` dispatch
+    /// (e.g. in `measureChild`). The name is retained for its existing call sites.
+    public static func withHydration<R>(context: RenderContext, _ block: () -> R) -> R {
+        let previous = activeEnvironment
         activeEnvironment = context.environment
-
-        let result = block()
-
-        activeContext = previousContext
-        counter = previousCounter
-        activeEnvironment = previousEnvironment
-
-        return result
+        defer { activeEnvironment = previous }
+        return block()
     }
 }
 
@@ -331,67 +273,99 @@ public struct Binding<Value> {
 ///
 /// # Render Integration
 ///
-/// `@State` uses **self-hydrating init**: when `@State.init` runs while a
-/// render context is active (`StateRegistration.activeContext`), it claims
-/// the next property index and retrieves (or creates) a persistent `StateBox`
-/// from `StateStorage`.
+/// `@State` binds to persistent storage at **render time, by the view's own
+/// structural identity** — not at construction. When `renderToBuffer` (or
+/// `measureChild`) processes a view, ``bindStateProperties(of:identity:storage:)``
+/// walks its `@State` properties (in declaration order) and points each at the
+/// `StateStorage` slot keyed by `(this view's identity, property index)`.
 ///
-/// The render loop sets the active context **before** evaluating `App.body`,
-/// so views constructed inside `WindowGroup { ... }` closures self-hydrate
-/// immediately. For nested composite views, `renderToBuffer(_:context:)`
-/// saves and restores the context around each `body` evaluation.
-///
-/// State is keyed by `ViewIdentity` and property index, ensuring values
-/// survive view reconstruction across render passes.
+/// Keying by the view's *own* identity — rather than the scope it was
+/// constructed in — is what keeps conditionally-swapped views (`if` / `switch`
+/// branches, which carry distinct `#true` / `#false` identities) from aliasing
+/// each other's state. Values survive view reconstruction because the same
+/// identity always resolves to the same `StateBox`.
 ///
 /// Mutations signal re-renders through `AppState.shared`.
 @propertyWrapper
 public struct State<Value> {
-    /// The backing storage box for this state value.
-    ///
-    /// Either a local box (when no render context is active) or a persistent
-    /// box from `StateStorage` (during rendering). Since `StateBox` is a
-    /// reference type, mutations through `nonmutating set` are visible everywhere.
-    private let box: StateBox<Value>
-
-    /// The default value provided at init time.
-    ///
-    /// Used by `StateStorage` to create a new entry when no persistent
-    /// value exists for this property yet.
-    let defaultValue: Value
+    /// Reference-typed backing whose `box` can be (re)bound to the persistent
+    /// `StateStorage` slot at render time — see ``StateBacking`` and
+    /// ``bindStateProperties(of:identity:storage:)``.
+    private let backing: StateBacking<Value>
 
     /// The current state value.
     public var wrappedValue: Value {
-        get { box.value }
-        nonmutating set { box.value = newValue }
+        get { backing.box.value }
+        nonmutating set { backing.box.value = newValue }
     }
 
     /// A binding to the state value.
     public var projectedValue: Binding<Value> {
-        Binding(
-            get: { self.box.value },
-            set: { self.box.value = $0 }
+        let backing = self.backing
+        return Binding(
+            get: { backing.box.value },
+            set: { backing.box.value = $0 }
         )
     }
 
-    /// Creates a state with an initial value.
-    ///
-    /// If a render context is active (`StateRegistration.activeContext`),
-    /// the state self-hydrates: it claims a property index and retrieves
-    /// or creates a persistent `StateBox` from `StateStorage`.
-    ///
-    /// Otherwise, a local `StateBox` is created with the default value.
-    ///
-    /// - Parameter wrappedValue: The initial/default value.
+    /// Creates a state with an initial value. Binds to persistent storage at
+    /// render time (keyed by the view's own identity), not at construction.
     public init(wrappedValue: Value) {
-        self.defaultValue = wrappedValue
-        if let context = StateRegistration.activeContext {
-            let index = StateRegistration.counter
-            StateRegistration.counter += 1
-            let key = StateStorage.StateKey(identity: context.identity, propertyIndex: index)
-            self.box = context.storage.storage(for: key, default: wrappedValue)
-        } else {
-            self.box = StateBox(wrappedValue)
+        self.backing = StateBacking(wrappedValue)
+    }
+}
+
+// MARK: - State backing
+
+/// Reference-typed backing for ``State`` so the storage box can be rebound at
+/// render time through the value-type copy a `Mirror` walk produces.
+final class StateBacking<Value> {
+    let defaultValue: Value
+    var box: StateBox<Value>
+
+    init(_ value: Value) {
+        self.defaultValue = value
+        self.box = StateBox(value)
+    }
+
+    func bind(to storage: StateStorage, key: StateStorage.StateKey) {
+        box = storage.storage(for: key, default: defaultValue)
+    }
+}
+
+// MARK: - Render-time binding
+
+/// A `@State` property that can be bound to storage at render time (mirrors
+/// ``EnvironmentResolvable``).
+protocol StateBindable {
+    func bindState(to storage: StateStorage, identity: ViewIdentity, propertyIndex: Int)
+}
+
+extension State: StateBindable {
+    func bindState(to storage: StateStorage, identity: ViewIdentity, propertyIndex: Int) {
+        backing.bind(to: storage, key: StateStorage.StateKey(identity: identity, propertyIndex: propertyIndex))
+    }
+}
+
+/// Binds every `@State` of `view` to storage keyed by the view's own render
+/// `identity` + declaration order. Mirrors ``resolveEnvironmentProperties``.
+@MainActor
+func bindStateProperties<V>(of view: V, identity: ViewIdentity, storage: StateStorage) {
+    let typeID = ObjectIdentifier(V.self)
+    if StateBindingCache.typesWithoutState.contains(typeID) { return }
+    var index = 0
+    for child in Mirror(reflecting: view).children {
+        if let bindable = child.value as? StateBindable {
+            bindable.bindState(to: storage, identity: identity, propertyIndex: index)
+            index += 1
         }
     }
+    if index == 0 {
+        StateBindingCache.typesWithoutState.insert(typeID)
+    }
+}
+
+@MainActor
+private enum StateBindingCache {
+    static var typesWithoutState: Set<ObjectIdentifier> = []
 }

@@ -173,15 +173,12 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
             .clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
-    // Priority 2: Composite view — set up hydration context and recurse into body.
+    // Priority 2: Composite view — bind this view's @State to its own identity,
+    // resolve its @Environment, then recurse into body.
     //
-    // Before evaluating `body`, we activate the hydration context so that any
-    // @State properties created during body evaluation self-hydrate from StateStorage.
-    //
-    // For the view's OWN @State properties: these were already hydrated when the
-    // view was constructed (either via self-hydrating init if activeContext was set,
-    // or via the parent's body evaluation context). The context here is for CHILDREN
-    // that will be constructed inside this view's body.
+    // `@State` binds here (not at construction): keyed by THIS view's render
+    // identity, so conditionally-swapped views don't alias each other's state.
+    // The body is then evaluated with the environment published for @Environment.
     if V.Body.self != Never.self {
         let childContext = context.withChildIdentity(type: V.Body.self)
 
@@ -190,6 +187,12 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
         // with any closure `body` creates that captures the view, so @Environment
         // reads correctly inside event handlers / actions, not just during body.
         resolveEnvironmentProperties(of: view, in: context.environment)
+
+        // Bind this view's @State to its OWN render identity (not the scope it
+        // was constructed in), so views swapped by a conditional don't alias
+        // each other's state. Mirrored in `measureChild`.
+        bindStateProperties(
+            of: view, identity: context.identity, storage: context.environment.stateStorage!)
 
         // Wrap body evaluation in observation tracking so that any @Observable
         // property accessed during body triggers a re-render when mutated.
