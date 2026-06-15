@@ -32,9 +32,9 @@ extension Color {
         let normalizedSaturation = saturation / 100.0
         let normalizedLightness = lightness / 100.0
 
-        if normalizedSaturation == 0 {
+        if normalizedSaturation <= 0 {
             // Achromatic (gray)
-            let gray = UInt8(normalizedLightness * 255)
+            let gray = clampedByte(normalizedLightness * 255)
             return .rgb(gray, gray, gray)
         }
 
@@ -54,9 +54,9 @@ extension Color {
             return luminance
         }
 
-        let red = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue + 1 / 3) * 255)
-        let green = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue) * 255)
-        let blue = UInt8(hueToRGB(luminanceFactor, chromaFactor, normalizedHue - 1 / 3) * 255)
+        let red = clampedByte(hueToRGB(luminanceFactor, chromaFactor, normalizedHue + 1 / 3) * 255)
+        let green = clampedByte(hueToRGB(luminanceFactor, chromaFactor, normalizedHue) * 255)
+        let blue = clampedByte(hueToRGB(luminanceFactor, chromaFactor, normalizedHue - 1 / 3) * 255)
 
         return .rgb(red, green, blue)
     }
@@ -129,7 +129,8 @@ extension Color {
             return .rgb(gray, gray, gray)
         }
 
-        var sector = hue.truncatingRemainder(dividingBy: 360)
+        // A non-finite hue would trap the `Int(...)` below — fold it to 0.
+        var sector = (hue.isFinite ? hue : 0).truncatingRemainder(dividingBy: 360)
         if sector < 0 { sector += 360 }
         sector /= 60  // 0..<6
 
@@ -251,9 +252,14 @@ extension Color {
 // MARK: - Private Helpers
 
 /// Rounds and clamps a 0–255-scaled channel value into a `UInt8`, guarding
-/// against out-of-range user input (e.g. a hand-entered HSB/CMYK value) that
+/// against out-of-range user input (e.g. a hand-entered HSL/HSB/CMYK value) that
 /// would otherwise trap the `UInt8` conversion. Rounding (not truncation) keeps
 /// the RGB↔HSB and RGB↔CMYK round-trips exact.
+///
+/// A non-finite input (NaN or ±∞, e.g. from a degenerate conversion) is treated
+/// as 0 — `UInt8(.nan)` and `UInt8(.infinity)` both trap, so they must never
+/// reach the conversion.
 private func clampedByte(_ value: Double) -> UInt8 {
-    UInt8(max(0, min(255, value.rounded())))
+    guard value.isFinite else { return 0 }
+    return UInt8(max(0, min(255, value.rounded())))
 }

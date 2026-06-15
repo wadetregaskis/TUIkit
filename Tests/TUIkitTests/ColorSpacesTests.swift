@@ -110,5 +110,22 @@ struct ColorSpacesTests {
         // Values past the nominal ranges must not crash the UInt8 conversion.
         #expect(Color.hsb(400, 150, 150).rgbComponents != nil)
         #expect(Color.cmyk(-10, 200, 50, -5).rgbComponents != nil)
+        // HSL must be just as robust as HSB/CMYK — both the achromatic
+        // (saturation 0) path and the chromatic path.
+        #expect(Color.hsl(0, 0, 200).rgbComponents != nil, "achromatic, lightness > 100")
+        #expect(Color.hsl(720, 150, 150).rgbComponents != nil, "chromatic, all over range")
+        #expect(Color.hsl(-30, -10, -20).rgbComponents != nil, "negative components")
+    }
+
+    @Test("Non-finite components are treated as zero, not trapped")
+    func handlesNonFinite() {
+        // NaN / infinity must never reach a UInt8 conversion unguarded.
+        for bad in [Double.nan, .infinity, -.infinity] {
+            #expect(Color.hsl(bad, 50, 50).rgbComponents != nil)
+            #expect(Color.hsl(180, bad, 50).rgbComponents != nil)
+            #expect(Color.hsl(180, 50, bad).rgbComponents != nil)
+            #expect(Color.hsb(bad, bad, bad).rgbComponents != nil)
+            #expect(Color.cmyk(bad, bad, bad, bad).rgbComponents != nil)
+        }
     }
 }
