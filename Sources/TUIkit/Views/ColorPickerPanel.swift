@@ -163,10 +163,17 @@ public struct ColorPickerPanel: View {
 
     // MARK: Semantic tab
 
-    /// The palette roles offered on the semantic tab. Selecting one sets the
-    /// colour to that *reference* (`.semantic(role)`) rather than a snapshot,
-    /// so the edited colour tracks the palette. (`Color.palette.accent` already
-    /// *is* `.semantic(.accent)`, so each entry doubles as swatch and value.)
+    /// The palette roles offered on the semantic tab. Selecting one snapshots
+    /// that role's *current concrete colour* into the selection.
+    ///
+    /// It deliberately does NOT store the `.semantic(role)` reference: when the
+    /// edited colour is itself a palette slot (a theme editor), storing a
+    /// reference makes the palette return a semantic colour from that slot, and
+    /// any consumer that reads `palette.accent` directly (e.g. a button tint)
+    /// then hands an unresolved semantic colour to the renderer, which traps. A
+    /// palette must always yield concrete colours, so we resolve before storing.
+    /// (`Color.palette.accent` already *is* `.semantic(.accent)`, so each entry
+    /// still doubles as the swatch.)
     static let semanticColors: [(name: String, color: Color)] = [
         ("Foreground", .palette.foreground),
         ("Secondary", .palette.foregroundSecondary),
@@ -191,13 +198,18 @@ public struct ColorPickerPanel: View {
     /// marked and uses the primary button style.
     @ViewBuilder
     private func semanticRow(_ name: String, _ color: Color) -> some View {
-        let isSelected = selection.wrappedValue == color
+        // Snapshot the role's current concrete value (resolve before storing) so
+        // the selection — which may be a palette slot — never holds a semantic
+        // reference. The swatch keeps the semantic colour: it resolves at render
+        // and so always shows the role's live colour.
+        let concrete = color.resolve(with: palette)
+        let isSelected = selection.wrappedValue.resolve(with: palette) == concrete
         HStack(spacing: 1) {
             Text("██").foregroundStyle(color)
             if isSelected {
-                Button("● " + name) { selection.wrappedValue = color }.buttonStyle(.primary)
+                Button("● " + name) { selection.wrappedValue = concrete }.buttonStyle(.primary)
             } else {
-                Button("  " + name) { selection.wrappedValue = color }.buttonStyle(.plain)
+                Button("  " + name) { selection.wrappedValue = concrete }.buttonStyle(.plain)
             }
         }
     }

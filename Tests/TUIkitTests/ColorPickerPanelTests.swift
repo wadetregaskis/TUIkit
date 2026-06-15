@@ -309,4 +309,95 @@ struct ColorPickerPanelCrashSafetyTests {
         // Final render must still succeed after all that clicking.
         #expect(!renderToBuffer(panel, context: ctx).lines.isEmpty)
     }
+
+    /// A palette whose `accent` slot mirrors a binding — exactly the shape
+    /// ThemePage uses (`selection` is a key-path binding *into the palette the
+    /// view also resolves against*).
+    private struct EditedPalette: Palette {
+        let id = "edited"
+        let name = "Edited"
+        let background = Color.black
+        let foreground = Color.white
+        var accent: Color
+        let success = Color.green
+        let warning = Color.yellow
+        let error = Color.red
+        let info = Color.blue
+        let border = Color.brightBlack
+    }
+
+    @Test("Clicking semantic swatches while the selection is bound into the palette never traps")
+    func paletteBoundSemanticSelectionDoesNotTrap() {
+        // Reproduces the real crash: the selection writes into `palette.accent`,
+        // and that same palette is the environment the panel resolves against —
+        // so a semantic pick makes `accent` a semantic reference, and every later
+        // render must still resolve to concrete RGB.
+        final class Holder { var color: Color = .rgb(0, 0, 255) }
+        let holder = Holder()
+        let selection = Binding<Color>(get: { holder.color }, set: { holder.color = $0 })
+
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let panel = ColorPickerPanel("Accent", selection: selection, isPresented: .constant(true))
+
+        func renderAndClickEach() {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            env.mouseEventDispatcher = tui.mouseEventDispatcher
+            env.palette = EditedPalette(accent: holder.color)  // accent reflects the live selection
+            let ctx = RenderContext(
+                availableWidth: 70, availableHeight: 44, environment: env, tuiContext: tui)
+            let buffer = renderToBuffer(panel, context: ctx)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            for r in buffer.hitTestRegions {
+                let x = r.offsetX + max(0, r.width / 2)
+                let y = r.offsetY + max(0, r.height / 2)
+                _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+                _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+            }
+        }
+
+        // Deterministically: render, click the Semantic tab (5th tab → region 4),
+        // re-render, then click each semantic-row button — re-rendering against
+        // the palette each click mutates. Assert we actually drove a semantic
+        // selection (so the test can't false-pass by never reaching a swatch).
+        func render() -> FrameBuffer {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            env.mouseEventDispatcher = tui.mouseEventDispatcher
+            env.palette = EditedPalette(accent: holder.color)
+            let ctx = RenderContext(
+                availableWidth: 70, availableHeight: 44, environment: env, tuiContext: tui)
+            return renderToBuffer(panel, context: ctx)
+        }
+        func click(_ r: HitTestRegion) {
+            tui.mouseEventDispatcher.setRegions([r])
+            let x = r.offsetX + max(0, r.width / 2)
+            let y = r.offsetY + max(0, r.height / 2)
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        }
+
+        let tabRegions = render().hitTestRegions
+        #expect(tabRegions.count >= 6, "the six model tabs register hit regions")
+        click(tabRegions[4])  // the Semantic tab (rgb,hsl,hsb,cmyk,semantic,256)
+
+        let semanticView = render()
+        // Semantic-row buttons follow the six tabs in render order.
+        let rowRegions = Array(semanticView.hitTestRegions.dropFirst(6))
+        #expect(!rowRegions.isEmpty, "the semantic tab shows selectable role rows")
+        var everSemantic = false
+        for row in rowRegions {
+            click(row)
+            _ = render()  // re-render against the palette the click just mutated
+            if case .semantic = holder.color.value { everSemantic = true }
+        }
+        // The selection must hold a CONCRETE colour — the semantic tab snapshots
+        // the role's value rather than storing a `.semantic` reference, so the
+        // palette slot it's bound to never goes semantic (which would crash a
+        // consumer that reads `palette.accent` directly).
+        #expect(!everSemantic, "the selection never becomes a semantic reference")
+        #expect(holder.color.rgbComponents != nil, "selection resolved to a concrete colour")
+        #expect(holder.color != .rgb(0, 0, 255), "clicking a role actually changed the selection")
+    }
 }
