@@ -178,7 +178,9 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         if !(header is EmptyView) {
             let headerBuffer = TUIkit.renderToBuffer(
                 header, context: sectionChromeContext(context, .sectionHeader))
-            lines.append(contentsOf: headerBuffer.lines)
+            // Drop a blank header (e.g. `header: { Text("") }`) rather than show
+            // an empty line above the content.
+            if !sectionBufferIsBlank(headerBuffer) { lines.append(contentsOf: headerBuffer.lines) }
         }
 
         let contentBuffer = TUIkit.renderToBuffer(content, context: context)
@@ -187,7 +189,7 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         if !(footer is EmptyView) {
             let footerBuffer = TUIkit.renderToBuffer(
                 footer, context: sectionChromeContext(context, .sectionFooter))
-            lines.append(contentsOf: footerBuffer.lines)
+            if !sectionBufferIsBlank(footerBuffer) { lines.append(contentsOf: footerBuffer.lines) }
         }
 
         return FrameBuffer(lines: lines)
@@ -199,6 +201,12 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
 /// any `.chrome(...)` overrides) rather than being post-styled with fixed ANSI.
 private func sectionChromeContext(_ context: RenderContext, _ role: ChromeRole) -> RenderContext {
     context.withEnvironment(context.environment.setting(\.chromeRole, to: role))
+}
+
+/// Whether a rendered header/footer buffer is entirely blank — so it should be
+/// dropped rather than shown as an empty line (e.g. an empty `Text("")` header).
+private func sectionBufferIsBlank(_ buffer: FrameBuffer) -> Bool {
+    buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
 }
 
 // MARK: - Section Row Extractor
@@ -233,15 +241,14 @@ extension Section: SectionRowExtractor {
         // Header/footer render under a chrome role so their text styles through
         // the cascade (see ``ChromeRole`` / ``Text``). The styling is per-line
         // and unshifted, so overlays and hit-test regions carry through.
-        let headerBuffer: FrameBuffer? =
-            (header is EmptyView)
-            ? nil
-            : TUIkit.renderToBuffer(header, context: sectionChromeContext(context, .sectionHeader))
-
-        let footerBuffer: FrameBuffer? =
-            (footer is EmptyView)
-            ? nil
-            : TUIkit.renderToBuffer(footer, context: sectionChromeContext(context, .sectionFooter))
+        func renderedChrome(_ view: some View, _ role: ChromeRole, isEmptyView: Bool) -> FrameBuffer? {
+            guard !isEmptyView else { return nil }
+            let buffer = TUIkit.renderToBuffer(view, context: sectionChromeContext(context, role))
+            // A blank header/footer is dropped (nil), not shown as an empty row.
+            return sectionBufferIsBlank(buffer) ? nil : buffer
+        }
+        let headerBuffer = renderedChrome(header, .sectionHeader, isEmptyView: header is EmptyView)
+        let footerBuffer = renderedChrome(footer, .sectionFooter, isEmptyView: footer is EmptyView)
 
         let contentBuffer = TUIkit.renderToBuffer(content, context: context)
 

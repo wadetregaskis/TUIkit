@@ -294,9 +294,16 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// indeterminate bar, started its animation task) just to read back a size
     /// that is fully determined by the label's presence.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        ViewSize(
-            width: proposal.width ?? context.availableWidth,
-            height: hasLabelLine ? 2 : 1,
+        let width = proposal.width ?? context.availableWidth
+        // 2 lines only when the label line is actually visible (a blank label
+        // like `ProgressView("")` collapses to just the bar). Rendering the
+        // label here is cheap and — unlike the bar — starts no animation.
+        let height =
+            visibleLabelLine(width: width, palette: context.environment.palette, context: context) != nil
+            ? 2 : 1
+        return ViewSize(
+            width: width,
+            height: height,
             isWidthFlexible: true,
             isHeightFlexible: false
         )
@@ -307,15 +314,11 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let width = context.availableWidth
         var lines: [String] = []
 
-        // Label line (optional): label left, currentValueLabel right.
-        if hasLabelLine {
-            lines.append(
-                renderLabelLine(
-                    width: width,
-                    palette: palette,
-                    context: context
-                )
-            )
+        // Label line (optional): label left, currentValueLabel right. A blank
+        // label (e.g. `ProgressView("")`) collapses so the bar isn't pushed
+        // down by an empty line.
+        if let labelLine = visibleLabelLine(width: width, palette: palette, context: context) {
+            lines.append(labelLine)
         }
 
         // Progress bar line
@@ -364,6 +367,15 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let gap = max(1, width - labelWidth - valueWidth)
 
         return labelText + String(repeating: " ", count: gap) + valueText
+    }
+
+    /// The label line if it has visible content, else `nil` — so a blank label
+    /// (`ProgressView("")`) doesn't push the bar down by an empty row. Used by
+    /// both `sizeThatFits` and `renderToBuffer` so their heights agree.
+    private func visibleLabelLine(width: Int, palette: any Palette, context: RenderContext) -> String? {
+        guard hasLabelLine else { return nil }
+        let line = renderLabelLine(width: width, palette: palette, context: context)
+        return line.stripped.allSatisfy(\.isWhitespace) ? nil : line
     }
 
     // MARK: - Bar Line Rendering

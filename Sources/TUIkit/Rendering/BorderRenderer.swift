@@ -125,7 +125,6 @@ extension BorderRenderer {
             title.strippedLength > maxTitleWidth
             ? title.ansiAwarePrefix(visibleCount: maxTitleWidth)
             : title
-        let titleStyled = ANSIRenderer.colorize(" \(fittedTitle) ", foreground: titleColor, bold: true)
 
         let leftPart: String
         if let indicatorColor = focusIndicatorColor {
@@ -141,6 +140,15 @@ extension BorderRenderer {
             )
         }
 
+        // An empty/blank title would render as `╭─  ─╮` — a gap in the border.
+        // Collapse it to a continuous border `╭────╮` (keeping any focus dot).
+        if fittedTitle.stripped.allSatisfy(\.isWhitespace) {
+            let fill = String(repeating: style.horizontal, count: max(0, innerWidth - 1))
+                + String(style.topRight)
+            return leftPart + ANSIRenderer.colorize(fill, foreground: color)
+        }
+
+        let titleStyled = ANSIRenderer.colorize(" \(fittedTitle) ", foreground: titleColor, bold: true)
         let rightPartLength = max(0, innerWidth - usedLeftWidth - fittedTitle.strippedLength - 2)
         let rightPart = ANSIRenderer.colorize(
             String(repeating: style.horizontal, count: rightPartLength) + String(style.topRight),
