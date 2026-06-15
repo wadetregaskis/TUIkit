@@ -406,16 +406,22 @@ private struct _ButtonStyleBody: View, Renderable {
         let buttonBg = palette.accent.opacity(buttonBgOpacity)
 
         // Label foreground: a scoped cascade colour wins (in every state);
-        // otherwise bold = tinted, unfocused = a dimmed foreground.
+        // otherwise the style/role's own colour is used in every state too. A
+        // semantic tint — a destructive button's error red, a success button's
+        // green — is load-bearing: it must not drop to a neutral grey just
+        // because the button is unfocused, or `.buttonStyle(.destructive)` would
+        // be indistinguishable from `.default` until focused (and a bare
+        // `role: .destructive` likewise). Focus changes the *weight* (`isBold`,
+        // applied below) and the caps/background pulse, not whether the tint
+        // shows. The default style's own colour already IS `foregroundSecondary`,
+        // so an unfocused default button still reads as a dim, recessive control.
         let labelFg: Color
         if isDisabled {
             labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
-        } else if isBold {
-            labelFg = baseForeground?.resolve(with: palette) ?? palette.accent
         } else {
-            labelFg = palette.foregroundSecondary
+            labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
         }
 
         // Caps match the background normally, pulsing to accent when focused.

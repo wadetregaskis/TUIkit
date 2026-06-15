@@ -89,6 +89,46 @@ struct ButtonRenderTests {
         #expect(out[0] == "\(openCap) Delete \(closeCap)", "got: '\(out[0])'")
     }
 
+    /// Renders `view` with focus parked on a sentinel, so the view under test
+    /// renders in its *un-focused* state. Returns the joined lines with ANSI
+    /// escapes intact. (Same sentinel trick as `plainUnfocused`.)
+    private func unfocusedANSI(_ view: some View, width: Int = 30, height: Int = 8) -> String {
+        let context = makeContext(width: width, height: height)
+        context.environment.focusManager.register(FocusHolder())
+        return renderToBuffer(view, context: context).lines.joined(separator: "\n")
+    }
+
+    @Test("An unfocused destructive-style button keeps its error tint (load-bearing colour)")
+    func unfocusedDestructiveStyleKeepsTint() {
+        // The semantic colour must survive losing focus — otherwise
+        // `.buttonStyle(.destructive)` is indistinguishable from `.default`
+        // until highlighted. Same label + chrome, so any ANSI difference is the
+        // label colour: a neutral default vs the error red.
+        let destructive = unfocusedANSI(Button("Reset") {}.buttonStyle(.destructive))
+        let plainDefault = unfocusedANSI(Button("Reset") {})
+        #expect(destructive != plainDefault,
+                "unfocused destructive must keep its error tint, not fall back to the default colour")
+    }
+
+    @Test("An unfocused destructive-role button keeps its error tint (load-bearing colour)")
+    func unfocusedDestructiveRoleKeepsTint() {
+        // The bare role (no bold cascade) must read as destructive even
+        // unfocused — the case that looked inconsistent next to a bold-cascaded
+        // role button that happened to always show red.
+        let role = unfocusedANSI(Button("Delete", role: .destructive) {})
+        let plainDefault = unfocusedANSI(Button("Delete") {})
+        #expect(role != plainDefault,
+                "unfocused role: .destructive must keep its error tint when unfocused")
+    }
+
+    @Test("Unfocused success and destructive buttons render in distinct semantic colours")
+    func unfocusedSemanticColoursDiffer() {
+        let success = unfocusedANSI(Button("Go") {}.buttonStyle(.success))
+        let destructive = unfocusedANSI(Button("Go") {}.buttonStyle(.destructive))
+        #expect(success != destructive,
+                "success (green) and destructive (red) must not collapse to the same unfocused colour")
+    }
+
     @Test("A plain-style button drops the brackets and shows the focus dot when focused")
     func plainFocused() {
         // First (only) focusable → auto-focused → pulsing `● ` prefix, no caps.
