@@ -20,7 +20,7 @@ private func createTestContext(width: Int = 20, height: Int = 6) -> RenderContex
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 // MARK: - Image Rendering Tests

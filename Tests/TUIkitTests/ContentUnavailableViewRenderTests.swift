@@ -20,7 +20,7 @@ private func createTestContext(width: Int = 30, height: Int = 8) -> RenderContex
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 @MainActor

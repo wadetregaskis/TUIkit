@@ -13,7 +13,7 @@ import Testing
 struct ViewThatFitsTests {
 
     private func context(width: Int, height: Int = 24) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     @Test("Picks the first candidate when it fits the available space")

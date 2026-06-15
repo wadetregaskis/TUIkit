@@ -536,7 +536,7 @@ struct ButtonRowBuilderTests {
         // padding, so an availableWidth of 8 leaves 4 cells for the label.
         let button = Button("Reticulate") {}
         let context = RenderContext(
-            availableWidth: 8, availableHeight: 1, tuiContext: TUIContext())
+            availableWidth: 8, availableHeight: 1, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(button, context: context)
         let stripped = buffer.lines[0].stripped
         #expect(stripped.contains("…"), "Truncated label should carry an ellipsis")
@@ -548,7 +548,7 @@ struct ButtonRowBuilderTests {
     func plainLabelTruncatesWithEllipsis() {
         let button = Button("Reticulate") {}.buttonStyle(.plain)
         let context = RenderContext(
-            availableWidth: 5, availableHeight: 1, tuiContext: TUIContext())
+            availableWidth: 5, availableHeight: 1, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(button, context: context)
         let stripped = buffer.lines[0].stripped
         #expect(stripped.contains("…"))

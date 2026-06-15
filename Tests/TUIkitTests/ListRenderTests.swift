@@ -25,7 +25,7 @@ private func listContext(width: Int = 30, height: Int = 8, explicitWidth: Bool =
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
     context.hasExplicitWidth = explicitWidth
     return context
 }

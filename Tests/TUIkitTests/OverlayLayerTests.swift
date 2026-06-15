@@ -20,7 +20,7 @@ private func makeContext(width: Int = 80, height: Int = 24) -> RenderContext {
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 /// A leaf test view that renders one visible line and emits one overlay layer

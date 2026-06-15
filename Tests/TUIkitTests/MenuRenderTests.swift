@@ -19,7 +19,7 @@ struct MenuRenderTests {
             availableWidth: width,
             availableHeight: height,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     private func lines(_ buffer: FrameBuffer) -> [String] {

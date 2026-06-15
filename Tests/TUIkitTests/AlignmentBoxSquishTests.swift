@@ -42,7 +42,7 @@ private func renderRow(width: Int) -> (lines: [String], height: Int) {
         availableHeight: 12,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
     let buffer = renderToBuffer(view, context: context)
     return (buffer.lines, buffer.height)
 }
@@ -145,7 +145,7 @@ struct AlignmentBoxSquishTests {
                 availableHeight: 24,
                 environment: environment,
                 tuiContext: TUIContext()
-            )
+            ).isolatingRenderCache()
             let buffer = renderToBuffer(makeRow(), context: context)
             let joined = buffer.lines.map(ansiStripped).joined(separator: "\n")
             let occurrences = joined.components(separatedBy: "short").count - 1
@@ -216,7 +216,7 @@ struct AlignmentBoxSquishTests {
                 availableHeight: 24,
                 environment: environment,
                 tuiContext: TUIContext()
-            )
+            ).isolatingRenderCache()
             let buffer = renderToBuffer(makeRow(), context: context)
             print("---- terminal width \(width) ----")
             for line in buffer.lines {
@@ -275,7 +275,7 @@ struct AlignmentBoxSquishTests {
                 availableHeight: 20,
                 environment: environment,
                 tuiContext: TUIContext()
-            )
+            ).isolatingRenderCache()
             let buffer = renderToBuffer(pageRow, context: context)
             print("---- terminal width \(width) ----")
             for line in buffer.lines {
@@ -337,7 +337,7 @@ struct AlignmentBoxSquishTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
         let buffer = renderToBuffer(row, context: context)
         for line in buffer.lines {
             print("|\(ansiStripped(line))|")
@@ -372,7 +372,7 @@ struct AlignmentBoxSquishTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
         let buffer = renderToBuffer(trailing, context: context)
         for line in buffer.lines {
             print("|\(ansiStripped(line))|")

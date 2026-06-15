@@ -103,7 +103,7 @@ struct FrameBufferClampedTests {
 struct StackChildClampingTests {
 
     private func context(width: Int, height: Int) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     @Test("renderChild truncates a child that over-renders its width")
@@ -158,7 +158,7 @@ private func assertNeverOverflows(
     for width in widths {
         for height in heights {
             let context = RenderContext(
-                availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+                availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
             let buffer = renderToBuffer(view, context: context)
             #expect(
                 buffer.height <= height,
@@ -220,7 +220,7 @@ struct HStackSizingTests {
             Spacer()
             Text("YZ")
         }
-        let context = RenderContext(availableWidth: 40, availableHeight: 3, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 40, availableHeight: 3, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.width == 40, "HStack with a Spacer should fill the width, got \(buffer.width)")
     }
@@ -233,7 +233,7 @@ struct HStackSizingTests {
             Text("Name:")
             TextField("field", text: binding)
         }
-        let context = RenderContext(availableWidth: 12, availableHeight: 3, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 12, availableHeight: 3, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.width <= 12)
         #expect(buffer.lines.first?.contains("Name:") == true, "the fixed label should not be truncated")
@@ -260,7 +260,7 @@ struct HStackSizingTests {
         // wrapped "(foregroundTertiary)" portion is silently clipped, as the
         // Settings panel in the example used to demonstrate at width 40.
         let context = RenderContext(
-            availableWidth: 40, availableHeight: 10, tuiContext: TUIContext())
+            availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()).isolatingRenderCache()
         let view = HStack(spacing: 2) {
             Text("Tertiary text (foregroundTertiary)")
                 .frame(maxWidth: .infinity)
@@ -337,7 +337,7 @@ struct VStackSizingTests {
             Spacer()
             Text("bottom")
         }
-        let context = RenderContext(availableWidth: 20, availableHeight: 15, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 20, availableHeight: 15, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.height == 15, "VStack with a Spacer should fill the height, got \(buffer.height)")
     }
@@ -351,7 +351,7 @@ struct VStackSizingTests {
             Text("row 4")
             Text("row 5")
         }
-        let context = RenderContext(availableWidth: 20, availableHeight: 3, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 20, availableHeight: 3, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.height <= 3)
         #expect(buffer.lines.first?.contains("row 1") == true, "the first row should stay visible")
@@ -402,7 +402,7 @@ struct ContainerSizingTests {
 
     @Test("Box shrinks to wrap short content")
     func boxWrapsContentTightly() {
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(Box { Text("Hi") }, context: context)
         #expect(buffer.width == 6, "Box should shrink to content width, got \(buffer.width)")
         #expect(buffer.height == 3, "Box should be content height plus borders, got \(buffer.height)")
@@ -417,7 +417,7 @@ struct ContainerSizingTests {
                 Text("line three")
             }
         }
-        let context = RenderContext(availableWidth: 8, availableHeight: 4, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 8, availableHeight: 4, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.width <= 8)
         #expect(buffer.height <= 4)
@@ -435,7 +435,7 @@ struct UniversalClampTests {
         for width in [0, 1, 5, 30, 80] {
             for height in [0, 1, 3, 24] {
                 let context = RenderContext(
-                    availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+                    availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
                 let buffer = renderToBuffer(
                     OversizedView(renderWidth: 500, renderHeight: 200), context: context)
                 #expect(buffer.width <= width, "width \(buffer.width) exceeds \(width)")
@@ -484,7 +484,7 @@ struct TableSizingTests {
     func tableUsesAvailableHeightOpportunistically() {
         // 8 rows need 8 + 3 chrome = 11 lines; 12 are available, so all 8
         // rows must be visible and no scroll indicator should appear.
-        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(table(rowCount: 8), context: context)
         let content = buffer.lines.joined(separator: "\n")
         #expect(content.contains("Item 0"), "first row should be visible")
@@ -495,7 +495,7 @@ struct TableSizingTests {
     @Test("Table scrolls gracefully when rows genuinely exceed the height")
     func tableScrollsWhenTooTall() {
         // 30 rows cannot fit in 10 lines — the table must stay within bounds.
-        let context = RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(table(rowCount: 30), context: context)
         #expect(buffer.height <= 10)
         #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
@@ -528,7 +528,7 @@ struct ListSizingTests {
     func listUsesAvailableHeightOpportunistically() {
         // 9 rows + 2 border lines = 11; 12 are available, so all 9 rows must
         // be visible with no scroll indicator.
-        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 40, availableHeight: 12, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(list(rowCount: 9), context: context)
         let content = buffer.lines.joined(separator: "\n")
         #expect(content.contains("Item 0"))
@@ -538,7 +538,7 @@ struct ListSizingTests {
 
     @Test("List scrolls gracefully when rows exceed the height")
     func listScrollsWhenTooTall() {
-        let context = RenderContext(availableWidth: 40, availableHeight: 8, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 40, availableHeight: 8, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(list(rowCount: 40), context: context)
         #expect(buffer.height <= 8)
         #expect(buffer.lines.allSatisfy { $0.strippedLength <= 40 })
@@ -572,7 +572,7 @@ struct TextInputSizingTests {
         let field = TextField("Field", text: binding)
         for proposedWidth in [12, 20, 40, 80] {
             let context = RenderContext(
-                availableWidth: proposedWidth, availableHeight: 1, tuiContext: TUIContext())
+                availableWidth: proposedWidth, availableHeight: 1, tuiContext: TUIContext()).isolatingRenderCache()
             let measured = measureChild(
                 field, proposal: ProposedSize(width: proposedWidth, height: 1), context: context)
             let rendered = renderToBuffer(field, context: context)

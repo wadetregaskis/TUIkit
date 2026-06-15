@@ -13,7 +13,7 @@ import Testing
 struct GroupTests {
 
     private func context(width: Int = 80, height: Int = 24) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     @Test("Group renders its children with no layout of its own")

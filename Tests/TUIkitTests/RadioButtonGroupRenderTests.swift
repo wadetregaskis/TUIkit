@@ -24,7 +24,7 @@ struct RadioButtonGroupRenderTests {
             availableHeight: height,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     /// A throwaway focusable used to occupy auto-focus so that a

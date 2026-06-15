@@ -13,7 +13,7 @@ import Testing
 struct StyleCascadeTests {
 
     private func context(width: Int = 40, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     /// All SGR parameter codes present across a rendered buffer (e.g. "1" = bold,

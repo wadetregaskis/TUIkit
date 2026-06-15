@@ -26,7 +26,7 @@ struct FlexibleFrameViewMeasureTests {
         environment.focusManager = FocusManager()
         return RenderContext(
             availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext())
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     /// The exact render-to-measure fallback `measureChild` applied before

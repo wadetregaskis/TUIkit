@@ -22,7 +22,7 @@ struct OnChangeTests {
             availableWidth: width,
             availableHeight: height,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
         return renderToBuffer(view, context: context)
     }
 

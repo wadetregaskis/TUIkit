@@ -117,7 +117,7 @@ struct LayoutableTests {
     @Test("Text sizeThatFits returns content size")
     func textSizeThatFits() {
         let text = Text("Hello")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         let size = text.sizeThatFits(proposal: .unspecified, context: context)
 
@@ -130,7 +130,7 @@ struct LayoutableTests {
     @Test("Text sizeThatFits wraps with proposed width")
     func textSizeThatFitsWraps() {
         let text = Text("Hello World")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         // With narrow proposed width, text should wrap
         let size = text.sizeThatFits(proposal: ProposedSize(width: 6, height: nil), context: context)
@@ -142,7 +142,7 @@ struct LayoutableTests {
     @Test("Spacer sizeThatFits is flexible")
     func spacerSizeThatFits() {
         let spacer = Spacer()
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         let size = spacer.sizeThatFits(proposal: .unspecified, context: context)
 
@@ -155,7 +155,7 @@ struct LayoutableTests {
     @Test("Spacer with minLength has minimum size")
     func spacerWithMinLength() {
         let spacer = Spacer(minLength: 5)
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         let size = spacer.sizeThatFits(proposal: .unspecified, context: context)
 
@@ -168,7 +168,7 @@ struct LayoutableTests {
     @Test("Divider sizeThatFits is width-flexible")
     func dividerSizeThatFits() {
         let divider = Divider()
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         let size = divider.sizeThatFits(proposal: .unspecified, context: context)
 
@@ -185,7 +185,7 @@ struct LayoutableTests {
             Text("Search:")
             TextField("Search", text: binding, prompt: Text("Enter search term..."))
         }
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(hstack, context: context)
 
         #expect(buffer.width == 80, "HStack should fill exactly available width, got \(buffer.width)")
@@ -197,7 +197,7 @@ struct LayoutableTests {
         var text = ""
         let binding = Binding(get: { text }, set: { text = $0 })
         let textField = TextField("Test", text: binding)
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         let size = measureChild(textField, proposal: .unspecified, context: context)
 
@@ -214,7 +214,7 @@ struct LayoutableTests {
 
         let model = LayoutTestModel()
         let view = ChildView().environment(model)
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
 
         // Before the fix, this would crash with:
         // "@Environment(LayoutTestModel.self): No object of type LayoutTestModel found"
@@ -228,7 +228,7 @@ struct LayoutableTests {
         // Text must still measure as a fixed-width view — otherwise a stack
         // treats it as the flexible child and shrinks it ahead of siblings.
         let view = Text("Black").foregroundStyle(.black).background(.white)
-        var context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        var context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         context.hasExplicitWidth = true
 
         let size = measureChild(view, proposal: .unspecified, context: context)
@@ -247,7 +247,7 @@ struct LayoutableTests {
             Text("Green")
             Text("Yellow")
         }
-        var context = RenderContext(availableWidth: 24, availableHeight: 1, tuiContext: TUIContext())
+        var context = RenderContext(availableWidth: 24, availableHeight: 1, tuiContext: TUIContext()).isolatingRenderCache()
         context.hasExplicitWidth = true
 
         let line = renderToBuffer(hstack, context: context).lines[0].stripped

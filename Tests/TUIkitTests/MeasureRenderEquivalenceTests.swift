@@ -37,7 +37,7 @@ struct MeasureRenderEquivalenceTests {
         environment.focusManager = FocusManager()
         return RenderContext(
             availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext())
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     /// Widths to probe. `nil` = unspecified proposal (context width 80).

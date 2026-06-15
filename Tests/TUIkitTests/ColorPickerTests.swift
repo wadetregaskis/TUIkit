@@ -17,7 +17,7 @@ struct ColorPickerTests {
         environment.focusManager = FocusManager()
         return RenderContext(
             availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext())
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     @Test("Renders its title and a swatch in the bound colour")

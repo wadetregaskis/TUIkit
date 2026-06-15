@@ -94,7 +94,7 @@ struct EnvironmentModifierTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -117,7 +117,7 @@ struct EnvironmentModifierTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -138,7 +138,7 @@ struct EnvironmentModifierTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -205,7 +205,7 @@ struct ForegroundStylePropagationTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -229,7 +229,7 @@ struct ForegroundStylePropagationTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -250,7 +250,7 @@ struct ForegroundStylePropagationTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
@@ -269,7 +269,7 @@ struct ForegroundStylePropagationTests {
             availableHeight: 24,
             environment: EnvironmentValues(),
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()

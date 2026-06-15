@@ -38,7 +38,7 @@ private func fieldContext(
         environment: env,
         tuiContext: TUIContext(),
         identity: ViewIdentity(path: identityPath)
-    )
+    ).isolatingRenderCache()
 }
 
 /// Renders a view twice through the same context (the first pass registers
@@ -293,7 +293,7 @@ struct TextFieldRenderTests {
             availableHeight: 5,
             environment: env,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let view = VStack {
             TextField("A", text: .constant("one")).focusID("a")

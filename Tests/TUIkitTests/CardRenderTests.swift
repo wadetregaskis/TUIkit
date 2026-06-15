@@ -21,7 +21,7 @@ private func createTestContext(width: Int = 30, height: Int = 8) -> RenderContex
         availableHeight: height,
         environment: environment,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 /// Convenience: render a view and return its visible (ANSI-stripped) lines.

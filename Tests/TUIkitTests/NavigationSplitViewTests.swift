@@ -18,7 +18,7 @@ private func testContext(width: Int = 80, height: Int = 24) -> RenderContext {
         availableWidth: width,
         availableHeight: height,
         tuiContext: TUIContext()
-    )
+    ).isolatingRenderCache()
 }
 
 // MARK: - NavigationSplitViewVisibility Tests
@@ -343,7 +343,7 @@ struct NavigationSplitViewFocusSectionTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         _ = renderToBuffer(splitView, context: context)
 
@@ -371,7 +371,7 @@ struct NavigationSplitViewFocusSectionTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         _ = renderToBuffer(splitView, context: context)
 
@@ -401,7 +401,7 @@ struct NavigationSplitViewFocusSectionTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         _ = renderToBuffer(splitView, context: context)
 

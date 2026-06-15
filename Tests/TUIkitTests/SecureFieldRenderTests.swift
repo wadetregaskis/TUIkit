@@ -36,7 +36,7 @@ private func fieldContext(
         environment: env,
         tuiContext: TUIContext(),
         identity: ViewIdentity(path: identityPath)
-    )
+    ).isolatingRenderCache()
 }
 
 @MainActor
@@ -246,7 +246,7 @@ struct SecureFieldRenderTests {
             availableHeight: 5,
             environment: env,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let view = VStack {
             SecureField("A", text: .constant("aa")).focusID("a")

@@ -20,7 +20,7 @@ struct GradientRenderingTests {
             availableHeight: 5,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     @Test("ForEach<Range, id: \\.self> inside HStack renders its glyphs")

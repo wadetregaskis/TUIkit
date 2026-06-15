@@ -125,7 +125,7 @@ struct ObservableEnvironmentTests {
             availableWidth: 80,
             availableHeight: 24,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         let buffer = renderToBuffer(view, context: context)
         #expect(!buffer.isEmpty)

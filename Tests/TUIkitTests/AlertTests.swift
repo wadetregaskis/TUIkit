@@ -23,7 +23,7 @@ struct AlertSizingTests {
             availableHeight: 30,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     private let sampleMessage = "This is a standard alert with default theme colors."

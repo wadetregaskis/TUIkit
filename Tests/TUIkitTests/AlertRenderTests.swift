@@ -24,7 +24,7 @@ struct AlertRenderTests {
             availableHeight: height,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     private func lines(_ buffer: FrameBuffer) -> [String] {

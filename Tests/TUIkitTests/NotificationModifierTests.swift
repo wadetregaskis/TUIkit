@@ -24,7 +24,7 @@ struct NotificationTests {
             availableHeight: height,
             tuiContext: TUIContext(),
             identity: identity
-        )
+        ).isolatingRenderCache()
     }
 
     // MARK: - Fade Timing

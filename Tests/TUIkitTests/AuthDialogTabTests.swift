@@ -20,7 +20,7 @@ struct AuthDialogTabTests {
             availableHeight: 24,
             environment: environment,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     @Test("Tab advances focus through every auth-dialog control in order")

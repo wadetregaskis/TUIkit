@@ -17,7 +17,7 @@ struct MenuTerminalWidthTests {
             availableWidth: width,
             availableHeight: 24,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     @Test("Menu with CJK labels produces uniform-width lines")

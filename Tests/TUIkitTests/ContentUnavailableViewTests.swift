@@ -21,7 +21,7 @@ struct ContentUnavailableViewTests {
         } actions: {
             Text("[Action]")
         }
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("Title"))
@@ -34,7 +34,7 @@ struct ContentUnavailableViewTests {
         let view = ContentUnavailableView {
             Text("Only Label")
         }
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("Only Label"))
@@ -43,7 +43,7 @@ struct ContentUnavailableViewTests {
     @Test("String convenience init renders title text")
     func stringInit() {
         let view = ContentUnavailableView("Empty State")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("Empty State"))
@@ -52,7 +52,7 @@ struct ContentUnavailableViewTests {
     @Test("String with description init renders both")
     func stringWithDescription() {
         let view = ContentUnavailableView("No Items", description: "Add items to get started.")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("No Items"))
@@ -62,7 +62,7 @@ struct ContentUnavailableViewTests {
     @Test("Search preset renders 'No Results' text")
     func searchPreset() {
         let view = ContentUnavailableView<Text, Text, EmptyView>.search
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("No Results"))
@@ -72,7 +72,7 @@ struct ContentUnavailableViewTests {
     @Test("Search with text renders query in title")
     func searchWithText() {
         let view = ContentUnavailableView<Text, Text, EmptyView>.search(text: "swift")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("No Results for 'swift'"))
@@ -85,7 +85,7 @@ struct ContentUnavailableViewTests {
         } description: {
             Text("Subtext")
         }
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
         #expect(content.contains("Header"))
@@ -95,7 +95,7 @@ struct ContentUnavailableViewTests {
     @Test("Content is centered horizontally")
     func horizontalCentering() {
         let view = ContentUnavailableView("Centered")
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         #expect(!buffer.isEmpty)
         // The line should have leading spaces for centering
@@ -116,7 +116,7 @@ struct ContentUnavailableViewTests {
         } actions: {
             Text("Act")
         }
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
         // Label + spacing + description + spacing + actions = at least 5 lines
         #expect(buffer.height >= 5)

@@ -110,7 +110,7 @@ struct EnvironmentPropertyTests {
             availableWidth: 80,
             availableHeight: 24,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
 
         // This should render without issues - the environment modifier
         // propagates the value through the render tree
@@ -161,7 +161,7 @@ struct EnvironmentPropertyTests {
         }
 
         StateRegistration.activeEnvironment = nil
-        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext())
+        let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         _ = renderToBuffer(ProbeView(sink: sink).environment(\.testColor, "teal"), context: context)
 
         // Render finished → the active environment is nil, exactly as when an

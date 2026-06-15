@@ -18,7 +18,7 @@ struct OptionalViewTests {
             availableWidth: 80,
             availableHeight: 24,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     @Test("Optional.some renders the wrapped view")

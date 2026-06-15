@@ -23,7 +23,7 @@ private struct CoverageRow: Identifiable, Sendable {
 struct StyleCascadeCoverageTests {
 
     private func context(width: Int = 40, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - StyleAttributes

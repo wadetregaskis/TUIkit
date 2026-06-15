@@ -19,7 +19,7 @@ struct ModalPresentationModifierTests {
             availableWidth: 80,
             availableHeight: 24,
             tuiContext: TUIContext()
-        )
+        ).isolatingRenderCache()
     }
 
     /// Helper to render a view to a FrameBuffer.
