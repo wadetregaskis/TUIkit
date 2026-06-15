@@ -157,7 +157,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         let entries = resolvedEntries()
         if pickerStyle.resolvesToMenu {
             VStack(alignment: .leading, spacing: 0) {
-                label
+                _PickerLabel(label: label)
                 _PickerMenuCore(
                     entries: entries,
                     selection: selection,
@@ -167,7 +167,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                label
+                _PickerLabel(label: label)
                 radioGroup(entries: entries)
             }
         }
@@ -195,6 +195,23 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         let group = RadioButtonGroup(selection: selection, items: items)
         let identified = focusID.map { group.focusID($0) } ?? group
         return identified.disabled(isDisabled)
+    }
+}
+
+// MARK: - Picker Label
+
+/// Renders a picker's label, collapsing to **zero height** when the label is
+/// empty or all-whitespace — so an unlabelled picker (e.g. `Picker("", …)`)
+/// doesn't show a blank first line above its options.
+private struct _PickerLabel<Label: View>: View, Renderable {
+    let label: Label
+
+    var body: Never { fatalError("_PickerLabel renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let buffer = TUIkit.renderToBuffer(label, context: context)
+        let isBlank = buffer.lines.allSatisfy { $0.stripped.allSatisfy(\.isWhitespace) }
+        return isBlank ? FrameBuffer() : buffer
     }
 }
 
