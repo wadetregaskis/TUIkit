@@ -18,6 +18,22 @@ public enum HorizontalAlignment: Sendable {
     case trailing
 }
 
+extension HorizontalAlignment {
+    /// The leading-edge (x) offset at which to place a `childWidth`-wide element
+    /// inside a `totalWidth`-wide region so that it sits at this alignment.
+    ///
+    /// Returns 0 for `.leading`, the centred offset for `.center`, and the
+    /// right-flush offset for `.trailing`. Shared by every container that places
+    /// a child on the horizontal axis (ZStack, stack alignment).
+    func childOffset(childWidth: Int, in totalWidth: Int) -> Int {
+        switch self {
+        case .leading: return 0
+        case .center: return max(0, (totalWidth - childWidth) / 2)
+        case .trailing: return max(0, totalWidth - childWidth)
+        }
+    }
+}
+
 // MARK: - Vertical Alignment
 
 /// Vertical alignment for HStack and similar containers.
@@ -30,6 +46,22 @@ public enum VerticalAlignment: Sendable {
 
     /// Align to the bottom edge.
     case bottom
+}
+
+extension VerticalAlignment {
+    /// The top-edge (y) offset at which to place a `childHeight`-tall element
+    /// inside a `totalHeight`-tall region so that it sits at this alignment.
+    ///
+    /// Returns 0 for `.top`, the centred offset for `.center`, and the
+    /// bottom-flush offset for `.bottom`. Shared by every container that places
+    /// a child on the vertical axis (ZStack, HStack row alignment).
+    func childOffset(childHeight: Int, in totalHeight: Int) -> Int {
+        switch self {
+        case .top: return 0
+        case .center: return max(0, (totalHeight - childHeight) / 2)
+        case .bottom: return max(0, totalHeight - childHeight)
+        }
+    }
 }
 
 // MARK: - Combined Alignment

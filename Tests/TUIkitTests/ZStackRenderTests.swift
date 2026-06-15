@@ -3,14 +3,12 @@
 //
 //  Buffer-level render audit for ZStack.
 //
-//  Note on the rendering contract: this framework's ZStack composites
-//  children with whole-LINE replacement (FrameBuffer.overlay) — the
-//  topmost child that has a non-empty string at a given row owns that
-//  entire row. This is the behaviour the existing ZIndexTests already
-//  pin down; these tests complement it. Configurations where this model
-//  diverges from SwiftUI (alignment ignored, a narrower top child
-//  shrinking the result) are reported as suspected bugs rather than
-//  asserted here.
+//  Rendering contract: ZStack is as wide/tall as its largest child and
+//  composites children character-by-character at their `alignment` offset
+//  (FrameBuffer.composited). A child paints its full bounding box — so a
+//  full-width or coloured-fill child owns its cells — but a *narrower* child
+//  only paints its own cells, leaving the larger layer beneath it visible
+//  around the edges. Alignment positions each child within the frame.
 //  License: MIT
 
 import Testing
@@ -22,7 +20,7 @@ import Testing
 struct ZStackRenderTests {
 
     private func ctx(width: Int = 30, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Empty / single
@@ -84,12 +82,13 @@ struct ZStackRenderTests {
         #expect(buffer.lines[0].stripped == "111")
     }
 
-    // MARK: - Documented padded-overlay usage
+    // MARK: - A child paints its full bounding box
 
-    @Test("A full-width foreground composites over a full-width background")
-    func paddedOverlay() {
-        // The documented ZStack pattern: pad the foreground to the
-        // background's width so it owns the whole row deliberately.
+    @Test("A full-width foreground (including its spaces) owns its row")
+    func fullWidthForegroundOwnsRow() {
+        // A child paints its whole box, so a full-width foreground — spaces and
+        // all — covers the background beneath it. (This is what preserves
+        // coloured fills: a fill is "blank" cells that must stay opaque.)
         let buffer = renderToBuffer(
             ZStack {
                 Text("######")
@@ -98,7 +97,63 @@ struct ZStackRenderTests {
             context: ctx()
         )
         #expect(buffer.width == 6)
-        #expect(buffer.lines[0].stripped == "XX    ", "Full-width foreground wins the row")
+        #expect(buffer.lines[0].stripped == "XX    ", "Full-width foreground wins the whole row")
+    }
+
+    // MARK: - A narrower child leaves the background showing (was a bug)
+
+    @Test("A narrower top child no longer truncates the wider background")
+    func narrowerTopChildPreservesBackground() {
+        // Previously whole-line overlay replaced the entire row, so the wide
+        // "######" vanished and only "X" remained. Now the uncovered sides show.
+        let buffer = renderToBuffer(
+            ZStack {                       // default .center
+                Text("######")
+                Text("X")
+            },
+            context: ctx()
+        )
+        #expect(buffer.width == 6, "frame is as wide as the widest child")
+        #expect(buffer.lines[0].stripped == "##X###", "X centred over the preserved background")
+    }
+
+    @Test("Horizontal alignment positions the smaller child (was ignored)")
+    func horizontalAlignmentPositionsChild() {
+        func row(_ a: Alignment) -> String {
+            renderToBuffer(
+                ZStack(alignment: a) { Text("######"); Text("X") }, context: ctx()
+            ).lines[0].stripped
+        }
+        #expect(row(.leading) == "X#####", "leading: flush left")
+        #expect(row(.center) == "##X###", "center: middle")
+        #expect(row(.trailing) == "#####X", "trailing: flush right")
+    }
+
+    @Test("An unpadded label centres over a fill without manual padding")
+    func unpaddedLabelCentresOverFill() {
+        // The documented idiom: rely on alignment, don't pad the string.
+        let buffer = renderToBuffer(
+            ZStack { Text("████████"); Text("Hi") }, context: ctx()
+        )
+        let row = buffer.lines[0].stripped
+        #expect(buffer.width == 8)
+        #expect(row == "███Hi███", "Hi centred over the preserved fill: \(row)")
+    }
+
+    @Test("Vertical alignment positions the shorter child (was top-pinned)")
+    func verticalAlignmentPositionsChild() {
+        func rows(_ a: Alignment) -> [String] {
+            renderToBuffer(
+                ZStack(alignment: a) {
+                    VStack(alignment: .leading) { Text("a"); Text("b"); Text("c") }
+                    Text("X")
+                },
+                context: ctx()
+            ).lines.map { $0.stripped }
+        }
+        #expect(rows(.topLeading) == ["X", "b", "c"], "top: X on the first row")
+        #expect(rows(.leading) == ["a", "X", "c"], "center: X on the middle row")
+        #expect(rows(.bottomLeading) == ["a", "b", "X"], "bottom: X on the last row")
     }
 
     // MARK: - Multi-line layering (equal-size children)
