@@ -173,7 +173,11 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 let spacerBuffer = FrameBuffer(emptyWithWidth: finalWidth, height: rowHeight)
                 result.appendHorizontally(spacerBuffer, spacing: spacingToApply)
             } else {
+                // A child shorter than the row is positioned within it by
+                // `alignment` (top/center/bottom). Without this every child is
+                // top-pinned, because `appendHorizontally` only top-aligns.
                 let buffer = child.render(width: finalWidth, height: rowHeight, context: context)
+                    .verticallyAligned(toHeight: rowHeight, alignment: alignment)
                 result.appendHorizontally(buffer, spacing: spacingToApply)
             }
         }

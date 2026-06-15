@@ -288,26 +288,10 @@ private struct _LazyHStackCore<Content: View>: View, Renderable {
     }
 
     /// Pads a buffer with empty rows to reach `height`, positioning content
-    /// according to the stack's vertical alignment.
+    /// according to the stack's vertical alignment. Shared with the eager
+    /// `HStack` via ``FrameBuffer/verticallyAligned(toHeight:alignment:)``.
     private func alignBufferVertically(_ buffer: FrameBuffer, toHeight height: Int) -> FrameBuffer {
-        guard buffer.height < height else { return buffer }
-        let padding = height - buffer.height
-        let topPadding: Int
-        switch alignment {
-        case .top: topPadding = 0
-        case .center: topPadding = padding / 2
-        case .bottom: topPadding = padding
-        }
-        let bottomPadding = padding - topPadding
-        let emptyLine = String(repeating: " ", count: buffer.width)
-        var lines = Array(repeating: emptyLine, count: topPadding)
-        lines += buffer.lines
-        lines += Array(repeating: emptyLine, count: bottomPadding)
-        // Content shifted down by `topPadding`; carry overlays and
-        // hit-test regions by the same amount. Bare initializer
-        // would drop them, breaking clicks on a LazyHStack with a
-        // non-top alignment or a child shorter than the stack.
-        return buffer.replacingLines(lines, overlayShiftY: topPadding)
+        buffer.verticallyAligned(toHeight: height, alignment: alignment)
     }
 }
 

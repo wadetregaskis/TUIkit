@@ -13,7 +13,7 @@ import Testing
 struct HStackRenderTests {
 
     private func ctx(width: Int = 30, height: Int = 8) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())
+        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
     // MARK: - Default arrangement
@@ -115,11 +115,26 @@ struct HStackRenderTests {
         #expect(buffer.lines[1].stripped.trimmingCharacters(in: .whitespaces) == "b")
     }
 
-    // NOTE: `.center` / `.bottom` vertical alignment is NOT honoured by the
-    // renderer (it always top-aligns shorter children). That divergence is
-    // reported as a suspected bug rather than asserted here — see the
-    // structured-output `suspectedBugs` for the HStack vertical-alignment
-    // finding.
+    @Test("Center and bottom alignment position a short child within a taller row")
+    func centerAndBottomAlignment() {
+        // A 3-row sibling next to a 1-row Text. The single "X" should sit on the
+        // top / middle / bottom row per the alignment. (Previously every
+        // alignment top-pinned the X — `.center` and `.bottom` were ignored.)
+        func rows(_ a: VerticalAlignment) -> [String] {
+            renderToBuffer(
+                HStack(alignment: a, spacing: 1) {
+                    VStack(alignment: .leading) { Text("a"); Text("b"); Text("c") }
+                    Text("X")
+                },
+                context: ctx(width: 10, height: 4)
+            ).lines.map { $0.stripped }
+        }
+        // The X column occupies its cell on every row (blank where X is absent),
+        // so non-X rows carry trailing spaces — pin them exactly.
+        #expect(rows(.top) == ["a X", "b  ", "c  "], "top: X on the first row")
+        #expect(rows(.center) == ["a  ", "b X", "c  "], "center: X on the middle row")
+        #expect(rows(.bottom) == ["a  ", "b  ", "c X"], "bottom: X on the last row")
+    }
 
     // MARK: - Narrow width (truncation, no overflow)
 
