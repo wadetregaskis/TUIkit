@@ -432,29 +432,42 @@ extension String {
     public var strippedLength: Int {
         // Fast path: a string with no ESC byte is a single visible run — the
         // whole string — so grapheme-cluster it in place and sum cell widths
-        // with ZERO allocation. The general path below calls
-        // `visibleANSIRuns()`, which materializes a `[String]` plus a `String`
-        // copy per run and then discards them — pure churn for a width count.
-        // `strippedLength` runs per word during `Text.wordWrap` and per line
-        // during render, every frame (profiling the `nested` tree:
-        // `String.strippedLength` ~23% inclusive, `visibleANSIRuns()` ~15%,
-        // dominated by `_StringGuts.append` / `_uncheckedFromUTF8` /
-        // tiny_malloc), and the text being measured while wrapping is plain
-        // (unstyled), so this is the overwhelming common case. Byte-identical:
-        // a no-ESC string yields exactly one run equal to the whole string.
+        // with ZERO allocation. The general path below scans the runs, which
+        // used to materialize a `[String]` plus a `String` copy per run and then
+        // discard them — pure churn for a width count. `strippedLength` runs per
+        // word during `Text.wordWrap` and per line during render, every frame
+        // (profiling the `nested` tree: `String.strippedLength` ~23% inclusive,
+        // the run scan ~15%, dominated by `_StringGuts.append` /
+        // `_uncheckedFromUTF8` / tiny_malloc), and the text being measured while
+        // wrapping is plain (unstyled), so this is the overwhelming common case.
+        // Byte-identical: a no-ESC string yields exactly one run equal to the
+        // whole string.
         if !unicodeScalars.contains(where: { $0.value == 0x1B }) {
             return reduce(0) { $0 + $1.terminalWidth }
         }
-        // General path: ANSI present — measure each visible run independently
-        // (a trailing Extend scalar after an SGR terminator must not fuse onto
-        // the previous run; see `visibleANSIRuns()`).
-        return visibleANSIRuns().reduce(0) { total, run in
-            total + run.reduce(0) { $0 + $1.terminalWidth }
+        // General path: ANSI present — measure each visible run independently (a
+        // trailing Extend scalar after an SGR terminator must not fuse onto the
+        // previous run; see `forEachVisibleANSIRun(_:)`). Each run is a borrowed
+        // `Substring`, so this counts widths without allocating.
+        var total = 0
+        forEachVisibleANSIRun { run in
+            for character in run { total += character.terminalWidth }
         }
+        return total
     }
 
-    /// The visible text of this string split into runs separated by CSI
-    /// (`ESC [ … letter`) escape sequences, with the sequences removed.
+    /// Invokes `body` once per visible run — the text between and around CSI
+    /// (`ESC [ … letter`) escape sequences, with the sequences removed —
+    /// passing each run as a `Substring` of `self`.
+    ///
+    /// This is the allocation-free core behind ``strippedLength`` and
+    /// ``stripped``. The previous form returned `[String]`, allocating the array
+    /// and copying every run into a fresh `String` only for callers to discard
+    /// it after summing widths or joining — pure churn (it showed up in render
+    /// profiling as `_StringGuts.append` / `_uncheckedFromUTF8` / tiny_malloc).
+    /// A run is always a contiguous slice of the original (escapes only fall
+    /// *between* runs), so a borrowed `Substring` carries the same scalars with
+    /// no copy.
     ///
     /// Two things matter here, both about grapheme clustering around escape
     /// sequences:
@@ -476,69 +489,71 @@ extension String {
     ///    styled run followed by a skin-tone modifier starting the next is
     ///    1 + 2 cells, but concatenating them would let the `Extend` modifier
     ///    cluster onto the space and be miscounted as a single 2-cell glyph
-    ///    (the residual off-by-one after fix 1). Each run is grapheme-
-    ///    clustered on its own.
-    private func visibleANSIRuns() -> [String] {
-        var runs: [String] = []
-        var current = Self.UnicodeScalarView()
-
-        func flush() {
-            if !current.isEmpty {
-                runs.append(String(current))
-                current = Self.UnicodeScalarView()
-            }
-        }
-
-        // Single forward pass over the scalar view. Iterating with the view's
-        // own iterator (`for…in`) decodes each scalar exactly once and never
-        // indexes by `String.Index`, so it avoids the per-access
-        // validateScalarIndex / _decodeScalar cost that the old index walk paid
-        // on every `scalars[index]` — the top self-time leaves in render
-        // profiling, and strippedLength runs on every line every frame. No
-        // array copy, no putback: a 3-state machine subsumes the look-ahead.
+    ///    (the residual off-by-one after fix 1). Each run is a slice bounded by
+    ///    the escapes, so it grapheme-clusters on its own — a run that begins
+    ///    at an `Extend` scalar starts a fresh cluster there, exactly as a
+    ///    standalone `String` of those scalars would.
+    private func forEachVisibleANSIRun(_ body: (Substring) -> Void) {
+        // Single forward pass over the scalar view, tracking the start index of
+        // the current visible run so each run can be yielded as a slice
+        // `self[runStart..<index]` — no array, no per-run copy. A 3-state
+        // machine subsumes the look-ahead:
         //
-        //   normal — accumulating visible scalars
+        //   normal — inside (or about to start) a visible run
         //   sawESC — just saw ESC; a following '[' opens a CSI introducer
         //   inCSI  — inside ESC[…; consume parameter bytes then one terminator
         //
         // An ESC, and a complete CSI introducer (ESC [ params letter), are
         // dropped; everything else is visible. Exactly one scalar is consumed
         // for the terminator so a trailing Extend scalar stays visible.
+        let scalars = unicodeScalars
+        var index = scalars.startIndex
+        var runStart = index
+        var hasRun = false  // whether [runStart, index) holds visible scalars
+
         enum ScanState { case normal, sawESC, inCSI }
         var state = ScanState.normal
 
-        for scalar in unicodeScalars {
-            let value = scalar.value
+        while index < scalars.endIndex {
+            let value = scalars[index].value
             switch state {
             case .normal:
-                if value == 0x1B { flush(); state = .sawESC } else { current.append(scalar) }
+                if value == 0x1B {  // ESC ends the current run
+                    if hasRun { body(self[runStart..<index]); hasRun = false }
+                    state = .sawESC
+                } else if !hasRun {  // first visible scalar of a new run
+                    runStart = index
+                    hasRun = true
+                }
 
             case .sawESC:
                 if value == 0x5B {  // '[' → CSI introducer
                     state = .inCSI
                 } else if value == 0x1B {  // ESC ESC → drop the first, restart
                     state = .sawESC
-                } else {  // a bare ESC: it is dropped, this scalar is visible
-                    current.append(scalar)
+                } else {  // a bare ESC: it is dropped, this scalar starts a run
+                    runStart = index
+                    hasRun = true
                     state = .normal
                 }
 
             case .inCSI:
                 if (0x30...0x39).contains(value) || value == 0x3B {
-                    continue  // parameter byte (digit or ';') — stay in CSI
+                    break  // parameter byte (digit or ';') — stay in CSI
                 }
                 if (0x41...0x5A).contains(value) || (0x61...0x7A).contains(value) {
                     state = .normal  // final letter — introducer complete, consumed
                 } else if value == 0x1B {  // ESC interrupts a malformed CSI
                     state = .sawESC
-                } else {  // non-letter where a terminator was expected: not
-                    current.append(scalar)  // part of the introducer, so visible
+                } else {  // non-letter where a terminator was expected: not part
+                    runStart = index  // of the introducer, so it starts a run
+                    hasRun = true
                     state = .normal
                 }
             }
+            index = scalars.index(after: index)
         }
-        flush()
-        return runs
+        if hasRun { body(self[runStart..<index]) }  // index == endIndex
     }
 
     /// Splits the string into ordered segments — each either a complete
@@ -602,7 +617,14 @@ extension String {
 
     /// The string with all ANSI (CSI) escape codes removed.
     public var stripped: String {
-        visibleANSIRuns().joined()
+        // Fast path: no ESC byte → nothing to strip, return self (no scan, no
+        // copy). Otherwise append each visible run (a borrowed `Substring`) into
+        // one result — no intermediate `[String]`.
+        if !unicodeScalars.contains(where: { $0.value == 0x1B }) { return self }
+        var result = ""
+        result.reserveCapacity(utf8.count)
+        forEachVisibleANSIRun { result += $0 }
+        return result
     }
 
     /// Returns a copy with ANSI escape sequences removed, suitable for rendering user-provided content.

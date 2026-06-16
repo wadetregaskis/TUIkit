@@ -48,6 +48,16 @@ struct StringANSITests {
         #expect(text.stripped == "Red")
     }
 
+    @Test("stripped keeps an Extend scalar that immediately follows an SGR terminator")
+    func strippedModifierAfterSGR() {
+        // A Fitzpatrick modifier (U+1F3FD) right after the `m` terminator must
+        // survive stripping as its own visible run — the run begins at the
+        // modifier scalar, which a Character-level skip would otherwise swallow.
+        #expect("\u{1B}[31m\u{1F3FD}\u{1B}[0m".stripped == "\u{1F3FD}")
+        // And a space before the next styled run doesn't fuse with that modifier.
+        #expect("a\u{1B}[31m \u{1B}[0m\u{1F3FD}".stripped == "a \u{1F3FD}")
+    }
+
     // MARK: - strippedLength
 
     @Test("strippedLength counts visible characters only")
