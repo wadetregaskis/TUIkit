@@ -157,19 +157,15 @@ public struct ColorPickerPanel: View {
                 }
             }
             VStack(alignment: .leading, spacing: 0) {
-                // Editable: type/paste a #RRGGBB (or RGB / #RGB) hex to set the colour.
-                TextField("", text: combinedHexText()).frame(width: 10)
+                // Editable: type/paste a #RRGGBB (or RGB / #RGB) hex to set the
+                // colour. Free-form while focused; only valid hex moves the colour.
+                _EditableValueField(
+                    focusID: "combined-hex", width: 10,
+                    format: { Self.hexString(selection.wrappedValue.resolve(with: palette).rgbComponents) },
+                    commit: { if let color = Color.hex($0) { selection.wrappedValue = color } })
                 Text(Self.rgbString(components)).foregroundStyle(.palette.foregroundTertiary)
             }
         }
-    }
-
-    /// A `String` binding over the whole colour as `#RRGGBB`: edits that parse to
-    /// a valid hex set the selection; partial/invalid input leaves it unchanged.
-    private func combinedHexText() -> Binding<String> {
-        Binding(
-            get: { Self.hexString(selection.wrappedValue.resolve(with: palette).rgbComponents) },
-            set: { if let color = Color.hex($0) { selection.wrappedValue = color } })
     }
 
     // MARK: Semantic tab
@@ -359,7 +355,7 @@ private struct _ChannelEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
-                channelRow(spec.label, channelBinding(index), 0...spec.upperBound)
+                channelRow(spec.label, index, channelBinding(index), 0...spec.upperBound)
             }
         }
         .onChange(of: selection.wrappedValue) { _, new in
@@ -394,54 +390,113 @@ private struct _ChannelEditor: View {
     /// 0–255 channels. All drive the same binding, so they stay in sync.
     private func channelRow(
         _ label: String,
+        _ index: Int,
         _ binding: Binding<Double>,
         _ range: ClosedRange<Double>
     ) -> some View {
         let upper = range.upperBound
+        // Structural focus IDs (model + channel index + representation): stable,
+        // unique within the panel, and never derived from user data.
+        let idBase = "\(mode.rawValue)-\(index)"
         return HStack(spacing: 1) {
             Text(label)
                 .frame(width: 2, alignment: .trailing)
                 .foregroundStyle(.palette.foregroundTertiary)
             Slider(value: binding, in: range, step: 1).frame(width: 16).sliderShowsValue(false)
-            TextField("", text: percentText(binding, upperBound: upper)).frame(width: 7)
+            // Percentage — always (it's the value the slider used to print).
+            _EditableValueField(
+                focusID: "\(idBase)-pct", width: 7,
+                format: { Self.percentString(binding.wrappedValue, upperBound: upper) },
+                commit: { raw in
+                    guard raw.contains(where: \.isNumber) else { return }
+                    binding.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: raw, upperBound: upper)
+                })
+            // Raw integer — only when it differs from the percentage (the 0–100
+            // channels would just duplicate it). Hue (0–360) gets a ° suffix.
             if upper != 100 {
-                TextField("", text: integerText(binding, in: range)).frame(width: 7)
+                _EditableValueField(
+                    focusID: "\(idBase)-int", width: 7,
+                    format: { Self.integerString(binding.wrappedValue, degrees: upper == 360) },
+                    commit: { raw in
+                        guard raw.contains(where: \.isNumber) else { return }
+                        binding.wrappedValue = ColorPickerPanel.channelValue(parsing: raw, into: range)
+                    })
             }
+            // Hex — only for the 0–255 (RGB) channels.
             if upper == 255 {
-                TextField("", text: hexText(binding)).frame(width: 7)
+                _EditableValueField(
+                    focusID: "\(idBase)-hex", width: 7,
+                    format: { Self.channelHexString(binding.wrappedValue) },
+                    commit: { raw in
+                        guard raw.contains(where: \.isHexDigit) else { return }
+                        binding.wrappedValue = ColorPickerPanel.channelValue(parsingHex: raw)
+                    })
             }
         }
     }
 
-    /// `"NN%"` of the channel's range — editable; parsing clamps to 0…100%.
-    private func percentText(_ value: Binding<Double>, upperBound: Double) -> Binding<String> {
-        Binding(
-            get: {
-                let v = value.wrappedValue
-                let pct = upperBound > 0 ? (v.isFinite ? v : 0) / upperBound * 100 : 0
-                return "\(Int(pct.rounded()))%"
-            },
-            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: $0, upperBound: upperBound) })
+    /// `"NN%"` of the channel's range.
+    private static func percentString(_ value: Double, upperBound: Double) -> String {
+        let pct = upperBound > 0 ? (value.isFinite ? value : 0) / upperBound * 100 : 0
+        return "\(Int(pct.rounded()))%"
     }
 
-    /// The raw integer value — editable; parsing clamps to `range`.
-    private func integerText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
-        Binding(
-            get: {
-                let v = value.wrappedValue
-                return String(Int((v.isFinite ? v : 0).rounded()))
-            },
-            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsing: $0, into: range) })
+    /// The raw integer value, with a `°` suffix for a degrees (hue) channel.
+    private static func integerString(_ value: Double, degrees: Bool) -> String {
+        "\(Int((value.isFinite ? value : 0).rounded()))" + (degrees ? "°" : "")
     }
 
-    /// The value as `"0xNN"` hex — editable; parsing keeps hex digits, clamps 0…255.
-    private func hexText(_ value: Binding<Double>) -> Binding<String> {
-        Binding(
-            get: {
-                let v = Int((value.wrappedValue.isFinite ? value.wrappedValue : 0).rounded())
-                let digits = String(max(0, min(255, v)), radix: 16, uppercase: true)
-                return "0x" + (digits.count < 2 ? "0" + digits : digits)
-            },
-            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsingHex: $0) })
+    /// The value as `"0xNN"` (two upper-case hex digits).
+    private static func channelHexString(_ value: Double) -> String {
+        let v = Int((value.isFinite ? value : 0).rounded())
+        let digits = String(max(0, min(255, v)), radix: 16, uppercase: true)
+        return "0x" + (digits.count < 2 ? "0" + digits : digits)
+    }
+}
+
+// MARK: - Editable value field
+
+/// A text field that edits a value through free-form text.
+///
+/// While focused it shows exactly what you type — it never reformats the text
+/// out from under you — and parses each keystroke to update the model live
+/// (best-effort: input with no value characters simply doesn't move the value,
+/// via the caller's `commit`). When focus is lost it shows the canonical
+/// ``format`` again, "prettying" the entry (e.g. `0xF` → `0x0F`, `9` → `9%`).
+///
+/// This decouples the *displayed* text from the *stored* value: the previous
+/// binding-based fields re-derived the formatted text every render, so a
+/// backspace or a digit was immediately reformatted/clamped, fighting the edit
+/// (typing `9` into `5%` produced `90%`; backspacing `0xFF` gave `0x0F`).
+private struct _EditableValueField: View {
+    let focusID: String
+    let width: Int
+    let format: () -> String
+    let commit: (String) -> Void
+
+    @Environment(\.focusManager) private var focusManager
+    /// The text being edited. Shown only while focused; seeded from `format()`.
+    @State private var draft: String
+
+    init(focusID: String, width: Int, format: @escaping () -> String, commit: @escaping (String) -> Void) {
+        self.focusID = focusID
+        self.width = width
+        self.format = format
+        self.commit = commit
+        _draft = State(wrappedValue: format())
+    }
+
+    var body: some View {
+        let focused = focusManager.isFocused(id: focusID)
+        return TextField("", text: Binding(
+            get: { focused ? draft : format() },
+            set: { draft = $0; commit($0) }))
+            .focusID(focusID)
+            .frame(width: width)
+            .onChange(of: focused) { _, nowFocused in
+                // Re-seed the editing text from the current value on focus-gain,
+                // so editing starts from what was displayed.
+                if nowFocused { draft = format() }
+            }
     }
 }

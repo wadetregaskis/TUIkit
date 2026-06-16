@@ -574,3 +574,97 @@ struct ColorPickerPanelLayoutTests {
         #expect(width(at: 300) == wide, "width caps at content, independent of extra available width")
     }
 }
+
+@MainActor
+@Suite("ColorPickerPanel — editable fields (#2, #3, #4, #10)")
+struct ColorPickerEditableFieldTests {
+
+    private final class Box {
+        var color: Color
+        init(_ c: Color) { color = c }
+        var binding: Binding<Color> { Binding(get: { self.color }, set: { self.color = $0 }) }
+    }
+
+    /// A render-loop-faithful harness: begin/endRenderPass each frame so focus
+    /// navigation and the fields' focus-aware editing behave like the real loop.
+    private func harness(_ box: Box) -> (render: () -> [String], fm: FocusManager) {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
+        let render: () -> [String] = {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            let ctx = RenderContext(
+                availableWidth: 72, availableHeight: 40, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            let buffer = renderToBuffer(panel, context: ctx)
+            fm.endRenderPass()
+            return buffer.lines.map { $0.stripped }
+        }
+        return (render, fm)
+    }
+
+    @Test("Hue's integer field is shown in degrees with a ° suffix (#3)")
+    func hueDegrees() {
+        let box = Box(.hsl(120, 50, 50))
+        let (render, fm) = harness(box)
+        _ = render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))      // combined-hex → strip
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))    // → HSL
+        let hRow = render().first { $0.contains("H ◀") } ?? ""
+        #expect(hRow.contains("120°"), "hue shows degrees with a ° suffix: \(hRow)")
+    }
+
+    @Test("A focused hex field shows raw edits and reflects them live, not reformatted (#10)")
+    func hexFieldRawWhileFocused() {
+        let box = Box(.rgb(200, 16, 16))  // R = 200 = 0xC8
+        let (render, fm) = harness(box)
+        _ = render()
+        // combined-hex → strip → R slider → R% → R int → R hex.
+        for _ in 0..<5 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); _ = render() }
+        #expect(fm.currentFocusedID == "RGB-0-hex", "focused the red hex field")
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .backspace))   // 0xC8 → 0xC
+        let row = render().first { $0.contains("R ◀") } ?? ""
+        // Shows the raw "0xC" — NOT reformatted/padded back to "0x0C".
+        #expect(row.contains("0xC") && !row.contains("0x0C"), "raw, un-padded while editing: \(row)")
+        // …and the value reflects it live (0xC = 12).
+        #expect(box.color.rgbComponents!.red == 12, "live value, got \(box.color.rgbComponents!.red)")
+    }
+
+    @Test("Typing a digit into a cleared percent field yields that percent, not a reformatted one (#4)")
+    func percentFieldNoReformat() {
+        let box = Box(.hsl(120, 50, 50))  // S = 50%
+        let (render, fm) = harness(box)
+        _ = render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))      // → strip
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))    // → HSL
+        _ = render()
+        // strip → H slider → H% → H int → S slider → S%.
+        for _ in 0..<5 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); _ = render() }
+        #expect(fm.currentFocusedID == "HSL-1-pct", "focused the saturation percent field")
+        // Clear "50%" (%, 0, 5) then type 9 → "9", i.e. 9% — not 90%.
+        for _ in 0..<3 { _ = fm.dispatchKeyEvent(KeyEvent(key: .backspace)); _ = render() }
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .character("9"))); _ = render()
+        let s = ColorPickerPanel.channelValue(of: box.color, mode: .hsl, index: 1)
+        #expect((8.0...10.0).contains(s), "typing 9 gives ~9%, not 90%, got \(s)")
+    }
+
+    @Test("The combined hex field accepts edits and updates the colour when valid (#2)")
+    func combinedHexEdits() {
+        let box = Box(.rgb(89, 192, 109))  // #59C06D, combined-hex auto-focused
+        let (render, fm) = harness(box)
+        _ = render()  // focus settles on the hex field at endRenderPass
+        _ = render()  // a focused frame, as the real loop produces before the user types
+        #expect(fm.currentFocusedID == "combined-hex", "the hex field takes initial focus")
+        // Backspace the blue pair and retype it as FF — a render per keystroke,
+        // exactly as the real loop drives it.
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .backspace)); _ = render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .backspace)); _ = render()
+        // Mid-edit ("#59C0") is invalid hex, so the colour is unchanged so far…
+        #expect(box.color.rgbComponents! == (89, 192, 109), "invalid partial leaves the colour")
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .character("F"))); _ = render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .character("F"))); _ = render()
+        // …and completing it to #59C0FF updates the colour.
+        #expect(box.color.rgbComponents! == (89, 192, 255), "completed hex set the colour, got \(box.color.rgbComponents!)")
+    }
+}
