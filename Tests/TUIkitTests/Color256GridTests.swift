@@ -16,17 +16,41 @@ private final class ColorBox {
 }
 
 @MainActor
+@Suite("Color256Grid — layout")
+struct Color256GridLayoutTests {
+
+    @Test("The layout places all 256 palette entries, each exactly once")
+    func placesEveryEntry() {
+        let cells = Palette256Layout.place(cellWidth: 1).cells
+        #expect(cells.count == 256)
+        #expect(Set(cells.map(\.index)) == Set(0...255), "every index 0…255 appears once")
+    }
+
+    @Test("Sections follow the xterm structure: 16 system, 216 cube, 24 grey")
+    func sectionStructure() {
+        // The greyscale ramp is the widest row (24 cells), so it sets the grid width.
+        #expect(Palette256Layout.widthInCells == 24)
+        // First non-empty row is the 16 system colours as two groups of eight
+        // (a single gap between), i.e. 17 columns of content.
+        let system = Palette256Layout.rows.first { !$0.isEmpty }!
+        #expect(system.compactMap { $0 } == Array(0...15))
+        #expect(system.count == 17, "8 + gap + 8")
+        // The last row is the 24-step greyscale ramp 232…255.
+        let grey = Palette256Layout.rows.last { !$0.isEmpty }!
+        #expect(grey.compactMap { $0 } == Array(232...255))
+    }
+
+    @Test("Cell width tracks the numbers toggle: 1 cell compact, 3 with numbers")
+    func cellWidthScales() {
+        #expect(Palette256Layout.place(cellWidth: 1).width == 24)
+        #expect(Palette256Layout.place(cellWidth: 3).width == 72)
+        #expect(Palette256Layout.place(cellWidth: 1).height == Palette256Layout.rows.count)
+    }
+}
+
+@MainActor
 @Suite("Color256Grid — handler")
 struct Color256GridHandlerTests {
-
-    @Test("Grid metrics cover the 256 palette as 16×16")
-    func metrics() {
-        #expect(Color256GridMetrics.columns == 16)
-        #expect(Color256GridMetrics.rows == 16)
-        #expect(Color256GridMetrics.columns * Color256GridMetrics.rows == 256)
-        #expect(Color256GridMetrics.width == 32)  // 16 cols × 2-wide cells
-        #expect(Color256GridMetrics.height == 16)
-    }
 
     @Test("commit clamps to 0…255 and writes .palette(index)")
     func commitClamps() {
@@ -41,23 +65,36 @@ struct Color256GridHandlerTests {
         #expect(handler.cursor == 0)
     }
 
-    @Test("Arrow keys move the cursor by the grid stride and commit live")
+    @Test("Arrow keys move spatially through the placed swatches and commit live")
     func arrowNavigation() {
         let box = ColorBox(.rgb(0, 0, 0))
-        let handler = Color256GridHandler(focusID: "g", cursor: 0, selection: box.binding)
-        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))   // +16
-        #expect(handler.cursor == 16)
-        #expect(box.color == .palette(16))
-        #expect(handler.handleKeyEvent(KeyEvent(key: .right)))  // +1
+        let handler = Color256GridHandler(focusID: "g", cursor: 16, selection: box.binding)
+        // Navigation reads the placed geometry the renderer produces.
+        handler.placements = Palette256Layout.place(cellWidth: 1).cells
+
+        // 16 is the top-left of the cube's first red slice (green 0, blue 0).
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))   // → green 1 (index 22)
+        #expect(handler.cursor == 22)
+        #expect(box.color == .palette(22))
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right)))  // → blue 1 (index 23)
+        #expect(handler.cursor == 23)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)))     // → green 0, blue 1 (index 17)
         #expect(handler.cursor == 17)
-        #expect(handler.handleKeyEvent(KeyEvent(key: .up)))     // -16
-        #expect(handler.cursor == 1)
-        #expect(handler.handleKeyEvent(KeyEvent(key: .left)))   // -1 → 0
-        #expect(handler.cursor == 0)
-        #expect(handler.handleKeyEvent(KeyEvent(key: .left)))   // clamp at 0
-        #expect(handler.cursor == 0)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .left)))   // → blue 0 (index 16)
+        #expect(handler.cursor == 16)
         // An unrelated key is not consumed.
         #expect(!handler.handleKeyEvent(KeyEvent(key: .tab)))
+    }
+
+    @Test("Left/right stay within the visual row; an edge move is a no-op")
+    func horizontalStaysInRow() {
+        let box = ColorBox(.palette(232))  // first greyscale cell, left edge of its row
+        let handler = Color256GridHandler(focusID: "g", cursor: 232, selection: box.binding)
+        handler.placements = Palette256Layout.place(cellWidth: 1).cells
+        #expect(handler.handleKeyEvent(KeyEvent(key: .left)))  // already at the left edge
+        #expect(handler.cursor == 232, "no cell to the left, so the cursor holds")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right)))
+        #expect(handler.cursor == 233, "moves one along the greyscale row")
     }
 
     @Test("index(of:) recovers a palette index, else nil")
@@ -89,6 +126,44 @@ struct Color256GridHandlerTests {
         let accentIdx = _Color256GridCore.nearestIndex(of: .palette.accent, palette: palette)
         #expect((0...255).contains(accentIdx))
     }
+}
+
+@MainActor
+@Suite("Color256Grid — rendering")
+struct Color256GridRenderTests {
+
+    @Test("Renders the sectioned grid with a contrasting bullet on the cursor cell")
+    func rendersGrid() {
+        let (focused, cells) = _Color256GridCore.renderGrid(
+            cursor: 16, isFocused: true, cellWidth: 1, showNumbers: false)
+        #expect(focused.count == Palette256Layout.rows.count)
+        #expect(cells.count == 256)
+        let nonEmpty = focused.filter { !$0.isEmpty }
+        #expect(nonEmpty.allSatisfy { $0.contains("\u{1B}[") }, "every content row carries colour escapes")
+        #expect(focused.contains { $0.contains("48;5;") }, "cells use the indexed 256-colour background")
+        // The focused cursor draws a filled bullet; unfocused, a hollow one.
+        #expect(focused.contains { $0.contains("●") }, "focused cursor is a filled bullet")
+        let (unfocused, _) = _Color256GridCore.renderGrid(
+            cursor: 16, isFocused: false, cellWidth: 1, showNumbers: false)
+        #expect(unfocused.contains { $0.contains("○") }, "unfocused cursor is a hollow bullet")
+    }
+
+    @Test("Numbers mode prints the palette index inside each three-cell swatch")
+    func numbersMode() {
+        // cursor 0 keeps 16/255 as numbered (non-cursor) cells.
+        let (lines, _) = _Color256GridCore.renderGrid(
+            cursor: 0, isFocused: true, cellWidth: 3, showNumbers: true)
+        let joined = lines.joined()
+        #expect(joined.contains("16"), "an index is printed in the swatch")
+        #expect(joined.contains("255"), "the last greyscale index is printed")
+    }
+
+    @Test("Contrast picks black on light cells and white on dark cells")
+    func contrast() {
+        // Cube index 16 is (0,0,0) → needs a light marker; 231 is (255,255,255) → dark.
+        #expect(_Color256GridCore.contrast(forIndex: 16) == .rgb(255, 255, 255))
+        #expect(_Color256GridCore.contrast(forIndex: 231) == .rgb(0, 0, 0))
+    }
 
     @Test("The grid highlights the nearest cell for a non-palette colour, not black")
     func gridSeedsNearestNotBlack() {
@@ -98,42 +173,17 @@ struct Color256GridHandlerTests {
         let box = ColorBox(.rgb(255, 255, 255))
         let buffer = renderToBuffer(
             _Color256GridCore(selection: box.binding, focusID: "grid-seed"),
-            context: makeRenderContext(width: 40, height: 18))
-        // The framed cursor "[]"/"()" must NOT be on the first (black) cell, and
-        // must appear somewhere (white's nearest cube cell, index 231, is row 14).
+            context: makeRenderContext(width: 40, height: 24))
         let lines = buffer.lines.map { $0.stripped }
-        func framed(_ s: String) -> Bool { s.contains("[") || s.contains("(") }
-        #expect(!framed(lines[0]), "cursor is NOT on the first (black) cell: \(lines[0])")
-        #expect(lines.contains(where: framed), "cursor is shown on a cell")
+        func bulleted(_ s: String) -> Bool { s.contains("●") || s.contains("○") }
+        // index 231 lives in the cube's last red slice, well below the first row.
+        #expect(!bulleted(lines.first { !$0.isEmpty } ?? ""), "cursor is NOT on the first (black) row")
+        #expect(lines.contains(where: bulleted), "cursor is shown on a cell")
     }
 }
 
 @MainActor
-@Suite("Color256Grid — rendering")
-struct Color256GridRenderTests {
-
-    @Test("Renders 16 colourful rows with a framed cursor cell")
-    func rendersGrid() {
-        let focused = _Color256GridCore.renderGrid(cursor: 0, isFocused: true)
-        #expect(focused.count == 16)
-        #expect(focused.allSatisfy { $0.contains("\u{1B}[") }, "every row carries colour escapes")
-        #expect(focused.contains { $0.contains("48;5;") }, "cells use the indexed 256-colour background")
-        #expect(focused[0].contains("[]"), "the focused cursor cell is framed []")
-        // Unfocused draws the cursor as () instead.
-        let unfocused = _Color256GridCore.renderGrid(cursor: 0, isFocused: false)
-        #expect(unfocused[0].contains("()"))
-    }
-
-    @Test("Contrast picks black on light cells and white on dark cells")
-    func contrast() {
-        // Cube index 16 is (0,0,0) → needs a light marker; 231 is (255,255,255) → dark.
-        #expect(_Color256GridCore.contrast(forIndex: 16) == .rgb(255, 255, 255))
-        #expect(_Color256GridCore.contrast(forIndex: 231) == .rgb(0, 0, 0))
-    }
-}
-
-@MainActor
-@Suite("Color256Grid — focus integration")
+@Suite("Color256Grid — focus + mouse integration")
 struct Color256GridFocusTests {
 
     @Test("Once focused, arrows route to the grid, move the cursor, and select live")
@@ -144,18 +194,45 @@ struct Color256GridFocusTests {
         let grid = _Color256GridCore(selection: box.binding, focusID: "grid-test")
 
         // Rendering registers the handler; as the sole focusable it auto-focuses,
-        // so the cursor cell is framed [] (the focused marker, not ()).
+        // so the cursor cell shows the filled bullet.
         let rendered = renderToBuffer(grid, context: ctx).lines.joined()
         #expect(focusManager.isFocused(id: "grid-test"), "the grid is focusable")
-        #expect(rendered.contains("[]"), "focused cursor frame")
+        #expect(rendered.contains("●"), "focused cursor bullet")
 
-        // The cursor seeds at black's nearest cube cell (index 16), not 0.
-        // Arrow keys route to the grid and write the colour live: down a row
-        // (+16) → 32, then right (+1) → 33.
+        // The cursor seeds at black's nearest cube cell (index 16). Down a green
+        // step → 22, then right a blue step → 23.
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .down)))
-        #expect(box.color == .palette(32))
+        #expect(box.color == .palette(22))
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .right)))
-        #expect(box.color == .palette(33))
+        #expect(box.color == .palette(23))
+    }
+
+    @Test("Clicking a swatch commits that palette index (the grid responds to the mouse)")
+    func mouseClickSelects() {
+        let box = ColorBox(.rgb(0, 0, 0))
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let grid = _Color256GridCore(selection: box.binding, focusID: "grid-mouse")
+
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let ctx = RenderContext(availableWidth: 40, availableHeight: 24, environment: env, tuiContext: tui)
+        fm.beginRenderPass()
+        let buffer = renderToBuffer(grid, context: ctx)
+        fm.endRenderPass()
+
+        // Every swatch is a hit region now.
+        #expect(buffer.hitTestRegions.count == 256, "one clickable region per swatch")
+        // Click the greyscale row's last cell (index 255), bottom-right of the grid.
+        let cells = Palette256Layout.place(cellWidth: 1).cells
+        let target = cells.first { $0.index == 255 }!
+        tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: target.x, y: target.y))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: target.x, y: target.y))
+        #expect(box.color == .palette(255), "the clicked swatch is selected, got \(box.color)")
     }
 }
 

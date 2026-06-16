@@ -102,7 +102,7 @@ public struct ColorPickerPanel: View {
                     Tab("HSB", value: Mode.hsb) { _ChannelEditor(mode: .hsb, selection: selection) }
                     Tab("CMYK", value: Mode.cmyk) { _ChannelEditor(mode: .cmyk, selection: selection) }
                     Tab("Semantic", value: Mode.semantic) { semanticEditor }
-                    Tab("256 (Xterm)", value: Mode.palette256) { _Color256GridCore(selection: selection) }
+                    Tab("256 (Xterm)", value: Mode.palette256) { _Palette256Editor(selection: selection) }
                 }
                 .tabViewStyle(.compact)
             }
