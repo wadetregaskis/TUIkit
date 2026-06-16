@@ -57,6 +57,17 @@ public final class FocusManager: @unchecked Sendable {
     /// The currently focused element's ID within the active section.
     private var focusedID: String?
 
+    /// The last focused element ID per section, so returning to a section
+    /// (e.g. dismissing a modal whose overlay activated its own section)
+    /// restores its focus instead of resetting to the section's first element.
+    /// Without this, opening then closing a modal moved focus to the top of the
+    /// page — and a `ScrollView` would snap-scroll there, resetting the scroll.
+    private var sectionFocusMemory: [String: String] = [:]
+
+    /// For each section that was activated *over* another, the section to revert
+    /// to when it is deactivated (e.g. a modal section reverts to the page's).
+    private var sectionRevertTarget: [String: String] = [:]
+
     /// A monotonic counter that increments every time the
     /// currently focused element handles (consumes) a key event.
     /// Used by ``ScrollView`` to tell apart "the focused control
@@ -190,6 +201,8 @@ extension FocusManager {
         sections.removeAll()
         activeSectionID = nil
         focusedID = nil
+        sectionFocusMemory.removeAll()
+        sectionRevertTarget.removeAll()
     }
 
     /// Focuses a specific element.
@@ -425,21 +438,66 @@ extension FocusManager {
             return
         }
 
+        // Remember the section we're leaving so returning to it restores focus,
+        // and record it as the revert target for `deactivateSection(id:)`.
+        rememberFocusForActiveSection()
+        if let leaving = activeSectionID {
+            sectionRevertTarget[id] = leaving
+        }
+
         // Notify current focused element
         notifyFocusLost()
 
         activeSectionID = id
         focusedID = nil
 
-        // Auto-focus first element in the new section
-        if let section = activeSection,
-            let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
+        // Restore the new section's remembered focus, else its first element.
+        restoreFocusForActiveSection()
+
+        onFocusChange?()
+    }
+
+    /// Deactivates `id` if it is the active section, reverting to the section it
+    /// was activated over (or the default), and restoring that section's
+    /// remembered focus.
+    ///
+    /// Called when a transient overlay (a modal) is dismissed. The focus is set
+    /// *directly* from memory — the reverted-to section's elements may not be
+    /// re-registered until later in this render pass, and setting `focusedID`
+    /// non-nil now both targets the right element and stops the first
+    /// re-registered element from grabbing focus (see `register(_:inSection:)`).
+    /// `endRenderPass` validates the result once registration completes.
+    public func deactivateSection(id: String) {
+        guard activeSectionID == id else { return }
+        rememberFocusForActiveSection()
+        let target = sectionRevertTarget[id] ?? Self.defaultSectionID
+        sectionRevertTarget[id] = nil
+        activeSectionID = target
+        focusedID = sectionFocusMemory[target]
+        onFocusChange?()
+    }
+
+    /// Saves the active section's currently focused element so it can be
+    /// restored when that section is next activated.
+    private func rememberFocusForActiveSection() {
+        if let active = activeSectionID, let focused = focusedID {
+            sectionFocusMemory[active] = focused
+        }
+    }
+
+    /// Focuses the active section's remembered element if it is still present
+    /// and focusable; otherwise focuses the section's first focusable element.
+    private func restoreFocusForActiveSection() {
+        guard let section = activeSection else { return }
+        if let saved = sectionFocusMemory[section.id],
+            let element = section.focusables.first(where: { $0.focusID == saved && $0.canBeFocused })
         {
+            focusedID = element.focusID
+            element.onFocusReceived()
+        } else if let firstFocusable = section.focusables.first(where: { $0.canBeFocused }) {
             focusedID = firstFocusable.focusID
             firstFocusable.onFocusReceived()
         }
-
-        onFocusChange?()
     }
 
     /// Prepares the focus manager for a new render pass.
@@ -463,11 +521,17 @@ extension FocusManager {
     /// registered section is activated. If the previously focused element
     /// no longer exists, the first focusable in the active section is focused.
     func endRenderPass() {
-        // Validate active section
+        // Validate active section. If the active section vanished (e.g. a modal
+        // overlay that activated its own section was dismissed), remember its
+        // focus, fall back to the first section, and restore THAT section's
+        // remembered focus — so the page returns to where it was, not its top.
         if let activeID = activeSectionID,
             !sections.contains(where: { $0.id == activeID })
         {
+            rememberFocusForActiveSection()
             activeSectionID = sections.first?.id
+            focusedID = nil
+            restoreFocusForActiveSection()
         }
 
         // Validate focused element

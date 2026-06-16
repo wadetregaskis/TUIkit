@@ -60,8 +60,14 @@ extension AlertPresentationModifier: Renderable {
     private static var alertSectionID: String { "__alert__" }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // If not presented, just return base content
+        // If not presented, just return base content. Tear down the alert's
+        // focus section if it's still active (the alert was just dismissed), so
+        // the page's focus — and a ScrollView's scroll position — is restored
+        // rather than jumping to the top.
         guard isPresented.wrappedValue else {
+            if !context.isMeasuring {
+                context.environment.focusManager.deactivateSection(id: Self.alertSectionID)
+            }
             return TUIkit.renderToBuffer(content, context: context)
         }
 

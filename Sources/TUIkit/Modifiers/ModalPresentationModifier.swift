@@ -45,8 +45,16 @@ extension ModalPresentationModifier: Renderable {
     private static var modalSectionID: String { "__modal__" }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // If not presented, just return base content
+        // If not presented, just return base content.
         guard isPresented.wrappedValue else {
+            // Tear down the modal focus section if it's still active (the modal
+            // was just dismissed). This reverts focus to the page's section AND
+            // restores its remembered focus, so the page doesn't jump to its
+            // first element — which a ScrollView would then snap-scroll to,
+            // resetting the scroll position.
+            if !context.isMeasuring {
+                context.environment.focusManager.deactivateSection(id: Self.modalSectionID)
+            }
             return TUIkit.renderToBuffer(content, context: context)
         }
 
