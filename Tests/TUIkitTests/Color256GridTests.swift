@@ -135,17 +135,14 @@ struct Color256GridRenderTests {
     @Test("Renders the sectioned grid with a contrasting bullet on the cursor cell")
     func rendersGrid() {
         let (focused, cells) = _Color256GridCore.renderGrid(
-            cursor: 16, isFocused: true, cellWidth: 1, showNumbers: false)
+            cursor: 16, isFocused: true, cellWidth: 2, showNumbers: false)
         #expect(focused.count == Palette256Layout.rows.count)
         #expect(cells.count == 256)
         let nonEmpty = focused.filter { !$0.isEmpty }
         #expect(nonEmpty.allSatisfy { $0.contains("\u{1B}[") }, "every content row carries colour escapes")
         #expect(focused.contains { $0.contains("48;5;") }, "cells use the indexed 256-colour background")
-        // The focused cursor draws a filled bullet; unfocused, a hollow one.
-        #expect(focused.contains { $0.contains("●") }, "focused cursor is a filled bullet")
-        let (unfocused, _) = _Color256GridCore.renderGrid(
-            cursor: 16, isFocused: false, cellWidth: 1, showNumbers: false)
-        #expect(unfocused.contains { $0.contains("○") }, "unfocused cursor is a hollow bullet")
+        // Two-cell swatches mark the cursor with the contiguous half-block bar ▐▌.
+        #expect(focused.contains { $0.contains("▐▌") }, "the cursor cell shows the two-cell marker")
     }
 
     @Test("Numbers mode prints each index in a five-cell swatch, never run together")
@@ -177,9 +174,9 @@ struct Color256GridRenderTests {
         let box = ColorBox(.rgb(255, 255, 255))
         let buffer = renderToBuffer(
             _Color256GridCore(selection: box.binding, focusID: "grid-seed"),
-            context: makeRenderContext(width: 40, height: 24))
+            context: makeRenderContext(width: 64, height: 24))  // ≥48 so the 2-wide grid isn't clipped
         let lines = buffer.lines.map { $0.stripped }
-        func bulleted(_ s: String) -> Bool { s.contains("●") || s.contains("○") }
+        func bulleted(_ s: String) -> Bool { s.contains("▐▌") }
         // index 231 lives in the cube's last red slice, well below the first row.
         #expect(!bulleted(lines.first { !$0.isEmpty } ?? ""), "cursor is NOT on the first (black) row")
         #expect(lines.contains(where: bulleted), "cursor is shown on a cell")
@@ -201,7 +198,7 @@ struct Color256GridFocusTests {
         // so the cursor cell shows the filled bullet.
         let rendered = renderToBuffer(grid, context: ctx).lines.joined()
         #expect(focusManager.isFocused(id: "grid-test"), "the grid is focusable")
-        #expect(rendered.contains("●"), "focused cursor bullet")
+        #expect(rendered.contains("▐▌"), "the cursor cell shows the two-cell marker")
 
         // The cursor seeds at black's nearest cube cell (index 16). Down a green
         // step → 22, then right a blue step → 23.
@@ -221,15 +218,16 @@ struct Color256GridFocusTests {
         var env = EnvironmentValues()
         env.focusManager = fm
         env.mouseEventDispatcher = tui.mouseEventDispatcher
-        let ctx = RenderContext(availableWidth: 40, availableHeight: 24, environment: env, tuiContext: tui)
+        let ctx = RenderContext(availableWidth: 64, availableHeight: 24, environment: env, tuiContext: tui)
         fm.beginRenderPass()
         let buffer = renderToBuffer(grid, context: ctx)
         fm.endRenderPass()
 
         // Every swatch is a hit region now.
         #expect(buffer.hitTestRegions.count == 256, "one clickable region per swatch")
-        // Click the greyscale row's last cell (index 255), bottom-right of the grid.
-        let cells = Palette256Layout.place(cellWidth: 1).cells
+        // Click the greyscale row's last cell (index 255), bottom-right of the
+        // grid. Swatches are two cells wide, so place with that width.
+        let cells = Palette256Layout.place(cellWidth: 2).cells
         let target = cells.first { $0.index == 255 }!
         tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
         _ = tui.mouseEventDispatcher.dispatch(

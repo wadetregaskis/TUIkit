@@ -47,16 +47,16 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
-    @Test("Compact tabs render as chips with slanted ◢ ◣ edge caps")
+    @Test("Compact tabs render as chips with half-block edge caps")
     func compactChipEdges() {
         let out = lines(
             TabView(selection: .constant(0)) {
                 Tab("One", value: 0) { Text("body") }
                 Tab("Two", value: 1) { Text("body") }
             }.tabViewStyle(.compact)).joined()
-        #expect(out.contains("◢") && out.contains("◣"), "compact tabs carry ◢ ◣ edge caps: \(out)")
-        // Between two tabs the caps abut as ◣◢.
-        #expect(out.contains("◣◢"), "adjacent chips meet at their caps")
+        #expect(out.contains("▐") && out.contains("▌"), "compact tabs carry ▐ ▌ edge caps: \(out)")
+        // Between two tabs the caps abut as ▌▐.
+        #expect(out.contains("▌▐"), "adjacent chips meet at their caps")
     }
 
     @Test("A strip too wide for the available width wraps to multiple rows, bounded")

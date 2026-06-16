@@ -130,6 +130,25 @@ struct ColorPickerPanelChannelTests {
         #expect(Panel.channelValue(parsing: "abc", into: 0...360) == 0)     // no digits → lower
         #expect(Panel.channelValue(parsing: "1x2x3", into: 0...360) == 123) // digits only
     }
+
+    @Test("A typed/pasted percentage scales to the channel's range, clamped 0…100")
+    func percentParsing() {
+        #expect(Panel.channelValue(parsingPercent: "100%", upperBound: 255) == 255)
+        #expect(Panel.channelValue(parsingPercent: "50", upperBound: 100) == 50)
+        #expect(Panel.channelValue(parsingPercent: "50%", upperBound: 360) == 180)  // of the range
+        #expect(Panel.channelValue(parsingPercent: "999%", upperBound: 255) == 255) // clamps at 100%
+        #expect(Panel.channelValue(parsingPercent: "", upperBound: 255) == 0)       // empty → 0
+    }
+
+    @Test("A typed/pasted hex value parses to a 0…255 channel, prefix-tolerant")
+    func hexParsing() {
+        #expect(Panel.channelValue(parsingHex: "0xFF") == 255)
+        #expect(Panel.channelValue(parsingHex: "ff") == 255)        // no prefix
+        #expect(Panel.channelValue(parsingHex: "#CD") == 205)       // #-prefixed
+        #expect(Panel.channelValue(parsingHex: "0x00") == 0)
+        #expect(Panel.channelValue(parsingHex: "1FF") == 255)       // > 255 clamps
+        #expect(Panel.channelValue(parsingHex: "") == 0)            // empty → 0
+    }
 }
 
 @MainActor
@@ -294,10 +313,12 @@ struct ColorPickerPanelCrashSafetyTests {
             renderToBuffer(panel, context: ctx).lines.map { $0.stripped }.joined(separator: "\n")
         }
 
-        // First render auto-focuses the TabView strip (on the RGB tab). A Right
-        // arrow moves the selection to the next tab (HSL), flipping `mode`.
+        // First render auto-focuses the preview's hex field; one Tab moves to the
+        // TabView strip (on the RGB tab). A Right arrow then moves the selection
+        // to the next tab (HSL), flipping `mode`.
         _ = render()
-        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))    // hex field → strip
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))  // RGB → HSL
         let out = render()
 
         #expect(out.contains("HSL"), "HSL tab present: \(out)")
@@ -322,7 +343,8 @@ struct ColorPickerPanelCrashSafetyTests {
                 availableWidth: 64, availableHeight: 30, environment: env, tuiContext: tui)
             return renderToBuffer(panel, context: ctx).lines.map { $0.stripped }.joined(separator: "\n")
         }
-        _ = render()                                       // RGB tab, strip auto-focused
+        _ = render()                                       // RGB tab, hex field auto-focused
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))       // hex field → strip
         _ = fm.dispatchKeyEvent(KeyEvent(key: .right))     // → HSL
         let hsl = render()
         #expect(hsl.contains("H ") && hsl.contains("L "), "actually switched to HSL: \(hsl)")
@@ -357,10 +379,11 @@ struct ColorPickerPanelCrashSafetyTests {
         }
 
         render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render()     // hex field → strip
         _ = fm.dispatchKeyEvent(KeyEvent(key: .right)); render()   // RGB → HSL
-        // Focus order on the HSL tab: strip, [H slider, H field], [S slider, …].
-        // Three Tabs from the strip land on the S slider.
-        for _ in 0..<3 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render() }
+        // Focus order on the HSL tab: strip, [H slider, H %, H int], [S slider, …]
+        // — H has both % and integer fields, so four Tabs reach the S slider.
+        for _ in 0..<4 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render() }
         _ = fm.dispatchKeyEvent(KeyEvent(key: .home)); render()    // S → 0: colour goes grey
         let grey = box.color.rgbComponents!
         #expect(grey.red == grey.green && grey.green == grey.blue,
@@ -379,20 +402,31 @@ struct ColorPickerPanelCrashSafetyTests {
         let ctx = makeRenderContext(width: 64, height: 30)
         let fm = ctx.environment.focusManager
         let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
-        func render() { _ = renderToBuffer(panel, context: ctx) }
+        // Render-loop-faithful: begin/endRenderPass so focus navigation stays
+        // clean across the many tab switches the key stream triggers.
+        func render() { fm.beginRenderPass(); _ = renderToBuffer(panel, context: ctx); fm.endRenderPass() }
         render()
 
-        // Cycle focus through tabs / channels / grid and drive every kind of
+        // First reach a channel slider and edit it, so the test demonstrably
+        // exercises editing: Tab off the preview hex field onto the strip, again
+        // into the R slider, then End drives it to its maximum.
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render()   // hex field → strip
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render()   // strip → R slider
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .end)); render()   // R → max
+        #expect(box.color != .rgb(200, 100, 50),
+                "reached and edited a channel, got \(box.color.rgbComponents!)")
+
+        // Then cycle focus through tabs / channels / grid and drive every kind of
         // edit. Switching to HSL/HSB/CMYK then hammering End/Home/arrows is the
-        // path that used to trap in the colour-space maths.
+        // path that used to trap in the colour-space maths — none of it may trap.
         let keys: [Key] = [.tab, .enter, .end, .home, .right, .left, .up, .down, .space]
         for i in 0..<240 {
             _ = fm.dispatchKeyEvent(KeyEvent(key: keys[i % keys.count]))
             render()
         }
-        // Reaching here means none of the 240 events trapped. The drive really
-        // exercised the panel — the bound colour was rewritten away from its seed.
-        #expect(box.color != .rgb(200, 100, 50), "the key stream actually edited the colour")
+        // Reaching here means none of the 240 events trapped, and the panel still
+        // renders.
+        #expect(!renderToBuffer(panel, context: ctx).lines.isEmpty)
     }
 
     @Test("Clicking every hit region across re-renders never traps (mouse path)")

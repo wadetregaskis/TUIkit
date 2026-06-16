@@ -242,8 +242,11 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     let isDisabled: Bool
     let onSubmitAction: (() -> Void)?
 
-    /// Minimum width for the text field content area.
-    private let minContentWidth = 10
+    /// Minimum width for the text field content area. Small, so an explicit
+    /// narrow `.frame(width:)` is honoured (e.g. a 0–255 / "100%" numeric field
+    /// that only needs room for a few characters plus the cursor); fields without
+    /// a frame still open at ``defaultContentWidth``.
+    private let minContentWidth = 3
 
     /// Default visible width for the text field content area when no proposal is given.
     private let defaultContentWidth = 20

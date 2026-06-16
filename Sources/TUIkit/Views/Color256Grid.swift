@@ -191,10 +191,11 @@ struct _Color256GridCore: View, Renderable {
 
     private typealias StateIndex = Color256GridStateIndex
 
-    /// The cell width for the current mode: a 1-cell colour block, or 5 cells
-    /// wide with numbers — wide enough that a three-digit index sits centred
-    /// with at least a space either side, so adjacent numbers never run together.
-    private var cellWidth: Int { showNumbers ? 5 : 1 }
+    /// The cell width for the current mode: two cells for a roughly-square,
+    /// easy-to-see colour block, or five cells with numbers — wide enough that a
+    /// three-digit index sits centred with a space either side, so adjacent
+    /// numbers never run together.
+    private var cellWidth: Int { showNumbers ? 5 : 2 }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = !context.environment.isEnabled
@@ -309,9 +310,12 @@ struct _Color256GridCore: View, Renderable {
         let color = Color.palette(UInt8(index))
         let foreground = contrast(forIndex: index)
         if isCursor {
-            let bullet = isFocused ? "●" : "○"
+            // A two-cell swatch centres the cursor with the half-block pair "▐▌",
+            // which abut into one contiguous bar (a lone ● can't centre in an even
+            // width); a one-cell swatch falls back to ●/○.
+            let marker = cellWidth >= 2 ? "▐▌" : (isFocused ? "●" : "○")
             return ANSIRenderer.colorize(
-                centred(bullet, in: cellWidth), foreground: foreground, background: color)
+                centred(marker, in: cellWidth), foreground: foreground, background: color, bold: isFocused)
         }
         if showNumbers {
             return ANSIRenderer.colorize(centred(String(index), in: cellWidth), foreground: foreground, background: color)

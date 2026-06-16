@@ -329,9 +329,12 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// field is padded the track + chrome fills the available width exactly
     /// (the value padding occupies the cell the old hard-coded 9 left blank for
     /// values narrower than "100%").
-    private var chromeWidth: Int {
-        // "◀" + " " (before track) + " " + "▶" + " " (after track) = 5 columns.
-        5 + valueLabelText.count
+    private func chromeWidth(showsValue: Bool) -> Int {
+        // "◀" + " " (before track) + " " + "▶" + " " (after track) = 5 columns,
+        // then the value field. With the value hidden the trailing space + field
+        // drop, leaving "◀ track ▶" — 4 columns of chrome.
+        guard showsValue else { return 4 }
+        return 5 + valueLabelText.count
     }
 
     var body: Never {
@@ -343,7 +346,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// Slider is width-flexible: it has a minimum width but expands
     /// to fill available horizontal space in HStack.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let chrome = chromeWidth
+        let chrome = chromeWidth(showsValue: context.environment.sliderShowsValue)
         let proposedWidth = proposal.width ?? (defaultTrackWidth + chrome)
         let trackWidth = max(minTrackWidth, proposedWidth - chrome)
         return ViewSize(
@@ -364,7 +367,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // Slider expands to fill available width (with minimum). Subtracting
         // the chrome here means track + chrome fills exactly `availableWidth`,
         // matching what `sizeThatFits` reports.
-        let trackWidth = max(minTrackWidth, context.availableWidth - chromeWidth)
+        let showsValue = context.environment.sliderShowsValue
+        let trackWidth = max(minTrackWidth, context.availableWidth - chromeWidth(showsValue: showsValue))
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -417,7 +421,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             trackWidth: trackWidth,
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.slider)]),
-            isDisabled: isDisabled
+            isDisabled: isDisabled,
+            showsValue: showsValue
         )
 
         var buffer = FrameBuffer(text: content)
@@ -688,7 +693,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         pulsePhase: Double,
         trackWidth: Int,
         valueStyle: StyleAttributes,
-        isDisabled: Bool
+        isDisabled: Bool,
+        showsValue: Bool
     ) -> String {
         // Arrow colors:
         //   - Focused: pulsing accent
@@ -739,7 +745,10 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false))
 
-        // Pulsing arrows indicate focus - no extra markers needed
+        // Pulsing arrows indicate focus - no extra markers needed. The value
+        // read-out is omitted when `.sliderShowsValue(false)` (some surrounding
+        // control shows the value instead).
+        guard showsValue else { return "\(leftArrow) \(track) \(rightArrow)" }
         return "\(leftArrow) \(track) \(rightArrow) \(valueLabel)"
     }
 }

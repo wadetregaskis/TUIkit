@@ -354,13 +354,17 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 let body = " \(tabs[i].title) "
                 if style == .compact {
                     // A coloured chip: active and inactive tabs use distinct
-                    // backgrounds; the ◢ ◣ caps (drawn in the chip's colour over
-                    // the surrounding default) give each chip a slanted edge.
+                    // backgrounds. The caps are half-blocks drawn in the chip's
+                    // colour over the surrounding default — ▐ fills the right half
+                    // of the leading cell and ▌ the left half of the trailing one,
+                    // so the chip's fill extends half a cell each side with a
+                    // clean, solid edge. (The corner-triangle glyphs ◢ ◣ render
+                    // far smaller than a cell in Terminal.app, so they don't.)
                     let chip = active ? activeBg : inactiveBg
                     let chipFg = active ? activeFg : inactiveFg
-                    line += ANSIRenderer.colorize("◢", foreground: chip)
+                    line += ANSIRenderer.colorize("▐", foreground: chip)
                     line += ANSIRenderer.colorize(body, foreground: chipFg, background: chip, bold: active)
-                    line += ANSIRenderer.colorize("◣", foreground: chip)
+                    line += ANSIRenderer.colorize("▌", foreground: chip)
                     regions.append((x: x, y: y, width: body.count + 2, index: i))
                     x += body.count + 2
                 } else {

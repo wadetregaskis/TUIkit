@@ -133,23 +133,35 @@ public struct ColorPickerPanel: View {
 
     // MARK: Preview
 
-    /// A live swatch plus the colour's hex and `rgb(…)` read-outs. A semantic
-    /// selection is resolved against the palette so the read-out shows its
-    /// concrete value rather than blanks.
+    /// A large live swatch plus an editable hex field and the `rgb(…)` read-out.
+    /// A semantic selection is resolved against the palette so the read-outs show
+    /// its concrete value rather than blanks.
     private var previewRow: some View {
-        let components = selection.wrappedValue.resolve(with: palette).rgbComponents
+        let resolved = selection.wrappedValue.resolve(with: palette)
+        let components = resolved.rgbComponents
         return HStack(alignment: .center, spacing: 2) {
-            // A large solid block of the current colour (10 wide × 5 tall).
+            // A large solid block of the current colour (10 wide × 5 tall). Filled
+            // with a background colour over spaces, so the cells are contiguous —
+            // block glyphs (█) leave hairline gaps between rows in some terminals.
             VStack(spacing: 0) {
                 ForEach(0..<5, id: \.self) { _ in
-                    Text(String(repeating: "█", count: 10)).foregroundStyle(selection.wrappedValue)
+                    Text(String(repeating: " ", count: 10)).background(resolved)
                 }
             }
             VStack(alignment: .leading, spacing: 0) {
-                Text(Self.hexString(components)).foregroundStyle(.palette.foreground)
+                // Editable: type/paste a #RRGGBB (or RGB / #RGB) hex to set the colour.
+                TextField("", text: combinedHexText()).frame(width: 10)
                 Text(Self.rgbString(components)).foregroundStyle(.palette.foregroundTertiary)
             }
         }
+    }
+
+    /// A `String` binding over the whole colour as `#RRGGBB`: edits that parse to
+    /// a valid hex set the selection; partial/invalid input leaves it unchanged.
+    private func combinedHexText() -> Binding<String> {
+        Binding(
+            get: { Self.hexString(selection.wrappedValue.resolve(with: palette).rgbComponents) },
+            set: { if let color = Color.hex($0) { selection.wrappedValue = color } })
     }
 
     // MARK: Semantic tab
@@ -211,6 +223,24 @@ public struct ColorPickerPanel: View {
         let digits = text.filter(\.isNumber)
         let parsed = digits.isEmpty ? range.lowerBound : (Double(digits) ?? range.upperBound)
         return max(range.lowerBound, min(range.upperBound, parsed))
+    }
+
+    /// Parses a typed/pasted percentage into a channel value: keeps the digits,
+    /// clamps the percentage to 0…100, then scales to `upperBound`. Pure; tested.
+    static func channelValue(parsingPercent text: String, upperBound: Double) -> Double {
+        let digits = text.filter(\.isNumber)
+        let percent = digits.isEmpty ? 0 : (Double(digits) ?? 100)
+        return max(0, min(100, percent)) / 100 * upperBound
+    }
+
+    /// Parses a typed/pasted hex value (optionally `0x`/`#`-prefixed) into a
+    /// 0…255 channel value: keeps the hex digits, clamps. Pure; tested.
+    static func channelValue(parsingHex text: String) -> Double {
+        var lowered = text.lowercased()
+        if lowered.hasPrefix("0x") { lowered.removeFirst(2) }
+        let hex = lowered.filter(\.isHexDigit)
+        let value = hex.isEmpty ? 0 : (Int(hex, radix: 16) ?? 255)
+        return Double(max(0, min(255, value)))
     }
 
     // MARK: - Channel conversions
@@ -349,33 +379,61 @@ private struct _ChannelEditor: View {
             })
     }
 
-    /// One labelled channel row: name, slider, editable numeric read-out.
+    /// One labelled channel row: name, slider, then editable read-outs for the
+    /// representations that apply to this channel — percentage always (it's the
+    /// value the slider used to print, now editable), the raw integer when it
+    /// differs from the percentage (i.e. not a 0–100 channel), and hex for the
+    /// 0–255 channels. All drive the same binding, so they stay in sync.
     private func channelRow(
         _ label: String,
         _ binding: Binding<Double>,
         _ range: ClosedRange<Double>
     ) -> some View {
-        HStack(spacing: 1) {
+        let upper = range.upperBound
+        return HStack(spacing: 1) {
             Text(label)
                 .frame(width: 2, alignment: .trailing)
                 .foregroundStyle(.palette.foregroundTertiary)
-            Slider(value: binding, in: range, step: 1).frame(width: 22)
-            // Editable read-out: type or paste an exact value, kept in sync with
-            // the slider (both drive the same binding). A fixed width keeps the
-            // panel sized-to-fit; 12 is the field's natural minimum, so both end
-            // caps render with room to type/select.
-            TextField("", text: channelText(binding, in: range)).frame(width: 12)
+            Slider(value: binding, in: range, step: 1).frame(width: 16).sliderShowsValue(false)
+            TextField("", text: percentText(binding, upperBound: upper)).frame(width: 7)
+            if upper != 100 {
+                TextField("", text: integerText(binding, in: range)).frame(width: 7)
+            }
+            if upper == 255 {
+                TextField("", text: hexText(binding)).frame(width: 7)
+            }
         }
     }
 
-    /// A `String` binding over a numeric channel: shows the integer value, and on
-    /// edit parses the digits and clamps to `range`.
-    private func channelText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
+    /// `"NN%"` of the channel's range — editable; parsing clamps to 0…100%.
+    private func percentText(_ value: Binding<Double>, upperBound: Double) -> Binding<String> {
+        Binding(
+            get: {
+                let v = value.wrappedValue
+                let pct = upperBound > 0 ? (v.isFinite ? v : 0) / upperBound * 100 : 0
+                return "\(Int(pct.rounded()))%"
+            },
+            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: $0, upperBound: upperBound) })
+    }
+
+    /// The raw integer value — editable; parsing clamps to `range`.
+    private func integerText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
         Binding(
             get: {
                 let v = value.wrappedValue
                 return String(Int((v.isFinite ? v : 0).rounded()))
             },
             set: { value.wrappedValue = ColorPickerPanel.channelValue(parsing: $0, into: range) })
+    }
+
+    /// The value as `"0xNN"` hex — editable; parsing keeps hex digits, clamps 0…255.
+    private func hexText(_ value: Binding<Double>) -> Binding<String> {
+        Binding(
+            get: {
+                let v = Int((value.wrappedValue.isFinite ? value.wrappedValue : 0).rounded())
+                let digits = String(max(0, min(255, v)), radix: 16, uppercase: true)
+                return "0x" + (digits.count < 2 ? "0" + digits : digits)
+            },
+            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsingHex: $0) })
     }
 }

@@ -230,8 +230,10 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
 
     private typealias StateIndex = SecureFieldStateIndex
 
-    /// Minimum width for the secure field content area.
-    private let minContentWidth = 10
+    /// Minimum width for the secure field content area. Small, so an explicit
+    /// narrow `.frame(width:)` is honoured; unframed fields open at
+    /// ``defaultContentWidth``.
+    private let minContentWidth = 3
 
     /// Default visible width for the secure field content area when no proposal is given.
     private let defaultContentWidth = 20

@@ -172,17 +172,17 @@ struct _SwatchGridCore: View, Renderable {
     }
 
     /// One swatch: the colour as a background, with a contrasting cursor marker.
-    /// A two-or-more-cell swatch uses the half-circle pair "◖◗", which join into
-    /// a single disc that spans the whole swatch and reads as visually centred
-    /// (a lone "●" would sit in one half of an even-width cell); a one-cell swatch
-    /// falls back to ●/○. Bold marks keyboard focus.
+    /// A two-or-more-cell swatch uses the half-block pair "▐▌", which abut into
+    /// one contiguous bar centred on the swatch (a lone "●" would sit in one half
+    /// of an even-width cell, and the half-circles ◖◗ render as two separated
+    /// pieces); a one-cell swatch falls back to ●/○. Bold marks keyboard focus.
     private func cellText(
         _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool, isFocused: Bool
     ) -> String {
         guard isCursor else {
             return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
         }
-        let marker = cellWidth >= 2 ? "◖◗" : (isFocused ? "●" : "○")
+        let marker = cellWidth >= 2 ? "▐▌" : (isFocused ? "●" : "○")
         return ANSIRenderer.colorize(
             Self.centred(marker, in: cellWidth),
             foreground: Self.contrast(for: color, palette: palette),
