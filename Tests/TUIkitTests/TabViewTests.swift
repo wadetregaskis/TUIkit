@@ -47,6 +47,26 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
+    @Test("A strip too wide for the available width wraps to multiple rows, bounded")
+    func stripWrapsWhenWide() {
+        let many = TabView(selection: .constant(0)) {
+            ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text("body") } }
+        }.tabViewStyle(.compact)
+        // Wide enough for a single row: no wrapping, the strip is one line.
+        let wide = renderToBuffer(many, context: makeRenderContext(width: 120, height: 12))
+        let wideStrip = wide.lines.prefix { !$0.stripped.contains("body") }
+        #expect(wideStrip.count == 1, "fits on one row when there's room")
+        // Narrow: the strip wraps across rows and the panel never exceeds the
+        // available width (the bug would be a single 90-wide row overflowing).
+        let narrow = renderToBuffer(many, context: makeRenderContext(width: 60, height: 16))
+        let narrowStrip = narrow.lines.prefix { !$0.stripped.contains("body") }
+        #expect(narrowStrip.count > 1, "wraps when the single row would overflow")
+        #expect(narrow.width <= 60, "panel stays within the available width, got \(narrow.width)")
+        // Every tab is still present across the wrapped rows.
+        let joined = narrow.lines.map { $0.stripped }.joined(separator: " ")
+        for i in 0..<10 { #expect(joined.contains("Tab\(i)"), "Tab\(i) present after wrapping") }
+    }
+
     @Test("Changing the selection shows a different tab's content")
     func selectionSwitchesContent() {
         func body(_ sel: Int) -> [String] {

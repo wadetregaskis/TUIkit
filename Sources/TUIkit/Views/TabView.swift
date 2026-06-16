@@ -205,11 +205,11 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         guard !tabs.isEmpty else { return ViewSize.fixed(0, 0) }
         let style = context.environment.tabViewStyle.resolved
-        let stripHeight = style == .bordered ? 2 : 1
-        let stripWidth = stripVisibleWidth(style: style)
-
         var ctx = context
         ctx.availableWidth = proposal.width ?? context.availableWidth
+        let stripHeight = stripRowCount(style: style, available: ctx.availableWidth)
+        let stripWidth = stripWrappedWidth(style: style, available: ctx.availableWidth)
+
         let contentSize = ChildView(tabs[selectedIndex].content).measure(
             proposal: ProposedSize(width: ctx.availableWidth, height: nil),
             context: contentContext(ctx, stripHeight: stripHeight))
@@ -268,12 +268,52 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
     // MARK: Strip rendering
 
-    /// The visible width the strip occupies (for sizing).
+    /// The visible width the strip occupies on a single row.
     private func stripVisibleWidth(style: TabViewStyle) -> Int {
-        let labels = tabs.map { " \($0.title) " }
+        let body = tabs.reduce(0) { $0 + " \($1.title) ".count }
         let separators = max(0, tabs.count - 1)
-        let body = labels.reduce(0) { $0 + $1.count }
         return style == .bordered ? body + separators + 1 : body + separators
+    }
+
+    /// Groups tab indices into rows that each fit within `available`. Wraps only
+    /// when the single-row strip would overflow, then balances the tabs across
+    /// the fewest rows so no row hogs the full width — with few tabs (the common
+    /// case) this stays one row. A single tab is never split.
+    private func stripRowGroups(available: Int) -> [[Int]] {
+        let widths = tabs.map { " \($0.title) ".count }
+        let total = widths.reduce(0, +) + max(0, tabs.count - 1)
+        let avail = max(1, available)
+        let rowCount = max(1, (total + avail - 1) / avail)   // ceil(total / avail)
+        let target = (total + rowCount - 1) / rowCount       // balance across rows
+        let cap = max(target, widths.max() ?? target)
+        var rows: [[Int]] = []
+        var current: [Int] = []
+        var width = 0
+        for i in tabs.indices {
+            let addend = (current.isEmpty ? 0 : 1) + widths[i]
+            if !current.isEmpty && width + addend > cap {
+                rows.append(current)
+                current = []
+                width = 0
+            }
+            width += (current.isEmpty ? 0 : 1) + widths[i]
+            current.append(i)
+        }
+        if !current.isEmpty { rows.append(current) }
+        return rows
+    }
+
+    /// The rows + rule the strip occupies for the given available width.
+    private func stripRowCount(style: TabViewStyle, available: Int) -> Int {
+        stripRowGroups(available: available).count + (style == .bordered ? 1 : 0)
+    }
+
+    /// The widest laid-out row, for sizing the panel to the wrapped strip.
+    private func stripWrappedWidth(style: TabViewStyle, available: Int) -> Int {
+        stripRowGroups(available: available).map { row in
+            row.reduce(0) { $0 + " \(tabs[$1].title) ".count }
+                + max(0, row.count - 1) + (style == .bordered ? 2 : 0)
+        }.max() ?? 0
     }
 
     private func renderStrip(
@@ -286,37 +326,38 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let activeFg = Self.contrastingForeground(for: accent, palette: palette)
         let separator = style == .bordered ? "│" : " "
 
-        var line = style == .bordered ? "│" : ""
-        var x = line.strippedLength
-        var regions: [(x: Int, width: Int, index: Int)] = []
+        let groups = stripRowGroups(available: context.availableWidth)
+        var lines: [String] = []
+        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
+        var maxWidth = 0
 
-        for (i, tab) in tabs.enumerated() {
-            let label = " \(tab.title) "
-            let isActive = i == selectedIndex
-            let seg: String
-            if isActive {
-                seg = ANSIRenderer.colorize(label, foreground: activeFg, background: activeBg, bold: true)
-            } else {
-                seg = ANSIRenderer.colorize(label, foreground: palette.foregroundSecondary)
+        for (y, row) in groups.enumerated() {
+            var line = style == .bordered ? ANSIRenderer.colorize("│", foreground: palette.border) : ""
+            var x = style == .bordered ? 1 : 0
+            for (j, i) in row.enumerated() {
+                let label = " \(tabs[i].title) "
+                let seg = (i == selectedIndex)
+                    ? ANSIRenderer.colorize(label, foreground: activeFg, background: activeBg, bold: true)
+                    : ANSIRenderer.colorize(label, foreground: palette.foregroundSecondary)
+                regions.append((x: x, y: y, width: label.strippedLength, index: i))
+                line += seg
+                x += label.strippedLength
+                if j < row.count - 1 || style == .bordered {
+                    line += ANSIRenderer.colorize(separator, foreground: palette.border)
+                    x += 1
+                }
             }
-            regions.append((x: x, width: label.strippedLength, index: i))
-            line += seg
-            x += label.strippedLength
-            if i < tabs.count - 1 || style == .bordered {
-                line += ANSIRenderer.colorize(separator, foreground: palette.border)
-                x += 1
-            }
+            maxWidth = max(maxWidth, x)
+            lines.append(line)
         }
-
-        var lines = [line]
         if style == .bordered {
             // A rule beneath the tabs that ties the strip to the content.
             lines.append(ANSIRenderer.colorize(
-                String(repeating: "─", count: x), foreground: palette.border))
+                String(repeating: "─", count: maxWidth), foreground: palette.border))
         }
         var buffer = FrameBuffer(lines: lines)
 
-        // Mouse: clicking a tab selects it.
+        // Mouse: clicking a tab selects it (row index → the region's y offset).
         if !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher {
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusIDForClicks(context)
@@ -333,7 +374,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 }
                 buffer.hitTestRegions.append(
                     HitTestRegion(
-                        offsetX: region.x, offsetY: 0, width: region.width, height: 1,
+                        offsetX: region.x, offsetY: region.y, width: region.width, height: 1,
                         handlerID: handlerID, focusID: nil))
             }
         }
