@@ -257,13 +257,24 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             style: style, selectedIndex: selected, isFocused: isFocused && !isDisabled,
             palette: palette, context: context)
 
-        // Selected content, isolated per tab.
+        // Selected content, isolated per tab. Its background matches the active
+        // tab's, so the active tab (whose row sits at the bottom of the strip)
+        // flows into the content as one surface.
+        let activeBg = Self.activeTabBackground(palette: palette, isFocused: isFocused && !isDisabled)
         let stripHeight = strip.height
         let content = TUIkit.renderToBuffer(
-            tabs[selected].content, context: contentContext(context, stripHeight: stripHeight))
+            tabs[selected].content.background(activeBg),
+            context: contentContext(context, stripHeight: stripHeight))
 
         strip.appendVertically(content)
         return strip.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// The active tab's background — the accent, dimmed when the strip isn't
+    /// focused. Shared by the active chip and the content area so they match.
+    static func activeTabBackground(palette: any Palette, isFocused: Bool) -> Color {
+        let accent = palette.accent.resolve(with: palette)
+        return isFocused ? accent : accent.opacity(ViewConstants.focusBorderDim)
     }
 
     // MARK: Strip rendering
@@ -335,13 +346,18 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         style: TabViewStyle, selectedIndex: Int, isFocused: Bool,
         palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
-        let accent = palette.accent.resolve(with: palette)
-        let activeBg = isFocused ? accent : accent.opacity(ViewConstants.focusBorderDim)
+        let activeBg = Self.activeTabBackground(palette: palette, isFocused: isFocused)
         let inactiveBg = palette.border.resolve(with: palette)
         let activeFg = Self.contrastingForeground(for: activeBg, palette: palette)
         let inactiveFg = Self.contrastingForeground(for: inactiveBg, palette: palette)
 
-        let groups = stripRowGroups(style: style, available: context.availableWidth)
+        // The active tab's whole row moves to the bottom of the stack so it sits
+        // directly above the content (matching backgrounds, they read as one).
+        var groups = stripRowGroups(style: style, available: context.availableWidth)
+        if let activeRow = groups.firstIndex(where: { $0.contains(selectedIndex) }),
+            activeRow != groups.count - 1 {
+            groups.append(groups.remove(at: activeRow))
+        }
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
         var maxWidth = 0

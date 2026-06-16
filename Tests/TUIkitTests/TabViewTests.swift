@@ -47,6 +47,23 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
+    @Test("The active tab's row moves to the bottom of the wrapped strip")
+    func activeRowMovesToBottom() {
+        // Ten tabs wrap to several rows at a narrow width. Selecting Tab0 (which
+        // would otherwise be in the first row) must put its whole row last, so it
+        // sits directly above the content.
+        let view = TabView(selection: .constant(0)) {
+            ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text("body-marker") } }
+        }.tabViewStyle(.compact)
+        let lines = renderToBuffer(view, context: makeRenderContext(width: 50, height: 16))
+            .lines.map { $0.stripped }
+        let stripRows = lines.prefix { !$0.contains("body-marker") }
+        #expect(stripRows.count > 1, "the strip wrapped to multiple rows")
+        // Tab0 is in the last strip row (adjacent to the content).
+        #expect(stripRows.last?.contains("Tab0") == true,
+                "the active tab's row is the bottom strip row: \(Array(stripRows))")
+    }
+
     @Test("Compact tabs render as chips with half-block edge caps")
     func compactChipEdges() {
         let out = lines(
