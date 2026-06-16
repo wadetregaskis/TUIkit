@@ -148,14 +148,18 @@ struct Color256GridRenderTests {
         #expect(unfocused.contains { $0.contains("○") }, "unfocused cursor is a hollow bullet")
     }
 
-    @Test("Numbers mode prints the palette index inside each three-cell swatch")
+    @Test("Numbers mode prints each index in a five-cell swatch, never run together")
     func numbersMode() {
         // cursor 0 keeps 16/255 as numbered (non-cursor) cells.
         let (lines, _) = _Color256GridCore.renderGrid(
-            cursor: 0, isFocused: true, cellWidth: 3, showNumbers: true)
+            cursor: 0, isFocused: true, cellWidth: 5, showNumbers: true)
         let joined = lines.joined()
         #expect(joined.contains("16"), "an index is printed in the swatch")
         #expect(joined.contains("255"), "the last greyscale index is printed")
+        // Five-cell swatches keep at least a space between adjacent indices — the
+        // three-cell layout used to render e.g. "100101102" with no separation.
+        #expect(!joined.contains("100101"), "adjacent three-digit indices don't run together")
+        #expect(!joined.contains("232233"), "…not even along the dense greyscale row")
     }
 
     @Test("Contrast picks black on light cells and white on dark cells")

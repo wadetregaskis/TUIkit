@@ -171,20 +171,31 @@ struct _SwatchGridCore: View, Renderable {
         return buffer
     }
 
-    /// One swatch: the colour as a background, with the cursor bullet (filled
-    /// when focused, hollow when not) in a contrasting foreground.
+    /// One swatch: the colour as a background, with a contrasting cursor marker.
+    /// A two-or-more-cell swatch uses the half-circle pair "◖◗", which join into
+    /// a single disc that spans the whole swatch and reads as visually centred
+    /// (a lone "●" would sit in one half of an even-width cell); a one-cell swatch
+    /// falls back to ●/○. Bold marks keyboard focus.
     private func cellText(
         _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool, isFocused: Bool
     ) -> String {
-        if isCursor {
-            let bullet = isFocused ? "●" : "○"
-            let left = (cellWidth - 1) / 2
-            let glyph = String(repeating: " ", count: left) + bullet
-                + String(repeating: " ", count: max(0, cellWidth - 1 - left))
-            return ANSIRenderer.colorize(
-                glyph, foreground: Self.contrast(for: color, palette: palette), background: color)
+        guard isCursor else {
+            return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
         }
-        return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
+        let marker = cellWidth >= 2 ? "◖◗" : (isFocused ? "●" : "○")
+        return ANSIRenderer.colorize(
+            Self.centred(marker, in: cellWidth),
+            foreground: Self.contrast(for: color, palette: palette),
+            background: color, bold: isFocused)
+    }
+
+    /// Centres `text` within `width` cells (a trailing-biased split for odd gaps).
+    static func centred(_ text: String, in width: Int) -> String {
+        let length = text.count
+        guard width > length else { return text }
+        let left = (width - length) / 2
+        return String(repeating: " ", count: left) + text
+            + String(repeating: " ", count: width - length - left)
     }
 
     /// Black or white, whichever reads better on `color`.

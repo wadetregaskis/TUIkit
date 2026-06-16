@@ -268,35 +268,49 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
     // MARK: Strip rendering
 
+    /// Per-tab visible width (cells), excluding inter-tab separators. Compact
+    /// tabs carry two extra cells for the ◢ ◣ edge caps.
+    private func tabWidth(_ index: Int, style: TabViewStyle) -> Int {
+        let body = tabs[index].title.count + 2   // " title "
+        return style == .compact ? body + 2 : body
+    }
+
+    /// Cells between adjacent tabs on a row (bordered uses a │; compact's caps
+    /// abut, so none).
+    private func tabSeparatorWidth(style: TabViewStyle) -> Int {
+        style == .bordered ? 1 : 0
+    }
+
     /// The visible width the strip occupies on a single row.
     private func stripVisibleWidth(style: TabViewStyle) -> Int {
-        let body = tabs.reduce(0) { $0 + " \($1.title) ".count }
-        let separators = max(0, tabs.count - 1)
-        return style == .bordered ? body + separators + 1 : body + separators
+        let body = tabs.indices.reduce(0) { $0 + tabWidth($1, style: style) }
+        let separators = max(0, tabs.count - 1) * tabSeparatorWidth(style: style)
+        return body + separators + (style == .bordered ? 1 : 0)  // bordered: leading │
     }
 
     /// Groups tab indices into rows that each fit within `available`. Wraps only
     /// when the single-row strip would overflow, then balances the tabs across
     /// the fewest rows so no row hogs the full width — with few tabs (the common
     /// case) this stays one row. A single tab is never split.
-    private func stripRowGroups(available: Int) -> [[Int]] {
-        let widths = tabs.map { " \($0.title) ".count }
-        let total = widths.reduce(0, +) + max(0, tabs.count - 1)
+    private func stripRowGroups(style: TabViewStyle, available: Int) -> [[Int]] {
+        let widths = tabs.indices.map { tabWidth($0, style: style) }
+        let sep = tabSeparatorWidth(style: style)
+        let total = stripVisibleWidth(style: style)
         let avail = max(1, available)
         let rowCount = max(1, (total + avail - 1) / avail)   // ceil(total / avail)
         let target = (total + rowCount - 1) / rowCount       // balance across rows
-        let cap = max(target, widths.max() ?? target)
+        let cap = max(target, (widths.max() ?? target) + sep)
         var rows: [[Int]] = []
         var current: [Int] = []
         var width = 0
         for i in tabs.indices {
-            let addend = (current.isEmpty ? 0 : 1) + widths[i]
+            let addend = (current.isEmpty ? 0 : sep) + widths[i]
             if !current.isEmpty && width + addend > cap {
                 rows.append(current)
                 current = []
                 width = 0
             }
-            width += (current.isEmpty ? 0 : 1) + widths[i]
+            width += (current.isEmpty ? 0 : sep) + widths[i]
             current.append(i)
         }
         if !current.isEmpty { rows.append(current) }
@@ -305,14 +319,15 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
     /// The rows + rule the strip occupies for the given available width.
     private func stripRowCount(style: TabViewStyle, available: Int) -> Int {
-        stripRowGroups(available: available).count + (style == .bordered ? 1 : 0)
+        stripRowGroups(style: style, available: available).count + (style == .bordered ? 1 : 0)
     }
 
     /// The widest laid-out row, for sizing the panel to the wrapped strip.
     private func stripWrappedWidth(style: TabViewStyle, available: Int) -> Int {
-        stripRowGroups(available: available).map { row in
-            row.reduce(0) { $0 + " \(tabs[$1].title) ".count }
-                + max(0, row.count - 1) + (style == .bordered ? 2 : 0)
+        let sep = tabSeparatorWidth(style: style)
+        return stripRowGroups(style: style, available: available).map { row in
+            row.reduce(0) { $0 + tabWidth($1, style: style) }
+                + max(0, row.count - 1) * sep + (style == .bordered ? 1 : 0)
         }.max() ?? 0
     }
 
@@ -321,12 +336,12 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
         let accent = palette.accent.resolve(with: palette)
-        let activeBg =
-            isFocused ? accent : accent.opacity(ViewConstants.focusBorderDim)
-        let activeFg = Self.contrastingForeground(for: accent, palette: palette)
-        let separator = style == .bordered ? "│" : " "
+        let activeBg = isFocused ? accent : accent.opacity(ViewConstants.focusBorderDim)
+        let inactiveBg = palette.border.resolve(with: palette)
+        let activeFg = Self.contrastingForeground(for: activeBg, palette: palette)
+        let inactiveFg = Self.contrastingForeground(for: inactiveBg, palette: palette)
 
-        let groups = stripRowGroups(available: context.availableWidth)
+        let groups = stripRowGroups(style: style, available: context.availableWidth)
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
         var maxWidth = 0
@@ -335,16 +350,30 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             var line = style == .bordered ? ANSIRenderer.colorize("│", foreground: palette.border) : ""
             var x = style == .bordered ? 1 : 0
             for (j, i) in row.enumerated() {
-                let label = " \(tabs[i].title) "
-                let seg = (i == selectedIndex)
-                    ? ANSIRenderer.colorize(label, foreground: activeFg, background: activeBg, bold: true)
-                    : ANSIRenderer.colorize(label, foreground: palette.foregroundSecondary)
-                regions.append((x: x, y: y, width: label.strippedLength, index: i))
-                line += seg
-                x += label.strippedLength
-                if j < row.count - 1 || style == .bordered {
-                    line += ANSIRenderer.colorize(separator, foreground: palette.border)
-                    x += 1
+                let active = i == selectedIndex
+                let body = " \(tabs[i].title) "
+                if style == .compact {
+                    // A coloured chip: active and inactive tabs use distinct
+                    // backgrounds; the ◢ ◣ caps (drawn in the chip's colour over
+                    // the surrounding default) give each chip a slanted edge.
+                    let chip = active ? activeBg : inactiveBg
+                    let chipFg = active ? activeFg : inactiveFg
+                    line += ANSIRenderer.colorize("◢", foreground: chip)
+                    line += ANSIRenderer.colorize(body, foreground: chipFg, background: chip, bold: active)
+                    line += ANSIRenderer.colorize("◣", foreground: chip)
+                    regions.append((x: x, y: y, width: body.count + 2, index: i))
+                    x += body.count + 2
+                } else {
+                    let seg = active
+                        ? ANSIRenderer.colorize(body, foreground: activeFg, background: activeBg, bold: true)
+                        : ANSIRenderer.colorize(body, foreground: palette.foregroundSecondary)
+                    regions.append((x: x, y: y, width: body.count, index: i))
+                    line += seg
+                    x += body.count
+                    if j < row.count - 1 || style == .bordered {
+                        line += ANSIRenderer.colorize("│", foreground: palette.border)
+                        x += 1
+                    }
                 }
             }
             maxWidth = max(maxWidth, x)

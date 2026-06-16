@@ -73,6 +73,17 @@ struct ColorPickerRenderTests {
                 "one slider row per RGB channel")
     }
 
+    @Test("ColorPickerPanel shows a large (10×5) preview swatch of the current colour")
+    func panelLargePreview() {
+        let lines = renderToBuffer(
+            ColorPickerPanel("C", selection: .constant(.rgb(205, 100, 50)), isPresented: .constant(true)),
+            context: makeRenderContext(width: 64, height: 40)
+        ).lines.map { $0.stripped }
+        // The swatch is ten full blocks wide, repeated over five rows.
+        let swatchRows = lines.filter { $0.contains("██████████") }
+        #expect(swatchRows.count >= 5, "preview swatch is at least five rows tall: \(swatchRows.count)")
+    }
+
     @Test("ColorPickerPanel's channel read-out is an editable text field showing the value")
     func panelChannelEditableField() {
         let lines = renderToBuffer(

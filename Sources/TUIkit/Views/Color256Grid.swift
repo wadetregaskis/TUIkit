@@ -191,9 +191,10 @@ struct _Color256GridCore: View, Renderable {
 
     private typealias StateIndex = Color256GridStateIndex
 
-    /// The cell width for the current mode: a 1-cell colour block, or 3 cells
-    /// wide so a palette index (up to three digits) fits.
-    private var cellWidth: Int { showNumbers ? 3 : 1 }
+    /// The cell width for the current mode: a 1-cell colour block, or 5 cells
+    /// wide with numbers — wide enough that a three-digit index sits centred
+    /// with at least a space either side, so adjacent numbers never run together.
+    private var cellWidth: Int { showNumbers ? 5 : 1 }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = !context.environment.isEnabled
@@ -313,19 +314,18 @@ struct _Color256GridCore: View, Renderable {
                 centred(bullet, in: cellWidth), foreground: foreground, background: color)
         }
         if showNumbers {
-            let label = String(index)
-            let padded = String(repeating: " ", count: max(0, cellWidth - label.count)) + label
-            return ANSIRenderer.colorize(padded, foreground: foreground, background: color)
+            return ANSIRenderer.colorize(centred(String(index), in: cellWidth), foreground: foreground, background: color)
         }
         return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
     }
 
-    /// Centres a one-column glyph within `width` cells.
-    private static func centred(_ glyph: String, in width: Int) -> String {
-        guard width > 1 else { return glyph }
-        let left = (width - 1) / 2
-        return String(repeating: " ", count: left) + glyph
-            + String(repeating: " ", count: width - 1 - left)
+    /// Centres `text` within `width` cells (a trailing-biased split for odd gaps).
+    private static func centred(_ text: String, in width: Int) -> String {
+        let length = text.count
+        guard width > length else { return text }
+        let left = (width - length) / 2
+        return String(repeating: " ", count: left) + text
+            + String(repeating: " ", count: width - length - left)
     }
 
     /// Black or white, whichever reads better on palette colour `index`.

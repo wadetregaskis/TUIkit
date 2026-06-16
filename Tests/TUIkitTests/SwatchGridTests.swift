@@ -88,7 +88,9 @@ struct SwatchGridRenderTests {
             context: makeRenderContext(width: 40, height: 12))
         let joined = buffer.lines.joined()
         #expect(joined.contains("48;5;") || joined.contains("48;2;"), "swatches carry a background colour")
-        #expect(joined.contains("●") || joined.contains("○"), "the cursor cell shows a bullet")
+        // Two-cell swatches mark the cursor with the half-circle pair "◖◗", which
+        // joins into a single disc spanning both cells.
+        #expect(joined.contains("◖◗"), "the cursor cell shows a two-cell bullet")
         // 16 entries / 8 columns → 2 rows.
         #expect(buffer.lines.count == 2, "laid out in 2 rows of 8")
     }

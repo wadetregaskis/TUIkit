@@ -138,8 +138,13 @@ public struct ColorPickerPanel: View {
     /// concrete value rather than blanks.
     private var previewRow: some View {
         let components = selection.wrappedValue.resolve(with: palette).rgbComponents
-        return HStack(spacing: 1) {
-            Text("█████").foregroundStyle(selection.wrappedValue)
+        return HStack(alignment: .center, spacing: 2) {
+            // A large solid block of the current colour (10 wide × 5 tall).
+            VStack(spacing: 0) {
+                ForEach(0..<5, id: \.self) { _ in
+                    Text(String(repeating: "█", count: 10)).foregroundStyle(selection.wrappedValue)
+                }
+            }
             VStack(alignment: .leading, spacing: 0) {
                 Text(Self.hexString(components)).foregroundStyle(.palette.foreground)
                 Text(Self.rgbString(components)).foregroundStyle(.palette.foregroundTertiary)
