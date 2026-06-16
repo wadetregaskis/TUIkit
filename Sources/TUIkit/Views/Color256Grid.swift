@@ -310,10 +310,11 @@ struct _Color256GridCore: View, Renderable {
         let color = Color.palette(UInt8(index))
         let foreground = contrast(forIndex: index)
         if isCursor {
-            // A two-cell swatch centres the cursor with the half-block pair "▐▌",
-            // which abut into one contiguous bar (a lone ● can't centre in an even
+            // A two-cell swatch centres the cursor with the quadrant pair "▗▖" —
+            // a svelte block on the lower edge that marks the cell without
+            // covering much of its colour (a lone ● can't centre in an even
             // width); a one-cell swatch falls back to ●/○.
-            let marker = cellWidth >= 2 ? "▐▌" : (isFocused ? "●" : "○")
+            let marker = cellWidth >= 2 ? "▗▖" : (isFocused ? "●" : "○")
             return ANSIRenderer.colorize(
                 centred(marker, in: cellWidth), foreground: foreground, background: color, bold: isFocused)
         }

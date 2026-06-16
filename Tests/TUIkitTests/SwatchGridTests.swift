@@ -88,9 +88,9 @@ struct SwatchGridRenderTests {
             context: makeRenderContext(width: 40, height: 12))
         let joined = buffer.lines.joined()
         #expect(joined.contains("48;5;") || joined.contains("48;2;"), "swatches carry a background colour")
-        // Two-cell swatches mark the cursor with the half-block pair "▐▌", which
+        // Two-cell swatches mark the cursor with the quadrant pair "▗▖", which
         // abut into one contiguous bar centred on the swatch.
-        #expect(joined.contains("▐▌"), "the cursor cell shows a two-cell marker")
+        #expect(joined.contains("▗▖"), "the cursor cell shows a two-cell marker")
         // 16 entries / 8 columns → 2 rows.
         #expect(buffer.lines.count == 2, "laid out in 2 rows of 8")
     }
@@ -118,6 +118,21 @@ struct SwatchGridRenderTests {
         _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
         #expect(box.color == entries[11], "the clicked swatch is selected, got \(box.color)")
+    }
+
+    @Test("exactMatchOnly hides the marker unless the colour is one of the swatches (#8)")
+    func exactMatchOnlyMarker() {
+        func markerShown(for color: Color) -> Bool {
+            renderToBuffer(
+                _SwatchGridCore(entries: entries, columns: 8, selection: .constant(color),
+                                exactMatchOnly: true, focusID: "sg-exact"),
+                context: makeRenderContext(width: 40, height: 12)
+            ).lines.joined().contains("▗▖")
+        }
+        // A colour that is one of the swatches → marker shown on it.
+        #expect(markerShown(for: entries[5]), "exact match shows the marker")
+        // A colour that is NOT a swatch → no marker (a nearest cell would mislead).
+        #expect(!markerShown(for: .rgb(7, 3, 1)), "no exact match → no marker")
     }
 }
 

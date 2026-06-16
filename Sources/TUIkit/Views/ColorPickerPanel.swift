@@ -114,10 +114,14 @@ public struct ColorPickerPanel: View {
                         _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection)
                     }
                     Tab("Web Safe", value: Mode.webSafe) {
-                        _SwatchGridCore(entries: SwatchPalettes.webSafe, columns: 18, selection: selection)
+                        _SwatchGridCore(
+                            entries: SwatchPalettes.webSafe, columns: 18,
+                            selection: selection, exactMatchOnly: true)
                     }
                     Tab("Crayons", value: Mode.crayons) {
-                        _NamedSwatchGrid(entries: SwatchPalettes.crayons, columns: 8, selection: selection)
+                        _NamedSwatchGrid(
+                            entries: SwatchPalettes.crayons, columns: 8,
+                            selection: selection, exactMatchOnly: true)
                     }
                 }
                 .tabViewStyle(.compact)
@@ -140,12 +144,16 @@ public struct ColorPickerPanel: View {
         let resolved = selection.wrappedValue.resolve(with: palette)
         let components = resolved.rgbComponents
         return HStack(alignment: .center, spacing: 2) {
-            // A large solid block of the current colour (10 wide × 5 tall). Filled
-            // with a background colour over spaces, so the cells are contiguous —
-            // block glyphs (█) leave hairline gaps between rows in some terminals.
+            // A large solid block of the current colour (10 wide × 5 tall). Both
+            // the glyph and the background are the colour: the █ glyphs keep it
+            // visible in terminals that don't paint a background behind spaces,
+            // and the matching background fills any hairline gaps a font leaves
+            // between the block glyphs — so it's solid either way.
             VStack(spacing: 0) {
                 ForEach(0..<5, id: \.self) { _ in
-                    Text(String(repeating: " ", count: 10)).background(resolved)
+                    Text(String(repeating: "█", count: 10))
+                        .foregroundStyle(resolved)
+                        .background(resolved)
                 }
             }
             VStack(alignment: .leading, spacing: 0) {

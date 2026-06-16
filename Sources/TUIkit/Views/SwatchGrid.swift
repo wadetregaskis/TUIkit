@@ -88,6 +88,11 @@ struct _SwatchGridCore: View, Renderable {
     let columns: Int
     let selection: Binding<Color>
     var cellWidth: Int = 2
+    /// When true, the selection marker is drawn only if the bound colour exactly
+    /// matches one of the swatches — never on a merely-nearest cell. For discrete
+    /// palettes (web-safe, crayons) a "nearest" marker would misleadingly imply
+    /// the shown colour is selected when it isn't.
+    var exactMatchOnly: Bool = false
     var focusID: String? = nil
 
     var body: Never { fatalError("_SwatchGridCore renders via Renderable") }
@@ -130,6 +135,13 @@ struct _SwatchGridCore: View, Renderable {
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        // Whether to draw the cursor marker at all. With exactMatchOnly, only
+        // when the bound colour is genuinely one of the swatches (the cursor
+        // still tracks the nearest cell for navigation, just unmarked).
+        let resolvedSelection = selection.wrappedValue.resolve(with: palette)
+        let markerVisible = !exactMatchOnly
+            || entries.contains { $0.resolve(with: palette) == resolvedSelection }
+
         var lines: [String] = []
         for row in 0..<rows {
             var line = ""
@@ -138,7 +150,7 @@ struct _SwatchGridCore: View, Renderable {
                 guard index < entries.count else { break }
                 line += cellText(
                     entries[index], cellWidth: cellWidth, palette: palette,
-                    isCursor: index == handler.cursor, isFocused: isFocused)
+                    isCursor: markerVisible && index == handler.cursor, isFocused: isFocused)
             }
             lines.append(line)
         }
@@ -172,17 +184,17 @@ struct _SwatchGridCore: View, Renderable {
     }
 
     /// One swatch: the colour as a background, with a contrasting cursor marker.
-    /// A two-or-more-cell swatch uses the half-block pair "▐▌", which abut into
-    /// one contiguous bar centred on the swatch (a lone "●" would sit in one half
-    /// of an even-width cell, and the half-circles ◖◗ render as two separated
-    /// pieces); a one-cell swatch falls back to ●/○. Bold marks keyboard focus.
+    /// A two-or-more-cell swatch uses the quadrant pair "▗▖", which abut into one
+    /// small block centred on the swatch's lower edge — svelte, so it marks the
+    /// cell without covering much of its colour (the full-height "▐▌" bar was too
+    /// heavy); a one-cell swatch falls back to ●/○. Bold marks keyboard focus.
     private func cellText(
         _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool, isFocused: Bool
     ) -> String {
         guard isCursor else {
             return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
         }
-        let marker = cellWidth >= 2 ? "▐▌" : (isFocused ? "●" : "○")
+        let marker = cellWidth >= 2 ? "▗▖" : (isFocused ? "●" : "○")
         return ANSIRenderer.colorize(
             Self.centred(marker, in: cellWidth),
             foreground: Self.contrast(for: color, palette: palette),
@@ -251,17 +263,27 @@ struct _NamedSwatchGrid: View {
     let entries: [(name: String, color: Color)]
     let columns: Int
     let selection: Binding<Color>
+    /// Forwarded to the grid; also gates the name read-out, so a discrete palette
+    /// (e.g. crayons) shows no name unless the colour exactly matches a swatch.
+    var exactMatchOnly: Bool = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .center, spacing: 0) {
-            _SwatchGridCore(entries: entries.map(\.color), columns: columns, selection: selection)
+            _SwatchGridCore(
+                entries: entries.map(\.color), columns: columns,
+                selection: selection, exactMatchOnly: exactMatchOnly)
             Text(currentName).foregroundStyle(.palette.foregroundSecondary)
         }
     }
 
     private var currentName: String {
         let colors = entries.map(\.color)
+        let resolved = selection.wrappedValue.resolve(with: palette)
+        if exactMatchOnly {
+            // Only name a swatch the colour genuinely is — no nearest fallback.
+            return entries.first { $0.color.resolve(with: palette) == resolved }?.name ?? ""
+        }
         let index = _SwatchGridCore.nearestIndex(of: selection.wrappedValue, in: colors, palette: palette)
         return entries.indices.contains(index) ? entries[index].name : ""
     }
