@@ -73,6 +73,19 @@ struct ColorPickerRenderTests {
                 "one slider row per RGB channel")
     }
 
+    @Test("ColorPickerPanel's channel read-out is an editable text field showing the value")
+    func panelChannelEditableField() {
+        let lines = renderToBuffer(
+            ColorPickerPanel("Pick", selection: .constant(.rgb(205, 100, 50)), isPresented: .constant(true)),
+            context: makeRenderContext(width: 60, height: 30)
+        ).lines.map { $0.stripped }
+        let rRow = lines.first { $0.contains("R ◀") } ?? ""
+        // The current red value is shown…
+        #expect(rRow.contains("205"), "the red channel value is shown: \(rRow)")
+        // …inside a TextField, which draws end caps the static read-out never did.
+        #expect(rRow.contains("▐") && rRow.contains("▌"), "the value sits in an editable field: \(rRow)")
+    }
+
     @Test("ColorPickerPanel renders inside a bordered dialog")
     func panelHasBorder() {
         let lines = renderToBuffer(

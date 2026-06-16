@@ -93,6 +93,18 @@ struct ColorPickerPanelChannelTests {
         #expect(Panel.hexString(nil) == "#------")
         #expect(Panel.rgbString(nil).contains("—"))
     }
+
+    // MARK: Editable channel read-out
+
+    @Test("A typed/pasted channel value keeps the digits and clamps to range")
+    func channelTextParsing() {
+        #expect(Panel.channelValue(parsing: "255", into: 0...255) == 255)
+        #expect(Panel.channelValue(parsing: "999", into: 0...255) == 255)  // over → clamp
+        #expect(Panel.channelValue(parsing: "", into: 0...255) == 0)        // empty → lower
+        #expect(Panel.channelValue(parsing: " 42 ", into: 0...100) == 42)   // trims non-digits
+        #expect(Panel.channelValue(parsing: "abc", into: 0...360) == 0)     // no digits → lower
+        #expect(Panel.channelValue(parsing: "1x2x3", into: 0...360) == 123) // digits only
+    }
 }
 
 @MainActor

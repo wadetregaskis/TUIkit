@@ -207,11 +207,32 @@ public struct ColorPickerPanel: View {
             Text(label)
                 .frame(width: 2, alignment: .trailing)
                 .foregroundStyle(.palette.foregroundTertiary)
-            Slider(value: binding, in: range, step: 1).frame(width: 26)
-            Text(String(format: "%4.0f", binding.wrappedValue))
-                .frame(width: 4, alignment: .trailing)
-                .foregroundStyle(.palette.foregroundSecondary)
+            Slider(value: binding, in: range, step: 1).frame(width: 22)
+            // Editable read-out: type or paste an exact value. Parsed and
+            // clamped to the channel's range on every edit; kept in sync with
+            // the slider (both drive the same binding). A fixed width keeps the
+            // panel sized-to-fit (a width-flexible field would regrow with the
+            // available width); 12 is the field's natural minimum, so both end
+            // caps render and there's room to type/select.
+            TextField("", text: channelText(binding, in: range)).frame(width: 12)
         }
+    }
+
+    /// A `String` binding over a numeric channel: shows the integer value, and
+    /// on edit parses the digits and clamps to `range`. Lets the read-out be
+    /// typed or pasted into while staying in sync with the slider.
+    private func channelText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
+        Binding(
+            get: { String(Int(value.wrappedValue.rounded())) },
+            set: { value.wrappedValue = Self.channelValue(parsing: $0, into: range) })
+    }
+
+    /// Parses a typed/pasted channel value: keeps the digits, clamps to `range`
+    /// (empty → the lower bound; out-of-range → the nearer bound). Pure; tested.
+    static func channelValue(parsing text: String, into range: ClosedRange<Double>) -> Double {
+        let digits = text.filter(\.isNumber)
+        let parsed = digits.isEmpty ? range.lowerBound : (Double(digits) ?? range.upperBound)
+        return max(range.lowerBound, min(range.upperBound, parsed))
     }
 
     // MARK: - Channel bindings
