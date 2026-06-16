@@ -147,3 +147,74 @@ struct ColorPickerGreyscaleTabTests {
         #expect(text.contains("Greyscale"))
     }
 }
+
+@MainActor
+@Suite("ColorPickerPanel — curated palettes (#9, #10)")
+struct CuratedPaletteTests {
+
+    @Test("Web-safe is the 216-colour palette: only the six standard channel levels")
+    func webSafe() {
+        let web = SwatchPalettes.webSafe
+        #expect(web.count == 216)
+        let levels: Set<UInt8> = [0, 51, 102, 153, 204, 255]
+        #expect(web.allSatisfy { c in
+            let rgb = c.rgbComponents!
+            return levels.contains(rgb.red) && levels.contains(rgb.green) && levels.contains(rgb.blue)
+        }, "every channel is one of 00/33/66/99/CC/FF")
+        // Every combination appears exactly once.
+        #expect(Set(web.map { $0.rgbComponents.map { [$0.red, $0.green, $0.blue] } ?? [] }).count == 216)
+    }
+
+    @Test("CSS named colours are the 148 keywords, synonyms collapsed")
+    func cssNamed() {
+        let named = SwatchPalettes.cssNamed
+        // 148 keywords minus 9 same-value synonyms (gray/grey ×7, aqua/cyan, fuchsia/magenta).
+        #expect(named.count == 139)
+        let byName = Dictionary(uniqueKeysWithValues: named.map { ($0.name, $0.color) })
+        #expect(byName["tomato"] == .hex(0xFF6347), "factually correct value for a known colour")
+        #expect(byName["rebeccapurple"] == .hex(0x663399), "CSS Color 4 addition is present")
+        // No two entries share a colour value (synonyms were collapsed).
+        let values = named.map { c in c.color.rgbComponents.map { [$0.red, $0.green, $0.blue] } ?? [] }
+        #expect(Set(values).count == named.count)
+    }
+
+    @Test("Crayons match Apple's selector: 48 colours, Sea Foam not Mandarin, exact values")
+    func crayons() {
+        let crayons = SwatchPalettes.crayons
+        #expect(crayons.count == 48)
+        let byName = Dictionary(uniqueKeysWithValues: crayons.map { ($0.name, $0.color) })
+        #expect(byName["Sea Foam"] != nil, "Apple's set has Sea Foam")
+        #expect(byName["Mandarin"] == nil, "…and not Mandarin (a common mis-transcription)")
+        // Spot-check the corroborated values.
+        #expect(byName["Maraschino"] == .hex(0xFF0000))
+        #expect(byName["Cantaloupe"] == .hex(0xFFCC66))
+        #expect(byName["Licorice"] == .hex(0x000000))
+        #expect(byName["Snow"] == .hex(0xFFFFFF))
+        // The 8×6 grid puts Maraschino at the start of the fourth row (index 24).
+        #expect(crayons[24].name == "Maraschino")
+    }
+
+    @Test("Named and Crayons tabs show the focused swatch's name")
+    func namedGridShowsName() {
+        // Selecting tomato should surface its name beneath the grid.
+        let view = _NamedSwatchGrid(
+            entries: SwatchPalettes.cssNamed, columns: 18, selection: .constant(.hex(0xFF6347)))
+        let text = renderToBuffer(view, context: makeRenderContext(width: 50, height: 16))
+            .lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(text.contains("tomato"), "the matched colour's name is shown: \(text)")
+    }
+
+    @Test("All four curated tabs are present and channelless in the panel")
+    func tabsPresent() {
+        for mode in [ColorPickerPanel.Mode.greyscale, .named, .webSafe, .crayons] {
+            #expect(mode.channels.isEmpty, "\(mode) is a swatch tab, not a channel editor")
+        }
+        let view = ColorPickerPanel(
+            "C", selection: .constant(.rgb(10, 20, 30)), isPresented: .constant(true))
+        let text = renderToBuffer(view, context: makeRenderContext(width: 90, height: 40))
+            .lines.map { $0.stripped }.joined(separator: " ")
+        for label in ["Greyscale", "Named", "Web Safe", "Crayons"] {
+            #expect(text.contains(label), "tab \(label) present in the wrapped strip")
+        }
+    }
+}

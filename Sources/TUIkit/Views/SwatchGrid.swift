@@ -229,3 +229,29 @@ extension _SwatchGridCore: Layoutable {
             isHeightFlexible: false)
     }
 }
+
+// MARK: - Named swatch grid
+
+/// A swatch grid plus a read-out of the focused swatch's name — for palettes
+/// whose colours have names (CSS named colours, macOS crayons). The name tracks
+/// the swatch nearest the bound colour, which is exactly where the grid's cursor
+/// sits, so navigating updates the grid and the read-out together.
+struct _NamedSwatchGrid: View {
+    let entries: [(name: String, color: Color)]
+    let columns: Int
+    let selection: Binding<Color>
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 0) {
+            _SwatchGridCore(entries: entries.map(\.color), columns: columns, selection: selection)
+            Text(currentName).foregroundStyle(.palette.foregroundSecondary)
+        }
+    }
+
+    private var currentName: String {
+        let colors = entries.map(\.color)
+        let index = _SwatchGridCore.nearestIndex(of: selection.wrappedValue, in: colors, palette: palette)
+        return entries.indices.contains(index) ? entries[index].name : ""
+    }
+}

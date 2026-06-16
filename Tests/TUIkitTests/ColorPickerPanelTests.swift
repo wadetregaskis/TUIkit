@@ -530,9 +530,13 @@ struct ColorPickerPanelLayoutTests {
 
     @Test("The panel sizes to its content, not the full available width")
     func sizesToFit() {
-        let narrow = width(at: 80)
-        #expect(narrow < 80, "panel should not fill the width, got \(narrow)")
-        // And it does not grow with extra available width — it fits its content.
-        #expect(width(at: 120) == narrow, "panel width must not depend on available width")
+        // On a narrow screen it fits within it — the (now ten-tab) strip wraps
+        // across rows rather than overflowing.
+        #expect(width(at: 80) < 80, "panel fits a narrow screen, got \(width(at: 80))")
+        // On a very wide screen it does NOT grow to fill the width: it caps at
+        // its natural single-row width and leaves the rest of the screen empty.
+        let wide = width(at: 200)
+        #expect(wide < 120, "panel does not fill a wide screen, got \(wide)")
+        #expect(width(at: 300) == wide, "width caps at content, independent of extra available width")
     }
 }

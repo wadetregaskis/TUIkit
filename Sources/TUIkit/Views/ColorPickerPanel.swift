@@ -59,6 +59,9 @@ public struct ColorPickerPanel: View {
         case semantic = "Semantic"
         case palette256 = "256"
         case greyscale = "Greyscale"
+        case named = "Named"
+        case webSafe = "Web Safe"
+        case crayons = "Crayons"
 
         /// The channels of this colour model: a one-letter label and the
         /// slider's upper bound (the lower bound is always 0). Empty for tabs
@@ -69,7 +72,7 @@ public struct ColorPickerPanel: View {
             case .hsl: [("H", 360), ("S", 100), ("L", 100)]
             case .hsb: [("H", 360), ("S", 100), ("B", 100)]
             case .cmyk: [("C", 100), ("M", 100), ("Y", 100), ("K", 100)]
-            case .semantic, .palette256, .greyscale: []
+            case .semantic, .palette256, .greyscale, .named, .webSafe, .crayons: []
             }
         }
     }
@@ -106,6 +109,15 @@ public struct ColorPickerPanel: View {
                     Tab("256 (Xterm)", value: Mode.palette256) { _Palette256Editor(selection: selection) }
                     Tab("Greyscale", value: Mode.greyscale) {
                         _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection)
+                    }
+                    Tab("Named", value: Mode.named) {
+                        _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection)
+                    }
+                    Tab("Web Safe", value: Mode.webSafe) {
+                        _SwatchGridCore(entries: SwatchPalettes.webSafe, columns: 18, selection: selection)
+                    }
+                    Tab("Crayons", value: Mode.crayons) {
+                        _NamedSwatchGrid(entries: SwatchPalettes.crayons, columns: 8, selection: selection)
                     }
                 }
                 .tabViewStyle(.compact)
@@ -220,7 +232,7 @@ public struct ColorPickerPanel: View {
         case .cmyk:
             let k = Color.rgbToCMYK(red: c.red, green: c.green, blue: c.blue)
             return [k.cyan, k.magenta, k.yellow, k.black][index]
-        case .semantic, .palette256, .greyscale:
+        case .semantic, .palette256, .greyscale, .named, .webSafe, .crayons:
             return 0  // no numeric channels; these tabs edit selection directly
         }
     }
@@ -244,7 +256,7 @@ public struct ColorPickerPanel: View {
             return .hsb(at(0), at(1), at(2))
         case .cmyk:
             return .cmyk(at(0), at(1), at(2), at(3))
-        case .semantic, .palette256, .greyscale:
+        case .semantic, .palette256, .greyscale, .named, .webSafe, .crayons:
             return .rgb(0, 0, 0)  // channelless tabs edit selection directly; unreachable here
         }
     }
