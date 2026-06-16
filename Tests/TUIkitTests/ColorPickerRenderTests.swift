@@ -53,8 +53,9 @@ struct ColorPickerRenderTests {
         let out = joined(
             ColorPickerPanel("Theme Colour", selection: .constant(.red), isPresented: .constant(true)))
         #expect(out.contains("Theme Colour"), "dialog title: \(out)")
-        // The active model tab is bracketed; the rest are present too — all six.
-        #expect(out.contains("[RGB]"), "active RGB tab is bracketed: \(out)")
+        // All six model tabs are present in the TabView strip (the active one is
+        // highlighted by background colour, not brackets).
+        #expect(out.contains("RGB"), "RGB tab: \(out)")
         #expect(out.contains("HSL") && out.contains("HSB") && out.contains("CMYK"))
         #expect(out.contains("Semantic") && out.contains("256"), "the semantic + 256-grid tabs")
         // Preview read-outs: hex and rgb(...) for the current colour.

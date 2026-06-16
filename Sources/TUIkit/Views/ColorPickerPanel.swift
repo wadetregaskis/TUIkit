@@ -93,8 +93,18 @@ public struct ColorPickerPanel: View {
         Dialog(title: title, titleColor: .palette.accent) {
             VStack(alignment: .leading, spacing: 1) {
                 previewRow
-                tabStrip
-                editor
+                // A TabView gives each model's editor its own identity, so a
+                // slider's state can't leak across tabs (e.g. RGB's 0…255 bounds
+                // vs HSL's 0…100). The compact style keeps the strip to one row.
+                TabView(selection: $mode) {
+                    Tab("RGB", value: Mode.rgb) { channelEditor(.rgb) }
+                    Tab("HSL", value: Mode.hsl) { channelEditor(.hsl) }
+                    Tab("HSB", value: Mode.hsb) { channelEditor(.hsb) }
+                    Tab("CMYK", value: Mode.cmyk) { channelEditor(.cmyk) }
+                    Tab("Semantic", value: Mode.semantic) { semanticEditor }
+                    Tab("256 (Xterm)", value: Mode.palette256) { _Color256GridCore(selection: selection) }
+                }
+                .tabViewStyle(.compact)
             }
         } footer: {
             // No leading Spacer: a Spacer is width-flexible, which would make the
@@ -121,42 +131,15 @@ public struct ColorPickerPanel: View {
         }
     }
 
-    // MARK: Tabs
-
-    /// The row of model tabs; the active one is the primary button style.
-    private var tabStrip: some View {
-        HStack(spacing: 1) {
-            ForEach(Mode.allCases, id: \.self) { tab in
-                tabButton(tab)
-            }
-        }
-    }
-
-    /// A compact, constant-width tab: the active one is bracketed `[RGB]`, the
-    /// rest padded ` RGB ` so switching tabs doesn't reflow the strip. Plain
-    /// style keeps six tabs within a sensibly sized dialog.
-    @ViewBuilder
-    private func tabButton(_ tab: Mode) -> some View {
-        if tab == mode {
-            Button("[\(tab.rawValue)]") { mode = tab }.buttonStyle(.plain).bold()
-        } else {
-            Button(" \(tab.rawValue) ") { mode = tab }.buttonStyle(.plain)
-        }
-    }
-
     // MARK: Channel editor
 
+    /// The sliders for one colour model's channels. Each tab renders its own,
+    /// under the TabView's per-tab identity, so their slider state is isolated.
     @ViewBuilder
-    private var editor: some View {
-        if mode == .semantic {
-            semanticEditor
-        } else if mode == .palette256 {
-            _Color256GridCore(selection: selection)
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
-                    channel(spec.label, channelBinding(index), 0...spec.upperBound)
-                }
+    private func channelEditor(_ mode: Mode) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
+                channel(spec.label, channelBinding(index, mode: mode), 0...spec.upperBound)
             }
         }
     }
@@ -239,11 +222,10 @@ public struct ColorPickerPanel: View {
     // ``ColorPicker``. A consequence of the round-trip: on a fully desaturated
     // colour HSL/HSB hue has no visible effect until saturation is raised.
 
-    /// A `Double` binding onto channel `index` of the current `mode`, reading
-    /// from and writing through ``selection`` via the pure helpers below.
-    private func channelBinding(_ index: Int) -> Binding<Double> {
-        let mode = self.mode
-        return Binding(
+    /// A `Double` binding onto channel `index` of `mode`, reading from and
+    /// writing through ``selection`` via the pure helpers below.
+    private func channelBinding(_ index: Int, mode: Mode) -> Binding<Double> {
+        Binding(
             get: { Self.channelValue(of: selection.wrappedValue, mode: mode, index: index) },
             set: { selection.wrappedValue = Self.color(bySetting: $0, at: index, mode: mode, of: selection.wrappedValue) })
     }

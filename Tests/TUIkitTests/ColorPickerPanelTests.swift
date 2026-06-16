@@ -248,16 +248,42 @@ struct ColorPickerPanelCrashSafetyTests {
             renderToBuffer(panel, context: ctx).lines.map { $0.stripped }.joined(separator: "\n")
         }
 
-        // First render auto-focuses the first tab ("[RGB]"). Tab → the HSL tab;
-        // Enter activates it, flipping the panel's `mode` to .hsl.
+        // First render auto-focuses the TabView strip (on the RGB tab). A Right
+        // arrow moves the selection to the next tab (HSL), flipping `mode`.
         _ = render()
-        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))
-        _ = fm.dispatchKeyEvent(KeyEvent(key: .enter))
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))
         let out = render()
 
-        #expect(out.contains("[HSL]"), "HSL is now the active (bracketed) tab: \(out)")
+        #expect(out.contains("HSL"), "HSL tab present: \(out)")
         #expect(out.contains("H ") && out.contains("S ") && out.contains("L "),
                 "the HSL channel rows are shown")
+    }
+
+    @Test("Switching RGB → HSL → RGB does not corrupt the colour (no slider-state leak across tabs)")
+    func tabRoundTripPreservesColour() {
+        // The reported Bug B: after viewing HSL on white, returning to RGB changed
+        // the colour (e.g. to #646464) and the RGB sliders were stuck at 0…100 —
+        // the HSL channels' state leaking onto the RGB sliders. Each tab now has
+        // isolated identity, so the round-trip is lossless.
+        let box = Box(.rgb(255, 255, 255))  // white
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
+        func render() -> String {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            let ctx = RenderContext(
+                availableWidth: 64, availableHeight: 30, environment: env, tuiContext: tui)
+            return renderToBuffer(panel, context: ctx).lines.map { $0.stripped }.joined(separator: "\n")
+        }
+        _ = render()                                       // RGB tab, strip auto-focused
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right))     // → HSL
+        let hsl = render()
+        #expect(hsl.contains("H ") && hsl.contains("L "), "actually switched to HSL: \(hsl)")
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .left))      // → RGB
+        _ = render()
+        #expect(box.color.rgbComponents! == (255, 255, 255),
+                "white survived the round-trip, got \(box.color.rgbComponents!)")
     }
 
     @Test("A long stream of key events through the live panel never traps")
