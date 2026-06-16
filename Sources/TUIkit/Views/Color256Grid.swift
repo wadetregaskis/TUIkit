@@ -48,6 +48,13 @@ final class Color256GridHandler: Focusable {
         selection.wrappedValue = .palette(UInt8(cursor))
     }
 
+    /// Moves the cursor to `index` *without* writing `selection` — used to keep
+    /// the highlighted cell tracking the current colour (which may have been
+    /// set elsewhere, e.g. another tab) until the user actually picks a swatch.
+    func syncCursor(to index: Int) {
+        cursor = max(0, min(255, index))
+    }
+
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         switch event.key {
         case .up: move(by: -Color256GridMetrics.columns); return true
@@ -105,7 +112,7 @@ struct _Color256GridCore: View, Renderable {
             for: handlerKey,
             default: Color256GridHandler(
                 focusID: persistedFocusID,
-                cursor: Self.index(of: selection.wrappedValue) ?? 0,
+                cursor: Self.nearestIndex(of: selection.wrappedValue, palette: context.environment.palette),
                 selection: selection,
                 canBeFocused: !isDisabled
             )
@@ -113,6 +120,13 @@ struct _Color256GridCore: View, Renderable {
         let handler = handlerBox.value
         handler.selection = selection
         handler.canBeFocused = !isDisabled
+        // Keep the highlighted cell on the swatch nearest the current colour
+        // (an exact match when the colour is a palette entry, otherwise the
+        // closest cube/grey cell). This tracks colours set on other tabs and
+        // fixes the cursor defaulting to black when the colour isn't a palette
+        // entry. The grid's own navigation writes `.palette(cursor)`, so this
+        // round-trips to the same cell.
+        handler.syncCursor(to: Self.nearestIndex(of: selection.wrappedValue, palette: context.environment.palette))
 
         if !context.isMeasuring {
             FocusRegistration.register(context: context, handler: handler)
@@ -159,6 +173,18 @@ struct _Color256GridCore: View, Renderable {
     static func index(of color: Color) -> Int? {
         if case .palette256(let n) = color.value { return Int(n) }
         return nil
+    }
+
+    /// The palette index whose swatch best represents `color`: an exact match
+    /// for a palette colour, otherwise the nearest 6×6×6-cube / greyscale cell
+    /// (resolving a semantic colour first). Used to seed/track the cursor so it
+    /// reflects the current colour rather than defaulting to index 0 (black).
+    static func nearestIndex(of color: Color, palette: any Palette) -> Int {
+        if let exact = index(of: color) { return exact }
+        if case .palette256(let n) = color.resolve(with: palette).downsampledToPalette256().value {
+            return Int(n)
+        }
+        return 0
     }
 }
 

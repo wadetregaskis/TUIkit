@@ -73,6 +73,39 @@ struct Color256GridHandlerTests {
             focusID: "g", cursor: _Color256GridCore.index(of: box.color) ?? 0, selection: box.binding)
         #expect(handler.cursor == 123)
     }
+
+    @Test("nearestIndex matches an exact palette colour and approximates others")
+    func nearestIndex() {
+        let palette = SystemPalette(.green)
+        // Exact palette entries map to themselves.
+        #expect(_Color256GridCore.nearestIndex(of: .palette(200), palette: palette) == 200)
+        // Pure colours map to their cube corners (index 16 = black, 231 = white).
+        #expect(_Color256GridCore.nearestIndex(of: .rgb(0, 0, 0), palette: palette) == 16)
+        #expect(_Color256GridCore.nearestIndex(of: .rgb(255, 255, 255), palette: palette) == 231)
+        // A 24-bit colour with no exact entry still resolves to a real index.
+        let approx = _Color256GridCore.nearestIndex(of: .rgb(38, 139, 210), palette: palette)
+        #expect((0...255).contains(approx))
+        // A semantic colour resolves first, then maps (no crash, a real index).
+        let accentIdx = _Color256GridCore.nearestIndex(of: .palette.accent, palette: palette)
+        #expect((0...255).contains(accentIdx))
+    }
+
+    @Test("The grid highlights the nearest cell for a non-palette colour, not black")
+    func gridSeedsNearestNotBlack() {
+        // White is not a 256-palette entry value, but its nearest cell is 231 —
+        // the grid must seed there, not at index 0 (black). (Bug: it always
+        // showed black selected.)
+        let box = ColorBox(.rgb(255, 255, 255))
+        let buffer = renderToBuffer(
+            _Color256GridCore(selection: box.binding, focusID: "grid-seed"),
+            context: makeRenderContext(width: 40, height: 18))
+        // The framed cursor "[]"/"()" must NOT be on the first (black) cell, and
+        // must appear somewhere (white's nearest cube cell, index 231, is row 14).
+        let lines = buffer.lines.map { $0.stripped }
+        func framed(_ s: String) -> Bool { s.contains("[") || s.contains("(") }
+        #expect(!framed(lines[0]), "cursor is NOT on the first (black) cell: \(lines[0])")
+        #expect(lines.contains(where: framed), "cursor is shown on a cell")
+    }
 }
 
 @MainActor
@@ -116,11 +149,13 @@ struct Color256GridFocusTests {
         #expect(focusManager.isFocused(id: "grid-test"), "the grid is focusable")
         #expect(rendered.contains("[]"), "focused cursor frame")
 
-        // Arrow keys route to the grid and write the colour live.
+        // The cursor seeds at black's nearest cube cell (index 16), not 0.
+        // Arrow keys route to the grid and write the colour live: down a row
+        // (+16) → 32, then right (+1) → 33.
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .down)))
-        #expect(box.color == .palette(16))
+        #expect(box.color == .palette(32))
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .right)))
-        #expect(box.color == .palette(17))
+        #expect(box.color == .palette(33))
     }
 }
 
