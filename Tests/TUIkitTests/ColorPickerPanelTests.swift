@@ -37,51 +37,76 @@ struct ColorPickerPanelChannelTests {
         #expect(Panel.channelValue(of: c, mode: .rgb, index: 2) == 30)
     }
 
-    @Test("RGB set rewrites only the chosen channel, clamped")
+    @Test("color(from:) builds RGB straight from the channels, clamped")
     func rgbSet() {
-        let c = Color.rgb(10, 20, 30)
-        #expect(Panel.color(bySetting: 200, at: 1, mode: .rgb, of: c).rgbComponents! == (10, 200, 30))
+        #expect(Panel.color(from: [10, 200, 30], mode: .rgb).rgbComponents! == (10, 200, 30))
         // Clamps above 255 and below 0.
-        #expect(Panel.color(bySetting: 999, at: 0, mode: .rgb, of: c).rgbComponents!.red == 255)
-        #expect(Panel.color(bySetting: -5, at: 2, mode: .rgb, of: c).rgbComponents!.blue == 0)
+        #expect(Panel.color(from: [999, 20, 30], mode: .rgb).rgbComponents!.red == 255)
+        #expect(Panel.color(from: [10, 20, -5], mode: .rgb).rgbComponents!.blue == 0)
+        // A short array reads missing channels as 0 rather than trapping.
+        #expect(Panel.color(from: [10], mode: .rgb).rgbComponents! == (10, 0, 0))
     }
 
     // MARK: HSL / HSB / CMYK (match the colour-space constructor exactly)
 
-    @Test("Setting an HSL channel matches the .hsl constructor with that channel changed")
+    @Test("Building an HSL colour matches the .hsl constructor for the same channels")
     func hslSetMatchesConstructor() {
-        let c = Color.rgb(200, 100, 50)
         let hsl = Color.rgbToHSL(red: 200, green: 100, blue: 50)
         // index 1 = saturation
-        let viaPanel = Panel.color(bySetting: 42, at: 1, mode: .hsl, of: c)
+        let viaPanel = Panel.color(from: [hsl.hue, 42, hsl.lightness], mode: .hsl)
         let viaCtor = Color.hsl(hsl.hue, 42, hsl.lightness)
         #expect(viaPanel.rgbComponents! == viaCtor.rgbComponents!)
     }
 
-    @Test("Setting an HSB channel matches the .hsb constructor")
+    @Test("Building an HSB colour matches the .hsb constructor")
     func hsbSetMatchesConstructor() {
-        let c = Color.rgb(200, 100, 50)
         let hsb = Color.rgbToHSB(red: 200, green: 100, blue: 50)
-        let viaPanel = Panel.color(bySetting: 42, at: 2, mode: .hsb, of: c)  // brightness
+        let viaPanel = Panel.color(from: [hsb.hue, hsb.saturation, 42], mode: .hsb)  // index 2 = brightness
         let viaCtor = Color.hsb(hsb.hue, hsb.saturation, 42)
         #expect(viaPanel.rgbComponents! == viaCtor.rgbComponents!)
     }
 
-    @Test("Setting a CMYK channel matches the .cmyk constructor (4 channels)")
+    @Test("Building a CMYK colour matches the .cmyk constructor (4 channels)")
     func cmykSetMatchesConstructor() {
-        let c = Color.rgb(200, 100, 50)
         let cmyk = Color.rgbToCMYK(red: 200, green: 100, blue: 50)
-        let viaPanel = Panel.color(bySetting: 25, at: 3, mode: .cmyk, of: c)  // black
+        let viaPanel = Panel.color(from: [cmyk.cyan, cmyk.magenta, cmyk.yellow, 25], mode: .cmyk)  // index 3 = black
         let viaCtor = Color.cmyk(cmyk.cyan, cmyk.magenta, cmyk.yellow, 25)
         #expect(viaPanel.rgbComponents! == viaCtor.rgbComponents!)
     }
 
     @Test("Channel indices are not swapped: editing S differs from editing L")
     func channelOrderNotSwapped() {
-        let c = Color.rgb(200, 100, 50)
-        let editS = Panel.color(bySetting: 80, at: 1, mode: .hsl, of: c).rgbComponents!
-        let editL = Panel.color(bySetting: 80, at: 2, mode: .hsl, of: c).rgbComponents!
+        let hsl = Color.rgbToHSL(red: 200, green: 100, blue: 50)
+        let editS = Panel.color(from: [hsl.hue, 80, hsl.lightness], mode: .hsl).rgbComponents!
+        let editL = Panel.color(from: [hsl.hue, hsl.saturation, 80], mode: .hsl).rgbComponents!
         #expect(editS != editL, "setting saturation must not behave like setting lightness")
+    }
+
+    // MARK: Over-determined models keep the values you typed (#3)
+
+    @Test("color(from:) keeps over-determined channels a round-trip would have lost")
+    func overdeterminedChannelsSurvive() {
+        // CMYK with K=100 is black. The old read-modify-write read C/M/Y back
+        // out of that black as zero — so you couldn't hold a non-zero C/M/Y at
+        // K=100. color(from:) builds straight from the channels: the result is
+        // still black, but the supplied C/M/Y are honoured, not forced to zero.
+        #expect(Panel.color(from: [50, 50, 50, 100], mode: .cmyk).rgbComponents! == (0, 0, 0))
+
+        // A grey is equal C/M/Y with K=0. The round-trip collapsed equal C/M/Y
+        // into K, so nudging one of C/M/Y moved K instead. color(from:) keeps
+        // them independent: raising cyan alone changes the colour.
+        let grey = Panel.color(from: [50, 50, 50, 0], mode: .cmyk).rgbComponents!
+        let cyanUp = Panel.color(from: [80, 50, 50, 0], mode: .cmyk).rgbComponents!
+        #expect(grey != cyanUp, "raising cyan alone must change the colour")
+
+        // HSL hue is undefined on a grey, so the round-trip lost it. color(from:)
+        // retains hue through zero saturation — raising S later reveals it.
+        let greyHue = Panel.color(from: [200, 0, 50], mode: .hsl).rgbComponents!
+        #expect(greyHue.red == greyHue.green && greyHue.green == greyHue.blue,
+                "zero saturation is grey regardless of hue")
+        let satUp = Panel.color(from: [200, 60, 50], mode: .hsl).rgbComponents!
+        #expect(!(satUp.red == satUp.green && satUp.green == satUp.blue),
+                "raising saturation reveals the retained hue")
     }
 
     // MARK: Read-out formatting
@@ -199,31 +224,40 @@ struct ColorPickerPanelCrashSafetyTests {
         }
     }
 
-    @Test("color(bySetting:) never traps and yields a concrete RGB, across a value sweep")
+    @Test("color(from:) never traps and yields a concrete RGB, across a channel sweep")
     func setChannelNeverTraps() {
         for mode in Self.channelModes {
+            // Seed the channels from each seed colour, then sweep one channel at
+            // a time below-range, at the bounds, midpoints, and well past the top
+            // — a slider/field clamps, but the build must be robust anyway.
             for seed in Self.seeds {
+                var base = mode.channels.indices.map {
+                    Panel.channelValue(of: seed, mode: mode, index: $0)
+                }
                 for index in mode.channels.indices {
                     let bound = mode.channels[index].upperBound
-                    // Below-range, the bounds, midpoints, and well past the top —
-                    // a slider clamps, but the constructor must be robust anyway.
                     for value in [-1000.0, -1, 0, bound / 2, bound, bound + 1, bound + 1000] {
-                        let out = Panel.color(bySetting: value, at: index, mode: mode, of: seed)
+                        var channels = base
+                        channels[index] = value
+                        let out = Panel.color(from: channels, mode: mode)
                         #expect(out.rgbComponents != nil,
-                                "set \(mode) ch\(index)=\(value) on \(seed) did not yield RGB")
+                                "build \(mode) ch\(index)=\(value) on \(seed) did not yield RGB")
                     }
+                    base[index] = bound  // vary the rest of the sweep too
                 }
             }
         }
     }
 
-    @Test("A full GET→SET→GET round-trip on every channel stays trap-free and finite")
+    @Test("A full GET→build→GET round-trip on every channel stays trap-free and finite")
     func roundTripStable() {
         for mode in Self.channelModes {
             for seed in Self.seeds {
+                let channels = mode.channels.indices.map {
+                    Panel.channelValue(of: seed, mode: mode, index: $0)
+                }
+                let edited = Panel.color(from: channels, mode: mode)
                 for index in mode.channels.indices {
-                    let v = Panel.channelValue(of: seed, mode: mode, index: index)
-                    let edited = Panel.color(bySetting: v, at: index, mode: mode, of: seed)
                     let again = Panel.channelValue(of: edited, mode: mode, index: index)
                     #expect(again.isFinite)
                 }
@@ -296,6 +330,47 @@ struct ColorPickerPanelCrashSafetyTests {
         _ = render()
         #expect(box.color.rgbComponents! == (255, 255, 255),
                 "white survived the round-trip, got \(box.color.rgbComponents!)")
+    }
+
+    @Test("HSL hue survives a trip through zero saturation (stateful editor, #3)")
+    func hueSurvivesZeroSaturation() {
+        // The stateless round-trip lost hue on a grey: desaturating to S=0 made
+        // the colour grey, and re-reading HSL from that grey returned hue 0 — so
+        // raising S again produced red, not the colour you started from. The
+        // stateful editor holds the channels, so the hue is retained across S=0
+        // and reappears when saturation comes back.
+        let box = Box(.hsl(120, 50, 50))  // a mid-saturation green
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
+        // A render-loop-faithful pass: begin/endRenderPass prune the focus of the
+        // tab we switched away from, so Tab navigates the *current* editor (not a
+        // stale slider left registered by the previous tab).
+        func render() {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            let ctx = RenderContext(
+                availableWidth: 64, availableHeight: 40, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            _ = renderToBuffer(panel, context: ctx)
+            fm.endRenderPass()
+        }
+
+        render()
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .right)); render()   // RGB → HSL
+        // Focus order on the HSL tab: strip, [H slider, H field], [S slider, …].
+        // Three Tabs from the strip land on the S slider.
+        for _ in 0..<3 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); render() }
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .home)); render()    // S → 0: colour goes grey
+        let grey = box.color.rgbComponents!
+        #expect(grey.red == grey.green && grey.green == grey.blue,
+                "S=0 desaturates to grey, got \(grey)")
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .end)); render()     // S → 100: the retained hue returns
+        let c = box.color.rgbComponents!
+        // The retained hue ~120 is green, so the green channel dominates. The old
+        // round-trip would have produced red here (green would NOT dominate).
+        #expect(c.green > c.red && c.green > c.blue,
+                "the retained green hue reappears, not red — got \(c)")
     }
 
     @Test("A long stream of key events through the live panel never traps")

@@ -97,10 +97,10 @@ public struct ColorPickerPanel: View {
                 // slider's state can't leak across tabs (e.g. RGB's 0…255 bounds
                 // vs HSL's 0…100). The compact style keeps the strip to one row.
                 TabView(selection: $mode) {
-                    Tab("RGB", value: Mode.rgb) { channelEditor(.rgb) }
-                    Tab("HSL", value: Mode.hsl) { channelEditor(.hsl) }
-                    Tab("HSB", value: Mode.hsb) { channelEditor(.hsb) }
-                    Tab("CMYK", value: Mode.cmyk) { channelEditor(.cmyk) }
+                    Tab("RGB", value: Mode.rgb) { _ChannelEditor(mode: .rgb, selection: selection) }
+                    Tab("HSL", value: Mode.hsl) { _ChannelEditor(mode: .hsl, selection: selection) }
+                    Tab("HSB", value: Mode.hsb) { _ChannelEditor(mode: .hsb, selection: selection) }
+                    Tab("CMYK", value: Mode.cmyk) { _ChannelEditor(mode: .cmyk, selection: selection) }
                     Tab("Semantic", value: Mode.semantic) { semanticEditor }
                     Tab("256 (Xterm)", value: Mode.palette256) { _Color256GridCore(selection: selection) }
                 }
@@ -127,19 +127,6 @@ public struct ColorPickerPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Self.hexString(components)).foregroundStyle(.palette.foreground)
                 Text(Self.rgbString(components)).foregroundStyle(.palette.foregroundTertiary)
-            }
-        }
-    }
-
-    // MARK: Channel editor
-
-    /// The sliders for one colour model's channels. Each tab renders its own,
-    /// under the TabView's per-tab identity, so their slider state is isolated.
-    @ViewBuilder
-    private func channelEditor(_ mode: Mode) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
-                channel(spec.label, channelBinding(index, mode: mode), 0...spec.upperBound)
             }
         }
     }
@@ -197,36 +184,6 @@ public struct ColorPickerPanel: View {
         }
     }
 
-    /// One labelled channel row: name, slider, numeric read-out.
-    private func channel(
-        _ label: String,
-        _ binding: Binding<Double>,
-        _ range: ClosedRange<Double>
-    ) -> some View {
-        HStack(spacing: 1) {
-            Text(label)
-                .frame(width: 2, alignment: .trailing)
-                .foregroundStyle(.palette.foregroundTertiary)
-            Slider(value: binding, in: range, step: 1).frame(width: 22)
-            // Editable read-out: type or paste an exact value. Parsed and
-            // clamped to the channel's range on every edit; kept in sync with
-            // the slider (both drive the same binding). A fixed width keeps the
-            // panel sized-to-fit (a width-flexible field would regrow with the
-            // available width); 12 is the field's natural minimum, so both end
-            // caps render and there's room to type/select.
-            TextField("", text: channelText(binding, in: range)).frame(width: 12)
-        }
-    }
-
-    /// A `String` binding over a numeric channel: shows the integer value, and
-    /// on edit parses the digits and clamps to `range`. Lets the read-out be
-    /// typed or pasted into while staying in sync with the slider.
-    private func channelText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
-        Binding(
-            get: { String(Int(value.wrappedValue.rounded())) },
-            set: { value.wrappedValue = Self.channelValue(parsing: $0, into: range) })
-    }
-
     /// Parses a typed/pasted channel value: keeps the digits, clamps to `range`
     /// (empty → the lower bound; out-of-range → the nearer bound). Pure; tested.
     static func channelValue(parsing text: String, into range: ClosedRange<Double>) -> Double {
@@ -235,21 +192,14 @@ public struct ColorPickerPanel: View {
         return max(range.lowerBound, min(range.upperBound, parsed))
     }
 
-    // MARK: - Channel bindings
+    // MARK: - Channel conversions
     //
-    // Each binding derives its channel from the current colour and writes the
-    // colour back through the matching colour-space constructor. Editing is
-    // stateless (the colour is the single source of truth), matching the inline
-    // ``ColorPicker``. A consequence of the round-trip: on a fully desaturated
-    // colour HSL/HSB hue has no visible effect until saturation is raised.
-
-    /// A `Double` binding onto channel `index` of `mode`, reading from and
-    /// writing through ``selection`` via the pure helpers below.
-    private func channelBinding(_ index: Int, mode: Mode) -> Binding<Double> {
-        Binding(
-            get: { Self.channelValue(of: selection.wrappedValue, mode: mode, index: index) },
-            set: { selection.wrappedValue = Self.color(bySetting: $0, at: index, mode: mode, of: selection.wrappedValue) })
-    }
+    // The stateful ``_ChannelEditor`` seeds its sliders from the current colour
+    // with ``channelValue(of:mode:index:)`` and pushes edits back through
+    // ``color(from:mode:)`` — a one-way build from the *full* channel set. That
+    // avoids the stateless round-trip's re-canonicalisation: an over-determined
+    // model (CMYK, or HSL/HSB hue on a desaturated colour) keeps the exact
+    // values you typed instead of being re-derived from the resulting RGB.
 
     /// Reads channel `index` of `color` in `mode`. Pure; unit-tested.
     static func channelValue(of color: Color, mode: Mode, index: Int) -> Double {
@@ -271,33 +221,27 @@ public struct ColorPickerPanel: View {
         }
     }
 
-    /// Returns `color` with channel `index` of `mode` set to `value`, rewritten
-    /// through that model's constructor. Pure; unit-tested.
-    static func color(bySetting value: Double, at index: Int, mode: Mode, of color: Color) -> Color {
-        let c = color.rgbComponents ?? (0, 0, 0)
+    /// Builds a colour directly from a full set of `mode` channel values — the
+    /// one-way push used by ``_ChannelEditor``. Unlike a read-modify-write
+    /// round-trip it does not read any channel back out of the current colour,
+    /// so over-determined models keep the exact values supplied: CMYK with
+    /// `K=100` still carries its C/M/Y, equal C/M/Y don't collapse into `K`, and
+    /// HSL/HSB hue survives a zero-saturation colour. Missing entries read as 0.
+    /// Pure; unit-tested.
+    static func color(from channels: [Double], mode: Mode) -> Color {
+        func at(_ i: Int) -> Double { channels.indices.contains(i) ? channels[i] : 0 }
         switch mode {
         case .rgb:
-            var rgb = [Double(c.red), Double(c.green), Double(c.blue)]
-            rgb[index] = value
-            let byte = { (v: Double) in UInt8(max(0, min(255, v.rounded()))) }
-            return .rgb(byte(rgb[0]), byte(rgb[1]), byte(rgb[2]))
+            let byte = { (v: Double) in UInt8(max(0, min(255, v.isFinite ? v.rounded() : 0))) }
+            return .rgb(byte(at(0)), byte(at(1)), byte(at(2)))
         case .hsl:
-            let h = Color.rgbToHSL(red: c.red, green: c.green, blue: c.blue)
-            var v = [h.hue, h.saturation, h.lightness]
-            v[index] = value
-            return .hsl(v[0], v[1], v[2])
+            return .hsl(at(0), at(1), at(2))
         case .hsb:
-            let h = Color.rgbToHSB(red: c.red, green: c.green, blue: c.blue)
-            var v = [h.hue, h.saturation, h.brightness]
-            v[index] = value
-            return .hsb(v[0], v[1], v[2])
+            return .hsb(at(0), at(1), at(2))
         case .cmyk:
-            let k = Color.rgbToCMYK(red: c.red, green: c.green, blue: c.blue)
-            var v = [k.cyan, k.magenta, k.yellow, k.black]
-            v[index] = value
-            return .cmyk(v[0], v[1], v[2], v[3])
+            return .cmyk(at(0), at(1), at(2), at(3))
         case .semantic, .palette256:
-            return color  // edited via selection directly, not channels
+            return .rgb(0, 0, 0)  // channelless tabs edit selection directly; unreachable here
         }
     }
 
@@ -311,5 +255,106 @@ public struct ColorPickerPanel: View {
     static func rgbString(_ components: (red: UInt8, green: UInt8, blue: UInt8)?) -> String {
         guard let c = components else { return "rgb(—, —, —)" }
         return "rgb(\(c.red), \(c.green), \(c.blue))"
+    }
+}
+
+// MARK: - Stateful channel editor
+
+/// The sliders + editable read-outs for one colour model's channels.
+///
+/// Colour models other than RGB are *over-determined*: many channel
+/// combinations map to the same RGB (any CMYK with `K=100` is black; a grey is
+/// `K` alone or equal `C/M/Y`; hue is undefined on a desaturated colour).
+/// Reading the channels back out of the stored colour on every edit therefore
+/// re-canonicalises them — raising `K` zeroes `C/M/Y`, adjusting one of `C/M/Y`
+/// shifts the derived `K` instead, and hue is lost. To let each channel be
+/// edited independently this view holds the channel values in `@State` and
+/// converts them to a colour one-way (``ColorPickerPanel/color(from:mode:)``);
+/// it re-seeds from `selection` only when the colour changes from *outside* (a
+/// different tab or the host app), detected by comparing against the colour it
+/// last produced.
+///
+/// Per-tab `@State` lifecycle does the rest: ``TabView`` renders each tab under
+/// its own identity, so leaving a tab prunes this editor's state and re-entering
+/// re-seeds the canonical channels for the current colour.
+private struct _ChannelEditor: View {
+    let mode: ColorPickerPanel.Mode
+    let selection: Binding<Color>
+
+    // Two @State, in declaration order: [0] the live channel values, [1] the
+    // colour we last pushed — so our own write-back isn't mistaken for an
+    // external change by the `onChange` below.
+    @State private var channels: [Double]
+    @State private var lastProduced: Color
+
+    init(mode: ColorPickerPanel.Mode, selection: Binding<Color>) {
+        self.mode = mode
+        self.selection = selection
+        let color = selection.wrappedValue
+        _channels = State(wrappedValue: mode.channels.indices.map {
+            ColorPickerPanel.channelValue(of: color, mode: mode, index: $0)
+        })
+        _lastProduced = State(wrappedValue: color)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
+                channelRow(spec.label, channelBinding(index), 0...spec.upperBound)
+            }
+        }
+        .onChange(of: selection.wrappedValue) { _, new in
+            // Re-seed only on an external change — never on our own write-back,
+            // which would re-canonicalise the channels and undo the whole point.
+            guard new != lastProduced else { return }
+            channels = mode.channels.indices.map {
+                ColorPickerPanel.channelValue(of: new, mode: mode, index: $0)
+            }
+            lastProduced = new
+        }
+    }
+
+    /// A `Double` binding onto channel `index`: reads/writes the held `@State`
+    /// and, on write, pushes the *full* channel set to `selection`.
+    private func channelBinding(_ index: Int) -> Binding<Double> {
+        Binding(
+            get: { channels.indices.contains(index) ? channels[index] : 0 },
+            set: { newValue in
+                guard channels.indices.contains(index) else { return }
+                channels[index] = newValue
+                let color = ColorPickerPanel.color(from: channels, mode: mode)
+                lastProduced = color
+                selection.wrappedValue = color
+            })
+    }
+
+    /// One labelled channel row: name, slider, editable numeric read-out.
+    private func channelRow(
+        _ label: String,
+        _ binding: Binding<Double>,
+        _ range: ClosedRange<Double>
+    ) -> some View {
+        HStack(spacing: 1) {
+            Text(label)
+                .frame(width: 2, alignment: .trailing)
+                .foregroundStyle(.palette.foregroundTertiary)
+            Slider(value: binding, in: range, step: 1).frame(width: 22)
+            // Editable read-out: type or paste an exact value, kept in sync with
+            // the slider (both drive the same binding). A fixed width keeps the
+            // panel sized-to-fit; 12 is the field's natural minimum, so both end
+            // caps render with room to type/select.
+            TextField("", text: channelText(binding, in: range)).frame(width: 12)
+        }
+    }
+
+    /// A `String` binding over a numeric channel: shows the integer value, and on
+    /// edit parses the digits and clamps to `range`.
+    private func channelText(_ value: Binding<Double>, in range: ClosedRange<Double>) -> Binding<String> {
+        Binding(
+            get: {
+                let v = value.wrappedValue
+                return String(Int((v.isFinite ? v : 0).rounded()))
+            },
+            set: { value.wrappedValue = ColorPickerPanel.channelValue(parsing: $0, into: range) })
     }
 }
