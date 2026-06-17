@@ -187,12 +187,19 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     // MARK: Layout
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        // A ScrollView is greedy on both axes: it takes whatever
-        // space the parent offers and scrolls if its content
-        // doesn't fit.
+        // A ScrollView takes whatever size the parent *proposes* and scrolls if
+        // its content doesn't fit — so it stays width/height-flexible, and a
+        // parent that constrains it (a too-short modal) makes it scroll. But its
+        // *ideal* size (an unproposed axis) is its content's size, not the whole
+        // viewport — so a parent that sizes to fit (a TabView, a Dialog) sizes to
+        // the content it wraps and only scrolls when space is actually short.
+        // Matches SwiftUI, where a ScrollView's ideal size is its content's.
+        let childSize: ViewSize? =
+            (proposal.width == nil || proposal.height == nil)
+            ? ChildView(content).measure(proposal: proposal, context: context) : nil
         return ViewSize(
-            width: proposal.width ?? context.availableWidth,
-            height: proposal.height ?? context.availableHeight,
+            width: proposal.width ?? (childSize?.width ?? context.availableWidth),
+            height: proposal.height ?? (childSize?.height ?? context.availableHeight),
             isWidthFlexible: true,
             isHeightFlexible: true
         )

@@ -97,6 +97,23 @@ struct TabViewTests {
                 "every reset is followed by a re-applied background (got \(backgrounds) bg vs \(resets) resets)")
     }
 
+    @Test("A ScrollView-wrapped tab sizes to its content, not the viewport (#4)")
+    func scrollViewTabSizesToContent() {
+        // A ScrollView is width-flexible; measured naively (AnyView render
+        // fallback) it would fill the whole screen and balloon the panel. The
+        // per-tab concrete measure closure + the ScrollView's content-sized ideal
+        // size it to its content instead.
+        let view = TabView(selection: .constant(0)) {
+            Tab("A", value: 0) { ScrollView { Text("exactly-this-wide") } }
+            Tab("B", value: 1) { ScrollView { Text("b") } }
+        }.tabViewStyle(.compact)
+        let buf = renderToBuffer(view, context: makeRenderContext(width: 120, height: 12))
+        #expect(buf.width < 60,
+                "panel sizes to the ScrollView's content (~17), not the 120-wide screen: \(buf.width)")
+        #expect(buf.lines.map { $0.stripped }.joined().contains("exactly-this-wide"),
+                "the scrolled content is shown")
+    }
+
     @Test("Header alignment shifts the tab strip across the box")
     func headerAlignment() {
         func tabsLine(_ alignment: HorizontalAlignment) -> String {
