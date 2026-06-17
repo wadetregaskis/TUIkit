@@ -393,6 +393,47 @@ struct TabViewTests {
         #expect(abs(lead - trail) <= 1, "content is centred (lead ≈ trail), got \(lead)/\(trail)")
     }
 
+    @Test("Up/down move between tab rows by nearest centre; past the edge they bubble (#2)")
+    func verticalRowNavigation() {
+        let sel = IntBox(2)
+        let handler = TabStripHandler(
+            focusID: "t",
+            selection: Binding(get: { AnyHashable(sel.value) }, set: { sel.value = ($0.base as? Int) ?? sel.value }),
+            values: [0, 1, 2, 3])
+        // Two rows, [0,1] above [2,3], columns aligned by centre.
+        handler.rows = [[0, 1], [2, 3]]
+        handler.centers = [0: 2, 1: 8, 2: 2, 3: 8]
+
+        // From tab 2 (row 1, left column) up → row 0, nearest centre → tab 0.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
+        #expect(sel.value == 0)
+        // From the top row, up has no row above → bubbles out, selection unchanged.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == false)
+        #expect(sel.value == 0)
+        // Down → row 1, nearest centre → tab 2.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == true)
+        #expect(sel.value == 2)
+        // From the bottom row, down bubbles out, selection unchanged.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == false)
+        #expect(sel.value == 2)
+    }
+
+    @Test("A focused wrapped strip moves the selection to another row on up (#2)")
+    func arrowNavMovesBetweenRowsInRender() {
+        let sel = IntBox(0)
+        let ctx = makeRenderContext(width: 18, height: 12)
+        let fm = ctx.environment.focusManager
+        let view = TabView(selection: sel.binding) {
+            ForEach(0..<6) { i in Tab("Tab\(i)", value: i) { Text("c\(i)") } }
+        }
+        .tabViewStyle(.compact)
+        _ = renderToBuffer(view, context: ctx)          // registers the handler + row geometry
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))    // focus the strip (active row floated to bottom)
+        let moved = fm.dispatchKeyEvent(KeyEvent(key: .up))
+        #expect(moved, "up is handled — there is a row above the active (bottom) row")
+        #expect(sel.value != 0, "selection moved to a tab in the row above, was 0 now \(sel.value)")
+    }
+
     @Test("A control inside a bordered tab is clickable (its hit region survives the box chrome)")
     func borderedTabContentClickable() {
         let on = BoolBox(false)

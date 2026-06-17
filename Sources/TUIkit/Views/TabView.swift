@@ -376,6 +376,35 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         context.environment.tabViewHeaderWrap == .toContentWidth ? widest : max(1, available)
     }
 
+    /// The strip's visual rows (tab indices, top-to-bottom with the active row
+    /// floated to the bottom) and each tab's horizontal centre in panel-relative
+    /// cells. Mirrors the render geometry so the `TabStripHandler`'s up/down keys
+    /// move to the tab actually above/below the current one.
+    private func navigationGeometry(context: RenderContext) -> (rows: [[Int]], centers: [Int: Int]) {
+        let style = context.environment.tabViewStyle.resolved
+        let alignment = context.environment.tabViewHeaderAlignment
+        let insets = resolvedContentInsets(style: style, context: context)
+        let bordered = style == .bordered
+        let avail = bordered ? max(1, context.availableWidth - 2) : context.availableWidth
+        let widest = widestContentWidth(insets: insets, available: avail, context: context)
+        let rows = floatActiveRowToBottom(
+            stripRowGroups(style: .compact, available: stripWrapBudget(widest: widest, available: avail, context: context)),
+            selectedIndex: selectedIndex)
+        let rowWidthOf: ([Int]) -> Int = bordered ? folderRowWidth : compactRowWidth
+        let panelWidth = max(widest, rows.map(rowWidthOf).max() ?? 0)
+        var centers: [Int: Int] = [:]
+        for row in rows {
+            var col = max(0, alignment.childOffset(childWidth: rowWidthOf(row), in: panelWidth))
+            for i in row {
+                let bodyWidth = bordered ? tabs[i].title.count + 2 : tabWidth(i, style: .compact)
+                let lead = bordered ? 1 : 0  // bordered: a wall precedes each tab body
+                centers[i] = col + lead + bodyWidth / 2
+                col += lead + bodyWidth
+            }
+        }
+        return (rows, centers)
+    }
+
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         guard !tabs.isEmpty else { return ViewSize.fixed(0, 0) }
         let style = context.environment.tabViewStyle.resolved
@@ -443,6 +472,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         handler.values = tabs.map(\.value)
         handler.canBeFocused = !isDisabled
         if !context.isMeasuring {
+            let geometry = navigationGeometry(context: context)
+            handler.rows = geometry.rows
+            handler.centers = geometry.centers
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID) && !isDisabled
@@ -884,13 +916,19 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
 // MARK: - Focus handler
 
-/// Switches the active tab with the left/right arrow keys when the strip is
-/// focused.
+/// Switches the active tab with the arrow keys when the strip is focused:
+/// left/right step through the tabs in order; up/down move between rows of a
+/// wrapped strip, to the tab nearest above/below the current one's centre.
 final class TabStripHandler: Focusable {
     let focusID: String
     var canBeFocused: Bool
     var selection: Binding<AnyHashable>
     var values: [AnyHashable]
+
+    /// The visual rows (tab indices, top-to-bottom) and each tab's horizontal
+    /// centre, refreshed each render so up/down navigation matches the layout.
+    var rows: [[Int]] = []
+    var centers: [Int: Int] = [:]
 
     init(focusID: String, selection: Binding<AnyHashable>, values: [AnyHashable], canBeFocused: Bool = true) {
         self.focusID = focusID
@@ -906,10 +944,28 @@ final class TabStripHandler: Focusable {
         selection.wrappedValue = values[next]
     }
 
+    /// Moves to the tab nearest (by centre) in the row `delta` rows away, or
+    /// returns `false` when there is no such row — so the key bubbles up and
+    /// focus can leave the strip (e.g. to the control above/below the TabView).
+    private func moveVertically(_ delta: Int) -> Bool {
+        let current = values.firstIndex(of: selection.wrappedValue) ?? 0
+        guard let row = rows.firstIndex(where: { $0.contains(current) }) else { return false }
+        let target = row + delta
+        guard rows.indices.contains(target) else { return false }
+        let cx = centers[current] ?? 0
+        guard let nearest = rows[target].min(by: {
+            abs((centers[$0] ?? 0) - cx) < abs((centers[$1] ?? 0) - cx)
+        }) else { return false }
+        selection.wrappedValue = values[nearest]
+        return true
+    }
+
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         switch event.key {
         case .left: move(by: -1); return true
         case .right: move(by: 1); return true
+        case .up: return moveVertically(-1)
+        case .down: return moveVertically(1)
         default: return false
         }
     }
