@@ -23,11 +23,33 @@ import TUIkit
 /// In both styles the active tab and the content share a subtle surface (a quiet
 /// lift above the base background, like the status bar / app header), and the
 /// active tab breathes on the pulse clock while the strip is focused.
+///
+/// A third **adjustable** demo wires the header alignment
+/// (`.tabViewHeaderAlignment(_:)`) and wrap mode (`.tabViewHeaderWrap(_:)`) to
+/// live controls so the strip's placement and folding can be tried interactively.
 struct TabViewPage: View {
     @State private var compactSelection = 0
     @State private var borderedSelection = 0
     @State private var notify = true
     @State private var volume = 0.6
+
+    // Live settings for the "Adjustable" demo below.
+    @State private var adjustableSelection = 0
+    @State private var headerAlignment: HeaderAlignment = .center
+    @State private var foldStrip = true
+
+    /// A `Picker`-friendly (`Hashable`) stand-in for ``HorizontalAlignment``,
+    /// which is `Sendable` but not `Hashable`, so it can't be a selection tag.
+    private enum HeaderAlignment: String, CaseIterable, Hashable {
+        case leading = "Leading", center = "Centre", trailing = "Trailing"
+        var alignment: HorizontalAlignment {
+            switch self {
+            case .leading: .leading
+            case .center: .center
+            case .trailing: .trailing
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -73,6 +95,33 @@ struct TabViewPage: View {
                     }
                 }
                 .tabViewStyle(.bordered)
+            }
+
+            DemoSection("Adjustable (try the settings)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Picker("Tab strip alignment", selection: $headerAlignment) {
+                        ForEach(HeaderAlignment.allCases, id: \.self) { choice in
+                            Text(choice.rawValue).tag(choice)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    // Fold the strip to the content width (so it wraps onto
+                    // several rows) instead of keeping it on one wide row — the
+                    // same choice the colour picker makes. With it on, the
+                    // alignment above visibly shifts each folded row.
+                    Toggle("Fold strip to content width", isOn: $foldStrip)
+
+                    TabView(selection: $adjustableSelection) {
+                        ForEach(Array(["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"].enumerated()), id: \.offset) { index, name in
+                            Tab(name, value: index) {
+                                Text("Settings and details for the \(name) section.")
+                            }
+                        }
+                    }
+                    .tabViewStyle(.bordered)
+                    .tabViewHeaderAlignment(headerAlignment.alignment)
+                    .tabViewHeaderWrap(foldStrip ? .toContentWidth : .minimal)
+                }
             }
 
             KeyboardHelpSection(
