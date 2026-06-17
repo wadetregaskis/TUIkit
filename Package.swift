@@ -77,7 +77,8 @@ let package = Package(
         // profiling instrument (see Sources/TUIkitStress/README.md).
         .executableTarget(
             name: "TUIkitStress",
-            dependencies: ["TUIkit"]
+            dependencies: ["TUIkit"],
+            exclude: ["README.md"]  // documentation, not a bundled resource
         ),
 
         // ── Tools ───────────────────────────────────────────────────────────────────────────────────────
