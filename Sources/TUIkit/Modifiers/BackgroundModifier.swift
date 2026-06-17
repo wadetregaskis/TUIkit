@@ -23,8 +23,11 @@ public struct BackgroundModifier: ViewModifier {
             // Pad the line to full width so background covers everything
             let paddedLine = line.padToVisibleWidth(width)
 
-            // We need to handle existing ANSI codes in the line
-            // For simplicity, we wrap the whole line with background
+            // Fill the whole line with the background. The child's own ANSI
+            // resets (a Text's trailing reset, a Slider track, a Toggle's `[`)
+            // would otherwise clear our background for the rest of the line —
+            // so re-apply it after every reset (persistent background) and
+            // close with a single reset at the line end to avoid bleed.
             let colored = applyBackground(to: paddedLine, color: resolvedColor)
             lines.append(colored)
         }
@@ -39,7 +42,12 @@ public struct BackgroundModifier: ViewModifier {
     }
 
     /// Applies background color to a string, preserving existing formatting.
+    ///
+    /// Uses a *persistent* background (re-applied after every interior reset)
+    /// so child content that emits its own ANSI resets — Text, a Slider's track,
+    /// a Toggle's brackets — doesn't punch holes in the fill. A final reset
+    /// closes the run so the colour doesn't bleed past the line.
     private func applyBackground(to string: String, color: Color) -> String {
-        ANSIRenderer.backgroundCode(for: color) + string + ANSIRenderer.reset
+        ANSIRenderer.applyPersistentBackground(string, color: color) + ANSIRenderer.reset
     }
 }

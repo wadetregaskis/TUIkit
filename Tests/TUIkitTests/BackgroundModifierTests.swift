@@ -71,4 +71,21 @@ struct BackgroundModifierTests {
         // Both lines should have the same visible width after padding
         #expect(result.lines[0].strippedLength == result.lines[1].strippedLength)
     }
+
+    @Test("Background persists across a child's interior ANSI resets (no holes)")
+    func backgroundPersistsAcrossResets() {
+        // Child content that closes a foreground run mid-line emits an interior
+        // reset; the fill must survive it (the old naive wrap left the rest of the
+        // line — trailing cells, sub-views — on the terminal default).
+        let inner = ANSIRenderer.colorize("AB", foreground: .blue) + "CD"  // <fg>AB<reset>CD
+        let result = BackgroundModifier(color: .red).modify(
+            buffer: FrameBuffer(lines: [inner]), context: testContext())
+        let line = result.lines[0]
+        let bg = ANSIRenderer.backgroundCode(for: .red)
+        let resets = line.components(separatedBy: ANSIRenderer.reset).count - 1
+        let backgrounds = line.components(separatedBy: bg).count - 1
+        #expect(resets >= 2, "the inner content + the trailing reset give ≥2 resets")
+        #expect(resets == backgrounds,
+                "the background is re-applied after every reset (\(backgrounds) bg vs \(resets) resets)")
+    }
 }
