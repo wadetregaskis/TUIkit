@@ -231,6 +231,9 @@ public struct TabView<SelectionValue: Hashable, Content: View>: View {
 private enum TabViewStateIndex {
     static let focusID = 0
     static let handler = 1
+    /// Per-tab measured content widths (`[tab value: width]`), so the panel can
+    /// size to the widest tab without re-measuring every tab each pass.
+    static let widthCache = 2
 }
 
 /// Renders the tab strip plus the selected tab's content.
@@ -260,23 +263,43 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         return child
     }
 
-    /// The selected tab's natural (unconstrained) content width — the view sizes
-    /// to its content and the strip folds to that width, rather than a wide strip
-    /// ballooning the panel. Capped to what's available.
+    /// The widest tab's natural (unconstrained) content width — the panel sizes to
+    /// it (stable across tab switches) and the strip folds to it, rather than a
+    /// wide strip ballooning the panel. Capped to what's available.
     ///
-    /// Only the *selected* tab is measured (one measure, as the layout already
-    /// did): measuring every tab each pass would fully render the non-`Layoutable`
-    /// tabs (channel editors, the 139/216/256-swatch grids) hundreds of cells at a
-    /// time, every layout pass — pathologically slow. The trade-off is that the
-    /// panel sizes to the current tab (it reflows a little on switch) rather than
-    /// to a stable widest-of-all; the 256-grid's "show numbers" still resizes it
-    /// while that tab is shown.
-    private func naturalContentWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
-        var branch = context.withBranchIdentity("tab-\(tabs[selectedIndex].value)")
-        branch.availableWidth = available
-        let size = ChildView(tabs[selectedIndex].content.padding(insets)).measure(
-            proposal: ProposedSize(width: nil, height: nil), context: branch)
-        return min(max(1, size.width), max(1, available))
+    /// Only the *selected* tab is measured each pass; the others reuse their last
+    /// measured width from a per-tab cache. Measuring every tab each pass would
+    /// fully render the non-`Layoutable` tabs (channel editors, the 139/216/256-
+    /// swatch grids) hundreds of cells at a time — pathologically slow. A tab not
+    /// yet seen is measured once to seed its entry. So the selected tab tracks its
+    /// own `@State` (e.g. the 256-grid's "show numbers"), and the panel holds the
+    /// widest of all tabs without re-rendering them.
+    ///
+    /// The cache is a pure memo keyed by content identity (it can only ever equal
+    /// what a measure would compute), so writing it during a measure pass is
+    /// benign — it doesn't perturb layout, only avoids recomputation.
+    private func widestContentWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
+        func measureTab(_ index: Int) -> Int {
+            var branch = context.withBranchIdentity("tab-\(tabs[index].value)")
+            branch.availableWidth = available
+            return ChildView(tabs[index].content.padding(insets)).measure(
+                proposal: ProposedSize(width: nil, height: nil), context: branch).width
+        }
+        guard let stateStorage = context.environment.stateStorage else {
+            return min(max(1, measureTab(selectedIndex)), max(1, available))
+        }
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.widthCache)
+        let box: StateBox<[AnyHashable: Int]> = stateStorage.storage(for: key, default: [:])
+        var cache = box.value
+        cache[AnyHashable(tabs[selectedIndex].value)] = measureTab(selectedIndex)
+        for (i, tab) in tabs.enumerated() where cache[AnyHashable(tab.value)] == nil {
+            cache[AnyHashable(tab.value)] = measureTab(i)  // one-time seed per tab
+        }
+        let present = Set(tabs.map { AnyHashable($0.value) })
+        cache = cache.filter { present.contains($0.key) }  // drop removed tabs
+        box.value = cache
+        let widest = tabs.map { cache[AnyHashable($0.value)] ?? 0 }.max() ?? 0
+        return min(max(1, widest), max(1, available))
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
@@ -290,7 +313,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             // Size to the widest tab; the strip folds to that width. Box chrome:
             // each tab row is 2 lines (tops + labels) + the content-border line +
             // the bottom border, plus a 1-cell border on each side.
-            let natural = naturalContentWidth(
+            let natural = widestContentWidth(
                 insets: insets, available: max(1, ctx.availableWidth - 2), context: ctx)
             let rows = stripRowGroups(style: .compact, available: natural)
             let chrome = 2 * rows.count + 2
@@ -305,7 +328,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
         // Compact: size to the widest tab; the strip folds to that width and the
         // selected content is centred within it. One line per wrapped tab row.
-        let natural = naturalContentWidth(insets: insets, available: ctx.availableWidth, context: ctx)
+        let natural = widestContentWidth(insets: insets, available: ctx.availableWidth, context: ctx)
         let rows = stripRowGroups(style: style, available: natural)
         let contentSize = ChildView(tabs[selectedIndex].content.padding(insets)).measure(
             proposal: ProposedSize(width: ctx.availableWidth, height: nil),
@@ -478,15 +501,19 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
         // Size to the widest tab; fold the strip to that width (so a wide strip
         // doesn't balloon the panel — it wraps to ~2 rows instead).
-        let natural = naturalContentWidth(insets: insets, available: context.availableWidth, context: context)
+        let natural = widestContentWidth(insets: insets, available: context.availableWidth, context: context)
         let rows = floatActiveRowToBottom(
             stripRowGroups(style: .compact, available: natural), selectedIndex: selectedIndex)
-
-        let content = TUIkit.renderToBuffer(
-            tabs[selectedIndex].content.padding(insets).background(surface),
-            context: contentContext(context, stripHeight: rows.count))
-
         let panelWidth = max(natural, rows.map(compactRowWidth).max() ?? 0)
+
+        // Render the content constrained to the panel width, so a width-flexible
+        // tab (e.g. a ScrollView-wrapped editor) fills the panel rather than the
+        // whole screen.
+        var contentCtx = contentContext(context, stripHeight: rows.count)
+        contentCtx.availableWidth = panelWidth
+        let content = TUIkit.renderToBuffer(
+            tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
+
         let (stripLines, regions) = compactStripLines(
             rows: rows, selectedIndex: selectedIndex, isFocused: isFocused,
             surface: surface, activeBg: activeBg, palette: palette,
@@ -611,19 +638,21 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let inactiveBg = palette.background.resolve(with: palette)
 
         // Size to the widest tab; fold the strip to that width.
-        let natural = naturalContentWidth(
+        let natural = widestContentWidth(
             insets: insets, available: max(1, context.availableWidth - 2), context: context)
         let rows = floatActiveRowToBottom(
             stripRowGroups(style: .compact, available: natural), selectedIndex: selectedIndex)
         guard !rows.isEmpty else { return FrameBuffer() }
         let chrome = 2 * rows.count + 2  // each row: tops + labels; plus content-border + bottom
-
-        let content = TUIkit.renderToBuffer(
-            tabs[selectedIndex].content.padding(insets).background(surface),
-            context: contentContext(context, stripHeight: chrome))
-
         let interior = max(natural, rows.map(folderRowWidth).max() ?? 0)
         let boxWidth = interior + 2
+
+        // Constrain the content to the interior so a width-flexible tab (a
+        // ScrollView-wrapped editor) fills the box, not the whole screen.
+        var contentCtx = contentContext(context, stripHeight: chrome)
+        contentCtx.availableWidth = interior
+        let content = TUIkit.renderToBuffer(
+            tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
 
         func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
         func surf(_ n: Int) -> String {

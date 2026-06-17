@@ -400,41 +400,71 @@ private struct _ChannelEditor: View {
         // Structural focus IDs (model + channel index + representation): stable,
         // unique within the panel, and never derived from user data.
         let idBase = "\(mode.rawValue)-\(index)"
-        return HStack(spacing: 1) {
-            Text(label)
-                .frame(width: 2, alignment: .trailing)
-                .foregroundStyle(.palette.foregroundTertiary)
-            Slider(value: binding, in: range, step: 1).frame(width: 16).sliderShowsValue(false)
-            // Percentage — always (it's the value the slider used to print).
-            _EditableValueField(
-                focusID: "\(idBase)-pct", width: 7,
-                format: { Self.percentString(binding.wrappedValue, upperBound: upper) },
-                commit: { raw in
-                    guard raw.contains(where: \.isNumber) else { return }
-                    binding.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: raw, upperBound: upper)
-                })
-            // Raw integer — only when it differs from the percentage (the 0–100
-            // channels would just duplicate it). Hue (0–360) gets a ° suffix.
-            if upper != 100 {
-                _EditableValueField(
-                    focusID: "\(idBase)-int", width: 7,
-                    format: { Self.integerString(binding.wrappedValue, degrees: upper == 360) },
-                    commit: { raw in
-                        guard raw.contains(where: \.isNumber) else { return }
-                        binding.wrappedValue = ColorPickerPanel.channelValue(parsing: raw, into: range)
-                    })
+        // Adapt to the available width: the preferred one-row layout, falling back
+        // to the slider on its own (flexing) row with the value fields stacked
+        // beneath — so a constrained editor still works down to ~12 cells. Only
+        // the chosen candidate renders, so the shared focus IDs never collide.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 1) {
+                channelLabel(label)
+                Slider(value: binding, in: range, step: 1).frame(width: 16).sliderShowsValue(false)
+                pctField(idBase, binding, upper)
+                if upper != 100 { intField(idBase, binding, range, upper) }
+                if upper == 255 { hexField(idBase, binding) }
             }
-            // Hex — only for the 0–255 (RGB) channels.
-            if upper == 255 {
-                _EditableValueField(
-                    focusID: "\(idBase)-hex", width: 7,
-                    format: { Self.channelHexString(binding.wrappedValue) },
-                    commit: { raw in
-                        guard raw.contains(where: \.isHexDigit) else { return }
-                        binding.wrappedValue = ColorPickerPanel.channelValue(parsingHex: raw)
-                    })
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 1) {
+                    channelLabel(label)
+                    Slider(value: binding, in: range, step: 1).sliderShowsValue(false)
+                }
+                pctField(idBase, binding, upper)
+                if upper != 100 { intField(idBase, binding, range, upper) }
+                if upper == 255 { hexField(idBase, binding) }
             }
         }
+    }
+
+    /// The channel's one-letter label, right-aligned in a fixed gutter.
+    private func channelLabel(_ label: String) -> some View {
+        Text(label)
+            .frame(width: 2, alignment: .trailing)
+            .foregroundStyle(.palette.foregroundTertiary)
+    }
+
+    /// Percentage field — always shown (it's the value the slider used to print).
+    private func pctField(_ idBase: String, _ binding: Binding<Double>, _ upper: Double) -> some View {
+        _EditableValueField(
+            focusID: "\(idBase)-pct", width: 7,
+            format: { Self.percentString(binding.wrappedValue, upperBound: upper) },
+            commit: { raw in
+                guard raw.contains(where: \.isNumber) else { return }
+                binding.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: raw, upperBound: upper)
+            })
+    }
+
+    /// Raw integer field — only when it differs from the percentage (a 0–100
+    /// channel would just duplicate it). Hue (0–360) gets a ° suffix.
+    private func intField(
+        _ idBase: String, _ binding: Binding<Double>, _ range: ClosedRange<Double>, _ upper: Double
+    ) -> some View {
+        _EditableValueField(
+            focusID: "\(idBase)-int", width: 7,
+            format: { Self.integerString(binding.wrappedValue, degrees: upper == 360) },
+            commit: { raw in
+                guard raw.contains(where: \.isNumber) else { return }
+                binding.wrappedValue = ColorPickerPanel.channelValue(parsing: raw, into: range)
+            })
+    }
+
+    /// Hex field — only for the 0–255 (RGB) channels.
+    private func hexField(_ idBase: String, _ binding: Binding<Double>) -> some View {
+        _EditableValueField(
+            focusID: "\(idBase)-hex", width: 7,
+            format: { Self.channelHexString(binding.wrappedValue) },
+            commit: { raw in
+                guard raw.contains(where: \.isHexDigit) else { return }
+                binding.wrappedValue = ColorPickerPanel.channelValue(parsingHex: raw)
+            })
     }
 
     /// `"NN%"` of the channel's range.
