@@ -88,9 +88,8 @@ struct SwatchGridRenderTests {
             context: makeRenderContext(width: 40, height: 12))
         let joined = buffer.lines.joined()
         #expect(joined.contains("48;5;") || joined.contains("48;2;"), "swatches carry a background colour")
-        // Two-cell swatches mark the cursor with the quadrant pair "▗▖", which
-        // abut into one contiguous bar centred on the swatch.
-        #expect(joined.contains("▗▖"), "the cursor cell shows a two-cell marker")
+        // The cursor swatch is marked with a contrasting check.
+        #expect(joined.contains("✔"), "the cursor cell shows the selection check")
         // 16 entries / 8 columns → 2 rows.
         #expect(buffer.lines.count == 2, "laid out in 2 rows of 8")
     }
@@ -120,6 +119,39 @@ struct SwatchGridRenderTests {
         #expect(box.color == entries[11], "the clicked swatch is selected, got \(box.color)")
     }
 
+    @Test("The focused selection mark animates on pulse and is steady on none (#2)")
+    func selectionIndicatorAnimation() {
+        let entries: [Color] = (0..<4).map { Color.rgb(0, UInt8($0 * 60), 0) }
+        let fm = FocusManager()
+        let tui = TUIContext()
+        func markForeground(style: SelectionIndicatorStyle, phase: Double) -> String {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            env.pulsePhase = phase  // no cursor timer in tests → helper falls back to this
+            env.selectionIndicatorStyle = style
+            let ctx = RenderContext(
+                availableWidth: 16, availableHeight: 3, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            let line = renderToBuffer(
+                _SwatchGridCore(
+                    entries: entries, columns: 4, selection: .constant(entries[1]), focusID: "sg-anim"),
+                context: ctx
+            ).lines.first ?? ""
+            fm.endRenderPass()
+            guard let r = line.range(of: "38;2;") else { return "none" }
+            return String(line[r.upperBound...].prefix(11))
+        }
+        _ = markForeground(style: SelectionIndicatorStyle(), phase: 0)  // first render auto-focuses
+        // pulse (the default): the mark colour tracks the phase — it breathes.
+        #expect(markForeground(style: SelectionIndicatorStyle(animation: .pulse), phase: 0.0)
+            != markForeground(style: SelectionIndicatorStyle(animation: .pulse), phase: 1.0),
+            "pulse: the focused mark animates with the phase")
+        // none: steady regardless of phase (focus shown by colour/bold alone).
+        #expect(markForeground(style: SelectionIndicatorStyle(animation: .none), phase: 0.0)
+            == markForeground(style: SelectionIndicatorStyle(animation: .none), phase: 1.0),
+            "none: the mark is steady")
+    }
+
     @Test("exactMatchOnly hides the marker unless the colour is one of the swatches (#8)")
     func exactMatchOnlyMarker() {
         func markerShown(for color: Color) -> Bool {
@@ -127,7 +159,7 @@ struct SwatchGridRenderTests {
                 _SwatchGridCore(entries: entries, columns: 8, selection: .constant(color),
                                 exactMatchOnly: true, focusID: "sg-exact"),
                 context: makeRenderContext(width: 40, height: 12)
-            ).lines.joined().contains("▗▖")
+            ).lines.joined().contains("✔")
         }
         // A colour that is one of the swatches → marker shown on it.
         #expect(markerShown(for: entries[5]), "exact match shows the marker")

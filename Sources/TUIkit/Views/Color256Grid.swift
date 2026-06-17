@@ -233,9 +233,10 @@ struct _Color256GridCore: View, Renderable {
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        let indicator = SelectionIndicator.resolve(isFocused: isFocused, context: context)
 
         let (lines, cells) = Self.renderGrid(
-            cursor: handler.cursor, isFocused: isFocused,
+            cursor: handler.cursor, indicator: indicator,
             cellWidth: cellWidth, showNumbers: showNumbers)
         handler.placements = cells
 
@@ -269,11 +270,11 @@ struct _Color256GridCore: View, Renderable {
     // MARK: Rendering
 
     /// Builds the grid lines and the geometry of every placed swatch. Each cell
-    /// is the palette colour as a background; the cursor cell shows a bullet
-    /// (`●` focused, `○` not) in a contrasting foreground so it stays visible on
-    /// any colour, including mid-grey.
+    /// is the palette colour as a background; the cursor cell shows a check in a
+    /// contrasting foreground so it stays visible on any colour, including
+    /// mid-grey, and (when focused) animates per ``SelectionIndicatorStyle``.
     static func renderGrid(
-        cursor: Int, isFocused: Bool, cellWidth: Int, showNumbers: Bool
+        cursor: Int, indicator: SelectionIndicator.Resolution, cellWidth: Int, showNumbers: Bool
     ) -> (lines: [String], cells: [Palette256Layout.Cell]) {
         let gridWidth = Palette256Layout.widthInCells * cellWidth
         var lines: [String] = []
@@ -290,7 +291,7 @@ struct _Color256GridCore: View, Renderable {
                 if let index = entry {
                     line += cellText(
                         index: index, cellWidth: cellWidth,
-                        isCursor: index == cursor, isFocused: isFocused, showNumbers: showNumbers)
+                        isCursor: index == cursor, indicator: indicator, showNumbers: showNumbers)
                     cells.append(Palette256Layout.Cell(index: index, x: x, y: y, width: cellWidth))
                 } else {
                     line += String(repeating: " ", count: cellWidth)  // gap
@@ -302,21 +303,22 @@ struct _Color256GridCore: View, Renderable {
         return (lines, cells)
     }
 
-    /// The rendered content of one swatch: the cursor bullet, the palette index
+    /// The rendered content of one swatch: the selection check, the palette index
     /// (in `showNumbers` mode), or a plain colour block.
     private static func cellText(
-        index: Int, cellWidth: Int, isCursor: Bool, isFocused: Bool, showNumbers: Bool
+        index: Int, cellWidth: Int, isCursor: Bool,
+        indicator: SelectionIndicator.Resolution, showNumbers: Bool
     ) -> String {
         let color = Color.palette(UInt8(index))
         let foreground = contrast(forIndex: index)
         if isCursor {
-            // A two-cell swatch centres the cursor with the quadrant pair "▗▖" —
-            // a svelte block on the lower edge that marks the cell without
-            // covering much of its colour (a lone ● can't centre in an even
-            // width); a one-cell swatch falls back to ●/○.
-            let marker = cellWidth >= 2 ? "▗▖" : (isFocused ? "●" : "○")
+            // A check, centred on the swatch, in a contrasting tone so it shows on
+            // any colour; when focused it animates (per SelectionIndicatorStyle)
+            // between the swatch colour and that contrasting tone, and is bold.
+            let markerColor = indicator.color(dim: color, bright: foreground)
             return ANSIRenderer.colorize(
-                centred(marker, in: cellWidth), foreground: foreground, background: color, bold: isFocused)
+                centred(_SwatchGridCore.selectionMark, in: cellWidth),
+                foreground: markerColor, background: color, bold: indicator.isFocused)
         }
         if showNumbers {
             return ANSIRenderer.colorize(centred(String(index), in: cellWidth), foreground: foreground, background: color)

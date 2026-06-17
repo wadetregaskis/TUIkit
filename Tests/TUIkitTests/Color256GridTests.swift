@@ -135,21 +135,21 @@ struct Color256GridRenderTests {
     @Test("Renders the sectioned grid with a contrasting bullet on the cursor cell")
     func rendersGrid() {
         let (focused, cells) = _Color256GridCore.renderGrid(
-            cursor: 16, isFocused: true, cellWidth: 2, showNumbers: false)
+            cursor: 16, indicator: .steady(isFocused: true), cellWidth: 2, showNumbers: false)
         #expect(focused.count == Palette256Layout.rows.count)
         #expect(cells.count == 256)
         let nonEmpty = focused.filter { !$0.isEmpty }
         #expect(nonEmpty.allSatisfy { $0.contains("\u{1B}[") }, "every content row carries colour escapes")
         #expect(focused.contains { $0.contains("48;5;") }, "cells use the indexed 256-colour background")
-        // Two-cell swatches mark the cursor with the svelte quadrant marker ▗▖.
-        #expect(focused.contains { $0.contains("▗▖") }, "the cursor cell shows the two-cell marker")
+        // The cursor cell is marked with a contrasting check.
+        #expect(focused.contains { $0.contains("✔") }, "the cursor cell shows the selection check")
     }
 
     @Test("Numbers mode prints each index in a five-cell swatch, never run together")
     func numbersMode() {
         // cursor 0 keeps 16/255 as numbered (non-cursor) cells.
         let (lines, _) = _Color256GridCore.renderGrid(
-            cursor: 0, isFocused: true, cellWidth: 5, showNumbers: true)
+            cursor: 0, indicator: .steady(isFocused: true), cellWidth: 5, showNumbers: true)
         let joined = lines.joined()
         #expect(joined.contains("16"), "an index is printed in the swatch")
         #expect(joined.contains("255"), "the last greyscale index is printed")
@@ -176,7 +176,7 @@ struct Color256GridRenderTests {
             _Color256GridCore(selection: box.binding, focusID: "grid-seed"),
             context: makeRenderContext(width: 64, height: 24))  // ≥48 so the 2-wide grid isn't clipped
         let lines = buffer.lines.map { $0.stripped }
-        func bulleted(_ s: String) -> Bool { s.contains("▗▖") }
+        func bulleted(_ s: String) -> Bool { s.contains("✔") }
         // index 231 lives in the cube's last red slice, well below the first row.
         #expect(!bulleted(lines.first { !$0.isEmpty } ?? ""), "cursor is NOT on the first (black) row")
         #expect(lines.contains(where: bulleted), "cursor is shown on a cell")
@@ -198,7 +198,7 @@ struct Color256GridFocusTests {
         // so the cursor cell shows the filled bullet.
         let rendered = renderToBuffer(grid, context: ctx).lines.joined()
         #expect(focusManager.isFocused(id: "grid-test"), "the grid is focusable")
-        #expect(rendered.contains("▗▖"), "the cursor cell shows the two-cell marker")
+        #expect(rendered.contains("✔"), "the cursor cell shows the selection check")
 
         // The cursor seeds at black's nearest cube cell (index 16). Down a green
         // step → 22, then right a blue step → 23.

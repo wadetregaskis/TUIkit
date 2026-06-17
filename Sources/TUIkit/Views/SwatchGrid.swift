@@ -134,6 +134,9 @@ struct _SwatchGridCore: View, Renderable {
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Resolve the focused-selection animation once (the phase is shared across
+        // cells); each cell applies it against its own colour.
+        let indicator = SelectionIndicator.resolve(isFocused: isFocused, context: context)
 
         // Whether to draw the cursor marker at all. With exactMatchOnly, only
         // when the bound colour is genuinely one of the swatches (the cursor
@@ -150,7 +153,7 @@ struct _SwatchGridCore: View, Renderable {
                 guard index < entries.count else { break }
                 line += cellText(
                     entries[index], cellWidth: cellWidth, palette: palette,
-                    isCursor: markerVisible && index == handler.cursor, isFocused: isFocused)
+                    isCursor: markerVisible && index == handler.cursor, indicator: indicator)
             }
             lines.append(line)
         }
@@ -183,22 +186,26 @@ struct _SwatchGridCore: View, Renderable {
         return buffer
     }
 
-    /// One swatch: the colour as a background, with a contrasting cursor marker.
-    /// A two-or-more-cell swatch uses the quadrant pair "▗▖", which abut into one
-    /// small block centred on the swatch's lower edge — svelte, so it marks the
-    /// cell without covering much of its colour (the full-height "▐▌" bar was too
-    /// heavy); a one-cell swatch falls back to ●/○. Bold marks keyboard focus.
+    /// The selected swatch's mark: a check, centred on the swatch. Drawn in a
+    /// contrasting tone (white on dark, dark on light) so it reads on any colour.
+    static let selectionMark = "✔"
+
+    /// One swatch: the colour as a background, with a check on the selected cell.
+    /// The check is contrasting so it stays visible on any swatch; when the grid
+    /// is focused it animates (per ``SelectionIndicatorStyle``) between the swatch
+    /// colour and the contrasting tone — breathing/blinking/steady — and is bold.
     private func cellText(
-        _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool, isFocused: Bool
+        _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool,
+        indicator: SelectionIndicator.Resolution
     ) -> String {
         guard isCursor else {
             return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
         }
-        let marker = cellWidth >= 2 ? "▗▖" : (isFocused ? "●" : "○")
+        let markerColor = indicator.color(
+            dim: color.resolve(with: palette), bright: Self.contrast(for: color, palette: palette))
         return ANSIRenderer.colorize(
-            Self.centred(marker, in: cellWidth),
-            foreground: Self.contrast(for: color, palette: palette),
-            background: color, bold: isFocused)
+            Self.centred(Self.selectionMark, in: cellWidth),
+            foreground: markerColor, background: color, bold: indicator.isFocused)
     }
 
     /// Centres `text` within `width` cells (a trailing-biased split for odd gaps).
