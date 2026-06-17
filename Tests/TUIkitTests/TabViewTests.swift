@@ -52,10 +52,12 @@ struct TabViewTests {
         let lines = renderToBuffer(
             TabView(selection: .constant(1)) {
                 Tab("RGB", value: 0) { Text("aaa") }
-                Tab("HSL", value: 1) { Text("body-here") }
+                // Wide content so the three tabs sit on one row (the strip folds
+                // to the widest tab's content width).
+                Tab("HSL", value: 1) { Text("body-here, the widest tab content row") }
                 Tab("HSB", value: 2) { Text("ccc") }
             }.tabViewStyle(.bordered),
-            context: makeRenderContext(width: 50, height: 12)
+            context: makeRenderContext(width: 60, height: 12)
         ).lines.map { $0.stripped }
         // Tab labels sit in a row, separated by walls.
         #expect(lines.contains { $0.contains("│ RGB │") && $0.contains("│ HSL │") },
@@ -144,9 +146,11 @@ struct TabViewTests {
         let tui = TUIContext()
         let fm = FocusManager()
         func activeChipBackground(phase: Double) -> String {
+            // Wide content so both chips sit on one row (the active chip on the
+            // sole strip line, where the test reads it).
             let view = TabView(selection: .constant(0)) {
-                Tab("AAA", value: 0) { Text("x") }
-                Tab("BBB", value: 1) { Text("y") }
+                Tab("AAA", value: 0) { Text(String(repeating: "x", count: 16)) }
+                Tab("BBB", value: 1) { Text(String(repeating: "y", count: 16)) }
             }.tabViewStyle(.compact)
             var env = EnvironmentValues()
             env.focusManager = fm
@@ -186,7 +190,8 @@ struct TabViewTests {
     func compactChipEdges() {
         let out = lines(
             TabView(selection: .constant(0)) {
-                Tab("One", value: 0) { Text("body") }
+                // Content wide enough that both chips sit on one row.
+                Tab("One", value: 0) { Text("body content, wide enough for one row") }
                 Tab("Two", value: 1) { Text("body") }
             }.tabViewStyle(.compact)).joined()
         #expect(out.contains("▐") && out.contains("▌"), "compact tabs carry ▐ ▌ edge caps: \(out)")
@@ -194,24 +199,24 @@ struct TabViewTests {
         #expect(out.contains("▌▐"), "adjacent chips meet at their caps")
     }
 
-    @Test("A strip too wide for the available width wraps to multiple rows, bounded")
-    func stripWrapsWhenWide() {
+    @Test("The strip folds to the widest tab's content width, not the screen width (#3)")
+    func stripFoldsToContent() {
+        // Ten tabs whose one-row strip is ~80 wide, but content only ~28. Even on a
+        // wide screen the strip folds to the content width — it sizes to the widest
+        // tab rather than ballooning to fit every tab on one row.
         let many = TabView(selection: .constant(0)) {
-            ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text("body") } }
+            ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text(String(repeating: "x", count: 28)) } }
         }.tabViewStyle(.compact)
-        // Wide enough for a single row: no wrapping, the strip is one line.
-        let wide = renderToBuffer(many, context: makeRenderContext(width: 120, height: 12))
-        let wideStrip = wide.lines.prefix { !$0.stripped.contains("body") }
-        #expect(wideStrip.count == 1, "fits on one row when there's room")
-        // Narrow: the strip wraps across rows and the panel never exceeds the
-        // available width (the bug would be a single 90-wide row overflowing).
-        let narrow = renderToBuffer(many, context: makeRenderContext(width: 60, height: 16))
-        let narrowStrip = narrow.lines.prefix { !$0.stripped.contains("body") }
-        #expect(narrowStrip.count > 1, "wraps when the single row would overflow")
-        #expect(narrow.width <= 60, "panel stays within the available width, got \(narrow.width)")
-        // Every tab is still present across the wrapped rows.
-        let joined = narrow.lines.map { $0.stripped }.joined(separator: " ")
-        for i in 0..<10 { #expect(joined.contains("Tab\(i)"), "Tab\(i) present after wrapping") }
+        let wide = renderToBuffer(many, context: makeRenderContext(width: 120, height: 16))
+        let wideStrip = wide.lines.prefix { !$0.stripped.contains("x") }
+        #expect(wideStrip.count > 1, "the strip folds despite the wide screen")
+        #expect(wide.width <= 40, "panel sized to the widest content (~28), not the strip: \(wide.width)")
+        // Every tab is still present across the folded rows.
+        let joined = wide.lines.map { $0.stripped }.joined(separator: " ")
+        for i in 0..<10 { #expect(joined.contains("Tab\(i)"), "Tab\(i) present after folding") }
+        // Constrained narrower than the content: the panel stays within bounds.
+        let narrow = renderToBuffer(many, context: makeRenderContext(width: 20, height: 16))
+        #expect(narrow.width <= 20, "panel stays within the available width, got \(narrow.width)")
     }
 
     @Test("Changing the selection shows a different tab's content")
@@ -317,8 +322,10 @@ struct TabViewTests {
             environment.mouseEventDispatcher = tui.mouseEventDispatcher
         }
         let dispatcher = ctx.environment.mouseEventDispatcher!
+        // Content wide enough that all three tabs sit on one row (so the regions
+        // are in tab order, not reordered by row folding/floating).
         let view = TabView(selection: sel.binding) {
-            Tab("A", value: 0) { Text("a") }
+            Tab("A", value: 0) { Text(String(repeating: "a", count: 18)) }
             Tab("B", value: 1) { Text("b") }
             Tab("C", value: 2) { Text("c") }
         }
