@@ -381,12 +381,13 @@ extension _Color256GridCore: Layoutable {
 /// The "256 (Xterm)" tab's content: the swatch grid plus a toggle that switches
 /// the swatches between compact colour blocks and three-cell numbered cells.
 ///
-/// `showNumbers` is `@State` here (not on the grid) so it survives re-renders
-/// while the tab is shown, and resets when the tab is left and re-entered — the
-/// same per-tab lifecycle the channel editors rely on.
+/// `showNumbers` is an `@AppStorage`-backed **preference**, not per-tab `@State`:
+/// it survives leaving and re-entering the tab and persists across relaunches, so
+/// a user who prefers numbered swatches keeps them. The key is namespaced to the
+/// picker so it won't collide with an app's own settings.
 struct _Palette256Editor: View {
     let selection: Binding<Color>
-    @State private var showNumbers = false
+    @AppStorage("tuikit.colorPicker.palette256.showNumbers") private var showNumbers = false
 
     var body: some View {
         VStack(alignment: .center, spacing: 0) {

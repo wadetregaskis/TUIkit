@@ -20,6 +20,12 @@ private final class DoubleBox {
     var binding: Binding<Double> { Binding(get: { self.value }, set: { self.value = $0 }) }
 }
 
+private final class BoolBox {
+    var value: Bool
+    init(_ v: Bool) { value = v }
+    var binding: Binding<Bool> { Binding(get: { self.value }, set: { self.value = $0 }) }
+}
+
 @MainActor
 @Suite("TabView")
 struct TabViewTests {
@@ -364,5 +370,53 @@ struct TabViewTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: r.offsetY))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: r.offsetY))
         #expect(sel.value == 2, "clicking tab C selected it")
+    }
+
+    @Test("A tab narrower than the panel is centred within it (#4)")
+    func narrowTabContentCentred() {
+        // The wide tab sets the panel width; the selected narrow tab's content
+        // should sit centred in that panel, not left-aligned. (It is rendered at
+        // the panel width then clamped to its natural width and block-centred.)
+        let view = TabView(selection: .constant(1)) {
+            Tab("Wide", value: 0) { Text(String(repeating: "x", count: 30)) }
+            Tab("Narrow", value: 1) { Text("hi") }
+        }
+        .tabViewStyle(.compact)
+        let buf = renderToBuffer(view, context: makeRenderContext(width: 60, height: 10))
+        guard let row = buf.lines.map({ $0.stripped }).first(where: { $0.contains("hi") }) else {
+            Issue.record("narrow tab content not found in render")
+            return
+        }
+        let lead = row.prefix(while: { $0 == " " }).count
+        let trail = Array(row).reversed().prefix(while: { $0 == " " }).count
+        #expect(lead > 1, "narrow content has leading padding (centred, not left-aligned), got lead=\(lead)")
+        #expect(abs(lead - trail) <= 1, "content is centred (lead ≈ trail), got \(lead)/\(trail)")
+    }
+
+    @Test("A control inside a bordered tab is clickable (its hit region survives the box chrome)")
+    func borderedTabContentClickable() {
+        let on = BoolBox(false)
+        let ctx = makeRenderContext(width: 40, height: 12) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let view = TabView(selection: .constant(0)) {
+            Tab("Settings", value: 0) { Toggle("Online", isOn: on.binding) }
+        }
+        .tabViewStyle(.bordered)
+        let buffer = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        // The toggle sits in the content area, below the tab strip — i.e. the
+        // lowest hit region. Before the fix the bordered box rebuilt its content
+        // rows as fresh strings and dropped this region, so only the tab header
+        // remained and the control was dead to the mouse.
+        guard let r = buffer.hitTestRegions.max(by: { $0.offsetY < $1.offsetY }) else {
+            Issue.record("no hit region for the toggle inside the bordered tab")
+            return
+        }
+        let x = r.offsetX + r.width / 2
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: r.offsetY))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: r.offsetY))
+        #expect(on.value, "clicking the toggle inside the bordered tab flipped it")
     }
 }

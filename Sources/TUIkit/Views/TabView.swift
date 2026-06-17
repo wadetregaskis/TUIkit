@@ -355,6 +355,20 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         return cap(widest)
     }
 
+    /// The selected tab's natural (unconstrained) content width — what its ink
+    /// actually occupies. The content is *rendered* at the full panel width (so a
+    /// `ViewThatFits` editor reliably picks its wide single-row candidate rather
+    /// than tipping onto a stacked fallback at a tight width), then clamped to
+    /// this natural width and block-centred. A tab narrower than the panel — e.g.
+    /// a slim channel editor in a panel widened by the 256-swatch grid — is thus
+    /// centred; a tab as wide as the panel clamps to the panel and fills it.
+    private func naturalSelectedWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
+        var branch = context.withBranchIdentity("tab-\(tabs[selectedIndex].value)")
+        branch.availableWidth = available
+        return max(1, tabs[selectedIndex].measure(
+            insets, ProposedSize(width: nil, height: nil), branch).width)
+    }
+
     /// The wrap budget for the header strip: the content width when folding
     /// (`toContentWidth`), otherwise the full available width (wrap only on
     /// overflow).
@@ -588,13 +602,18 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             selectedIndex: selectedIndex)
         let panelWidth = max(widest, rows.map(compactRowWidth).max() ?? 0)
 
-        // Render the content at the panel width; a width-flexible tab (a
-        // ScrollView-wrapped editor) fills it. Content narrower than the panel is
-        // centred by the leftPad below.
+        // Render the content at the full panel width (so a ViewThatFits editor
+        // reliably picks its wide single-row layout rather than tipping onto a
+        // stacked fallback at a tight width), then clamp it to its own natural
+        // width so the leftPad below centres it as a block. A tab as wide as the
+        // panel clamps to the panel and fills it (leftPad 0). Clamp preserves the
+        // content's hit regions, so its controls stay clickable once centred.
         var contentCtx = contentContext(context, stripHeight: rows.count)
         contentCtx.availableWidth = panelWidth
-        let content = TUIkit.renderToBuffer(
+        let natural = naturalSelectedWidth(insets: insets, available: context.availableWidth, context: context)
+        let full = TUIkit.renderToBuffer(
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
+        let content = full.clamped(toWidth: min(natural, panelWidth), height: full.height)
 
         let (stripLines, regions) = compactStripLines(
             rows: rows, selectedIndex: selectedIndex, isFocused: isFocused,
@@ -732,12 +751,16 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let interior = max(widest, rows.map(folderRowWidth).max() ?? 0)
         let boxWidth = interior + 2
 
-        // Render the content at the interior width; content narrower than the
-        // interior is centred by the per-line padding below.
+        // Render the content at the full interior width (so a ViewThatFits editor
+        // reliably picks its wide layout), then clamp it to its own natural width
+        // so the per-line padding below centres it as a block; a tab as wide as
+        // the interior clamps to it and fills. (See the compact path.)
         var contentCtx = contentContext(context, stripHeight: chrome)
         contentCtx.availableWidth = interior
-        let content = TUIkit.renderToBuffer(
+        let natural = naturalSelectedWidth(insets: insets, available: avail, context: context)
+        let full = TUIkit.renderToBuffer(
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
+        let content = full.clamped(toWidth: min(natural, interior), height: full.height)
 
         func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
         func surf(_ n: Int) -> String {
@@ -829,6 +852,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         // Content rows, centred within the interior as one block (a uniform
         // offset, so internal column alignment is preserved), then the bottom.
         let contentPad = max(0, (interior - content.width) / 2)
+        let contentStartY = lines.count
         for line in content.lines {
             let used = line.strippedLength
             lines.append(
@@ -837,6 +861,15 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
 
         var buffer = FrameBuffer(lines: lines)
+        // Re-attach the content's interactive regions/overlays (slider, toggle, …):
+        // the content rows above were rebuilt as fresh strings, so the content
+        // buffer's hit regions are not carried automatically. Shift them past the
+        // left border + centring pad and down past the tab-strip rows.
+        let contentShiftX = 1 + contentPad
+        buffer.hitTestRegions.append(
+            contentsOf: content.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
+        buffer.overlays.append(
+            contentsOf: content.shiftedOverlays(byX: contentShiftX, y: contentStartY))
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }

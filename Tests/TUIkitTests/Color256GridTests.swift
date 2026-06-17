@@ -251,4 +251,23 @@ struct ColorPickerPanel256TabTests {
         let text = renderToBuffer(view, context: makeRenderContext()).lines.joined(separator: "\n")
         #expect(text.contains("256"))
     }
+
+    /// `_Palette256Editor` stores "Show numbers" in `@AppStorage`, not per-tab
+    /// `@State`, so it survives leaving/re-entering the tab and a relaunch. This
+    /// pins the storage key + persistence contract without mutating the global
+    /// backend (which would race the panel-rendering tests). The editor's read
+    /// path itself is exercised whenever the full suite renders the 256 tab.
+    @Test("'Show numbers' is a persisted preference, not transient per-tab state")
+    func showNumbersPersistsAcrossRecreation() {
+        let key = "tuikit.colorPicker.palette256.showNumbers"  // must match _Palette256Editor
+        let backend = MockStorageBackend()
+        // First "mount": defaults off, then the user enables numbers.
+        let firstMount = AppStorage(wrappedValue: false, key, storage: backend)
+        #expect(firstMount.wrappedValue == false, "defaults to compact swatches")
+        firstMount.wrappedValue = true
+        // A later "mount" (tab re-entry / relaunch) reads the persisted value
+        // rather than resetting to the default, which plain @State would do.
+        let laterMount = AppStorage(wrappedValue: false, key, storage: backend)
+        #expect(laterMount.wrappedValue == true, "the numbered-swatch preference persisted")
+    }
 }
