@@ -216,23 +216,32 @@ struct TabViewTests {
         #expect(out.contains("▌▐"), "adjacent chips meet at their caps")
     }
 
-    @Test("The strip folds to the widest tab's content width, not the screen width (#3)")
-    func stripFoldsToContent() {
-        // Ten tabs whose one-row strip is ~80 wide, but content only ~28. Even on a
-        // wide screen the strip folds to the content width — it sizes to the widest
-        // tab rather than ballooning to fit every tab on one row.
-        let many = TabView(selection: .constant(0)) {
-            ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text(String(repeating: "x", count: 28)) } }
-        }.tabViewStyle(.compact)
-        let wide = renderToBuffer(many, context: makeRenderContext(width: 120, height: 16))
-        let wideStrip = wide.lines.prefix { !$0.stripped.contains("x") }
-        #expect(wideStrip.count > 1, "the strip folds despite the wide screen")
-        #expect(wide.width <= 40, "panel sized to the widest content (~28), not the strip: \(wide.width)")
-        // Every tab is still present across the folded rows.
-        let joined = wide.lines.map { $0.stripped }.joined(separator: " ")
+    @Test("`.toContentWidth` folds the strip to the content; `.minimal` doesn't (#1, #3)")
+    func headerWrapModes() {
+        func tabs() -> some View {
+            TabView(selection: .constant(0)) {
+                ForEach(0..<10) { i in Tab("Tab\(i)", value: i) { Text(String(repeating: "x", count: 28)) } }
+            }.tabViewStyle(.compact)
+        }
+        // .toContentWidth: even on a wide screen the ~80-wide strip folds to the
+        // ~28-wide content, so the panel stays narrow.
+        let folded = renderToBuffer(
+            tabs().tabViewHeaderWrap(.toContentWidth), context: makeRenderContext(width: 120, height: 16))
+        let foldedStrip = folded.lines.prefix { !$0.stripped.contains("x") }
+        #expect(foldedStrip.count > 1, "toContentWidth folds despite the wide screen")
+        #expect(folded.width <= 40, "panel sized to the widest content (~28): \(folded.width)")
+        let joined = folded.lines.map { $0.stripped }.joined(separator: " ")
         for i in 0..<10 { #expect(joined.contains("Tab\(i)"), "Tab\(i) present after folding") }
+
+        // .minimal (the default): the strip stays on one row when the screen has
+        // room — it does NOT fold just because the content is narrower.
+        let minimal = renderToBuffer(tabs(), context: makeRenderContext(width: 120, height: 16))
+        let minimalStrip = minimal.lines.prefix { !$0.stripped.contains("x") }
+        #expect(minimalStrip.count == 1, "minimal keeps one row when the screen has room")
+
         // Constrained narrower than the content: the panel stays within bounds.
-        let narrow = renderToBuffer(many, context: makeRenderContext(width: 20, height: 16))
+        let narrow = renderToBuffer(
+            tabs().tabViewHeaderWrap(.toContentWidth), context: makeRenderContext(width: 20, height: 16))
         #expect(narrow.width <= 20, "panel stays within the available width, got \(narrow.width)")
     }
 

@@ -95,7 +95,9 @@ public struct ColorPickerPanel: View {
 
     public var body: some View {
         Dialog(title: title, titleColor: .palette.accent) {
-            VStack(alignment: .leading, spacing: 1) {
+            // Centre the preview and the tab view relative to each other (the tab
+            // view is the widest, so the preview centres within it).
+            VStack(alignment: .center, spacing: 1) {
                 previewRow
                 // A TabView gives each model's editor its own identity, so a
                 // slider's state can't leak across tabs (e.g. RGB's 0…255 bounds
@@ -103,32 +105,31 @@ public struct ColorPickerPanel: View {
                 // with no padding between the strip and the body; each editor
                 // shares the active tab's surface, courtesy of the TabView.
                 //
-                // Each tab's content is wrapped in a ScrollView: it sizes to the
-                // content (so the panel still fits the editor), but a too-short
-                // terminal keeps the tall tabs (256-grid, Named, …) reachable by
-                // scrolling rather than clipping them.
+                // Each tab's content is wrapped (via `tabBody`) in a ScrollView so
+                // a too-short terminal keeps the tall tabs (256-grid, Named, …)
+                // reachable by scrolling rather than clipping them.
                 TabView(selection: $mode) {
-                    Tab("RGB", value: Mode.rgb) { ScrollView { _ChannelEditor(mode: .rgb, selection: selection) } }
-                    Tab("HSL", value: Mode.hsl) { ScrollView { _ChannelEditor(mode: .hsl, selection: selection) } }
-                    Tab("HSB", value: Mode.hsb) { ScrollView { _ChannelEditor(mode: .hsb, selection: selection) } }
-                    Tab("CMYK", value: Mode.cmyk) { ScrollView { _ChannelEditor(mode: .cmyk, selection: selection) } }
-                    Tab("Semantic", value: Mode.semantic) { ScrollView { semanticEditor } }
-                    Tab("256 (Xterm)", value: Mode.palette256) { ScrollView { _Palette256Editor(selection: selection) } }
+                    Tab("RGB", value: Mode.rgb) { tabBody { _ChannelEditor(mode: .rgb, selection: selection) } }
+                    Tab("HSL", value: Mode.hsl) { tabBody { _ChannelEditor(mode: .hsl, selection: selection) } }
+                    Tab("HSB", value: Mode.hsb) { tabBody { _ChannelEditor(mode: .hsb, selection: selection) } }
+                    Tab("CMYK", value: Mode.cmyk) { tabBody { _ChannelEditor(mode: .cmyk, selection: selection) } }
+                    Tab("Semantic", value: Mode.semantic) { tabBody { semanticEditor } }
+                    Tab("256 (Xterm)", value: Mode.palette256) { tabBody { _Palette256Editor(selection: selection) } }
                     Tab("Greyscale", value: Mode.greyscale) {
-                        ScrollView { _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection) }
+                        tabBody { _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection) }
                     }
                     Tab("Named", value: Mode.named) {
-                        ScrollView { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection) }
+                        tabBody { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection) }
                     }
                     Tab("Web Safe", value: Mode.webSafe) {
-                        ScrollView {
+                        tabBody {
                             _SwatchGridCore(
                                 entries: SwatchPalettes.webSafe, columns: 18,
                                 selection: selection, exactMatchOnly: true)
                         }
                     }
                     Tab("Crayons", value: Mode.crayons) {
-                        ScrollView {
+                        tabBody {
                             _NamedSwatchGrid(
                                 entries: SwatchPalettes.crayons, columns: 8,
                                 selection: selection, exactMatchOnly: true)
@@ -136,6 +137,10 @@ public struct ColorPickerPanel: View {
                     }
                 }
                 .tabViewStyle(.compact)
+                // Many tabs: fold the header strip to the content width so the
+                // dialog stays as narrow as its editors rather than being
+                // stretched wide by a long single-row strip.
+                .tabViewHeaderWrap(.toContentWidth)
             }
         } footer: {
             // No leading Spacer: a Spacer is width-flexible, which would make the
@@ -144,6 +149,13 @@ public struct ColorPickerPanel: View {
             Button("Done") { isPresented.wrappedValue = false }
                 .buttonStyle(.primary)
         }
+    }
+
+    /// Wraps a tab's content in a ScrollView so a too-short terminal can scroll the
+    /// tall tabs (the 256-grid, Named, Crayons) into view rather than clipping them.
+    @ViewBuilder
+    private func tabBody<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ScrollView { content() }
     }
 
     // MARK: Preview
