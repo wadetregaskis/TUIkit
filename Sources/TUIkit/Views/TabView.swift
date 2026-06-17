@@ -207,6 +207,23 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let style = context.environment.tabViewStyle.resolved
         var ctx = context
         ctx.availableWidth = proposal.width ?? context.availableWidth
+
+        if style == .bordered {
+            // Box chrome: 1 border + tab rows + notch + pad + content + 1 border,
+            // and a 1-cell border + 1-cell padding on each side.
+            let chrome = borderedChromeHeight(available: ctx.availableWidth)
+            let contentSize = ChildView(tabs[selectedIndex].content).measure(
+                proposal: ProposedSize(width: ctx.availableWidth, height: nil),
+                context: contentContext(ctx, stripHeight: chrome))
+            let tabsWidth = stripRowGroups(style: .compact, available: max(1, ctx.availableWidth - 4))
+                .map { row in row.reduce(0) { $0 + tabWidth($1, style: .compact) } }.max() ?? 0
+            return ViewSize(
+                width: max(tabsWidth, contentSize.width) + 4,  // 2 border + 2 padding
+                height: chrome + contentSize.height,
+                isWidthFlexible: false,
+                isHeightFlexible: false)
+        }
+
         let stripHeight = stripRowCount(style: style, available: ctx.availableWidth)
         let stripWidth = stripWrappedWidth(style: style, available: ctx.availableWidth)
 
@@ -250,31 +267,36 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-
-        // Strip.
         let selected = selectedIndex
+        let activeBg = Self.activeTabBackground(palette: palette, isFocused: isFocused && !isDisabled)
+
+        if style == .bordered {
+            return renderBordered(
+                selectedIndex: selected, isFocused: isFocused && !isDisabled,
+                surface: activeBg, palette: palette, context: context)
+        }
+
+        // Compact: strip of chips, then the content (whose background matches the
+        // active tab's, so the active tab — floated to the bottom row — flows into
+        // the content as one surface).
         var strip = renderStrip(
             style: style, selectedIndex: selected, isFocused: isFocused && !isDisabled,
             palette: palette, context: context)
-
-        // Selected content, isolated per tab. Its background matches the active
-        // tab's, so the active tab (whose row sits at the bottom of the strip)
-        // flows into the content as one surface.
-        let activeBg = Self.activeTabBackground(palette: palette, isFocused: isFocused && !isDisabled)
-        let stripHeight = strip.height
         let content = TUIkit.renderToBuffer(
             tabs[selected].content.background(activeBg),
-            context: contentContext(context, stripHeight: stripHeight))
+            context: contentContext(context, stripHeight: strip.height))
 
         strip.appendVertically(content)
         return strip.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
-    /// The active tab's background — the accent, dimmed when the strip isn't
-    /// focused. Shared by the active chip and the content area so they match.
+    /// The active tab's background — a quiet neutral surface (the border tone),
+    /// shared by the active chip and the content area so they unify without the
+    /// accent tint overwhelming (and washing out) the body. Stable across strip
+    /// focus so the content background doesn't flicker; focus is shown on the
+    /// active tab's foreground instead.
     static func activeTabBackground(palette: any Palette, isFocused: Bool) -> Color {
-        let accent = palette.accent.resolve(with: palette)
-        return isFocused ? accent : accent.opacity(ViewConstants.focusBorderDim)
+        palette.border.resolve(with: palette)
     }
 
     // MARK: Strip rendering
@@ -346,10 +368,16 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         style: TabViewStyle, selectedIndex: Int, isFocused: Bool,
         palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
+        // Active tab + content share the neutral surface; inactive chips recede
+        // on a fainter version of it. The active tab is told apart by its
+        // brighter fill, bold, and bottom-row position; when the strip itself is
+        // focused, its label takes the accent so arrow-navigation is discoverable.
         let activeBg = Self.activeTabBackground(palette: palette, isFocused: isFocused)
-        let inactiveBg = palette.border.resolve(with: palette)
-        let activeFg = Self.contrastingForeground(for: activeBg, palette: palette)
-        let inactiveFg = Self.contrastingForeground(for: inactiveBg, palette: palette)
+        let inactiveBg = palette.border.opacity(ViewConstants.focusBorderDim)
+        let activeFg = isFocused
+            ? palette.accent.resolve(with: palette)
+            : Self.contrastingForeground(for: activeBg, palette: palette)
+        let inactiveFg = palette.foregroundSecondary
 
         // The active tab's whole row moves to the bottom of the stack so it sits
         // directly above the content (matching backgrounds, they read as one).
@@ -434,6 +462,124 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         FocusRegistration.persistFocusID(
             context: context, explicitFocusID: nil, defaultPrefix: "tabview",
             propertyIndex: StateIndex.focusID)
+    }
+
+    /// Registers a click handler per tab region (selecting that tab).
+    private func attachTabClicks(
+        to buffer: inout FrameBuffer,
+        regions: [(x: Int, y: Int, width: Int, index: Int)],
+        context: RenderContext
+    ) {
+        guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher else { return }
+        let captureFocusID = persistedFocusIDForClicks(context)
+        let focusManager = context.environment.focusManager
+        for region in regions {
+            let value = tabs[region.index].value
+            let capture = selection
+            let handlerID = dispatcher.register { event in
+                guard event.phase == .released, event.button == .left else {
+                    return event.phase == .pressed && event.button == .left
+                }
+                focusManager.focus(id: captureFocusID)
+                if let v = value.base as? SelectionValue { capture.wrappedValue = v }
+                return true
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: region.x, offsetY: region.y, width: region.width, height: 1,
+                    handlerID: handlerID, focusID: nil))
+        }
+    }
+
+    /// The number of rows the bordered box adds around the content: the top
+    /// border, the wrapped tab rows, the notch separator, the padding row, and
+    /// the bottom border.
+    private func borderedChromeHeight(available: Int) -> Int {
+        stripRowGroups(style: .compact, available: max(1, available - 4)).count + 4
+    }
+
+    /// Renders the `.bordered` style: a line-drawn box wrapping the tab rows and
+    /// the content. The active tab's row floats to the bottom; the separator
+    /// between the tabs and the content is drawn under the inactive tabs but left
+    /// open under the active tab, which (sharing the content's background) flows
+    /// into the body — a notebook tab.
+    private func renderBordered(
+        selectedIndex: Int, isFocused: Bool, surface: Color, palette: any Palette, context: RenderContext
+    ) -> FrameBuffer {
+        let border = palette.border
+        let inactiveBg = palette.border.opacity(ViewConstants.focusBorderDim)
+        let activeFg = isFocused
+            ? palette.accent.resolve(with: palette)
+            : Self.contrastingForeground(for: surface, palette: palette)
+        let inactiveFg = palette.foregroundSecondary
+        let hpad = 1
+
+        // Wrapped tab rows, active row floated to the bottom (next to the content).
+        var groups = stripRowGroups(style: .compact, available: max(1, context.availableWidth - 2 - 2 * hpad))
+        if let activeRow = groups.firstIndex(where: { $0.contains(selectedIndex) }),
+            activeRow != groups.count - 1 {
+            groups.append(groups.remove(at: activeRow))
+        }
+        guard !groups.isEmpty else { return FrameBuffer() }
+
+        // Content, on the shared surface, with room for the box chrome.
+        let content = TUIkit.renderToBuffer(
+            tabs[selectedIndex].content.background(surface),
+            context: contentContext(context, stripHeight: groups.count + 4))
+
+        func tabRowWidth(_ row: [Int]) -> Int { row.reduce(0) { $0 + tabWidth($1, style: .compact) } }
+        let interior = max(groups.map(tabRowWidth).max() ?? 0, content.width) + 2 * hpad
+
+        func surfaceFill(_ n: Int) -> String {
+            n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
+        }
+        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
+
+        var lines: [String] = [bc("╭" + String(repeating: "─", count: interior) + "╮")]
+        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
+        var activeSpan: (start: Int, width: Int)?  // in interior columns (0 = first cell after │)
+
+        for (rowIndex, row) in groups.enumerated() {
+            var line = bc("│") + surfaceFill(hpad)
+            var x = 1 + hpad
+            for i in row {
+                let active = i == selectedIndex
+                let body = " \(tabs[i].title) "
+                let chipBg = active ? surface : inactiveBg
+                let chipFg = active ? activeFg : inactiveFg
+                line += ANSIRenderer.colorize("▐", foreground: chipBg)
+                line += ANSIRenderer.colorize(body, foreground: chipFg, background: chipBg, bold: active)
+                line += ANSIRenderer.colorize("▌", foreground: chipBg)
+                regions.append((x: x, y: rowIndex + 1, width: body.count + 2, index: i))
+                if active && rowIndex == groups.count - 1 { activeSpan = (x - 1, body.count + 2) }
+                x += body.count + 2
+            }
+            line += surfaceFill(interior - (x - 1)) + bc("│")
+            lines.append(line)
+        }
+
+        // Notch: a border line under the tabs, opened under the active tab.
+        var separator = bc("├")
+        for column in 0..<interior {
+            if let span = activeSpan, column >= span.start, column < span.start + span.width {
+                separator += ANSIRenderer.colorize(" ", background: surface)  // open: tab → content
+            } else {
+                separator += bc("─")
+            }
+        }
+        lines.append(separator + bc("┤"))
+
+        // Padding row, then the content, then the bottom border.
+        lines.append(bc("│") + surfaceFill(interior) + bc("│"))
+        for contentLine in content.lines {
+            let used = contentLine.strippedLength
+            lines.append(bc("│") + surfaceFill(hpad) + contentLine + surfaceFill(interior - hpad - used) + bc("│"))
+        }
+        lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
+
+        var buffer = FrameBuffer(lines: lines)
+        attachTabClicks(to: &buffer, regions: regions, context: context)
+        return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     /// Black or white, whichever reads better on `color`.

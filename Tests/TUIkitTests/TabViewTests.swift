@@ -47,6 +47,30 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
+    @Test("Bordered style wraps tabs + content in a box, notch open under the active tab")
+    func borderedBox() {
+        let lines = renderToBuffer(
+            TabView(selection: .constant(1)) {
+                Tab("RGB", value: 0) { Text("aaa") }
+                Tab("HSL", value: 1) { Text("body-here") }
+                Tab("HSB", value: 2) { Text("ccc") }
+            }.tabViewStyle(.bordered),
+            context: makeRenderContext(width: 44, height: 10)
+        ).lines.map { $0.stripped }
+        // A line-drawn box.
+        #expect(lines.first?.contains("╭") == true && lines.first?.contains("╮") == true, "top border")
+        #expect(lines.last?.contains("╰") == true && lines.last?.contains("╯") == true, "bottom border")
+        // Tabs are inside the box.
+        #expect(lines.contains { $0.contains("│") && $0.contains("RGB") && $0.contains("HSL") },
+                "tabs inside the box")
+        // The notch separator (├ … ┤) carries a run of border with a gap (spaces)
+        // opened under the active tab.
+        let notch = lines.first { $0.contains("├") && $0.contains("┤") } ?? ""
+        #expect(notch.contains("─") && notch.contains("   "),
+                "notch is open under the active tab: \(notch)")
+        #expect(lines.contains { $0.contains("body-here") }, "content shows inside the box")
+    }
+
     @Test("The active tab's row moves to the bottom of the wrapped strip")
     func activeRowMovesToBottom() {
         // Ten tabs wrap to several rows at a narrow width. Selecting Tab0 (which
