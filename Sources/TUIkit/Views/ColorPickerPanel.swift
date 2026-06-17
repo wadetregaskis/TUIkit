@@ -99,37 +99,31 @@ public struct ColorPickerPanel: View {
                 previewRow
                 // A TabView gives each model's editor its own identity, so a
                 // slider's state can't leak across tabs (e.g. RGB's 0…255 bounds
-                // vs HSL's 0…100). The compact style keeps the strip to one row.
-                // Each tab's content adds its own top padding row: in compact
-                // mode the TabView itself adds none, so the content provides the
-                // gap between the (active) tab and the body (#9). It shares the
-                // active tab's background, courtesy of the TabView.
+                // vs HSL's 0…100). The compact style keeps the strip to one row
+                // with no padding between the strip and the body; each editor
+                // shares the active tab's surface, courtesy of the TabView.
                 TabView(selection: $mode) {
-                    Tab("RGB", value: Mode.rgb) { _ChannelEditor(mode: .rgb, selection: selection).padding(.top, 1) }
-                    Tab("HSL", value: Mode.hsl) { _ChannelEditor(mode: .hsl, selection: selection).padding(.top, 1) }
-                    Tab("HSB", value: Mode.hsb) { _ChannelEditor(mode: .hsb, selection: selection).padding(.top, 1) }
-                    Tab("CMYK", value: Mode.cmyk) { _ChannelEditor(mode: .cmyk, selection: selection).padding(.top, 1) }
-                    Tab("Semantic", value: Mode.semantic) { semanticEditor.padding(.top, 1) }
-                    Tab("256 (Xterm)", value: Mode.palette256) { _Palette256Editor(selection: selection).padding(.top, 1) }
+                    Tab("RGB", value: Mode.rgb) { _ChannelEditor(mode: .rgb, selection: selection) }
+                    Tab("HSL", value: Mode.hsl) { _ChannelEditor(mode: .hsl, selection: selection) }
+                    Tab("HSB", value: Mode.hsb) { _ChannelEditor(mode: .hsb, selection: selection) }
+                    Tab("CMYK", value: Mode.cmyk) { _ChannelEditor(mode: .cmyk, selection: selection) }
+                    Tab("Semantic", value: Mode.semantic) { semanticEditor }
+                    Tab("256 (Xterm)", value: Mode.palette256) { _Palette256Editor(selection: selection) }
                     Tab("Greyscale", value: Mode.greyscale) {
                         _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection)
-                            .padding(.top, 1)
                     }
                     Tab("Named", value: Mode.named) {
                         _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection)
-                            .padding(.top, 1)
                     }
                     Tab("Web Safe", value: Mode.webSafe) {
                         _SwatchGridCore(
                             entries: SwatchPalettes.webSafe, columns: 18,
                             selection: selection, exactMatchOnly: true)
-                            .padding(.top, 1)
                     }
                     Tab("Crayons", value: Mode.crayons) {
                         _NamedSwatchGrid(
                             entries: SwatchPalettes.crayons, columns: 8,
                             selection: selection, exactMatchOnly: true)
-                            .padding(.top, 1)
                     }
                 }
                 .tabViewStyle(.compact)

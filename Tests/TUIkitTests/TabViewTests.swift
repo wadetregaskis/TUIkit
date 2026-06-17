@@ -47,7 +47,7 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
-    @Test("Bordered style wraps tabs + content in a box, notch open under the active tab")
+    @Test("Bordered style: folder tabs on a content box, border opens under the active tab")
     func borderedBox() {
         let lines = renderToBuffer(
             TabView(selection: .constant(1)) {
@@ -55,20 +55,114 @@ struct TabViewTests {
                 Tab("HSL", value: 1) { Text("body-here") }
                 Tab("HSB", value: 2) { Text("ccc") }
             }.tabViewStyle(.bordered),
-            context: makeRenderContext(width: 44, height: 10)
+            context: makeRenderContext(width: 50, height: 12)
         ).lines.map { $0.stripped }
-        // A line-drawn box.
-        #expect(lines.first?.contains("╭") == true && lines.first?.contains("╮") == true, "top border")
+        // Tab labels sit in a row, separated by walls.
+        #expect(lines.contains { $0.contains("│ RGB │") && $0.contains("│ HSL │") },
+                "folder tabs with wall separators: \(lines)")
+        // The content box's top border curves up around the active tab — a line
+        // carrying the mouth ╯ … ╰ (╯ before ╰, distinguishing it from the
+        // bottom border's ╰ … ╯).
+        #expect(lines.contains { line in
+            guard let p = line.firstIndex(of: "╯"), let q = line.firstIndex(of: "╰") else { return false }
+            return p < q
+        }, "border opens under the active tab (╯ … ╰ mouth): \(lines)")
+        // A line-drawn content box with rounded bottom corners.
         #expect(lines.last?.contains("╰") == true && lines.last?.contains("╯") == true, "bottom border")
-        // Tabs are inside the box.
-        #expect(lines.contains { $0.contains("│") && $0.contains("RGB") && $0.contains("HSL") },
-                "tabs inside the box")
-        // The notch separator (├ … ┤) carries a run of border with a gap (spaces)
-        // opened under the active tab.
-        let notch = lines.first { $0.contains("├") && $0.contains("┤") } ?? ""
-        #expect(notch.contains("─") && notch.contains("   "),
-                "notch is open under the active tab: \(notch)")
-        #expect(lines.contains { $0.contains("body-here") }, "content shows inside the box")
+        // Only the active tab's content shows.
+        #expect(lines.contains { $0.contains("body-here") }, "active tab content shows")
+        #expect(!lines.joined().contains("aaa") && !lines.joined().contains("ccc"),
+                "inactive tabs' content is hidden")
+    }
+
+    @Test("A tab's content background is contiguous — child resets don't punch holes (#3)")
+    func contentBackgroundIsContiguous() {
+        // A Toggle emits several interior ANSI resets (brackets, mark, label). The
+        // active tab's content must stay fully backed by the surface across all of
+        // them. Persistent background keeps one background code per reset, so the
+        // counts match (the old naive wrap left a single opening code).
+        let raw = renderToBuffer(
+            TabView(selection: .constant(0)) {
+                Tab("Settings", value: 0) { Toggle("Notify", isOn: .constant(true)) }
+            }.tabViewStyle(.compact),
+            context: makeRenderContext(width: 30, height: 4))
+        // The content line (the one with the toggle label).
+        let line = raw.lines.first { $0.contains("Notify") } ?? ""
+        let resets = line.components(separatedBy: "\u{1B}[0m").count - 1
+        let backgrounds = line.components(separatedBy: "48;2;").count - 1
+        #expect(resets >= 2, "the toggle emits interior resets")
+        #expect(backgrounds == resets,
+                "every reset is followed by a re-applied background (got \(backgrounds) bg vs \(resets) resets)")
+    }
+
+    @Test("Header alignment shifts the tab strip across the box")
+    func headerAlignment() {
+        func tabsLine(_ alignment: HorizontalAlignment) -> String {
+            let view = TabView(selection: .constant(0)) {
+                Tab("A", value: 0) { Text(String(repeating: "wide content ", count: 4)) }
+                Tab("B", value: 1) { Text("b") }
+            }.tabViewStyle(.bordered).tabViewHeaderAlignment(alignment)
+            return renderToBuffer(view, context: makeRenderContext(width: 60, height: 8))
+                .lines.map { $0.stripped }.first { $0.contains("│ A │") } ?? ""
+        }
+        func leadingSpaces(_ s: String) -> Int { s.prefix { $0 == " " }.count }
+        let leading = leadingSpaces(tabsLine(.leading))
+        let center = leadingSpaces(tabsLine(.center))
+        let trailing = leadingSpaces(tabsLine(.trailing))
+        #expect(leading < center && center < trailing,
+                "leading(\(leading)) < centre(\(center)) < trailing(\(trailing))")
+    }
+
+    @Test("Compact adds no padding row; bordered pads its content (#1, #5)")
+    func contentPadding() {
+        // Compact: the content sits immediately under the strip — no blank row.
+        let compact = renderToBuffer(
+            TabView(selection: .constant(0)) {
+                Tab("A", value: 0) { Text("CONTENT") }
+            }.tabViewStyle(.compact),
+            context: makeRenderContext(width: 20, height: 5)
+        ).lines.map { $0.stripped }
+        let compactStripRow = compact.firstIndex { $0.contains("A") } ?? 0
+        #expect(compact[compactStripRow + 1].contains("CONTENT"),
+                "compact: content is on the row right after the strip: \(compact)")
+
+        // Bordered: a default inset puts a blank (padded) row above the content.
+        let bordered = renderToBuffer(
+            TabView(selection: .constant(0)) {
+                Tab("A", value: 0) { Text("CONTENT") }
+            }.tabViewStyle(.bordered),
+            context: makeRenderContext(width: 30, height: 9)
+        ).lines.map { $0.stripped }
+        let contentRow = bordered.firstIndex { $0.contains("CONTENT") } ?? 0
+        // The row above the content is interior padding (just the box walls), and
+        // the content is indented by the leading inset.
+        #expect(bordered[contentRow].contains("  CONTENT"), "bordered content is inset: \(bordered)")
+    }
+
+    @Test("The active tab breathes (background changes with the pulse) when focused (#4)")
+    func activeTabAnimatesWhenFocused() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        func activeChipBackground(phase: Double) -> String {
+            let view = TabView(selection: .constant(0)) {
+                Tab("AAA", value: 0) { Text("x") }
+                Tab("BBB", value: 1) { Text("y") }
+            }.tabViewStyle(.compact)
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            env.pulsePhase = phase
+            let ctx = RenderContext(
+                availableWidth: 30, availableHeight: 5, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            let line = renderToBuffer(view, context: ctx).lines.first ?? ""
+            fm.endRenderPass()
+            // The first 48;2;r;g;b run on the strip line is the active chip's fill.
+            guard let r = line.range(of: "48;2;") else { return "none" }
+            return String(line[r.upperBound...].prefix(11))
+        }
+        _ = activeChipBackground(phase: 0)  // first render auto-focuses the strip
+        #expect(activeChipBackground(phase: 0.0) != activeChipBackground(phase: 1.0),
+                "the focused active tab's fill tracks the pulse phase (it animates)")
     }
 
     @Test("The active tab's row moves to the bottom of the wrapped strip")

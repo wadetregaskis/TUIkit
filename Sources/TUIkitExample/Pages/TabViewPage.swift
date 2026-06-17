@@ -9,17 +9,20 @@ import TUIkit
 /// TabView demo page.
 ///
 /// Shows the `TabView` control in both of its styles:
-/// - `.compact` — a lightweight strip of chip-style tab headers, no chrome
-///   around the content (the same style the colour picker uses). The content
-///   adds its own padding, since the compact strip deliberately leaves none.
-/// - `.bordered` — line-drawing chrome (like `List`, `Table`, the app header)
-///   wrapping the tabs *and* the content, with the border opened beneath the
-///   active tab so its row flows directly into the content.
+/// - `.compact` — a lightweight strip of chip-style tab headers with no chrome
+///   around the content (the style the colour picker uses). Here it's set to
+///   leading alignment via `.tabViewHeaderAlignment(_:)`.
+/// - `.bordered` — folder tabs sitting on a line-drawing content box (like
+///   `List` / `Table` / the app header). Inactive tabs are separated from the
+///   content by the box's top border; the active tab's row floats to the bottom
+///   and the border curves around it (`╯ … ╰`) so the tab and body read as one.
+///   The strip is centred by default and the content is padded for breathing
+///   room (both adjustable via `.tabViewHeaderAlignment(_:)` /
+///   `.tabViewContentPadding(_:)`).
 ///
-/// In both styles the content area takes the active tab header's background, so
-/// the selected tab reads as one continuous surface with its content. Activating
-/// a tab always floats its whole row to the bottom of a wrapped strip, so it sits
-/// adjacent to the content it reveals.
+/// In both styles the active tab and the content share a subtle surface (a quiet
+/// lift above the base background, like the status bar / app header), and the
+/// active tab breathes on the pulse clock while the strip is focused.
 struct TabViewPage: View {
     @State private var compactSelection = 0
     @State private var borderedSelection = 0
@@ -37,18 +40,16 @@ struct TabViewPage: View {
                             Text("First programmer")
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
-                        .padding(.top, 1)
                     }
                     Tab("Settings", value: 1) {
                         Toggle("Notifications", isOn: $notify)
-                            .padding(.top, 1)
                     }
                     Tab("About", value: 2) {
                         Text("TUIkit · v1.0")
-                            .padding(.top, 1)
                     }
                 }
                 .tabViewStyle(.compact)
+                .tabViewHeaderAlignment(.leading)
             }
 
             DemoSection("Bordered Style (line-drawing chrome)") {
