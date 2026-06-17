@@ -170,3 +170,94 @@ struct ModalPresentationModifierTests {
         #expect(content.contains("Small"))
     }
 }
+
+// MARK: - Focus / input isolation (modal blocks the background)
+
+private final class ClickSink: @unchecked Sendable { var hits: [String] = [] }
+
+@MainActor
+@Suite("Modal focus & input isolation")
+struct ModalIsolationTests {
+
+    /// Renders the view with a real FocusManager + mouse dispatcher, returns the
+    /// buffer and the manager so a test can inspect focus and click hit regions.
+    private func renderInteractive<V: View>(
+        _ view: V, width: Int = 60, height: Int = 20
+    ) -> (buffer: FrameBuffer, fm: FocusManager, tui: TUIContext) {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.stateStorage = tui.stateStorage
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let ctx = RenderContext(
+            availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
+        fm.beginRenderPass()
+        let buffer = renderToBuffer(view, context: ctx)
+        fm.endRenderPass()
+        return (buffer, fm, tui)
+    }
+
+    /// Clicks the centre of every hit region in the buffer.
+    private func clickAllRegions(_ buffer: FrameBuffer, _ tui: TUIContext) {
+        tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+        for region in buffer.hitTestRegions {
+            let x = region.offsetX + region.width / 2
+            let y = region.offsetY + region.height / 2
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        }
+    }
+
+    @Test("A presented modal captures focus and makes the background inert (#6)")
+    func modalIsolatesBackground() {
+        let sink = ClickSink()
+        let view = VStack { Button("bg") { sink.hits.append("bg") } }
+            .modal(isPresented: .constant(true)) {
+                Dialog(title: "D") { Button("ok") { sink.hits.append("modal") } }
+            }
+        let (buffer, fm, tui) = renderInteractive(view)
+
+        // (a) The modal received keyboard focus on open — the reported symptom is
+        // dialogs that open with nothing focused.
+        #expect(fm.currentFocusedID != nil, "the modal received focus on open")
+
+        // (c) The background is inert: the dimmed base contributes no hit regions,
+        // so no click anywhere can reach the background control.
+        clickAllRegions(buffer, tui)
+        #expect(!sink.hits.contains("bg"),
+                "the background control can't be clicked while the modal is up: \(sink.hits)")
+        #expect(sink.hits.contains("modal"), "the modal's control is clickable")
+    }
+
+    @Test("The convenience .modal { } isolates the background too (#6)")
+    func convenienceModalIsolates() {
+        let sink = ClickSink()
+        let view = VStack { Button("bg") { sink.hits.append("bg") } }
+            .modal {
+                Dialog(title: "D") { Button("ok") { sink.hits.append("modal") } }
+            }
+        let (buffer, fm, tui) = renderInteractive(view)
+        #expect(fm.currentFocusedID != nil, "the always-on modal received focus")
+        clickAllRegions(buffer, tui)
+        #expect(!sink.hits.contains("bg"), "background inert under the convenience modal: \(sink.hits)")
+        #expect(sink.hits.contains("modal"), "the modal's control is clickable")
+    }
+
+    @Test("Stacked modals isolate to the topmost; lower layers are inert (#6)")
+    func stackedModalsIsolateToTopmost() {
+        let sink = ClickSink()
+        let view = VStack { Button("page") { sink.hits.append("page") } }
+            .modal(isPresented: .constant(true)) {
+                Dialog(title: "A") { Button("a") { sink.hits.append("a") } }
+                    .modal(isPresented: .constant(true)) {
+                        Dialog(title: "B") { Button("b") { sink.hits.append("b") } }
+                    }
+            }
+        let (buffer, _, tui) = renderInteractive(view, height: 24)
+        clickAllRegions(buffer, tui)
+        #expect(sink.hits.contains("b"), "the topmost modal's control is interactive: \(sink.hits)")
+        #expect(!sink.hits.contains("a") && !sink.hits.contains("page"),
+                "lower modal + page are inert under the topmost: \(sink.hits)")
+    }
+}

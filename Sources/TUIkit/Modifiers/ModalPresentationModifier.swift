@@ -41,10 +41,14 @@ public struct ModalPresentationModifier<Content: View, Modal: View>: View {
 // MARK: - Renderable
 
 extension ModalPresentationModifier: Renderable {
-    /// A stable section ID for modal focus sections.
-    private static var modalSectionID: String { "__modal__" }
-
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // A focus section unique to THIS modal instance (its position in the
+        // tree), so stacked modals each get a distinct section. Only the topmost
+        // (most recently activated) section is interactive, and focus can't leak
+        // between modals or to the background. A fixed shared id would make two
+        // modals register into one section and break that isolation.
+        let sectionID = "modal-\(context.identity.path)"
+
         // If not presented, just return base content.
         guard isPresented.wrappedValue else {
             // Tear down the modal focus section if it's still active (the modal
@@ -53,7 +57,7 @@ extension ModalPresentationModifier: Renderable {
             // first element — which a ScrollView would then snap-scroll to,
             // resetting the scroll position.
             if !context.isMeasuring {
-                context.environment.focusManager.deactivateSection(id: Self.modalSectionID)
+                context.environment.focusManager.deactivateSection(id: sectionID)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -68,11 +72,9 @@ extension ModalPresentationModifier: Renderable {
         let isolatedContext = context.isolatedForBackground()
         let dimmedBuffer = TUIkit.renderToBuffer(dimmedBase, context: isolatedContext)
 
-        // Register a modal focus section and activate it.
-        // This replaces the previous focusManager.clear() approach.
-        // The modal section becomes the active section, so Tab/arrows
-        // only navigate within the modal's focusable elements.
-        let sectionID = Self.modalSectionID
+        // Register the modal focus section and activate it. The modal section
+        // becomes the active section, so Tab/arrows only navigate within the
+        // modal's focusable elements.
         if !context.isMeasuring {
             focusManager.registerSection(id: sectionID)
             focusManager.activateSection(id: sectionID)

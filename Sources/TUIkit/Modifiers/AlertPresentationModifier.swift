@@ -56,17 +56,18 @@ public struct AlertPresentationModifier<Content: View, Actions: View, Message: V
 // MARK: - Renderable
 
 extension AlertPresentationModifier: Renderable {
-    /// A stable section ID for alert focus sections.
-    private static var alertSectionID: String { "__alert__" }
-
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // A focus section unique to THIS alert instance, so stacked alerts /
+        // modals each isolate (only the topmost active section is interactive).
+        let sectionID = "alert-\(context.identity.path)"
+
         // If not presented, just return base content. Tear down the alert's
         // focus section if it's still active (the alert was just dismissed), so
         // the page's focus — and a ScrollView's scroll position — is restored
         // rather than jumping to the top.
         guard isPresented.wrappedValue else {
             if !context.isMeasuring {
-                context.environment.focusManager.deactivateSection(id: Self.alertSectionID)
+                context.environment.focusManager.deactivateSection(id: sectionID)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -100,10 +101,9 @@ extension AlertPresentationModifier: Renderable {
         let isolatedContext = context.isolatedForBackground()
         let dimmedBuffer = TUIkit.renderToBuffer(dimmedBase, context: isolatedContext)
 
-        // Register an alert focus section and activate it.
-        // The alert section becomes the active section, so Tab/arrows
-        // only navigate within the alert's focusable elements (buttons).
-        let sectionID = Self.alertSectionID
+        // Register the alert focus section and activate it. The alert section
+        // becomes the active section, so Tab/arrows only navigate within the
+        // alert's focusable elements (buttons).
         if !context.isMeasuring {
             focusManager.registerSection(id: sectionID)
             focusManager.activateSection(id: sectionID)

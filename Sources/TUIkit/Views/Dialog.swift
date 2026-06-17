@@ -35,16 +35,19 @@
 ///     }
 /// }
 ///
-/// // Modal overlay pattern
+/// // Present it modally with `.modal(isPresented:)` (or `.modal { }` for an
+/// // always-on dialog). Do NOT use bare `.dimmed().overlay()` — that only dims
+/// // the background's appearance; the background stays focusable and clickable
+/// // and the dialog never captures the keyboard. The presentation modifiers dim
+/// // the background AND make it inert, capture focus, and centre the dialog.
 /// mainContent
-///     .dimmed()
-///     .overlay {
+///     .modal(isPresented: $confirming) {
 ///         Dialog(title: "Confirm Action") {
 ///             Text("Are you sure you want to proceed?")
 ///         } footer: {
 ///             ButtonRow {
-///                 Button("Yes") { }
-///                 Button("No") { }
+///                 Button("Yes") { confirming = false }
+///                 Button("No") { confirming = false }
 ///             }
 ///         }
 ///     }

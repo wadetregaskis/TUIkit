@@ -111,7 +111,7 @@ struct OverlayTests {
         #expect(buffer.lines[0].stripped.contains("Dimmed text"))
     }
 
-    @Test("Modal helper combines dimmed and overlay")
+    @Test("The convenience .modal presents a centred modal over the dimmed base")
     func modalRendering() {
         let view = Text("Background")
             .modal {
@@ -119,13 +119,12 @@ struct OverlayTests {
             }
         let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(view, context: context)
-        // The result should contain both the dimmed background and the modal overlay
-        #expect(buffer.height == 1)
-        // Overlay compositing should show "Modal" overlaid on "Background"
-        let stripped = buffer.lines[0].stripped
-        #expect(stripped.contains("Modal"))
-        // The visible text shows the overlay positioned over the base
-        #expect(buffer.width >= 5)  // at least "Modal" width
+        // The convenience modal now goes through the real presentation path: a
+        // dimmed base with the modal centred on top (rather than a bare overlay
+        // composited onto the single base line).
+        let all = buffer.lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(all.contains("Background"), "the dimmed base is shown")
+        #expect(all.contains("Modal"), "the modal content is shown over the base")
     }
 
     @Test("FrameBuffer compositing places overlay at correct position")

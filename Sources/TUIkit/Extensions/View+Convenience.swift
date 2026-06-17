@@ -7,10 +7,20 @@
 // MARK: - Modal
 
 extension View {
-    /// Presents this view as a modal dialog over dimmed content.
+    /// Presents this view as an always-on modal dialog over dimmed content.
     ///
-    /// This is a convenience method that combines `.dimmed()` and `.overlay()`
-    /// with center alignment.
+    /// The unconditional counterpart to ``modal(isPresented:content:)`` — for
+    /// content that is *always* modal while it's in the tree. It goes through the
+    /// same presentation path: the background is dimmed **and made inert** (its
+    /// focusables and key/mouse handlers are isolated), a dedicated focus section
+    /// captures the keyboard, and the modal is centred on the screen. So the
+    /// background can't be interacted with while the modal is up — the same
+    /// guarantee the binding-based form gives.
+    ///
+    /// > Important: Do **not** present a `Dialog` with bare `.dimmed().overlay()`.
+    /// > That only dims the *look* of the background; it leaves the background
+    /// > focusable and clickable, and the dialog never captures focus. Use this
+    /// > modifier (or ``modal(isPresented:content:)`` / ``alert(title:isPresented:…)``).
     ///
     /// ## Example
     ///
@@ -28,8 +38,11 @@ extension View {
     public func modal<Modal: View>(
         @ViewBuilder content: () -> Modal
     ) -> some View {
-        self.dimmed()
-            .overlay(alignment: .center, content: content)
+        ModalPresentationModifier(
+            content: self,
+            isPresented: .constant(true),
+            modal: content()
+        )
     }
 }
 
