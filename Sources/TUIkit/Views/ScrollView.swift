@@ -196,7 +196,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Matches SwiftUI, where a ScrollView's ideal size is its content's.
         let childSize: ViewSize? =
             (proposal.width == nil || proposal.height == nil)
-            ? ChildView(content).measure(proposal: proposal, context: context) : nil
+            ? ChildView(content).measure(
+                proposal: proposal, context: context.withChildIdentity(type: Content.self)) : nil
         return ViewSize(
             width: proposal.width ?? (childSize?.width ?? context.availableWidth),
             height: proposal.height ?? (childSize?.height ?? context.availableHeight),
@@ -336,7 +337,14 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // overflow downstream — but generous enough that any
         // realistic content lays out without truncation.
         let measureHeight = max(viewportHeight * 64, 4096)
-        var measureContext = context
+        // Render the content under its OWN child identity, distinct from the
+        // ScrollView's identity. Otherwise a directly-stateful content view binds
+        // its `@State` (property indices 0, 1, …) at the ScrollView's identity,
+        // where it collides with the ScrollView's own state keys (handler,
+        // focusID, …) — corrupting both, e.g. a stateful editor losing its held
+        // values frame to frame. Measure (`sizeThatFits`) uses the same child
+        // identity, so the content's state is hydrated consistently.
+        var measureContext = context.withChildIdentity(type: Content.self)
         measureContext.availableWidth = viewportWidth
         measureContext.availableHeight = measureHeight
         let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)

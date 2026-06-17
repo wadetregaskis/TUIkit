@@ -102,28 +102,37 @@ public struct ColorPickerPanel: View {
                 // vs HSL's 0…100). The compact style keeps the strip to one row
                 // with no padding between the strip and the body; each editor
                 // shares the active tab's surface, courtesy of the TabView.
+                //
+                // Each tab's content is wrapped in a ScrollView: it sizes to the
+                // content (so the panel still fits the editor), but a too-short
+                // terminal keeps the tall tabs (256-grid, Named, …) reachable by
+                // scrolling rather than clipping them.
                 TabView(selection: $mode) {
-                    Tab("RGB", value: Mode.rgb) { _ChannelEditor(mode: .rgb, selection: selection) }
-                    Tab("HSL", value: Mode.hsl) { _ChannelEditor(mode: .hsl, selection: selection) }
-                    Tab("HSB", value: Mode.hsb) { _ChannelEditor(mode: .hsb, selection: selection) }
-                    Tab("CMYK", value: Mode.cmyk) { _ChannelEditor(mode: .cmyk, selection: selection) }
-                    Tab("Semantic", value: Mode.semantic) { semanticEditor }
-                    Tab("256 (Xterm)", value: Mode.palette256) { _Palette256Editor(selection: selection) }
+                    Tab("RGB", value: Mode.rgb) { ScrollView { _ChannelEditor(mode: .rgb, selection: selection) } }
+                    Tab("HSL", value: Mode.hsl) { ScrollView { _ChannelEditor(mode: .hsl, selection: selection) } }
+                    Tab("HSB", value: Mode.hsb) { ScrollView { _ChannelEditor(mode: .hsb, selection: selection) } }
+                    Tab("CMYK", value: Mode.cmyk) { ScrollView { _ChannelEditor(mode: .cmyk, selection: selection) } }
+                    Tab("Semantic", value: Mode.semantic) { ScrollView { semanticEditor } }
+                    Tab("256 (Xterm)", value: Mode.palette256) { ScrollView { _Palette256Editor(selection: selection) } }
                     Tab("Greyscale", value: Mode.greyscale) {
-                        _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection)
+                        ScrollView { _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection) }
                     }
                     Tab("Named", value: Mode.named) {
-                        _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection)
+                        ScrollView { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection) }
                     }
                     Tab("Web Safe", value: Mode.webSafe) {
-                        _SwatchGridCore(
-                            entries: SwatchPalettes.webSafe, columns: 18,
-                            selection: selection, exactMatchOnly: true)
+                        ScrollView {
+                            _SwatchGridCore(
+                                entries: SwatchPalettes.webSafe, columns: 18,
+                                selection: selection, exactMatchOnly: true)
+                        }
                     }
                     Tab("Crayons", value: Mode.crayons) {
-                        _NamedSwatchGrid(
-                            entries: SwatchPalettes.crayons, columns: 8,
-                            selection: selection, exactMatchOnly: true)
+                        ScrollView {
+                            _NamedSwatchGrid(
+                                entries: SwatchPalettes.crayons, columns: 8,
+                                selection: selection, exactMatchOnly: true)
+                        }
                     }
                 }
                 .tabViewStyle(.compact)

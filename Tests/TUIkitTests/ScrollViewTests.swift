@@ -461,3 +461,62 @@ struct ScrollViewRenderingTests {
             "a nested ScrollView must scroll a below-fold focused control into view")
     }
 }
+
+// MARK: - Content @State isolation
+
+/// A view with its own `@State`, bumped via a click, reporting the held value —
+/// so a test can verify the value persists across renders rather than resetting.
+private final class StateSink: @unchecked Sendable { var value = -1 }
+
+private struct StatefulContent: View {
+    @State private var count = 0
+    let sink: StateSink
+    var body: some View {
+        Button("count \(count)") {
+            count += 1
+            sink.value = count
+        }
+    }
+}
+
+@MainActor
+@Suite("ScrollView — content @State isolation")
+struct ScrollViewContentStateTests {
+
+    @Test("A ScrollView preserves directly-stateful content's @State (no key collision)")
+    func preservesContentState() {
+        // The content's `@State` (property index 0) must not collide with the
+        // ScrollView's own state keys (handler index 0, …) at the same identity —
+        // it lives under a distinct child identity. If it collided, the content's
+        // state would be clobbered each frame and the count would never climb.
+        let sink = StateSink()
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let view = ScrollView { StatefulContent(sink: sink) }
+
+        func click() {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            env.stateStorage = tui.stateStorage
+            env.mouseEventDispatcher = tui.mouseEventDispatcher
+            let ctx = RenderContext(
+                availableWidth: 24, availableHeight: 6, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            let buffer = renderToBuffer(view, context: ctx)
+            fm.endRenderPass()
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            // The button's region is the short one (height 1); the ScrollView's
+            // viewport region (taller) rejects the click and falls through to it.
+            guard let button = buffer.hitTestRegions.min(by: { $0.height < $1.height }) else { return }
+            let x = button.offsetX + button.width / 2
+            let y = button.offsetY
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+            _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        }
+
+        click()  // count: 0 → 1
+        click()  // count: 1 → 2 (only if the @State persisted across the ScrollView)
+        #expect(sink.value == 2,
+                "content @State persisted across renders inside the ScrollView, got \(sink.value)")
+    }
+}
