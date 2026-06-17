@@ -119,6 +119,39 @@ struct SwatchGridRenderTests {
         #expect(box.color == entries[11], "the clicked swatch is selected, got \(box.color)")
     }
 
+    @Test("cellHeight renders multi-line swatches; hit regions span the whole cell")
+    func multiLineSwatches() {
+        let box = ColorBox(entries[10])  // row 1, column 2
+        let tui = TUIContext()
+        let fm = FocusManager()
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let ctx = RenderContext(availableWidth: 60, availableHeight: 12, environment: env, tuiContext: tui)
+        fm.beginRenderPass()
+        let buffer = renderToBuffer(
+            _SwatchGridCore(
+                entries: entries, columns: 8, selection: box.binding,
+                cellWidth: 4, cellHeight: 2, focusID: "sg-big"),
+            context: ctx)
+        fm.endRenderPass()
+
+        // 16 entries / 8 cols = 2 grid rows, each 2 lines tall → 4 lines of 8×4 = 32.
+        #expect(buffer.lines.count == 4, "two grid rows of two lines each")
+        #expect(buffer.lines.allSatisfy { $0.strippedLength == 32 }, "8 columns of 4-wide swatches")
+        #expect(buffer.lines.joined().contains("✔"), "the cursor cell is still marked")
+        // One 4×2 region per swatch.
+        #expect(buffer.hitTestRegions.count == entries.count)
+        #expect(buffer.hitTestRegions.allSatisfy { $0.width == 4 && $0.height == 2 })
+        // A click anywhere inside a swatch's 4×2 box selects it.
+        let target = 5  // row 0, column 5
+        let r = buffer.hitTestRegions[target]
+        tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: r.offsetX + 1, y: r.offsetY + 1))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: r.offsetX + 1, y: r.offsetY + 1))
+        #expect(box.color == entries[target], "clicking the lower line of a 2-tall swatch still selects it")
+    }
+
     @Test("The focused selection mark animates on pulse and is steady on none (#2)")
     func selectionIndicatorAnimation() {
         let entries: [Color] = (0..<4).map { Color.rgb(0, UInt8($0 * 60), 0) }

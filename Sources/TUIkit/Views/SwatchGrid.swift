@@ -88,6 +88,9 @@ struct _SwatchGridCore: View, Renderable {
     let columns: Int
     let selection: Binding<Color>
     var cellWidth: Int = 2
+    /// Swatch height in lines. Each grid row renders `cellHeight` identical
+    /// coloured lines; the cursor's check sits on the middle one.
+    var cellHeight: Int = 1
     /// When true, the selection marker is drawn only if the bound colour exactly
     /// matches one of the swatches — never on a merely-nearest cell. For discrete
     /// palettes (web-safe, crayons) a "nearest" marker would misleadingly imply
@@ -146,16 +149,20 @@ struct _SwatchGridCore: View, Renderable {
             || entries.contains { $0.resolve(with: palette) == resolvedSelection }
 
         var lines: [String] = []
+        let markRow = cellHeight / 2  // the sub-line that carries the cursor check
         for row in 0..<rows {
-            var line = ""
+            var sublines = [String](repeating: "", count: max(1, cellHeight))
             for col in 0..<columns {
                 let index = row * columns + col
                 guard index < entries.count else { break }
-                line += cellText(
-                    entries[index], cellWidth: cellWidth, palette: palette,
-                    isCursor: markerVisible && index == handler.cursor, indicator: indicator)
+                let isCursor = markerVisible && index == handler.cursor
+                for h in sublines.indices {
+                    sublines[h] += cellText(
+                        entries[index], cellWidth: cellWidth, palette: palette,
+                        isCursor: isCursor && h == markRow, indicator: indicator)
+                }
             }
-            lines.append(line)
+            lines.append(contentsOf: sublines)
         }
         var buffer = FrameBuffer(lines: lines)
 
@@ -176,8 +183,8 @@ struct _SwatchGridCore: View, Renderable {
                     }
                     buffer.hitTestRegions.append(
                         HitTestRegion(
-                            offsetX: col * cellWidth, offsetY: row,
-                            width: cellWidth, height: 1,
+                            offsetX: col * cellWidth, offsetY: row * cellHeight,
+                            width: cellWidth, height: cellHeight,
                             handlerID: handlerID, focusID: persistedFocusID))
                 }
             }
@@ -254,7 +261,7 @@ extension _SwatchGridCore: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         ViewSize(
             width: columns * cellWidth,
-            height: rows,
+            height: rows * cellHeight,
             isWidthFlexible: false,
             isHeightFlexible: false)
     }
@@ -273,13 +280,16 @@ struct _NamedSwatchGrid: View {
     /// Forwarded to the grid; also gates the name read-out, so a discrete palette
     /// (e.g. crayons) shows no name unless the colour exactly matches a swatch.
     var exactMatchOnly: Bool = false
+    var cellWidth: Int = 2
+    var cellHeight: Int = 1
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .center, spacing: 0) {
             _SwatchGridCore(
                 entries: entries.map(\.color), columns: columns,
-                selection: selection, exactMatchOnly: exactMatchOnly)
+                selection: selection, cellWidth: cellWidth, cellHeight: cellHeight,
+                exactMatchOnly: exactMatchOnly)
             Text(currentName).foregroundStyle(.palette.foregroundSecondary)
         }
     }

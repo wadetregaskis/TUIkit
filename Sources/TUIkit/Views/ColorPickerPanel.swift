@@ -116,7 +116,12 @@ public struct ColorPickerPanel: View {
                     Tab("Semantic", value: Mode.semantic) { tabBody { semanticEditor } }
                     Tab("256 (Xterm)", value: Mode.palette256) { tabBody { _Palette256Editor(selection: selection) } }
                     Tab("Greyscale", value: Mode.greyscale) {
-                        tabBody { _SwatchGridCore(entries: SwatchPalettes.greyscale, columns: 8, selection: selection) }
+                        // Only 8 columns, so there's room for larger 4×2 swatches.
+                        tabBody {
+                            _SwatchGridCore(
+                                entries: SwatchPalettes.greyscale, columns: 8,
+                                selection: selection, cellWidth: 4, cellHeight: 2)
+                        }
                     }
                     Tab("Named", value: Mode.named) {
                         tabBody { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection) }
@@ -129,10 +134,12 @@ public struct ColorPickerPanel: View {
                         }
                     }
                     Tab("Crayons", value: Mode.crayons) {
+                        // 8 columns like Greyscale — room for larger 4×2 swatches.
                         tabBody {
                             _NamedSwatchGrid(
                                 entries: SwatchPalettes.crayons, columns: 8,
-                                selection: selection, exactMatchOnly: true)
+                                selection: selection, exactMatchOnly: true,
+                                cellWidth: 4, cellHeight: 2)
                         }
                     }
                 }
