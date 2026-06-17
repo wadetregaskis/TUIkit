@@ -523,15 +523,22 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         return style == .bordered ? EdgeInsets(top: 1, leading: 2, bottom: 1, trailing: 2) : EdgeInsets()
     }
 
-    /// Moves the active tab's whole row to the bottom of a wrapped strip, so it
-    /// sits directly above (and connects to) the content.
+    /// Reorders a wrapped strip so the active tab's row sits at the bottom (it
+    /// abuts and connects to the content), *rotating* the others so they keep
+    /// their cyclic order above it.
+    ///
+    /// Rotating — rather than just lifting the active row out and appending it —
+    /// is what makes Up navigation reach every row. Up always selects the row
+    /// directly above the active (bottom) one, which then rotates to the bottom;
+    /// rotation feeds a *different* row into the second-from-bottom slot each
+    /// time, so repeated Up walks the whole strip. Lifting-and-appending instead
+    /// froze the upper rows, leaving Up oscillating between the bottom two.
     private func floatActiveRowToBottom(_ rows: [[Int]], selectedIndex: Int) -> [[Int]] {
-        var rows = rows
-        if let activeRow = rows.firstIndex(where: { $0.contains(selectedIndex) }),
-            activeRow != rows.count - 1 {
-            rows.append(rows.remove(at: activeRow))
-        }
-        return rows
+        guard rows.count > 1,
+            let activeRow = rows.firstIndex(where: { $0.contains(selectedIndex) })
+        else { return rows }
+        let pivot = (activeRow + 1) % rows.count  // rotate so the active row lands last
+        return Array(rows[pivot...] + rows[..<pivot])
     }
 
     /// A bordered (folder-tab) row's width: each tab body is `" title "`, and the

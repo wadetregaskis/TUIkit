@@ -434,6 +434,29 @@ struct TabViewTests {
         #expect(sel.value != 0, "selection moved to a tab in the row above, was 0 now \(sel.value)")
     }
 
+    @Test("Repeated up cycles through every row of a wrapped strip (#2 rotation)")
+    func upReachesEveryRow() {
+        // Six tabs wrap to three rows of two ([0,1] [2,3] [4,5]); row = value / 2.
+        let sel = IntBox(0)
+        let ctx = makeRenderContext(width: 14, height: 14)
+        let fm = ctx.environment.focusManager
+        let view = TabView(selection: sel.binding) {
+            ForEach(0..<6) { i in Tab("T\(i)", value: i) { Text("c\(i)") } }
+        }
+        .tabViewStyle(.compact)
+        _ = renderToBuffer(view, context: ctx)
+        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))  // focus the strip
+        var seenRows: Set<Int> = [sel.value / 2]
+        for _ in 0..<6 {
+            _ = renderToBuffer(view, context: ctx)    // refresh row geometry for the new selection
+            _ = fm.dispatchKeyEvent(KeyEvent(key: .up))
+            seenRows.insert(sel.value / 2)
+        }
+        // The float-to-bottom-by-removal layout could only ever reach two rows;
+        // rotating the rows lets up walk through all three.
+        #expect(seenRows.count == 3, "up reaches every row; saw rows \(seenRows.sorted())")
+    }
+
     @Test("A control inside a bordered tab is clickable (its hit region survives the box chrome)")
     func borderedTabContentClickable() {
         let on = BoolBox(false)
