@@ -664,7 +664,8 @@ where Value.ID: Hashable {
     ) -> (indicator: String, indicatorColor: Color, backgroundColor: Color?) {
         if isFocused && isSelected {
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-            let bg = Color.lerp(dimAccent, palette.accent.opacity(ViewConstants.focusPulseMax), phase: context.environment.pulsePhase)
+            let bg = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dimAccent, bright: palette.accent.opacity(ViewConstants.focusPulseMax))
             return ("●", palette.accent, bg)
         } else if isFocused {
             return (" ", palette.foregroundTertiary, palette.focusBackground)

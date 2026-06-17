@@ -888,7 +888,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         case .content:
             if isFocused && isSelected {
                 let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-                return Color.lerp(dimAccent, palette.accent.opacity(ViewConstants.focusPulseMax), phase: context.environment.pulsePhase)
+                return SelectionIndicator.resolve(isFocused: true, context: context)
+                    .color(dim: dimAccent, bright: palette.accent.opacity(ViewConstants.focusPulseMax))
             } else if isFocused {
                 return palette.focusBackground
             } else if isSelected {

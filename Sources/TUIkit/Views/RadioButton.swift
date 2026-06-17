@@ -477,7 +477,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
         } else if isFocused {
             // Focused: pulsing accent (whether selected or not)
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-            indicatorColor = Color.lerp(dimAccent, palette.accent, phase: context.environment.pulsePhase)
+            indicatorColor = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dimAccent, bright: palette.accent)
         } else if isSelected {
             // Selected but not focused: solid accent
             indicatorColor = palette.accent

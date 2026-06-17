@@ -319,7 +319,8 @@ private struct _ToggleCore<Label: View>: View, Renderable {
             bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
         } else if isFocused {
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-            bracketColor = Color.lerp(dimAccent, palette.accent, phase: context.environment.pulsePhase)
+            bracketColor = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dimAccent, bright: palette.accent)
         } else if isHovered {
             // Hover bumps the brackets to a partial accent tint
             // so the affordance reads without the focused pulse.

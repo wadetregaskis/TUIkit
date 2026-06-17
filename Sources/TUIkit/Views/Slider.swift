@@ -417,7 +417,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
-            pulsePhase: context.environment.pulsePhase,
+            indicator: SelectionIndicator.resolve(isFocused: isFocused, context: context),
             trackWidth: trackWidth,
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.slider)]),
@@ -690,7 +690,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         isFocused: Bool,
         isHovered: Bool,
         palette: any Palette,
-        pulsePhase: Double,
+        indicator: SelectionIndicator.Resolution,
         trackWidth: Int,
         valueStyle: StyleAttributes,
         isDisabled: Bool,
@@ -708,7 +708,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         } else if isFocused {
             // Pulse between 35% and 100% accent
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-            arrowColor = Color.lerp(dimAccent, palette.accent, phase: pulsePhase)
+            arrowColor = indicator.color(dim: dimAccent, bright: palette.accent)
         } else if isHovered {
             arrowColor = palette.accent.opacity(ViewConstants.hoverBackground)
         } else {

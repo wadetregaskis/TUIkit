@@ -457,15 +457,13 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
         // the drop-down rather than whatever sits behind it.
         let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
         let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax)
-        let highlightBg = Color.lerp(dimAccent, brightAccent, phase: context.environment.pulsePhase)
+        let indicator = SelectionIndicator.resolve(isFocused: true, context: context)
+        let highlightBg = indicator.color(dim: dimAccent, bright: brightAccent)
         // The border colour echoes the highlight pulse at lower intensity so
         // the drop-down's frame reads as part of the same active control,
         // not as a static element with a moving inside.
-        let borderColor = Color.lerp(
-            palette.accent.opacity(ViewConstants.focusBorderDim),
-            palette.accent,
-            phase: context.environment.pulsePhase
-        )
+        let borderColor = indicator.color(
+            dim: palette.accent.opacity(ViewConstants.focusBorderDim), bright: palette.accent)
 
         var lines: [String] = [
             BorderRenderer.standardTopBorder(
