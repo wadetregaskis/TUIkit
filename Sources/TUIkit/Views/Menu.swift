@@ -199,8 +199,8 @@ private struct _MenuCore: View, Renderable, Layoutable {
         fatalError("_MenuCore renders via Renderable")
     }
 
-    /// A menu sizes to its widest item / title (it does not fill), so it measures
-    /// by a single render — off the render-to-measure fallback's flexibility probe.
+    /// A menu sizes to its widest item / title (it does not fill), so a single
+    /// render is its exact, fixed measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }

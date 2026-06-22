@@ -285,10 +285,12 @@ extension FlexibleFrameView: Layoutable {
         return false
     }
 
-    /// The original render-to-measure fallback, kept for the constraint shapes
-    /// whose width depends on content reflow. Mirrors `measureChild`'s fallback
-    /// exactly: render for the natural size, then 8 cells wider to see whether
-    /// the width grows.
+    /// A render-and-probe measure, kept locally for the constraint shapes whose
+    /// width depends on content reflow: render for the natural size, then 8 cells
+    /// wider to see whether the width grows. This is the same heuristic
+    /// `measureChild`'s fallback once used globally (since retired there in favour
+    /// of a single render); `FrameModifier` keeps it for these specific shapes
+    /// because their width genuinely tracks reflow.
     private func measureByRendering(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         var measureContext = context
         measureContext.isMeasuring = true

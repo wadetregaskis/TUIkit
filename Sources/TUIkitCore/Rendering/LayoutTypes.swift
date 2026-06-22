@@ -51,10 +51,10 @@ public struct ProposedSize: Equatable, Sendable {
 /// **exactly** what it renders.
 ///
 /// - Important: A *wrapping* `Text` is **fixed**, not flexible. It reflows to
-///   use width up to its ideal (single-line) width — so a render-twice "+8"
-///   probe sees the width grow when the proposal is *below* that ideal and may
-///   wrongly call it flexible — but it never grows *past* the ideal, so it does
-///   not fill arbitrary space. Flexibility means "fills unbounded available
+///   use width up to its ideal (single-line) width — so the retired render-twice
+///   "+8" probe saw the width grow when the proposal was *below* that ideal and
+///   would wrongly call it flexible — but it never grows *past* the ideal, so it
+///   does not fill arbitrary space. Flexibility means "fills unbounded available
 ///   space", not "reflows within it".
 ///
 /// - Important: A few views — `ViewThatFits` above all — are **available-width
@@ -72,10 +72,12 @@ public struct ProposedSize: Equatable, Sendable {
 /// - flexible axis ⟹ `rendered == E` (it fills) and `reported ≤ E` (a minimum);
 /// - fixed axis ⟹ `rendered == reported` (exact).
 ///
-/// For a `Layoutable` view, `sizeThatFits` is the **canonical** source of this
-/// flag. The `measureChild` render-to-measure fallback (for `Renderable`-only
-/// views) derives it from a "+8" probe, an approximation that can over-report
-/// flexibility for wrapping content; that heuristic is *not* the contract.
+/// For a `Layoutable` view, `sizeThatFits` is the **canonical** (and now sole)
+/// source of this flag. `measureChild`'s fallback for the remaining
+/// `Renderable`-only views reports **fixed** (a single render); a view that
+/// fills its width must conform to `Layoutable` to advertise it. (The fallback
+/// once guessed flexibility from a "+8" render probe, but that approximation
+/// over-reported wrapping content and was retired — it was never the contract.)
 public struct ViewSize: Equatable, Sendable {
     /// The width this view needs — a *minimum* when ``isWidthFlexible``, else exact.
     public var width: Int

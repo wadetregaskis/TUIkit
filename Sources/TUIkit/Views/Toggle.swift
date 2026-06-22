@@ -262,9 +262,9 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
     /// Size from one render (the label is flattened into the `[x] label` row, so
     /// its width can't be derived structurally), with flexibility taken from the
-    /// label: the toggle fills its width iff its label does. Still cheaper than the
-    /// render-to-measure fallback (one render + a structural label probe, vs two
-    /// full renders), and correct where the fallback's +8 probe was imprecise.
+    /// label: the toggle fills its width iff its label does. The single-render
+    /// fallback would size it the same, but always reports fixed — this adds the
+    /// structural label probe so a flexible label still makes the toggle flexible.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let size = measureFixedByRendering(self, proposal: proposal, context: context)
         let labelFlexible = measureChild(label, proposal: proposal, context: context).isWidthFlexible

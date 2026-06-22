@@ -57,18 +57,19 @@ extension EnvironmentModifier: Layoutable {
     /// Without this conformance, `measureChild` would fall through to its
     /// render-to-measure fallback (the view is `Renderable` and its body
     /// returns the same content — `V.Body == Content`, which is also
-    /// `View`, so it would still hit the fallback). The fallback renders
-    /// the content *twice* per measure (once at the proposal, once at
-    /// `naturalWidth + 8` to probe flexibility). With `Image` typically
-    /// wrapped in several environment modifiers (character set, colour
-    /// mode, dithering, placeholder, …) and each layout pass touching it
-    /// multiple times, that escalates into many ASCIIConverter runs per
-    /// frame — the demo's "twelve-second render" was almost entirely
-    /// re-running the ASCII conversion to *measure* the same image.
+    /// `View`, so it would still hit the fallback). That fallback renders
+    /// the content to measure it (historically *twice* per measure — a
+    /// second render at `naturalWidth + 8` probed flexibility, since
+    /// retired). With `Image` typically wrapped in several environment
+    /// modifiers (character set, colour mode, dithering, placeholder, …)
+    /// and each layout pass touching it multiple times, that escalates
+    /// into many ASCIIConverter runs per frame — the demo's "twelve-second
+    /// render" was almost entirely re-running the ASCII conversion to
+    /// *measure* the same image.
     ///
     /// Forwarding the measurement to the content under the modified
-    /// environment matches the semantics of the render path and skips the
-    /// double-render entirely.
+    /// environment matches the semantics of the render path and skips
+    /// rendering the (possibly expensive) content to measure it.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let modifiedEnvironment = context.environment.setting(keyPath, to: value)
         let modifiedContext = context.withEnvironment(modifiedEnvironment)

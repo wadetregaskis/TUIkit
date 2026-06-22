@@ -171,8 +171,8 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         static let isHovered = 1
     }
 
-    /// A button hugs its label (it never grows to fill), so measure it by
-    /// rendering once rather than through the render-twice fallback.
+    /// A button hugs its label (it never grows to fill), so a single render is
+    /// its exact, fixed measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }

@@ -111,8 +111,8 @@ private struct _ButtonRowCore: View, Renderable, Layoutable {
     }
 
     /// A button row is fixed: its fixed-width buttons sit left-aligned with
-    /// `spacing` between them and it does not fill the remaining width, so it
-    /// measures by a single render (no redundant flexibility probe).
+    /// `spacing` between them and it does not fill the remaining width, so a
+    /// single render is its exact, fixed measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }

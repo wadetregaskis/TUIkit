@@ -136,8 +136,7 @@ extension TaskModifier: Renderable {
 // `!context.isMeasuring` (the measure-side-effect rule). So forwarding the
 // measurement to `content` is exactly render-consistent, and it keeps the
 // wrapped subtree out of `measureChild`'s render-to-measure fallback, which
-// would otherwise render the content twice per measure (once at the proposal,
-// once at `naturalWidth + 8` to probe flexibility) on top of the real render.
+// would otherwise render the content to measure it (on top of the real render).
 
 extension OnAppearModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {

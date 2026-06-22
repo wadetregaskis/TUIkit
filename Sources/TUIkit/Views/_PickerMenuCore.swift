@@ -61,7 +61,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     }
 
     /// The picker's option menu sizes to its widest option (it does not fill), so
-    /// it measures by a single render — off the render-to-measure fallback's probe.
+    /// a single render is its exact, fixed measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }

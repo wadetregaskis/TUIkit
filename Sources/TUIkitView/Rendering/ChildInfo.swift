@@ -300,17 +300,21 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 /// Measures a fixed-size view by rendering it ONCE in measuring mode and
 /// reporting the result as a fixed size.
 ///
-/// The measure-pass twin of `measureChild`'s render-to-measure fallback for the
-/// common case of a control that never grows to fill — a `Button`, `Toggle`,
-/// `Stepper`, and the like. That fallback renders such a view *twice* (once at
-/// the proposal, once at `naturalWidth + 8` to probe width-flexibility) only to
-/// conclude it is fixed. A view that is known to be fixed skips the probe:
-/// render once, report fixed — halving the measure cost.
+/// This is the measure used by a `Layoutable` view that never grows to fill — a
+/// `Button`, `Toggle`, `Stepper`, a `Menu`, and the like — whose width can't be
+/// derived structurally (it's assembled procedurally in `renderToBuffer`). It is
+/// also exactly what `measureChild`'s fallback now does for the Renderable long
+/// tail that isn't `Layoutable`: render once, report fixed. (Historically that
+/// fallback rendered *twice* — a second render at `naturalWidth + 8` to probe
+/// width-flexibility — but that probe was retired once the flexible views became
+/// `Layoutable`; see `measureChild`.)
 ///
 /// The single render goes through the same clamped `renderToBuffer(_:context:)`
-/// the real layout pass uses, and sets `isMeasuring` / `hasExplicitWidth`
-/// exactly as the fallback's first render does, so the size reported here is
-/// identical to the fallback's `naturalWidth` and to what render produces.
+/// the real layout pass uses, and sets `isMeasuring` / `hasExplicitWidth` so the
+/// view reports its natural (minimum) size — identical to what render produces.
+/// A view that needs to advertise width/height *flexibility* must not use this
+/// alone (it always reports fixed): see how `_ToggleCore` combines it with a
+/// structural label probe.
 ///
 /// - Parameters:
 ///   - view: The fixed-size view.
@@ -321,7 +325,8 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 public func measureFixedByRendering<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
     var measureContext = context
     measureContext.isMeasuring = true
-    // Report the natural (minimum) size, not an expanded one — as the fallback does.
+    // Clear hasExplicitWidth so the view reports its natural (minimum) size
+    // rather than expanding to fill the full available width.
     measureContext.hasExplicitWidth = false
     if let width = proposal.width {
         measureContext.availableWidth = width

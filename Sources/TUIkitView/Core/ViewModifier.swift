@@ -114,12 +114,12 @@ extension ModifiedView: Renderable {
 extension ModifiedView: Layoutable {
     /// Measures the wrapped content through the modifier without rendering it.
     ///
-    /// `Renderable` views fall through to `measureChild`'s render-to-measure
-    /// fallback, which calls `renderToBuffer` twice per measure (once at the
-    /// proposal, once at `naturalWidth + 8` to probe flexibility). That's a
-    /// disaster for expensive content (an `Image` whose `renderToBuffer`
-    /// runs the ASCII converter, for example) wrapped in even one
-    /// `.padding()` or custom modifier.
+    /// `Renderable` views without a `Layoutable` conformance fall through to
+    /// `measureChild`'s render-to-measure fallback (a single `renderToBuffer` —
+    /// historically two, with a `naturalWidth + 8` flexibility probe since
+    /// retired). Rendering to measure is a disaster for expensive content (an
+    /// `Image` whose `renderToBuffer` runs the ASCII converter, for example)
+    /// wrapped in even one `.padding()` or custom modifier — so forward instead.
     ///
     /// Forwards measurement to the content under the modifier's
     /// `adjustContext`, then adds the per-axis delta the modifier shrank

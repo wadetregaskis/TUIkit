@@ -173,17 +173,17 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // These wrappers impose no geometry of their own — their size is exactly
 // the size of the view they wrap. Declaring `Layoutable` (forwarding the
 // measurement to the child) keeps the wrapped subtree out of measureChild's
-// render-to-measure fallback, which would otherwise render it twice per
-// frame — once for its natural size and once more to probe flexibility —
-// on top of the real render. The render paths are unchanged, so output is
+// render-to-measure fallback, which would otherwise render it to measure it
+// (historically twice — a second render probed flexibility, since retired) on
+// top of the real render. The render paths are unchanged, so output is
 // identical; only the measure pass gets cheaper.
 
 // AnyView forwards its measurement to the wrapped view (via the captured
 // `_measure`), so its type-erased subtree is measured structurally — like the
 // transparent wrappers above — instead of through measureChild's render-to-
-// measure fallback (which rendered the whole erased subtree twice per frame).
-// This is now behaviour-correct: the flexibility contract (`ViewSize`) settled
-// that `sizeThatFits` is canonical and the fallback's "+8" probe *over-reports*
+// measure fallback (which rendered the whole erased subtree to measure it).
+// This is behaviour-correct: the flexibility contract (`ViewSize`) settled that
+// `sizeThatFits` is canonical and the fallback's old "+8" probe *over-reported*
 // flexibility for wrapping content; with the stacks/containers reconciled to the
 // contract, the forwarded measure agrees with the render (the measure/render
 // equivalence harness — the oracle — covers AnyView(Text) and AnyView(flexFrame),

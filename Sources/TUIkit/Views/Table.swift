@@ -189,12 +189,12 @@ where Value.ID: Hashable {
         fatalError("_TableCore renders via Renderable")
     }
 
-    /// Sizes the table without the render-to-measure fallback's *second* render.
+    /// Sizes the table analytically rather than by rendering it to measure.
     ///
     /// Being `Renderable`-only, `_TableCore` previously fell through `measureChild`
-    /// to the fallback, which renders the table TWICE per measure — once at the
-    /// proposal for its natural size, once at `naturalWidth + 8` purely to probe
-    /// width-flexibility — on top of the real render. On a 20k-row table that was
+    /// to the fallback, which rendered the table to measure it — at the time TWICE
+    /// per measure (a second render at `naturalWidth + 8` probed width-flexibility,
+    /// since retired) — on top of the real render. On a 20k-row table that was
     /// ~72% of the frame (`measureChild`).
     ///
     /// The probe is unnecessary here: a table grows with the available width iff a

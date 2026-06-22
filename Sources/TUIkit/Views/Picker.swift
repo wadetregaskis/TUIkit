@@ -208,8 +208,8 @@ private struct _PickerLabel<Label: View>: View, Renderable, Layoutable {
 
     var body: Never { fatalError("_PickerLabel renders via Renderable") }
 
-    /// The collapsed picker label sizes to its content (it does not fill), so it
-    /// measures by a single render — off the render-to-measure fallback's probe.
+    /// The collapsed picker label sizes to its content (it does not fill), so a
+    /// single render is its exact, fixed measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }

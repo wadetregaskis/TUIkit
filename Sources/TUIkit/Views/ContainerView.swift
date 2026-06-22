@@ -406,13 +406,13 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
     ///
     /// `.border()` is a title- and footer-less `ContainerView`, so before this
     /// every bordered measure fell through `measureChild`'s render-to-measure
-    /// fallback, which renders the entire subtree *twice* (once at the
-    /// proposal, once at `naturalWidth + 8` to probe flexibility). Nested
-    /// borders multiplied that: the layout-heavy RenderHarness trees
-    /// (`alignment`, `nested` — deeply nested `.border()`s) ran ~12× and ~45×
-    /// slower than the border-free `frames` tree. Measuring instead of
-    /// double-rendering removes that cost; the measure/render equivalence
-    /// tests pin the two passes together.
+    /// fallback, which rendered the entire subtree to measure it — at the time
+    /// *twice* (a second render at `naturalWidth + 8` probed flexibility, since
+    /// retired). Nested borders multiplied that: the layout-heavy RenderHarness
+    /// trees (`alignment`, `nested` — deeply nested `.border()`s) ran ~12× and
+    /// ~45× slower than the border-free `frames` tree. Measuring instead of
+    /// rendering removes that cost; the measure/render equivalence tests pin the
+    /// two passes together.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Resolve the space we were offered (proposal wins over the context,
         // exactly as renderChild sets availableWidth/Height before rendering).
@@ -511,8 +511,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // what's available, so the container fills exactly when its content
         // wants at least that much. Reading the child's `isWidthFlexible`
         // instead would mislabel a container whose body merely *wraps* (a
-        // wrapping `Text`, or any `AnyView`-erased body measured by the
-        // imprecise +8 probe) as filling when it actually shrinks to content.
+        // wrapping `Text`) as filling when it actually shrinks to content.
         let fillsWidth = contentBasedWidth >= innerWidthAvailable
         return ViewSize(
             width: min(totalWidth, max(0, base.availableWidth)),
