@@ -125,9 +125,6 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             childSizes.append(child.measure(proposal: .unspecified, context: context))
         }
 
-        let totalSpacing = max(0, children.count - 1) * spacing
-        let contentHeight = max(0, context.availableHeight - totalSpacing)
-
         var naturalHeight = [Int](repeating: 0, count: children.count)
         var isFlexible = [Bool](repeating: false, count: children.count)
         for (index, child) in children.enumerated() {
@@ -140,10 +137,16 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
+        // Pass the full available height and the spacing: the distribution
+        // charges each gap only between children it actually places, so an
+        // over-tall stack clips its trailing rows instead of starving every row
+        // to zero (which rendered the whole stack blank when the gaps alone
+        // exceeded the height).
         let finalHeights = distributeLinearSpace(
             naturalSizes: naturalHeight,
             isFlexible: isFlexible,
-            available: contentHeight
+            available: context.availableHeight,
+            spacing: spacing
         )
         let hasFlexible = isFlexible.contains(true)
 

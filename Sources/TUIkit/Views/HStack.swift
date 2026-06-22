@@ -82,7 +82,6 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     ) -> (widths: [Int], totalWidth: Int, height: Int, fills: Bool) {
         let count = children.count
         let totalSpacing = max(0, count - 1) * spacing
-        let contentWidth = max(0, availableWidth - totalSpacing)
 
         var ideal = [Int](repeating: 0, count: count)
         var idealHeight = [Int](repeating: 0, count: count)
@@ -103,7 +102,11 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
-        let widths = distributeLinearSpace(naturalSizes: ideal, isFlexible: fills, available: contentWidth)
+        // Full available width + spacing: the distribution charges each gap only
+        // between columns it places, so an over-wide row clips its trailing
+        // columns instead of collapsing every column to zero.
+        let widths = distributeLinearSpace(
+            naturalSizes: ideal, isFlexible: fills, available: availableWidth, spacing: spacing)
 
         // Heights at the widths children will actually be given. A child given
         // at least its ideal width wraps no further than it did at `.unspecified`

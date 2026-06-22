@@ -14,22 +14,39 @@
 ///   flexible children absorb the surplus.
 /// - **Space is short** — flexible children are shrunk first.
 /// - **Even the fixed content overflows** — flexible children collapse to
-///   zero and fixed children are truncated in order, so the leading content
-///   (leftmost / topmost) stays visible.
+///   zero and fixed children are placed in order (leftmost / topmost first)
+///   until the space runs out, so the leading content stays visible and the
+///   rest is clipped.
 ///
-/// The returned sizes always sum to at most `max(0, available)` — which is
-/// what makes a stack unable to overflow the space it was given.
+/// `spacing` is charged only *between children that are actually placed*. This
+/// is the difference between clipping gracefully and going blank: reserving a
+/// gap for every child up front means a stack with more gaps than fit (e.g. a
+/// `VStack(spacing: 1)` of a dozen rows in a pane only a few rows tall) would
+/// have **no** budget left for content and collapse every child to zero —
+/// rendering nothing. Charging spacing per placed child instead shows the
+/// children that fit and clips the rest, the way SwiftUI does.
+///
+/// The placed sizes plus the spacing between them always sum to at most
+/// `max(0, available)` — which is what makes a stack unable to overflow the
+/// space it was given.
 ///
 /// - Parameters:
 ///   - naturalSizes: Each child's natural size along the layout axis.
 ///   - isFlexible: Whether each child can flex along the layout axis.
 ///     Must be the same length as `naturalSizes`.
-///   - available: The space to distribute, already net of inter-child spacing.
-/// - Returns: One allocated size per child; the sum is `<= max(0, available)`.
-func distributeLinearSpace(naturalSizes: [Int], isFlexible: [Bool], available: Int) -> [Int] {
+///   - available: The total space to distribute, *including* the inter-child
+///     spacing (which this function accounts for; callers pass the full extent).
+///   - spacing: The gap rendered between adjacent non-empty children.
+/// - Returns: One allocated size per child; placed sizes + their gaps sum to
+///   `<= max(0, available)`.
+func distributeLinearSpace(
+    naturalSizes: [Int], isFlexible: [Bool], available: Int, spacing: Int = 0
+) -> [Int] {
     let total = max(0, available)
     var result = naturalSizes.map { max(0, $0) }
     let flexIndices = result.indices.filter { isFlexible[$0] }
+    let gap = max(0, spacing)
+    let allSpacing = max(0, result.count - 1) * gap
 
     var nonFlexTotal = 0
     var flexTotal = 0
@@ -41,21 +58,38 @@ func distributeLinearSpace(naturalSizes: [Int], isFlexible: [Bool], available: I
         }
     }
 
-    if nonFlexTotal + flexTotal <= total {
-        // Everything fits; flexible children absorb the surplus.
-        addLinearSpace(total - nonFlexTotal - flexTotal, to: flexIndices, of: &result, weights: nil)
-    } else if nonFlexTotal <= total {
-        // Fixed content fits; flexible children share the remainder.
+    if nonFlexTotal + flexTotal + allSpacing <= total {
+        // Everything (content + every gap) fits; flexible children absorb the surplus.
+        addLinearSpace(
+            total - nonFlexTotal - flexTotal - allSpacing, to: flexIndices, of: &result, weights: nil)
+    } else if nonFlexTotal + allSpacing <= total {
+        // Fixed content + gaps fit; flexible children share the remainder.
         let weights = flexTotal > 0 ? flexIndices.map { result[$0] } : nil
         for index in flexIndices { result[index] = 0 }
-        addLinearSpace(total - nonFlexTotal, to: flexIndices, of: &result, weights: weights)
+        addLinearSpace(total - nonFlexTotal - allSpacing, to: flexIndices, of: &result, weights: weights)
     } else {
-        // Even the fixed content overflows; flexible → 0, fixed truncated in order.
+        // Even the fixed content + its gaps overflow: flexible → 0, then place
+        // fixed children top-down at their natural size, charging `spacing` only
+        // *between* placed children, until the space runs out. Children that
+        // don't fit collapse to zero (clipped). Charging spacing per placed
+        // child — rather than reserving every gap up front — is what stops the
+        // whole stack going blank when the gaps alone would exceed `available`.
         for index in flexIndices { result[index] = 0 }
         var used = 0
+        var placedAny = false
         for index in result.indices where !isFlexible[index] {
-            result[index] = max(0, min(result[index], total - used))
-            used += result[index]
+            let leadingGap = placedAny ? gap : 0
+            let room = total - used - leadingGap
+            if room <= 0 {
+                result[index] = 0
+                continue
+            }
+            let size = min(result[index], room)
+            result[index] = size
+            if size > 0 {
+                used += leadingGap + size
+                placedAny = true
+            }
         }
     }
     return result

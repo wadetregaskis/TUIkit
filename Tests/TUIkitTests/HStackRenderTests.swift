@@ -167,4 +167,24 @@ struct HStackRenderTests {
         #expect(buffer.lines.count == 1)
         #expect(buffer.lines[0].stripped == "0 1 2 3")
     }
+
+    // MARK: - Overflow degrades gracefully (regression)
+
+    @Test("A spaced row wider than its space clips trailing columns, never blanks")
+    func overflowingSpacedRowClipsNotBlanks() {
+        // 12 single-cell columns with spacing 1 want 23 cells. In a 4-cell width
+        // the inter-column gaps alone exceed it — reserving every gap first would
+        // starve all columns to zero and render blank. The leading columns must
+        // stay visible instead.
+        let buffer = renderToBuffer(
+            HStack(spacing: 1) {
+                ForEach(0..<12) { Text("\($0 % 10)") }
+            },
+            context: ctx(width: 4, height: 2)
+        )
+        #expect(!buffer.lines.allSatisfy { $0.stripped.trimmingCharacters(in: .whitespaces).isEmpty },
+                "Overflowing spaced row must not render blank")
+        #expect(buffer.lines.first?.stripped.hasPrefix("0") == true, "Leading column stays visible")
+        #expect(buffer.width <= 4, "Never overflows the width it was given")
+    }
 }
