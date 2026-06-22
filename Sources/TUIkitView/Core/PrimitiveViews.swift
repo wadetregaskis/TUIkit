@@ -97,6 +97,7 @@ public struct ViewArray<Element: View>: View {
 /// ```
 public struct AnyView: View {
     private let _render: (RenderContext) -> FrameBuffer
+    private let _measure: (ProposedSize, RenderContext) -> ViewSize
 
     /// Creates an AnyView wrapping the given view.
     ///
@@ -104,6 +105,12 @@ public struct AnyView: View {
     public init<V: View>(_ view: V) {
         self._render = { context in
             TUIkitView.renderToBuffer(view, context: context)
+        }
+        // Capture the wrapped view's measurement too, so AnyView can forward
+        // `sizeThatFits` to it (see the `Layoutable` conformance) rather than
+        // falling into measureChild's render-to-measure fallback.
+        self._measure = { proposal, context in
+            measureChild(view, proposal: proposal, context: context)
         }
     }
 
@@ -171,30 +178,34 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // on top of the real render. The render paths are unchanged, so output is
 // identical; only the measure pass gets cheaper.
 
-// NOTE: AnyView is deliberately NOT made Layoutable; it keeps the
-// render-to-measure fallback. Forwarding the measure to the wrapped view (as
-// the wrappers above do) is NOT behaviour-equivalent for AnyView's *arbitrary*
-// content: a child's own `sizeThatFits` is not always render-consistent for
-// flexible / wrapping / nested content (e.g. `VStack`/`HStack` under-report
-// width-flexibility vs what re-rendering 8 cells wider observes), and AnyView's
-// fallback — which actually re-renders — is the behaviour that ships. A
-// characterization test confirmed the forwarded measure differs (width and
-// width-flexibility) for the nested-alignment-row and wrapping cases, though no
-// current layout test regresses. The unlike-Conditional/Equatable distinction
-// is that those wrap a single statically-known branch; AnyView erases anything.
+// AnyView forwards its measurement to the wrapped view (via the captured
+// `_measure`), so its type-erased subtree is measured structurally — like the
+// transparent wrappers above — instead of through measureChild's render-to-
+// measure fallback (which rendered the whole erased subtree twice per frame).
+// This is now behaviour-correct: the flexibility contract (`ViewSize`) settled
+// that `sizeThatFits` is canonical and the fallback's "+8" probe *over-reports*
+// flexibility for wrapping content; with the stacks/containers reconciled to the
+// contract, the forwarded measure agrees with the render (the measure/render
+// equivalence harness — the oracle — covers AnyView(Text) and AnyView(flexFrame),
+// and any wrapped content it covers). The earlier "forwarded measure differs"
+// objection was against that imprecise +8 probe, not the render.
 //
-// ⚠️ Also: changing AnyView's stored layout requires a CLEAN build. AnyView is
-// a non-resilient struct used across TUIkitView → TUIkit → tests; a layout
-// change via a private member (a second closure, a pad, …) changes its size but
-// not TUIkitView's public interface hash, so an INCREMENTAL `swift build` does
-// not recompile the cross-module dependents — they keep the old, smaller layout
-// and corrupt memory at runtime. A clean build is fine. This is an
-// incremental-compilation (Swift driver / SwiftPM) bug, NOT a codegen bug —
-// AnyView's value witnesses are correctly generated (verified in -Onone IR).
-// It masqueraded as a "compiler crash" through earlier investigation. Minimal
-// repro + analysis: `anyview-incremental-repro/` (untracked) + the
-// perf-optimisation handoff doc. So if you do change AnyView's storage,
-// `rm -rf .build` before testing.
+// ⚠️ Changing AnyView's stored layout (it now holds a second closure) requires a
+// CLEAN build (`swift package clean`). AnyView is a non-resilient struct used
+// across TUIkitView → TUIkit → consumers; a size change does not bump
+// TUIkitView's public interface hash, so an INCREMENTAL build may not recompile
+// cross-module dependents — they keep the old, smaller layout and corrupt memory
+// at runtime. This is an incremental-compilation (Swift driver / SwiftPM) bug,
+// not a codegen bug (witnesses are correct in -Onone IR). Clean builds are fine,
+// so this is benign in practice: clean-build after pulling a change to AnyView's
+// storage.
+
+extension AnyView: Layoutable {
+    /// Forwards measurement to the wrapped view — see the note above.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        _measure(proposal, context)
+    }
+}
 
 extension EmptyView: Layoutable {
     /// An empty view occupies no cells.

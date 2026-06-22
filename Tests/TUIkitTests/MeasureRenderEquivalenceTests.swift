@@ -187,6 +187,13 @@ struct MeasureRenderEquivalenceTests {
             }.tabViewStyle(.bordered), "TabView(bordered)")
         check(AnyView(Text("erased")), "AnyView(Text)")
         check(AnyView(Text("fill").frame(maxWidth: .infinity)), "AnyView(flexFrame)")
+        // AnyView now forwards measurement to the wrapped view; these exercise the
+        // forward over composite / flexible / chrome content (the cases the old
+        // "forwarded measure differs" objection cited), so they pin that the
+        // erased subtree measures structurally and still agrees with the render.
+        check(AnyView(VStack { Text("one"); Text("two longer") }), "AnyView(VStack)")
+        check(AnyView(HStack { Text("a"); Spacer(); Text("z") }), "AnyView(HStack+spacer)")
+        check(AnyView(Text("boxed").border()), "AnyView(border)")
 
         // — The nested alignment row (the historical sore spot) —
         check(
@@ -227,6 +234,27 @@ struct MeasureRenderEquivalenceTests {
         #expect(
             unexpected.isEmpty,
             "Unexpected measure/render size divergence (see report above): \(unexpected)")
+    }
+
+    /// AnyView is now `Layoutable` and forwards measurement to the wrapped view,
+    /// so its erased subtree measures structurally instead of via measureChild's
+    /// render-to-measure fallback. This pins the forward — and would fail if AnyView
+    /// reverted to the fallback, whose "+8" probe over-reports a wrapping Text as
+    /// width-flexible where the wrapped view's own (canonical) measure does not.
+    @Test("AnyView is Layoutable and forwards the wrapped view's measurement")
+    func anyViewForwardsMeasurement() {
+        #expect(AnyView(Text("hi")) is Layoutable, "AnyView conforms to Layoutable")
+
+        let wrapping = Text("A fairly long line of text that wraps when the width is narrow")
+        let proposal = ProposedSize(width: 20, height: nil)
+        let direct = measureChild(wrapping, proposal: proposal, context: makeContext(width: 20, height: height))
+        let erased = measureChild(AnyView(wrapping), proposal: proposal, context: makeContext(width: 20, height: height))
+
+        #expect(erased.width == direct.width && erased.height == direct.height,
+                "erased measure \(erased) matches the wrapped view's \(direct)")
+        #expect(!direct.isWidthFlexible, "wrapping Text is fixed (contract)")
+        #expect(erased.isWidthFlexible == direct.isWidthFlexible,
+                "AnyView carries the wrapped view's flexibility (a fallback would over-report it flexible)")
     }
 
     /// Pins the canonical flexibility values from the ``ViewSize`` contract.
