@@ -132,6 +132,17 @@ extension NotificationHostModifier: Renderable {
     }
 }
 
+// MARK: - Layoutable
+
+extension NotificationHostModifier: Layoutable {
+    /// Notifications are transient overlays composited onto the page content
+    /// (which spans the screen), so the layout footprint is the base `content`.
+    /// Forwarding also keeps the animation-timer side-effect on the render pass.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
 // MARK: - Private Helpers
 
 extension NotificationHostModifier {

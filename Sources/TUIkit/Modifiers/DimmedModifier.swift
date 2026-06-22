@@ -123,3 +123,14 @@ extension DimmedModifier: Renderable {
             .withPersistentBackground(background)
     }
 }
+
+// MARK: - Layoutable
+
+extension DimmedModifier: Layoutable {
+    /// Dimming rewrites each line in place — same line count, each padded to the
+    /// content width — so the dimmed layer is exactly `content`'s size and
+    /// flexibility.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

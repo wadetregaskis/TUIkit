@@ -54,3 +54,15 @@ extension AppHeaderModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
+
+// MARK: - Layoutable
+
+extension AppHeaderModifier: Layoutable {
+    /// The header renders separately (the RenderLoop draws it from
+    /// `appHeader.contentBuffer`); this view returns `content` inline, so it
+    /// measures as `content`. Forwarding also keeps the header-buffer write to
+    /// the render pass.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

@@ -45,3 +45,14 @@ extension KeyPressModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
+
+// MARK: - Layoutable
+
+extension KeyPressModifier: Layoutable {
+    /// Behaviour-only decorator — it renders `content` unchanged. Forwarding the
+    /// measure keeps it off ``measureChild``'s render-to-measure fallback and lets
+    /// the wrapped view's flexibility propagate.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

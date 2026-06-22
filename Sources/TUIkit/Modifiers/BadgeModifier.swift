@@ -107,3 +107,16 @@ extension BadgeModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: modifiedContext)
     }
 }
+
+// MARK: - Layoutable
+
+extension BadgeModifier: Layoutable {
+    /// Measures `content` under the *same* badge-bearing environment the render
+    /// uses: a child that draws the badge (a tab, a list row) sizes differently
+    /// with it set, so the plain context would under-measure.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let modifiedContext = context.withEnvironment(
+            context.environment.setting(\EnvironmentValues.badgeValue, to: value))
+        return measureChild(content, proposal: proposal, context: modifiedContext)
+    }
+}

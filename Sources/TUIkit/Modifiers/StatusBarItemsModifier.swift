@@ -78,3 +78,14 @@ extension StatusBarItemsModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: renderContext)
     }
 }
+
+// MARK: - Layoutable
+
+extension StatusBarItemsModifier: Layoutable {
+    /// Status-bar items render on a separate bar, not inline, so this measures as
+    /// `content`. Forwarding also keeps the item-registration side-effect to the
+    /// render pass — a measure must not mutate the status bar.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

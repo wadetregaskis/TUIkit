@@ -56,3 +56,16 @@ extension SelectionDisabledModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: modifiedContext)
     }
 }
+
+// MARK: - Layoutable
+
+extension SelectionDisabledModifier: Layoutable {
+    /// Measures `content` under the same selection-disabled environment the
+    /// render uses (mirroring render exactly, in case a row's selection chrome
+    /// affects its width).
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let modifiedContext = context.withEnvironment(
+            context.environment.setting(\.isSelectionDisabled, to: isDisabled))
+        return measureChild(content, proposal: proposal, context: modifiedContext)
+    }
+}

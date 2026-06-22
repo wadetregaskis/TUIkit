@@ -61,3 +61,14 @@ extension OnChangeModifier: Renderable {
         return TUIkitView.renderToBuffer(content, context: context)
     }
 }
+
+// MARK: - Layoutable
+
+extension OnChangeModifier: Layoutable {
+    /// Renders `content` unchanged, so it measures as `content`. Forwarding is
+    /// also what keeps the change-detection and `action` firing on the render
+    /// pass — a measure must not observe values or fire `onChange`.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

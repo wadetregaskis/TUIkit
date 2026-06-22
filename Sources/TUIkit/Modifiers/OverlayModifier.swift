@@ -80,3 +80,21 @@ extension OverlayModifier: Renderable {
         return baseBuffer.composited(with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset))
     }
 }
+
+// MARK: - Layoutable
+
+extension OverlayModifier: Layoutable {
+    /// `composited` grows to fit a wider/taller overlay (`max(base, offset +
+    /// overlay)`), and the alignment offsets are clamped to `0...(base −
+    /// overlay)`, so the result is `max(base, overlay)` on each axis — and fills
+    /// an axis if either layer does.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let baseSize = measureChild(base, proposal: proposal, context: context)
+        let overlaySize = measureChild(overlay, proposal: proposal, context: context)
+        return ViewSize(
+            width: max(baseSize.width, overlaySize.width),
+            height: max(baseSize.height, overlaySize.height),
+            isWidthFlexible: baseSize.isWidthFlexible || overlaySize.isWidthFlexible,
+            isHeightFlexible: baseSize.isHeightFlexible || overlaySize.isHeightFlexible)
+    }
+}

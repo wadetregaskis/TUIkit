@@ -82,6 +82,14 @@ extension NavigationSplitViewColumnWidthView: Renderable {
     }
 }
 
+extension NavigationSplitViewColumnWidthView: Layoutable {
+    /// Publishes a column-width *preference* and renders `content` unchanged, so
+    /// it measures as `content`.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
 // MARK: - View Extension
 
 extension View {

@@ -254,6 +254,21 @@ struct MeasureRenderEquivalenceTests {
                 Text("Flexible section")
             }, "Section(flexContent)")
 
+        // — Behavioural decorators (now forward measurement to content) —
+        check(Text("watched").onChange(of: 0) { }, "Text.onChange")
+        check(Text("keyed").onKeyPress { _ in false }, "Text.onKeyPress")
+        check(Text("dimmed").selectionDisabled(), "Text.selectionDisabled")
+        check(Text("badged").badge(3), "Text.badge")
+        check(VStack { Text("a"); Text("bb") }.focusSection("sec"), "VStack.focusSection")
+        // Overlay sizes to max(base, overlay): base wider, then overlay wider.
+        check(Text("wide base text").overlay { Text("o") }, "overlay(baseWider)")
+        check(Text("b").overlay { Text("wide overlay text") }, "overlay(overlayWider)")
+        // Optional view: .some forwards, .none is empty.
+        check(Optional(Text("present")), "Optional(some)")
+        check(Optional<Text>.none, "Optional(none)")
+        // Flexibility must survive the decorator: a maxWidth frame behind onChange.
+        check(Text("flex").frame(maxWidth: .infinity).onChange(of: 0) { }, "flexFrame.onChange")
+
         // — The nested alignment row (the historical sore spot) —
         check(
             HStack(spacing: 2) {
@@ -314,6 +329,34 @@ struct MeasureRenderEquivalenceTests {
         #expect(!direct.isWidthFlexible, "wrapping Text is fixed (contract)")
         #expect(erased.isWidthFlexible == direct.isWidthFlexible,
                 "AnyView carries the wrapped view's flexibility (a fallback would over-report it flexible)")
+    }
+
+    /// Behavioural decorators (`onChange`, `onKeyPress`, `focusSection`,
+    /// `selectionDisabled`, …) render their content unchanged and now forward
+    /// measurement to it. A decorator that fell back to render-to-measure would
+    /// report a *fixed* size (the fallback never claims flexible without the +8
+    /// probe agreeing, and the probe under-reports), silently dropping the
+    /// content's flexibility — which mis-drives a parent stack's width
+    /// distribution. This pins that flexibility survives the decorator layer.
+    @Test("Behavioural decorators forward the wrapped view's flexibility")
+    func decoratorsForwardFlexibility() {
+        func widthFlexible<V: View>(_ view: V) -> Bool {
+            measureChild(
+                view, proposal: ProposedSize(width: 40, height: nil),
+                context: makeContext(width: 40, height: height)
+            ).isWidthFlexible
+        }
+
+        let flex = Text("x").frame(maxWidth: .infinity)
+        let fixed = Text("x")
+
+        #expect(widthFlexible(flex.onChange(of: 0) { }), "onChange forwards flexible")
+        #expect(!widthFlexible(fixed.onChange(of: 0) { }), "onChange forwards fixed")
+        #expect(widthFlexible(flex.onKeyPress { _ in false }), "onKeyPress forwards flexible")
+        #expect(widthFlexible(flex.selectionDisabled()), "selectionDisabled forwards flexible")
+        #expect(widthFlexible(flex.focusSection("s")), "focusSection forwards flexible")
+        #expect(widthFlexible(Optional(flex)), "Optional(.some) forwards flexible")
+        #expect(!widthFlexible(Optional<Text>.none), "Optional(.none) is fixed (empty)")
     }
 
     /// Pins the canonical flexibility values from the ``ViewSize`` contract.

@@ -93,3 +93,12 @@ extension ListRowSeparatorModifier: Renderable {
         TUIkit.renderToBuffer(content, context: context)
     }
 }
+
+// MARK: - Layoutable
+
+extension ListRowSeparatorModifier: Layoutable {
+    /// Stub decorator — renders `content` unchanged, so it measures as `content`.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

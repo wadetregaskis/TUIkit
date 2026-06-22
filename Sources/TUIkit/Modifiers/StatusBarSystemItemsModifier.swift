@@ -51,6 +51,16 @@ extension StatusBarSystemItemsModifier: Renderable {
     }
 }
 
+// MARK: - Layoutable
+
+extension StatusBarSystemItemsModifier: Layoutable {
+    /// System status-bar items render on a separate bar, not inline, so this
+    /// measures as `content` (and the toggle side-effects stay render-only).
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
 // MARK: - View Extension
 
 extension View {

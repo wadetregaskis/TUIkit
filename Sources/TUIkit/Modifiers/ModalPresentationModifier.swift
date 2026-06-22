@@ -130,3 +130,16 @@ extension ModalPresentationModifier: Renderable {
         )
     }
 }
+
+// MARK: - Layoutable
+
+extension ModalPresentationModifier: Layoutable {
+    /// The modal is *presented over* the page (a centred overlay on the dimmed
+    /// base, which spans the page), so the layout footprint is the base
+    /// `content` — both when dismissed and when presented. Forwarding also keeps
+    /// the focus-section / status-bar side-effects on the render pass; a measure
+    /// must not register or activate sections.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}

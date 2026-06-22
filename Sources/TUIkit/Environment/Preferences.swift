@@ -32,6 +32,14 @@ extension PreferenceModifier: Renderable {
     }
 }
 
+extension PreferenceModifier: Layoutable {
+    /// Publishes a preference and renders `content` unchanged, so it measures as
+    /// `content` (and the preference write stays a render-pass side-effect).
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+}
+
 // MARK: - OnPreferenceChange Modifier
 
 /// A modifier that reacts to preference changes.
@@ -68,6 +76,15 @@ extension OnPreferenceChangeModifier: Renderable {
         action(preferences[K.self])
 
         return buffer
+    }
+}
+
+extension OnPreferenceChangeModifier: Layoutable {
+    /// Renders `content` unchanged (it only collects/observes preferences), so it
+    /// measures as `content`. Forwarding also keeps the push/pop and the change
+    /// callback to the render pass — a measure must not fire preference actions.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
     }
 }
 

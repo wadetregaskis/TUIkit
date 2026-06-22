@@ -45,3 +45,16 @@ extension Optional: Renderable where Wrapped: View {
         }
     }
 }
+
+extension Optional: Layoutable where Wrapped: View {
+    /// `.some` measures as the wrapped view; `.none` is empty. Forwarding keeps an
+    /// optional view off ``measureChild``'s render-to-measure fallback.
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        switch self {
+        case .some(let view):
+            return measureChild(view, proposal: proposal, context: context)
+        case .none:
+            return ViewSize.fixed(0, 0)
+        }
+    }
+}
