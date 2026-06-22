@@ -55,6 +55,8 @@ scale live · `a` toggle autopilot.
 |---|---|
 | `megalist` | `List`/`ForEach` windowing, row-id resolution, lazy row content, per-row memo |
 | `table` | `Table` column-width computation, row windowing, per-cell value closures |
+| `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
+| `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
 | `fanout` | non-lazy container measure over **all** children (O(n) layout) |
 | `modifiers` | `ModifiedView`/environment-modifier layering, per-node measure overhead |
