@@ -112,6 +112,40 @@ private struct _ZStackCore<Content: View>: View, Renderable {
     }
 }
 
+// MARK: - Layout
+
+extension _ZStackCore: Layoutable {
+    /// Measures the z-stack without rendering: it is as wide/tall as its largest
+    /// child (the union of their sizes, matching `renderToBuffer`'s frame), and is
+    /// flexible on an axis when any child is — a flexible child fills that extent,
+    /// so the stack does too. Alignment and z-index affect placement/draw order,
+    /// not size.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let children = resolveChildViews(from: content, context: context)
+        guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
+
+        var maxWidth = 0
+        var maxHeight = 0
+        var hasFlexibleWidth = false
+        var hasFlexibleHeight = false
+        for child in children {
+            let size = child.measure(proposal: proposal, context: context)
+            maxWidth = max(maxWidth, size.width)
+            maxHeight = max(maxHeight, size.height)
+            hasFlexibleWidth = hasFlexibleWidth || size.isWidthFlexible
+            hasFlexibleHeight = hasFlexibleHeight || size.isHeightFlexible
+        }
+        // Never advertise larger than the constraint (mirrors VStack/HStack).
+        let widthLimit = proposal.width ?? context.availableWidth
+        let heightLimit = proposal.height ?? context.availableHeight
+        return ViewSize(
+            width: min(maxWidth, max(0, widthLimit)),
+            height: min(maxHeight, max(0, heightLimit)),
+            isWidthFlexible: hasFlexibleWidth,
+            isHeightFlexible: hasFlexibleHeight)
+    }
+}
+
 // MARK: - Equatable
 
 extension ZStack: @preconcurrency Equatable where Content: Equatable {

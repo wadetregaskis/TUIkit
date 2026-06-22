@@ -195,6 +195,11 @@ struct MeasureRenderEquivalenceTests {
         check(AnyView(HStack { Text("a"); Spacer(); Text("z") }), "AnyView(HStack+spacer)")
         check(AnyView(Text("boxed").border()), "AnyView(border)")
 
+        // — Newly-Layoutable controls (were render-to-measure fallback) —
+        check(ZStack { Text("████████"); Text("hi") }, "ZStack")
+        check(ZStack { Text("x").frame(maxWidth: .infinity); Text("o") }, "ZStack(flexChild)")
+        check(Spinner("Loading"), "Spinner")
+
         // — The nested alignment row (the historical sore spot) —
         check(
             HStack(spacing: 2) {

@@ -261,13 +261,20 @@ public struct Spinner: View {
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering and animation of Spinner.
-private struct _SpinnerCore: View, Renderable {
+private struct _SpinnerCore: View, Renderable, Layoutable {
     let label: String?
     let style: SpinnerStyle
     let color: Color?
 
     var body: Never {
         fatalError("_SpinnerCore renders via Renderable")
+    }
+
+    /// A spinner is fixed-size (a fixed-width glyph plus an optional fixed label),
+    /// so it measures by a single render — skipping the render-to-measure
+    /// fallback's redundant flexibility probe.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
