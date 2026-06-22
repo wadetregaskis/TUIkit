@@ -68,6 +68,15 @@ struct TabViewTests {
         // Tab labels sit in a row, separated by walls.
         #expect(lines.contains { $0.contains("│ RGB │") && $0.contains("│ HSL │") },
                 "folder tabs with wall separators: \(lines)")
+        // The active tab (HSL, a middle tab) has BOTH top corners rounded so it
+        // reads as a raised `╭ … ╮` cell — its left ╭ deliberately cuts into the
+        // neighbour. So the tops line carries two ╭ (the strip start and the
+        // active tab's left corner), where a flush ┬ would leave only one.
+        let labelsIndex = lines.firstIndex { $0.contains("│ HSL │") }!
+        let topsLine = lines[labelsIndex - 1]
+        #expect(topsLine.filter { $0 == "╭" }.count >= 2,
+                "active tab's left top corner is rounded (╭), not a flush ┬: \(topsLine)")
+        #expect(topsLine.contains("╮"), "active tab's right top corner is rounded (╮): \(topsLine)")
         // The content box's top border curves up around the active tab — a line
         // carrying the mouth ╯ … ╰ (╯ before ╰, distinguishing it from the
         // bottom border's ╰ … ╯).

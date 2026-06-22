@@ -834,15 +834,17 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             // run — `╭`/`╮` for active corners & strip ends, `┬` for shared walls.
             var top = ""
             for k in wallCols.indices {
-                let leftActive = k > 0 && row[k - 1] == selectedIndex
-                // The active tab's box closes with `╭ … ╮` so it reads as raised;
-                // but a wall shared with an inactive neighbour can only carry one
-                // glyph, so the active's right corner (`╮`) wins there while its
-                // left corner falls back to a flush `┬` (a backwards `╭` on the
-                // neighbour would look wrong). At a strip end the corner is clean.
+                // A wall touching the active tab takes a rounded corner so the
+                // active tab reads as a raised `╭ … ╮` cell — `╮` on its right
+                // wall, `╭` on its left. These deliberately cut into the shared
+                // walls with its neighbours (a "backwards" corner on the
+                // neighbour), which is what makes the active tab stand out.
+                let activeRight = k > 0 && row[k - 1] == selectedIndex
+                let activeLeft = k < bodySpans.count && row[k] == selectedIndex
                 if k == 0 { top += "╭" }
                 else if k == wallCols.count - 1 { top += "╮" }
-                else if leftActive { top += "╮" }
+                else if activeRight { top += "╮" }
+                else if activeLeft { top += "╭" }
                 else { top += "┬" }
                 if k < bodySpans.count { top += String(repeating: "─", count: bodySpans[k].len) }
             }
