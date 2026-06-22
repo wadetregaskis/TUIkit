@@ -159,13 +159,42 @@ extension Section where Parent == Text, Footer == EmptyView {
 /// `_SectionCore` is a leaf node that renders the section's header, content,
 /// and footer with appropriate styling. It conforms to `Renderable` for
 /// direct buffer output.
-private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Renderable {
+private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Renderable, Layoutable {
     let header: Parent
     let content: Content
     let footer: Footer
 
     var body: Never {
         fatalError("_SectionCore renders via Renderable")
+    }
+
+    /// Size from one render: the stack of header/content/footer drops a *blank*
+    /// header or footer (e.g. `header: { Text("") }` that padded to spaces),
+    /// which can't be detected without rendering, so the height isn't a clean
+    /// structural sum. Flexibility comes from the parts — measured under the same
+    /// chrome contexts the render uses (chrome role styles, it does not resize) —
+    /// so a `.frame(maxWidth: .infinity)` content still reports the section
+    /// width-flexible to its parent.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var widthFlexible = false
+        var heightFlexible = false
+        func note(_ childSize: ViewSize) {
+            if childSize.isWidthFlexible { widthFlexible = true }
+            if childSize.isHeightFlexible { heightFlexible = true }
+        }
+        if !(header is EmptyView) {
+            note(measureChild(header, proposal: proposal,
+                              context: sectionChromeContext(context, .sectionHeader)))
+        }
+        note(measureChild(content, proposal: proposal, context: context))
+        if !(footer is EmptyView) {
+            note(measureChild(footer, proposal: proposal,
+                              context: sectionChromeContext(context, .sectionFooter)))
+        }
+        return ViewSize(
+            width: size.width, height: size.height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

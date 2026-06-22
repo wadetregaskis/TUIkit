@@ -65,13 +65,36 @@ public struct LazyVStack<Content: View>: View {
 // MARK: - Internal LazyVStack Core
 
 /// Internal view that handles the actual rendering of LazyVStack.
-private struct _LazyVStackCore<Content: View>: View, Renderable {
+private struct _LazyVStackCore<Content: View>: View, Renderable, Layoutable {
     let alignment: HorizontalAlignment
     let spacing: Int
     let content: Content
 
     var body: Never {
         fatalError("_LazyVStackCore renders via Renderable")
+    }
+
+    /// Size from one render: the layout is *windowed* — it stops appending
+    /// children once the running height would exceed `availableHeight`, so the
+    /// rendered height ends on a child boundary and can fall short of the height
+    /// limit by a truncated child. Summing children analytically (as ``VStack``
+    /// does) would over-report that boundary, so the exact size must come from a
+    /// render under this context. Flexibility mirrors `renderToBuffer`'s fill
+    /// rules: a (vertical) spacer makes `maxWidth` become `availableWidth` and
+    /// expands the height, and any width/height-flexible child fills its axis.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var widthFlexible = false
+        var heightFlexible = false
+        for child in resolveChildViews(from: content, context: context) {
+            if child.isSpacer { widthFlexible = true; heightFlexible = true }
+            let childSize = child.measure(proposal: proposal, context: context)
+            if childSize.isWidthFlexible { widthFlexible = true }
+            if childSize.isHeightFlexible { heightFlexible = true }
+        }
+        return ViewSize(
+            width: size.width, height: size.height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -222,13 +245,35 @@ public struct LazyHStack<Content: View>: View {
 // MARK: - Internal LazyHStack Core
 
 /// Internal view that handles the actual rendering of LazyHStack.
-private struct _LazyHStackCore<Content: View>: View, Renderable {
+private struct _LazyHStackCore<Content: View>: View, Renderable, Layoutable {
     let alignment: VerticalAlignment
     let spacing: Int
     let content: Content
 
     var body: Never {
         fatalError("_LazyHStackCore renders via Renderable")
+    }
+
+    /// Size from one render: the layout is *windowed* on `availableWidth` (it
+    /// stops appending columns once the running width would exceed it), so the
+    /// rendered width ends on a child boundary and can fall short of the width
+    /// limit by a truncated column — the exact size must come from a render under
+    /// this context, not an analytical sum. Flexibility mirrors `renderToBuffer`:
+    /// a (horizontal) spacer absorbs the slack and fills the width, and any
+    /// width/height-flexible child fills its axis.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var widthFlexible = false
+        var heightFlexible = false
+        for child in resolveChildViews(from: content, context: context) {
+            if child.isSpacer { widthFlexible = true }
+            let childSize = child.measure(proposal: proposal, context: context)
+            if childSize.isWidthFlexible { widthFlexible = true }
+            if childSize.isHeightFlexible { heightFlexible = true }
+        }
+        return ViewSize(
+            width: size.width, height: size.height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

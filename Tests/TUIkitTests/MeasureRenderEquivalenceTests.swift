@@ -221,6 +221,38 @@ struct MeasureRenderEquivalenceTests {
                 RadioButtonItem(1) { Text("Second") },
             ]), "RadioButtonGroup")
         check(Box(lines: ["pre-styled", "buffer"]), "Box(lines)")
+        check(
+            ContentUnavailableView {
+                Text("No Results")
+            } description: {
+                Text("Try a different search.")
+            } actions: {
+                Button("Clear Filters") {}
+            }, "ContentUnavailableView")
+        check(LazyVStack { Text("a"); Text("bb"); Text("ccc") }, "LazyVStack(plain)")
+        check(LazyHStack { Text("a"); Text("bb"); Text("ccc") }, "LazyHStack(plain)")
+        // Windowed: more rows/cols than fit → the render truncates on a child
+        // boundary, the case an analytical sum-and-clamp would mis-size.
+        check(
+            LazyVStack(spacing: 1) { ForEach(1...40, id: \.self) { Text("Row \($0)") } },
+            "LazyVStack(windowed)")
+        check(
+            LazyHStack(spacing: 2) { ForEach(1...40, id: \.self) { Text("C\($0)") } },
+            "LazyHStack(windowed)")
+        check(
+            Section {
+                Text("Row one"); Text("Row two")
+            } header: {
+                Text("HEADER")
+            } footer: {
+                Text("footer note")
+            }, "Section")
+        check(
+            Section {
+                Text("Body").frame(maxWidth: .infinity)
+            } header: {
+                Text("Flexible section")
+            }, "Section(flexContent)")
 
         // — The nested alignment row (the historical sore spot) —
         check(

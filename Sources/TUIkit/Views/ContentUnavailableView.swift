@@ -152,13 +152,24 @@ extension ContentUnavailableView where Label == Text, Description == Text, Actio
 ///
 /// Renders label, description, and actions as a vertically stacked layout,
 /// centered horizontally in the available width.
-private struct _ContentUnavailableViewCore<Label: View, Description: View, Actions: View>: View, Renderable {
+private struct _ContentUnavailableViewCore<Label: View, Description: View, Actions: View>: View, Renderable, Layoutable {
     let label: Label
     let description: Description
     let actions: Actions
 
     var body: Never {
         fatalError("_ContentUnavailableViewCore renders via Renderable")
+    }
+
+    /// Available-width-dependent (like ``ViewThatFits``): the assembled block is
+    /// left-padded to sit centred in `context.availableWidth`, so its rendered
+    /// width is a function of the offered width, not a single intrinsic value. A
+    /// single render under the layout's own context reports that width exactly —
+    /// measure and render must occur at the same width (they do in two-pass
+    /// layout). It is *not* flexible in the contract sense (it does not fill to
+    /// the edge — only the left pad grows), so it reports `.fixed`.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
