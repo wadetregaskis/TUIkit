@@ -151,6 +151,42 @@ struct MeasureRenderEquivalenceTests {
         check(Panel("Info") { Text("Body line") } footer: { Text("Footer") }, "Panel+footer")
         check(Card { Text("Card body") }, "Card")
         check(Dialog(title: "Confirm") { Text("Proceed?") }, "Dialog")
+        check(Dialog(title: "Confirm") { Text("Proceed?") } footer: { Button("OK") {} }, "Dialog+footer")
+
+        // — Adaptive / tab / erased (this session's flexibility-sensitive surface;
+        //   the views whose measure/render had to be reconciled by hand) —
+        check(
+            ViewThatFits {
+                HStack(spacing: 1) { Text("Alpha"); Text("Beta"); Text("Gamma") }
+                VStack(spacing: 0) { Text("Alpha"); Text("Beta"); Text("Gamma") }
+            }, "ViewThatFits")
+        // The colour-picker channel-editor row shape — fixed slider + fields wide,
+        // stacked narrow — the case whose 1-cell measure drift drove the TabView
+        // render-then-clamp centring.
+        check(
+            ViewThatFits {
+                HStack(spacing: 1) {
+                    Text("R").frame(width: 2)
+                    Slider(value: .constant(0.5), in: 0...1).frame(width: 16)
+                    Text("31%").frame(width: 7)
+                }
+                VStack(spacing: 0) {
+                    Text("R")
+                    Slider(value: .constant(0.5), in: 0...1)
+                }
+            }, "ViewThatFits(editorRow)")
+        check(
+            TabView(selection: .constant(0)) {
+                Tab("A", value: 0) { Text("alpha") }
+                Tab("B", value: 1) { Text("beta") }
+            }.tabViewStyle(.compact), "TabView(compact)")
+        check(
+            TabView(selection: .constant(0)) {
+                Tab("A", value: 0) { Text("alpha") }
+                Tab("B", value: 1) { Text("beta") }
+            }.tabViewStyle(.bordered), "TabView(bordered)")
+        check(AnyView(Text("erased")), "AnyView(Text)")
+        check(AnyView(Text("fill").frame(maxWidth: .infinity)), "AnyView(flexFrame)")
 
         // — The nested alignment row (the historical sore spot) —
         check(

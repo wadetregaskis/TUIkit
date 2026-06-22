@@ -57,6 +57,16 @@ public struct ProposedSize: Equatable, Sendable {
 ///   not fill arbitrary space. Flexibility means "fills unbounded available
 ///   space", not "reflows within it".
 ///
+/// - Important: A few views — `ViewThatFits` above all — are **available-width
+///   dependent**: their reported (and rendered) size is a function of the
+///   *available* extent, not the proposal alone, because they switch which
+///   candidate they present as the space changes. They still honour the contract
+///   (measured == rendered *at a given width*), but their size is not constant
+///   across widths the way an ordinary fixed view's is. A parent must therefore
+///   measure and render such a child at the **same** available width; measuring
+///   at one width and rendering at another can land on different candidates and
+///   mis-size it.
+///
 /// This yields the invariant the measure/render equivalence harness asserts, for
 /// available extent `E`:
 /// - flexible axis ⟹ `rendered == E` (it fills) and `reported ≤ E` (a minimum);

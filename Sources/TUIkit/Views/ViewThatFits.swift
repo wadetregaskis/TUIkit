@@ -56,6 +56,17 @@ public enum Axis: Sendable, CaseIterable, Equatable {
 /// By default both axes are considered. Pass `in:` to constrain the test to
 /// a single axis — for example `ViewThatFits(in: .horizontal)` only checks
 /// whether a candidate fits horizontally and ignores its height.
+///
+/// - Important: A `ViewThatFits`'s size depends on the **available width**, not
+///   the proposal alone — it reports (and renders) whichever candidate currently
+///   fits. It satisfies the flexibility contract (``ViewSize``) — measured and
+///   rendered sizes agree *at a given width* — but unlike an ordinary fixed view
+///   its size is not constant across widths. A parent that measures it at one
+///   width and then renders it at a narrower one can therefore land on different
+///   candidates and mis-size it; measure and render it at the **same** width. (A
+///   panel sized to its widest child then rendering a narrower child at the panel
+///   width must clamp the rendered buffer back to the child's natural width
+///   rather than re-render it narrower — see `TabView`'s content centring.)
 public struct ViewThatFits<Content: View>: View {
     /// The axes along which candidate fit is evaluated.
     let axes: Axis.Set
