@@ -93,6 +93,58 @@ struct DialogRenderTests {
         #expect(lines.last!.hasSuffix("╯"))
     }
 
+    @Test("Footer defaults to leading alignment")
+    func dialogFooterLeadingByDefault() {
+        let lines = strippedLines(Dialog(title: "T") {
+            Text(String(repeating: "x", count: 24))  // a wide body sets the box width
+        } footer: {
+            Text("[OK]")
+        }, width: 40, height: 10)
+        let footer = lines.first { $0.contains("[OK]") }!
+        let inner = String(footer.dropFirst().dropLast())  // strip the two side borders
+        let lead = inner.prefix { $0 == " " }.count
+        #expect(lead <= 1, "footer sits at the leading edge by default, lead=\(lead)")
+    }
+
+    @Test("footerAlignment .center centres the footer and keeps it clickable")
+    func dialogFooterCentred() {
+        var clicked = false
+        let tui = TUIContext()
+        let fm = FocusManager()
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let ctx = RenderContext(availableWidth: 40, availableHeight: 10, environment: env, tuiContext: tui)
+            .isolatingRenderCache()
+        let view = Dialog(title: "T", footerAlignment: .center) {
+            Text(String(repeating: "x", count: 24))
+        } footer: {
+            Button("OK") { clicked = true }
+        }
+        fm.beginRenderPass()
+        let buffer = renderToBuffer(view, context: ctx)
+        fm.endRenderPass()
+
+        let footer = buffer.lines.map { $0.stripped }.first { $0.contains("OK") }!
+        let inner = Array(String(footer.dropFirst().dropLast()))
+        let lead = inner.prefix { $0 == " " }.count
+        let trail = inner.reversed().prefix { $0 == " " }.count
+        #expect(lead > 1, "footer is centred, not at the leading edge (lead=\(lead))")
+        #expect(abs(lead - trail) <= 1, "footer is centred: lead=\(lead) trail=\(trail)")
+
+        // The button's hit region (the lowest, in the footer) tracks the centred
+        // glyph, so a click on it still fires.
+        guard let r = buffer.hitTestRegions.max(by: { $0.offsetY < $1.offsetY }) else {
+            Issue.record("no footer hit region")
+            return
+        }
+        tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+        let x = r.offsetX + r.width / 2
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: r.offsetY))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: r.offsetY))
+        #expect(clicked, "the centred footer button is clickable")
+    }
+
     @Test("Footer-bearing dialog keeps a continuous rectangle (uniform width)")
     func dialogFooterUniformWidth() {
         let buffer = renderToBuffer(

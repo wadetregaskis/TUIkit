@@ -83,6 +83,7 @@ public struct Dialog<Content: View, Footer: View>: View {
         titleColor: Color? = nil,
         padding: EdgeInsets = EdgeInsets(horizontal: 2, vertical: 1),
         showFooterSeparator: Bool = true,
+        footerAlignment: HorizontalAlignment = .leading,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
@@ -92,7 +93,8 @@ public struct Dialog<Content: View, Footer: View>: View {
             borderColor: borderColor,
             titleColor: titleColor,
             padding: padding,
-            showFooterSeparator: showFooterSeparator
+            showFooterSeparator: showFooterSeparator,
+            footerAlignment: footerAlignment
         )
         self.content = content()
         self.footer = footer()

@@ -37,6 +37,10 @@ struct ContainerConfig: Sendable, Equatable {
     /// Whether to show a separator line between body and footer.
     var showFooterSeparator: Bool
 
+    /// How the footer content is aligned within the container width. Defaults to
+    /// `.leading`; `.center`/`.trailing` shift the (narrower-than-the-box) footer.
+    var footerAlignment: HorizontalAlignment
+
     /// Creates a container configuration.
     ///
     /// - Parameters:
@@ -45,18 +49,21 @@ struct ContainerConfig: Sendable, Equatable {
     ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - showFooterSeparator: Show separator before footer (default: true).
+    ///   - footerAlignment: How to align the footer (default: leading).
     init(
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
-        showFooterSeparator: Bool = true
+        showFooterSeparator: Bool = true,
+        footerAlignment: HorizontalAlignment = .leading
     ) {
         self.borderStyle = borderStyle
         self.borderColor = borderColor
         self.titleColor = titleColor
         self.padding = padding
         self.showFooterSeparator = showFooterSeparator
+        self.footerAlignment = footerAlignment
     }
 
     /// Default configuration.
@@ -81,6 +88,10 @@ struct ContainerStyle: Sendable, Equatable {
     /// The border color (nil uses theme default).
     var borderColor: Color?
 
+    /// How the footer content is aligned within the container width (default
+    /// leading). See ``ContainerConfig/footerAlignment``.
+    var footerAlignment: HorizontalAlignment
+
     /// Creates a container style with the specified options.
     ///
     /// - Parameters:
@@ -88,16 +99,19 @@ struct ContainerStyle: Sendable, Equatable {
     ///   - showFooterSeparator: Show separator before footer (default: true).
     ///   - borderStyle: The border style (default: appearance default).
     ///   - borderColor: The border color (default: theme border).
+    ///   - footerAlignment: How to align the footer (default: leading).
     init(
         showHeaderSeparator: Bool = true,
         showFooterSeparator: Bool = true,
         borderStyle: BorderStyle? = nil,
-        borderColor: Color? = nil
+        borderColor: Color? = nil,
+        footerAlignment: HorizontalAlignment = .leading
     ) {
         self.showHeaderSeparator = showHeaderSeparator
         self.showFooterSeparator = showFooterSeparator
         self.borderStyle = borderStyle
         self.borderColor = borderColor
+        self.footerAlignment = footerAlignment
     }
 
     /// Creates a `ContainerStyle` from a ``ContainerConfig``.
@@ -108,6 +122,7 @@ struct ContainerStyle: Sendable, Equatable {
         self.showFooterSeparator = config.showFooterSeparator
         self.borderStyle = config.borderStyle
         self.borderColor = config.borderColor
+        self.footerAlignment = config.footerAlignment
     }
 
     /// Default container style.
@@ -141,7 +156,8 @@ internal func renderContainer<Content: View, Footer: View>(
         showHeaderSeparator: true,
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
-        borderColor: config.borderColor
+        borderColor: config.borderColor,
+        footerAlignment: config.footerAlignment
     )
 
     let container = ContainerView(
@@ -192,7 +208,8 @@ internal func measureContainer<Content: View, Footer: View>(
         showHeaderSeparator: true,
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
-        borderColor: config.borderColor
+        borderColor: config.borderColor,
+        footerAlignment: config.footerAlignment
     )
 
     let container = ContainerView(
@@ -361,6 +378,22 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
     /// `renderToBuffer` and `sizeThatFits` so the two cannot disagree about the
     /// footer's width budget.
     private var footerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
+
+    /// Pads `buffer` to `width` cells, offsetting its content — and its hit
+    /// regions/overlays — per `alignment`. A no-op for `.leading` (offset 0) or
+    /// when the buffer already fills `width`. Used to place the footer; centring
+    /// it here (at render, where the final width is known) rather than with a
+    /// flexible frame avoids inflating the container to the full available width.
+    private func aligned(_ buffer: FrameBuffer, toWidth width: Int, alignment: HorizontalAlignment) -> FrameBuffer {
+        let offset = max(0, alignment.childOffset(childWidth: buffer.width, in: width))
+        guard offset > 0 else { return buffer }
+        let lines = buffer.lines.map { line in
+            let used = line.strippedLength
+            return String(repeating: " ", count: offset) + line
+                + String(repeating: " ", count: max(0, width - offset - used))
+        }
+        return buffer.replacingLines(lines, overlayShiftX: offset)
+    }
 
     var body: Never {
         fatalError("_ContainerViewCore renders via Renderable")
@@ -561,8 +594,12 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             var footerContext = footerInner
             footerContext.availableWidth = max(0, innerWidth - footerPadding.leading - footerPadding.trailing)
             footerContext.availableHeight = innerAvailableHeight
-            footerBuffer = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: footerContext)
+            let rendered = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: footerContext)
                 .clamped(toWidth: innerWidth, height: innerAvailableHeight)
+            // Place the (narrower-than-the-box) footer per the configured
+            // alignment. A no-op for `.leading`; `.center`/`.trailing` shift the
+            // content and its hit regions so a centred button stays clickable.
+            footerBuffer = aligned(rendered, toWidth: innerWidth, alignment: style.footerAlignment)
         } else {
             footerBuffer = nil
         }

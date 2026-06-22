@@ -94,7 +94,7 @@ public struct ColorPickerPanel: View {
     }
 
     public var body: some View {
-        Dialog(title: title, titleColor: .palette.accent) {
+        Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
             // Centre the preview and the tab view relative to each other (the tab
             // view is the widest, so the preview centres within it).
             VStack(alignment: .center, spacing: 1) {
