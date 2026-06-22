@@ -11,14 +11,15 @@
 struct _RawTab {
     let value: AnyHashable
     let title: String
+    /// The tab's content, type-erased. `AnyView` is `Layoutable` and forwards
+    /// `sizeThatFits` to the wrapped view, so measuring `content` (see the call
+    /// sites in `_TabViewCore`) sizes a `Layoutable` child — e.g. a `ScrollView`
+    /// — via its own `sizeThatFits` (its content's size), not a render-to-measure
+    /// pass that would let a flexible child fill the viewport and defeat
+    /// size-to-content. (Before AnyView became `Layoutable` this needed a bespoke
+    /// concrete-type `measure` closure captured pre-erasure; the forward made it
+    /// redundant.)
     let content: AnyView
-    /// Measures the tab's content (padded by the given interior insets) at its
-    /// *concrete* type. Captured in `Tab.tabs()` before the content is erased to
-    /// `AnyView`, so a `Layoutable` child (e.g. a `ScrollView`) is sized via its
-    /// `sizeThatFits` (its content's size) rather than `AnyView`'s
-    /// render-to-measure fallback (which would render a flexible child to fill
-    /// the viewport, defeating size-to-content).
-    let measure: @MainActor (EdgeInsets, ProposedSize, RenderContext) -> ViewSize
 }
 
 /// A view that can contribute tabs to a ``TabView``.
@@ -94,14 +95,7 @@ public struct Tab<Value: Hashable, Content: View>: View {
 
 extension Tab: TabContentProvider {
     func tabs() -> [_RawTab] {
-        let content = self.content  // concrete, captured before AnyView erasure
-        return [
-            _RawTab(
-                value: AnyHashable(value), title: title, content: AnyView(content),
-                measure: { insets, proposal, context in
-                    ChildView(content.padding(insets)).measure(proposal: proposal, context: context)
-                })
-        ]
+        [_RawTab(value: AnyHashable(value), title: title, content: AnyView(content))]
     }
 }
 
@@ -336,7 +330,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         func measureTab(_ index: Int) -> Int {
             var branch = context.withBranchIdentity("tab-\(tabs[index].value)")
             branch.availableWidth = available
-            return tabs[index].measure(insets, ProposedSize(width: nil, height: nil), branch).width
+            return measureChild(
+                tabs[index].content.padding(insets),
+                proposal: ProposedSize(width: nil, height: nil), context: branch).width
         }
         guard let stateStorage = context.environment.stateStorage else {
             return cap(measureTab(selectedIndex))
@@ -365,8 +361,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     private func naturalSelectedWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
         var branch = context.withBranchIdentity("tab-\(tabs[selectedIndex].value)")
         branch.availableWidth = available
-        return max(1, tabs[selectedIndex].measure(
-            insets, ProposedSize(width: nil, height: nil), branch).width)
+        return max(1, measureChild(
+            tabs[selectedIndex].content.padding(insets),
+            proposal: ProposedSize(width: nil, height: nil), context: branch).width)
     }
 
     /// The wrap budget for the header strip: the content width when folding
@@ -422,9 +419,10 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 style: .compact,
                 available: stripWrapBudget(widest: widest, available: avail, context: ctx))
             let chrome = 2 * rows.count + 2
-            let contentSize = tabs[selectedIndex].measure(
-                insets, ProposedSize(width: avail, height: nil),
-                contentContext(ctx, stripHeight: chrome))
+            let contentSize = measureChild(
+                tabs[selectedIndex].content.padding(insets),
+                proposal: ProposedSize(width: avail, height: nil),
+                context: contentContext(ctx, stripHeight: chrome))
             let interior = max(widest, rows.map(folderRowWidth).max() ?? 0)
             return ViewSize(
                 width: interior + 2, height: chrome + contentSize.height,
@@ -437,9 +435,10 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let rows = stripRowGroups(
             style: style,
             available: stripWrapBudget(widest: widest, available: ctx.availableWidth, context: ctx))
-        let contentSize = tabs[selectedIndex].measure(
-            insets, ProposedSize(width: ctx.availableWidth, height: nil),
-            contentContext(ctx, stripHeight: rows.count))
+        let contentSize = measureChild(
+            tabs[selectedIndex].content.padding(insets),
+            proposal: ProposedSize(width: ctx.availableWidth, height: nil),
+            context: contentContext(ctx, stripHeight: rows.count))
         let panelWidth = max(widest, rows.map(compactRowWidth).max() ?? 0)
         return ViewSize(
             width: panelWidth, height: rows.count + contentSize.height,
