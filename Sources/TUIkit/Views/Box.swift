@@ -151,7 +151,7 @@ extension Box where Content == BufferView {
 /// content into the `Box` rendering pipeline. This lets `Box` handle border
 /// rendering (border style from the current appearance) while the content is controlled
 /// externally.
-struct BufferView: View, Renderable {
+struct BufferView: View, Renderable, Layoutable {
     /// The pre-built buffer to return during rendering.
     let buffer: FrameBuffer
 
@@ -161,6 +161,11 @@ struct BufferView: View, Renderable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         buffer
+    }
+
+    /// A pre-built buffer is exactly its own size — measured directly, no render.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize.fixed(buffer.width, buffer.height)
     }
 }
 

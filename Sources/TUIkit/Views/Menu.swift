@@ -183,7 +183,7 @@ public struct Menu: View {
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering of Menu.
-private struct _MenuCore: View, Renderable {
+private struct _MenuCore: View, Renderable, Layoutable {
     let title: String?
     let items: [MenuItem]
     let selectedIndex: Int
@@ -197,6 +197,12 @@ private struct _MenuCore: View, Renderable {
 
     var body: Never {
         fatalError("_MenuCore renders via Renderable")
+    }
+
+    /// A menu sizes to its widest item / title (it does not fill), so it measures
+    /// by a single render — off the render-to-measure fallback's flexibility probe.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

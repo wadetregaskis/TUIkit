@@ -108,10 +108,20 @@ public struct Stepper<Label: View>: View {
 /// nothing when the label is empty/blank/absent, so the control isn't preceded
 /// by a stray space. Used by ``Stepper`` (and reusable by other inline-labelled
 /// controls).
-private struct _CollapsingLabel<Label: View>: View, Renderable {
+private struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
     let label: Label?
 
     var body: Never { fatalError("_CollapsingLabel renders via Renderable") }
+
+    /// Size from one render (it drops to nothing for a blank label and adds a
+    /// trailing space otherwise — both need the render), flexibility from the label.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        let labelFlexible = label.map {
+            measureChild($0, proposal: proposal, context: context).isWidthFlexible
+        } ?? false
+        return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
+    }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         guard let label, !(label is EmptyView) else { return FrameBuffer() }
@@ -324,7 +334,7 @@ private enum StepperStateIndex {
 }
 
 /// Internal view that handles the actual rendering of Stepper.
-private struct _StepperCore<Label: View>: View, Renderable {
+private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
     let value: Binding<Int>
     let bounds: ClosedRange<Int>?
     let step: Int
@@ -337,6 +347,16 @@ private struct _StepperCore<Label: View>: View, Renderable {
 
     var body: Never {
         fatalError("_StepperCore renders via Renderable")
+    }
+
+    /// Size from one render (label + fixed stepper controls), flexibility from
+    /// the label — a flexible label (e.g. a maxWidth frame) makes the row grow.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        let labelFlexible = label.map {
+            measureChild($0, proposal: proposal, context: context).isWidthFlexible
+        } ?? false
+        return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
     }
 
     private typealias StateIndex = StepperStateIndex

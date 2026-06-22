@@ -200,6 +200,27 @@ struct MeasureRenderEquivalenceTests {
         check(ZStack { Text("x").frame(maxWidth: .infinity); Text("o") }, "ZStack(flexChild)")
         check(Spinner("Loading"), "Spinner")
         check(ButtonRow { Button("OK") {}; Button("Cancel") {} }, "ButtonRow")
+        check(
+            Menu(title: "Actions", items: [
+                MenuItem(label: "New", shortcut: "n"),
+                MenuItem(label: "Open", shortcut: "o"),
+            ]), "Menu")
+        check(
+            Picker("Theme", selection: .constant(0)) {
+                Text("Light").tag(0)
+                Text("Dark").tag(1)
+            }.pickerStyle(.menu), "Picker(menu)")
+        check(
+            Picker("Theme", selection: .constant(0)) {
+                Text("Light").tag(0)
+                Text("Dark").tag(1)
+            }.pickerStyle(.inline), "Picker(inline)")
+        check(
+            RadioButtonGroup(selection: .constant(0), items: [
+                RadioButtonItem(0) { Text("First") },
+                RadioButtonItem(1) { Text("Second") },
+            ]), "RadioButtonGroup")
+        check(Box(lines: ["pre-styled", "buffer"]), "Box(lines)")
 
         // — The nested alignment row (the historical sore spot) —
         check(

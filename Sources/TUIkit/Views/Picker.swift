@@ -203,10 +203,16 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
 /// Renders a picker's label, collapsing to **zero height** when the label is
 /// empty or all-whitespace — so an unlabelled picker (e.g. `Picker("", …)`)
 /// doesn't show a blank first line above its options.
-private struct _PickerLabel<Label: View>: View, Renderable {
+private struct _PickerLabel<Label: View>: View, Renderable, Layoutable {
     let label: Label
 
     var body: Never { fatalError("_PickerLabel renders via Renderable") }
+
+    /// The collapsed picker label sizes to its content (it does not fill), so it
+    /// measures by a single render — off the render-to-measure fallback's probe.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
+    }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(label, context: context)

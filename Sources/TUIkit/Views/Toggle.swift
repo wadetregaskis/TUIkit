@@ -250,7 +250,7 @@ private enum ToggleStateIndex {
 }
 
 /// Internal view that handles the actual rendering of Toggle.
-private struct _ToggleCore<Label: View>: View, Renderable {
+private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     let isOn: Binding<Bool>
     let label: Label
     let focusID: String?
@@ -258,6 +258,17 @@ private struct _ToggleCore<Label: View>: View, Renderable {
 
     var body: Never {
         fatalError("_ToggleCore renders via Renderable")
+    }
+
+    /// Size from one render (the label is flattened into the `[x] label` row, so
+    /// its width can't be derived structurally), with flexibility taken from the
+    /// label: the toggle fills its width iff its label does. Still cheaper than the
+    /// render-to-measure fallback (one render + a structural label probe, vs two
+    /// full renders), and correct where the fallback's +8 probe was imprecise.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        let labelFlexible = measureChild(label, proposal: proposal, context: context).isWidthFlexible
+        return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
     }
 
     private typealias StateIndex = ToggleStateIndex

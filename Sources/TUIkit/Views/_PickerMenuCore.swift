@@ -43,7 +43,7 @@ private enum PickerMenuConstants {
 ///
 /// - Important: Framework infrastructure. ``Picker`` returns this from its
 ///   `body` for the menu style; it is never used directly.
-struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
+struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// The resolved options.
     let entries: [_PickerEntry<SelectionValue>]
 
@@ -58,6 +58,12 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable {
 
     var body: Never {
         fatalError("_PickerMenuCore renders via Renderable")
+    }
+
+    /// The picker's option menu sizes to its widest option (it does not fill), so
+    /// it measures by a single render — off the render-to-measure fallback's probe.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

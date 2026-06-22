@@ -223,7 +223,7 @@ private enum RadioButtonGroupStateIndex {
 }
 
 /// Internal view that handles the actual rendering of RadioButtonGroup.
-private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
+private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layoutable {
     let selection: Binding<Value>
     let items: [RadioButtonItem<Value>]
     let orientation: RadioButtonOrientation
@@ -234,6 +234,13 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable {
 
     var body: Never {
         fatalError("_RadioButtonGroupCore renders via Renderable")
+    }
+
+    /// A radio group is fixed: its options lay out at their natural size (it does
+    /// not fill), so it measures by a single render — off the render-to-measure
+    /// fallback's redundant flexibility probe.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
