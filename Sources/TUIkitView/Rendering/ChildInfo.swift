@@ -256,7 +256,7 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     //
     // Skip Renderable views: their rendering logic (including environment
     // injection) lives in renderToBuffer, not in body. They fall through
-    // to the render-to-measure fallback below, which runs the full pipeline.
+    // to the single-render fallback below.
     if !(view is Renderable), V.Body.self != Never.self {
         // Descend into the body under the SAME child identity `renderToBuffer`
         // uses (it appends the body type via `withChildIdentity`). Measuring
@@ -274,37 +274,27 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
         return measureChild(body, proposal: proposal, context: childContext)
     }
 
-    // Fallback: render to measure (without side-effects)
-    var measureContext = context
-    measureContext.isMeasuring = true
-    // Clear hasExplicitWidth so views report their natural (minimum) size
-    // instead of expanding to fill the full available width.
-    measureContext.hasExplicitWidth = false
-    if let width = proposal.width {
-        measureContext.availableWidth = width
-    }
-    if let height = proposal.height {
-        measureContext.availableHeight = height
-    }
-    let buffer = renderToBuffer(view, context: measureContext)
-    let naturalWidth = buffer.width
-
-    // Determine width-flexibility by observation rather than by guessing
-    // from the parent's `hasExplicitWidth`. Render again with more room
-    // and see whether the view actually grows: a fixed view (a `Text`, or
-    // a size-preserving modifier such as `.background()` wrapped around
-    // one) renders the same width, while a genuinely flexible view
-    // expands. The old heuristic flagged *every* modified view in an
-    // explicit-width context as flexible, which made a backgrounded
-    // `Text` get shrunk ahead of its fixed siblings in a stack.
-    var probeContext = measureContext
-    probeContext.availableWidth = naturalWidth + 8
-    let probedWidth = renderToBuffer(view, context: probeContext).width
-
-    if probedWidth > naturalWidth {
-        return ViewSize.flexibleWidth(minWidth: naturalWidth, height: buffer.height)
-    }
-    return ViewSize.fixed(naturalWidth, buffer.height)
+    // Fallback: a `Renderable` view with no `Layoutable` conformance. Measure by
+    // a SINGLE render, reported fixed.
+    //
+    // This used to render the view *twice* — once at the proposal, then again at
+    // `naturalWidth + 8` to probe whether the view grows (and so is width-
+    // flexible). That probe is now retired: every view whose measure depends on
+    // width-flexibility (the stacks, frames, containers, controls, the
+    // behavioural decorators, AnyView, …) conforms to `Layoutable` and is handled
+    // above, where its `sizeThatFits` reports flexibility precisely. The probe was
+    // also imprecise — it called any view that *reflows* wider (a wrapping `Text`)
+    // "flexible", contradicting the `ViewSize` flexibility contract.
+    //
+    // What reaches here now is the fixed-size Renderable long tail: structural
+    // wrappers that vertically stack (`TupleView`, `ViewArray`), and leaf cores
+    // rendered within already-`Layoutable` parents or directly by the render loop
+    // (the status bar, table rows, list content, the alert button row, …). For
+    // these a single render is size-exact; they don't fill, so reporting fixed is
+    // correct. A NEW Renderable view that genuinely fills its width must conform
+    // to `Layoutable` to advertise that — the equivalence harness
+    // (`MeasureRenderEquivalenceTests`) is the guard that catches one that doesn't.
+    return measureFixedByRendering(view, proposal: proposal, context: context)
 }
 
 /// Measures a fixed-size view by rendering it ONCE in measuring mode and
