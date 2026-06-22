@@ -199,6 +199,7 @@ struct MeasureRenderEquivalenceTests {
         check(ZStack { Text("████████"); Text("hi") }, "ZStack")
         check(ZStack { Text("x").frame(maxWidth: .infinity); Text("o") }, "ZStack(flexChild)")
         check(Spinner("Loading"), "Spinner")
+        check(ButtonRow { Button("OK") {}; Button("Cancel") {} }, "ButtonRow")
 
         // — The nested alignment row (the historical sore spot) —
         check(

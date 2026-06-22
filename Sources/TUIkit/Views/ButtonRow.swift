@@ -102,12 +102,19 @@ public struct ButtonRowBuilder {
 // MARK: - Internal Core View
 
 /// Internal view that handles the actual rendering of ButtonRow.
-private struct _ButtonRowCore: View, Renderable {
+private struct _ButtonRowCore: View, Renderable, Layoutable {
     let buttons: [Button]
     let spacing: Int
 
     var body: Never {
         fatalError("_ButtonRowCore renders via Renderable")
+    }
+
+    /// A button row is fixed: its fixed-width buttons sit left-aligned with
+    /// `spacing` between them and it does not fill the remaining width, so it
+    /// measures by a single render (no redundant flexibility probe).
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
