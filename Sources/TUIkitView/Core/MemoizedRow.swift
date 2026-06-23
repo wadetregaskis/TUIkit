@@ -17,16 +17,25 @@ import TUIkitCore
 /// `Element == Element` only when the dynamic types match; a type mismatch
 /// compares unequal (so a heterogeneous collection simply never hits).
 public struct AnyEquatableBox: Equatable {
-    @usableFromInline let value: Any
-    @usableFromInline let isEqual: (Any) -> Bool
+    @usableFromInline let value: any Equatable
 
     public init<E: Equatable>(_ value: E) {
         self.value = value
-        self.isEqual = { ($0 as? E) == value }
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.isEqual(rhs.value)
+        // Open `lhs`'s existential to its concrete type, then compare against
+        // `rhs` cast to that same type. This is exactly the old stored `isEqual`
+        // closure — `(rhs as? typeof(lhs)) == lhs` — but without allocating a
+        // heap closure per box: a `ForEach`/`List` row builds one box per
+        // element every frame, so that per-row closure allocation was pure churn
+        // on the hottest general path. A dynamic-type mismatch (a heterogeneous
+        // collection) casts to nil and compares unequal, so a mixed collection
+        // still never produces a false cache hit.
+        func equal<L: Equatable>(_ lhsValue: L) -> Bool {
+            (rhs.value as? L) == lhsValue
+        }
+        return equal(lhs.value)
     }
 }
 
