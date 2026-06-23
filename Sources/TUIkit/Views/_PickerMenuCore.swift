@@ -241,8 +241,15 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             case .pressed where event.button == .left:
                 return true
             case .released where event.button == .left:
+                // Capture the open/close intent BEFORE focusing. Focusing the
+                // (already-focused) picker fires its own `onFocusLost`, which
+                // sets `isOpen = false`; reading `isOpen` *after* that and
+                // toggling it would flip false→true and reopen a drop-down the
+                // user clicked the control to close. Setting the intended state
+                // explicitly after the focus call is immune to that.
+                let shouldOpen = !handler.isOpen
                 focusManager.focus(id: persistedFocusID)
-                handler.isOpen.toggle()
+                handler.isOpen = shouldOpen
                 if handler.isOpen {
                     handler.highlightedIndex =
                         handler.itemValues.firstIndex(

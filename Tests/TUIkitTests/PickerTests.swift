@@ -180,6 +180,70 @@ struct PickerTests {
         #expect(popupWidths.first == open.width)
     }
 
+    @Test("Clicking the collapsed control closes an open drop-down")
+    func clickingControlClosesOpenDropDown() throws {
+        let context = createTestContext()
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries = [
+            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
+
+        _ = renderToBuffer(core, context: context)  // create the persistent handler
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummy = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker", selection: dummy, itemValues: [], canBeFocused: true))
+        box.value.isOpen = true
+
+        let open = renderToBuffer(core, context: context)
+        #expect(box.value.isOpen, "precondition: drop-down open")
+
+        let dispatcher = try #require(context.environment.mouseEventDispatcher)
+        dispatcher.setRegions(open.hitTestRegions)
+        // The collapsed control is the row-0 hit region.
+        let control = try #require(open.hitTestRegions.first { $0.offsetY == 0 })
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: control.offsetX, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: control.offsetX, y: 0))
+
+        #expect(box.value.isOpen == false, "clicking the control must close the open drop-down")
+    }
+
+    @Test("Clicking the collapsed control opens a closed drop-down")
+    func clickingControlOpensClosedDropDown() throws {
+        let context = createTestContext()
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries = [
+            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
+
+        let closed = renderToBuffer(core, context: context)  // closed; control at row 0
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummy = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker", selection: dummy, itemValues: [], canBeFocused: true))
+        #expect(box.value.isOpen == false, "precondition: closed")
+
+        let dispatcher = try #require(context.environment.mouseEventDispatcher)
+        dispatcher.setRegions(closed.hitTestRegions)
+        let control = try #require(closed.hitTestRegions.first { $0.offsetY == 0 })
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: control.offsetX, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: control.offsetX, y: 0))
+
+        #expect(box.value.isOpen == true, "clicking the control must open a closed drop-down")
+    }
+
     @Test("Open menu picker writes the transient ESC label on the status bar")
     func menuPickerSetsEscapeLabelOverrideWhenOpen() {
         let context = createTestContext()
