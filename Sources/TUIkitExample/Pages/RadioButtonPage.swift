@@ -50,8 +50,13 @@ struct RadioButtonPage: View {
             }
 
             DemoSection("Disabled Group") {
-                RadioButtonGroup(selection: Binding(get: { "disabled" }, set: { _ in })) {
-                    RadioButtonItem("disabled", "This group is disabled")
+                // Several items so both disabled states show: the selected one
+                // (●, dimmed) and the unselected ones (◌, the dotted "not
+                // pickable" circle).
+                RadioButtonGroup(selection: Binding(get: { "selected" }, set: { _ in })) {
+                    RadioButtonItem("selected", "This group is disabled (selected)")
+                    RadioButtonItem("a", "An unavailable option")
+                    RadioButtonItem("b", "Another unavailable option")
                 }
                 .disabled()
             }
