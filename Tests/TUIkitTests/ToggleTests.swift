@@ -51,7 +51,7 @@ struct ToggleTests {
         #expect(enabledToggle.isDisabled == false)
     }
 
-    @Test("Toggle renders with brackets")
+    @Test("Toggle renders its checkbox indicator")
     func toggleRenders() {
         let context = createTestContext()
 
@@ -65,13 +65,13 @@ struct ToggleTests {
         let toggle = Toggle("Test", isOn: binding)
         let buffer = renderToBuffer(toggle, context: context)
 
-        // Should render as single line with [ ] indicator (OFF)
+        // Single line with the empty (OFF) square indicator (⬜, default style).
         #expect(buffer.height == 1)
         let content = buffer.lines.joined()
-        #expect(content.contains("[") && content.contains("]"))
+        #expect(content.contains("\u{2B1C}\u{FE0E}"))
     }
 
-    @Test("Toggle OFF renders empty brackets")
+    @Test("Toggle OFF renders the empty square")
     func toggleOffState() {
         let context = createTestContext()
 
@@ -85,10 +85,10 @@ struct ToggleTests {
         let buffer = renderToBuffer(toggle, context: context)
 
         let content = buffer.lines.joined().stripped
-        #expect(content.contains("[ ]"))
+        #expect(content.contains("\u{2B1C}\u{FE0E}"))
     }
 
-    @Test("Toggle ON renders x in brackets")
+    @Test("Toggle ON renders the filled square")
     func toggleOnState() {
         let context = createTestContext()
 
@@ -102,7 +102,7 @@ struct ToggleTests {
         let buffer = renderToBuffer(toggle, context: context)
 
         let content = buffer.lines.joined().stripped
-        #expect(content.contains("[x]"))
+        #expect(content.contains("\u{2B1B}\u{FE0E}"))
     }
 
     @Test("Toggle renders focus indicator when focused")
@@ -191,10 +191,13 @@ struct ToggleTests {
 
         // Two toggles in a stack: the first registers focus, leaving the
         // second one genuinely unfocused (but still enabled).
+        // This test is specifically about the two-tone bracket colouring, so it
+        // uses the ASCII checkbox style (the default ⬛/⬜ glyphs have no brackets).
         let stack = VStack(spacing: 0) {
             Toggle("First", isOn: bindingFirst)
             Toggle("Second", isOn: bindingSecond)
         }
+        .checkboxStyle(.ascii)
         let buffer = renderToBuffer(stack, context: context)
         #expect(buffer.height == 2, "Expected one line per toggle, got \(buffer.height)")
         let unfocusedLine = buffer.lines[1]

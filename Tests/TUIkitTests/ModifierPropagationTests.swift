@@ -119,8 +119,8 @@ struct ModifierPropagationTests {
         let context = testContext()
         let buffer = renderToBuffer(toggle, context: context)
 
-        // Toggle should render with brackets and label
-        #expect(buffer.lines[0].stripped.contains("[") && buffer.lines[0].stripped.contains("]"))
+        // Toggle should render with its checkbox indicator (⬜, default) and label
+        #expect(buffer.lines[0].stripped.contains("\u{2B1C}\u{FE0E}"))
         #expect(buffer.lines[0].contains("Enable"))
     }
 

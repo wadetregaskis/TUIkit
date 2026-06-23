@@ -33,7 +33,7 @@ struct TogglePage: View {
 
             DemoSection("Themeable label text (.toggleTextStyle)") {
                 VStack(alignment: .leading, spacing: 1) {
-                    // Only the labels are restyled; the [x] indicator is unaffected.
+                    // Only the labels are restyled; the checkbox glyph is unaffected.
                     Toggle("Italic, info-coloured label", isOn: $styledLabelA)
                     Toggle("…and this one too", isOn: $styledLabelB)
                 }

@@ -289,8 +289,10 @@ struct TintTests {
 
     @Test("tint cascades from a container to a toggle's ON mark")
     func tintCascadesToToggle() {
+        // Rendered unfocused: a checked square shows the (tinted) accent solid;
+        // a focused one would pulse it, lerping away from the exact tint RGB.
         let view = VStack { Toggle("Wi-Fi", isOn: .constant(true)) }.tint(.rgb(7, 8, 9))
-        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
+        let line = renderToBuffer(view, context: makeBareRenderContext()).lines.joined()
         #expect(line.contains("38;2;7;8;9"))
     }
 
@@ -314,8 +316,8 @@ struct TintTests {
             VStack { Toggle("Inner", isOn: .constant(true)) }.tint(.rgb(7, 8, 9))
         }
         .tint(.rgb(1, 2, 3))
-        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
-        #expect(line.contains("38;2;7;8;9"))      // inner tint
+        let line = renderToBuffer(view, context: makeBareRenderContext()).lines.joined()
+        #expect(line.contains("38;2;7;8;9"))      // inner tint (unfocused → solid)
     }
 }
 

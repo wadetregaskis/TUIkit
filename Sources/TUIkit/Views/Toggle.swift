@@ -16,18 +16,22 @@
 /// | Style | Description |
 /// |-------|-------------|
 /// | `.automatic` | Platform default (checkbox in TUI) |
-/// | `.checkbox` | Classic checkbox: `[ ]` / `[x]` |
+/// | `.checkbox` | Classic checkbox |
 /// | `.switch` | Switch style (renders same as checkbox in TUI) |
 ///
-/// > Note: In TUIkit, all styles render identically as `[ ]` / `[x]`
-/// > due to terminal constraints. The API matches SwiftUI for compatibility.
+/// > Note: In TUIkit, all of these `ToggleStyle`s render identically — a
+/// > checkbox — due to terminal constraints; the API matches SwiftUI for
+/// > compatibility. The *glyphs* of that checkbox (⬛/⬜ by default, or `[x]`/`[ ]`)
+/// > are a separate, TUI-specific choice — see ``CheckboxStyle`` and
+/// > ``SwiftUICore/View/checkboxStyle(_:)``.
 public protocol ToggleStyle: Sendable {}
 
 // MARK: - Built-in Toggle Styles
 
 /// The default toggle style.
 ///
-/// In TUIkit, the default style is checkbox: `[ ]` / `[x]`.
+/// In TUIkit this is a checkbox; its glyphs come from ``CheckboxStyle`` (⬛/⬜
+/// by default).
 public struct DefaultToggleStyle: ToggleStyle {
     public init() {}
 }
@@ -35,9 +39,12 @@ public struct DefaultToggleStyle: ToggleStyle {
 /// A toggle style that displays a checkbox followed by its label.
 ///
 /// ```
-/// [ ] Label     (OFF)
-/// [x] Label     (ON)
+/// ⬜ Label     (OFF)
+/// ⬛ Label     (ON)
 /// ```
+///
+/// The checkbox glyphs are configurable via ``CheckboxStyle`` (e.g.
+/// `.checkboxStyle(.ascii)` for `[ ]` / `[x]`).
 public struct CheckboxToggleStyle: ToggleStyle {
     public init() {}
 }
@@ -99,7 +106,8 @@ extension View {
     /// .toggleStyle(.checkbox)
     /// ```
     ///
-    /// > Note: In TUIkit, all styles currently render as checkbox `[ ]` / `[x]`.
+    /// > Note: In TUIkit, all `ToggleStyle`s currently render as a checkbox; the
+    /// > checkbox glyphs are set separately via ``CheckboxStyle``.
     ///
     /// - Parameter style: The toggle style to use.
     /// - Returns: A view with the toggle style set.
@@ -134,9 +142,11 @@ extension View {
 /// ## Rendering
 ///
 /// ```
-/// [ ] Label     (OFF - dimmed)
-/// [x] Label     (ON - accent color)
+/// ⬜ Label     (OFF - dimmed)
+/// ⬛ Label     (ON - accent color)
 /// ```
+///
+/// The checkbox glyphs are configurable — see ``CheckboxStyle``.
 ///
 /// When focused, the brackets pulse in the accent color.
 ///
@@ -260,7 +270,7 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         fatalError("_ToggleCore renders via Renderable")
     }
 
-    /// Size from one render (the label is flattened into the `[x] label` row, so
+    /// Size from one render (the label is flattened into the `<mark> label` row, so
     /// its width can't be derived structurally), with flexibility taken from the
     /// label: the toggle fills its width iff its label does. The single-render
     /// fallback would size it the same, but always reports fixed — this adds the
@@ -340,24 +350,35 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             bracketColor = palette.foreground
         }
 
-        let openBracket = ANSIRenderer.colorize("[", foreground: bracketColor)
-        let closeBracket = ANSIRenderer.colorize("]", foreground: bracketColor)
+        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (⬛/⬜
+        // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
+        let style = context.environment.checkboxStyle
+        let mark = isOnValue ? style.onMark : style.offMark
 
-        // Content: [ ] (OFF) or [x] (ON). The OFF mark is a space, so its
-        // colour is moot; the ON mark uses the accent so a checked box
-        // reads clearly, and a disabled toggle dims throughout.
-        let contentColor: Color
-        if isDisabled {
-            contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-        } else if isOnValue {
-            contentColor = palette.accent
+        let styledIndicator: String
+        if style.openBracket.isEmpty {
+            // Self-contained glyph (squares): its *shape* shows on/off, so its
+            // colour is free to show state — accent when checked, plus the
+            // focus / hover / disabled tints the brackets would otherwise carry.
+            let markColor = (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
+            styledIndicator = ANSIRenderer.colorize(mark, foreground: markColor)
         } else {
-            contentColor = palette.foreground
+            // Two-tone bracketed (ASCII): the brackets show focus while the
+            // inner mark shows on/off (accent when checked, dimmed when
+            // disabled; the OFF mark is a space, so its colour is moot).
+            let contentColor: Color
+            if isDisabled {
+                contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            } else if isOnValue {
+                contentColor = palette.accent
+            } else {
+                contentColor = palette.foreground
+            }
+            styledIndicator =
+                ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
+                + ANSIRenderer.colorize(mark, foreground: contentColor)
+                + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
         }
-
-        let content = isOnValue ? "x" : " "
-        let styledContent = ANSIRenderer.colorize(content, foreground: contentColor)
-        let styledIndicator = openBracket + styledContent + closeBracket
 
         // Combine: [indicator] label
         let combinedLine = styledIndicator + " " + labelText

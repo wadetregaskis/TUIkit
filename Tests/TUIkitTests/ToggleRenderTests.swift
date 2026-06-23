@@ -16,6 +16,10 @@ import Testing
 @MainActor
 @Suite("Toggle rendering")
 struct ToggleRenderTests {
+    /// The default checkbox marks: filled / empty large squares (with the
+    /// text-presentation selector), each one grapheme / two cells wide.
+    private let on = "\u{2B1B}\u{FE0E}"   // ⬛ checked
+    private let off = "\u{2B1C}\u{FE0E}"  // ⬜ unchecked
 
     /// Renders with a focus manager present (the first focusable auto-focuses).
     private func lines(_ v: some View, w: Int = 30, h: Int = 4) -> [String] {
@@ -29,28 +33,36 @@ struct ToggleRenderTests {
 
     // MARK: - On / off indicator
 
-    @Test("An OFF toggle renders [ ] then the label, on a single line")
+    @Test("An OFF toggle renders ⬜ then the label, on a single line")
     func offRendersEmptyBox() {
         let out = lines(Toggle("Wifi", isOn: .constant(false)))
         #expect(out.count == 1, "exactly one line, got: \(out)")
-        #expect(out[0] == "[ ] Wifi", "got: |\(out[0])|")
+        #expect(out[0] == "\(off) Wifi", "got: |\(out[0])|")
     }
 
-    @Test("An ON toggle renders [x] then the label, on a single line")
+    @Test("An ON toggle renders ⬛ then the label, on a single line")
     func onRendersCheckedBox() {
         let out = lines(Toggle("Wifi", isOn: .constant(true)))
         #expect(out.count == 1, "exactly one line, got: \(out)")
-        #expect(out[0] == "[x] Wifi", "got: |\(out[0])|")
+        #expect(out[0] == "\(on) Wifi", "got: |\(out[0])|")
     }
 
     @Test("Flipping the binding flips the indicator glyph only")
     func indicatorTracksBinding() {
-        let off = lines(Toggle("S", isOn: .constant(false))).first ?? ""
-        let on = lines(Toggle("S", isOn: .constant(true))).first ?? ""
-        #expect(off.hasPrefix("[ ]"))
-        #expect(on.hasPrefix("[x]"))
-        // Only the in-bracket glyph differs; the rest of the row is identical.
-        #expect(off.dropFirst(3) == on.dropFirst(3))
+        let offLine = lines(Toggle("S", isOn: .constant(false))).first ?? ""
+        let onLine = lines(Toggle("S", isOn: .constant(true))).first ?? ""
+        #expect(offLine.hasPrefix(off))
+        #expect(onLine.hasPrefix(on))
+        // Only the leading glyph differs; the rest of the row is identical.
+        #expect(offLine.dropFirst() == onLine.dropFirst())
+    }
+
+    @Test("The .ascii checkbox style restores the bracketed [x] / [ ] form")
+    func asciiStyleRestoresBrackets() {
+        let offLine = lines(Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.ascii))
+        let onLine = lines(Toggle("Wifi", isOn: .constant(true)).checkboxStyle(.ascii))
+        #expect(offLine[0] == "[ ] Wifi", "got: |\(offLine[0])|")
+        #expect(onLine[0] == "[x] Wifi", "got: |\(onLine[0])|")
     }
 
     // MARK: - Empty / whitespace label (the "empty chrome" bug class)
@@ -60,22 +72,22 @@ struct ToggleRenderTests {
         let out = lines(Toggle("", isOn: .constant(false)))
         #expect(out.count == 1, "unlabelled toggle must be a single line, got: \(out)")
         // The line must start with the indicator and not be blank.
-        #expect(out[0].hasPrefix("[ ]"), "got: |\(out[0])|")
-        #expect(out[0].first == "[", "must not be a blank line, got: |\(out[0])|")
+        #expect(out[0].hasPrefix(off), "got: |\(out[0])|")
+        #expect(!out[0].isEmpty, "must not be a blank line, got: |\(out[0])|")
     }
 
     @Test("An unlabelled ON toggle still shows the checked indicator")
     func emptyLabelOnShowsCheck() {
         let out = lines(Toggle("", isOn: .constant(true)))
         #expect(out.count == 1)
-        #expect(out[0].hasPrefix("[x]"), "got: |\(out[0])|")
+        #expect(out[0].hasPrefix(on), "got: |\(out[0])|")
     }
 
     @Test("A whitespace-only label does not add extra lines")
     func whitespaceLabelSingleLine() {
         let out = lines(Toggle("   ", isOn: .constant(false)))
         #expect(out.count == 1, "got: \(out)")
-        #expect(out[0].hasPrefix("[ ]"))
+        #expect(out[0].hasPrefix(off))
     }
 
     // MARK: - Custom (ViewBuilder) label
@@ -84,7 +96,7 @@ struct ToggleRenderTests {
     func viewBuilderLabel() {
         let out = lines(Toggle(isOn: .constant(true)) { Text("Custom") })
         #expect(out.count == 1)
-        #expect(out[0] == "[x] Custom", "got: |\(out[0])|")
+        #expect(out[0] == "\(on) Custom", "got: |\(out[0])|")
     }
 
     // MARK: - Focus
@@ -94,7 +106,7 @@ struct ToggleRenderTests {
         let focused = lines(Toggle("Net", isOn: .constant(false)))
         let unfocused = unfocusedLines(Toggle("Net", isOn: .constant(false)))
         #expect(focused == unfocused, "focus must not change the stripped text; f=\(focused) u=\(unfocused)")
-        #expect(focused.first == "[ ] Net")
+        #expect(focused.first == "\(off) Net")
     }
 
     @Test("In a stack the second (unfocused) toggle still renders its box and label")
@@ -105,8 +117,8 @@ struct ToggleRenderTests {
                 Toggle("Second", isOn: .constant(true))
             })
         #expect(out.count == 2, "one row per toggle, got: \(out)")
-        #expect(out[0].hasPrefix("[ ] First"))
-        #expect(out[1].hasPrefix("[x] Second"))
+        #expect(out[0].hasPrefix("\(off) First"))
+        #expect(out[1].hasPrefix("\(on) Second"))
     }
 
     // MARK: - Disabled
@@ -116,13 +128,13 @@ struct ToggleRenderTests {
         // Disabled changes colour only; the stripped text must be unchanged.
         let out = lines(Toggle("Wifi", isOn: .constant(true)).disabled())
         #expect(out.count == 1)
-        #expect(out[0] == "[x] Wifi", "got: |\(out[0])|")
+        #expect(out[0] == "\(on) Wifi", "got: |\(out[0])|")
     }
 
     @Test("A disabled OFF toggle still shows the empty box and label")
     func disabledOffRenders() {
         let out = lines(Toggle("Wifi", isOn: .constant(false)).disabled())
-        #expect(out[0] == "[ ] Wifi", "got: |\(out[0])|")
+        #expect(out[0] == "\(off) Wifi", "got: |\(out[0])|")
     }
 
     // MARK: - Width / truncation
@@ -133,14 +145,14 @@ struct ToggleRenderTests {
         // the buffer width — it never spills onto extra lines.
         let out = lines(Toggle("A very long setting label here", isOn: .constant(true)), w: 12)
         #expect(out.count == 1, "must stay on a single line, got: \(out)")
-        #expect(out[0].count <= 12, "must not exceed the available width, got len \(out[0].count): |\(out[0])|")
-        #expect(out[0].hasPrefix("[x] "), "indicator stays at the front, got: |\(out[0])|")
+        #expect(out[0].strippedLength <= 12, "must not exceed the available width, got: |\(out[0])|")
+        #expect(out[0].hasPrefix("\(on) "), "indicator stays at the front, got: |\(out[0])|")
     }
 
     @Test("A wide toggle shows the full label with no padding artefacts")
     func wideShowsFullLabel() {
         let out = lines(Toggle("Short", isOn: .constant(false)), w: 40)
         #expect(out.count == 1)
-        #expect(out[0] == "[ ] Short", "got: |\(out[0])|")
+        #expect(out[0] == "\(off) Short", "got: |\(out[0])|")
     }
 }
