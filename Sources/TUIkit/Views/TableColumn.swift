@@ -18,6 +18,18 @@ public enum ColumnWidth: Sendable, Equatable {
     /// Proportional width as a ratio of total available space.
     /// For example, `.ratio(0.5)` takes 50% of available width.
     case ratio(Double)
+
+    /// Sizes the column to fit its content — the width of the widest of the
+    /// column header and every cell value in the column (so nothing in the
+    /// column is truncated, space permitting). This mirrors the content-based
+    /// sizing of a SwiftUI table's automatic columns.
+    ///
+    /// It scans all of the column's values to find that width, so it is O(rows);
+    /// for very large tables where a per-frame content scan is undesirable,
+    /// prefer `.fixed` or `.flexible`. The fitted width is stable as the table
+    /// scrolls (it considers every row, not just the visible ones), so the
+    /// columns do not jump while scrolling.
+    case fit
 }
 
 // MARK: - Table Column
@@ -47,6 +59,7 @@ public enum ColumnWidth: Sendable, Equatable {
 /// | `.fixed(n)` | Exactly n characters wide |
 /// | `.flexible` | Expands to fill remaining space (shared equally) |
 /// | `.ratio(r)` | Takes r proportion of available width (0.0-1.0) |
+/// | `.fit` | Sizes to the widest of the header and all cell values (O(rows)) |
 public struct TableColumn<Value>: Sendable {
     /// The column header title.
     public let title: String

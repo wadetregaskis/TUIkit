@@ -39,7 +39,7 @@ private struct FileEntry: Identifiable, Sendable {
 /// Shows interactive table features including:
 /// - Column definitions with key paths
 /// - Column alignment (leading, center, trailing)
-/// - Column width modes (fixed, flexible, ratio)
+/// - Column width modes (fixed, flexible, ratio, fit)
 /// - Single and multi-selection
 /// - Keyboard navigation
 /// - Scroll indicators
@@ -50,20 +50,23 @@ struct TablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            Text("File Browser (Single Selection)")
+            Text("File Browser (Name column sized to fit, Type fills the rest)")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(
                 FileEntry.sampleFiles,
                 selection: $singleSelection
             ) {
+                // `.fit` sizes the Name column to its widest value
+                // (".swiftlint.yml") so no filename is ever truncated.
                 TableColumn("Name", value: \FileEntry.name)
+                    .width(.fit)
                 TableColumn("Size", value: \FileEntry.size)
                     .width(.fixed(10))
                     .alignment(.trailing)
                 TableColumn("Modified", value: \FileEntry.modified)
                     .width(.fixed(12))
                 TableColumn("Type", value: \FileEntry.type)
-                    .width(.fixed(10))
+                    .width(.flexible)
             }
 
             Text("Multi-Selection Table")

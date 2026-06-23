@@ -245,6 +245,38 @@ struct TableRenderTests {
         }
     }
 
+    @Test(".fit sizes a column to its widest value, so nothing in it is truncated")
+    func fitColumn() {
+        let rows = [
+            Row(id: "1", name: "Hi", size: "1"),
+            Row(id: "2", name: "Wiiiiiiide", size: "2"),  // 10 cells — the widest value
+        ]
+        // A `.fit` Name column sizes to "Wiiiiiiide" (10) so it shows in full,
+        // even though the header "Name" is only 4 wide.
+        let fit = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name).width(.fit)
+                TableColumn("Size", value: \Row.size).width(.fixed(4))
+            },
+            context: tableContext(width: 40, height: 8)
+        )
+        expectClosedBorder(fit)
+        #expect(fit.contains { $0.contains("Wiiiiiiide") }, "fit must show the widest value in full: \(fit)")
+        #expect(!fit.contains { $0.contains("…") }, "fit must not truncate its content: \(fit)")
+
+        // The same data in a fixed(4) Name column DOES truncate the long value —
+        // confirming the fit width is genuinely derived from the content.
+        let fixed = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name).width(.fixed(4))
+                TableColumn("Size", value: \Row.size).width(.fixed(4))
+            },
+            context: tableContext(width: 40, height: 8)
+        )
+        #expect(fixed.contains { $0.contains("…") }, "fixed(4) should truncate the long value: \(fixed)")
+        #expect(!fixed.contains { $0.contains("Wiiiiiiide") }, "fixed(4) cannot show the value in full")
+    }
+
     @Test("Narrow columns truncate cell values with an ellipsis")
     func narrowTruncation() {
         let lines = strippedLines(

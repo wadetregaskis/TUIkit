@@ -220,7 +220,9 @@ where Value.ID: Hashable {
         let fillsWidth = columns.contains { column in
             switch column.width {
             case .flexible, .ratio: return true
-            case .fixed: return false
+            // `.fit` is content-sized (a fixed width derived from the data), so
+            // like `.fixed` it does not grow with the available width.
+            case .fixed, .fit: return false
             }
         }
         return fillsWidth
@@ -570,6 +572,15 @@ where Value.ID: Hashable {
                 let ratioWidth = Int(Double(contentWidth) * ratio)
                 widths[index] = ratioWidth
                 usedWidth += ratioWidth
+            case .fit:
+                // Fit to the widest of the header and every cell value in this
+                // column. O(rows) per column, but stable as the table scrolls
+                // (all rows are considered, not just the visible ones).
+                let fitted = data.reduce(column.title.strippedLength) { widest, item in
+                    max(widest, column.value(for: item).strippedLength)
+                }
+                widths[index] = fitted
+                usedWidth += fitted
             case .flexible:
                 flexibleIndices.append(index)
             }
