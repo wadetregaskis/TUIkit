@@ -51,6 +51,23 @@ struct SliderHandlerTests {
         #expect(value == 0.6)
     }
 
+    @Test("Shift+arrow steps by 5× the normal amount")
+    func shiftArrowStepsByFive() {
+        var value = 0.5
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let handler = SliderHandler(focusID: "test", value: binding, bounds: 0...1, step: 0.05)
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right, shift: true)) == true)
+        #expect(abs(value - 0.75) < 1e-9, "0.5 + 5×0.05 = 0.75, got \(value)")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .left, shift: true)) == true)
+        #expect(abs(value - 0.5) < 1e-9, "0.75 − 5×0.05 = 0.5, got \(value)")
+
+        // A plain arrow (no Shift) still moves by a single step.
+        _ = handler.handleKeyEvent(KeyEvent(key: .right))
+        #expect(abs(value - 0.55) < 1e-9, "single step, got \(value)")
+    }
+
     @Test("Left arrow decrements value by step")
     func leftArrowDecrements() {
         var value = 0.5

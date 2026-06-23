@@ -18,6 +18,7 @@
 /// |-----|--------|
 /// | `→` or `+` | Increment by step |
 /// | `←` or `-` | Decrement by step |
+/// | `Shift+→` / `Shift+←` | Increment / decrement by 5× the step |
 /// | `Home` | Jump to minimum |
 /// | `End` | Jump to maximum |
 final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: BinaryFloatingPoint {
@@ -69,15 +70,19 @@ final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: Bin
 
 extension SliderHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // Holding Shift with an arrow steps by 5× the normal amount, for coarse
+        // adjustment. (CSI arrow sequences carry the Shift modifier; the symbol
+        // keys don't, so `+`/`-` keep the single step.)
+        let multiplier = event.shift ? 5 : 1
         switch event.key {
         case .right, .character("+"), .character("="):
             beginEditingIfNeeded()
-            increment()
+            increment(multiplier: multiplier)
             return true
 
         case .left, .character("-"), .character("_"):
             beginEditingIfNeeded()
-            decrement()
+            decrement(multiplier: multiplier)
             return true
 
         case .home:
@@ -99,15 +104,15 @@ extension SliderHandler {
 // MARK: - Value Manipulation
 
 extension SliderHandler {
-    /// Increments the value by the step size.
-    func increment() {
-        let newValue = value.wrappedValue + V(step)
+    /// Increments the value by `multiplier` step sizes (default one).
+    func increment(multiplier: Int = 1) {
+        let newValue = value.wrappedValue + V(step) * V(multiplier)
         value.wrappedValue = min(bounds.upperBound, newValue)
     }
 
-    /// Decrements the value by the step size.
-    func decrement() {
-        let newValue = value.wrappedValue - V(step)
+    /// Decrements the value by `multiplier` step sizes (default one).
+    func decrement(multiplier: Int = 1) {
+        let newValue = value.wrappedValue - V(step) * V(multiplier)
         value.wrappedValue = max(bounds.lowerBound, newValue)
     }
 
