@@ -96,7 +96,7 @@ struct _SwatchGridCore: View, Renderable {
     /// palettes (web-safe, crayons) a "nearest" marker would misleadingly imply
     /// the shown colour is selected when it isn't.
     var exactMatchOnly: Bool = false
-    var focusID: String? = nil
+    var focusID: String?
 
     var body: Never { fatalError("_SwatchGridCore renders via Renderable") }
 

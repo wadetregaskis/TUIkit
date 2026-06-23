@@ -31,7 +31,7 @@ struct TextFieldContentRenderer {
     /// A scoped style-cascade override for the entered text's colour
     /// (`.textFieldTextStyle { … }`), or `nil` to use the palette foreground.
     /// The cursor, selection, and (dim) prompt keep their own colours.
-    var contentForeground: Color? = nil
+    var contentForeground: Color?
 
     /// The entered-text foreground, resolved to a concrete colour. A
     /// `.textFieldTextStyle` override may be a *semantic* colour (e.g.

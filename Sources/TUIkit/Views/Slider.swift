@@ -684,7 +684,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         return box.value
     }
 
-    /// Builds the rendered slider content.
+    // Builds the rendered slider content. The nine inputs are all distinct render
+    // parameters (geometry, the resolved interaction state, and the value-readout
+    // style); bundling them into a throwaway struct only to satisfy the
+    // parameter-count ceiling would scatter closely-related render inputs.
+    // swiftlint:disable:next function_parameter_count
     private func buildContent(
         fraction: Double,
         isFocused: Bool,

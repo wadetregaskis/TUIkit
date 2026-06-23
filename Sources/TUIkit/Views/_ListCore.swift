@@ -4,6 +4,13 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// `_ListCore` is a single cohesive render core (the windowed row source, the
+// list core, and the content view that draws it) whose pieces are tightly
+// coupled through the row/selection/overflow model; splitting it across files
+// purely to satisfy the length ceiling would scatter that model for no clarity
+// gain — the same rationale by which `type_body_length` is disabled project-wide.
+// swiftlint:disable file_length
+
 // MARK: - Row Source (windowed materialisation)
 
 /// A windowed view over a `List`'s rows.
@@ -67,6 +74,9 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
             make: { rows[$0].content })
     }
 
+    // `count` is the stored row count (an `Int`), not a Collection, so the
+    // empty_count rule misfires — `isEmpty` is precisely what we're defining.
+    // swiftlint:disable:next empty_count
     var isEmpty: Bool { count == 0 }
 
     /// The row's type/id at `index` — cheap, builds no content.

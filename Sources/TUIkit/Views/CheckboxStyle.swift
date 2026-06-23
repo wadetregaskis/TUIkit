@@ -56,12 +56,12 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// render monochrome — letting the theme tint them for focus / checked /
     /// disabled rather than appearing as a fixed-colour emoji. They occupy two
     /// terminal cells.
-    public static let squares = CheckboxStyle(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
+    public static let squares = Self(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
 
     /// A pure-ASCII style, `[x]` / `[ ]`, for terminals where the square glyphs
     /// don't render correctly. Three cells wide, two-tone (brackets show focus,
     /// the inner mark shows on/off).
-    public static let ascii = CheckboxStyle(onMark: "x", offMark: " ", openBracket: "[", closeBracket: "]")
+    public static let ascii = Self(onMark: "x", offMark: " ", openBracket: "[", closeBracket: "]")
 }
 
 // MARK: - Environment

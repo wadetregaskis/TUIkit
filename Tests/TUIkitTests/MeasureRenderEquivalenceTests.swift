@@ -98,7 +98,11 @@ struct MeasureRenderEquivalenceTests {
         if flag { Text("true branch text") } else { Text("false") }
     }
 
+    // The corpus is a flat enumeration of view shapes to assert over; keeping it
+    // as one linear list reads better than scattering it across helpers purely to
+    // satisfy the length ceiling.
     @Test("sizeThatFits matches render across the Layoutable corpus (size invariant)")
+    // swiftlint:disable:next function_body_length
     func report() {
         var sizeDiv: [String] = []
         var flexDiv: [String] = []

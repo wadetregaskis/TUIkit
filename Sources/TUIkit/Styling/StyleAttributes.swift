@@ -100,8 +100,8 @@ public struct StyleAttributes: Sendable, Equatable {
     /// merge primitive the cascade uses. Applying an inner (closer) entry's
     /// attributes `merged(over:)` the accumulated outer ones makes the closest
     /// setter of each property win (proximity, per property).
-    public func merged(over base: StyleAttributes) -> StyleAttributes {
-        StyleAttributes(
+    public func merged(over base: Self) -> Self {
+        Self(
             foreground: foreground ?? base.foreground,
             background: background ?? base.background,
             bold: bold ?? base.bold,

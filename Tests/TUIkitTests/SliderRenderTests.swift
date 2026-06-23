@@ -161,10 +161,10 @@ struct SliderRenderTests {
 
     @Test("Focused and unfocused sliders render identical text (focus is colour-only)")
     func focusTextUnchanged() {
-        let f = focusedLines(Slider(value: .constant(0.5)))
-        let u = lines(Slider(value: .constant(0.5)))
-        #expect(f == u, "focus must not change the stripped text; f=\(f) u=\(u)")
-        #expect(f.count == 1)
+        let focused = focusedLines(Slider(value: .constant(0.5)))
+        let unfocused = lines(Slider(value: .constant(0.5)))
+        #expect(focused == unfocused, "focus must not change the stripped text; \(focused) vs \(unfocused)")
+        #expect(focused.count == 1)
     }
 
     // MARK: - Themed value read-out (.sliderTextStyle)

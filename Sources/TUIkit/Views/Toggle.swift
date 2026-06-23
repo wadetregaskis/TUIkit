@@ -283,6 +283,62 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
     private typealias StateIndex = ToggleStateIndex
 
+    /// The styled checkbox indicator (⬛/⬜ by default, `[x]`/`[ ]` under
+    /// `.checkboxStyle(.ascii)`) for the toggle's current state, themed for
+    /// focus / hover / disabled.
+    private func styledToggleIndicator(
+        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
+    ) -> String {
+        let palette = context.environment.palette
+
+        // Bracket color: pulsing accent when focused, the normal foreground
+        // when simply unfocused, and dimmed only when actually disabled.
+        // (An unfocused-but-enabled control must stay readable — dimming it
+        // to the disabled style made the brackets almost invisible against
+        // the terminal background.)
+        let bracketColor: Color
+        if isDisabled {
+            bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        } else if isFocused {
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+            bracketColor = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dimAccent, bright: palette.accent)
+        } else if isHovered {
+            // Hover bumps the brackets to a partial accent tint
+            // so the affordance reads without the focused pulse.
+            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground)
+        } else {
+            bracketColor = palette.foreground
+        }
+
+        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (⬛/⬜
+        // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
+        let style = context.environment.checkboxStyle
+        let mark = isOnValue ? style.onMark : style.offMark
+
+        if style.openBracket.isEmpty {
+            // Self-contained glyph (squares): its *shape* shows on/off, so its
+            // colour is free to show state — accent when checked, plus the
+            // focus / hover / disabled tints the brackets would otherwise carry.
+            let markColor = (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
+            return ANSIRenderer.colorize(mark, foreground: markColor)
+        }
+        // Two-tone bracketed (ASCII): the brackets show focus while the
+        // inner mark shows on/off (accent when checked, dimmed when
+        // disabled; the OFF mark is a space, so its colour is moot).
+        let contentColor: Color
+        if isDisabled {
+            contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        } else if isOnValue {
+            contentColor = palette.accent
+        } else {
+            contentColor = palette.foreground
+        }
+        return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
+            + ANSIRenderer.colorize(mark, foreground: contentColor)
+            + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
@@ -330,55 +386,9 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let labelBuffer = TUIkit.renderToBuffer(label, context: labelContext)
         let labelText = labelBuffer.lines.joined(separator: " ")
 
-        // Bracket color: pulsing accent when focused, the normal foreground
-        // when simply unfocused, and dimmed only when actually disabled.
-        // (An unfocused-but-enabled control must stay readable — dimming it
-        // to the disabled style made the brackets almost invisible against
-        // the terminal background.)
-        let bracketColor: Color
-        if isDisabled {
-            bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-        } else if isFocused {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-            bracketColor = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dimAccent, bright: palette.accent)
-        } else if isHovered {
-            // Hover bumps the brackets to a partial accent tint
-            // so the affordance reads without the focused pulse.
-            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground)
-        } else {
-            bracketColor = palette.foreground
-        }
-
-        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (⬛/⬜
-        // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
-        let style = context.environment.checkboxStyle
-        let mark = isOnValue ? style.onMark : style.offMark
-
-        let styledIndicator: String
-        if style.openBracket.isEmpty {
-            // Self-contained glyph (squares): its *shape* shows on/off, so its
-            // colour is free to show state — accent when checked, plus the
-            // focus / hover / disabled tints the brackets would otherwise carry.
-            let markColor = (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
-            styledIndicator = ANSIRenderer.colorize(mark, foreground: markColor)
-        } else {
-            // Two-tone bracketed (ASCII): the brackets show focus while the
-            // inner mark shows on/off (accent when checked, dimmed when
-            // disabled; the OFF mark is a space, so its colour is moot).
-            let contentColor: Color
-            if isDisabled {
-                contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
-            } else if isOnValue {
-                contentColor = palette.accent
-            } else {
-                contentColor = palette.foreground
-            }
-            styledIndicator =
-                ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
-                + ANSIRenderer.colorize(mark, foreground: contentColor)
-                + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
-        }
+        let styledIndicator = styledToggleIndicator(
+            isOnValue: isOnValue, isDisabled: isDisabled,
+            isFocused: isFocused, isHovered: isHovered, context: context)
 
         // Combine: [indicator] label
         let combinedLine = styledIndicator + " " + labelText

@@ -185,7 +185,7 @@ final class Color256GridHandler: Focusable {
 struct _Color256GridCore: View, Renderable {
     let selection: Binding<Color>
     var showNumbers: Bool = false
-    var focusID: String? = nil
+    var focusID: String?
 
     var body: Never { fatalError("_Color256GridCore renders via Renderable") }
 

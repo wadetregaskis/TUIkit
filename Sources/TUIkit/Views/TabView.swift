@@ -4,59 +4,6 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
-// MARK: - Tab extraction
-
-/// A tab recovered from the content closure before its value has been matched
-/// to the `TabView`'s concrete selection-value type. Mirrors `_RawPickerOption`.
-struct _RawTab {
-    let value: AnyHashable
-    let title: String
-    /// The tab's content, type-erased. `AnyView` is `Layoutable` and forwards
-    /// `sizeThatFits` to the wrapped view, so measuring `content` (see the call
-    /// sites in `_TabViewCore`) sizes a `Layoutable` child — e.g. a `ScrollView`
-    /// — via its own `sizeThatFits` (its content's size), not a render-to-measure
-    /// pass that would let a flexible child fill the viewport and defeat
-    /// size-to-content. (Before AnyView became `Layoutable` this needed a bespoke
-    /// concrete-type `measure` closure captured pre-erasure; the forward made it
-    /// redundant.)
-    let content: AnyView
-}
-
-/// A view that can contribute tabs to a ``TabView``.
-///
-/// Mirrors the `PickerOptionProvider` pattern: rather than reflecting over the
-/// view tree, each view type that may appear in a tab-view content closure
-/// declares how to surface its tabs. `TupleView` / `ForEach` recurse.
-@MainActor
-protocol TabContentProvider {
-    func tabs() -> [_RawTab]
-}
-
-extension EmptyView: TabContentProvider {
-    func tabs() -> [_RawTab] { [] }
-}
-
-extension TupleView: TabContentProvider {
-    func tabs() -> [_RawTab] {
-        var result: [_RawTab] = []
-        func collect<Child: View>(_ view: Child) {
-            if let provider = view as? TabContentProvider {
-                result.append(contentsOf: provider.tabs())
-            }
-        }
-        repeat collect(each children)
-        return result
-    }
-}
-
-extension ForEach: TabContentProvider {
-    func tabs() -> [_RawTab] {
-        data.flatMap { element -> [_RawTab] in
-            (content(element) as? TabContentProvider)?.tabs() ?? []
-        }
-    }
-}
-
 // MARK: - Tab
 
 /// A tab in a ``TabView``: a title, a selection value, and the content shown
@@ -112,7 +59,7 @@ public enum TabViewStyle: Sendable {
     /// — more decorative, one row taller than ``compact``.
     case bordered
 
-    var resolved: TabViewStyle { self == .automatic ? .compact : self }
+    var resolved: Self { self == .automatic ? .compact : self }
 }
 
 private struct TabViewStyleKey: EnvironmentKey {
@@ -840,11 +787,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 // neighbour), which is what makes the active tab stand out.
                 let activeRight = k > 0 && row[k - 1] == selectedIndex
                 let activeLeft = k < bodySpans.count && row[k] == selectedIndex
-                if k == 0 { top += "╭" }
-                else if k == wallCols.count - 1 { top += "╮" }
-                else if activeRight { top += "╮" }
-                else if activeLeft { top += "╭" }
-                else { top += "┬" }
+                top += Self.topWallGlyph(
+                    isStripStart: k == 0, isStripEnd: k == wallCols.count - 1,
+                    activeRight: activeRight, activeLeft: activeLeft)
                 if k < bodySpans.count { top += String(repeating: "─", count: bodySpans[k].len) }
             }
             lines.append(base(off) + bc(top) + base(boxWidth - off - top.count))
@@ -867,25 +812,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             // Under the active (bottom) row: the content box's top border, curving
             // up to wrap the active tab and opening (surface gap) beneath it.
             if isBottom {
-                let activeWall = wallCols.firstIndex { wc in
-                    bodySpans.contains { $0.index == selectedIndex && $0.start == wc + 1 }
-                } ?? 0
-                let aLeft = wallCols[activeWall]
-                let aBody = bodySpans.first { $0.index == selectedIndex }!
-                let aRight = aBody.start + aBody.len
-                let inactiveWalls = Set(wallCols).subtracting([aLeft, aRight])
-                func borderGlyph(_ c: Int) -> String {
-                    if c == 0 { return "╭" }
-                    if c == boxWidth - 1 { return "╮" }
-                    if c == aLeft { return "╯" }
-                    if c == aRight { return "╰" }
-                    return inactiveWalls.contains(c) ? "┴" : "─"
-                }
-                var left = ""
-                for c in 0..<aBody.start { left += borderGlyph(c) }
-                var right = ""
-                for c in aRight..<boxWidth { right += borderGlyph(c) }
-                lines.append(bc(left) + surf(aBody.len) + bc(right))
+                lines.append(activeRowBottomBorder(
+                    wallCols: wallCols, bodySpans: bodySpans, selectedIndex: selectedIndex,
+                    boxWidth: boxWidth, border: border, surface: surface))
             }
         }
 
@@ -914,6 +843,61 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
+    /// The glyph for a tab-strip top wall: rounded corners at the strip ends and
+    /// around the active tab (`╭`/`╮`), a `┬` for an ordinary shared wall. The
+    /// precedence (strip-end before active-tab) makes a wall that is both read as
+    /// the strip end.
+    private static func topWallGlyph(
+        isStripStart: Bool, isStripEnd: Bool, activeRight: Bool, activeLeft: Bool
+    ) -> String {
+        if isStripStart {
+            return "╭"
+        } else if isStripEnd {
+            return "╮"
+        } else if activeRight {
+            return "╮"
+        } else if activeLeft {
+            return "╭"
+        } else {
+            return "┬"
+        }
+    }
+
+    /// The content box's top border drawn beneath the active (bottom) tab row: it
+    /// curves up to wrap the active tab (`╯` … `╰`, with a surface-coloured gap
+    /// across the tab body) and meets the inactive walls with `┴`.
+    private func activeRowBottomBorder(
+        wallCols: [Int], bodySpans: [(start: Int, len: Int, index: Int)],
+        selectedIndex: Int, boxWidth: Int, border: Color, surface: Color
+    ) -> String {
+        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
+        let activeWall = wallCols.firstIndex { wc in
+            bodySpans.contains { $0.index == selectedIndex && $0.start == wc + 1 }
+        } ?? 0
+        let aLeft = wallCols[activeWall]
+        guard let aBody = bodySpans.first(where: { $0.index == selectedIndex }) else {
+            return bc("╰" + String(repeating: "─", count: max(0, boxWidth - 2)) + "╯")
+        }
+        let aRight = aBody.start + aBody.len
+        let inactiveWalls = Set(wallCols).subtracting([aLeft, aRight])
+        func borderGlyph(_ c: Int) -> String {
+            if c == 0 { return "╭" }
+            if c == boxWidth - 1 { return "╮" }
+            if c == aLeft { return "╯" }
+            if c == aRight { return "╰" }
+            return inactiveWalls.contains(c) ? "┴" : "─"
+        }
+        var left = ""
+        for c in 0..<aBody.start { left += borderGlyph(c) }
+        var right = ""
+        for c in aRight..<boxWidth { right += borderGlyph(c) }
+        let gap =
+            aBody.len > 0
+            ? ANSIRenderer.colorize(String(repeating: " ", count: aBody.len), background: surface)
+            : ""
+        return bc(left) + gap + bc(right)
+    }
+
     /// Black or white, whichever reads better on `color`.
     static func contrastingForeground(for color: Color, palette: any Palette) -> Color {
         let c = color.resolve(with: palette).rgbComponents ?? (0, 0, 0)
@@ -922,59 +906,5 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     }
 }
 
-// MARK: - Focus handler
-
-/// Switches the active tab with the arrow keys when the strip is focused:
-/// left/right step through the tabs in order; up/down move between rows of a
-/// wrapped strip, to the tab nearest above/below the current one's centre.
-final class TabStripHandler: Focusable {
-    let focusID: String
-    var canBeFocused: Bool
-    var selection: Binding<AnyHashable>
-    var values: [AnyHashable]
-
-    /// The visual rows (tab indices, top-to-bottom) and each tab's horizontal
-    /// centre, refreshed each render so up/down navigation matches the layout.
-    var rows: [[Int]] = []
-    var centers: [Int: Int] = [:]
-
-    init(focusID: String, selection: Binding<AnyHashable>, values: [AnyHashable], canBeFocused: Bool = true) {
-        self.focusID = focusID
-        self.selection = selection
-        self.values = values
-        self.canBeFocused = canBeFocused
-    }
-
-    private func move(by delta: Int) {
-        guard !values.isEmpty else { return }
-        let current = values.firstIndex(of: selection.wrappedValue) ?? 0
-        let next = max(0, min(values.count - 1, current + delta))
-        selection.wrappedValue = values[next]
-    }
-
-    /// Moves to the tab nearest (by centre) in the row `delta` rows away, or
-    /// returns `false` when there is no such row — so the key bubbles up and
-    /// focus can leave the strip (e.g. to the control above/below the TabView).
-    private func moveVertically(_ delta: Int) -> Bool {
-        let current = values.firstIndex(of: selection.wrappedValue) ?? 0
-        guard let row = rows.firstIndex(where: { $0.contains(current) }) else { return false }
-        let target = row + delta
-        guard rows.indices.contains(target) else { return false }
-        let cx = centers[current] ?? 0
-        guard let nearest = rows[target].min(by: {
-            abs((centers[$0] ?? 0) - cx) < abs((centers[$1] ?? 0) - cx)
-        }) else { return false }
-        selection.wrappedValue = values[nearest]
-        return true
-    }
-
-    func handleKeyEvent(_ event: KeyEvent) -> Bool {
-        switch event.key {
-        case .left: move(by: -1); return true
-        case .right: move(by: 1); return true
-        case .up: return moveVertically(-1)
-        case .down: return moveVertically(1)
-        default: return false
-        }
-    }
-}
+// `TabStripHandler` (the strip's focus/keyboard handler) lives in
+// `TabStripHandler.swift`.

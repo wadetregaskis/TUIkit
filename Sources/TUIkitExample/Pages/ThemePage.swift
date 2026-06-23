@@ -24,7 +24,7 @@ struct ThemePage: View {
 
     /// Index into ``editableColors`` currently open in the full modal colour
     /// editor (``ColorPickerPanel``), or `nil` when it is dismissed.
-    @State private var editing: Int? = nil
+    @State private var editing: Int?
 
     /// Tint options offered in the live-styling section (name + colour).
     private static let tintOptions: [(name: String, color: Color?)] = [
@@ -87,7 +87,7 @@ struct ThemePage: View {
         )
         let tintSelection = Binding(
             get: { Self.tintOptions.first { $0.color == styling.tint }?.name ?? "None" },
-            set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color ?? nil }
+            set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color }
         )
         // Drives the modal colour editor: true while a colour is open for editing.
         let editingBinding = Binding(

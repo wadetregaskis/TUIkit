@@ -45,7 +45,7 @@ public struct StyleCascade: Sendable, Equatable {
 
     /// Returns a copy with `(scope, attributes)` appended as the new innermost
     /// (closest) entry. No-op for empty attributes.
-    public func appending(_ scope: StyleScope, _ attributes: StyleAttributes) -> StyleCascade {
+    public func appending(_ scope: StyleScope, _ attributes: StyleAttributes) -> Self {
         guard !attributes.isEmpty else { return self }
         var copy = self
         copy.entries.append(Entry(scope: scope, attributes: attributes))
