@@ -343,6 +343,21 @@ extension FocusManager {
                 """)
         }
 
+        // A Page Up/Down or Home/End the focused element didn't consume scrolls
+        // the enclosing scroll container — so the page scrolls even while a
+        // non-scrollable control (e.g. a Button) inside a ScrollView holds focus,
+        // and even when nothing is focused at all. (Plain Up/Down remain focus
+        // navigation, handled below.)
+        switch event.key {
+        case .pageUp, .pageDown, .home, .end:
+            if scrollActiveSection(for: event.key) {
+                focusedInteractionGeneration &+= 1
+                return true
+            }
+        default:
+            break
+        }
+
         // Tab navigation: cycle sections (or elements within single section)
         if event.key == .tab {
             if event.shift {
@@ -367,6 +382,40 @@ extension FocusManager {
         }
 
         return false
+    }
+
+    /// Scrolls the active section's enclosing scroll container for a
+    /// page/home/end key the focused element didn't consume.
+    ///
+    /// Scrolls the viewport directly through ``ScrollableOffsetState`` (so it
+    /// never disturbs a list's selection — it is a viewport move, not a focus
+    /// move), and only when the active section has exactly one scroller that can
+    /// currently move. That one-scroller guard keeps it unambiguous (the common
+    /// "a single ScrollView/List wraps the page" case) and avoids scrolling the
+    /// wrong container when several are on screen.
+    ///
+    /// - Returns: `true` if a scroll container was moved.
+    private func scrollActiveSection(for key: Key) -> Bool {
+        guard let section = activeSection else { return false }
+        let focusedID = currentFocused?.focusID
+        let scrollers = section.focusables.compactMap { focusable -> (any ScrollableOffsetState)? in
+            guard focusable.focusID != focusedID,
+                let scroller = focusable as? any ScrollableOffsetState,
+                scroller.maxOffset > 0
+            else { return nil }
+            return scroller
+        }
+        guard scrollers.count == 1, let scroller = scrollers.first else { return false }
+
+        let page = max(1, scroller.viewportHeight)
+        switch key {
+        case .pageUp: scroller.scroll(by: -page)
+        case .pageDown: scroller.scroll(by: page)
+        case .home: scroller.scrollOffset = 0
+        case .end: scroller.scrollOffset = scroller.maxOffset
+        default: return false
+        }
+        return true
     }
 }
 

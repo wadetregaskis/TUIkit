@@ -73,6 +73,68 @@ struct FocusManagerTests {
         #expect(!manager.isFocused(element2))
     }
 
+    @Test("Page/Home/End the focused control ignores scroll the enclosing container")
+    func pageKeysScrollEnclosingContainer() {
+        let manager = FocusManager()
+        // A scroll container with content taller than its viewport (can scroll).
+        let scroller = ScrollViewHandler(focusID: "scroll")
+        scroller.contentHeight = 100
+        scroller.viewportHeight = 10
+        manager.register(scroller)
+        // A non-scrollable control that does NOT consume keys, holding focus.
+        let button = MockFocusable(id: "button", shouldConsumeEvents: false)
+        manager.register(button)
+        manager.focus(button)
+        #expect(manager.currentFocusedID == "button")
+
+        // Page Down: the button ignores it, so it scrolls the container one viewport.
+        #expect(manager.dispatchKeyEvent(KeyEvent(key: .pageDown)))
+        #expect(scroller.scrollOffset == 10, "pageDown should scroll one viewport, got \(scroller.scrollOffset)")
+        #expect(manager.currentFocusedID == "button", "scrolling must not move focus")
+
+        // End jumps to the bottom; Home back to the top.
+        #expect(manager.dispatchKeyEvent(KeyEvent(key: .end)))
+        #expect(scroller.scrollOffset == scroller.maxOffset)
+        #expect(manager.dispatchKeyEvent(KeyEvent(key: .home)))
+        #expect(scroller.scrollOffset == 0)
+    }
+
+    @Test("Page-key scroll fallback yields to a focused control that consumes the key")
+    func pageKeyConsumedByFocusedControl() {
+        let manager = FocusManager()
+        let scroller = ScrollViewHandler(focusID: "scroll")
+        scroller.contentHeight = 100
+        scroller.viewportHeight = 10
+        manager.register(scroller)
+        // A control that consumes every key (e.g. a TextField's Home/End).
+        let field = MockFocusable(id: "field", shouldConsumeEvents: true)
+        manager.register(field)
+        manager.focus(field)
+
+        #expect(manager.dispatchKeyEvent(KeyEvent(key: .pageDown)))
+        #expect(scroller.scrollOffset == 0, "a consuming control keeps the key; the container must not scroll")
+    }
+
+    @Test("Page-key scroll fallback stays inert when several scrollers could move")
+    func pageKeyAmbiguousScrollersInert() {
+        let manager = FocusManager()
+        let scrollerA = ScrollViewHandler(focusID: "scrollA")
+        scrollerA.contentHeight = 100
+        scrollerA.viewportHeight = 10
+        let scrollerB = ScrollViewHandler(focusID: "scrollB")
+        scrollerB.contentHeight = 100
+        scrollerB.viewportHeight = 10
+        manager.register(scrollerA)
+        manager.register(scrollerB)
+        let button = MockFocusable(id: "button", shouldConsumeEvents: false)
+        manager.register(button)
+        manager.focus(button)
+
+        // Two scrollers can move → ambiguous → the fallback declines, leaving both put.
+        #expect(!manager.dispatchKeyEvent(KeyEvent(key: .pageDown)))
+        #expect(scrollerA.scrollOffset == 0 && scrollerB.scrollOffset == 0)
+    }
+
     @Test("Unregister focusable element")
     func unregisterFocusable() {
         let manager = FocusManager()
