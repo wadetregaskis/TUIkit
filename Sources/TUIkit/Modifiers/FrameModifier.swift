@@ -170,6 +170,10 @@ extension FlexibleFrameView: Renderable {
             verticalOffset = max(0, targetHeight - buffer.height)
         }
 
+        // Track the aligned result's width as we build it — `alignHorizontally`
+        // measures each line for its padding decision anyway, so threading that
+        // width out lets the final `replacingLines` skip re-measuring every line.
+        var resultWidth = 0
         for row in 0..<targetHeight {
             let contentRow = row - verticalOffset
             let line: String
@@ -180,8 +184,9 @@ extension FlexibleFrameView: Renderable {
             }
 
             // Align horizontally within the frame
-            let aligned = alignHorizontally(line, toWidth: targetWidth)
+            let (aligned, alignedWidth) = alignHorizontally(line, toWidth: targetWidth)
             result.append(aligned)
+            resultWidth = max(resultWidth, alignedWidth)
         }
 
         // The content shifted within the frame; carry overlay layers by the
@@ -196,29 +201,35 @@ extension FlexibleFrameView: Renderable {
         case .trailing:
             horizontalOffset = max(0, targetWidth - buffer.width)
         }
+        // Pass the now-known width so `replacingLines` doesn't re-measure every
+        // padded line. When nothing overflowed the frame, every line is exactly
+        // `targetWidth` — flag that so the buffer can skip per-line work too.
         return buffer.replacingLines(
-            result, overlayShiftX: horizontalOffset, overlayShiftY: verticalOffset)
+            result, width: resultWidth, uniformWidth: resultWidth == targetWidth,
+            overlayShiftX: horizontalOffset, overlayShiftY: verticalOffset)
     }
 
-    /// Aligns a single line within the given width.
-    private func alignHorizontally(_ line: String, toWidth targetWidth: Int) -> String {
+    /// Aligns a single line within the given width, returning the aligned line
+    /// and its visible width — `max(targetWidth, the line's own width)` — so the
+    /// caller can total the result width without a second `strippedLength` pass.
+    private func alignHorizontally(_ line: String, toWidth targetWidth: Int) -> (line: String, width: Int) {
         let visibleWidth = line.strippedLength
 
         if visibleWidth >= targetWidth {
-            return line
+            return (line, visibleWidth)
         }
 
         let padding = targetWidth - visibleWidth
 
         switch alignment.horizontal {
         case .leading:
-            return line + String(repeating: " ", count: padding)
+            return (line + String(repeating: " ", count: padding), targetWidth)
         case .center:
             let left = padding / 2
             let right = padding - left
-            return String(repeating: " ", count: left) + line + String(repeating: " ", count: right)
+            return (String(repeating: " ", count: left) + line + String(repeating: " ", count: right), targetWidth)
         case .trailing:
-            return String(repeating: " ", count: padding) + line
+            return (String(repeating: " ", count: padding) + line, targetWidth)
         }
     }
 }
