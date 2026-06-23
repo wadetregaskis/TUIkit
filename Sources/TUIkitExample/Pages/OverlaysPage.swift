@@ -121,7 +121,9 @@ struct OverlaysPage: View {
             .modal(isPresented: $showOverlay) {
                 overlayContent(for: selectedDemo)
             }
-            .notificationHost()
+            // Note: notifications are hosted once at the app root (see
+            // `ExampleApp` in main.swift) so a toast posted here survives
+            // navigating back to the menu, rather than vanishing with the page.
             .statusBarItems(statusBarItems)
     }
 

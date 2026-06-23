@@ -30,6 +30,12 @@ struct ExampleApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(palette: $palette, styling: $styling)
+                // Host notifications once, at the app root, so a toast posted on
+                // any page stays visible until it expires — even after the user
+                // navigates to a different page. (A per-page host would drop the
+                // toast the instant you left that page, though the global
+                // `NotificationService` still holds it.)
+                .notificationHost()
         }
         .theme(Theme(palette: palette, tint: styling.tint))
     }

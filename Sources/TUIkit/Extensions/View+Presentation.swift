@@ -192,8 +192,18 @@ extension View {
 extension View {
     /// Makes this view the notification rendering host.
     ///
-    /// Attach this modifier once at the root of your view tree. It reads
-    /// active notifications from the environment's ``NotificationService``
+    /// Attach this modifier **once, at the root of your view tree** (e.g. on the
+    /// content of your `WindowGroup`). Notifications are posted to a process-wide
+    /// ``NotificationService`` and live there until they expire, independently of
+    /// the view tree — so the host's placement decides only *where they are
+    /// drawn*. Hosting at the root means a toast posted on one screen stays
+    /// visible until it expires even after the user navigates elsewhere, which is
+    /// almost always what transient status messages want. Hosting it on a single
+    /// screen instead scopes the toast to that screen: it disappears the moment
+    /// you navigate away (the notification is still active, but nothing is drawing
+    /// it). Apply it on exactly one view — two hosts would draw every toast twice.
+    ///
+    /// It reads active notifications from the environment's ``NotificationService``
     /// and renders them as a stacked overlay at the configured position.
     ///
     /// Notifications are posted via the service, not declared in the view tree:
