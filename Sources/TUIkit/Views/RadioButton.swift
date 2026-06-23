@@ -468,8 +468,18 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
-        // Radio indicator: ● if selected OR focused, ◯ if neither
-        let indicator = (isSelected || isFocused) ? TerminalSymbols.radioSelected : TerminalSymbols.radioUnselected
+        // Radio indicator: ● if selected OR focused; otherwise ◯ when enabled, or
+        // ◌ (dotted circle) when disabled — a disabled, unselected option reads
+        // as "not pickable". (A disabled control never holds focus, so a disabled
+        // item is ● only when it is the current selection.)
+        let indicator: String
+        if isSelected || isFocused {
+            indicator = TerminalSymbols.radioSelected
+        } else if isDisabled {
+            indicator = TerminalSymbols.radioDisabledUnselected
+        } else {
+            indicator = TerminalSymbols.radioUnselected
+        }
 
         // Determine indicator color based on state. Priority
         // order: disabled > focused > selected > hovered >

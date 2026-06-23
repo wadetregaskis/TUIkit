@@ -183,9 +183,11 @@ struct RadioButtonGroupRenderTests {
         let result = lines(renderToBuffer(group, context: context))
 
         #expect(result.count == 2)
-        // Disabled groups never auto-focus, so only the selected item is filled.
+        // Disabled groups never auto-focus, so only the selected item is filled;
+        // a disabled *unselected* item shows the dotted circle ◌ ("not pickable")
+        // rather than the plain empty circle of an enabled-but-unselected one.
         #expect(result[0] == "\(selected) Alpha")
-        #expect(result[1] == "\(unselected) Bravo")
+        #expect(result[1] == "\u{25CC} Bravo")
         let filledCount = result.filter { $0.hasPrefix(selected) }.count
         #expect(filledCount == 1, "Disabled group shows exactly one filled (the selection)")
     }

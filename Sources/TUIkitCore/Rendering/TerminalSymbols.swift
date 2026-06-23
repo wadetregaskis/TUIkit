@@ -36,6 +36,11 @@ public enum TerminalSymbols {
     /// Empty circle for unselected radio button.
     public static let radioUnselected = "\u{25EF}"
 
+    /// Dotted circle (U+25CC) for a *disabled* unselected radio button — its
+    /// broken outline reads as "not available to pick" versus the solid empty
+    /// circle of an enabled-but-unselected one.
+    public static let radioDisabledUnselected = "\u{25CC}"
+
     // MARK: - Text Masking
 
     /// Bullet character (U+25CF) used for masking text in SecureField.
