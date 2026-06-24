@@ -53,7 +53,7 @@ struct TablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            Text("File Browser (Name column sized to fit, Type fills the rest)")
+            Text("File Browser (Name sized to fit, Type fills, opt-in scrollbar)")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(
                 FileEntry.sampleFiles,
@@ -71,6 +71,10 @@ struct TablePage: View {
                 TableColumn("Type", value: \FileEntry.type)
                     .width(.flexible)
             }
+            // A short height so the rows overflow, plus an opt-in scrollbar that
+            // tracks the visible region (sub-cell-precise thumb, ▲/▼ end arrows).
+            .frame(height: 8)
+            .scrollbarVisibility(.visible)
 
             Text("Multi-Selection + multi-line Details (.lineLimit(2))")
                 .foregroundStyle(.palette.foregroundSecondary)

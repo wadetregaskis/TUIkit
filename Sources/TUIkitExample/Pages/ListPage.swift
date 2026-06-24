@@ -108,7 +108,7 @@ struct ListPage: View {
             }
 
             DemoSection(
-                "Wheel scrolling — long list, no live selection"
+                "Wheel scrolling + scrollbar — long list, no live selection"
             ) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(
@@ -117,7 +117,9 @@ struct ListPage: View {
                             + "focus — wheel events go to the viewport, "
                             + "not the selection. (Arrow keys still move "
                             + "the selection, but only when the list is "
-                            + "focused.)"
+                            + "focused.) The opt-in scrollbar on the right "
+                            + "(.scrollbarVisibility(.visible)) tracks the "
+                            + "visible region in lines, with a sub-cell thumb."
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
@@ -127,6 +129,7 @@ struct ListPage: View {
                         }
                     }
                     .frame(height: 8)
+                    .scrollbarVisibility(.visible)
                 }
             }
 
