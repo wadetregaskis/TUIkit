@@ -8,6 +8,11 @@ import Testing
 
 @testable import TUIkit
 
+// One cohesive suite covering `ItemListHandler` navigation, selection, and
+// scrolling; keeping the related cases together reads better than splitting them
+// across files purely to satisfy the length ceiling.
+// swiftlint:disable file_length
+
 // MARK: - Item List Handler Navigation Tests
 
 @MainActor
@@ -502,6 +507,26 @@ struct ItemListHandlerScrollTests {
         handler.ensureFocusedItemVisible()
 
         #expect(handler.scrollOffset == 2)
+    }
+
+    @Test("Height-aware reveal scrolls a tall tail into view (clamped to the bottom)")
+    func heightAwareScrollReveal() {
+        // 5 rows of heights [1, 3, 1, 3, 1] in a 5-line content area. A
+        // multi-line table sets viewportHeight so the handler's maxOffset equals
+        // the height-aware furthest scroll (3 here), and supplies rowHeights so
+        // the reveal accumulates them rather than assuming one line per row.
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: 5, viewportHeight: 2, selectionMode: .single)
+        handler.contentHeight = 5
+        handler.rowHeights = [1, 3, 1, 3, 1]
+
+        handler.focusedIndex = 4
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset == 3, "tall tail reveal clamps to the bottom, got \(handler.scrollOffset)")
+
+        handler.focusedIndex = 0
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset == 0, "focusing the first row scrolls fully up")
     }
 
     @Test("hasContentAbove returns correct state")

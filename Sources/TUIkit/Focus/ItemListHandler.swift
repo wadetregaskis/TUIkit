@@ -84,6 +84,15 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// handler's own unit tests).
     var contentHeight: Int?
 
+    /// Per-row heights, in lines, for a table whose cells can span multiple lines
+    /// — or `nil` when every row is exactly one line (a `List`, and single-line
+    /// tables). When set, ``ensureFocusedItemVisible()`` accumulates these so a
+    /// tall focused row is fully revealed rather than partially scrolled off; the
+    /// owning view computes the visible window and the matching ``viewportHeight``
+    /// from the same heights, so a `nil` value leaves the original uniform-height
+    /// behaviour (and `List`) completely unchanged.
+    var rowHeights: [Int]?
+
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode
 
@@ -380,17 +389,31 @@ extension ItemListHandler {
             scrollOffset = focusedIndex
         }
 
-        // Scroll down: keep the focused row within the visible rows.
-        // Use the conservative visible-row count — the case where
-        // both indicators show (contentHeight - 2) — so the focused
-        // row never lands on an indicator line. clampScrollOffset()
-        // pulls the offset back to the true bottom near the end.
-        let safeRows =
-            itemCount <= contentHeight
-            ? contentHeight
-            : max(1, contentHeight - 2)
-        if focusedIndex >= scrollOffset + safeRows {
-            scrollOffset = focusedIndex - safeRows + 1
+        // Scroll down: keep the focused row within the visible rows. The
+        // conservative both-indicators budget (contentHeight - 2) keeps the
+        // focused row off an indicator line; clampScrollOffset() pulls the offset
+        // back to the true bottom near the end.
+        if let rowHeights, focusedIndex < rowHeights.count {
+            // Multi-line rows: pull the top down only as far as needed for the
+            // focused row to fit as the last visible row, accumulating heights.
+            let budget = max(1, contentHeight - 2)
+            var top = focusedIndex
+            var used = rowHeights[focusedIndex]
+            while top > 0, used + rowHeights[top - 1] <= budget {
+                used += rowHeights[top - 1]
+                top -= 1
+            }
+            if scrollOffset < top {
+                scrollOffset = top
+            }
+        } else {
+            let safeRows =
+                itemCount <= contentHeight
+                ? contentHeight
+                : max(1, contentHeight - 2)
+            if focusedIndex >= scrollOffset + safeRows {
+                scrollOffset = focusedIndex - safeRows + 1
+            }
         }
 
         clampScrollOffset()

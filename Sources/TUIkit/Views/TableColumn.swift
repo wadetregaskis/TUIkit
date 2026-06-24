@@ -77,6 +77,15 @@ public struct TableColumn<Value>: Sendable {
     /// Defaults to `.tail` (keep the start, drop the end).
     public var truncationMode: TruncationMode = .tail
 
+    /// The maximum number of lines a cell in this column may occupy.
+    ///
+    /// A value that is wider than the column — or that contains explicit line
+    /// breaks — wraps onto further lines up to this limit (the row grows to its
+    /// tallest cell); content beyond the limit is folded into the last line and
+    /// truncated with an ellipsis. Mirrors SwiftUI's `lineLimit`. Defaults to `1`
+    /// (single-line cells, the classic table look).
+    public var lineLimit: Int = 1
+
     /// Extracts the display value from a data item.
     let valueExtractor: @Sendable (Value) -> String
 
@@ -125,6 +134,24 @@ extension TableColumn {
     public func width(_ width: ColumnWidth) -> TableColumn {
         var copy = self
         copy.width = width
+        return copy
+    }
+
+    /// Sets the maximum number of lines a cell in this column may occupy.
+    ///
+    /// With a limit above 1 a cell wraps its value (and honours embedded
+    /// newlines) onto multiple lines, growing the row; the content is clipped to
+    /// the limit with an ellipsis. A limit below 1 is treated as 1.
+    ///
+    /// ```swift
+    /// TableColumn("Notes", value: \.notes).lineLimit(3)
+    /// ```
+    ///
+    /// - Parameter limit: The maximum number of lines per cell.
+    /// - Returns: A modified column with the specified line limit.
+    public func lineLimit(_ limit: Int) -> TableColumn {
+        var copy = self
+        copy.lineLimit = max(1, limit)
         return copy
     }
 

@@ -277,6 +277,44 @@ struct TableRenderTests {
         #expect(!fixed.contains { $0.contains("Wiiiiiiide") }, "fixed(4) cannot show the value in full")
     }
 
+    @Test("A lineLimit > 1 column wraps a long value across multiple lines")
+    func multiLineCellWraps() {
+        let rows = [Row(id: "1", name: "Alpha", size: "one two three four five six")]
+        let lines = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name).width(.fixed(6))
+                TableColumn("Notes", value: \Row.size).width(.fixed(10)).lineLimit(2)
+            },
+            context: tableContext(width: 30, height: 8)
+        )
+        expectClosedBorder(lines)
+        // Wrapped to width 10: "one two" / "three four" / "five six", clipped to 2
+        // lines (the remainder folded into line 2 with an ellipsis). The single
+        // row therefore occupies two content lines.
+        #expect(lines.contains { $0.contains("one two") }, "first wrapped line: \(lines)")
+        #expect(lines.contains { $0.contains("three") }, "second wrapped line: \(lines)")
+        #expect(lines.allSatisfy { !$0.contains("\n") }, "no raw newline may survive: \(lines)")
+    }
+
+    @Test("An embedded newline in a cell expands the row")
+    func multiLineCellNewline() {
+        let rows = [Row(id: "1", name: "Alpha", size: "first\nsecond")]
+        let lines = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name)
+                TableColumn("Notes", value: \Row.size).lineLimit(3)
+            },
+            context: tableContext(width: 30, height: 8)
+        )
+        expectClosedBorder(lines)
+        #expect(lines.contains { $0.contains("first") }, "first line: \(lines)")
+        #expect(lines.contains { $0.contains("second") }, "newline should expand to a second line: \(lines)")
+        #expect(lines.allSatisfy { !$0.contains("\n") }, "no raw newline may survive: \(lines)")
+        // "Alpha" sits beside the first line only; the second row line's Name cell
+        // is blank padding.
+        #expect(lines.contains { $0.contains("Alpha") })
+    }
+
     @Test("Narrow columns truncate cell values with an ellipsis")
     func narrowTruncation() {
         let lines = strippedLines(

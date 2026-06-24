@@ -16,6 +16,9 @@ private struct FileEntry: Identifiable, Sendable {
     let modified: String
     let type: String
 
+    /// A longer, wrappable description used to demo multi-line cells.
+    var details: String { "\(type), \(size), last modified \(modified)" }
+
     static let sampleFiles: [Self] = [
         Self(id: "1", name: "README.md", size: "4.2 KB", modified: "2026-02-07", type: "Markdown"),
         Self(id: "2", name: "Package.swift", size: "1.8 KB", modified: "2026-02-06", type: "Swift"),
@@ -69,15 +72,19 @@ struct TablePage: View {
                     .width(.flexible)
             }
 
-            Text("Multi-Selection Table")
+            Text("Multi-Selection + multi-line Details (.lineLimit(2))")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(
                 FileEntry.sampleFiles,
                 selection: $multiSelection
             ) {
                 TableColumn("Name", value: \FileEntry.name)
-                TableColumn("Type", value: \FileEntry.type)
-                    .width(.fixed(12))
+                    .width(.fit)
+                // A narrow column with .lineLimit(2): the Details value wraps onto
+                // a second line, growing the row, and clips the rest.
+                TableColumn("Details", value: \FileEntry.details)
+                    .width(.fixed(22))
+                    .lineLimit(2)
             }
 
             DemoSection("Current Selections") {

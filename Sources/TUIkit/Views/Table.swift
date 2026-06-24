@@ -4,6 +4,14 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// `Table` and its single cohesive render core `_TableCore` (column-width
+// resolution, the single-line and multi-line layout paths, scroll indicators,
+// and mouse wiring) are tightly coupled through the row/column/selection model;
+// splitting them across files purely to satisfy the length ceiling would scatter
+// that model for no clarity gain — the same rationale by which `type_body_length`
+// is disabled project-wide and `_ListCore` keeps its `file_length` disable.
+// swiftlint:disable file_length
+
 // MARK: - Table
 
 /// A scrollable table with columns, keyboard navigation, and selection.
@@ -236,6 +244,10 @@ where Value.ID: Hashable {
         let focusID: String
         let visibleRange: Range<Int>
         let scrollOffsetAbove: Int
+        /// The line height of each visible row, in `visibleRange` order, so a
+        /// click can map a line to its row when rows span multiple lines. All
+        /// ones for a single-line table (line offset == row offset).
+        let visibleRowHeights: [Int]
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -295,6 +307,15 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         innerWidth: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
+        // Multi-line cells (any column with a line limit above 1) take a separate,
+        // height-aware layout path. Single-line tables keep the original
+        // row-per-line path below completely untouched.
+        if columns.contains(where: { $0.lineLimit > 1 }) {
+            return buildMultiLineContent(
+                context: context, stateStorage: stateStorage, palette: palette,
+                columnWidths: columnWidths, innerWidth: innerWidth)
+        }
+
         // The fixed chrome is 3 lines: the top border, the bottom
         // border, and the column-header line. What's left is the
         // scrollable content area, shared between the visible rows
@@ -353,9 +374,212 @@ where Value.ID: Hashable {
                 handler: handler,
                 focusID: persistedFocusID,
                 visibleRange: handler.visibleRange,
-                scrollOffsetAbove: handler.hasContentAbove ? 1 : 0
+                scrollOffsetAbove: handler.hasContentAbove ? 1 : 0,
+                visibleRowHeights: Array(repeating: 1, count: handler.visibleRange.count)
             )
         )
+    }
+
+    // MARK: - Multi-line content (variable row heights)
+
+    /// The render path for a table with multi-line cells. Rows can be taller than
+    /// one line, so the visible window, the scroll bounds, focus-reveal, and the
+    /// click mapping are all line-aware (driven by per-row heights). The
+    /// single-line path above is left completely untouched.
+    private func buildMultiLineContent(
+        context: RenderContext,
+        stateStorage: StateStorage,
+        palette: any Palette,
+        columnWidths: [Int],
+        innerWidth: Int
+    ) -> (lines: [String], state: PopulatedRenderState) {
+        // 3 = top border + column header + bottom border.
+        let contentHeight = max(1, context.availableHeight - 3)
+        let heights = data.map { cellLayout(for: $0, columnWidths: columnWidths).height }
+        let overflowing = heights.reduce(0, +) > contentHeight
+
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
+        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
+            for: handlerKey,
+            default: ItemListHandler(
+                focusID: persistedFocusID, itemCount: data.count, viewportHeight: 1,
+                selectionMode: selectionMode, canBeFocused: !isDisabled))
+        let handler = handlerBox.value
+        handler.itemCount = data.count
+        handler.contentHeight = contentHeight
+        handler.canBeFocused = !isDisabled
+        handler.idAt = { data[$0].id }
+        handler.itemIDs = []
+        handler.rowHeights = overflowing ? heights : nil
+        // Choose viewportHeight so the handler's row-based maxOffset
+        // (itemCount − viewportHeight) equals the height-aware furthest scroll.
+        let furthest = maxScrollOffset(heights: heights, contentHeight: contentHeight)
+        handler.viewportHeight = max(1, data.count - furthest)
+        if !context.isMeasuring {
+            handler.clampScrollOffset()
+        }
+        handler.singleSelection = singleSelection
+        handler.multiSelection = multiSelection
+
+        FocusRegistration.register(context: context, handler: handler)
+        let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+
+        let window = rowWindow(
+            scrollOffset: handler.scrollOffset, heights: heights, contentHeight: contentHeight)
+        let lines = composeMultiLineRows(
+            window: window, handler: handler, tableHasFocus: tableHasFocus,
+            columnWidths: columnWidths, innerWidth: innerWidth, context: context, palette: palette)
+
+        return (
+            lines: lines,
+            state: PopulatedRenderState(
+                handler: handler,
+                focusID: persistedFocusID,
+                visibleRange: window.range,
+                scrollOffsetAbove: window.showAbove ? 1 : 0,
+                visibleRowHeights: window.range.map { heights[$0] }
+            )
+        )
+    }
+
+    /// The wrapped lines of each cell of a row plus the row's height (its tallest
+    /// cell). Each cell is laid out into its column with `TextWrapping`, so an
+    /// embedded newline or an over-long value expands within the column up to the
+    /// column's line limit and then clips — the same model `Text` uses.
+    private func cellLayout(
+        for item: Value, columnWidths: [Int]
+    ) -> (cells: [[String]], height: Int) {
+        var cells: [[String]] = []
+        cells.reserveCapacity(columns.count)
+        var height = 1
+        for (column, width) in zip(columns, columnWidths) {
+            let wrapped = TextWrapping.fit(
+                column.value(for: item), width: max(1, width),
+                maxLines: column.lineLimit, mode: column.truncationMode)
+            height = max(height, wrapped.count)
+            cells.append(wrapped)
+        }
+        return (cells, height)
+    }
+
+    /// The furthest the table can scroll: the largest first-visible row such that
+    /// the remaining rows still fill the content area (reserving a line for the
+    /// "above" indicator that shows whenever the first visible row isn't row 0).
+    private func maxScrollOffset(heights: [Int], contentHeight: Int) -> Int {
+        var used = 0
+        var offset = heights.count
+        while offset > 0 {
+            let aboveReserve = (offset - 1) > 0 ? 1 : 0
+            if used + heights[offset - 1] + aboveReserve > contentHeight { break }
+            used += heights[offset - 1]
+            offset -= 1
+        }
+        return offset
+    }
+
+    /// The window of rows visible at `scrollOffset`: accumulate row heights until
+    /// the content area fills, reserving a line for each scroll indicator actually
+    /// shown. Mirrors the single-line indicator reservation, height-aware.
+    private func rowWindow(
+        scrollOffset: Int, heights: [Int], contentHeight: Int
+    ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool) {
+        let count = heights.count
+        guard count > 0 else { return (0..<0, false, false) }
+        let offset = min(max(0, scrollOffset), count - 1)
+        let showAbove = offset > 0
+
+        func fill(budget: Int) -> Int {
+            var used = 0
+            var end = offset
+            while end < count {
+                if used + heights[end] > budget && end > offset { break }
+                used += heights[end]
+                end += 1
+            }
+            return max(offset + 1, end)
+        }
+
+        var end = fill(budget: contentHeight - (showAbove ? 1 : 0))
+        if end < count {
+            end = fill(budget: contentHeight - (showAbove ? 1 : 0) - 1)
+        }
+        return (offset..<min(count, end), showAbove, end < count)
+    }
+
+    /// Stitches scroll indicators around the visible multi-line rows.
+    private func composeMultiLineRows(
+        window: (range: Range<Int>, showAbove: Bool, showBelow: Bool),
+        handler: ItemListHandler<Value.ID>,
+        tableHasFocus: Bool,
+        columnWidths: [Int],
+        innerWidth: Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> [String] {
+        var lines: [String] = []
+        if window.showAbove {
+            lines.append(renderScrollIndicator(
+                direction: .up, count: window.range.lowerBound, width: innerWidth, palette: palette))
+        }
+        for rowIndex in window.range {
+            lines.append(contentsOf: renderMultiLineRow(
+                item: data[rowIndex],
+                isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
+                isSelected: handler.isSelected(at: rowIndex),
+                columnWidths: columnWidths, rowWidth: innerWidth, context: context, palette: palette))
+        }
+        if window.showBelow {
+            lines.append(renderScrollIndicator(
+                direction: .down, count: data.count - window.range.upperBound,
+                width: innerWidth, palette: palette))
+        }
+        return lines
+    }
+
+    /// Renders one (possibly multi-line) row: the selection indicator on the first
+    /// line, each column's wrapped cell lines beneath it, shorter cells padded with
+    /// blank lines, and the selection/focus background spanning every line.
+    private func renderMultiLineRow(
+        item: Value,
+        isFocused: Bool,
+        isSelected: Bool,
+        columnWidths: [Int],
+        rowWidth: Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> [String] {
+        let spacing = String(repeating: " ", count: columnSpacing)
+        let visual = rowVisualState(
+            isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
+        let styledIndicator = ANSIRenderer.colorize(visual.indicator, foreground: visual.indicatorColor)
+        let foreground = context.environment.foregroundStyle ?? palette.foreground
+        let layout = cellLayout(for: item, columnWidths: columnWidths)
+
+        var lines: [String] = []
+        for lineIndex in 0..<layout.height {
+            // The indicator shows only on the first line; continuation lines keep
+            // the same two-cell gutter so the columns line up beneath it.
+            let gutter = lineIndex == 0 ? styledIndicator + " " : "  "
+            let cells = zip(columns, columnWidths).enumerated().map { index, pair -> String in
+                let (column, width) = pair
+                let cellLines = layout.cells[index]
+                let text = lineIndex < cellLines.count ? cellLines[lineIndex] : ""
+                let aligned = alignText(
+                    text, width: width, alignment: column.alignment, truncationMode: column.truncationMode)
+                return ANSIRenderer.colorize(aligned, foreground: foreground)
+            }
+            let content = gutter + cells.joined(separator: spacing)
+            if let bgColor = visual.backgroundColor {
+                let padding = max(0, rowWidth - content.strippedLength)
+                lines.append(
+                    (content + String(repeating: " ", count: padding)).withPersistentBackground(bgColor))
+            } else {
+                lines.append(content)
+            }
+        }
+        return lines
     }
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
@@ -389,6 +613,7 @@ where Value.ID: Hashable {
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
+        handler.rowHeights = nil  // single-line path: uniform-height scroll math
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
@@ -524,6 +749,7 @@ where Value.ID: Hashable {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
+        let visibleRowHeights = state.visibleRowHeights
         return { event in
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
@@ -536,12 +762,20 @@ where Value.ID: Hashable {
                 guard event.phase == .released else {
                     return event.phase == .pressed
                 }
-                // Each data row is one line tall.
-                let dataRowIndex = event.y - firstRowY
-                if dataRowIndex >= 0, dataRowIndex < visibleRange.count {
-                    let absoluteIndex = visibleRange.lowerBound + dataRowIndex
-                    captureHandler.focusedIndex = absoluteIndex
-                    captureHandler.toggleSelectionAtFocusedIndex()
+                // Map the clicked line to its data row, walking the visible rows'
+                // heights — so a click anywhere in a multi-line row selects it.
+                // Single-line rows are height 1, so the line offset is the row.
+                let lineOffset = event.y - firstRowY
+                if lineOffset >= 0 {
+                    var accumulated = 0
+                    for (offset, height) in visibleRowHeights.enumerated() {
+                        if lineOffset < accumulated + height {
+                            captureHandler.focusedIndex = visibleRange.lowerBound + offset
+                            captureHandler.toggleSelectionAtFocusedIndex()
+                            break
+                        }
+                        accumulated += height
+                    }
                 }
                 focusManager.focus(id: captureFocusID)
                 return true
