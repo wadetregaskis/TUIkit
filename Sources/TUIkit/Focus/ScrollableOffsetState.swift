@@ -41,6 +41,12 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``ItemListHandler``, line count for
     /// ``ScrollViewHandler``. Read by every predicate below.
     var extent: Int { get }
+
+    /// While a scrollbar thumb is being dragged, the offset (in cells) of the grab
+    /// point within the thumb; `nil` when no drag is in progress. Lives on the
+    /// persistent handler so it survives the render between the press and the
+    /// drag/release that the mouse dispatcher routes back to the same handler.
+    var scrollbarDragGrab: Int? { get set }
 }
 
 // MARK: - Default arithmetic

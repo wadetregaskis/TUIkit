@@ -107,6 +107,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// The scroll offset (first visible item index).
     var scrollOffset: Int = 0
 
+    /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
+    var scrollbarDragGrab: Int?
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 

@@ -413,10 +413,13 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             )
         }
 
-        // Append the trailing scrollbar column over the reserved width.
+        // Append the trailing scrollbar column over the reserved width, then make
+        // it interactive (arrows / track / thumb drag).
         if wantsScrollbar {
             visibleBuffer = appendVerticalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
+            attachScrollbarMouseHandler(
+                to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
 
         // Mouse handler + hit-test region covering the viewport.
@@ -474,6 +477,33 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return visibleBuffer
+    }
+
+    /// Registers a mouse handler over the scrollbar's single column so the arrows
+    /// step by one, a track click pages or jumps, and the thumb drags. Inserted at
+    /// the front of the regions array *before* the viewport handler's own
+    /// `insert(at: 0)` pushes it back one, so the bar is hit-tested ahead of the
+    /// viewport for its column (the viewport still wins everywhere else).
+    private func attachScrollbarMouseHandler(
+        to buffer: inout FrameBuffer, contentWidth: Int,
+        handler: ScrollViewHandler, context: RenderContext
+    ) {
+        guard !context.isMeasuring,
+              let mouseDispatcher = context.environment.mouseEventDispatcher,
+              !isDisabled
+        else { return }
+        let barHandler = ScrollbarRenderer.verticalMouseHandler(
+            for: handler, length: buffer.height,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            behavior: context.environment.scrollbarClickBehavior)
+        let barHandlerID = mouseDispatcher.register(barHandler)
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: contentWidth, offsetY: 0, width: 1, height: buffer.height,
+                handlerID: barHandlerID),
+            at: 0
+        )
     }
 
     /// Appends the trailing vertical scrollbar column to the windowed viewport.

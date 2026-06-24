@@ -171,16 +171,10 @@ enum ScrollbarRenderer {
             return Array(repeating: .full, count: count)
         }
 
-        let totalSub = count * 8
-        let proportionalSub = Int((Double(viewport) / Double(extent) * Double(totalSub)).rounded())
-        let thumbSub = min(totalSub, max(8, proportional ? proportionalSub : 8))
-        let travel = totalSub - thumbSub
-        let maxOffset = extent - viewport
-        let rawStart = maxOffset > 0
-            ? Int((Double(offset) / Double(maxOffset) * Double(travel)).rounded())
-            : 0
-        let start = max(0, min(travel, rawStart))
-        let end = start + thumbSub
+        let span = thumbSpan(
+            count: count, extent: extent, viewport: viewport, offset: offset, proportional: proportional)
+        let start = span.start
+        let end = span.end
 
         var cells: [ScrollbarCell] = []
         cells.reserveCapacity(count)
@@ -207,6 +201,26 @@ enum ScrollbarRenderer {
             }
         }
         return cells
+    }
+
+    /// The thumb's covered sub-cell range `start..<end` (eighths of a cell) within
+    /// a `count`-cell track, shared by ``trackCells`` (rendering) and the hit-test
+    /// (interaction) so the two never disagree about where the thumb is. The range
+    /// spans `0...(count*8)`; the thumb is at least one whole cell (8 sub-units).
+    static func thumbSpan(
+        count: Int, extent: Int, viewport: Int, offset: Int, proportional: Bool
+    ) -> (start: Int, end: Int) {
+        let totalSub = count * 8
+        guard count > 0, extent > viewport, viewport > 0 else { return (0, totalSub) }
+        let proportionalSub = Int((Double(viewport) / Double(extent) * Double(totalSub)).rounded())
+        let thumbSub = min(totalSub, max(8, proportional ? proportionalSub : 8))
+        let travel = totalSub - thumbSub
+        let maxOffset = extent - viewport
+        let rawStart = maxOffset > 0
+            ? Int((Double(offset) / Double(maxOffset) * Double(travel)).rounded())
+            : 0
+        let start = max(0, min(travel, rawStart))
+        return (start, start + thumbSub)
     }
 
     /// The lower block filled `eighths`/8 from the bottom: `▁`…`▇`, `█` at 8.

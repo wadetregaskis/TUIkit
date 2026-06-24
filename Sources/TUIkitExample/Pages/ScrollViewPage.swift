@@ -33,6 +33,7 @@ struct ScrollViewPage: View {
     @State var barVisibility: ScrollbarVisibility = .visible
     @State var barArrows: ScrollbarArrows = .single
     @State var barProportional: Bool = true
+    @State var barClickBehavior: ScrollbarClickBehavior = .page
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -133,6 +134,13 @@ struct ScrollViewPage: View {
                     .scrollbarVisibility(barVisibility)
                     .scrollbarArrows(barArrows)
                     .scrollbarProportionalThumb(barProportional)
+                    .scrollbarClickBehavior(barClickBehavior)
+
+                    Text(
+                        "The bar is interactive: click the arrows to step, click "
+                            + "the track to page (or jump), and drag the thumb."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
 
                     Picker("Visibility", selection: $barVisibility) {
                         Text("Automatic (only when overflowing)").tag(ScrollbarVisibility.automatic)
@@ -143,6 +151,10 @@ struct ScrollViewPage: View {
                         Text("None").tag(ScrollbarArrows.none)
                         Text("Single (one at each end)").tag(ScrollbarArrows.single)
                         Text("Double (both at each end)").tag(ScrollbarArrows.double)
+                    }
+                    Picker("Track click", selection: $barClickBehavior) {
+                        Text("Page towards the click").tag(ScrollbarClickBehavior.page)
+                        Text("Jump to the click").tag(ScrollbarClickBehavior.jump)
                     }
                     Toggle("Proportional thumb (off = fixed one cell)", isOn: $barProportional)
                 }
