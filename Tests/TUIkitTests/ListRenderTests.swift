@@ -242,6 +242,66 @@ struct ListRenderTests {
         #expect(!lines.contains { $0.contains("Item 19") })
     }
 
+    // MARK: Scrollbar
+
+    @Test("A visible scrollbar draws a block-glyph column inside the List border")
+    func scrollbarColumn() {
+        let lines = strippedLines(
+            List(selection: .constant(String?.none)) {
+                ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
+            }
+            .scrollbarVisibility(.visible),
+            context: listContext(width: 30, height: 8)
+        )
+        expectClosedBorder(lines)
+        let joined = lines.joined()
+        #expect(joined.contains("▲") && joined.contains("▼"), "scrollbar arrows present: \(lines)")
+        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
+        #expect(joined.contains { blocks.contains($0) }, "scrollbar thumb block present: \(lines)")
+        // The bar supersedes the text indicator (no "more below" while a bar shows).
+        #expect(!joined.contains("more below"), "bar replaces the text indicator: \(lines)")
+    }
+
+    @Test("Lists draw no scrollbar by default")
+    func noScrollbarByDefault() {
+        let lines = strippedLines(
+            List(selection: .constant(String?.none)) {
+                ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
+            },
+            context: listContext(width: 30, height: 8)
+        )
+        // The "N more below" indicator uses ▼; the telltale of a scrollbar is its
+        // block-glyph thumb, which a default list lacks.
+        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
+        #expect(!lines.joined().contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")
+    }
+
+    @Test("A List scrollbar measures multi-line rows in lines, not rows")
+    func scrollbarLineBased() {
+        // Eight rows, each two lines tall (16 lines total) in an 8-line content
+        // area. The bar is line-based, so it renders with a closed border and the
+        // multi-line rows draw in full alongside it.
+        let lines = strippedLines(
+            List(selection: .constant(String?.none)) {
+                ForEach((0..<8).map { "Item \($0)" }, id: \.self) { item in
+                    VStack(alignment: .leading) {
+                        Text(item)
+                        Text("detail")
+                    }
+                }
+            }
+            .scrollbarVisibility(.visible),
+            context: listContext(width: 30, height: 10)
+        )
+        expectClosedBorder(lines)
+        let joined = lines.joined()
+        #expect(joined.contains("▲") && joined.contains("▼"), "arrows present: \(lines)")
+        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
+        #expect(joined.contains { blocks.contains($0) }, "thumb present: \(lines)")
+        // A two-line row renders both of its lines next to the bar.
+        #expect(joined.contains("Item 0") && joined.contains("detail"), "multi-line row renders: \(lines)")
+    }
+
     // MARK: Footer
 
     @Test("Footer renders below a separator inside the border")

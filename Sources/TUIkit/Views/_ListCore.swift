@@ -327,17 +327,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
 
+        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
+        // text indicators: it marks the off-screen rows itself, so the rows then
+        // fill the whole content area with no reserved indicator line.
+        let barVisibility = context.environment.scrollbarVisibility
+        let wantsScrollbar =
+            barVisibility != .hidden && (barVisibility == .visible || overflowing)
+
         // Reserve a line for each scroll indicator that is actually
         // present at this offset, so the rows plus indicators fill
         // the content area exactly — no wasted blank line at the
         // ends (which used to push the "N more below" indicator one
-        // row too high), and no overflow in the middle.
-        let visibleRows = resolveVisibleWindow(
-            source: source,
-            handler: handler,
-            contentHeight: targetContentHeight,
-            overflowing: overflowing
-        )
+        // row too high), and no overflow in the middle. With a bar,
+        // the whole content area is the viewport (no reservation).
+        let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
+        if wantsScrollbar {
+            visibleRows = calculateVisibleRows(
+                source: source, handler: handler, viewportHeight: targetContentHeight)
+        } else {
+            visibleRows = resolveVisibleWindow(
+                source: source,
+                handler: handler,
+                contentHeight: targetContentHeight,
+                overflowing: overflowing
+            )
+        }
         // Sync the viewport to the rows actually shown so the
         // handler's indicator predicates match the rendering.
         handler.viewportHeight = max(1, visibleRows.count)
@@ -359,15 +373,38 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             rowWidth = max(maxRowWidth, context.availableWidth - 2)
         }
 
-        let (lines, visibleRowYRanges) = composeRowLines(
-            handler: handler,
-            visibleRows: visibleRows,
-            listHasFocus: listHasFocus,
-            rowWidth: rowWidth,
-            style: style,
-            context: context,
-            palette: palette
-        )
+        let lines: [String]
+        let visibleRowYRanges: [VisibleRowRange]
+        if wantsScrollbar {
+            let bar = listScrollbarCells(
+                source: source,
+                handler: handler,
+                visibleRows: visibleRows,
+                contentHeight: targetContentHeight,
+                context: context,
+                palette: palette
+            )
+            (lines, visibleRowYRanges) = composeScrollbarRowLines(
+                visibleRows: visibleRows,
+                handler: handler,
+                listHasFocus: listHasFocus,
+                contentRowWidth: max(1, rowWidth - 1),
+                bar: bar,
+                style: style,
+                context: context,
+                palette: palette
+            )
+        } else {
+            (lines, visibleRowYRanges) = composeRowLines(
+                handler: handler,
+                visibleRows: visibleRows,
+                listHasFocus: listHasFocus,
+                rowWidth: rowWidth,
+                style: style,
+                context: context,
+                palette: palette
+            )
+        }
 
         return (
             lines: lines,
@@ -562,6 +599,97 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 width: rowWidth,
                 palette: palette
             ))
+        }
+        return (lines, ranges)
+    }
+
+    /// The vertical scrollbar cells for a list, one styled single-cell string per
+    /// content line. Metrics are in *lines* (the user's spec — a five-line row
+    /// scrolls as five units).
+    ///
+    /// Cost discipline: when every visible row is one line (the common case, and
+    /// every windowed mega-list), line == row, so the extent is just the row count
+    /// and nothing extra is materialised. Only a list actually showing a taller
+    /// row sums the true line heights — and only because a bar is displayed; a
+    /// `.hidden` list (the default) never reaches here at all.
+    private func listScrollbarCells(
+        source: RowSource<SelectionValue>,
+        handler: ItemListHandler<SelectionValue>,
+        visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
+        contentHeight: Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> [String] {
+        let extentLines: Int
+        let offsetLines: Int
+        if visibleRows.allSatisfy({ $0.row.buffer.height == 1 }) {
+            extentLines = source.count
+            offsetLines = handler.scrollOffset
+        } else {
+            extentLines = (0..<source.count).reduce(0) { $0 + source.row(at: $1).buffer.height }
+            offsetLines = (0..<handler.scrollOffset).reduce(0) { $0 + source.row(at: $1).buffer.height }
+        }
+
+        return ScrollbarRenderer.verticalScrollbar(
+            height: contentHeight, extent: extentLines, viewport: contentHeight, offset: offsetLines,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            colors: ScrollbarColors(
+                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
+    }
+
+    /// Like ``composeRowLines`` but draws a vertical scrollbar (`bar`, one styled
+    /// cell per content line) in the rightmost column instead of the "N more" text
+    /// indicators. Each rendered line gets its own bar cell, so a tall row covers
+    /// as many bar cells as it is lines tall.
+    private func composeScrollbarRowLines(
+        visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
+        handler: ItemListHandler<SelectionValue>,
+        listHasFocus: Bool,
+        contentRowWidth: Int,
+        bar: [String],
+        style: any ListStyle,
+        context: RenderContext,
+        palette: any Palette
+    ) -> (lines: [String], ranges: [VisibleRowRange]) {
+        let contentHeight = bar.count
+        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        func barCell(at line: Int) -> String { line < bar.count ? bar[line] : emptyCell }
+
+        var lines: [String] = []
+        var ranges: [VisibleRowRange] = []
+        var sectionContentIndex = 0
+        for (rowIndex, row) in visibleRows {
+            if case .header = row.type { sectionContentIndex = 0 }
+            let isFocused = handler.isFocused(at: rowIndex) && listHasFocus
+            let isSelected = handler.isSelected(at: rowIndex)
+            let styledLines = renderRow(
+                row: row,
+                isFocused: isFocused,
+                isSelected: isSelected,
+                rowWidth: contentRowWidth,
+                sectionContentIndex: sectionContentIndex,
+                style: style,
+                context: context,
+                palette: palette
+            )
+            let yStart = lines.count
+            for rowLine in styledLines {
+                let pad = max(0, contentRowWidth - rowLine.strippedLength)
+                lines.append(rowLine + String(repeating: " ", count: pad) + barCell(at: lines.count))
+            }
+            ranges.append((
+                rowIndex: rowIndex,
+                yStart: yStart,
+                height: styledLines.count,
+                type: row.type
+            ))
+            if case .content = row.type { sectionContentIndex += 1 }
+        }
+        // Fill the area below the last row so the bar spans the full height.
+        while lines.count < contentHeight {
+            lines.append(String(repeating: " ", count: contentRowWidth) + barCell(at: lines.count))
         }
         return (lines, ranges)
     }
