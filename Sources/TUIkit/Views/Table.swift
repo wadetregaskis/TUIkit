@@ -306,7 +306,12 @@ where Value.ID: Hashable {
             style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
             padding: EdgeInsets(horizontal: 1, vertical: 0)
         ) {
-            VStack(spacing: 0) {
+            // `.leading`: the header sits left, over its columns. A focused/selected
+            // row or a scroll indicator must never be wider than the other lines, or
+            // this VStack would centre the narrower header over them — so those are
+            // padded to the same content width (see `contentWidth` below), not to the
+            // full interior, keeping every line the same width.
+            VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
                 _TableContentView(lines: contentLines)
             }
@@ -640,22 +645,27 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
+        // Every line — focused-row backgrounds and indicators included — is padded
+        // to the *content* width (the columns), not the full interior, so a focused
+        // row or a scroll indicator is never wider than the header and rows; that
+        // width mismatch is what made the wrapping VStack centre the header.
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         var lines: [String] = []
         if window.showAbove {
             lines.append(renderScrollIndicator(
-                direction: .up, count: window.range.lowerBound, width: innerWidth, palette: palette))
+                direction: .up, count: window.range.lowerBound, width: contentWidth, palette: palette))
         }
         for rowIndex in window.range {
             lines.append(contentsOf: renderMultiLineRow(
                 item: data[rowIndex],
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
-                columnWidths: columnWidths, rowWidth: innerWidth, context: context, palette: palette))
+                columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette))
         }
         if window.showBelow {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
-                width: innerWidth, palette: palette))
+                width: contentWidth, palette: palette))
         }
         return lines
     }
@@ -769,6 +779,18 @@ where Value.ID: Hashable {
         return handler
     }
 
+    /// The table's content width: the selection gutter plus the columns and their
+    /// spacing, clamped to the interior. Focused-row backgrounds and indicators are
+    /// padded to *this*, not the full interior, so every line is the same width and
+    /// the table neither jumps wider on focus nor centres its header over a lone
+    /// full-width row. A `.flexible` column already fills the interior, so there the
+    /// two widths coincide and nothing changes.
+    private func tableContentWidth(_ columnWidths: [Int], within innerWidth: Int) -> Int {
+        let gutter = 2  // selection indicator + its trailing space
+        let spacing = columnSpacing * max(0, columnWidths.count - 1)
+        return min(innerWidth, gutter + columnWidths.reduce(0, +) + spacing)
+    }
+
     /// Stitches scroll indicators around the visible data rows.
     private func composeRowLines(
         handler: ItemListHandler<Value.ID>,
@@ -778,12 +800,13 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         var lines: [String] = []
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
                 direction: .up,
                 count: handler.rowsAbove,
-                width: innerWidth,
+                width: contentWidth,
                 palette: palette
             ))
         }
@@ -797,7 +820,7 @@ where Value.ID: Hashable {
                 columnWidths: columnWidths,
                 isFocused: isFocused,
                 isSelected: isSelected,
-                rowWidth: innerWidth,
+                rowWidth: contentWidth,
                 context: context,
                 palette: palette
             ))
@@ -806,7 +829,7 @@ where Value.ID: Hashable {
             lines.append(renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
-                width: innerWidth,
+                width: contentWidth,
                 palette: palette
             ))
         }

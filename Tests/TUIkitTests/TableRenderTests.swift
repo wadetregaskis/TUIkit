@@ -315,6 +315,37 @@ struct TableRenderTests {
         #expect(lines.contains { $0.contains("Alpha") })
     }
 
+    @Test("A selected row in a non-flexible table keeps the header left, not centred")
+    func selectedRowDoesNotCentreHeader() {
+        // Non-flexible columns (.fit + .fixed) make the content narrower than the
+        // interior. A selected row used to pad to the full interior, widening the
+        // content buffer so the wrapping VStack centred the (narrower) header.
+        let rows = (0..<5).map { Row(id: "\($0)", name: "Row \($0)", size: "\($0)") }
+        let lines = strippedLines(
+            Table(rows, selection: .constant("0")) {
+                TableColumn("Name", value: \Row.name).width(.fit)
+                TableColumn("Details", value: \Row.size).width(.fixed(8)).lineLimit(2)
+            },
+            context: tableContext(width: 40, height: 10)
+        )
+        expectClosedBorder(lines)
+        // A rendered table auto-focuses its first row, so row 0 carries a focus
+        // background — the trigger for the bug. Two invariants must hold:
+        // (1) the table stays content-hugging — the focus background must not pad to
+        //     the full interior and inflate the border to the available width (40);
+        let borderWidth = lines[0].count
+        #expect(borderWidth < 30, "table should hug its ~17-col content, not fill 40 (got \(borderWidth)): \(lines)")
+        // (2) the header "Name" stays near the left edge, not centred over a lone
+        //     full-width focused row.
+        let header = lines[1]  // line 0 is the top border
+        if let nameRange = header.range(of: "Name") {
+            let col = header.distance(from: header.startIndex, to: nameRange.lowerBound)
+            #expect(col <= 5, "header 'Name' should stay left (col \(col), centred bug pushes it right): \(header)")
+        } else {
+            Issue.record("header missing 'Name': \(header)")
+        }
+    }
+
     @Test("A visible scrollbar adds a trailing block-glyph column inside the border")
     func scrollbarColumn() {
         // 12 rows in a short viewport → overflowing; .visible forces the bar.
