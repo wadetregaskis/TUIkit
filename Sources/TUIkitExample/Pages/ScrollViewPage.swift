@@ -29,6 +29,11 @@ struct ScrollViewPage: View {
     @State var counter: Int = 0
     @State var sliderValue: Double = 50
 
+    // Live scrollbar settings for the configurable demo below.
+    @State var barVisibility: ScrollbarVisibility = .visible
+    @State var barArrows: ScrollbarArrows = .single
+    @State var barProportional: Bool = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -105,14 +110,14 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection("Scrollbar — opt-in, sub-cell-precise thumb") {
+            DemoSection("Scrollbar — opt-in, fully configurable") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(
-                        "A scrollbar is opt-in via .scrollbarVisibility(.visible) "
-                            + "(or .automatic to show it only while the content "
-                            + "overflows). The thumb is proportional to the visible "
-                            + "region at 1/8-cell precision; .scrollbarArrows(.double) "
-                            + "puts both arrows at each end."
+                        "A scrollbar is opt-in and configurable. The thumb is "
+                            + "proportional to the visible region at 1/8-cell "
+                            + "precision and filled with a background colour (no "
+                            + "inter-cell gaps). Change the controls below and watch "
+                            + "the bar on the right of the box update live."
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
@@ -125,8 +130,21 @@ struct ScrollViewPage: View {
                     }
                     .frame(height: 8)
                     .border(color: .palette.border)
-                    .scrollbarVisibility(.visible)
-                    .scrollbarArrows(.double)
+                    .scrollbarVisibility(barVisibility)
+                    .scrollbarArrows(barArrows)
+                    .scrollbarProportionalThumb(barProportional)
+
+                    Picker("Visibility", selection: $barVisibility) {
+                        Text("Automatic (only when overflowing)").tag(ScrollbarVisibility.automatic)
+                        Text("Always visible").tag(ScrollbarVisibility.visible)
+                        Text("Hidden").tag(ScrollbarVisibility.hidden)
+                    }
+                    Picker("End arrows", selection: $barArrows) {
+                        Text("None").tag(ScrollbarArrows.none)
+                        Text("Single (one at each end)").tag(ScrollbarArrows.single)
+                        Text("Double (both at each end)").tag(ScrollbarArrows.double)
+                    }
+                    Toggle("Proportional thumb (off = fixed one cell)", isOn: $barProportional)
                 }
             }
 

@@ -9,7 +9,7 @@ import TUIkitCore
 // MARK: - Scrollbar configuration
 
 /// How end arrows are drawn on a scrollbar.
-public enum ScrollbarArrows: Sendable, Equatable {
+public enum ScrollbarArrows: Sendable, Hashable, CaseIterable {
     /// No arrows; the track spans the whole scrollbar.
     case none
     /// One arrow at each end pointing away from the centre (`▲` … `▼`,
@@ -20,7 +20,7 @@ public enum ScrollbarArrows: Sendable, Equatable {
 }
 
 /// When a scrollbar is shown.
-public enum ScrollbarVisibility: Sendable, Equatable {
+public enum ScrollbarVisibility: Sendable, Hashable, CaseIterable {
     /// Show the scrollbar only while the content overflows its viewport.
     case automatic
     /// Always reserve the scrollbar (even when everything fits).
