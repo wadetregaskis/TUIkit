@@ -135,6 +135,17 @@ extension ScrollViewHandler {
         case .end:
             scrollToBottom()
             return true
+        case .left:
+            // Scroll the horizontal axis one column. Returns false (not consumed)
+            // when it can't move — no horizontal axis, or already at the edge — so
+            // the key still bubbles to whatever else might handle Left/Right.
+            let before = horizontal.scrollOffset
+            horizontal.scroll(by: -1)
+            return horizontal.scrollOffset != before
+        case .right:
+            let before = horizontal.scrollOffset
+            horizontal.scroll(by: 1)
+            return horizontal.scrollOffset != before
         default:
             return false
         }

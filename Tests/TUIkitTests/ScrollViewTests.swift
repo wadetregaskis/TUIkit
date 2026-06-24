@@ -103,6 +103,30 @@ struct ScrollViewHandlerTests {
         #expect(handler.scrollOffset == 30)
     }
 
+    @Test("Left/Right keys scroll the horizontal axis")
+    func leftRightScrollsHorizontally() {
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.horizontal.extent = 50
+        handler.horizontal.viewportHeight = 10  // viewport width in columns
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right)))
+        #expect(handler.horizontal.scrollOffset == 1)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .left)))
+        #expect(handler.horizontal.scrollOffset == 0)
+        // At the left edge Left can't move, so it isn't consumed (key bubbles).
+        #expect(!handler.handleKeyEvent(KeyEvent(key: .left)))
+    }
+
+    @Test("Left/Right are not consumed when content fits horizontally")
+    func leftRightNoOpWhenContentFits() {
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.horizontal.extent = 5
+        handler.horizontal.viewportHeight = 10  // content narrower than viewport
+
+        #expect(!handler.handleKeyEvent(KeyEvent(key: .right)))
+        #expect(!handler.handleKeyEvent(KeyEvent(key: .left)))
+    }
+
     @Test("End jumps to maxOffset, Home jumps back to zero")
     func endThenHome() {
         let handler = ScrollViewHandler(focusID: "sv")
