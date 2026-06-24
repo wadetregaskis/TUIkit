@@ -254,6 +254,38 @@ private extension String {
 }
 
 extension String {
+    /// Returns a copy safe to emit as a single terminal row.
+    ///
+    /// Every C0 control character that would move the cursor off the row — a
+    /// line feed (`\n`), carriage return (`\r`), tab, vertical tab, form feed,
+    /// backspace, and the rest of `0x00…0x1F` — plus `DEL` (`0x7F`) is replaced
+    /// with a space. The `ESC` (`0x1B`) that introduces an ANSI colour / cursor
+    /// sequence is deliberately preserved: those sequences are intentional and,
+    /// after the leading `ESC`, contain only printable bytes, so nothing else in
+    /// them is touched.
+    ///
+    /// A `FrameBuffer` line is, by contract, exactly one terminal row; a stray
+    /// control character in one (e.g. user data with an embedded newline placed
+    /// verbatim into a cell) otherwise prints literally and shoves the cursor —
+    /// drawing outside the intended bounds and corrupting every row below.
+    /// Applied at the terminal-write boundary, this guarantees no view can do
+    /// that, whatever it put in its buffer.
+    ///
+    /// Returns `self` unchanged — no allocation — when there is nothing to
+    /// sanitize, which is the overwhelmingly common case.
+    public func sanitizedForTerminalRow() -> String {
+        func isStray(_ value: UInt32) -> Bool {
+            (value < 0x20 && value != 0x1B) || value == 0x7F
+        }
+        guard unicodeScalars.contains(where: { isStray($0.value) }) else { return self }
+        var result = String()
+        result.unicodeScalars.reserveCapacity(unicodeScalars.count)
+        for scalar in unicodeScalars {
+            result.unicodeScalars.append(isStray(scalar.value) ? " " : scalar)
+        }
+        return result
+    }
+
     /// Returns `true` if any character in this string has a Terminal.app
     /// cursor advance that differs from its visible cell width — VS-16
     /// pictographic emoji (advance 1, width 2) or any Fitzpatrick skin-

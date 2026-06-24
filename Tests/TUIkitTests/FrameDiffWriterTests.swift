@@ -89,6 +89,21 @@ struct BuildOutputLinesTests {
         #expect(lines[0].contains("\(reset)[BG]"))
     }
 
+    @Test("A buffer line with control characters is sanitised before output")
+    func controlCharactersSanitised() {
+        let writer = FrameDiffWriter()
+        // A cell value with an embedded newline / tab / carriage return — the bug
+        // that drew outside the row. The emitted line must contain none of them
+        // (each would move the cursor); they are replaced with spaces in place.
+        let buffer = FrameBuffer(lines: ["A\nB\tC\rD"])
+        let lines = writer.buildOutputLines(
+            buffer: buffer, terminalWidth: 20, terminalHeight: 1, bgCode: "[BG]", reset: "[R]")
+        #expect(!lines[0].contains("\n"))
+        #expect(!lines[0].contains("\r"))
+        #expect(!lines[0].contains("\t"))
+        #expect(lines[0].contains("A B C D"), "control chars become spaces: \(lines[0])")
+    }
+
     @Test("Multiple content lines are all processed")
     func multipleContentLines() {
         let writer = FrameDiffWriter()

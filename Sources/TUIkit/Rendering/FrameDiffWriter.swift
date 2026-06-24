@@ -229,6 +229,16 @@ extension FrameDiffWriter {
         emptyLine: String
     ) -> String {
         guard let raw else { return emptyLine }
+        // Neutralise any cursor-moving control character (a stray newline /
+        // carriage return / tab in a buffer line — e.g. user data with an
+        // embedded newline placed verbatim into a table cell) before it reaches
+        // the terminal: such a character prints literally and shoves the cursor,
+        // drawing outside the row's bounds and corrupting the rows below. A
+        // buffer line is one terminal row by contract, so this is the single
+        // boundary that guarantees no view can violate it. (No-op, no
+        // allocation, for the clean lines that are virtually all of them; and
+        // only changed lines are rebuilt here, unchanged ones are reused.)
+        let sanitized = raw.sanitizedForTerminalRow()
         // Clip first so over-wide content (a layout that does not shrink to fit
         // a narrower terminal) cannot wrap past the right edge.  Cursor
         // compensation is applied AFTER clipping so any CUF sequences are scoped
@@ -241,8 +251,8 @@ extension FrameDiffWriter {
         // padding below needs no separate `strippedLength` re-scan of `clipped`
         // — which, for a styled line, would take the allocating ANSI-runs path.
         let (clipped, clippedWidth) = isAppleTerminal
-            ? raw.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: terminalWidth)
-            : raw.ansiAwarePrefixWithWidth(visibleCount: terminalWidth)
+            ? sanitized.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: terminalWidth)
+            : sanitized.ansiAwarePrefixWithWidth(visibleCount: terminalWidth)
         let compensated = isAppleTerminal
             ? clipped.withTerminalAppCursorCompensation()
             : clipped
