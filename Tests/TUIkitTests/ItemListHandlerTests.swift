@@ -513,12 +513,14 @@ struct ItemListHandlerScrollTests {
     func heightAwareScrollReveal() {
         // 5 rows of heights [1, 3, 1, 3, 1] in a 5-line content area. A
         // multi-line table sets viewportHeight so the handler's maxOffset equals
-        // the height-aware furthest scroll (3 here), and supplies rowHeights so
-        // the reveal accumulates them rather than assuming one line per row.
+        // the height-aware furthest scroll (3 here), and supplies a rowHeight
+        // closure so the reveal accumulates real heights rather than assuming one
+        // line per row.
+        let rowHeights = [1, 3, 1, 3, 1]
         let handler = ItemListHandler<String>(
             focusID: "test", itemCount: 5, viewportHeight: 2, selectionMode: .single)
         handler.contentHeight = 5
-        handler.rowHeights = [1, 3, 1, 3, 1]
+        handler.rowHeight = { rowHeights[$0] }
 
         handler.focusedIndex = 4
         handler.ensureFocusedItemVisible()

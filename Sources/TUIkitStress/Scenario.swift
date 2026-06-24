@@ -38,6 +38,7 @@ enum Scenarios {
     static let all: [Scenario] = [
         MegaListScenario.descriptor,
         WideTableScenario.descriptor,
+        MultiLineTableScenario.descriptor,
         TablesInScrollViewScenario.descriptor,
         TablesInVStackScenario.descriptor,
         DeepRecursionScenario.descriptor,

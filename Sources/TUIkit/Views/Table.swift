@@ -484,8 +484,20 @@ where Value.ID: Hashable {
     ) -> (lines: [String], state: PopulatedRenderState) {
         // 3 = top border + column header + bottom border.
         let contentHeight = max(1, context.availableHeight - 3)
-        let heights = data.map { cellLayout(for: $0, columnWidths: columnWidths).height }
-        let overflowing = heights.reduce(0, +) > contentHeight
+
+        // Row heights are answered lazily. The scroll arithmetic below touches only
+        // a viewport's worth of rows — the visible window, plus the bottom suffix
+        // that fixes the furthest scroll — so a tall table needn't wrap every
+        // off-screen row (the optimisation a scrollbar's *absence* permits: nothing
+        // exposes the total extent). Memoised within this render since the window
+        // and the suffix overlap once scrolled near the end.
+        var heightCache: [Int: Int] = [:]
+        func heightOf(_ index: Int) -> Int {
+            if let cached = heightCache[index] { return cached }
+            let height = rowHeight(of: data[index], columnWidths: columnWidths)
+            heightCache[index] = height
+            return height
+        }
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
@@ -501,10 +513,12 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
-        handler.rowHeights = overflowing ? heights : nil
+        // The reveal-on-focus arithmetic (run between renders, on key events)
+        // answers heights lazily too, from this frame's data and column widths.
+        handler.rowHeight = { rowHeight(of: data[$0], columnWidths: columnWidths) }
         // Choose viewportHeight so the handler's row-based maxOffset
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
-        let furthest = maxScrollOffset(heights: heights, contentHeight: contentHeight)
+        let furthest = maxScrollOffset(count: data.count, contentHeight: contentHeight, height: heightOf)
         handler.viewportHeight = max(1, data.count - furthest)
         if !context.isMeasuring {
             handler.clampScrollOffset()
@@ -516,7 +530,8 @@ where Value.ID: Hashable {
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
         let window = rowWindow(
-            scrollOffset: handler.scrollOffset, heights: heights, contentHeight: contentHeight)
+            scrollOffset: handler.scrollOffset, count: data.count,
+            contentHeight: contentHeight, height: heightOf)
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth, context: context, palette: palette)
@@ -528,7 +543,7 @@ where Value.ID: Hashable {
                 focusID: persistedFocusID,
                 visibleRange: window.range,
                 scrollOffsetAbove: window.showAbove ? 1 : 0,
-                visibleRowHeights: window.range.map { heights[$0] }
+                visibleRowHeights: window.range.map(heightOf)
             )
         )
     }
@@ -553,16 +568,34 @@ where Value.ID: Hashable {
         return (cells, height)
     }
 
+    /// The height in lines of one row — its tallest cell wrapped into its column.
+    /// Height-only (the wrapped lines are discarded), so the off-screen rows the
+    /// scroll arithmetic has to measure are wrapped without also allocating their
+    /// cell content; ``cellLayout(for:columnWidths:)`` returns the cells too, for
+    /// the rows actually rendered.
+    private func rowHeight(of item: Value, columnWidths: [Int]) -> Int {
+        var height = 1
+        for (column, width) in zip(columns, columnWidths) {
+            let lineCount = TextWrapping.fit(
+                column.value(for: item), width: max(1, width),
+                maxLines: column.lineLimit, mode: column.truncationMode
+            ).count
+            height = max(height, lineCount)
+        }
+        return height
+    }
+
     /// The furthest the table can scroll: the largest first-visible row such that
     /// the remaining rows still fill the content area (reserving a line for the
     /// "above" indicator that shows whenever the first visible row isn't row 0).
-    private func maxScrollOffset(heights: [Int], contentHeight: Int) -> Int {
+    private func maxScrollOffset(count: Int, contentHeight: Int, height: (Int) -> Int) -> Int {
         var used = 0
-        var offset = heights.count
+        var offset = count
         while offset > 0 {
             let aboveReserve = (offset - 1) > 0 ? 1 : 0
-            if used + heights[offset - 1] + aboveReserve > contentHeight { break }
-            used += heights[offset - 1]
+            let rowH = height(offset - 1)
+            if used + rowH + aboveReserve > contentHeight { break }
+            used += rowH
             offset -= 1
         }
         return offset
@@ -572,9 +605,8 @@ where Value.ID: Hashable {
     /// the content area fills, reserving a line for each scroll indicator actually
     /// shown. Mirrors the single-line indicator reservation, height-aware.
     private func rowWindow(
-        scrollOffset: Int, heights: [Int], contentHeight: Int
+        scrollOffset: Int, count: Int, contentHeight: Int, height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool) {
-        let count = heights.count
         guard count > 0 else { return (0..<0, false, false) }
         let offset = min(max(0, scrollOffset), count - 1)
         let showAbove = offset > 0
@@ -583,8 +615,9 @@ where Value.ID: Hashable {
             var used = 0
             var end = offset
             while end < count {
-                if used + heights[end] > budget && end > offset { break }
-                used += heights[end]
+                let rowH = height(end)
+                if used + rowH > budget && end > offset { break }
+                used += rowH
                 end += 1
             }
             return max(offset + 1, end)
@@ -702,7 +735,7 @@ where Value.ID: Hashable {
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
-        handler.rowHeights = nil  // single-line path: uniform-height scroll math
+        handler.rowHeight = nil  // single-line path: uniform-height scroll math
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
