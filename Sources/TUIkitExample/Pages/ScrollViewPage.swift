@@ -198,6 +198,11 @@ struct ScrollViewPage: View {
             )
         }
         .padding(.horizontal, 1)
+        // The page itself is taller than most terminals (several framed demo
+        // ScrollViews stacked), so wrap it too. The inner demos are fixed-height,
+        // so this nests cleanly, and Tab-ing to a control below the fold now
+        // scrolls the page to reveal it.
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
                 "ScrollView",
