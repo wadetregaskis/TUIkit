@@ -315,6 +315,43 @@ struct TableRenderTests {
         #expect(lines.contains { $0.contains("Alpha") })
     }
 
+    @Test("A visible scrollbar adds a trailing block-glyph column inside the border")
+    func scrollbarColumn() {
+        // 12 rows in a short viewport → overflowing; .visible forces the bar.
+        let rows = (0..<12).map { Row(id: "\($0)", name: "Row \($0)", size: "\($0)K") }
+        let lines = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name)
+                TableColumn("Size", value: \Row.size).width(.fixed(6))
+            }
+            .scrollbarVisibility(.visible),
+            context: tableContext(width: 30, height: 8)
+        )
+        expectClosedBorder(lines)
+        let joined = lines.joined()
+        #expect(joined.contains("▲") && joined.contains("▼"), "scrollbar arrows present: \(lines)")
+        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
+        #expect(joined.contains { blocks.contains($0) }, "scrollbar thumb block present: \(lines)")
+    }
+
+    @Test("Scrollbars are off by default — the table is unchanged")
+    func noScrollbarByDefault() {
+        let rows = (0..<12).map { Row(id: "\($0)", name: "Row \($0)", size: "\($0)K") }
+        let lines = strippedLines(
+            Table(rows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name)
+            },
+            context: tableContext(width: 30, height: 8)
+        )
+        let joined = lines.joined()
+        // The "N more below" text indicator legitimately uses ▼, so the telltale
+        // of a scrollbar is its block-glyph thumb, which a default table lacks.
+        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
+        #expect(!joined.contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")
+        // The text "N more below" indicator is shown instead.
+        #expect(joined.lowercased().contains("more"))
+    }
+
     @Test("Narrow columns truncate cell values with an ellipsis")
     func narrowTruncation() {
         let lines = strippedLines(

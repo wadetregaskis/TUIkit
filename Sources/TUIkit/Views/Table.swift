@@ -255,18 +255,40 @@ where Value.ID: Hashable {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
 
-        // Calculate available width inside container (subtract
-        // border + padding).
+        // Calculate available width inside container (subtract border + padding).
         let innerWidth = max(0, context.availableWidth - 4)
+
+        // A single-line table decides a scrollbar cheaply (one line per row),
+        // reserving a column inside the border for it. Multi-line tables wire the
+        // scrollbar separately (their overflow needs the total wrapped height).
+        let rowArea = max(1, context.availableHeight - 3)
+        let barVisibility = context.environment.scrollbarVisibility
+        let isMultiLine = columns.contains { $0.lineLimit > 1 }
+        let wantsScrollbar =
+            !isMultiLine && !data.isEmpty && barVisibility != .hidden
+            && (barVisibility == .visible || data.count > rowArea)
+        let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
+
         let columnWidths = calculateColumnWidths(
-            availableWidth: innerWidth, spacing: columnSpacing)
-        let headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+            availableWidth: contentInnerWidth, spacing: columnSpacing)
+        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+        if wantsScrollbar {
+            // Pad the header to the full inner width so it aligns with the rows
+            // (whose last column is the scrollbar); the cell above the bar is blank.
+            headerLine += String(repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
+        }
 
         let contentLines: [String]
         let renderState: PopulatedRenderState?
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
             renderState = nil
+        } else if wantsScrollbar {
+            let result = buildScrollbarContent(
+                context: context, stateStorage: stateStorage, palette: palette,
+                columnWidths: columnWidths, contentInnerWidth: contentInnerWidth)
+            contentLines = result.lines
+            renderState = result.state
         } else {
             let result = buildPopulatedContent(
                 context: context,
@@ -381,6 +403,70 @@ where Value.ID: Hashable {
                 visibleRowHeights: []
             )
         )
+    }
+
+    // MARK: - Scrollbar content (single-line)
+
+    /// The render path for a single-line table that shows a scrollbar. The bar
+    /// supersedes the "N more" text indicators, so the whole row area is the
+    /// viewport (no indicator reservation); each visible row is built one column
+    /// narrower and the styled scrollbar cell is appended to its right, with the
+    /// area below the last row left blank behind the bar.
+    private func buildScrollbarContent(
+        context: RenderContext,
+        stateStorage: StateStorage,
+        palette: any Palette,
+        columnWidths: [Int],
+        contentInnerWidth: Int
+    ) -> (lines: [String], state: PopulatedRenderState) {
+        let contentHeight = max(1, context.availableHeight - 3)
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
+        let handler = resolveHandler(
+            persistedFocusID: persistedFocusID, stateStorage: stateStorage, context: context,
+            contentHeight: contentHeight, overflowing: data.count > contentHeight)
+        // The whole row area is visible — the bar, not a text indicator, marks the
+        // off-screen rows — so the viewport is the full content height.
+        handler.viewportHeight = contentHeight
+        if !context.isMeasuring {
+            handler.clampScrollOffset()
+        }
+        FocusRegistration.register(context: context, handler: handler)
+        let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+
+        let visibleRange = handler.scrollOffset..<min(data.count, handler.scrollOffset + contentHeight)
+        let bar = ScrollbarRenderer.verticalScrollbar(
+            height: contentHeight, extent: data.count, viewport: contentHeight, offset: handler.scrollOffset,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            colors: ScrollbarColors(
+                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
+        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+
+        var lines: [String] = []
+        lines.reserveCapacity(contentHeight)
+        for line in 0..<contentHeight {
+            let rowLine: String
+            if line < visibleRange.count {
+                let rowIndex = visibleRange.lowerBound + line
+                rowLine = renderRow(
+                    item: data[rowIndex], columnWidths: columnWidths,
+                    isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
+                    isSelected: handler.isSelected(at: rowIndex),
+                    rowWidth: contentInnerWidth, context: context, palette: palette)
+            } else {
+                rowLine = ""
+            }
+            let pad = max(0, contentInnerWidth - rowLine.strippedLength)
+            lines.append(rowLine + String(repeating: " ", count: pad) + (line < bar.count ? bar[line] : emptyCell))
+        }
+
+        return (
+            lines,
+            PopulatedRenderState(
+                handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
+                scrollOffsetAbove: 0, visibleRowHeights: []))
     }
 
     // MARK: - Multi-line content (variable row heights)
