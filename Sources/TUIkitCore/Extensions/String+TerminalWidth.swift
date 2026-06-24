@@ -740,6 +740,48 @@ extension String {
         return (result, visible)
     }
 
+    /// A horizontal slice: the visible columns in
+    /// `visibleStart ..< (visibleStart + visibleCount)`, with ANSI styling intact.
+    ///
+    /// This is the column-windowing primitive for horizontal scrolling. The dropped
+    /// leading columns' SGR (colour/style) escapes are *carried* onto the front of
+    /// the result, so the slice keeps whatever styling was active at `visibleStart`
+    /// even though the codes that set it scrolled out of view. Non-SGR escapes
+    /// (cursor moves) in the dropped region are not replayed. A wide character that
+    /// straddles either edge is dropped (it can't be shown whole), leaving a gap —
+    /// the same treatment ``ansiAwarePrefix(visibleCount:)`` gives the right edge.
+    ///
+    /// - Parameters:
+    ///   - visibleStart: The first visible column to include (0-based).
+    ///   - visibleCount: How many visible columns to include.
+    public func ansiAwareSlice(visibleStart: Int, visibleCount: Int) -> String {
+        guard visibleCount > 0 else { return "" }
+        guard visibleStart > 0 else { return ansiAwarePrefix(visibleCount: visibleCount) }
+
+        let end = visibleStart + visibleCount
+        var carriedStyle = ""  // SGR history replayed so the slice starts correctly styled
+        var body = ""
+        var visible = 0
+
+        for segment in ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                if visible < visibleStart {
+                    if isSGR { carriedStyle += sequence }
+                } else if visible < end {
+                    body += sequence
+                }
+            case .visible(let character):
+                let charWidth = character.terminalWidth
+                if visible >= visibleStart && visible + charWidth <= end {
+                    body.append(character)
+                }
+                visible += charWidth
+            }
+        }
+        return carriedStyle + body
+    }
+
     /// Like ``ansiAwarePrefix(visibleCount:)`` but cursor-aware — clips so
     /// that no character's Terminal.app cursor advance would push past the
     /// right edge.

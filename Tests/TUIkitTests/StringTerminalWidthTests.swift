@@ -8,6 +8,10 @@ import Testing
 
 @testable import TUIkit
 
+// One cohesive file of String terminal-width / ANSI-aware tests; splitting purely
+// to satisfy the length ceiling would scatter closely-related cases.
+// swiftlint:disable file_length
+
 // MARK: - Character.terminalWidth
 
 @Suite("Character.terminalWidth")
@@ -851,5 +855,50 @@ struct RepaintRightEdgeColumnTests {
         #expect(!output.contains(repaintAtRow1), "Row 1 (plain) should not be repainted")
         #expect(output.contains(repaintAtRow2), "Row 2 (VS-16) should be repainted")
         #expect(!output.contains(repaintAtRow3), "Row 3 (plain) should not be repainted")
+    }
+}
+
+// MARK: - ansiAwareSlice (horizontal windowing)
+
+@Suite("String.ansiAwareSlice")
+struct AnsiAwareSliceTests {
+    private let esc = "\u{1b}"
+
+    @Test("A plain slice takes the requested visible columns")
+    func plainSlice() {
+        #expect("0123456789".ansiAwareSlice(visibleStart: 3, visibleCount: 4) == "3456")
+        #expect("0123456789".ansiAwareSlice(visibleStart: 0, visibleCount: 4) == "0123")
+        #expect("0123456789".ansiAwareSlice(visibleStart: 8, visibleCount: 5) == "89")
+    }
+
+    @Test("A slice from column 0 equals the prefix")
+    func sliceFromZero() {
+        let styled = "\(esc)[31mhello\(esc)[0m world"
+        #expect(
+            styled.ansiAwareSlice(visibleStart: 0, visibleCount: 5)
+                == styled.ansiAwarePrefix(visibleCount: 5))
+    }
+
+    @Test("A slice carries the SGR state active at its start")
+    func carriesStyle() {
+        // Red "RED", reset, bold "BOLD". Slice the bold part (cols 3...): the
+        // red-setting code scrolled out, but the slice must still be styled
+        // correctly — its own codes (reset then bold) are kept, and the dropped
+        // SGR is replayed in front so nothing earlier is lost.
+        let styled = "\(esc)[31mRED\(esc)[0m\(esc)[1mBOLD"
+        let slice = styled.ansiAwareSlice(visibleStart: 3, visibleCount: 4)
+        #expect(slice.stripped == "BOLD", "visible content is the bold word: \(slice.debugDescription)")
+        #expect(slice.contains("\(esc)[1m"), "keeps the bold code that applies to the slice")
+        // The replayed history includes the earlier red set (harmless, then reset).
+        #expect(slice.contains("\(esc)[31m"), "carries the dropped SGR history")
+    }
+
+    @Test("A slice mid-run keeps the colour from before the window")
+    func midRunKeepsColour() {
+        // The colour is set once at the start; slicing the middle keeps it.
+        let styled = "\(esc)[32mGREENtext"
+        let slice = styled.ansiAwareSlice(visibleStart: 5, visibleCount: 4)
+        #expect(slice.stripped == "text")
+        #expect(slice.hasPrefix("\(esc)[32m"), "carries the green still active at the slice: \(slice.debugDescription)")
     }
 }
