@@ -105,6 +105,31 @@ struct ScrollViewPage: View {
                 }
             }
 
+            DemoSection("Scrollbar — opt-in, sub-cell-precise thumb") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "A scrollbar is opt-in via .scrollbarVisibility(.visible) "
+                            + "(or .automatic to show it only while the content "
+                            + "overflows). The thumb is proportional to the visible "
+                            + "region at 1/8-cell precision; .scrollbarArrows(.double) "
+                            + "puts both arrows at each end."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    ScrollView {
+                        VStack(alignment: .leading) {
+                            ForEach(loremLines, id: \.self) { line in
+                                Text(line)
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+                    .border(color: .palette.border)
+                    .scrollbarVisibility(.visible)
+                    .scrollbarArrows(.double)
+                }
+            }
+
             DemoSection("Indicators off — fully naked") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(
