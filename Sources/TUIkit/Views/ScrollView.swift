@@ -331,6 +331,17 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler.canBeFocused = !isDisabled
         handler.viewportHeight = viewportHeight
 
+        // Scrollbar: reserve a trailing column when one will be shown. The
+        // decision uses the prior frame's content height (persisted on the
+        // handler) so the content is laid out at the reduced width in a single
+        // render; on the very first frame nothing has overflowed yet, so an
+        // automatic bar appears one frame after the content first overflows.
+        let barVisibility = context.environment.scrollbarVisibility
+        let wantsScrollbar =
+            barVisibility != .hidden
+            && (barVisibility == .visible || handler.contentHeight > viewportHeight)
+        let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
+
         // Render the content at a tall canvas so it lays out at
         // its natural full height without being clipped to the
         // viewport. The canvas is bounded — Int.max risks
@@ -345,7 +356,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // values frame to frame. Measure (`sizeThatFits`) uses the same child
         // identity, so the content's state is hydrated consistently.
         var measureContext = context.withChildIdentity(type: Content.self)
-        measureContext.availableWidth = viewportWidth
+        measureContext.availableWidth = contentWidth
         measureContext.availableHeight = measureHeight
         let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
 
@@ -384,21 +395,28 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             full: fullBuffer,
             scrollOffset: handler.scrollOffset,
             viewportHeight: viewportHeight,
-            viewportWidth: viewportWidth
+            viewportWidth: contentWidth
         )
 
-        // Compose the scroll-indicator chrome on top of the
-        // windowed content. Indicators replace the first /
-        // last line of the visible buffer rather than adding
-        // to its height — they're a hint, not extra content.
-        if showsIndicators {
+        // Compose the scroll-indicator chrome on top of the windowed content.
+        // Indicators replace the first / last line of the visible buffer rather
+        // than adding to its height — they're a hint, not extra content. A
+        // scrollbar supersedes the text indicators (it shows the same thing more
+        // precisely), so they are mutually exclusive.
+        if showsIndicators && !wantsScrollbar {
             let palette = context.environment.palette
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,
-                width: viewportWidth,
+                width: contentWidth,
                 palette: palette
             )
+        }
+
+        // Append the trailing scrollbar column over the reserved width.
+        if wantsScrollbar {
+            visibleBuffer = appendVerticalScrollbar(
+                to: visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
 
         // Mouse handler + hit-test region covering the viewport.
@@ -456,6 +474,40 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return visibleBuffer
+    }
+
+    /// Appends the trailing vertical scrollbar column to the windowed viewport.
+    /// The content keeps its `contentWidth`; the bar occupies the last column,
+    /// reflecting the handler's scroll position at sub-cell precision. The
+    /// content's hit-test regions sit at `x < contentWidth`, so the appended
+    /// column never disturbs them.
+    private func appendVerticalScrollbar(
+        to buffer: FrameBuffer, contentWidth: Int,
+        handler: ScrollViewHandler, context: RenderContext
+    ) -> FrameBuffer {
+        let height = buffer.height
+        guard height > 0 else { return buffer }
+        let palette = context.environment.palette
+        let bar = ScrollbarRenderer.verticalScrollbar(
+            height: height,
+            extent: handler.contentHeight,
+            viewport: handler.viewportHeight,
+            offset: handler.scrollOffset,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            colors: ScrollbarColors(
+                thumb: palette.foregroundSecondary,
+                track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
+        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        var lines = buffer.lines
+        for index in 0..<height {
+            let content = index < lines.count ? lines[index] : ""
+            let pad = max(0, contentWidth - content.strippedLength)
+            let cell = index < bar.count ? bar[index] : emptyCell
+            lines[index] = content + String(repeating: " ", count: pad) + cell
+        }
+        return buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
     }
 
     // MARK: Windowing

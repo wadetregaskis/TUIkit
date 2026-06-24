@@ -138,4 +138,47 @@ struct ScrollViewRenderTests {
         )
         #expect(buffer.lines.isEmpty)
     }
+
+    // MARK: - Scrollbar
+
+    @Test("A visible scrollbar adds a trailing block-glyph column with end arrows")
+    func visibleScrollbarColumn() {
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<20, id: \.self) { Text("line \($0)") }
+                }
+            }
+            .scrollbarVisibility(.visible),
+            context: ctx(width: 20, height: 6)
+        )
+        #expect(buffer.width == 20, "the scrollbar sits inside the viewport width")
+        let lastColumn = buffer.lines.map { $0.stripped.last ?? " " }
+        #expect(lastColumn.first == "▲", "single-arrow top: \(lastColumn)")
+        #expect(lastColumn.last == "▼", "single-arrow bottom: \(lastColumn)")
+        // The track cells between the arrows are block glyphs or spaces, with at
+        // least one filled (the thumb).
+        let track = lastColumn.dropFirst().dropLast()
+        let blockOrSpace: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇", " "]
+        #expect(track.allSatisfy { blockOrSpace.contains($0) }, "track is block glyphs: \(lastColumn)")
+        #expect(track.contains { $0 != " " }, "the thumb is visible: \(lastColumn)")
+    }
+
+    @Test("Scrollbars are hidden by default — the viewport is unchanged")
+    func hiddenScrollbarByDefault() {
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<20, id: \.self) { Text("line \($0)") }
+                }
+            },
+            context: ctx(width: 20, height: 6)
+        )
+        let lastColumn = buffer.lines.map { $0.stripped.last ?? " " }
+        #expect(
+            !lastColumn.contains("▲") && !lastColumn.contains("▼"),
+            "no scrollbar by default: \(lastColumn)")
+        // The text "N more below" indicator is still shown.
+        #expect(buffer.lines.map { $0.stripped }.joined().contains("more below"))
+    }
 }
