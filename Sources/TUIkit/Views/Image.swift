@@ -133,6 +133,33 @@ private struct ImageURLTimeoutKey: EnvironmentKey {
     static let defaultValue: TimeInterval = 30
 }
 
+/// The reference box an image scales to fit — see ``View/imageFitTarget(_:)``.
+///
+/// `.fit`/`.fill` (``ContentMode``) decides *how* an image scales relative to a box;
+/// this decides *which box*. The two are orthogonal.
+public enum ImageFitTarget: Sendable, Hashable, CaseIterable {
+    /// Fit the size the layout proposes — the default. Inside a `ScrollView` the
+    /// proposed size is unbounded on the scroll axis, so the image becomes
+    /// width-driven and can be scrolled at full size.
+    case proposedSize
+
+    /// Fit the visible viewport — the innermost enclosing `ScrollView`'s visible
+    /// content area, or the proposed size when there is no enclosing `ScrollView`.
+    /// The image fills the viewport at ``View/imageZoom(_:)`` `1` and overflows
+    /// (scrolling, with scrollbars appearing automatically) only when zoomed in.
+    case viewport
+}
+
+/// Environment key for the image fit target.
+private struct ImageFitTargetKey: EnvironmentKey {
+    static let defaultValue: ImageFitTarget = .proposedSize
+}
+
+/// Environment key for the image zoom multiplier.
+private struct ImageZoomKey: EnvironmentKey {
+    static let defaultValue: Double = 1.0
+}
+
 // MARK: - EnvironmentValues
 
 extension EnvironmentValues {
@@ -195,6 +222,18 @@ extension EnvironmentValues {
     var imageURLTimeout: TimeInterval {
         get { self[ImageURLTimeoutKey.self] }
         set { self[ImageURLTimeoutKey.self] = newValue }
+    }
+
+    /// The reference box images scale to fit — proposed size vs visible viewport.
+    var imageFitTarget: ImageFitTarget {
+        get { self[ImageFitTargetKey.self] }
+        set { self[ImageFitTargetKey.self] = newValue }
+    }
+
+    /// The zoom multiplier applied to an image's fitted size (`1` = fit exactly).
+    var imageZoom: Double {
+        get { self[ImageZoomKey.self] }
+        set { self[ImageZoomKey.self] = newValue }
     }
 }
 
@@ -288,6 +327,38 @@ extension View {
     /// - Returns: A view that scales to fill.
     public func scaledToFill() -> some View {
         aspectRatio(contentMode: .fill)
+    }
+
+    /// Sets the reference box this image scales to fit.
+    ///
+    /// `.fit`/`.fill` (via ``aspectRatio(_:contentMode:)``) decides *how* an image
+    /// scales; this decides *which box* it scales to. By default an image fits the
+    /// size the layout proposes (``ImageFitTarget/proposedSize``) — which inside a
+    /// `ScrollView` is unbounded on the scroll axis, so the image renders at full
+    /// size and scrolls. Pass ``ImageFitTarget/viewport`` to fit the enclosing
+    /// `ScrollView`'s *visible* area instead: the image fills the viewport at
+    /// ``imageZoom(_:)`` `1` and overflows (showing scrollbars) only when zoomed in,
+    /// so one fixed view tree goes from "fits exactly" to "scroll around" purely by
+    /// changing the zoom.
+    ///
+    /// - Parameter target: The box to fit within.
+    /// - Returns: A modified view.
+    public func imageFitTarget(_ target: ImageFitTarget) -> some View {
+        environment(\.imageFitTarget, target)
+    }
+
+    /// Scales an image by a zoom multiplier on top of its fitted size.
+    ///
+    /// `1` (the default) renders at the fitted size; `2` doubles it; and so on.
+    /// Combine with ``imageFitTarget(_:)`` `.viewport` inside a `ScrollView` to zoom
+    /// an image in and out, scrollbars appearing automatically once it exceeds the
+    /// viewport. The ASCII conversion re-runs at the zoomed size, so zooming in adds
+    /// detail rather than just enlarging cells.
+    ///
+    /// - Parameter factor: The zoom multiplier (clamped to a small positive minimum).
+    /// - Returns: A modified view.
+    public func imageZoom(_ factor: Double) -> some View {
+        environment(\.imageZoom, factor)
     }
 
     /// Sets the maximum allowed pixel count for image loading.

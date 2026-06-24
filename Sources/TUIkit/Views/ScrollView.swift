@@ -502,6 +502,10 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> FrameBuffer {
         var measureContext = context.withChildIdentity(type: Content.self)
+        // Publish the visible viewport so descendants can fit to it instead of the
+        // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
+        measureContext.environment.scrollViewportSize = ScrollViewportSize(
+            width: contentWidth, height: viewportHeight)
         measureContext.availableHeight = max(viewportHeight * 64, 4096)
 
         // When horizontal scrolling is on, let the content take its natural width
@@ -711,5 +715,32 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return buffer.replacingLines(lines)
+    }
+}
+
+// MARK: - Viewport size publication
+
+/// The size, in cells, of the innermost enclosing ``ScrollView``'s visible viewport
+/// — its content area, excluding any scrollbar column.
+///
+/// ``ScrollView`` publishes this into the environment so a descendant can size
+/// itself relative to the *visible* area rather than the (deliberately unbounded
+/// on the scroll axis) proposed size. ``Image`` consumes it for
+/// ``ImageFitTarget/viewport``. `nil` when there is no enclosing scroll view.
+struct ScrollViewportSize: Sendable, Hashable {
+    var width: Int
+    var height: Int
+}
+
+private struct ScrollViewportSizeKey: EnvironmentKey {
+    static let defaultValue: ScrollViewportSize? = nil
+}
+
+extension EnvironmentValues {
+    /// The innermost enclosing ``ScrollView``'s visible viewport size — see
+    /// ``ScrollViewportSize``.
+    var scrollViewportSize: ScrollViewportSize? {
+        get { self[ScrollViewportSizeKey.self] }
+        set { self[ScrollViewportSizeKey.self] = newValue }
     }
 }

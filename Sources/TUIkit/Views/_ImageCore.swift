@@ -84,15 +84,29 @@ struct _ImageCore: View, Renderable, Layoutable {
     // MARK: - Layoutable
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let proposedWidth = proposal.width ?? context.availableWidth
-        let proposedHeight = proposal.height ?? context.availableHeight
+        let environment = context.environment
+        let zoom = max(0.01, environment.imageZoom)
+
+        // The box the image scales to fit: the visible viewport (when requested and
+        // available) or the size the layout proposes. `.viewport` is what lets an
+        // image fill the visible area at zoom 1 and overflow (scroll) only once
+        // zoomed in, even though a ScrollView measures content against an unbounded
+        // canvas.
+        let fitWidth: Int
+        let fitHeight: Int
+        if environment.imageFitTarget == .viewport, let viewport = environment.scrollViewportSize {
+            fitWidth = viewport.width
+            fitHeight = viewport.height
+        } else {
+            fitWidth = proposal.width ?? context.availableWidth
+            fitHeight = proposal.height ?? context.availableHeight
+        }
 
         // Once the image has loaded, report the SAME aspect-fitted size the renderer
-        // produces — so the height follows from the width and the image's aspect
-        // ratio, and a generous offered height (e.g. a ScrollView's tall measure
-        // canvas) is width-limited rather than claimed whole. Reading the phase box
-        // is a pure lookup (no mutation that matters during a measure pass).
-        if let stateStorage = context.environment.stateStorage {
+        // produces (height follows from width × aspect ratio), then apply zoom.
+        // Reading the phase box is a pure lookup (no mutation that matters during a
+        // measure pass).
+        if let stateStorage = environment.stateStorage {
             let phaseKey = StateStorage.StateKey(
                 identity: context.identity, propertyIndex: StateIndex.phase)
             let phaseBox: StateBox<ImageLoadingPhase> = stateStorage.storage(
@@ -100,18 +114,23 @@ struct _ImageCore: View, Renderable, Layoutable {
             if case .success(let rawImage) = phaseBox.value, rawImage.width > 0, rawImage.height > 0 {
                 let fitted = ASCIIConverter.targetSize(
                     imageWidth: rawImage.width, imageHeight: rawImage.height,
-                    maxWidth: proposedWidth, maxHeight: proposedHeight,
-                    contentMode: context.environment.imageContentMode,
-                    overrideAspectRatio: context.environment.imageAspectRatio)
-                return .fixed(fitted.width, fitted.height)
+                    maxWidth: fitWidth, maxHeight: fitHeight,
+                    contentMode: environment.imageContentMode,
+                    overrideAspectRatio: environment.imageAspectRatio)
+                return .fixed(Self.zoomed(fitted.width, zoom), Self.zoomed(fitted.height, zoom))
             }
         }
 
         // Before it loads, the aspect ratio is unknown — reserve a bounded
         // placeholder box (assume a ~2:1 cell aspect) rather than the full offered
         // height, so an unbounded offer can't balloon to thousands of lines.
-        let placeholderHeight = min(proposedHeight, max(1, proposedWidth / 2))
-        return .fixed(proposedWidth, placeholderHeight)
+        let placeholderHeight = min(fitHeight, max(1, fitWidth / 2))
+        return .fixed(Self.zoomed(fitWidth, zoom), Self.zoomed(placeholderHeight, zoom))
+    }
+
+    /// Multiplies a cell dimension by the zoom factor (rounded, floored at 1).
+    private static func zoomed(_ value: Int, _ factor: Double) -> Int {
+        factor == 1 ? value : max(1, Int((Double(value) * factor).rounded()))
     }
 
     // MARK: - Renderable

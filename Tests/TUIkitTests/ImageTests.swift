@@ -531,4 +531,85 @@ struct ImageSizingTests {
         #expect(size.width == 40, "takes the offered width: \(size.width)")
         #expect(size.height < 100, "height is bounded, not the 4096-line canvas: \(size.height)")
     }
+
+    /// Builds a context that mimics being inside a ScrollView: a tall measure canvas
+    /// plus a published `scrollViewportSize` for the visible area.
+    private func scrollContext(viewport: (Int, Int)) -> RenderContext {
+        var environment = EnvironmentValues()
+        environment.stateStorage = StateStorage()
+        environment.scrollViewportSize = ScrollViewportSize(width: viewport.0, height: viewport.1)
+        return RenderContext(
+            availableWidth: viewport.0, availableHeight: 4096,
+            environment: environment, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+    }
+
+    @Test(".imageFitTarget(.viewport) fits the visible viewport, not the proposed canvas")
+    func viewportFitUsesViewport() {
+        // Proposed width 80 but viewport only 20 wide → the image sizes to the
+        // viewport (20), so at zoom 1 it fills the visible area and won't overflow.
+        let context = scrollContext(viewport: (20, 10))
+        let size = measureChild(
+            Image(.file("/no/such/image.png")).imageFitTarget(.viewport),
+            proposal: ProposedSize(width: 80, height: nil),
+            context: context)
+        #expect(size.width == 20, "uses the viewport width (20), not the proposal (80): \(size.width)")
+        #expect(size.height <= 10, "bounded by the viewport height (10): \(size.height)")
+    }
+
+    @Test(".proposedSize (default) ignores the viewport and uses the proposal")
+    func proposedFitIgnoresViewport() {
+        // Same published viewport, but the default target tracks the proposal — so an
+        // unzoomed image in a horizontal scroll can still be wider than the viewport.
+        let context = scrollContext(viewport: (20, 10))
+        let size = measureChild(
+            Image(.file("/no/such/image.png")),
+            proposal: ProposedSize(width: 80, height: nil),
+            context: context)
+        #expect(size.width == 80, "default uses the proposal width (80), not the viewport (20): \(size.width)")
+    }
+
+    @Test(".imageZoom multiplies the fitted size")
+    func zoomMultipliesSize() {
+        let context = scrollContext(viewport: (20, 10))
+        let base = measureChild(
+            Image(.file("/no/such/image.png")).imageFitTarget(.viewport),
+            proposal: ProposedSize(width: 80, height: nil),
+            context: context)
+        let zoomed = measureChild(
+            Image(.file("/no/such/image.png")).imageFitTarget(.viewport).imageZoom(2),
+            proposal: ProposedSize(width: 80, height: nil),
+            context: context)
+        #expect(zoomed.width == base.width * 2, "zoom 2 doubles width: \(zoomed.width) vs \(base.width)")
+        #expect(zoomed.height == base.height * 2, "zoom 2 doubles height: \(zoomed.height) vs \(base.height)")
+    }
+
+    private func renderContext(width: Int, height: Int) -> RenderContext {
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.stateStorage = StateStorage()
+        return RenderContext(
+            availableWidth: width, availableHeight: height,
+            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
+    }
+
+    @Test("In a real ScrollView, .viewport fits the visible area; the default overflows")
+    func viewportFitComposesWithScrollView() {
+        // End to end: ScrollView publishes its viewport, the Image fits it, and the
+        // `.automatic` scrollbar (▼) only appears once content exceeds the viewport.
+        // Two renders settle the handler's lazily-measured content height.
+        func hasVerticalScrollbar(_ content: some View) -> Bool {
+            let view = ScrollView { content }.scrollbarVisibility(.automatic)
+            let context = renderContext(width: 24, height: 5)
+            _ = renderToBuffer(view, context: context)
+            let buffer = renderToBuffer(view, context: context)
+            return buffer.lines.contains { $0.contains("▼") }
+        }
+        #expect(
+            !hasVerticalScrollbar(Image(.file("/no/such/x.png")).imageFitTarget(.viewport)),
+            ".viewport fits the 5-line viewport → no scrollbar")
+        #expect(
+            hasVerticalScrollbar(Image(.file("/no/such/x.png"))),
+            "the default image overflows the short viewport → scrollbar appears")
+    }
 }
