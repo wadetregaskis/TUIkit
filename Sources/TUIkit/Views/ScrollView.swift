@@ -360,7 +360,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         measureContext.availableHeight = measureHeight
         let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
 
-        handler.contentHeight = fullBuffer.height
+        handler.contentHeight = Self.contentHeightTrimmingTrailingBlanks(fullBuffer)
         // Re-clamp the offset against the now-known content height — but only on
         // the real render pass. A measure pass may be offered a larger height
         // than the ScrollView finally renders into (e.g. when it shares space
@@ -477,6 +477,22 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return visibleBuffer
+    }
+
+    /// The content's real height, ignoring trailing blank lines.
+    ///
+    /// The content is measured by rendering it into a deliberately tall canvas, so
+    /// a flexible filler — most commonly a trailing `Spacer()` used to top-align a
+    /// page — expands to fill it with blank lines. Counting those would make the
+    /// view report thousands of phantom lines below; the real content ends at its
+    /// last non-blank line. Non-flexible content already hugs its natural height,
+    /// so this is a no-op there.
+    private static func contentHeightTrimmingTrailingBlanks(_ buffer: FrameBuffer) -> Int {
+        var height = buffer.lines.count
+        while height > 0, buffer.lines[height - 1].allSatisfy({ $0 == " " }) {
+            height -= 1
+        }
+        return height
     }
 
     /// Registers a mouse handler over the scrollbar's single column so the arrows

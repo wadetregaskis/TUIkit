@@ -55,6 +55,44 @@ struct ScrollViewRenderTests {
         #expect(!joined.contains("more below"))
     }
 
+    // MARK: - Trailing Spacer (flexible filler)
+
+    @Test("A trailing Spacer is not mistaken for overflowing content")
+    func trailingSpacerFits() {
+        // A Spacer expands to fill the tall measure canvas; its blank lines must
+        // not be counted as content, or a fitting page shows a bogus overflow.
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading) {
+                    Text("A")
+                    Text("B")
+                    Text("C")
+                    Spacer()
+                }
+            },
+            context: ctx(width: 20, height: 8)
+        )
+        let joined = buffer.lines.map { $0.stripped }.joined()
+        #expect(!joined.contains("more below"), "3 lines + Spacer fit in 8 rows: \(buffer.lines.map { $0.stripped })")
+    }
+
+    @Test("A trailing Spacer doesn't inflate the overflow count to the canvas height")
+    func trailingSpacerSaneOverflow() {
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading) {
+                    ForEach(0..<20, id: \.self) { Text("Line \($0)") }
+                    Spacer()
+                }
+            },
+            context: ctx(width: 20, height: 8)
+        )
+        let lines = buffer.lines.map { $0.stripped }
+        let indicator = lines.first { $0.contains("more below") } ?? ""
+        let count = indicator.split { !$0.isNumber }.compactMap { Int($0) }.first ?? -1
+        #expect(count > 0 && count < 20, "overflow count is the real remainder, not the measure canvas: \(indicator)")
+    }
+
     // MARK: - Overflowing content (bottom indicator)
 
     @Test("Tall content shows a 'N more below' indicator at the bottom edge")
