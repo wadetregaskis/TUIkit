@@ -86,7 +86,32 @@ struct _ImageCore: View, Renderable, Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let proposedWidth = proposal.width ?? context.availableWidth
         let proposedHeight = proposal.height ?? context.availableHeight
-        return .fixed(proposedWidth, proposedHeight)
+
+        // Once the image has loaded, report the SAME aspect-fitted size the renderer
+        // produces — so the height follows from the width and the image's aspect
+        // ratio, and a generous offered height (e.g. a ScrollView's tall measure
+        // canvas) is width-limited rather than claimed whole. Reading the phase box
+        // is a pure lookup (no mutation that matters during a measure pass).
+        if let stateStorage = context.environment.stateStorage {
+            let phaseKey = StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.phase)
+            let phaseBox: StateBox<ImageLoadingPhase> = stateStorage.storage(
+                for: phaseKey, default: .loading)
+            if case .success(let rawImage) = phaseBox.value, rawImage.width > 0, rawImage.height > 0 {
+                let fitted = ASCIIConverter.targetSize(
+                    imageWidth: rawImage.width, imageHeight: rawImage.height,
+                    maxWidth: proposedWidth, maxHeight: proposedHeight,
+                    contentMode: context.environment.imageContentMode,
+                    overrideAspectRatio: context.environment.imageAspectRatio)
+                return .fixed(fitted.width, fitted.height)
+            }
+        }
+
+        // Before it loads, the aspect ratio is unknown — reserve a bounded
+        // placeholder box (assume a ~2:1 cell aspect) rather than the full offered
+        // height, so an unbounded offer can't balloon to thousands of lines.
+        let placeholderHeight = min(proposedHeight, max(1, proposedWidth / 2))
+        return .fixed(proposedWidth, placeholderHeight)
     }
 
     // MARK: - Renderable

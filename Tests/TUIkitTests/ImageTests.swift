@@ -507,3 +507,28 @@ struct ImageLoadErrorTests {
         #expect(downloadError.description.contains("timeout"))
     }
 }
+
+// MARK: - Image sizing (aspect-driven, not greedy)
+
+@MainActor
+@Suite("Image sizing")
+struct ImageSizingTests {
+    @Test("An unloaded image reserves a bounded height, not an unbounded offered height")
+    func unloadedImageHeightBounded() {
+        // A ScrollView measures its content against a deliberately tall canvas; the
+        // image must not claim that whole height before its aspect ratio is known
+        // (the regression that buried the demo image thousands of lines down).
+        var environment = EnvironmentValues()
+        environment.stateStorage = StateStorage()
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 4096,
+            environment: environment, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        let size = measureChild(
+            Image(.file("/no/such/image.png")),
+            proposal: ProposedSize(width: 40, height: nil),
+            context: context)
+        #expect(size.width == 40, "takes the offered width: \(size.width)")
+        #expect(size.height < 100, "height is bounded, not the 4096-line canvas: \(size.height)")
+    }
+}
