@@ -122,14 +122,19 @@ struct ScrollViewPage: View {
                     )
                     .foregroundStyle(.palette.foregroundSecondary)
 
+                    // Few enough lines (18) in a tall enough viewport (10) that the
+                    // proportional thumb is several cells — clearly larger than the
+                    // fixed one-cell thumb when the toggle below is turned off. With
+                    // the full 60-line body the proportional thumb would round down
+                    // to the one-cell minimum and look identical.
                     ScrollView {
                         VStack(alignment: .leading) {
-                            ForEach(loremLines, id: \.self) { line in
+                            ForEach(Array(loremLines.prefix(18)), id: \.self) { line in
                                 Text(line)
                             }
                         }
                     }
-                    .frame(height: 8)
+                    .frame(height: 10)
                     .border(color: .palette.border)
                     .scrollbarVisibility(barVisibility)
                     .scrollbarArrows(barArrows)
