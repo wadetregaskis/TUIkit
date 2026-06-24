@@ -56,6 +56,9 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
     public var scrollbarDragGrab: Int?
 
+    /// Held arrow/track auto-repeat action (``ScrollableOffsetState``).
+    public var scrollbarRepeat: ScrollbarRepeat?
+
     /// The total natural height of the scroll view's content,
     /// computed during the layout pass.
     public var contentHeight: Int = 0

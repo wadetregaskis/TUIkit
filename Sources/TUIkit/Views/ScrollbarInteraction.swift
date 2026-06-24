@@ -39,6 +39,55 @@ extension View {
     }
 }
 
+// MARK: - Auto-repeat
+
+/// A scroll action that repeats while a scrollbar arrow (or a `.page`-mode track)
+/// is held down. Terminals send no key/button auto-repeat, so the bar's owner
+/// drives it from the render loop (see ``ScrollbarRenderer/driveAutoRepeat``).
+public struct ScrollbarRepeat: Sendable, Equatable {
+    /// The offset delta applied on each repeat tick (±1 for an arrow, ±viewport
+    /// for a page-track hold).
+    public var delta: Int
+    /// The absolute time of the next tick, in nanoseconds (`environment.frameNowNanos`
+    /// scale). `0` means "not yet scheduled" — the driver seeds it with the initial
+    /// delay the first frame it sees the hold.
+    public var nextFireNanos: Int64
+
+    public init(delta: Int, nextFireNanos: Int64 = 0) {
+        self.delta = delta
+        self.nextFireNanos = nextFireNanos
+    }
+}
+
+extension ScrollbarRenderer {
+    /// The pause before a held arrow/track starts repeating (like a key-repeat
+    /// delay), then the gap between repeats.
+    static let autoRepeatInitialDelayNanos: Int64 = 400_000_000
+    static let autoRepeatIntervalNanos: Int64 = 60_000_000
+
+    /// Drives a held scrollbar's auto-repeat. Call it each frame from the bar's
+    /// owner (with a bar shown): while `state.scrollbarRepeat` is set it keeps the
+    /// run loop waking and scrolls by the repeat delta once the initial delay has
+    /// passed and then every interval. The hold's mouse handler sets the repeat on
+    /// press and clears it on release.
+    @MainActor
+    static func driveAutoRepeat(
+        state: ScrollableOffsetState, token: String, context: RenderContext
+    ) {
+        guard !context.isMeasuring, var repeating = state.scrollbarRepeat else { return }
+        // Keep the loop ticking while held so the deadline below is checked.
+        context.requestAnimation(token: token, frequency: 20)
+        let now = context.environment.frameNowNanos
+        if repeating.nextFireNanos == 0 {
+            repeating.nextFireNanos = now + autoRepeatInitialDelayNanos
+        } else if now >= repeating.nextFireNanos {
+            state.scroll(by: repeating.delta)
+            repeating.nextFireNanos = now + autoRepeatIntervalNanos
+        }
+        state.scrollbarRepeat = repeating
+    }
+}
+
 // MARK: - Hit testing
 
 /// Which part of a scrollbar a coordinate falls on.
@@ -145,9 +194,12 @@ extension ScrollbarRenderer {
                     offset: state.scrollOffset, arrows: arrows, proportional: proportional)
                 switch hit {
                 case .arrowStart:
+                    // Step now, then auto-repeat while held (see driveAutoRepeat).
                     state.scroll(by: -1)
+                    state.scrollbarRepeat = ScrollbarRepeat(delta: -1)
                 case .arrowEnd:
                     state.scroll(by: 1)
+                    state.scrollbarRepeat = ScrollbarRepeat(delta: 1)
                 case .trackBefore, .trackAfter:
                     if behavior == .jump {
                         let thumbCells = thumbCellCount(
@@ -158,10 +210,12 @@ extension ScrollbarRenderer {
                         // cursor), so the press turns into a drag and the thumb
                         // follows the mouse until release — per macOS.
                         state.scrollbarDragGrab = thumbCells / 2
-                    } else if case .trackBefore = hit {
-                        state.scroll(by: -max(1, viewport))
                     } else {
-                        state.scroll(by: max(1, viewport))
+                        // Page towards the click now, then auto-repeat the paging
+                        // while the track stays held.
+                        let pageDelta = (hit == .trackBefore) ? -max(1, viewport) : max(1, viewport)
+                        state.scroll(by: pageDelta)
+                        state.scrollbarRepeat = ScrollbarRepeat(delta: pageDelta)
                     }
                 case .thumb(let grab):
                     state.scrollbarDragGrab = grab
@@ -175,6 +229,7 @@ extension ScrollbarRenderer {
                 return true
             case .released:
                 state.scrollbarDragGrab = nil
+                state.scrollbarRepeat = nil
                 return true
             default:
                 return false

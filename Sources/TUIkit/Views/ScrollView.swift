@@ -522,6 +522,10 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 handlerID: barHandlerID),
             at: 0
         )
+        // Keep a held arrow / page-track repeating (the press set the repeat; this
+        // wakes the loop and ticks it until release clears it).
+        ScrollbarRenderer.driveAutoRepeat(
+            state: handler, token: "scrollbar-repeat-\(context.identity.path)", context: context)
     }
 
     /// Appends the trailing vertical scrollbar column to the windowed viewport.

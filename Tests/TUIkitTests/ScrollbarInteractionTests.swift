@@ -84,6 +84,58 @@ struct ScrollbarInteractionTests {
         #expect(handler.scrollbarDragGrab == nil, "release ends the drag")
     }
 
+    /// Runs the auto-repeat driver once at a given monotonic time.
+    private func tickRepeat(_ handler: ScrollViewHandler, atNanos: Int64) {
+        var env = EnvironmentValues()
+        env.frameNowNanos = atNanos
+        let context = RenderContext(
+            availableWidth: 10, availableHeight: 10, environment: env, tuiContext: TUIContext())
+        Bar.driveAutoRepeat(state: handler, token: "t", context: context)
+    }
+
+    @Test("A held arrow auto-repeats after the initial delay, then at the interval")
+    func autoRepeatTicks() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        handler.scrollOffset = 50
+        handler.scrollbarRepeat = ScrollbarRepeat(delta: -1)  // as if the up arrow is held
+
+        let t0: Int64 = 1_000_000_000
+        tickRepeat(handler, atNanos: t0)  // seeds the deadline; no scroll yet
+        #expect(handler.scrollOffset == 50, "no repeat before the initial delay: \(handler.scrollOffset)")
+        tickRepeat(handler, atNanos: t0 + Bar.autoRepeatInitialDelayNanos)
+        #expect(handler.scrollOffset == 49, "first repeat fires after the delay: \(handler.scrollOffset)")
+        tickRepeat(
+            handler, atNanos: t0 + Bar.autoRepeatInitialDelayNanos + Bar.autoRepeatIntervalNanos)
+        #expect(handler.scrollOffset == 48, "second repeat after one interval: \(handler.scrollOffset)")
+    }
+
+    @Test("With nothing held, the auto-repeat driver does nothing")
+    func autoRepeatIdle() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        handler.scrollOffset = 50
+        handler.scrollbarRepeat = nil  // released / never pressed
+        tickRepeat(handler, atNanos: 9_000_000_000)
+        #expect(handler.scrollOffset == 50, "no repeat when nothing is held")
+    }
+
+    @Test("Pressing an arrow arms the auto-repeat; release disarms it")
+    func arrowArmsRepeat() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        handler.scrollOffset = 50
+        let handle = Bar.verticalMouseHandler(
+            for: handler, length: 12, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(0, 0))  // press the up arrow
+        #expect(handler.scrollbarRepeat?.delta == -1, "arrow press arms a -1 repeat")
+        _ = handle(event(0, 0, .released))
+        #expect(handler.scrollbarRepeat == nil, "release disarms the repeat")
+    }
+
     @Test("Dragging the thumb moves the offset; release ends the drag")
     func thumbDrag() {
         let handler = ScrollViewHandler(focusID: "t")

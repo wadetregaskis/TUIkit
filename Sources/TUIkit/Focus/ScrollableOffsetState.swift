@@ -47,6 +47,11 @@ public protocol ScrollableOffsetState: AnyObject {
     /// persistent handler so it survives the render between the press and the
     /// drag/release that the mouse dispatcher routes back to the same handler.
     var scrollbarDragGrab: Int? { get set }
+
+    /// While a scrollbar arrow (or a `.page`-mode track) is held, the repeat action
+    /// to apply on each tick; `nil` when nothing is held. Lives on the persistent
+    /// handler so the bar's owner can drive it from the render loop across frames.
+    var scrollbarRepeat: ScrollbarRepeat? { get set }
 }
 
 // MARK: - Default arithmetic

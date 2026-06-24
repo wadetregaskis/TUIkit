@@ -110,6 +110,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
     var scrollbarDragGrab: Int?
 
+    /// Held arrow/track auto-repeat action (``ScrollableOffsetState``).
+    var scrollbarRepeat: ScrollbarRepeat?
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 
