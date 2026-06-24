@@ -65,7 +65,7 @@ struct ScrollbarInteractionTests {
         #expect(handler.scrollOffset == 10, "page down one viewport: \(handler.scrollOffset)")
     }
 
-    @Test("Jump behaviour centres the thumb on the clicked spot")
+    @Test("Jump behaviour centres the thumb on the clicked spot, then follows the drag")
     func trackClickJumps() {
         let handler = ScrollViewHandler(focusID: "t")
         handler.contentHeight = 100
@@ -74,7 +74,14 @@ struct ScrollbarInteractionTests {
         let handle = Bar.verticalMouseHandler(
             for: handler, length: 12, arrows: .single, proportional: true, behavior: .jump)
         _ = handle(event(0, 10))  // near the bottom of the track → jump near the end
-        #expect(handler.scrollOffset > 50, "jump lands near the click, not one page: \(handler.scrollOffset)")
+        let jumped = handler.scrollOffset
+        #expect(jumped > 50, "jump lands near the click, not one page: \(jumped)")
+        // Jump implicitly enters a drag (macOS): the thumb now follows the mouse.
+        #expect(handler.scrollbarDragGrab != nil, "a jump-click implicitly grabs the thumb")
+        _ = handle(event(0, 3, .dragged))  // drag back up
+        #expect(handler.scrollOffset < jumped, "after a jump, dragging up follows the cursor: \(handler.scrollOffset)")
+        _ = handle(event(0, 3, .released))
+        #expect(handler.scrollbarDragGrab == nil, "release ends the drag")
     }
 
     @Test("Dragging the thumb moves the offset; release ends the drag")

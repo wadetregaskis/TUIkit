@@ -154,6 +154,10 @@ extension ScrollbarRenderer {
                             trackLen: trackLen, extent: extent, viewport: viewport,
                             proportional: proportional)
                         jumpOrDrag(topCell: (event.y - perEnd) - thumbCells / 2)
+                        // Jump-to-spot implicitly grabs the thumb (centred under the
+                        // cursor), so the press turns into a drag and the thumb
+                        // follows the mouse until release — per macOS.
+                        state.scrollbarDragGrab = thumbCells / 2
                     } else if case .trackBefore = hit {
                         state.scroll(by: -max(1, viewport))
                     } else {
