@@ -99,6 +99,36 @@ public struct OverlayLayer: Sendable, Equatable {
         self.anchorHeight = anchorHeight
     }
 
+    /// Resolves this layer's on-screen placement within a `maxWidth` × `maxHeight`
+    /// content area: the (clamped) content plus the column and row to draw it at.
+    ///
+    /// The content is clamped to the screen first, so it can never exceed it — a
+    /// too-tall popover keeps its top rows, so its text still shows even when it
+    /// can't fit. If it would then overflow the bottom edge it is flipped to sit
+    /// *above* its anchor (when ``anchorHeight`` allows); otherwise it is nudged
+    /// back up. The same nudge keeps it within the right edge.
+    public func placed(maxWidth: Int, maxHeight: Int) -> (content: FrameBuffer, x: Int, y: Int) {
+        let clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
+        let height = clamped.height
+        let width = clamped.width
+
+        var y = offsetY
+        if y + height > maxHeight {
+            // Try flipping above the anchoring control; else nudge back on screen.
+            let flipped = offsetY - anchorHeight - height
+            y = flipped >= 0 ? flipped : max(0, maxHeight - height)
+        }
+        y = max(0, y)
+
+        var x = offsetX
+        if x + width > maxWidth {
+            x = max(0, maxWidth - width)
+        }
+        x = max(0, x)
+
+        return (clamped, x, y)
+    }
+
     /// Returns a copy of this layer with its offset shifted by `(dx, dy)`.
     ///
     /// - Parameters:

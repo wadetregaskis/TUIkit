@@ -656,42 +656,12 @@ extension RenderLoop {
             }.map(\.element)
 
             for layer in ordered {
-                let placed = placeOverlay(layer, maxWidth: maxWidth, maxHeight: maxHeight)
+                let placed = layer.placed(maxWidth: maxWidth, maxHeight: maxHeight)
                 result = result.composited(
                     with: placed.content, at: (x: placed.x, y: placed.y))
             }
         }
         return result
-    }
-
-    /// Resolves an overlay layer's on-screen position.
-    ///
-    /// The layer is clamped to the content area. If it would overflow the
-    /// bottom edge it is flipped to sit above its anchor (when
-    /// ``OverlayLayer/anchorHeight`` allows); otherwise it is nudged back
-    /// on screen.
-    fileprivate func placeOverlay(
-        _ layer: OverlayLayer, maxWidth: Int, maxHeight: Int
-    ) -> (content: FrameBuffer, x: Int, y: Int) {
-        let content = layer.content.clamped(toWidth: maxWidth, height: maxHeight)
-        let height = content.height
-        let width = content.width
-
-        var y = layer.offsetY
-        if y + height > maxHeight {
-            // Try flipping above the anchoring control.
-            let flipped = layer.offsetY - layer.anchorHeight - height
-            y = flipped >= 0 ? flipped : max(0, maxHeight - height)
-        }
-        y = max(0, y)
-
-        var x = layer.offsetX
-        if x + width > maxWidth {
-            x = max(0, maxWidth - width)
-        }
-        x = max(0, x)
-
-        return (content, x, y)
     }
 
     /// Builds the app-header buffer (with its hit-test regions
