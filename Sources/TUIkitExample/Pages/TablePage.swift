@@ -111,6 +111,7 @@ struct TablePage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Table Demo")
         }

@@ -33,6 +33,7 @@ struct SpinnersPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Spinners")
         }

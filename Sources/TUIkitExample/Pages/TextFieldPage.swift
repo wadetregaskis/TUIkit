@@ -129,6 +129,7 @@ struct TextFieldPage: View {
         .padding(.horizontal, 1)
         .textCursor(currentShape, animation: currentAnimation, speed: currentSpeed)
         .statusBarItems(cursorStatusBarItems)
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("TextField Demo")
         }

@@ -61,6 +61,7 @@ struct ImageURLPage: View {
         .imageColorMode(colorMode)
         .imageDithering(dithering)
         .statusBarItems(statusBarItems)
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Image (URL)")
         }

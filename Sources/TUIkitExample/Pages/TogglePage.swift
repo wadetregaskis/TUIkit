@@ -49,6 +49,7 @@ struct TogglePage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Toggle Demo")
         }

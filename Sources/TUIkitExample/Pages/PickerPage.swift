@@ -69,6 +69,7 @@ struct PickerPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Picker Demo")
         }

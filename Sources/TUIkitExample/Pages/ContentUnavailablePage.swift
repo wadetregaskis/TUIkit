@@ -48,6 +48,7 @@ struct ContentUnavailablePage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Empty State Demo")
         }

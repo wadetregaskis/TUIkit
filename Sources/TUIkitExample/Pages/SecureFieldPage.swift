@@ -98,6 +98,7 @@ struct SecureFieldPage: View {
             Spacer()
         }
         .padding(.horizontal, 1)
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("SecureField Demo")
         }

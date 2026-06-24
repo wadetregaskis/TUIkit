@@ -174,6 +174,7 @@ struct MousePage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
                 "Mouse Demo",

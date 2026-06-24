@@ -103,6 +103,7 @@ struct LayoutPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Layout System Demo")
         }

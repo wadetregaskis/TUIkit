@@ -41,6 +41,7 @@ struct ImageFilePage: View {
         .imageColorMode(colorMode)
         .imageDithering(dithering)
         .statusBarItems(statusBarItems)
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Image (File)")
         }

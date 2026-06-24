@@ -130,6 +130,7 @@ struct ProgressViewPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Progress Views")
         }

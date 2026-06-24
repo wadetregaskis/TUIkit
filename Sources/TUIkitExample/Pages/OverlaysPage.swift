@@ -193,6 +193,7 @@ struct OverlaysPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Overlays, Modals & Notifications Demo")
         }

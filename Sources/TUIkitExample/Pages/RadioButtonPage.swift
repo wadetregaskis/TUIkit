@@ -80,6 +80,7 @@ struct RadioButtonPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Radio Buttons Demo")
         }

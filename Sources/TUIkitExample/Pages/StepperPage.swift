@@ -73,6 +73,7 @@ struct StepperPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Stepper Demo")
         }
