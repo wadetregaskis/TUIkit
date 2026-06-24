@@ -329,11 +329,11 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         )
         let handler = handlerBox.value
         handler.canBeFocused = !isDisabled
-        handler.viewportHeight = viewportHeight
 
-        // Scrollbar: reserve a trailing column when one will be shown. The
-        // decision uses the prior frame's content height (persisted on the
-        // handler) so the content is laid out at the reduced width in a single
+        // Scrollbar reservation. Each bar steals one cell across the viewport — the
+        // vertical bar a trailing column, the horizontal bar a bottom row. The
+        // decisions use the prior frame's measured extents (persisted on the
+        // handler) so the content is laid out at the reduced size in a single
         // render; on the very first frame nothing has overflowed yet, so an
         // automatic bar appears one frame after the content first overflows.
         let wantsHorizontal = axes.contains(.horizontal)
@@ -341,10 +341,15 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let wantsScrollbar =
             barVisibility != .hidden
             && (barVisibility == .visible || handler.contentHeight > viewportHeight)
+        let wantsHorizontalBar =
+            wantsHorizontal && barVisibility != .hidden
+            && (barVisibility == .visible || handler.horizontal.extent > viewportWidth)
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
+        let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
+        handler.viewportHeight = contentViewportHeight
 
         let fullBuffer = renderedContent(
-            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, context: context)
         handler.contentHeight = fullBuffer.height
         // Sync the horizontal axis to the rendered content width and clamp.
@@ -375,7 +380,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         snapViewportToFocusedControl(
             handler: handler,
             fullBuffer: fullBuffer,
-            viewportHeight: viewportHeight,
+            viewportHeight: contentViewportHeight,
             context: context)
 
         // Register focus so the dispatchKeyEvent → handler chain
@@ -388,7 +393,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         var visibleBuffer = windowedBuffer(
             full: fullBuffer,
             scrollOffset: handler.scrollOffset,
-            viewportHeight: viewportHeight,
+            viewportHeight: contentViewportHeight,
             viewportWidth: contentWidth,
             horizontalEnabled: wantsHorizontal,
             horizontalOffset: handler.horizontal.scrollOffset
@@ -416,6 +421,14 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 to: visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
             attachScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
+        }
+
+        // Append the bottom horizontal scrollbar over the reserved row (with a
+        // corner cell where it meets the vertical bar).
+        if wantsHorizontalBar {
+            visibleBuffer = appendHorizontalScrollbar(
+                to: visibleBuffer, contentWidth: contentWidth,
+                hasVerticalBar: wantsScrollbar, handler: handler, context: context)
         }
 
         attachViewportMouseHandler(
@@ -595,6 +608,35 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             lines[index] = content + String(repeating: " ", count: pad) + cell
         }
         return buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
+    }
+
+    /// Appends the bottom horizontal scrollbar over a reserved row. When the
+    /// vertical bar is also present, a track-styled corner cell fills the
+    /// bottom-right where the two meet.
+    private func appendHorizontalScrollbar(
+        to buffer: FrameBuffer, contentWidth: Int, hasVerticalBar: Bool,
+        handler: ScrollViewHandler, context: RenderContext
+    ) -> FrameBuffer {
+        let palette = context.environment.palette
+        let bar = ScrollbarRenderer.horizontalScrollbar(
+            width: contentWidth,
+            extent: handler.horizontal.extent,
+            viewport: handler.horizontal.viewportHeight,
+            offset: handler.horizontal.scrollOffset,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            colors: ScrollbarColors(
+                thumb: palette.foregroundSecondary,
+                track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
+        let corner =
+            hasVerticalBar
+            ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+            : ""
+        var lines = buffer.lines
+        lines.append(bar + corner)
+        return buffer.replacingLines(
+            lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
     }
 
     // MARK: Windowing

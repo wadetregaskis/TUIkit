@@ -235,6 +235,34 @@ struct ScrollViewRenderingTests {
         #expect(after.contains("F"), "a later column is now visible: \(after)")
     }
 
+    @Test("A horizontal ScrollView shows the ◀▶ scrollbar when content overflows")
+    func horizontalScrollbarAppears() {
+        let view = ScrollView(.horizontal) {
+            Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
+        }
+        .scrollbarVisibility(.automatic)
+        let context = makeContext(width: 10, height: 4)
+        _ = renderToBuffer(view, context: context)  // settle the lazily-measured extent
+        let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
+        #expect(
+            text.contains("◀") || text.contains("▶"),
+            "the bottom horizontal scrollbar should be drawn: \(text)")
+    }
+
+    @Test("A horizontal ScrollView whose content fits shows no scrollbar")
+    func horizontalScrollbarHiddenWhenFits() {
+        let view = ScrollView(.horizontal) {
+            Text("short")
+        }
+        .scrollbarVisibility(.automatic)
+        let context = makeContext(width: 20, height: 4)
+        _ = renderToBuffer(view, context: context)
+        let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
+        #expect(
+            !text.contains("◀") && !text.contains("▶"),
+            "no horizontal scrollbar when the content fits: \(text)")
+    }
+
     @Test("Wheel down then up restores the original viewport")
     func wheelRoundTripRestoresViewport() {
         let view = ScrollView {
