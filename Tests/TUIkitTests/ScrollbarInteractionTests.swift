@@ -151,4 +151,37 @@ struct ScrollbarInteractionTests {
         _ = handle(event(0, 10, .released))
         #expect(handler.scrollbarDragGrab == nil, "releasing ends the drag")
     }
+
+    // MARK: Horizontal handler (same logic, driven by event.x)
+
+    @Test("A horizontal bar's arrows step by one column (event.x)")
+    func horizontalArrowClicksStepOne() {
+        let axis = ScrollAxis()
+        axis.extent = 30  // content width
+        axis.viewportHeight = 10  // viewport width
+        axis.scrollOffset = 5
+        let handle = Bar.horizontalMouseHandler(
+            for: axis, length: 10, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(0, 0))  // left arrow at x = 0
+        #expect(axis.scrollOffset == 4, "the left arrow scrolls left one: \(axis.scrollOffset)")
+        _ = handle(event(9, 0))  // right arrow at x = 9
+        _ = handle(event(9, 0))
+        #expect(axis.scrollOffset == 6, "two right arrows scroll right two: \(axis.scrollOffset)")
+    }
+
+    @Test("Dragging a horizontal bar's thumb moves the offset (event.x)")
+    func horizontalThumbDrag() {
+        let axis = ScrollAxis()
+        axis.extent = 100
+        axis.viewportHeight = 10
+        axis.scrollOffset = 0
+        let handle = Bar.horizontalMouseHandler(
+            for: axis, length: 12, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(1, 0))  // press on the thumb (left of the track)
+        #expect(axis.scrollbarDragGrab != nil, "pressing the thumb begins a drag")
+        _ = handle(event(10, 0, .dragged))  // drag toward the right
+        #expect(axis.scrollOffset > 50, "dragging right moves the offset toward the end: \(axis.scrollOffset)")
+        _ = handle(event(10, 0, .released))
+        #expect(axis.scrollbarDragGrab == nil, "releasing ends the drag")
+    }
 }

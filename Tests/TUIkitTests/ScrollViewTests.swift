@@ -287,6 +287,31 @@ struct ScrollViewRenderingTests {
             "no horizontal scrollbar when the content fits: \(text)")
     }
 
+    @Test("Clicking the horizontal scrollbar's right arrow scrolls the content")
+    func horizontalScrollbarClickScrolls() {
+        let view = ScrollView(.horizontal) {
+            Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
+        }
+        .scrollbarVisibility(.automatic)
+        let context = makeContext(width: 12, height: 4)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        _ = renderToBuffer(view, context: context)  // settle the extent so the bar shows next frame
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        #expect(buffer.lines.map(\.stripped).joined().contains("0"), "left edge visible first")
+
+        // The bar is the bottom row; its ▶ arrow is the last content column (x = 11).
+        let barRow = buffer.height - 1
+        for _ in 0..<3 {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 11, y: barRow))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 11, y: barRow))
+        }
+        let after = renderToBuffer(view, context: context).lines.map(\.stripped).joined()
+        #expect(!after.contains("0"), "clicking ▶ scrolled the left edge off-screen: \(after)")
+    }
+
     @Test("Wheel down then up restores the original viewport")
     func wheelRoundTripRestoresViewport() {
         let view = ScrollView {

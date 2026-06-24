@@ -160,22 +160,25 @@ extension ScrollbarRenderer {
 // MARK: - Mouse handler
 
 extension ScrollbarRenderer {
-    /// Builds the mouse handler for a vertical scrollbar `length` cells tall that
-    /// drives `state`: the arrows step by one, a track click pages or jumps per
-    /// `behavior`, and a press on the thumb begins a drag that the dispatcher
-    /// routes here until release. Returns `true` for any left-button event on the
-    /// bar so it is consumed.
+    /// Builds the mouse handler for a scrollbar `length` cells long that drives
+    /// `state`: the arrows step by one, a track click pages or jumps per `behavior`,
+    /// and a press on the thumb begins a drag that the dispatcher routes here until
+    /// release. `vertical` picks which localized coordinate is the bar position —
+    /// `event.y` for a vertical bar, `event.x` for a horizontal one. Returns `true`
+    /// for any left-button event on the bar so it is consumed.
     ///
     /// Works in the bar's own units, which are `state`'s units for a `ScrollView`
-    /// and a single-line `Table` (one line per row); for a `List` whose bar is
-    /// measured in lines while its offset is in rows, dragging is proportional
-    /// rather than exact, which is acceptable for the uncommon variable-height case.
-    static func verticalMouseHandler(
-        for state: ScrollableOffsetState, length: Int, arrows: ScrollbarArrows,
-        proportional: Bool, behavior: ScrollbarClickBehavior
+    /// (each axis) and a single-line `Table` (one line per row); for a `List` whose
+    /// bar is measured in lines while its offset is in rows, dragging is
+    /// proportional rather than exact, acceptable for the uncommon variable-height
+    /// case.
+    static func mouseHandler(
+        for state: ScrollableOffsetState, length: Int, vertical: Bool,
+        arrows: ScrollbarArrows, proportional: Bool, behavior: ScrollbarClickBehavior
     ) -> (MouseEvent) -> Bool {
         { event in
             guard event.button == .left else { return false }
+            let position = vertical ? event.y : event.x
             let perEnd = (length > arrowReserve(arrows) ? arrowReserve(arrows) : 0) / 2
             let trackLen = max(1, length - 2 * perEnd)
             let extent = state.extent
@@ -190,7 +193,7 @@ extension ScrollbarRenderer {
             switch event.phase {
             case .pressed:
                 let hit = hitTest(
-                    position: event.y, length: length, extent: extent, viewport: viewport,
+                    position: position, length: length, extent: extent, viewport: viewport,
                     offset: state.scrollOffset, arrows: arrows, proportional: proportional)
                 switch hit {
                 case .arrowStart:
@@ -205,7 +208,7 @@ extension ScrollbarRenderer {
                         let thumbCells = thumbCellCount(
                             trackLen: trackLen, extent: extent, viewport: viewport,
                             proportional: proportional)
-                        jumpOrDrag(topCell: (event.y - perEnd) - thumbCells / 2)
+                        jumpOrDrag(topCell: (position - perEnd) - thumbCells / 2)
                         // Jump-to-spot implicitly grabs the thumb (centred under the
                         // cursor), so the press turns into a drag and the thumb
                         // follows the mouse until release — per macOS.
@@ -225,7 +228,7 @@ extension ScrollbarRenderer {
                 return true
             case .dragged:
                 guard let grab = state.scrollbarDragGrab else { return false }
-                jumpOrDrag(topCell: (event.y - perEnd) - grab)
+                jumpOrDrag(topCell: (position - perEnd) - grab)
                 return true
             case .released:
                 state.scrollbarDragGrab = nil
@@ -235,5 +238,27 @@ extension ScrollbarRenderer {
                 return false
             }
         }
+    }
+
+    /// Vertical convenience wrapper over ``mouseHandler(for:length:vertical:arrows:proportional:behavior:)``
+    /// — the bar position is `event.y`.
+    static func verticalMouseHandler(
+        for state: ScrollableOffsetState, length: Int, arrows: ScrollbarArrows,
+        proportional: Bool, behavior: ScrollbarClickBehavior
+    ) -> (MouseEvent) -> Bool {
+        mouseHandler(
+            for: state, length: length, vertical: true,
+            arrows: arrows, proportional: proportional, behavior: behavior)
+    }
+
+    /// Horizontal convenience wrapper over ``mouseHandler(for:length:vertical:arrows:proportional:behavior:)``
+    /// — the bar position is `event.x`.
+    static func horizontalMouseHandler(
+        for state: ScrollableOffsetState, length: Int, arrows: ScrollbarArrows,
+        proportional: Bool, behavior: ScrollbarClickBehavior
+    ) -> (MouseEvent) -> Bool {
+        mouseHandler(
+            for: state, length: length, vertical: false,
+            arrows: arrows, proportional: proportional, behavior: behavior)
     }
 }

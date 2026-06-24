@@ -424,11 +424,13 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         // Append the bottom horizontal scrollbar over the reserved row (with a
-        // corner cell where it meets the vertical bar).
+        // corner cell where it meets the vertical bar), then make it interactive.
         if wantsHorizontalBar {
             visibleBuffer = appendHorizontalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth,
                 hasVerticalBar: wantsScrollbar, handler: handler, context: context)
+            attachHorizontalScrollbarMouseHandler(
+                to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
 
         attachViewportMouseHandler(
@@ -574,6 +576,36 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // wakes the loop and ticks it until release clears it).
         ScrollbarRenderer.driveAutoRepeat(
             state: handler, token: "scrollbar-repeat-\(context.identity.path)", context: context)
+    }
+
+    /// Like ``attachScrollbarMouseHandler`` but for the bottom horizontal bar: a
+    /// one-row hit region over the bar's track drives the *horizontal* axis (arrows
+    /// step, track pages/jumps, thumb drags). The region spans `contentWidth` only,
+    /// so the bottom-right corner cell (when the vertical bar is also present) stays
+    /// inert. A distinct repeat token lets both axes auto-repeat independently.
+    private func attachHorizontalScrollbarMouseHandler(
+        to buffer: inout FrameBuffer, contentWidth: Int,
+        handler: ScrollViewHandler, context: RenderContext
+    ) {
+        guard !context.isMeasuring,
+              let mouseDispatcher = context.environment.mouseEventDispatcher,
+              !isDisabled
+        else { return }
+        let barHandler = ScrollbarRenderer.horizontalMouseHandler(
+            for: handler.horizontal, length: contentWidth,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            behavior: context.environment.scrollbarClickBehavior)
+        let barHandlerID = mouseDispatcher.register(barHandler)
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: 0, offsetY: max(0, buffer.height - 1), width: contentWidth, height: 1,
+                handlerID: barHandlerID),
+            at: 0
+        )
+        ScrollbarRenderer.driveAutoRepeat(
+            state: handler.horizontal, token: "scrollbar-h-repeat-\(context.identity.path)",
+            context: context)
     }
 
     /// Appends the trailing vertical scrollbar column to the windowed viewport.
