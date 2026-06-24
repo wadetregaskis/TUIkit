@@ -221,13 +221,25 @@ enum ScrollbarRenderer {
         return Character(UnicodeScalar(0x2590 - min(8, eighths))!)
     }
 
-    /// Styles one track cell. A bottom-/left-anchored cell draws the glyph in the
-    /// thumb colour over the track; an inverted (top-/right-anchored) cell swaps
-    /// them — the thumb colour becomes the cell background — which is how the two
-    /// anchors Unicode lacks a series for are produced.
+    /// Styles one track cell.
+    ///
+    /// Fully-covered and empty cells are drawn as a *space* coloured by background
+    /// — the thumb colour and the track colour respectively — never as a `█` glyph.
+    /// Two reasons: adjacent block glyphs leave a hairline gap in some terminals
+    /// (notably Terminal.app, the same gap seen between box-drawing characters),
+    /// whereas contiguous background colour is seamless; and a background fill
+    /// covers the *whole* cell, so a one-cell thumb is as solid as a multi-cell one
+    /// instead of looking thinner. Only the fractional end cells need a partial
+    /// glyph: a bottom-/left-anchored end draws the partial block in the thumb
+    /// colour over the track, an inverted (top-/right-anchored) end swaps them so
+    /// the thumb colour is the cell background — which is also how the two anchors
+    /// Unicode lacks a partial-block series for are produced.
     static func styledCell(_ cell: ScrollbarCell, thumb: Color, track: Color) -> String {
         if cell.glyph == " " {
             return ANSIRenderer.colorize(" ", background: track)
+        }
+        if cell.glyph == "█" {
+            return ANSIRenderer.colorize(" ", background: thumb)
         }
         if cell.inverted {
             return ANSIRenderer.colorize(String(cell.glyph), foreground: track, background: thumb)

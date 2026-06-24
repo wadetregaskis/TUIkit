@@ -65,6 +65,21 @@ struct ScrollbarTests {
         #expect(cells[3] == .full)
     }
 
+    @Test("Full and empty cells fill by background colour, not a █ glyph")
+    func solidCellsUseBackgroundFill() {
+        // Adjacent block glyphs leave a hairline gap in some terminals; a
+        // background-coloured space does not, and it covers the whole cell so a
+        // one-cell thumb is as solid as a multi-cell one.
+        let full = Bar.styledCell(.full, thumb: .red, track: .blue)
+        #expect(!full.contains("█"), "full cell must not use a block glyph: \(full)")
+        let empty = Bar.styledCell(.empty, thumb: .red, track: .blue)
+        #expect(!empty.contains("█"), "empty cell must not use a block glyph: \(empty)")
+        // A fractional end still needs a partial glyph — there is no background-only
+        // way to draw a sub-cell boundary.
+        let partial = Bar.styledCell(ScrollbarCell(glyph: "▄", inverted: false), thumb: .red, track: .blue)
+        #expect(partial.contains("▄"), "a fractional end keeps its partial glyph: \(partial)")
+    }
+
     @Test("The thumb is at least one whole cell")
     func minimumThumb() {
         // A tiny viewport against a huge extent would round the thumb below one

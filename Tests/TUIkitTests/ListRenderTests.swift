@@ -281,23 +281,28 @@ struct ListRenderTests {
         // Eight rows, each two lines tall (16 lines total) in an 8-line content
         // area. The bar is line-based, so it renders with a closed border and the
         // multi-line rows draw in full alongside it.
-        let lines = strippedLines(
-            List(selection: .constant(String?.none)) {
-                ForEach((0..<8).map { "Item \($0)" }, id: \.self) { item in
-                    VStack(alignment: .leading) {
-                        Text(item)
-                        Text("detail")
-                    }
+        let context = listContext(width: 30, height: 10)
+        let view = List(selection: .constant(String?.none)) {
+            ForEach((0..<8).map { "Item \($0)" }, id: \.self) { item in
+                VStack(alignment: .leading) {
+                    Text(item)
+                    Text("detail")
                 }
             }
-            .scrollbarVisibility(.visible),
-            context: listContext(width: 30, height: 10)
-        )
+        }
+        .scrollbarVisibility(.visible)
+        let buffer = renderToBuffer(view, context: context)
+        let lines = buffer.lines.map { $0.stripped }
         expectClosedBorder(lines)
         let joined = lines.joined()
         #expect(joined.contains("▲") && joined.contains("▼"), "arrows present: \(lines)")
-        let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
-        #expect(joined.contains { blocks.contains($0) }, "thumb present: \(lines)")
+        // This thumb is an exact three cells (8/16 of the area) with no fractional
+        // end, so it's drawn purely by background colour — no glyph survives ANSI
+        // stripping. Verify it in the raw output via the thumb's filled cell.
+        let palette = context.environment.palette
+        let thumbCell = ScrollbarRenderer.styledCell(
+            .full, thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary)
+        #expect(buffer.lines.contains { $0.contains(thumbCell) }, "background-filled thumb present: \(lines)")
         // A two-line row renders both of its lines next to the bar.
         #expect(joined.contains("Item 0") && joined.contains("detail"), "multi-line row renders: \(lines)")
     }
