@@ -256,7 +256,7 @@ extension Text: Renderable, Layoutable {
         // Text has a fixed size based on its content.
         // If a width is proposed, we may word-wrap.
         let maxWidth = proposal.width ?? context.availableWidth
-        let wrappedLines = wordWrap(content, maxWidth: maxWidth)
+        let wrappedLines = TextWrapping.wrap(content, width: maxWidth)
 
         let naturalWidth = wrappedLines.map(\.strippedLength).max() ?? 0
         // Never advertise a width wider than the wrap boundary: a word
@@ -340,35 +340,15 @@ extension Text: Renderable, Layoutable {
         let maxWidth = context.availableWidth
         let mode = style.truncationMode
         let atWordBoundary = style.truncatesAtWordBoundary
-        var lines = wordWrap(Self.applyingCase(effectiveCase, to: content), maxWidth: maxWidth)
-
-        // Height constraint: if the wrapped text is taller than the space
-        // it was given — or than an explicit line limit — keep the lines
-        // that fit in full and let the final visible line absorb all the
-        // remaining content, truncated with an ellipsis, so the loss is
-        // shown rather than silently clipped.
+        // Lay the (cased) content into the available width and height: wrap on
+        // word boundaries, honour an explicit line limit, and clip an over-long
+        // run with an ellipsis. Shared with multi-line Table cells via
+        // `TextWrapping` so text lays out the same way wherever it's shown.
         let lineLimit = style.lineLimit.map { max(1, $0) }
         let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
-        if maxHeight >= 1 && lines.count > maxHeight {
-            let keptCount = max(0, maxHeight - 1)
-            var kept = Array(lines.prefix(keptCount))
-            let remainder = lines[keptCount...].joined(separator: " ")
-            kept.append(
-                remainder.truncatedToWidth(
-                    maxWidth,
-                    mode: mode,
-                    atWordBoundary: atWordBoundary,
-                    forceEllipsis: true
-                )
-            )
-            lines = kept
-        }
-
-        // Width constraint: a word longer than the wrap boundary leaves a
-        // line wider than `maxWidth`; truncate it with a visible ellipsis.
-        let truncated = lines.map { line in
-            line.truncatedToWidth(maxWidth, mode: mode, atWordBoundary: atWordBoundary)
-        }
+        let truncated = TextWrapping.fit(
+            Self.applyingCase(effectiveCase, to: content),
+            width: maxWidth, maxLines: maxHeight, mode: mode, atWordBoundary: atWordBoundary)
 
         // Apply styling to each line
         let styledLines = truncated.map { ANSIRenderer.render($0, with: resolvedStyle) }
@@ -396,76 +376,5 @@ extension Text: Renderable, Layoutable {
         case .lowercase: return string.lowercased()
         case nil: return string
         }
-    }
-
-    /// Wraps text into lines that fit a maximum terminal cell width.
-    ///
-    /// Explicit line breaks (`\n`, `\r\n`, `\r`) split the text into
-    /// independent paragraphs, each wrapped on its own. This is essential:
-    /// a raw newline left inside a buffer line would be interpreted by the
-    /// terminal as a real row break, corrupting every row below it.
-    ///
-    /// Within a paragraph, wrapping happens on word boundaries (spaces).
-    /// Words longer than `maxWidth` are placed on their own line without
-    /// further splitting. Uses terminal-aware width measurement so wide
-    /// characters (CJK, emoji) that occupy 2 cells are counted correctly.
-    ///
-    /// - Parameters:
-    ///   - text: The text to wrap.
-    ///   - maxWidth: Maximum terminal cells per line.
-    /// - Returns: An array of wrapped lines (never empty).
-    private func wordWrap(_ text: String, maxWidth: Int) -> [String] {
-        // Split on explicit line breaks first so embedded newlines never
-        // survive into a rendered buffer line.
-        let paragraphs = text.split(
-            omittingEmptySubsequences: false,
-            whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" }
-        )
-
-        guard maxWidth > 0 else {
-            return paragraphs.isEmpty ? [""] : paragraphs.map(String.init)
-        }
-
-        var lines: [String] = []
-        for paragraph in paragraphs {
-            lines.append(contentsOf: wrapParagraph(String(paragraph), maxWidth: maxWidth))
-        }
-        return lines.isEmpty ? [""] : lines
-    }
-
-    /// Wraps a single paragraph (with no embedded line breaks) on word
-    /// boundaries so each returned line fits `maxWidth` terminal cells.
-    ///
-    /// - Parameters:
-    ///   - text: A single paragraph of text.
-    ///   - maxWidth: Maximum terminal cells per line.
-    /// - Returns: An array of wrapped lines (never empty).
-    private func wrapParagraph(_ text: String, maxWidth: Int) -> [String] {
-        let words = text.split(separator: " ", omittingEmptySubsequences: false)
-        var lines: [String] = []
-        var currentLine = ""
-        var currentLineWidth = 0
-
-        for word in words {
-            let wordStr = String(word)
-            let wordWidth = wordStr.strippedLength
-            if currentLine.isEmpty {
-                currentLine = wordStr
-                currentLineWidth = wordWidth
-            } else if currentLineWidth + 1 + wordWidth <= maxWidth {
-                currentLine += " " + wordStr
-                currentLineWidth += 1 + wordWidth
-            } else {
-                lines.append(currentLine)
-                currentLine = wordStr
-                currentLineWidth = wordWidth
-            }
-        }
-
-        if !currentLine.isEmpty {
-            lines.append(currentLine)
-        }
-
-        return lines.isEmpty ? [""] : lines
     }
 }
