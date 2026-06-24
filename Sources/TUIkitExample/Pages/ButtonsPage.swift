@@ -17,6 +17,7 @@ import TUIkit
 /// - Live click counter demonstrating `@State` persistence across re-renders
 struct ButtonsPage: View {
     @State var clickCount: Int = 0
+    @State var tintToggle: Bool = true
 
     var body: some View {
         ScrollView {
@@ -90,7 +91,7 @@ struct ButtonsPage: View {
                 // .tint cascades the accent to every control inside.
                 VStack(alignment: .leading, spacing: 1) {
                     Button("Primary") { clickCount += 1 }.buttonStyle(.primary)
-                    Toggle("Toggle", isOn: .constant(true))
+                    Toggle("Toggle", isOn: $tintToggle)
                 }
                 .tint(.palette.success)
             }
