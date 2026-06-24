@@ -54,6 +54,28 @@ public protocol ScrollableOffsetState: AnyObject {
     var scrollbarRepeat: ScrollbarRepeat? { get set }
 }
 
+// MARK: - Generic single-axis scroll state
+
+/// A plain one-axis scroll position, used for the *horizontal* axis of a
+/// ``ScrollView`` (vertical scrolling lives on ``ScrollViewHandler`` itself).
+///
+/// `ScrollableOffsetState`'s vocabulary is vertical-leaning (`viewportHeight`,
+/// `scrollOffset`) but axis-agnostic: for a horizontal axis read `viewportHeight`
+/// as the viewport *width* and `extent` as the content *width*, both in columns.
+/// Conforming gives the scrollbar renderer, the mouse interaction, and auto-repeat
+/// to this axis for free.
+public final class ScrollAxis: ScrollableOffsetState {
+    public var scrollOffset: Int = 0
+    /// The viewport size along this axis (columns, for a horizontal axis).
+    public var viewportHeight: Int = 0
+    /// The content size along this axis (columns, for a horizontal axis).
+    public var extent: Int = 0
+    public var scrollbarDragGrab: Int?
+    public var scrollbarRepeat: ScrollbarRepeat?
+
+    public init() {}
+}
+
 // MARK: - Default arithmetic
 
 extension ScrollableOffsetState {
@@ -155,6 +177,28 @@ extension ScrollableOffsetState {
         case .scrollDown:
             let before = scrollOffset
             scroll(by: linesPerTick)
+            return scrollOffset != before
+        default:
+            return false
+        }
+    }
+
+    /// Like ``handleWheelEvent(_:linesPerTick:)`` but for a *horizontal* axis:
+    /// responds to `.scrollLeft` / `.scrollRight` wheel events. Call it on a
+    /// horizontal ``ScrollAxis`` (a native horizontal wheel, or a shift+wheel the
+    /// caller has translated, drives it).
+    public func handleHorizontalWheelEvent(
+        _ event: MouseEvent,
+        columnsPerTick: Int = ViewConstants.mouseWheelScrollLines
+    ) -> Bool {
+        switch event.button {
+        case .scrollLeft:
+            let before = scrollOffset
+            scroll(by: -columnsPerTick)
+            return scrollOffset != before
+        case .scrollRight:
+            let before = scrollOffset
+            scroll(by: columnsPerTick)
             return scrollOffset != before
         default:
             return false

@@ -207,6 +207,34 @@ struct ScrollViewRenderingTests {
         #expect(buffer.height == 6, "ScrollView should fill viewport height; got \(buffer.height)")
     }
 
+    @Test("Horizontal ScrollView windows wide content and the horizontal wheel scrolls it")
+    func horizontalWheelScrolls() {
+        let view = ScrollView(.horizontal) {
+            Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns, one line
+        }
+        let context = makeContext(width: 10, height: 3)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        let before = buffer.lines.map(\.stripped)
+        #expect(before[0].hasPrefix("0123456789"), "shows the left edge first: \(before[0])")
+        #expect(!before.joined().contains("Z"), "the right end is off-screen")
+        // Content does NOT wrap onto the next line — it scrolls instead.
+        #expect(
+            before.count > 1 && before[1].trimmingCharacters(in: .whitespaces).isEmpty,
+            "wide content is one line, not wrapped: \(before)")
+
+        // Scroll right via the horizontal wheel.
+        for _ in 0..<5 {
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollRight, phase: .scrolled, x: 5, y: 0))
+        }
+        let after = renderToBuffer(view, context: context).lines.map(\.stripped).joined()
+        #expect(!after.contains("0"), "after scrolling right, the left edge is off-screen: \(after)")
+        #expect(after.contains("F"), "a later column is now visible: \(after)")
+    }
+
     @Test("Wheel down then up restores the original viewport")
     func wheelRoundTripRestoresViewport() {
         let view = ScrollView {

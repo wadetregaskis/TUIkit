@@ -59,6 +59,12 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// Held arrow/track auto-repeat action (``ScrollableOffsetState``).
     public var scrollbarRepeat: ScrollbarRepeat?
 
+    /// The horizontal scroll axis, used when the ScrollView's `axes` include
+    /// `.horizontal`. The handler itself is the vertical axis; this carries the
+    /// horizontal offset, content width, and viewport width (plus its own drag /
+    /// repeat state) so the same scrollbar machinery serves both axes.
+    public let horizontal = ScrollAxis()
+
     /// The total natural height of the scroll view's content,
     /// computed during the layout pass.
     public var contentHeight: Int = 0

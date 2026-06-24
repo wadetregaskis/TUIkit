@@ -336,6 +336,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // handler) so the content is laid out at the reduced width in a single
         // render; on the very first frame nothing has overflowed yet, so an
         // automatic bar appears one frame after the content first overflows.
+        let wantsHorizontal = axes.contains(.horizontal)
         let barVisibility = context.environment.scrollbarVisibility
         let wantsScrollbar =
             barVisibility != .hidden
@@ -343,8 +344,17 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
 
         let fullBuffer = renderedContent(
-            contentWidth: contentWidth, viewportHeight: viewportHeight, context: context)
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: wantsHorizontal, context: context)
         handler.contentHeight = fullBuffer.height
+        // Sync the horizontal axis to the rendered content width and clamp.
+        if wantsHorizontal {
+            handler.horizontal.extent = fullBuffer.width
+            handler.horizontal.viewportHeight = contentWidth
+            if !context.isMeasuring {
+                handler.horizontal.clampScrollOffset()
+            }
+        }
         // Re-clamp the offset against the now-known content height — but only on
         // the real render pass. A measure pass may be offered a larger height
         // than the ScrollView finally renders into (e.g. when it shares space
@@ -379,7 +389,9 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             full: fullBuffer,
             scrollOffset: handler.scrollOffset,
             viewportHeight: viewportHeight,
-            viewportWidth: contentWidth
+            viewportWidth: contentWidth,
+            horizontalEnabled: wantsHorizontal,
+            horizontalOffset: handler.horizontal.scrollOffset
         )
 
         // Compose the scroll-indicator chrome on top of the windowed content.
@@ -406,61 +418,65 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
 
-        // Mouse handler + hit-test region covering the viewport.
-        // Three responsibilities, all routed through the same
-        // region:
-        //   - wheel events (.scrollUp / .scrollDown) scroll the
-        //     viewport;
-        //   - left-button releases focus the ScrollView so the
-        //     keyboard scroll keys (arrows / Page / Home / End)
-        //     reach it without the user having to Tab to it;
-        //   - any other event is rejected so the dispatcher
-        //     can fall through to nothing (clicks on inner
-        //     controls already won at this point because of
-        //     the insert(at: 0) below).
-        if !context.isMeasuring,
-           let mouseDispatcher = context.environment.mouseEventDispatcher,
-           !isDisabled
-        {
-            let captureHandler = handler
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let mouseHandlerID = mouseDispatcher.register { event in
-                if captureHandler.handleWheelEvent(event) { return true }
-                if event.button == .left {
-                    switch event.phase {
-                    case .pressed:
-                        return true
-                    case .released:
-                        focusManager.focus(id: captureFocusID)
-                        return true
-                    default:
-                        return false
-                    }
-                }
-                return false
-            }
-            // Insert at the back of the regions array so any
-            // interactive children inside the content (Buttons,
-            // TextFields, etc.) still win clicks. Wheel events
-            // bubble out through the dispatcher's wheel fall-
-            // through, so this region only catches wheels that
-            // weren't claimed by any inner control — exactly the
-            // behaviour we want. Same pattern as the matching
-            // change in _ListCore / _TableCore.
-            visibleBuffer.hitTestRegions.insert(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: viewportWidth,
-                    height: viewportHeight,
-                    handlerID: mouseHandlerID
-                ),
-                at: 0
-            )
-        }
+        attachViewportMouseHandler(
+            to: &visibleBuffer, context: context, handler: handler,
+            persistedFocusID: persistedFocusID, viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight, wantsHorizontal: wantsHorizontal)
 
         return visibleBuffer
+    }
+
+    /// Registers the viewport-wide mouse handler + its hit region. The handler:
+    ///   - scrolls on the wheel — vertically, and horizontally (a native
+    ///     horizontal wheel, or shift + vertical wheel) when horizontal is enabled;
+    ///   - focuses the ScrollView on a left release so the keyboard scroll keys
+    ///     reach it without the user having to Tab to it.
+    /// The region is inserted at the front of the array so any interactive child
+    /// inside the content still wins its clicks (this is the fall-through).
+    private func attachViewportMouseHandler(
+        to buffer: inout FrameBuffer, context: RenderContext, handler: ScrollViewHandler,
+        persistedFocusID: String, viewportWidth: Int, viewportHeight: Int, wantsHorizontal: Bool
+    ) {
+        guard !context.isMeasuring,
+              let mouseDispatcher = context.environment.mouseEventDispatcher,
+              !isDisabled
+        else { return }
+        let captureHandler = handler
+        let focusManager = context.environment.focusManager
+        let captureFocusID = persistedFocusID
+        let captureHorizontal = wantsHorizontal
+        let mouseHandlerID = mouseDispatcher.register { event in
+            if captureHandler.handleWheelEvent(event) { return true }
+            if captureHorizontal {
+                if captureHandler.horizontal.handleHorizontalWheelEvent(event) { return true }
+                if event.shift, event.button == .scrollUp {
+                    captureHandler.horizontal.scroll(by: -ViewConstants.mouseWheelScrollLines)
+                    return true
+                }
+                if event.shift, event.button == .scrollDown {
+                    captureHandler.horizontal.scroll(by: ViewConstants.mouseWheelScrollLines)
+                    return true
+                }
+            }
+            if event.button == .left {
+                switch event.phase {
+                case .pressed:
+                    return true
+                case .released:
+                    focusManager.focus(id: captureFocusID)
+                    return true
+                default:
+                    return false
+                }
+            }
+            return false
+        }
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: viewportWidth, height: viewportHeight,
+                handlerID: mouseHandlerID),
+            at: 0
+        )
     }
 
     /// Renders the content to its full (unwindowed) buffer, sized so a flexible
@@ -483,14 +499,29 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// with the ScrollView's own state keys (handler, focusID, …) and corrupting
     /// both. The measure uses the same child identity, so state hydrates consistently.
     private func renderedContent(
-        contentWidth: Int, viewportHeight: Int, context: RenderContext
+        contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> FrameBuffer {
         var measureContext = context.withChildIdentity(type: Content.self)
-        measureContext.availableWidth = contentWidth
         measureContext.availableHeight = max(viewportHeight * 64, 4096)
+
+        // When horizontal scrolling is on, let the content take its natural width
+        // (measured under a generous budget so the width report isn't clamped) so it
+        // can be wider than the viewport and scroll, rather than wrapping to fit.
+        let renderWidth: Int
+        if horizontal {
+            measureContext.availableWidth = max(contentWidth * 64, 4096)
+            let naturalWidth = measureChild(
+                content, proposal: ProposedSize(width: nil, height: nil), context: measureContext
+            ).width
+            renderWidth = max(contentWidth, naturalWidth)
+        } else {
+            renderWidth = contentWidth
+        }
+
+        measureContext.availableWidth = renderWidth
         let naturalHeight = measureChild(
             content,
-            proposal: ProposedSize(width: contentWidth, height: nil),
+            proposal: ProposedSize(width: renderWidth, height: nil),
             context: measureContext
         ).height
         measureContext.availableHeight = max(viewportHeight, naturalHeight)
@@ -571,7 +602,9 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         full: FrameBuffer,
         scrollOffset: Int,
         viewportHeight: Int,
-        viewportWidth: Int
+        viewportWidth: Int,
+        horizontalEnabled: Bool,
+        horizontalOffset: Int
     ) -> FrameBuffer {
         guard viewportHeight > 0 else {
             return FrameBuffer(lines: [], width: viewportWidth)
@@ -583,10 +616,16 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Without the per-line padding the result buffer's
         // effective width would follow the longest line (which
         // might just be a 'N more above' indicator — far
-        // shorter than the proposed width).
+        // shorter than the proposed width). When horizontal scrolling is on, each
+        // line is first sliced to the visible column window (carrying SGR state).
         var visibleLines = Array(
             full.lines.dropFirst(scrollOffset).prefix(viewportHeight)
-        ).map { $0.padToVisibleWidth(viewportWidth) }
+        ).map { line -> String in
+            let windowed = horizontalEnabled
+                ? line.ansiAwareSlice(visibleStart: horizontalOffset, visibleCount: viewportWidth)
+                : line
+            return windowed.padToVisibleWidth(viewportWidth)
+        }
         if visibleLines.count < viewportHeight {
             let blank = String(repeating: " ", count: viewportWidth)
             visibleLines.append(
@@ -603,11 +642,12 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // scrollOffset so it stays anchored to its content.
         let viewportTop = scrollOffset
         let viewportBottom = scrollOffset + viewportHeight
+        let dx = horizontalEnabled ? -horizontalOffset : 0
         let visibleOverlays = full.overlays.compactMap { overlay -> OverlayLayer? in
             let topY = overlay.offsetY
             let bottomY = overlay.offsetY + overlay.content.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
-            return overlay.shifted(byX: 0, y: -scrollOffset)
+            return overlay.shifted(byX: dx, y: -scrollOffset)
         }
 
         // Filter + shift hit-test regions, same logic.
@@ -616,7 +656,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             let bottomY = region.offsetY + region.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
             return HitTestRegion(
-                offsetX: region.offsetX,
+                offsetX: region.offsetX + dx,
                 offsetY: region.offsetY - scrollOffset,
                 width: region.width,
                 height: region.height,
