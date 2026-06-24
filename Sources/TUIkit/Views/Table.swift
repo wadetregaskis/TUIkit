@@ -245,8 +245,9 @@ where Value.ID: Hashable {
         let visibleRange: Range<Int>
         let scrollOffsetAbove: Int
         /// The line height of each visible row, in `visibleRange` order, so a
-        /// click can map a line to its row when rows span multiple lines. All
-        /// ones for a single-line table (line offset == row offset).
+        /// click can map a line to its row when rows span multiple lines. Left
+        /// empty for a single-line table (the line offset is the row offset, with
+        /// no per-frame array to allocate).
         let visibleRowHeights: [Int]
     }
 
@@ -375,7 +376,9 @@ where Value.ID: Hashable {
                 focusID: persistedFocusID,
                 visibleRange: handler.visibleRange,
                 scrollOffsetAbove: handler.hasContentAbove ? 1 : 0,
-                visibleRowHeights: Array(repeating: 1, count: handler.visibleRange.count)
+                // Single-line rows: leave empty (no per-frame array); the click
+                // handler maps the line offset straight to the row.
+                visibleRowHeights: []
             )
         )
     }
@@ -762,11 +765,17 @@ where Value.ID: Hashable {
                 guard event.phase == .released else {
                     return event.phase == .pressed
                 }
-                // Map the clicked line to its data row, walking the visible rows'
-                // heights — so a click anywhere in a multi-line row selects it.
-                // Single-line rows are height 1, so the line offset is the row.
+                // Map the clicked line to its data row. Single-line tables leave
+                // `visibleRowHeights` empty (no per-frame array) — the line offset
+                // is the row. Multi-line tables walk the visible rows' heights, so
+                // a click anywhere in a tall row selects it.
                 let lineOffset = event.y - firstRowY
-                if lineOffset >= 0 {
+                if visibleRowHeights.isEmpty {
+                    if lineOffset >= 0, lineOffset < visibleRange.count {
+                        captureHandler.focusedIndex = visibleRange.lowerBound + lineOffset
+                        captureHandler.toggleSelectionAtFocusedIndex()
+                    }
+                } else if lineOffset >= 0 {
                     var accumulated = 0
                     for (offset, height) in visibleRowHeights.enumerated() {
                         if lineOffset < accumulated + height {

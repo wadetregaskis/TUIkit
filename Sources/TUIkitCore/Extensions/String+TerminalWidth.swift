@@ -277,7 +277,20 @@ extension String {
         func isStray(_ value: UInt32) -> Bool {
             (value < 0x20 && value != 0x1B) || value == 0x7F
         }
-        guard unicodeScalars.contains(where: { isStray($0.value) }) else { return self }
+        // Fast reject for the clean line that virtually every line is, and which
+        // runs once per *changed* terminal row per frame: every byte we'd
+        // replace is single-byte UTF-8 (< 0x80), so a raw contiguous-byte scan is
+        // correct and far cheaper than walking the `UnicodeScalarView` (whose
+        // per-element index validation showed up in render profiling).
+        let hasStray =
+            utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+                for byte in buffer where (byte < 0x20 && byte != 0x1B) || byte == 0x7F {
+                    return true
+                }
+                return false
+            } ?? unicodeScalars.contains { isStray($0.value) }
+        guard hasStray else { return self }
+
         var result = String()
         result.unicodeScalars.reserveCapacity(unicodeScalars.count)
         for scalar in unicodeScalars {
