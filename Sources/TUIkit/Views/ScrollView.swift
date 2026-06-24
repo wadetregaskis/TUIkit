@@ -342,25 +342,9 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             && (barVisibility == .visible || handler.contentHeight > viewportHeight)
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
 
-        // Render the content at a tall canvas so it lays out at
-        // its natural full height without being clipped to the
-        // viewport. The canvas is bounded — Int.max risks
-        // overflow downstream — but generous enough that any
-        // realistic content lays out without truncation.
-        let measureHeight = max(viewportHeight * 64, 4096)
-        // Render the content under its OWN child identity, distinct from the
-        // ScrollView's identity. Otherwise a directly-stateful content view binds
-        // its `@State` (property indices 0, 1, …) at the ScrollView's identity,
-        // where it collides with the ScrollView's own state keys (handler,
-        // focusID, …) — corrupting both, e.g. a stateful editor losing its held
-        // values frame to frame. Measure (`sizeThatFits`) uses the same child
-        // identity, so the content's state is hydrated consistently.
-        var measureContext = context.withChildIdentity(type: Content.self)
-        measureContext.availableWidth = contentWidth
-        measureContext.availableHeight = measureHeight
-        let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
-
-        handler.contentHeight = Self.contentHeightTrimmingTrailingBlanks(fullBuffer)
+        let fullBuffer = renderedContent(
+            contentWidth: contentWidth, viewportHeight: viewportHeight, context: context)
+        handler.contentHeight = fullBuffer.height
         // Re-clamp the offset against the now-known content height — but only on
         // the real render pass. A measure pass may be offered a larger height
         // than the ScrollView finally renders into (e.g. when it shares space
@@ -479,20 +463,38 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         return visibleBuffer
     }
 
-    /// The content's real height, ignoring trailing blank lines.
+    /// Renders the content to its full (unwindowed) buffer, sized so a flexible
+    /// filler behaves well.
     ///
-    /// The content is measured by rendering it into a deliberately tall canvas, so
-    /// a flexible filler — most commonly a trailing `Spacer()` used to top-align a
-    /// page — expands to fill it with blank lines. Counting those would make the
-    /// view report thousands of phantom lines below; the real content ends at its
-    /// last non-blank line. Non-flexible content already hugs its natural height,
-    /// so this is a no-op there.
-    private static func contentHeightTrimmingTrailingBlanks(_ buffer: FrameBuffer) -> Int {
-        var height = buffer.lines.count
-        while height > 0, buffer.lines[height - 1].allSatisfy({ $0 == " " }) {
-            height -= 1
-        }
-        return height
+    /// The natural height is measured with a generous height budget (a stack's
+    /// measure clamps its report to `availableHeight`, so a small budget would cap
+    /// tall content) and an unspecified height proposal, which collapses a flexible
+    /// filler such as `Spacer()` to its minimum. The content is then rendered at the
+    /// larger of the viewport and that natural height: a Spacer expands only as far
+    /// as the viewport — spreading content across the visible area when it fits
+    /// (e.g. `VStack { Text; Spacer; Text }` puts the two at top and bottom) — and
+    /// collapses when the content is taller, so it scrolls without the filler
+    /// forcing extra height. (Rendering into a fixed tall canvas would instead let a
+    /// Spacer expand to thousands of lines and report a phantom overflow.)
+    ///
+    /// The content renders under its OWN child identity, distinct from the
+    /// ScrollView's: otherwise a directly-stateful content view would bind its
+    /// `@State` (property indices 0, 1, …) at the ScrollView's identity, colliding
+    /// with the ScrollView's own state keys (handler, focusID, …) and corrupting
+    /// both. The measure uses the same child identity, so state hydrates consistently.
+    private func renderedContent(
+        contentWidth: Int, viewportHeight: Int, context: RenderContext
+    ) -> FrameBuffer {
+        var measureContext = context.withChildIdentity(type: Content.self)
+        measureContext.availableWidth = contentWidth
+        measureContext.availableHeight = max(viewportHeight * 64, 4096)
+        let naturalHeight = measureChild(
+            content,
+            proposal: ProposedSize(width: contentWidth, height: nil),
+            context: measureContext
+        ).height
+        measureContext.availableHeight = max(viewportHeight, naturalHeight)
+        return TUIkit.renderToBuffer(content, context: measureContext)
     }
 
     /// Registers a mouse handler over the scrollbar's single column so the arrows

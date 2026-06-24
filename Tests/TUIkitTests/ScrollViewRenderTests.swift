@@ -93,6 +93,29 @@ struct ScrollViewRenderTests {
         #expect(count > 0 && count < 20, "overflow count is the real remainder, not the measure canvas: \(indicator)")
     }
 
+    @Test("A middle Spacer spreads content to the viewport edges without forcing scroll")
+    func middleSpacerSpreads() {
+        // `VStack { Text; Spacer; Text }` shorter than the viewport: the Spacer
+        // fills only to the viewport, putting the two texts at the top and bottom
+        // with no overflow — rather than collapsing (SwiftUI) or pushing the second
+        // text thousands of lines down (the pre-fix bug).
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading) {
+                    Text("top")
+                    Spacer()
+                    Text("bottom")
+                }
+            },
+            context: ctx(width: 20, height: 8)
+        )
+        let lines = buffer.lines.map { $0.stripped }
+        #expect(lines.count == 8, "fills the viewport: \(lines)")
+        #expect(lines.first?.contains("top") == true, "first line is 'top': \(lines)")
+        #expect(lines.last?.contains("bottom") == true, "last line is 'bottom': \(lines)")
+        #expect(!lines.joined().contains("more below"), "fits — no overflow: \(lines)")
+    }
+
     // MARK: - Overflowing content (bottom indicator)
 
     @Test("Tall content shows a 'N more below' indicator at the bottom edge")
