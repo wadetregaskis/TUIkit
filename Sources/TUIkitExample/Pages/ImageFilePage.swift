@@ -41,7 +41,10 @@ struct ImageFilePage: View {
         .imageColorMode(colorMode)
         .imageDithering(dithering)
         .statusBarItems(statusBarItems)
-        .scrollableDemoPage()
+        // Not wrapped in a page ScrollView: the image scales to fill the height it
+        // is offered, so inside a scroll it would expand to the full measure canvas
+        // (thousands of lines) instead of fitting. The image fills the page itself;
+        // a scrollable + zoomable image demo is handled separately (E3).
         .appHeader {
             DemoAppHeader("Image (File)")
         }
