@@ -18,6 +18,7 @@ struct ImageURLPage: View {
     @State var charSetIndex: Int = 0
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
+    @State var zoom: Double = 1.0
 
     var body: some View {
         let charSet = ImageDemoHelpers.charSets[charSetIndex]
@@ -37,15 +38,15 @@ struct ImageURLPage: View {
             .padding(.bottom, 1)
 
             if !activeURL.isEmpty {
-                HStack {
-                    Spacer()
-                    Image(.url(activeURL))
-                        .imagePlaceholder("Downloading...")
-                        .imagePlaceholderSpinner(true)
-                        .border(color: .palette.border)
-                    Spacer()
-                }
+                // Loaded image fills the rest of the page in a viewport-fitted,
+                // zoomable two-axis scroll (+/- to zoom; scrollbars appear on zoom).
+                Image(.url(activeURL))
+                    .imagePlaceholder("Downloading...")
+                    .imagePlaceholderSpinner(true)
+                    .zoomableImageScroll(zoom: zoom)
+                    .border(color: .palette.border)
             } else {
+                Spacer()
                 HStack {
                     Spacer()
                     Text("Press Enter to load the image")
@@ -55,15 +56,11 @@ struct ImageURLPage: View {
                 }
                 Spacer()
             }
-            Spacer()
         }
         .imageCharacterSet(charSet)
         .imageColorMode(colorMode)
         .imageDithering(dithering)
         .statusBarItems(statusBarItems)
-        // Page-scrollable again: Image now sizes its height from the width and its
-        // aspect ratio, so it no longer balloons inside a ScrollView.
-        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Image (URL)")
         }
@@ -112,6 +109,17 @@ struct ImageURLPage: View {
             // no-op, so no "D" partner.
             StatusBarItem(shortcut: "d", label: ditheringOn ? "dither:on" : "dither:off") {
                 ditheringOn.toggle()
+            },
+            // +/- zoom. "=" is a hidden synonym for "+" (no Shift needed). At zoom 1
+            // the image fits the viewport; zooming in reveals the scrollbars.
+            StatusBarItem(shortcut: "+|-", label: ImageDemoHelpers.zoomLabel(zoom), key: .character("+")) {
+                zoom = ImageDemoHelpers.zoomedIn(zoom)
+            },
+            StatusBarItem(shortcut: "=", label: "", key: .character("="), displayInStatusBar: false) {
+                zoom = ImageDemoHelpers.zoomedIn(zoom)
+            },
+            StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
+                zoom = ImageDemoHelpers.zoomedOut(zoom)
             },
             StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "scroll"),
         ]

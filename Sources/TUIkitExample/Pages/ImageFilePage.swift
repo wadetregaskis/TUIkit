@@ -15,38 +15,35 @@ struct ImageFilePage: View {
     @State var charSetIndex: Int = 0
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
+    @State var zoom: Double = 1.0
 
     var body: some View {
         let charSet = ImageDemoHelpers.charSets[charSetIndex]
         let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
         let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
 
-        VStack(alignment: .leading) {
-            HStack {
-                Spacer()
-                if let path = Bundle.module.path(forResource: "demo-image", ofType: "jpg", inDirectory: "Resources") {
-                    Image(.file(path))
-                        .imagePlaceholder("Loading image...")
-                        .imagePlaceholderSpinner(true)
-                } else {
-                    Text("Resource not found: demo-image.jpg")
-                        .foregroundStyle(.error)
-                }
-                Spacer()
+        // The image lives in a two-axis ScrollView fitted to the viewport: at zoom 1
+        // the whole image shows with no scrollbars; `+`/`-` zoom in and out, and the
+        // scrollbars appear automatically once it grows past the visible area.
+        imageContent
+            .imageCharacterSet(charSet)
+            .imageColorMode(colorMode)
+            .imageDithering(dithering)
+            .statusBarItems(statusBarItems)
+            .appHeader {
+                DemoAppHeader("Image (File)")
             }
-            .padding(.bottom, 1)
-            Spacer()
-        }
-        .imageCharacterSet(charSet)
-        .imageColorMode(colorMode)
-        .imageDithering(dithering)
-        .statusBarItems(statusBarItems)
-        // Page-scrollable again: Image now sizes its height from the width and its
-        // aspect ratio (rather than claiming the whole offered height), so it no
-        // longer balloons inside a ScrollView's tall measure canvas.
-        .scrollableDemoPage()
-        .appHeader {
-            DemoAppHeader("Image (File)")
+    }
+
+    @ViewBuilder private var imageContent: some View {
+        if let path = Bundle.module.path(forResource: "demo-image", ofType: "jpg", inDirectory: "Resources") {
+            Image(.file(path))
+                .imagePlaceholder("Loading image...")
+                .imagePlaceholderSpinner(true)
+                .zoomableImageScroll(zoom: zoom)
+        } else {
+            Text("Resource not found: demo-image.jpg")
+                .foregroundStyle(.error)
         }
     }
 
@@ -93,6 +90,17 @@ struct ImageFilePage: View {
             // no-op, so no "D" partner.
             StatusBarItem(shortcut: "d", label: ditheringOn ? "dither:on" : "dither:off") {
                 ditheringOn.toggle()
+            },
+            // +/- zoom. "=" is a hidden synonym for "+" (no Shift needed). At zoom 1
+            // the image fits the viewport; zooming in reveals the scrollbars.
+            StatusBarItem(shortcut: "+|-", label: ImageDemoHelpers.zoomLabel(zoom), key: .character("+")) {
+                zoom = ImageDemoHelpers.zoomedIn(zoom)
+            },
+            StatusBarItem(shortcut: "=", label: "", key: .character("="), displayInStatusBar: false) {
+                zoom = ImageDemoHelpers.zoomedIn(zoom)
+            },
+            StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
+                zoom = ImageDemoHelpers.zoomedOut(zoom)
             },
             StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "scroll"),
         ]
