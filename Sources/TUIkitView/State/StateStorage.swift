@@ -68,6 +68,12 @@ public final class StateStorage: @unchecked Sendable {
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
+    /// The render cache that state changes should invalidate — the cache of the
+    /// ``TUIContext`` this storage belongs to. Wired by the context at creation and
+    /// stamped onto each ``StateBox`` at hydration, so a state change clears only
+    /// its own context's cache (no process-wide singleton → no cross-test bleed).
+    public weak var renderCache: RenderCache?
+
     /// Creates an empty state storage.
     public init() {}
 
@@ -91,10 +97,12 @@ extension StateStorage {
     public func storage<Value>(for key: StateKey, default defaultValue: Value) -> StateBox<Value> {
         if let existing = values[key] as? StateBox<Value> {
             existing.identity = key.identity
+            existing.renderCache = renderCache
             return existing
         }
         let fresh = StateBox(defaultValue)
         fresh.identity = key.identity
+        fresh.renderCache = renderCache
         values[key] = fresh
         return fresh
     }
@@ -209,13 +217,20 @@ public final class StateBox<Value>: @unchecked Sendable {
     /// cache invalidation via ``RenderCache/clearAffected(by:)``.
     var identity: ViewIdentity?
 
+    /// The render cache to invalidate on change — the box's owning context's cache,
+    /// wired during hydration from ``StateStorage``. There is no shared singleton,
+    /// so each context (the app's, and every test's) invalidates only its own
+    /// cache. `nil` before the box is first hydrated, in which case nothing has
+    /// been cached for it yet, so there is nothing to clear.
+    weak var renderCache: RenderCache?
+
     /// The current value.
     public var value: Value {
         didSet {
             if let identity {
-                RenderCache.shared.clearAffected(by: identity)
+                renderCache?.clearAffected(by: identity)
             } else {
-                RenderCache.shared.clearAll()
+                renderCache?.clearAll()
             }
             AppState.shared.setNeedsRender()
         }

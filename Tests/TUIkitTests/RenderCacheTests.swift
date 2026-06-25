@@ -378,4 +378,43 @@ struct RenderCacheTests {
         #expect(cache.isEmpty)
         #expect(cache.stats.subtreeClears == 1)
     }
+
+    // MARK: - Per-context invalidation (no shared singleton)
+
+    @Test("Each TUIContext owns an isolated render cache")
+    func eachContextHasIsolatedCache() {
+        // The flake fix: there is no process-wide `RenderCache.shared`, so two
+        // contexts (e.g. two parallel tests) can never see each other's entries.
+        let contextA = TUIContext()
+        let contextB = TUIContext()
+        #expect(contextA.renderCache !== contextB.renderCache)
+    }
+
+    @Test("A @State change invalidates its own context's cache, not another's")
+    func stateChangeInvalidatesOwningContextCacheOnly() {
+        let contextA = TUIContext()
+        let contextB = TUIContext()
+        let identity = ViewIdentity(path: "Root/Counter")
+
+        // Seed both caches with an entry at the same identity.
+        contextA.renderCache.store(
+            identity: identity, view: 0, buffer: FrameBuffer(text: "A"), contextWidth: 80, contextHeight: 24)
+        contextB.renderCache.store(
+            identity: identity, view: 0, buffer: FrameBuffer(text: "B"), contextWidth: 80, contextHeight: 24)
+
+        // Hydrate a @State box on context A at that identity. Hydration wires the
+        // box to A's cache (the replacement for the old implicit shared target),
+        // so its didSet must invalidate A's cache — and only A's.
+        let key = StateStorage.StateKey(identity: identity, propertyIndex: 0)
+        let box = contextA.stateStorage.storage(for: key, default: 0)
+
+        box.value = 1
+
+        #expect(
+            contextA.renderCache.lookup(identity: identity, view: 0, contextWidth: 80, contextHeight: 24) == nil,
+            "the owning context's cached subtree is invalidated on a @State change")
+        #expect(
+            contextB.renderCache.lookup(identity: identity, view: 0, contextWidth: 80, contextHeight: 24) != nil,
+            "an unrelated context's cache is untouched (no shared-singleton bleed)")
+    }
 }

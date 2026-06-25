@@ -89,12 +89,14 @@ func makeRenderContext(
 extension RenderContext {
     /// Returns a copy whose render cache is a fresh, test-local `RenderCache`.
     ///
-    /// `TUIContext()` installs the process-wide `RenderCache.shared` singleton,
-    /// so without this every test shares one cache. Under Swift Testing's
-    /// parallel execution that lets a memoized buffer from one suite satisfy a
-    /// same-identity lookup in another (e.g. a Spinner's `▇` frame surfacing in
-    /// a Text render), producing rare, confusing cross-suite failures. Each
-    /// render context getting its own cache makes suites independent.
+    /// Each `TUIContext` owns its own cache (there is no process-wide
+    /// singleton), so a context built via `RenderContext(tuiContext:)` is
+    /// already isolated. This makes that isolation explicit and construction-
+    /// independent: however the context was assembled, the test gets a cache no
+    /// other suite can touch. Under Swift Testing's parallel execution that
+    /// prevents a memoized buffer from one suite satisfying a same-identity
+    /// lookup in another (e.g. a Spinner's `▇` frame surfacing in a Text
+    /// render), which used to produce rare, confusing cross-suite failures.
     func isolatingRenderCache() -> RenderContext {
         var copy = self
         copy.environment.renderCache = RenderCache()

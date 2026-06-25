@@ -32,10 +32,10 @@ struct EquatableViewTests {
         env.stateStorage = tuiContext.stateStorage
         env.lifecycle = tuiContext.lifecycle
         env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        // A fresh cache, NOT the RenderCache.shared singleton TUIContext() uses
-        // by default: these tests assert an absolute entry count, and List /
-        // ForEach renders in other (interleaved) tests now populate the shared
-        // cache, which would pollute the count.
+        // A fresh, test-local cache: these tests assert an absolute entry
+        // count, so it must be touched only by this test's renders. The env is
+        // built by hand here (not via RenderContext(tuiContext:)), so the cache
+        // has to be set explicitly — EquatableView force-unwraps it.
         env.renderCache = RenderCache()
         env.preferenceStorage = tuiContext.preferences
         return RenderContext(
@@ -101,7 +101,7 @@ struct EquatableViewTests {
     func cacheMissOnSizeChange() {
         let tuiContext = TUIContext()
         let identity = ViewIdentity(path: "Root")
-        let cache = RenderCache()  // isolated from RenderCache.shared (see testContext)
+        let cache = RenderCache()  // fresh, test-local (see testContext)
 
         var env = EnvironmentValues()
         env.stateStorage = tuiContext.stateStorage

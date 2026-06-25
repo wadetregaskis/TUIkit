@@ -271,14 +271,23 @@ final class TUIContext: @unchecked Sendable {
 
     /// Creates a new TUI context with fresh instances of all services.
     ///
-    /// Uses the shared `RenderCache` singleton for all instances.
+    /// Each context gets its OWN `RenderCache` — there is no process-wide shared
+    /// instance. The app's run loop creates one context and reuses it across
+    /// frames, so its cache still persists frame-to-frame; meanwhile every other
+    /// context (notably each test's) is fully isolated, which is what keeps
+    /// parallel render tests from contaminating one another's cache.
     init() {
         self.lifecycle = LifecycleManager()
         self.keyEventDispatcher = KeyEventDispatcher()
         self.mouseEventDispatcher = MouseEventDispatcher()
         self.preferences = PreferenceStorage()
         self.stateStorage = StateStorage()
-        self.renderCache = RenderCache.shared
+        self.renderCache = RenderCache()
+        // Point the state storage at this context's cache so a `@State` change
+        // (``StateBox/value`` didSet) invalidates the right cache. Without the
+        // shared singleton there is no implicit common target — the owner must
+        // wire the two together.
+        self.stateStorage.renderCache = self.renderCache
     }
 
     /// Creates a new TUI context with the given services.
@@ -290,14 +299,14 @@ final class TUIContext: @unchecked Sendable {
     ///   - keyEventDispatcher: The key event dispatcher to use.
     ///   - preferences: The preference storage to use.
     ///   - stateStorage: The state storage to use.
-    ///   - renderCache: The render cache to use (defaults to the shared singleton).
+    ///   - renderCache: The render cache to use (defaults to a fresh, isolated cache).
     init(
         lifecycle: LifecycleManager,
         keyEventDispatcher: KeyEventDispatcher,
         mouseEventDispatcher: MouseEventDispatcher = MouseEventDispatcher(),
         preferences: PreferenceStorage,
         stateStorage: StateStorage = StateStorage(),
-        renderCache: RenderCache = RenderCache.shared
+        renderCache: RenderCache = RenderCache()
     ) {
         self.lifecycle = lifecycle
         self.keyEventDispatcher = keyEventDispatcher
@@ -305,6 +314,8 @@ final class TUIContext: @unchecked Sendable {
         self.preferences = preferences
         self.stateStorage = stateStorage
         self.renderCache = renderCache
+        // See init(): wire state-change invalidation to this context's cache.
+        self.stateStorage.renderCache = self.renderCache
     }
 }
 
