@@ -23,8 +23,16 @@ struct AlertPresentationModifierTests {
     }
 
     /// Helper to render a view to a FrameBuffer.
+    ///
+    /// A presented `.alert` now floats to the screen root as an overlay (so it
+    /// centres + dims over the whole screen from any attachment), so the test
+    /// composites the overlays the way `RenderLoop` does — yielding the final
+    /// dimmed-base + centred-alert buffer the tests assert against.
     private func render<V: View>(_ view: V) -> FrameBuffer {
-        renderToBuffer(view, context: testContext())
+        let context = testContext()
+        let buffer = renderToBuffer(view, context: context)
+        return buffer.compositingOverlays(
+            maxWidth: 80, maxHeight: 24, palette: context.environment.palette)
     }
 
     @Test("Alert not presented shows only base content")

@@ -91,25 +91,17 @@ extension AlertPresentationModifier: Renderable {
             actions: { actions }
         )
 
-        let focusManager = context.environment.focusManager
-
-        // Render dimmed base with an isolated context.
-        // The base content's buttons and key handlers register into a
-        // throwaway FocusManager and KeyEventDispatcher so they don't
-        // interfere with the alert's interactive elements.
-        let dimmedBase = DimmedModifier(content: content)
-        let isolatedContext = context.isolatedForBackground()
-        let dimmedBuffer = TUIkit.renderToBuffer(dimmedBase, context: isolatedContext)
-
-        // Register the alert focus section and activate it. The alert section
-        // becomes the active section, so Tab/arrows only navigate within the
-        // alert's focusable elements (buttons).
+        // Register the alert focus section and activate it FIRST, so the page
+        // beneath registers its controls in the now-inactive page section (and
+        // can't steal focus/scroll) while the alert's own controls auto-focus.
         if !context.isMeasuring {
+            let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)
         }
 
-        // Register ESC handler to dismiss the alert
+        // Register ESC handler to dismiss the alert (on the real dispatcher; the
+        // page beneath renders with a throwaway one, so only the alert's ESC fires).
         let isPresentedBinding = isPresented
         context.environment.keyEventDispatcher!.addHandler { event in
             if event.key == .escape {
@@ -119,34 +111,29 @@ extension AlertPresentationModifier: Renderable {
             return false
         }
 
-        // Set the alert section in the context so child focusables
-        // (buttons in the alert) register in the alert section.
-        var alertContext = context
-        alertContext.environment.activeFocusSectionID = sectionID
+        // Render the page beneath normally — real focus + state, rendered once
+        // (the root compositor dims it for the backdrop). `onKeyPress` is isolated
+        // so page hotkeys can't fire while the alert is up; mouse is isolated by
+        // the dimmed backdrop dropping the page's hit-test regions.
+        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatingKeyDispatcher())
 
+        // Render the alert against the FULL screen (not the attachment's local
+        // area) so it isn't clipped, in the alert section.
+        var alertContext = context
+            .withAvailableWidth(context.environment.terminalWidth)
+            .withAvailableHeight(context.environment.terminalHeight)
+        alertContext.environment.activeFocusSectionID = sectionID
         let alertBuffer = TUIkit.renderToBuffer(alert, context: alertContext)
 
-        guard !dimmedBuffer.isEmpty else {
-            return alertBuffer
-        }
+        guard !alertBuffer.isEmpty else { return baseBuffer }
 
-        guard !alertBuffer.isEmpty else {
-            return dimmedBuffer
-        }
-
-        // Center relative to the full terminal area, not the content size.
-        let screenWidth = context.availableWidth
-        let screenHeight = context.availableHeight
-        let alertWidth = alertBuffer.width
-        let alertHeight = alertBuffer.height
-
-        let horizontalOffset = max(0, (screenWidth - alertWidth) / 2)
-        let verticalOffset = max(0, (screenHeight - alertHeight) / 2 - 2)
-
-        return dimmedBuffer.composited(
-            with: alertBuffer,
-            at: (x: horizontalOffset, y: verticalOffset)
-        )
+        // Float the alert to the screen root: it composites centred over the whole
+        // screen and dims everything beneath, from any attachment point.
+        baseBuffer.overlays.append(
+            OverlayLayer(
+                offsetX: 0, offsetY: 0, content: alertBuffer,
+                level: .alert, centered: true, dimsBackground: true))
+        return baseBuffer
     }
 }
 
