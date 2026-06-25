@@ -92,10 +92,11 @@ extension ScrollbarRenderer {
 
 /// Which part of a scrollbar a coordinate falls on.
 enum ScrollbarHit: Equatable {
-    /// The start arrow (top of a vertical bar, left of a horizontal one).
-    case arrowStart
-    /// The end arrow (bottom / right).
-    case arrowEnd
+    /// An arrow button; `delta` is the direction it scrolls — `-1` toward the
+    /// start (`▲` / `◀`), `+1` toward the end (`▼` / `▶`). With `.double` arrows
+    /// both arrows appear at *each* end, so the direction is decided by which
+    /// glyph was hit, not by which end of the bar it sits at.
+    case arrow(delta: Int)
     /// The track before the thumb (above / left of it).
     case trackBefore
     /// The thumb; `grab` is the offset of the hit within the thumb, in cells.
@@ -116,8 +117,12 @@ extension ScrollbarRenderer {
         guard position >= 0, position < length else { return .outside }
         let perEnd = (length > arrowReserve(arrows) ? arrowReserve(arrows) : 0) / 2
         if perEnd > 0 {
-            if position < perEnd { return .arrowStart }
-            if position >= length - perEnd { return .arrowEnd }
+            if position < perEnd {
+                return .arrow(delta: arrowDelta(sub: position, perEnd: perEnd, atHead: true))
+            }
+            if position >= length - perEnd {
+                return .arrow(delta: arrowDelta(sub: position - (length - perEnd), perEnd: perEnd, atHead: false))
+            }
         }
         let trackLen = length - 2 * perEnd
         guard trackLen > 0 else { return .outside }
@@ -130,6 +135,17 @@ extension ScrollbarRenderer {
         if trackPos < firstCell { return .trackBefore }
         if trackPos > lastCell { return .trackAfter }
         return .thumb(grab: trackPos - firstCell)
+    }
+
+    /// The scroll direction (−1 toward the start, +1 toward the end) for a click on
+    /// an arrow cell `sub` cells into an end's `perEnd`-cell arrow region. With
+    /// `.double` arrows (`perEnd == 2`) each end renders `[▲, ▼]` (`[◀, ▶]`), so the
+    /// sub-position alone decides direction — the *same* at both ends, which is why
+    /// the up-arrow at the bottom end must scroll up, not down. With `.single`
+    /// (`perEnd == 1`) the head is `▲`/`◀` and the tail is `▼`/`▶`.
+    private static func arrowDelta(sub: Int, perEnd: Int, atHead: Bool) -> Int {
+        if perEnd >= 2 { return sub == 0 ? -1 : 1 }
+        return atHead ? -1 : 1
     }
 
     /// The thumb length in whole cells for a `trackLen`-cell track (constant for a
@@ -196,13 +212,12 @@ extension ScrollbarRenderer {
                     position: position, length: length, extent: extent, viewport: viewport,
                     offset: state.scrollOffset, arrows: arrows, proportional: proportional)
                 switch hit {
-                case .arrowStart:
-                    // Step now, then auto-repeat while held (see driveAutoRepeat).
-                    state.scroll(by: -1)
-                    state.scrollbarRepeat = ScrollbarRepeat(delta: -1)
-                case .arrowEnd:
-                    state.scroll(by: 1)
-                    state.scrollbarRepeat = ScrollbarRepeat(delta: 1)
+                case .arrow(let delta):
+                    // Step in the clicked arrow's own direction (with `.double`
+                    // arrows the bottom end has an up-arrow too), then auto-repeat
+                    // while held (see driveAutoRepeat).
+                    state.scroll(by: delta)
+                    state.scrollbarRepeat = ScrollbarRepeat(delta: delta)
                 case .trackBefore, .trackAfter:
                     if behavior == .jump {
                         let thumbCells = thumbCellCount(

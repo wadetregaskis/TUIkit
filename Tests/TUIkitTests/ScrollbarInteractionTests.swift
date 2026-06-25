@@ -28,14 +28,42 @@ struct ScrollbarInteractionTests {
                 position: position, length: 10, extent: 30, viewport: 10, offset: 0,
                 arrows: .single, proportional: true)
         }
-        #expect(hit(0) == .arrowStart)
-        #expect(hit(9) == .arrowEnd)
+        #expect(hit(0) == .arrow(delta: -1), "the top arrow scrolls up")
+        #expect(hit(9) == .arrow(delta: 1), "the bottom arrow scrolls down")
         #expect(hit(-1) == .outside)
         #expect(hit(10) == .outside)
         if case .thumb = hit(1) {} else {
             Issue.record("the top of the track is the thumb at offset 0: \(hit(1))")
         }
         #expect(hit(8) == .trackAfter, "the bottom of the track is after a top thumb: \(hit(8))")
+    }
+
+    @Test("Double arrows scroll by their own glyph direction at both ends")
+    func doubleArrowDirections() {
+        // length 12, double arrows: each end shows [▲, ▼]. Head: 0=▲, 1=▼.
+        // Tail: 10=▲, 11=▼. Track is 2…9.
+        func hit(_ position: Int) -> ScrollbarHit {
+            Bar.hitTest(
+                position: position, length: 12, extent: 40, viewport: 12, offset: 0,
+                arrows: .double, proportional: true)
+        }
+        #expect(hit(0) == .arrow(delta: -1), "head up-arrow scrolls up")
+        #expect(hit(1) == .arrow(delta: 1), "head down-arrow scrolls down")
+        // The bug: the up-arrow at the *bottom* end used to scroll down.
+        #expect(hit(10) == .arrow(delta: -1), "bottom up-arrow scrolls UP, not down")
+        #expect(hit(11) == .arrow(delta: 1), "bottom down-arrow scrolls down")
+    }
+
+    @Test("Clicking the bottom up-arrow (double arrows) scrolls up")
+    func doubleArrowBottomUpScrollsUp() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 40
+        handler.viewportHeight = 12
+        handler.scrollOffset = 20
+        let handle = Bar.verticalMouseHandler(
+            for: handler, length: 12, arrows: .double, proportional: true, behavior: .page)
+        _ = handle(event(0, 10))  // the up-arrow at the bottom end
+        #expect(handler.scrollOffset == 19, "the bottom up-arrow scrolls up one: \(handler.scrollOffset)")
     }
 
     @Test("Clicking the arrows steps by one line")
