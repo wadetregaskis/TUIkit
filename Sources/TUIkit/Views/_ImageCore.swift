@@ -85,7 +85,10 @@ struct _ImageCore: View, Renderable, Layoutable {
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let environment = context.environment
-        let zoom = max(0.01, environment.imageZoom)
+        // Any positive zoom is honoured; the rendered size is floored at one cell
+        // (see `zoomed`), so even a 1/512 zoom shrinks gracefully to a single
+        // pixel instead of vanishing. Guard only against a non-positive factor.
+        let zoom = environment.imageZoom > 0 ? environment.imageZoom : 1.0
 
         // The box the image scales to fit: the visible viewport (when requested and
         // available) or the size the layout proposes. `.viewport` is what lets an

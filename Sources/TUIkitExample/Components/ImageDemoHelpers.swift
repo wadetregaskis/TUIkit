@@ -35,14 +35,34 @@ enum ImageDemoHelpers {
 
     // MARK: - Zoom
 
-    /// `1` = fit the viewport exactly; the upper bound keeps the zoomed image to a
-    /// sane size on screen.
-    static let minZoom = 1.0
+    /// `1` = fit the viewport exactly. Above 1× we step linearly up to a sane
+    /// on-screen maximum; below 1× we step multiplicatively (halving) down to
+    /// `minZoom`, so a handful of presses shrinks the image all the way to a
+    /// single pixel for typical terminal sizes (1/512 ≈ 2⁻⁹).
+    static let minZoom = 1.0 / 512.0
     static let maxZoom = 6.0
 
-    static func zoomedIn(_ zoom: Double) -> Double { min(maxZoom, zoom + 0.5) }
-    static func zoomedOut(_ zoom: Double) -> Double { max(minZoom, zoom - 0.5) }
-    static func zoomLabel(_ zoom: Double) -> String { "zoom:\(String(format: "%.1f", zoom))x" }
+    /// Zoom in one step. Below 1× this doubles back toward 1×; at/above 1× it
+    /// adds 0.5. The two regimes meet cleanly at 1×.
+    static func zoomedIn(_ zoom: Double) -> Double {
+        zoom < 1.0 ? min(1.0, zoom * 2.0) : min(maxZoom, zoom + 0.5)
+    }
+
+    /// Zoom out one step. Above 1× this subtracts 0.5 down to 1×; at/below 1× it
+    /// halves down to `minZoom`.
+    static func zoomedOut(_ zoom: Double) -> Double {
+        zoom > 1.0 ? max(1.0, zoom - 0.5) : max(minZoom, zoom / 2.0)
+    }
+
+    /// Below 1× the scale is an exact power-of-two fraction, so show it as `1/N`
+    /// (e.g. `zoom:1/512x`); at/above 1× show one decimal (`zoom:2.0x`).
+    static func zoomLabel(_ zoom: Double) -> String {
+        if zoom < 1.0 {
+            let denominator = Int((1.0 / zoom).rounded())
+            return "zoom:1/\(denominator)x"
+        }
+        return "zoom:\(String(format: "%.1f", zoom))x"
+    }
 }
 
 extension View {
