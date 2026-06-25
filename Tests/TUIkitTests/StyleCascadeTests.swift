@@ -184,6 +184,34 @@ struct StyleCascadeTests {
         #expect(lines.contains { $0.contains("HEADER") }, "header should be uppercased")
         #expect(lines.contains { $0.contains("Body") }, "body should be unaffected")
     }
+
+    @Test("A custom header opting into .chrome inherits app-wide textCase but not the default dim")
+    func customChromeHeaderInheritsCaseNotDim() {
+        // Mirrors TUIkitExample's DemoSection title: a bold + underlined header
+        // that opts into `.chrome(.sectionHeader)` to pick up an app-wide textCase
+        // toggle, while locally clearing the role's default dim so it stays crisp.
+        // The inner `dim = false` and the outer `textCase` target different
+        // properties, so the per-property cascade keeps both.
+        func header(uppercase: Bool) -> some View {
+            Text("Preset Palette")
+                .bold()
+                .underline()
+                .environment(\.chromeRole, .sectionHeader)
+                .style(.chrome(.sectionHeader)) { $0.dim = false }
+                .style(.chrome(.sectionHeader)) { $0.textCase = uppercase ? .uppercase : nil }
+        }
+
+        // The title is always bold, so the section-header default dim would show as
+        // the leading `ESC[1;2` (bold;dim). Its absence proves dim is suppressed.
+        let off = renderToBuffer(header(uppercase: false), context: context()).lines.first ?? ""
+        #expect(off.contains("Preset Palette"), "off: original case is preserved")
+        #expect(!off.contains("\u{1B}[1;2"), "off: the chrome default dim is suppressed")
+
+        let on = renderToBuffer(header(uppercase: true), context: context()).lines.first ?? ""
+        #expect(on.contains("PRESET PALETTE"), "on: the header is uppercased")
+        #expect(!on.contains("\u{1B}[1;2"), "on: still no dim")
+        #expect(on.contains("\u{1B}[1;") && on.contains("4"), "on: stays bold + underlined")
+    }
 }
 
 @MainActor

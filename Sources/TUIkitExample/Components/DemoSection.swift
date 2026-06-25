@@ -33,6 +33,14 @@ struct DemoSection<Content: View>: View {
                 .bold()
                 .underline()
                 .foregroundStyle(.palette.accent)
+                // Render the title as a themeable section header so it picks up the
+                // app-wide `.chrome(.sectionHeader)` styling — e.g. the Theme page's
+                // "UPPERCASE section headers" toggle drives its textCase. The local
+                // `dim = false` overrides the chrome role's default dimming (which is
+                // for plain section headers), keeping these bold-underline-accent
+                // headers crisp; only textCase is inherited from the cascade.
+                .environment(\.chromeRole, .sectionHeader)
+                .style(.chrome(.sectionHeader)) { $0.dim = false }
             content
         }
     }
