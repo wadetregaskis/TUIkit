@@ -46,15 +46,23 @@ extension View {
 /// drives it from the render loop (see ``ScrollbarRenderer/driveAutoRepeat``).
 public struct ScrollbarRepeat: Sendable, Equatable {
     /// The offset delta applied on each repeat tick (±1 for an arrow, ±viewport
-    /// for a page-track hold).
+    /// for a page-track hold). Its **sign is the fixed direction** of the hold —
+    /// a page hold never reverses, even if the mouse later moves the other way.
     public var delta: Int
+    /// For a `.page`-track hold, the offset at which paging stops — where the thumb
+    /// reaches the held mouse position. Paging ticks only move *toward* it (never
+    /// past, never reversed); once reached the hold idles until the mouse moves
+    /// further in the same direction (which updates this). `nil` for an arrow hold,
+    /// which repeats unconditionally while held.
+    public var stopAtOffset: Int?
     /// The absolute time of the next tick, in nanoseconds (`environment.frameNowNanos`
     /// scale). `0` means "not yet scheduled" — the driver seeds it with the initial
     /// delay the first frame it sees the hold.
     public var nextFireNanos: Int64
 
-    public init(delta: Int, nextFireNanos: Int64 = 0) {
+    public init(delta: Int, stopAtOffset: Int? = nil, nextFireNanos: Int64 = 0) {
         self.delta = delta
+        self.stopAtOffset = stopAtOffset
         self.nextFireNanos = nextFireNanos
     }
 }
@@ -81,7 +89,19 @@ extension ScrollbarRenderer {
         if repeating.nextFireNanos == 0 {
             repeating.nextFireNanos = now + autoRepeatInitialDelayNanos
         } else if now >= repeating.nextFireNanos {
-            state.scroll(by: repeating.delta)
+            if let target = repeating.stopAtOffset {
+                // Page-track hold: advance toward the held mouse position without
+                // passing it, and stop (no scroll) once reached — the hold then
+                // idles until a drag moves the target further (same direction).
+                let remaining = target - state.scrollOffset
+                if repeating.delta > 0 && remaining > 0 {
+                    state.scroll(by: min(repeating.delta, remaining))
+                } else if repeating.delta < 0 && remaining < 0 {
+                    state.scroll(by: max(repeating.delta, remaining))
+                }
+            } else {
+                state.scroll(by: repeating.delta)
+            }
             repeating.nextFireNanos = now + autoRepeatIntervalNanos
         }
         state.scrollbarRepeat = repeating
@@ -206,6 +226,16 @@ extension ScrollbarRenderer {
                     viewport: viewport, proportional: proportional)
             }
 
+            // The offset at which a page hold should stop — where the thumb sits
+            // centred under the mouse `position` (the same spot a jump-click lands).
+            func pageStopTarget(at position: Int) -> Int {
+                let thumbCells = thumbCellCount(
+                    trackLen: trackLen, extent: extent, viewport: viewport, proportional: proportional)
+                return offset(
+                    forThumbTopCell: (position - perEnd) - thumbCells / 2, trackLen: trackLen,
+                    extent: extent, viewport: viewport, proportional: proportional)
+            }
+
             switch event.phase {
             case .pressed:
                 let hit = hitTest(
@@ -229,11 +259,14 @@ extension ScrollbarRenderer {
                         // follows the mouse until release — per macOS.
                         state.scrollbarDragGrab = thumbCells / 2
                     } else {
-                        // Page towards the click now, then auto-repeat the paging
-                        // while the track stays held.
+                        // Page towards the click now (a full viewport, as a single
+                        // click always does), then auto-repeat the paging while the
+                        // track stays held — but the repeat stops once the thumb
+                        // reaches the mouse and never reverses (see driveAutoRepeat).
                         let pageDelta = (hit == .trackBefore) ? -max(1, viewport) : max(1, viewport)
                         state.scroll(by: pageDelta)
-                        state.scrollbarRepeat = ScrollbarRepeat(delta: pageDelta)
+                        state.scrollbarRepeat = ScrollbarRepeat(
+                            delta: pageDelta, stopAtOffset: pageStopTarget(at: position))
                     }
                 case .thumb(let grab):
                     state.scrollbarDragGrab = grab
@@ -242,9 +275,20 @@ extension ScrollbarRenderer {
                 }
                 return true
             case .dragged:
-                guard let grab = state.scrollbarDragGrab else { return false }
-                jumpOrDrag(topCell: (position - perEnd) - grab)
-                return true
+                if let grab = state.scrollbarDragGrab {
+                    jumpOrDrag(topCell: (position - perEnd) - grab)
+                    return true
+                }
+                // During a page-track hold, follow the mouse: move the stop target
+                // to its new position. The delta sign is untouched, so paging still
+                // can't reverse — dragging further in the held direction lets it
+                // resume; dragging back simply leaves the thumb where it stopped.
+                if var repeating = state.scrollbarRepeat, repeating.stopAtOffset != nil {
+                    repeating.stopAtOffset = pageStopTarget(at: position)
+                    state.scrollbarRepeat = repeating
+                    return true
+                }
+                return false
             case .released:
                 state.scrollbarDragGrab = nil
                 state.scrollbarRepeat = nil

@@ -180,6 +180,68 @@ struct ScrollbarInteractionTests {
         #expect(handler.scrollbarDragGrab == nil, "releasing ends the drag")
     }
 
+    // MARK: Page-track hold — stop at the mouse / resume / never reverse
+
+    /// Drives the auto-repeat past the initial delay, then for `count` intervals.
+    private func driveRepeats(_ handler: ScrollViewHandler, count: Int, from start: Int64) -> Int64 {
+        var t = start
+        tickRepeat(handler, atNanos: t)  // seed the deadline (first time)
+        t += Bar.autoRepeatInitialDelayNanos + 1
+        for _ in 0..<count {
+            tickRepeat(handler, atNanos: t)
+            t += Bar.autoRepeatIntervalNanos + 1
+        }
+        return t
+    }
+
+    @Test("A page-track hold stops once the thumb reaches the mouse")
+    func pageHoldStopsAtMouse() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        let handle = Bar.verticalMouseHandler(
+            for: handler, length: 12, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(0, 6))  // press in the track below the thumb → page down
+        #expect(handler.scrollOffset == 10, "the initial click pages one full viewport")
+        #expect(handler.scrollbarRepeat?.stopAtOffset == 50, "the hold targets the offset under the mouse")
+
+        _ = driveRepeats(handler, count: 30, from: 1_000_000_000)
+        #expect(handler.scrollOffset == 50, "paging stops at the mouse, not the end: \(handler.scrollOffset)")
+    }
+
+    @Test("A page hold resumes when the mouse moves further the same way")
+    func pageHoldResumesOnFurtherDrag() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        let handle = Bar.verticalMouseHandler(
+            for: handler, length: 12, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(0, 6))
+        var t = driveRepeats(handler, count: 30, from: 1_000_000_000)
+        #expect(handler.scrollOffset == 50)
+
+        _ = handle(event(0, 10, .dragged))  // mouse drags further down
+        #expect((handler.scrollbarRepeat?.stopAtOffset ?? 0) > 50, "dragging further extends the target")
+        t = driveRepeats(handler, count: 30, from: t)
+        #expect(handler.scrollOffset == 90, "paging resumes toward the new target: \(handler.scrollOffset)")
+    }
+
+    @Test("A page hold never reverses when the mouse moves back")
+    func pageHoldNeverReverses() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        let handle = Bar.verticalMouseHandler(
+            for: handler, length: 12, arrows: .single, proportional: true, behavior: .page)
+        _ = handle(event(0, 6))  // page down toward 50
+        var t = driveRepeats(handler, count: 30, from: 1_000_000_000)
+        #expect(handler.scrollOffset == 50)
+
+        _ = handle(event(0, 2, .dragged))  // mouse drags back up, above the thumb
+        t = driveRepeats(handler, count: 30, from: t)
+        #expect(handler.scrollOffset == 50, "a down-hold never pages back up: \(handler.scrollOffset)")
+    }
+
     // MARK: Horizontal handler (same logic, driven by event.x)
 
     @Test("A horizontal bar's arrows step by one column (event.x)")
