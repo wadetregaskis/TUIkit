@@ -36,6 +36,12 @@ private struct TerminalWidthKey: EnvironmentKey {
     static let defaultValue: Int = 80
 }
 
+/// Environment key for the height of the content area available to overlays —
+/// the screen minus the app header and the status bar.
+private struct OverlayContentHeightKey: EnvironmentKey {
+    static let defaultValue: Int = 24
+}
+
 extension EnvironmentValues {
     /// The terminal's total height in rows, published once at the render root.
     ///
@@ -58,6 +64,21 @@ extension EnvironmentValues {
     var terminalWidth: Int {
         get { self[TerminalWidthKey.self] }
         set { self[TerminalWidthKey.self] = newValue }
+    }
+
+    /// The height (in rows) of the content area that overlays composite into —
+    /// the screen height minus the app header and status bar. Published once at
+    /// the render root, alongside ``terminalHeight``.
+    ///
+    /// An anchored overlay (e.g. a ``Picker`` drop-down) must size itself to this,
+    /// **not** ``terminalHeight``: the compositor clamps overlays to this area (so
+    /// they never overlap the status bar), so a drop-down sized to the full screen
+    /// height would have its bottom border and last rows shaved off — reading as
+    /// "clipped behind the status bar". Defaults to 24 (no chrome reserved) for
+    /// isolated tests with no render loop.
+    var overlayContentHeight: Int {
+        get { self[OverlayContentHeightKey.self] }
+        set { self[OverlayContentHeightKey.self] = newValue }
     }
 }
 

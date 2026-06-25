@@ -102,7 +102,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // there's a blank gap between the option text and the bar (rather than the
         // text running flush against it) without truncating any label. The
         // overflow test mirrors the windowing in `renderOpenMenu`.
-        let maxVisibleForWidth = min(entries.count, max(4, context.environment.terminalHeight - 4))
+        let maxVisibleForWidth = min(entries.count, max(4, context.environment.overlayContentHeight - 2))
         let wantsScrollbar = entries.count > maxVisibleForWidth
         let desiredInner = maxLabelWidth + 4 + (wantsScrollbar ? 1 : 0)
         let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
@@ -293,12 +293,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         palette: any Palette
     ) {
         // Window the options against the visible screen, scrolling (with a
-        // scrollbar) when they don't all fit. Use the published terminal height,
-        // not `availableHeight`: the drop-down is an overlay that can span the whole
-        // screen, and a Picker inside a ScrollView is offered a huge measure budget
-        // as `availableHeight`. Reserve a few rows for the control + app chrome (the
-        // overlay placer makes the final fit) and keep a sensible floor.
-        let maxVisible = min(entries.count, max(4, context.environment.terminalHeight - 4))
+        // scrollbar) when they don't all fit. Use the published overlay content
+        // height — the area above the status bar / below the header that the
+        // compositor clamps overlays to — not `availableHeight` (a Picker inside a
+        // ScrollView is offered a huge measure budget) nor `terminalHeight` (that
+        // includes the status bar + header, so the drop-down would be sized too
+        // tall and have its bottom border + last rows shaved off against the status
+        // bar). Subtract 2 for the drop-down's own top/bottom border; keep a floor.
+        let maxVisible = min(entries.count, max(4, context.environment.overlayContentHeight - 2))
         let wantsBar = entries.count > maxVisible
 
         handler.menuScroll.extent = entries.count

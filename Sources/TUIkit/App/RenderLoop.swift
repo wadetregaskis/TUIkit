@@ -422,6 +422,11 @@ extension RenderLoop {
         }
 
         let contentHeight = terminalHeight - statusBarHeight - appHeaderHeight
+        // Publish the content-area height so anchored overlays (a Picker
+        // drop-down) size to the area the compositor will clamp them to — above
+        // the status bar — rather than to the full `terminalHeight` (which would
+        // leave their bottom rows shaved off against the status bar).
+        environment.overlayContentHeight = contentHeight
 
         var context = RenderContext(
             availableWidth: terminalWidth,
@@ -440,6 +445,7 @@ extension RenderLoop {
         if actualHeaderHeight != appHeaderHeight {
             diffWriter.invalidate()
             let actualContentHeight = terminalHeight - statusBarHeight - actualHeaderHeight
+            environment.overlayContentHeight = actualContentHeight
             var correctedContext = RenderContext(
                 availableWidth: terminalWidth,
                 availableHeight: actualContentHeight,

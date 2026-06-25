@@ -183,7 +183,10 @@ struct PickerTests {
     @Test("A long drop-down windows its options, shows a scrollbar, and scrolls")
     func longDropDownWindowsAndScrolls() throws {
         var context = createTestContext(height: 8)
-        context.environment.terminalHeight = 8  // window ≈ 4 rows after chrome
+        // The drop-down sizes to the overlay content area (above the status bar),
+        // not the full terminal height; an 8-row area windows to ≈ 6 rows of
+        // options after the drop-down's own top/bottom border.
+        context.environment.overlayContentHeight = 8
         var choice = AnyHashable("opt-0")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
         let entries = (0..<20).map {
@@ -205,6 +208,9 @@ struct PickerTests {
         let popupText = popup.lines.map(\.stripped).joined()
 
         #expect(popup.lines.count < entries.count, "menu is windowed, not all 20 options")
+        #expect(
+            popup.lines.count <= 8,
+            "the drop-down fits within the overlay content height (not clipped behind the status bar)")
         #expect(popupText.contains("Option 0"), "the window starts at the selected option")
         #expect(!popupText.contains("Option 19"), "the last option is off-screen initially")
         #expect(
