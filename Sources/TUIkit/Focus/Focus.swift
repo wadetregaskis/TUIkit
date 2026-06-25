@@ -64,6 +64,13 @@ public final class FocusManager: @unchecked Sendable {
     /// page — and a `ScrollView` would snap-scroll there, resetting the scroll.
     private var sectionFocusMemory: [String: String] = [:]
 
+    /// Sections that belong to a presented modal / alert — surfaces that *grab*
+    /// input. Re-marked each render by the presentation modifiers (cleared in
+    /// `beginRenderPass`). When the active section is one of these, the app's
+    /// global default key bindings (appearance / theme cycling) must not fire
+    /// behind the modal; see `InputHandler` and ``activeSectionIsModal``.
+    private var modalSectionIDs: Set<String> = []
+
     /// For each section that was activated *over* another, the section to revert
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
     private var sectionRevertTarget: [String: String] = [:]
@@ -92,6 +99,15 @@ public final class FocusManager: @unchecked Sendable {
     /// The ID of the currently active section, if any.
     var activeSectionIdentifier: String? {
         activeSectionID
+    }
+
+    /// Whether the active section belongs to a presented modal / alert — i.e. a
+    /// surface that grabs input. The `InputHandler` consults this to suppress the
+    /// app's global default key bindings (appearance / theme) so they don't fire
+    /// behind a modal. See ``markSectionModal(id:)``.
+    var activeSectionIsModal: Bool {
+        guard let activeID = activeSectionID else { return false }
+        return modalSectionIDs.contains(activeID)
     }
 
     /// All registered section IDs in render order.
@@ -203,6 +219,7 @@ extension FocusManager {
         focusedID = nil
         sectionFocusMemory.removeAll()
         sectionRevertTarget.removeAll()
+        modalSectionIDs.removeAll()
     }
 
     /// Focuses a specific element.
@@ -439,6 +456,14 @@ extension FocusManager {
         }
     }
 
+    /// Marks a section as belonging to a presented modal / alert (an
+    /// input-grabbing surface). Called by the presentation modifiers each render
+    /// — the set is cleared in `beginRenderPass`, so an unmarked (dismissed)
+    /// modal's section naturally stops grabbing input. See ``activeSectionIsModal``.
+    func markSectionModal(id: String) {
+        modalSectionIDs.insert(id)
+    }
+
     /// Returns the section with the given ID, or nil if not found.
     ///
     /// - Parameter id: The section identifier.
@@ -560,6 +585,10 @@ extension FocusManager {
     /// Call this at the start of each render pass instead of ``clear()``.
     func beginRenderPass() {
         sections.removeAll()
+        // Modal sections are re-marked each render by the presentation modifiers;
+        // clearing here means a dismissed modal (which no longer renders, so no
+        // longer re-marks) stops grabbing input on the very next frame.
+        modalSectionIDs.removeAll()
         // activeSectionID and focusedID are intentionally preserved.
         // They will be validated after the render pass re-registers sections.
     }

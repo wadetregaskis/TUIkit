@@ -60,16 +60,36 @@ extension RenderContext {
         )
     }
 
-    /// Returns a copy whose key-event dispatcher is a throwaway — for rendering
-    /// the page *beneath* a root-hosted modal. The page renders normally (real
-    /// focus + state, so it stays correct and isn't double-rendered), but its
-    /// `onKeyPress` / Menu key handlers register into a discarded dispatcher so
-    /// they can't fire while the modal is up. Focus is isolated separately by the
-    /// modal's active section; mouse is isolated by the dimmed backdrop dropping
-    /// the page's hit-test regions.
-    func isolatingKeyDispatcher() -> Self {
+    /// Creates a context isolated from the real focus, key-event, and state
+    /// systems — for rendering the page *beneath* a root-hosted modal / alert as
+    /// an inert backdrop. The returned context has a throwaway `FocusManager`,
+    /// `KeyEventDispatcher`, **and `StateStorage`**:
+    ///
+    /// - **focus isolation** stops the background's controls from registering
+    ///   into the live `FocusManager`. Crucially, the modal has already
+    ///   `activateSection`'d its own section before the page renders, so a
+    ///   background control registering with no explicit section would resolve to
+    ///   `activeSectionID` — the *modal's* section — and the first one would
+    ///   auto-focus there (see `FocusManager.register`), stealing the focus the
+    ///   modal's own controls should receive and leaving the background live to
+    ///   hotkeys. A throwaway manager keeps the real one seeing only the modal.
+    /// - **key isolation** stops the background's `onKeyPress` / Menu key handlers
+    ///   from firing while the modal is up.
+    /// - **state isolation** stops the background re-render from mutating the
+    ///   page's persistent `@State`. (The throwaway focus manager auto-focuses the
+    ///   first background element; a `ScrollView` would then snap-scroll to it and
+    ///   overwrite the real scroll offset — so dismissing the modal left the page
+    ///   scrolled back to the top. With its own storage that write lands on the
+    ///   throwaway state and the page's scroll position survives.)
+    ///
+    /// Mouse is isolated separately by the dimmed backdrop dropping the page's
+    /// hit-test regions. Lifecycle and preferences stay shared (keyed by identity,
+    /// unaffected by the backdrop, and must not double-fire / be lost).
+    func isolatedForBackground() -> Self {
         var copy = self
+        copy.environment.focusManager = FocusManager()
         copy.environment.keyEventDispatcher = KeyEventDispatcher()
+        copy.environment.stateStorage = StateStorage()
         return copy
     }
 }

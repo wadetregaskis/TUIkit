@@ -182,6 +182,62 @@ struct InputHandlerTests {
         #expect(fixture.appearance.current.id == "a2")
     }
 
+    /// Leaves the focus manager in the state a presented modal/alert produces:
+    /// a section that is active *and* marked modal (input-grabbing).
+    private func activateModalSection(_ focus: FocusManager, id: String = "modal-test") {
+        focus.registerSection(id: id)
+        focus.activateSection(id: id)
+        focus.markSectionModal(id: id)
+    }
+
+    @Test("Layer 4 'a' is suppressed while a modal section is active")
+    func appearanceSuppressedBehindModal() {
+        let fixture = makeFixture()
+        activateModalSection(fixture.focus)
+        let before = fixture.appearance.current.id
+
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("a")))
+
+        #expect(!consumed, "'a' must not be consumed behind a modal")
+        #expect(fixture.appearance.current.id == before, "the appearance must not cycle behind a modal")
+    }
+
+    @Test("Layer 4 't' is suppressed while a modal section is active")
+    func themeSuppressedBehindModal() {
+        let fixture = makeFixture()
+        fixture.statusBar.showThemeItem = true
+        activateModalSection(fixture.focus)
+        let before = fixture.palette.current.id
+
+        fixture.handler.handle(KeyEvent(key: .character("t")))
+
+        #expect(fixture.palette.current.id == before, "the theme must not cycle behind a modal")
+    }
+
+    @Test("Layer 4 'a' is suppressed while a drop-down has claimed Escape")
+    func appearanceSuppressedBehindDropdown() {
+        let fixture = makeFixture()
+        // An open Picker drop-down signals its transient grab via the escape
+        // override; the global appearance shortcut must defer to it too.
+        fixture.statusBar.escapeLabelOverride = "Close"
+        let before = fixture.appearance.current.id
+
+        fixture.handler.handle(KeyEvent(key: .character("a")))
+
+        #expect(fixture.appearance.current.id == before)
+    }
+
+    @Test("Quit still fires from behind a modal (its status bar offers it)")
+    func quitStillWorksBehindModal() {
+        let fixture = makeFixture()
+        activateModalSection(fixture.focus)
+
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("q")))
+
+        #expect(consumed)
+        #expect(fixture.probe.quitCount == 1, "q remains an escape hatch behind a modal")
+    }
+
     @Test("An unhandled key with no consumers is a no-op")
     func unhandledKeyIsNoOp() {
         let fixture = makeFixture()

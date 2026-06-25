@@ -98,6 +98,9 @@ extension AlertPresentationModifier: Renderable {
             let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)
+            // Mark this section input-grabbing so the app's global default key
+            // bindings (appearance/theme) don't fire behind the alert.
+            focusManager?.markSectionModal(id: sectionID)
         }
 
         // Register ESC handler to dismiss the alert (on the real dispatcher; the
@@ -111,11 +114,16 @@ extension AlertPresentationModifier: Renderable {
             return false
         }
 
-        // Render the page beneath normally — real focus + state, rendered once
-        // (the root compositor dims it for the backdrop). `onKeyPress` is isolated
-        // so page hotkeys can't fire while the alert is up; mouse is isolated by
-        // the dimmed backdrop dropping the page's hit-test regions.
-        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatingKeyDispatcher())
+        // Render the page beneath as an inert backdrop, isolated from the live
+        // focus / key / state systems (`isolatedForBackground`). The alert section
+        // is already active, so a background control rendered into the real focus
+        // manager would resolve to that section and steal the focus the alert's
+        // own actions should auto-receive — and stay live to hotkeys. Isolation
+        // keeps the real manager seeing only the alert, silences page `onKeyPress`,
+        // and (via throwaway state) preserves the page's scroll/@State. The root
+        // compositor dims this buffer for the backdrop; mouse is isolated by that
+        // dimmed backdrop dropping the page's hit-test regions.
+        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatedForBackground())
 
         // Render the alert against the FULL screen (not the attachment's local
         // area) so it isn't clipped, in the alert section.

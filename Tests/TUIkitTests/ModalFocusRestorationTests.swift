@@ -58,6 +58,43 @@ struct ModalFocusRestorationTests {
         #expect(fm.currentFocusedID == "row-20", "page focus restored on dismiss")
         #expect(closed.first == scrolled.first, "scroll position unchanged on dismiss; got \(closed.first ?? "")")
     }
+
+    @Test("A presented modal auto-focuses its first control, not the page's")
+    func modalAutoFocusesFirstControl() {
+        let presented = BoolBox()
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let view = VStack {
+            Text("Page")
+            Button("Page Button") {}.focusID("page-button")
+        }
+        .modal(isPresented: presented.binding) {
+            Button("Dismiss") {}.focusID("modal-dismiss")
+        }
+
+        func render() {
+            var env = EnvironmentValues()
+            env.focusManager = fm
+            let ctx = RenderContext(availableWidth: 40, availableHeight: 12, environment: env, tuiContext: tui)
+            fm.beginRenderPass()
+            _ = renderToBuffer(view, context: ctx)
+            fm.endRenderPass()
+        }
+
+        render()  // page only — the page's own button auto-focuses
+        #expect(fm.currentFocusedID == "page-button")
+
+        presented.v = true
+        render()  // modal up
+
+        // The modal's control takes focus (the page beneath renders into a
+        // throwaway focus manager, so it can't keep or steal it), and the modal
+        // section grabs input.
+        #expect(
+            fm.currentFocusedID == "modal-dismiss",
+            "modal's first control is focused; got \(fm.currentFocusedID ?? "nil")")
+        #expect(fm.activeSectionIsModal, "the active section is the modal's, marked input-grabbing")
+    }
 }
 
 @MainActor

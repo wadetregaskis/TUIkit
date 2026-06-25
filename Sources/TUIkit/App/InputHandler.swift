@@ -111,7 +111,11 @@ extension InputHandler {
             }
         }
 
-        // Layer 4: Default key bindings
+        // Layer 4: Default key bindings.
+        //
+        // Quit stays available even behind a transient surface — a modal's status
+        // bar still offers `q quit` as an escape hatch — so it is handled first,
+        // unconditionally.
         if statusBar.quitShortcut.matches(event) {
             if statusBar.isQuitAllowed {
                 onQuit()
@@ -119,15 +123,25 @@ extension InputHandler {
             return true
         }
 
+        // The remaining global shortcuts (appearance / theme cycling) are app
+        // chrome, not part of any modal's interaction. Suppress them while an
+        // input-grabbing transient surface is up — a presented modal / alert
+        // (its focus section is marked modal) or an open drop-down (which has
+        // claimed ESC). Otherwise `a` would cycle the border style and `t` the
+        // theme from *behind* the modal, which the user never asked for and
+        // can't see the controls for.
+        let inputGrabbed = focusManager.activeSectionIsModal || statusBar.escapeLabelOverride != nil
+
         switch event.key {
         case .character(let character) where character == "t" || character == "T":
-            if statusBar.showThemeItem {
+            if statusBar.showThemeItem && !inputGrabbed {
                 paletteManager.cycleNext()
                 return true
             }
             return false
 
         case .character(let character) where character == "a" || character == "A":
+            if inputGrabbed { return false }
             appearanceManager.cycleNext()
             return true
 
