@@ -72,6 +72,11 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// line up exactly with the content area.
     var viewportHeight: Int
 
+    /// How many rows a Shift-accelerated Up/Down moves the focus cursor. Set from
+    /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
+    /// moves one. See ``View/shiftStepMultiplier(_:)``.
+    var shiftStepMultiplier: Int = 5
+
     /// The full height of the scrollable content area, in rows —
     /// the space available for visible rows *plus* whichever
     /// scroll indicators are showing.
@@ -241,11 +246,21 @@ extension ItemListHandler {
 
         switch event.key {
         case .up:
-            moveFocus(by: -1, wrap: true)
+            // A plain Up moves one row and wraps; Shift jumps by the multiplier
+            // and clamps at the top (an accelerated move, not a cycle).
+            if event.shift {
+                moveFocus(by: -max(1, shiftStepMultiplier), wrap: false)
+            } else {
+                moveFocus(by: -1, wrap: true)
+            }
             return true
 
         case .down:
-            moveFocus(by: 1, wrap: true)
+            if event.shift {
+                moveFocus(by: max(1, shiftStepMultiplier), wrap: false)
+            } else {
+                moveFocus(by: 1, wrap: true)
+            }
             return true
 
         case .home:

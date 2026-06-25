@@ -84,6 +84,35 @@ struct ItemListHandlerNavigationTests {
         #expect(handler.focusedIndex == 2)  // Wrapped to last
     }
 
+    @Test("Shift+Down moves by the step multiplier and clamps at the end")
+    func shiftDownAccelerates() {
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: 20, viewportHeight: 5, selectionMode: .single)
+        handler.shiftStepMultiplier = 5
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down, ctrl: false, alt: false, shift: true))
+        #expect(handler.focusedIndex == 5, "Shift+Down jumps 5: \(handler.focusedIndex)")
+
+        handler.focusedIndex = 18
+        _ = handler.handleKeyEvent(KeyEvent(key: .down, ctrl: false, alt: false, shift: true))
+        #expect(handler.focusedIndex == 19, "clamps at the last row instead of wrapping: \(handler.focusedIndex)")
+    }
+
+    @Test("Shift+Up moves by the step multiplier and clamps at the top")
+    func shiftUpAccelerates() {
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: 20, viewportHeight: 5, selectionMode: .single)
+        handler.shiftStepMultiplier = 5
+        handler.focusedIndex = 12
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .up, ctrl: false, alt: false, shift: true))
+        #expect(handler.focusedIndex == 7, "Shift+Up jumps 5 back: \(handler.focusedIndex)")
+
+        handler.focusedIndex = 2
+        _ = handler.handleKeyEvent(KeyEvent(key: .up, ctrl: false, alt: false, shift: true))
+        #expect(handler.focusedIndex == 0, "clamps at the top instead of wrapping: \(handler.focusedIndex)")
+    }
+
     @Test("Home key jumps to first item")
     func homeJumpsToFirst() {
         let handler = ItemListHandler<String>(

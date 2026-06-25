@@ -499,6 +499,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
+        // Captured at render so Shift+arrow can accelerate the focus cursor at
+        // event time, when the environment is no longer reachable.
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing
