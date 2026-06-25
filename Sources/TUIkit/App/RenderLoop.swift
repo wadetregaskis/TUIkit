@@ -392,6 +392,13 @@ extension RenderLoop {
         terminalHeight: Int,
         statusBarHeight: Int
     ) -> (buffer: FrameBuffer, contentHeight: Int) {
+        // Publish the true screen height into the environment so overlays (e.g. a
+        // Picker drop-down) can size to the visible area. Unlike a context's
+        // `availableHeight` — which a ScrollView inflates to a tall measure budget —
+        // this is set once at the root and never overridden, so it survives intact
+        // however deep the consumer sits.
+        var environment = environment
+        environment.terminalHeight = terminalHeight
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.

@@ -24,6 +24,27 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - Terminal Height Environment Key
+
+/// Environment key for the terminal's total height in rows.
+private struct TerminalHeightKey: EnvironmentKey {
+    static let defaultValue: Int = 24
+}
+
+extension EnvironmentValues {
+    /// The terminal's total height in rows, published once at the render root.
+    ///
+    /// Unlike a context's `availableHeight` — which a ``ScrollView`` inflates to a
+    /// tall measure budget — this stays the true screen height however deep the
+    /// reader sits, letting an overlay (e.g. a ``Picker`` drop-down) size itself to
+    /// the visible area. Defaults to a conservative 24 when no render loop has set
+    /// it (e.g. in isolated tests).
+    var terminalHeight: Int {
+        get { self[TerminalHeightKey.self] }
+        set { self[TerminalHeightKey.self] = newValue }
+    }
+}
+
 // MARK: - List Style Environment Key
 
 /// Environment key for list styles.

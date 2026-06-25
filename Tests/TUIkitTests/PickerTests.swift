@@ -180,6 +180,50 @@ struct PickerTests {
         #expect(popupWidths.first == open.width)
     }
 
+    @Test("A long drop-down windows its options, shows a scrollbar, and scrolls")
+    func longDropDownWindowsAndScrolls() throws {
+        var context = createTestContext(height: 8)
+        context.environment.terminalHeight = 8  // window ≈ 4 rows after chrome
+        var choice = AnyHashable("opt-0")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries = (0..<20).map {
+            _PickerEntry(tag: AnyHashable("opt-\($0)"), label: AnyView(Text("Option \($0)")))
+        }
+        let core = _PickerMenuCore(
+            entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
+
+        _ = renderToBuffer(core, context: context)  // create the persistent handler
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummy = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker", selection: dummy, itemValues: [], canBeFocused: true))
+        box.value.isOpen = true
+
+        let popup = try #require(renderToBuffer(core, context: context).overlays.first).content
+        let popupText = popup.lines.map(\.stripped).joined()
+
+        #expect(popup.lines.count < entries.count, "menu is windowed, not all 20 options")
+        #expect(popupText.contains("Option 0"), "the window starts at the selected option")
+        #expect(!popupText.contains("Option 19"), "the last option is off-screen initially")
+        #expect(
+            popupText.contains("▼") || popupText.contains("▲"),
+            "the drop-down draws a scrollbar: \(popupText)")
+        // The scrollbar is wired for the mouse: a one-column hit region down the
+        // right interior edge.
+        #expect(
+            popup.hitTestRegions.contains { $0.width == 1 && $0.offsetX == popup.width - 2 },
+            "the scrollbar column has its own hit region")
+
+        // End jumps the highlight to the last option; the window follows it.
+        _ = box.value.handleKeyEvent(KeyEvent(key: .end))
+        let scrolled = try #require(renderToBuffer(core, context: context).overlays.first).content
+        let scrolledText = scrolled.lines.map(\.stripped).joined()
+        #expect(scrolledText.contains("Option 19"), "after End the last option is visible: \(scrolledText)")
+        #expect(!scrolledText.contains("Option 0"), "after End the first option scrolled off")
+    }
+
     @Test("Clicking the collapsed control closes an open drop-down")
     func clickingControlClosesOpenDropDown() throws {
         let context = createTestContext()

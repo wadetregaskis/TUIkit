@@ -17,6 +17,7 @@ struct PickerPage: View {
     @State var fruit: String = "apple"
     @State var size: String = "medium"
     @State var priority: Int = 2
+    @State var number: Int = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -27,6 +28,16 @@ struct PickerPage: View {
                     Text("Banana").tag("banana")
                     Text("Cherry").tag("cherry")
                     Text("Dragonfruit").tag("dragonfruit")
+                }
+            }
+
+            DemoSection("Long Menu (scrolls)") {
+                // More options than fit the screen: the drop-down windows them and
+                // shows a scrollbar (wheel, arrows, Home/End, and the bar all scroll).
+                Picker("Pick a number", selection: $number) {
+                    ForEach(1...40, id: \.self) { value in
+                        Text("Number \(value)").tag(value)
+                    }
                 }
             }
 
@@ -55,6 +66,7 @@ struct PickerPage: View {
                     ValueDisplayRow("Fruit:", fruit)
                     ValueDisplayRow("Size:", size)
                     ValueDisplayRow("Priority:", "\(priority)")
+                    ValueDisplayRow("Number:", "\(number)")
                 }
             }
 
