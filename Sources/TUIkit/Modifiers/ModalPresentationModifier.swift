@@ -62,72 +62,59 @@ extension ModalPresentationModifier: Renderable {
             return TUIkit.renderToBuffer(content, context: context)
         }
 
-        let focusManager = context.environment.focusManager
-
-        // Render dimmed base with an isolated context.
-        // The base content's buttons and key handlers register into a
-        // throwaway FocusManager and KeyEventDispatcher so they don't
-        // interfere with the modal's interactive elements.
-        let dimmedBase = DimmedModifier(content: content)
-        let isolatedContext = context.isolatedForBackground()
-        let dimmedBuffer = TUIkit.renderToBuffer(dimmedBase, context: isolatedContext)
-
-        // Register the modal focus section and activate it. The modal section
-        // becomes the active section, so Tab/arrows only navigate within the
-        // modal's focusable elements.
+        // Register the modal focus section and activate it FIRST — so the page
+        // rendered beneath registers its controls in the now-inactive page
+        // section (and can't steal focus or auto-scroll), while the modal's own
+        // controls auto-focus. The active section means Tab/arrows navigate only
+        // within the modal. (Skipped while measuring — a measure mustn't mutate
+        // focus or the status bar.)
         if !context.isMeasuring {
+            let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)
 
             // While the modal is on screen ESC should close it. Publish an
             // ESC=dismiss item on the status bar tied to the modal section
             // (composition: merge so non-ESC items the page declared still
-            // show), and have it flip the presentation binding back to
-            // false. The section items are cleared at the start of every
-            // render pass, so closing the modal naturally drops the
-            // override and restores the page's own ESC item.
+            // show), flipping the presentation binding back to false. Section
+            // items are cleared each render pass, so closing the modal naturally
+            // drops the override and restores the page's own ESC item.
             let isPresented = self.isPresented
-            let dismissItem = StatusBarItem(
-                shortcut: Shortcut.escape,
-                label: "dismiss"
-            ) {
+            let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
                 isPresented.wrappedValue = false
             }
             context.environment.statusBar.registerSectionItems(
-                sectionID: sectionID,
-                items: [dismissItem],
-                composition: .merge
-            )
+                sectionID: sectionID, items: [dismissItem], composition: .merge)
         }
 
-        // Set the modal section in the context so child focusables
-        // (buttons in the modal) register in the modal section.
-        var modalContext = context
-        modalContext.environment.activeFocusSectionID = sectionID
+        // Render the page beneath normally — real focus + state, rendered once
+        // (the root compositor dims it for the backdrop, so there's no separate
+        // dimmed re-render and the page's scroll/state survive). `onKeyPress` is
+        // isolated so page hotkeys can't fire while the modal is up; mouse is
+        // isolated by the dimmed backdrop dropping the page's hit-test regions.
+        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatingKeyDispatcher())
 
+        // Render the modal content against the FULL screen (not the attachment's
+        // local area, which may be a tiny leaf) so it isn't clipped, in the modal
+        // section so its focusables register there. The root compositor then
+        // centres and clamps it.
+        var modalContext = context
+            .withAvailableWidth(context.environment.terminalWidth)
+            .withAvailableHeight(context.environment.terminalHeight)
+        modalContext.environment.activeFocusSectionID = sectionID
         let modalBuffer = TUIkit.renderToBuffer(modal, context: modalContext)
 
-        guard !dimmedBuffer.isEmpty else {
-            return modalBuffer
-        }
+        guard !modalBuffer.isEmpty else { return baseBuffer }
 
-        guard !modalBuffer.isEmpty else {
-            return dimmedBuffer
-        }
-
-        // Center relative to the full terminal area, not the content size.
-        let screenWidth = context.availableWidth
-        let screenHeight = context.availableHeight
-        let modalWidth = modalBuffer.width
-        let modalHeight = modalBuffer.height
-
-        let horizontalOffset = max(0, (screenWidth - modalWidth) / 2)
-        let verticalOffset = max(0, (screenHeight - modalHeight) / 2 - 2)
-
-        return dimmedBuffer.composited(
-            with: modalBuffer,
-            at: (x: horizontalOffset, y: verticalOffset)
-        )
+        // Float the modal to the screen root: it composites centred over the whole
+        // screen and dims everything beneath — so it presents over the full screen
+        // no matter where in the view tree `.modal` was attached (rather than
+        // centring on the attachment's local area).
+        baseBuffer.overlays.append(
+            OverlayLayer(
+                offsetX: 0, offsetY: 0, content: modalBuffer,
+                level: .modal, centered: true, dimsBackground: true))
+        return baseBuffer
     }
 }
 

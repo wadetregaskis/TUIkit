@@ -31,6 +31,11 @@ private struct TerminalHeightKey: EnvironmentKey {
     static let defaultValue: Int = 24
 }
 
+/// Environment key for the terminal's total width in columns.
+private struct TerminalWidthKey: EnvironmentKey {
+    static let defaultValue: Int = 80
+}
+
 extension EnvironmentValues {
     /// The terminal's total height in rows, published once at the render root.
     ///
@@ -42,6 +47,17 @@ extension EnvironmentValues {
     var terminalHeight: Int {
         get { self[TerminalHeightKey.self] }
         set { self[TerminalHeightKey.self] = newValue }
+    }
+
+    /// The terminal's total width in columns, published once at the render root.
+    ///
+    /// Like ``terminalHeight``, this is the true screen width however deep the
+    /// reader sits — unlike a context's `availableWidth`, which is only whatever a
+    /// leaf was offered. A screen-level overlay (e.g. a centred modal) renders
+    /// against it so it isn't clipped to its attachment's local area. Defaults to 80.
+    var terminalWidth: Int {
+        get { self[TerminalWidthKey.self] }
+        set { self[TerminalWidthKey.self] = newValue }
     }
 }
 

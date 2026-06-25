@@ -118,10 +118,11 @@ struct OverlayTests {
                 Text("Modal")
             }
         let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
+        // The convenience modal floats to the screen root as an overlay (so it
+        // centres + dims over the whole screen); composite it the way RenderLoop
+        // does to see the final dimmed-base + centred-modal buffer.
         let buffer = renderToBuffer(view, context: context)
-        // The convenience modal now goes through the real presentation path: a
-        // dimmed base with the modal centred on top (rather than a bare overlay
-        // composited onto the single base line).
+            .compositingOverlays(maxWidth: 80, maxHeight: 24, palette: context.environment.palette)
         let all = buffer.lines.map { $0.stripped }.joined(separator: "\n")
         #expect(all.contains("Background"), "the dimmed base is shown")
         #expect(all.contains("Modal"), "the modal content is shown over the base")

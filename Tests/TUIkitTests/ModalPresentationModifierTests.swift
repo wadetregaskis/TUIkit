@@ -23,8 +23,16 @@ struct ModalPresentationModifierTests {
     }
 
     /// Helper to render a view to a FrameBuffer.
+    ///
+    /// A presented `.modal` now floats to the screen root as an overlay (so it
+    /// centres + dims over the whole screen from any attachment), so the test
+    /// composites the overlays the way `RenderLoop` does — yielding the final
+    /// dimmed-base + centred-modal buffer the tests assert against.
     private func render<V: View>(_ view: V) -> FrameBuffer {
-        renderToBuffer(view, context: testContext())
+        let context = testContext()
+        let buffer = renderToBuffer(view, context: context)
+        return buffer.compositingOverlays(
+            maxWidth: 80, maxHeight: 24, palette: context.environment.palette)
     }
 
     @Test("Modal not presented shows only base content")
@@ -169,6 +177,34 @@ struct ModalPresentationModifierTests {
         #expect(content.contains("Wide base content"))
         #expect(content.contains("Small"))
     }
+
+    @Test("A modal attached to a small leaf still centres on the whole screen (#95)")
+    func leafModalCentersOnScreen() {
+        // `.modal` is on a one-character leaf near the top-left, not the page
+        // root. It must still centre over the full 80×24 screen, not the leaf's
+        // tiny local area.
+        let view = VStack(alignment: .leading, spacing: 0) {
+            Text("TOPLINE")
+            Text("x").modal(isPresented: .constant(true)) {
+                Dialog(title: "M") { Text("MODALBODY") }
+            }
+            Text("BOTLINE")
+        }
+        let buffer = render(view)  // composites the overlay at 80×24
+        let lines = buffer.lines.map { $0.stripped }
+
+        guard let row = lines.firstIndex(where: { $0.contains("MODALBODY") }) else {
+            Issue.record("the modal body should be shown: \(lines)")
+            return
+        }
+        let leading = lines[row].prefix { $0 == " " }.count
+        // Centred vertically (well below the leaf's row ~1) and horizontally (a big
+        // left margin, not flush at the leaf's column 0).
+        #expect(row > 4, "modal is centred vertically, not at the leaf's row: \(row)")
+        #expect(leading > 15, "modal is centred horizontally, not at the leaf's column: leading=\(leading)")
+        // The dimmed base is still visible behind it.
+        #expect(lines.contains { $0.contains("TOPLINE") }, "the dimmed base shows through")
+    }
 }
 
 // MARK: - Focus / input isolation (modal blocks the background)
@@ -195,7 +231,13 @@ struct ModalIsolationTests {
         fm.beginRenderPass()
         let buffer = renderToBuffer(view, context: ctx)
         fm.endRenderPass()
-        return (buffer, fm, tui)
+        // The modal floats to the screen root as an overlay, so composite it the
+        // way RenderLoop does: that dims the base (dropping its hit regions, so the
+        // background is inert) and lands the modal's hit regions at the centred
+        // position — which is exactly the isolation these tests check.
+        let composited = buffer.compositingOverlays(
+            maxWidth: width, maxHeight: height, palette: ctx.environment.palette)
+        return (composited, fm, tui)
     }
 
     /// Clicks the centre of every hit region in the buffer.

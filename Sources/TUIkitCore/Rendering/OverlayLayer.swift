@@ -73,6 +73,17 @@ public struct OverlayLayer: Sendable, Equatable {
     /// (the layer is simply clamped on screen).
     public var anchorHeight: Int
 
+    /// When `true`, the layer ignores ``offsetX`` / ``offsetY`` and is centred
+    /// in the composite area instead (used by screen-level modals/alerts, which
+    /// must centre on the whole screen regardless of where in the tree they were
+    /// attached). Anchored overlays (popovers) leave this `false`.
+    public var centered: Bool
+
+    /// When `true`, the compositor dims everything beneath this layer before
+    /// drawing it — a flat, inert backdrop so the layer reads as modal. Used by
+    /// modals/alerts; popovers and notifications leave this `false`.
+    public var dimsBackground: Bool
+
     /// Creates an overlay layer.
     ///
     /// - Parameters:
@@ -83,13 +94,17 @@ public struct OverlayLayer: Sendable, Equatable {
     ///   - zIndex: The fine-grained order within the level (default: `0`).
     ///   - anchorHeight: The height of the anchoring control above the layer,
     ///     used for flip-on-overflow placement (default: `0`).
+    ///   - centered: Centre in the composite area, ignoring the offset (default: `false`).
+    ///   - dimsBackground: Dim everything beneath before drawing (default: `false`).
     public init(
         offsetX: Int,
         offsetY: Int,
         content: FrameBuffer,
         level: OverlayLevel = .popover,
         zIndex: Double = 0,
-        anchorHeight: Int = 0
+        anchorHeight: Int = 0,
+        centered: Bool = false,
+        dimsBackground: Bool = false
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
@@ -97,6 +112,8 @@ public struct OverlayLayer: Sendable, Equatable {
         self.level = level
         self.zIndex = zIndex
         self.anchorHeight = anchorHeight
+        self.centered = centered
+        self.dimsBackground = dimsBackground
     }
 
     /// Resolves this layer's on-screen placement within a `maxWidth` × `maxHeight`
@@ -111,6 +128,12 @@ public struct OverlayLayer: Sendable, Equatable {
         let clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
         let height = clamped.height
         let width = clamped.width
+
+        // Screen-level overlays (modals/alerts) centre on the whole composite
+        // area, ignoring the offset they happened to ride up the tree with.
+        if centered {
+            return (clamped, max(0, (maxWidth - width) / 2), max(0, (maxHeight - height) / 2))
+        }
 
         var y = offsetY
         if y + height > maxHeight {

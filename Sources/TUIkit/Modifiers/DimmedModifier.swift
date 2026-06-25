@@ -61,66 +61,35 @@ private enum DimmedOrnaments {
 extension DimmedModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let contentBuffer = TUIkit.renderToBuffer(content, context: context)
-
-        guard !contentBuffer.isEmpty else {
-            return contentBuffer
-        }
-
         let palette = context.environment.palette
-        let foreground = palette.foregroundTertiary
-        let background = palette.overlayBackground
-
-        // Strip all ANSI codes and ornament characters, then re-apply
-        // uniform dimmed styling. This removes borders and indicators —
-        // leaving only plain text on a uniform dimmed background.
-        let dimmedLines = contentBuffer.lines.map { line -> String in
-            flattenLine(line, foreground: foreground, background: background, width: contentBuffer.width)
-        }
-
-        // Intentionally use the bare FrameBuffer(lines:) initializer
-        // rather than `contentBuffer.replacingLines(...)`: dimming
-        // is applied to background content behind a modal / alert,
-        // and that background MUST become fully inert while the
-        // modal is up.
-        //
-        // - hit-test regions are dropped so clicks on dimmed
-        //   buttons / text fields / etc. don't fire (the modal
-        //   above is responsible for intercepting input).
-        // - overlay layers are dropped so a popover / picker that
-        //   was open on the background before the modal appeared
-        //   doesn't continue to draw on top, half-bright, in front
-        //   of the dimmed backdrop.
-        //
-        // The intent is "this layer is a flat, non-interactive
-        // backdrop". If you find yourself wanting to preserve
-        // either, you almost certainly want a different modifier.
-        return FrameBuffer(lines: dimmedLines)
+        return contentBuffer.dimmedAsBackdrop(
+            foreground: palette.foregroundTertiary, background: palette.overlayBackground)
     }
+}
 
-    /// Strips all ANSI formatting and ornament characters from a line,
-    /// then applies uniform dimmed colors.
+extension FrameBuffer {
+    /// Returns a flat, inert, dimmed copy of this buffer for use as the backdrop
+    /// behind a modal / alert: every line is stripped of ANSI codes and ornament
+    /// characters (borders, indicators) and re-rendered as a dimmed `foreground`
+    /// on a uniform `background`, padded to the full width so no gaps show.
     ///
-    /// The line is padded to the full buffer width so the dimmed background
-    /// covers the entire row without gaps.
-    ///
-    /// - Parameters:
-    ///   - line: The original line with ANSI codes and ornaments.
-    ///   - foreground: The dimmed foreground color.
-    ///   - background: The dimmed background color.
-    ///   - width: The target width to pad to.
-    /// - Returns: The flattened, uniformly styled line.
-    private func flattenLine(_ line: String, foreground: Color, background: Color, width: Int) -> String {
-        let stripped = line.stripped
-        let cleaned = String(stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
-        let paddedText = cleaned.padding(toLength: width, withPad: " ", startingAt: 0)
-
-        var style = TextStyle()
-        style.foregroundColor = foreground
-        style.backgroundColor = background
-        style.isDim = true
-
-        return ANSIRenderer.render(paddedText, with: style)
-            .withPersistentBackground(background)
+    /// Hit-test regions and nested overlay layers are intentionally dropped — the
+    /// backdrop MUST be fully inert while the modal is up: clicks on dimmed
+    /// controls must not fire (the modal intercepts input), and a popover/picker
+    /// that was open behind the modal must not keep drawing half-bright on top.
+    public func dimmedAsBackdrop(foreground: Color, background: Color) -> FrameBuffer {
+        guard !isEmpty else { return self }
+        let width = self.width
+        let dimmed = lines.map { line -> String in
+            let cleaned = String(line.stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
+            let paddedText = cleaned.padding(toLength: width, withPad: " ", startingAt: 0)
+            var style = TextStyle()
+            style.foregroundColor = foreground
+            style.backgroundColor = background
+            style.isDim = true
+            return ANSIRenderer.render(paddedText, with: style).withPersistentBackground(background)
+        }
+        return FrameBuffer(lines: dimmed)
     }
 }
 

@@ -85,4 +85,17 @@ extension RenderContext {
         copy.environment.stateStorage = StateStorage()
         return copy
     }
+
+    /// Returns a copy whose key-event dispatcher is a throwaway — for rendering
+    /// the page *beneath* a root-hosted modal. The page renders normally (real
+    /// focus + state, so it stays correct and isn't double-rendered), but its
+    /// `onKeyPress` / Menu key handlers register into a discarded dispatcher so
+    /// they can't fire while the modal is up. Focus is isolated separately by the
+    /// modal's active section; mouse is isolated by the dimmed backdrop dropping
+    /// the page's hit-test regions.
+    func isolatingKeyDispatcher() -> Self {
+        var copy = self
+        copy.environment.keyEventDispatcher = KeyEventDispatcher()
+        return copy
+    }
 }

@@ -302,7 +302,8 @@ extension RenderLoop {
         if !buffer.overlays.isEmpty {
             let overlayContentHeight = terminalHeight - statusBarHeight - appHeader.height
             buffer = compositeOverlays(
-                buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight)
+                buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight,
+                palette: environment.palette)
         }
 
         // Build the app-header and status-bar buffers up front
@@ -399,6 +400,7 @@ extension RenderLoop {
         // however deep the consumer sits.
         var environment = environment
         environment.terminalHeight = terminalHeight
+        environment.terminalWidth = terminalWidth
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.
@@ -641,34 +643,9 @@ extension RenderLoop {
     ///   - maxHeight: The height of the content area in rows.
     /// - Returns: The content buffer with all overlay layers composited in.
     fileprivate func compositeOverlays(
-        _ base: FrameBuffer, maxWidth: Int, maxHeight: Int
+        _ base: FrameBuffer, maxWidth: Int, maxHeight: Int, palette: any Palette
     ) -> FrameBuffer {
-        var result = base
-        // A small pass cap guards against a pathological layer that somehow
-        // keeps re-emitting itself; 16 levels of nesting is far beyond real use.
-        var passesRemaining = 16
-        while !result.overlays.isEmpty && passesRemaining > 0 {
-            passesRemaining -= 1
-            let layers = result.overlays
-            result.overlays = []
-
-            let ordered = layers.enumerated().sorted { lhs, rhs in
-                if lhs.element.level != rhs.element.level {
-                    return lhs.element.level < rhs.element.level
-                }
-                if lhs.element.zIndex != rhs.element.zIndex {
-                    return lhs.element.zIndex < rhs.element.zIndex
-                }
-                return lhs.offset < rhs.offset
-            }.map(\.element)
-
-            for layer in ordered {
-                let placed = layer.placed(maxWidth: maxWidth, maxHeight: maxHeight)
-                result = result.composited(
-                    with: placed.content, at: (x: placed.x, y: placed.y))
-            }
-        }
-        return result
+        base.compositingOverlays(maxWidth: maxWidth, maxHeight: maxHeight, palette: palette)
     }
 
     /// Builds the app-header buffer (with its hit-test regions
