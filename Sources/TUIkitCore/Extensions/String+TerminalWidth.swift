@@ -469,6 +469,28 @@ extension String {
 
 // MARK: - ANSI String Helpers
 
+extension StringProtocol {
+    /// Terminal width of a run that contains NO ANSI escapes, fast-pathing pure
+    /// ASCII.
+    ///
+    /// ASCII is exactly one cell per byte, so for an all-ASCII run the width is
+    /// the byte count — computed by a plain byte scan that skips grapheme-cluster
+    /// segmentation. That segmentation (`_opaqueCharacterStride` /
+    /// `getGraphemeBreakProperty` / `_GraphemeBreakingState.shouldBreak`) is the
+    /// single dominant cost in render profiling, and the overwhelming majority of
+    /// terminal text — labels, wrapped words, table cells — is ASCII. The first
+    /// non-ASCII byte falls back to summing per-`Character` ``Character/terminalWidth``,
+    /// so results are byte-identical to the grapheme path.
+    var visibleRunWidth: Int {
+        var width = 0
+        for byte in utf8 {
+            if byte >= 0x80 { return reduce(0) { $0 + $1.terminalWidth } }
+            width += 1
+        }
+        return width
+    }
+}
+
 extension String {
     /// The visible width of the string in terminal cells, excluding ANSI escape codes.
     ///
@@ -487,16 +509,19 @@ extension String {
         // wrapping is plain (unstyled), so this is the overwhelming common case.
         // Byte-identical: a no-ESC string yields exactly one run equal to the
         // whole string.
-        if !unicodeScalars.contains(where: { $0.value == 0x1B }) {
-            return reduce(0) { $0 + $1.terminalWidth }
+        // ESC detection is a direct byte search (0x1B is a standalone byte, never
+        // part of a multi-byte scalar), cheaper than decoding scalars.
+        if !utf8.contains(0x1B) {
+            return visibleRunWidth
         }
         // General path: ANSI present — measure each visible run independently (a
         // trailing Extend scalar after an SGR terminator must not fuse onto the
         // previous run; see `forEachVisibleANSIRun(_:)`). Each run is a borrowed
-        // `Substring`, so this counts widths without allocating.
+        // `Substring`, so this counts widths without allocating, and each run
+        // takes the ASCII byte-count fast path when it has no wide characters.
         var total = 0
         forEachVisibleANSIRun { run in
-            for character in run { total += character.terminalWidth }
+            total += run.visibleRunWidth
         }
         return total
     }
