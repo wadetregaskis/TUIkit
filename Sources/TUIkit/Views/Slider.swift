@@ -395,6 +395,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // Keep handler in sync with current values
         handler.value = value
         handler.canBeFocused = !isDisabled
+        // Captured at render so Shift+arrow can accelerate at event time.
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.onEditingChanged = onEditingChanged
         handler.clampValue()
 

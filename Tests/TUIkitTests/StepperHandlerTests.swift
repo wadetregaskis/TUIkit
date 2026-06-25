@@ -68,6 +68,29 @@ struct StepperHandlerTests {
         #expect(value == 4)
     }
 
+    @Test("Shift+arrow steps by the multiplier, clamping to bounds")
+    func shiftArrowAccelerates() {
+        var value = 10
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let handler = StepperHandler(focusID: "test", value: binding, bounds: 0...100, step: 1)
+        handler.shiftStepMultiplier = 5
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, shift: true))
+        #expect(value == 15, "Shift+Right adds 5 steps: \(value)")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .left, shift: true))
+        #expect(value == 10, "Shift+Left subtracts 5 steps: \(value)")
+
+        // A plain `+` still steps once even though Shift would on an arrow.
+        _ = handler.handleKeyEvent(KeyEvent(key: .character("+")))
+        #expect(value == 11, "the + key keeps the single step: \(value)")
+
+        // Near the bound, the accelerated step clamps rather than overshooting.
+        value = 98
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, shift: true))
+        #expect(value == 100, "clamps to the upper bound: \(value)")
+    }
+
     @Test("Plus key increments value")
     func plusKeyIncrements() {
         var value = 5

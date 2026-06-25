@@ -33,6 +33,11 @@ final class StepperHandler<V: Strideable>: Focusable where V.Stride: SignedNumer
     /// The step size for increment/decrement.
     let step: V.Stride
 
+    /// How many steps a Shift-accelerated arrow press takes. Set from
+    /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
+    /// (and the `+`/`-` keys) take one. See ``View/shiftStepMultiplier(_:)``.
+    var shiftStepMultiplier: Int = 5
+
     /// Whether this element can currently receive focus.
     var canBeFocused: Bool
 
@@ -102,15 +107,19 @@ final class StepperHandler<V: Strideable>: Focusable where V.Stride: SignedNumer
 
 extension StepperHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // Holding Shift with an arrow steps by the (env-configured) multiplier,
+        // for coarse adjustment. (Only the arrow keys carry an explicit Shift
+        // flag from the terminal; `+`/`-` don't, so they keep the single step.)
+        let times = event.shift ? max(1, shiftStepMultiplier) : 1
         switch event.key {
         case .right, .character("+"), .character("="):
             beginEditingIfNeeded()
-            increment()
+            increment(times: times)
             return true
 
         case .left, .character("-"), .character("_"):
             beginEditingIfNeeded()
-            decrement()
+            decrement(times: times)
             return true
 
         case .home:
@@ -138,32 +147,38 @@ extension StepperHandler {
 // MARK: - Value Manipulation
 
 extension StepperHandler {
-    /// Increments the value by the step size.
-    func increment() {
-        if let onIncrement {
-            onIncrement()
-        } else {
-            let newValue = value.wrappedValue.advanced(by: step)
-            if let bounds {
-                value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, newValue))
+    /// Increments the value by `times` step sizes (default one). Stepping one at a
+    /// time clamps to `bounds` at each move and fires `onIncrement` per step, so a
+    /// Shift-accelerated press behaves exactly like that many ordinary presses.
+    func increment(times: Int = 1) {
+        for _ in 0..<max(1, times) {
+            if let onIncrement {
+                onIncrement()
             } else {
-                value.wrappedValue = newValue
+                let newValue = value.wrappedValue.advanced(by: step)
+                if let bounds {
+                    value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, newValue))
+                } else {
+                    value.wrappedValue = newValue
+                }
             }
         }
     }
 
-    /// Decrements the value by the step size.
-    func decrement() {
-        if let onDecrement {
-            onDecrement()
-        } else {
-            // For Strideable, we need to negate the step
-            let negativeStep = V.Stride.zero - step
-            let newValue = value.wrappedValue.advanced(by: negativeStep)
-            if let bounds {
-                value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, newValue))
+    /// Decrements the value by `times` step sizes (default one). See ``increment(times:)``.
+    func decrement(times: Int = 1) {
+        for _ in 0..<max(1, times) {
+            if let onDecrement {
+                onDecrement()
             } else {
-                value.wrappedValue = newValue
+                // For Strideable, we need to negate the step
+                let negativeStep = V.Stride.zero - step
+                let newValue = value.wrappedValue.advanced(by: negativeStep)
+                if let bounds {
+                    value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, newValue))
+                } else {
+                    value.wrappedValue = newValue
+                }
             }
         }
     }

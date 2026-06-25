@@ -34,6 +34,11 @@ final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: Bin
     /// The step size for increment/decrement.
     let step: V.Stride
 
+    /// How many steps a Shift-accelerated arrow press takes. Set from
+    /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
+    /// (and the `+`/`-` keys) take one. See ``View/shiftStepMultiplier(_:)``.
+    var shiftStepMultiplier: Int = 5
+
     /// Whether this element can currently receive focus.
     var canBeFocused: Bool
 
@@ -70,10 +75,10 @@ final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: Bin
 
 extension SliderHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
-        // Holding Shift with an arrow steps by 5× the normal amount, for coarse
-        // adjustment. (CSI arrow sequences carry the Shift modifier; the symbol
-        // keys don't, so `+`/`-` keep the single step.)
-        let multiplier = event.shift ? 5 : 1
+        // Holding Shift with an arrow steps by the (env-configured) multiplier,
+        // for coarse adjustment. (CSI arrow sequences carry the Shift modifier;
+        // the symbol keys don't, so `+`/`-` keep the single step.)
+        let multiplier = event.shift ? max(1, shiftStepMultiplier) : 1
         switch event.key {
         case .right, .character("+"), .character("="):
             beginEditingIfNeeded()

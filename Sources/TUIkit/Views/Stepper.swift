@@ -391,6 +391,8 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
         // Keep handler in sync with current values
         handler.value = value
         handler.canBeFocused = !isDisabled
+        // Captured at render so Shift+arrow can accelerate at event time.
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.onIncrement = onIncrement
         handler.onDecrement = onDecrement
         handler.onEditingChanged = onEditingChanged
