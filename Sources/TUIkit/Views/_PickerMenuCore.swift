@@ -97,8 +97,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let maxLabelWidth = renderedLabels.map(\.strippedLength).max() ?? 0
 
         // Inner width = label + selection marker + a space + 1 char padding
-        // on each side. Clamp to the space actually available.
-        let desiredInner = maxLabelWidth + 4
+        // on each side. When the option list overflows, the drop-down shows a
+        // scrollbar in its rightmost interior column; reserve one more column so
+        // there's a blank gap between the option text and the bar (rather than the
+        // text running flush against it) without truncating any label. The
+        // overflow test mirrors the windowing in `renderOpenMenu`.
+        let maxVisibleForWidth = min(entries.count, max(4, context.environment.terminalHeight - 4))
+        let wantsScrollbar = entries.count > maxVisibleForWidth
+        let desiredInner = maxLabelWidth + 4 + (wantsScrollbar ? 1 : 0)
         let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
 
         let isOpen = handler.isOpen && !entries.isEmpty
