@@ -144,6 +144,7 @@ struct ContainersPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Container Views Demo")
         }

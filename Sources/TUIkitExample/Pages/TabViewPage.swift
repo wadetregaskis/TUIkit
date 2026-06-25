@@ -135,6 +135,7 @@ struct TabViewPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("TabView Demo")
         }

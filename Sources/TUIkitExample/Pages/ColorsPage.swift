@@ -81,6 +81,7 @@ struct ColorsPage: View {
 
             Spacer()
         }
+        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("Colors Demo")
         }
