@@ -222,12 +222,30 @@ struct _ImageCore: View, Renderable, Layoutable {
             lifecycle.cancelTask(token: token)
         }
 
+        // The image renders into the fit box scaled by zoom — mirroring
+        // `sizeThatFits`, so what's measured is what's drawn. For a `.viewport`
+        // fit the base is the (unzoomed) published viewport, so zooming OUT
+        // shrinks the image below the viewport (and zooming IN grows it past it);
+        // otherwise the laid-out available size already reflects the zoom.
+        // `zoomed` floors at one cell, so even a 1/512 zoom stays renderable.
+        let zoom = context.environment.imageZoom > 0 ? context.environment.imageZoom : 1.0
+        let renderWidth: Int
+        let renderHeight: Int
+        if context.environment.imageFitTarget == .viewport,
+            let viewport = context.environment.scrollViewportSize {
+            renderWidth = Self.zoomed(viewport.width, zoom)
+            renderHeight = Self.zoomed(viewport.height, zoom)
+        } else {
+            renderWidth = width
+            renderHeight = height
+        }
+
         // Render based on current phase
         switch phaseBox.value {
         case .loading:
             return renderPlaceholder(
-                width: width,
-                height: height,
+                width: renderWidth,
+                height: renderHeight,
                 text: placeholderText,
                 showSpinner: showSpinner,
                 context: context
@@ -236,8 +254,8 @@ struct _ImageCore: View, Renderable, Layoutable {
         case .success(let rawImage):
             return renderImage(
                 rawImage,
-                width: width,
-                height: height,
+                width: renderWidth,
+                height: renderHeight,
                 characterSet: characterSet,
                 colorMode: colorMode,
                 dithering: dithering,
@@ -248,7 +266,7 @@ struct _ImageCore: View, Renderable, Layoutable {
             )
 
         case .failure(let message):
-            return renderError(message, width: width, height: height, context: context)
+            return renderError(message, width: renderWidth, height: renderHeight, context: context)
         }
     }
 }
