@@ -425,6 +425,48 @@ struct ListRenderingTests {
         )
     }
 
+    @Test("Clicking the List scrollbar's down arrow scrolls the rows")
+    func listScrollbarDownArrowScrolls() {
+        let context = createTestContext(width: 24, height: 8)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let items = (0..<50).map { "Row \($0)" }
+        let view = List("Items", selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .scrollbarVisibility(.automatic)
+        .frame(height: 8)
+
+        let before = renderToBuffer(view, context: context)
+        dispatcher.setRegions(before.hitTestRegions)
+        #expect(before.lines.map(\.stripped).joined().contains("Row 0"), "first row visible initially")
+
+        // Locate the drawn ▼ down-arrow cell. Its visible character offset equals its
+        // buffer column here (every cell before it on that line is one column wide).
+        var arrowX = -1
+        var arrowY = -1
+        for (y, line) in before.lines.enumerated() {
+            let stripped = line.stripped
+            if let idx = stripped.firstIndex(of: "▼") {
+                arrowX = stripped.distance(from: stripped.startIndex, to: idx)
+                arrowY = y
+                break
+            }
+        }
+        #expect(arrowX >= 0, "the scrollbar's ▼ arrow should be drawn")
+
+        var joined = ""
+        for _ in 0..<8 {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: arrowX, y: arrowY))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: arrowX, y: arrowY))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined()
+        }
+        #expect(!joined.contains("Row 0"), "clicking ▼ scrolled the first row off-screen: \(joined)")
+    }
+
     @Test("Filtering content under a deep scrollOffset snaps the viewport back to the data")
     func filterUnderScrollSnapsViewport() {
         // Regression test for the bug where a List that had been

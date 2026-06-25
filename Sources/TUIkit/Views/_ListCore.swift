@@ -183,6 +183,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let handler: ItemListHandler<SelectionValue>
         let focusID: String
         let visibleRowYRanges: [VisibleRowRange]
+        /// The buffer column of the scrollbar and its line-height, when one is
+        /// drawn (`nil` column = no bar). Drives the bar's mouse handler in
+        /// `attachMouseHandlers`.
+        var scrollbarColumn: Int?
+        var scrollbarHeight = 0
     }
 
     private typealias VisibleRowRange = (
@@ -309,6 +314,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // don't all fit in the content area.
         let overflowing = rowsOverflow(source, targetContentHeight: targetContentHeight)
 
+        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
+        // text indicators: it marks the off-screen rows itself, so the rows then
+        // fill the whole content area with no reserved indicator line. Decided up
+        // front so the handler resolver can skip the offset-1 snap (which only
+        // saves an indicator line a bar doesn't have — see resolvePopulatedHandler).
+        let barVisibility = context.environment.scrollbarVisibility
+        let wantsScrollbar =
+            barVisibility != .hidden && (barVisibility == .visible || overflowing)
+
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,
@@ -321,18 +335,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             stateStorage: stateStorage,
             context: context,
             contentHeight: targetContentHeight,
-            overflowing: overflowing
+            overflowing: overflowing,
+            showsScrollbar: wantsScrollbar
         )
         FocusRegistration.register(context: context, handler: handler)
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
-
-        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
-        // text indicators: it marks the off-screen rows itself, so the rows then
-        // fill the whole content area with no reserved indicator line.
-        let barVisibility = context.environment.scrollbarVisibility
-        let wantsScrollbar =
-            barVisibility != .hidden && (barVisibility == .visible || overflowing)
 
         // Reserve a line for each scroll indicator that is actually
         // present at this offset, so the rows plus indicators fill
@@ -375,6 +383,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         let lines: [String]
         let visibleRowYRanges: [VisibleRowRange]
+        var scrollbarColumn: Int?
+        var scrollbarHeight = 0
         if wantsScrollbar {
             let bar = listScrollbarCells(
                 source: source,
@@ -384,16 +394,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            let contentRowWidth = max(1, rowWidth - 1)
             (lines, visibleRowYRanges) = composeScrollbarRowLines(
                 visibleRows: visibleRows,
                 handler: handler,
                 listHasFocus: listHasFocus,
-                contentRowWidth: max(1, rowWidth - 1),
+                contentRowWidth: contentRowWidth,
                 bar: bar,
                 style: style,
                 context: context,
                 palette: palette
             )
+            // The bar is the last interior column: border (1) + left padding, then
+            // the content, then the bar cell. Matches the `1 + paddingTop` content
+            // inset used for click mapping (see attachMouseHandlers).
+            scrollbarColumn = 1 + style.rowPadding.leading + contentRowWidth
+            scrollbarHeight = bar.count
         } else {
             (lines, visibleRowYRanges) = composeRowLines(
                 handler: handler,
@@ -411,7 +427,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
-                visibleRowYRanges: visibleRowYRanges
+                visibleRowYRanges: visibleRowYRanges,
+                scrollbarColumn: scrollbarColumn,
+                scrollbarHeight: scrollbarHeight
             )
         )
     }
@@ -456,7 +474,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         stateStorage: StateStorage,
         context: RenderContext,
         contentHeight: Int,
-        overflowing: Bool
+        overflowing: Bool,
+        showsScrollbar: Bool = false
     ) -> ItemListHandler<SelectionValue> {
         // Clamp the offset against the largest possible visible-row
         // count (one indicator, at an end); the exact viewport is
@@ -498,8 +517,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // line: that line could just show the row. So never rest at
             // offset 1 — snap to 0, where the first row shows with no
             // indicator. Removing the indicator frees a line, so the row
-            // that was at the bottom of the viewport is still shown.
-            if overflowing, handler.scrollOffset == 1 {
+            // that was at the bottom of the viewport is still shown. A
+            // scrollbar shows no such indicator line, so it has nothing to
+            // save — and the snap would otherwise undo a single up/down-arrow
+            // click on the bar (0↔1). Skip it when the bar is shown.
+            if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
                 handler.scrollOffset = 0
             }
         }
@@ -716,6 +738,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // include the scroll-indicator's own row when present),
         // so this single inset is the entire translation needed.
         let topInset = 1 + paddingTop
+
+        // The scrollbar's own handler goes in first so the container's later
+        // insert(at: 0) pushes it to a higher index — hit-tested ahead of the
+        // container (reverse iteration) for its single column. The bar's metrics
+        // are in lines while its offset is in rows, so dragging is exact for
+        // uniform 1-line rows and proportional for taller rows (arrows/track stay
+        // exact). Its own repeat token lets it auto-repeat independently.
+        if let barColumn = state.scrollbarColumn, state.scrollbarHeight > 0 {
+            let barHandler = ScrollbarRenderer.verticalMouseHandler(
+                for: state.handler, length: state.scrollbarHeight,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                behavior: context.environment.scrollbarClickBehavior)
+            let barHandlerID = mouseDispatcher.register(barHandler)
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: barColumn, offsetY: topInset,
+                    width: 1, height: state.scrollbarHeight, handlerID: barHandlerID),
+                at: 0
+            )
+            ScrollbarRenderer.driveAutoRepeat(
+                state: state.handler,
+                token: "list-scrollbar-repeat-\(context.identity.path)", context: context)
+        }
+
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
