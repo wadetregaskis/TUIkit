@@ -68,7 +68,14 @@ let package = Package(
             dependencies: ["TUIkit"],
             resources: [.copy("Resources")]
         ),
-        .testTarget(name: "TUIkitTests", dependencies: ["TUIkit"]),
+        .testTarget(
+            name: "TUIkitTests",
+            dependencies: ["TUIkit"],
+            // Golden snapshots are read/written by path (#filePath-relative, see
+            // TestHelpers/SnapshotTesting.swift), not via the resource bundle, so
+            // exclude them from the build rather than declaring them as resources.
+            exclude: ["__Snapshots__"]
+        ),
 
         // ── Stress test ─────────────────────────────────────────────────────────────────────────────────
         // A performance stress harness shaped like an app: deep/wide view
