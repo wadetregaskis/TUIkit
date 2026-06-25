@@ -329,6 +329,9 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         )
         let handler = handlerBox.value
         handler.canBeFocused = !isDisabled
+        // Captured at render so Shift+arrow can accelerate at event time, when the
+        // environment is no longer reachable.
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
 
         // Scrollbar reservation. Each bar steals one cell across the viewport — the
         // vertical bar a trailing column, the horizontal bar a bottom row. The

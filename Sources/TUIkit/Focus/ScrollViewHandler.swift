@@ -72,6 +72,11 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// The visible height of the scroll view's viewport.
     public var viewportHeight: Int = 0
 
+    /// How many lines/columns a Shift-accelerated arrow press scrolls. Set from
+    /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
+    /// always scrolls one. See ``View/shiftStepMultiplier(_:)``.
+    public var shiftStepMultiplier: Int = 5
+
     /// Creates a scroll-view handler.
     ///
     /// - Parameters:
@@ -116,12 +121,16 @@ extension ScrollViewHandler {
     /// - Parameter event: The incoming key event.
     /// - Returns: `true` if the key was a scroll command.
     public func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // A plain arrow steps one line/column; Shift accelerates by the
+        // (env-configured) multiplier. Page/Home/End are already large jumps and
+        // ignore Shift.
+        let step = event.shift ? max(1, shiftStepMultiplier) : 1
         switch event.key {
         case .up:
-            scroll(by: -1)
+            scroll(by: -step)
             return true
         case .down:
-            scroll(by: 1)
+            scroll(by: step)
             return true
         case .pageUp:
             scroll(by: -max(1, viewportHeight))
@@ -136,15 +145,16 @@ extension ScrollViewHandler {
             scrollToBottom()
             return true
         case .left:
-            // Scroll the horizontal axis one column. Returns false (not consumed)
-            // when it can't move — no horizontal axis, or already at the edge — so
-            // the key still bubbles to whatever else might handle Left/Right.
+            // Scroll the horizontal axis (Shift-accelerated). Returns false (not
+            // consumed) when it can't move — no horizontal axis, or already at the
+            // edge — so the key still bubbles to whatever else might handle
+            // Left/Right.
             let before = horizontal.scrollOffset
-            horizontal.scroll(by: -1)
+            horizontal.scroll(by: -step)
             return horizontal.scrollOffset != before
         case .right:
             let before = horizontal.scrollOffset
-            horizontal.scroll(by: 1)
+            horizontal.scroll(by: step)
             return horizontal.scrollOffset != before
         default:
             return false

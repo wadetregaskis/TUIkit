@@ -127,6 +127,32 @@ struct ScrollViewHandlerTests {
         #expect(!handler.handleKeyEvent(KeyEvent(key: .left)))
     }
 
+    @Test("Shift+Up/Down scrolls by the step multiplier")
+    func shiftArrowsAccelerateVertical() {
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 100
+        handler.viewportHeight = 20
+        handler.shiftStepMultiplier = 5
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // plain → one line
+        #expect(handler.scrollOffset == 1)
+        _ = handler.handleKeyEvent(KeyEvent(key: .down, ctrl: false, alt: false, shift: true))
+        #expect(handler.scrollOffset == 6, "Shift+Down jumps 5: \(handler.scrollOffset)")
+        _ = handler.handleKeyEvent(KeyEvent(key: .up, ctrl: false, alt: false, shift: true))
+        #expect(handler.scrollOffset == 1, "Shift+Up jumps 5 back: \(handler.scrollOffset)")
+    }
+
+    @Test("Shift+Left/Right scrolls the horizontal axis by the step multiplier")
+    func shiftArrowsAccelerateHorizontal() {
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.horizontal.extent = 50
+        handler.horizontal.viewportHeight = 10  // viewport width in columns
+        handler.shiftStepMultiplier = 4
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .right, ctrl: false, alt: false, shift: true))
+        #expect(handler.horizontal.scrollOffset == 4, "Shift+Right jumps 4: \(handler.horizontal.scrollOffset)")
+    }
+
     @Test("End jumps to maxOffset, Home jumps back to zero")
     func endThenHome() {
         let handler = ScrollViewHandler(focusID: "sv")
