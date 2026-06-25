@@ -35,7 +35,7 @@ struct PickerPage: View {
                 // More options than fit the screen: the drop-down windows them and
                 // shows a scrollbar (wheel, arrows, Home/End, and the bar all scroll).
                 Picker("Pick a number", selection: $number) {
-                    ForEach(1...40, id: \.self) { value in
+                    ForEach(1...200, id: \.self) { value in
                         Text("Number \(value)").tag(value)
                     }
                 }
