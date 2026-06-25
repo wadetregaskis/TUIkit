@@ -248,7 +248,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 // user clicked the control to close. Setting the intended state
                 // explicitly after the focus call is immune to that.
                 let shouldOpen = !handler.isOpen
-                focusManager.focus(id: persistedFocusID)
+                focusManager?.focus(id: persistedFocusID)
                 handler.isOpen = shouldOpen
                 if handler.isOpen {
                     handler.highlightedIndex =
@@ -436,7 +436,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 case .pressed where event.button == .left:
                     return true
                 case .released where event.button == .left:
-                    focusManager.focus(id: persistedFocusID)
+                    focusManager?.focus(id: persistedFocusID)
                     captureSelection.wrappedValue = entry.tag
                     handler.highlightedIndex = index
                     handler.isOpen = false

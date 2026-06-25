@@ -535,7 +535,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
     private func wholeRowHandler(
         handler: StepperHandler<Int>,
         hoverBox: StateBox<Bool>,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         focusID: String
     ) -> @MainActor (MouseEvent) -> Bool {
         { event in
@@ -554,11 +554,11 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
                 // Wheel up matches "scrolling up through the
                 // values" — towards smaller / earlier.
                 handler.decrement()
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 return true
             case .scrollDown:
                 handler.increment()
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 return true
             case .left:
                 guard event.phase == .released else {
@@ -566,7 +566,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
                     // routes here, but don't move the value.
                     return event.phase == .pressed
                 }
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 return true
             default:
                 return false
@@ -580,7 +580,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
     /// Release or drag-off stops the timer.
     private func arrowHandler(
         timer: AutoRepeatTimer,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         focusID: String,
         action: @escaping @MainActor () -> Void
     ) -> @MainActor (MouseEvent) -> Bool {
@@ -588,7 +588,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
             guard event.button == .left else { return false }
             switch event.phase {
             case .pressed:
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 timer.start(action: action)
                 return true
             case .released, .dragged:

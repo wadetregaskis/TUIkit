@@ -336,7 +336,7 @@ struct TabViewTests {
     func arrowNavigation() {
         let sel = IntBox(1)
         let ctx = makeRenderContext(width: 40, height: 8)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let view = TabView(selection: sel.binding) {
             Tab("A", value: 0) { Text("a") }
             Tab("B", value: 1) { Text("b") }
@@ -431,7 +431,7 @@ struct TabViewTests {
     func arrowNavMovesBetweenRowsInRender() {
         let sel = IntBox(0)
         let ctx = makeRenderContext(width: 18, height: 12)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let view = TabView(selection: sel.binding) {
             ForEach(0..<6) { i in Tab("Tab\(i)", value: i) { Text("c\(i)") } }
         }
@@ -448,7 +448,7 @@ struct TabViewTests {
         // Six tabs wrap to three rows of two ([0,1] [2,3] [4,5]); row = value / 2.
         let sel = IntBox(0)
         let ctx = makeRenderContext(width: 14, height: 14)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let view = TabView(selection: sel.binding) {
             ForEach(0..<6) { i in Tab("T\(i)", value: i) { Text("c\(i)") } }
         }

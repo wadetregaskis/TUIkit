@@ -142,7 +142,7 @@ struct StateBindingIdentityTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
         let typed = KeyEvent(key: .character("Z"))
-        _ = context.environment.focusManager.dispatchKeyEvent(typed)
+        _ = context.environment.focusManager!.dispatchKeyEvent(typed)
 
         #expect(
             page.searchQuery == "Z",
@@ -213,7 +213,7 @@ struct StateBindingIdentityTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
         let typed = KeyEvent(key: .character("Z"))
-        _ = context.environment.focusManager.dispatchKeyEvent(typed)
+        _ = context.environment.focusManager!.dispatchKeyEvent(typed)
 
         #expect(
             page.searchQuery == "Z",
@@ -290,7 +290,7 @@ struct StateBindingIdentityTests {
             DemoShapedPage()
         }
 
-        let focusManager = context.environment.focusManager
+        let focusManager = context.environment.focusManager!
         let dispatcher = context.environment.mouseEventDispatcher!
         dispatcher.setActiveSupport(.standard)
 
@@ -343,7 +343,7 @@ struct StateBindingIdentityTests {
             TwoFieldPageWithOptional()
         }
 
-        let focusManager = context.environment.focusManager
+        let focusManager = context.environment.focusManager!
         let dispatcher = context.environment.mouseEventDispatcher!
         dispatcher.setActiveSupport(.standard)
 

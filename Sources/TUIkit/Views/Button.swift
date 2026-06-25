@@ -251,7 +251,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     // drifts off the button before it lifts.
                     return true
                 case .released where event.button == .left:
-                    focusManager.focus(id: captureFocusID)
+                    focusManager?.focus(id: captureFocusID)
                     captureAction()
                     return true
                 default:

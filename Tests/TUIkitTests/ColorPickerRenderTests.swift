@@ -112,7 +112,7 @@ struct ColorPickerRenderTests {
         // only one field is shown, not two identical ones. (Switch to CMYK first.)
         let box = ColorBoxRef(.rgb(200, 100, 50))
         let ctx = makeRenderContext(width: 70, height: 30)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
         func render() -> [String] { renderToBuffer(panel, context: ctx).lines.map { $0.stripped } }
         _ = render()

@@ -366,7 +366,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
                     case .pressed where event.button == .left:
                         return true
                     case .released where event.button == .left:
-                        focusManager.focus(id: captureFocusID)
+                        focusManager?.focus(id: captureFocusID)
                         handler.focusedIndex = index
                         captureSelection.wrappedValue = captureItems[index].value
                         return true

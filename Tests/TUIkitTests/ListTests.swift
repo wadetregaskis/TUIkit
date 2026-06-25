@@ -585,7 +585,7 @@ struct ListRenderingTests {
             ForEach(items, id: \.self) { Text($0) }
         }
         _ = renderToBuffer(view, context: context)  // register + focus the list
-        _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .end))
+        _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .end))
         let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
         let joined = lines.joined(separator: "\n")
 
@@ -611,7 +611,7 @@ struct ListRenderingTests {
         }
         _ = renderToBuffer(view, context: context)
         for _ in 0..<6 {
-            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+            _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
         }
         let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
         let joined = lines.joined(separator: "\n")
@@ -644,7 +644,7 @@ struct ListRenderingTests {
         _ = renderToBuffer(view, context: context)  // register + focus
 
         for _ in 0..<20 {
-            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+            _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
             let joined = renderToBuffer(view, context: context)
                 .lines.map(\.stripped).joined(separator: "\n")
             #expect(
@@ -743,7 +743,7 @@ struct ListRenderingTests {
         }
         let w0 = renderToBuffer(view, context: context).width  // wide row visible
         for _ in 0..<6 {
-            _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+            _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
         }
         let w1 = renderToBuffer(view, context: context).width  // wide row scrolled off
         #expect(w0 == w1, "list width changed \(w0) -> \(w1) on scroll")

@@ -507,7 +507,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// fixed at the moment of registration.
     private func mouseHandler(
         hoverBox: StateBox<Bool>,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         focusID: String,
         leftArrowTimer: AutoRepeatTimer,
         rightArrowTimer: AutoRepeatTimer,
@@ -552,11 +552,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                 // slider previously had this inverted, so a horizontal slider
                 // adjusted the opposite way from every other wheel control.
                 decrementOnce()
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 return true
             case .scrollDown:
                 incrementOnce()
-                focusManager.focus(id: focusID)
+                focusManager?.focus(id: focusID)
                 return true
             case .left:
                 return Self.handleLeftButton(
@@ -599,7 +599,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         decrementOnce: @escaping @MainActor () -> Void,
         incrementOnce: @escaping @MainActor () -> Void,
         stopArrowTimers: @MainActor () -> Void,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         focusID: String
     ) -> Bool {
         switch event.phase {
@@ -634,7 +634,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     trackWidth: trackWidth
                 )
             }
-            focusManager.focus(id: focusID)
+            focusManager?.focus(id: focusID)
             return true
         case .released:
             stopArrowTimers()

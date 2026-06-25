@@ -214,7 +214,7 @@ struct ButtonTests {
 
         // Park focus on the sentinel so the button under test
         // is rendered un-focused — see FocusSentinel for why.
-        context.environment.focusManager.register(FocusSentinel())
+        context.environment.focusManager!.register(FocusSentinel())
 
         let view = Button("Hover me") { /* no-op */ }
 
@@ -261,7 +261,7 @@ struct ButtonTests {
 
         // Park focus on the sentinel — same reason as the
         // hoverFlipsRenderedTint sibling test above.
-        context.environment.focusManager.register(FocusSentinel())
+        context.environment.focusManager!.register(FocusSentinel())
 
         let view = Button("Hover me") { /* no-op */ }
 

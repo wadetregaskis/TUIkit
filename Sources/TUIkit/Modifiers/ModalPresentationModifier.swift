@@ -57,7 +57,7 @@ extension ModalPresentationModifier: Renderable {
             // first element — which a ScrollView would then snap-scroll to,
             // resetting the scroll position.
             if !context.isMeasuring {
-                context.environment.focusManager.deactivateSection(id: sectionID)
+                context.environment.focusManager?.deactivateSection(id: sectionID)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -76,8 +76,8 @@ extension ModalPresentationModifier: Renderable {
         // becomes the active section, so Tab/arrows only navigate within the
         // modal's focusable elements.
         if !context.isMeasuring {
-            focusManager.registerSection(id: sectionID)
-            focusManager.activateSection(id: sectionID)
+            focusManager?.registerSection(id: sectionID)
+            focusManager?.activateSection(id: sectionID)
 
             // While the modal is on screen ESC should close it. Publish an
             // ESC=dismiss item on the status bar tied to the modal section

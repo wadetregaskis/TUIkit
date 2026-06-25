@@ -547,7 +547,7 @@ private struct _EditableValueField: View {
     }
 
     var body: some View {
-        let focused = focusManager.isFocused(id: focusID)
+        let focused = focusManager?.isFocused(id: focusID) ?? false
         return TextField("", text: Binding(
             get: { focused ? draft : format() },
             set: { draft = $0; commit($0) }))

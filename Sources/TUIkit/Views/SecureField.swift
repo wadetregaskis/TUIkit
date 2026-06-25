@@ -370,7 +370,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
                 case .pressed where event.button == .left:
                     return true
                 case .released where event.button == .left:
-                    focusManager.focus(id: captureFocusID)
+                    focusManager?.focus(id: captureFocusID)
                     return true
                 default:
                     return false

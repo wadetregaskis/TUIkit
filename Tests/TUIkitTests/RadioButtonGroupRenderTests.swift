@@ -55,7 +55,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("c", "Charlie")
         }
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)  // register
         let result = lines(renderToBuffer(group, context: context))  // read state
 
@@ -73,7 +73,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("only", "Only")
         }
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 
@@ -88,7 +88,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("b", "Second")
         }
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 
@@ -109,7 +109,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("c", "Charlie")
         }
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 
@@ -121,7 +121,7 @@ struct RadioButtonGroupRenderTests {
     @Test("Changing the bound selection moves the filled glyph")
     func selectionMovesGlyph() {
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
 
         let groupA = RadioButtonGroup(selection: .constant("a")) {
             RadioButtonItem("a", "Alpha")
@@ -147,8 +147,8 @@ struct RadioButtonGroupRenderTests {
         }
         let context = makeContext()
         _ = renderToBuffer(group, context: context)  // registers + auto-focuses
-        _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
-        _ = context.environment.focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
         let result = lines(renderToBuffer(group, context: context))
 
         #expect(result[0] == "\(selected) Alpha", "Selected item stays filled")
@@ -201,7 +201,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("b", "Bravo")
         }
         let context = makeContext(width: 40)
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 
@@ -218,7 +218,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem("c", "C")
         }
         let context = makeContext(width: 40)
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 
@@ -235,7 +235,7 @@ struct RadioButtonGroupRenderTests {
             RadioButtonItem(2) { Text("Label") }
         }
         let context = makeContext()
-        context.environment.focusManager.register(FocusHog("hog"))
+        context.environment.focusManager!.register(FocusHog("hog"))
         _ = renderToBuffer(group, context: context)
         let result = lines(renderToBuffer(group, context: context))
 

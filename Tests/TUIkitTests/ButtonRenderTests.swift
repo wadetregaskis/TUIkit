@@ -94,7 +94,7 @@ struct ButtonRenderTests {
     /// escapes intact. (Same sentinel trick as `plainUnfocused`.)
     private func unfocusedANSI(_ view: some View, width: Int = 30, height: Int = 8) -> String {
         let context = makeContext(width: width, height: height)
-        context.environment.focusManager.register(FocusHolder())
+        context.environment.focusManager!.register(FocusHolder())
         return renderToBuffer(view, context: context).lines.joined(separator: "\n")
     }
 
@@ -147,7 +147,7 @@ struct ButtonRenderTests {
         // is registered straight onto the manager, the pattern ButtonTests
         // uses for its hover cases.)
         let context = makeContext()
-        context.environment.focusManager.register(FocusHolder())
+        context.environment.focusManager!.register(FocusHolder())
         let out = renderToBuffer(Button("Second") {}.buttonStyle(.plain), context: context)
             .lines.map { $0.stripped }
         #expect(out.count == 1)

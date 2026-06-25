@@ -67,7 +67,7 @@ extension AlertPresentationModifier: Renderable {
         // rather than jumping to the top.
         guard isPresented.wrappedValue else {
             if !context.isMeasuring {
-                context.environment.focusManager.deactivateSection(id: sectionID)
+                context.environment.focusManager?.deactivateSection(id: sectionID)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -105,8 +105,8 @@ extension AlertPresentationModifier: Renderable {
         // becomes the active section, so Tab/arrows only navigate within the
         // alert's focusable elements (buttons).
         if !context.isMeasuring {
-            focusManager.registerSection(id: sectionID)
-            focusManager.activateSection(id: sectionID)
+            focusManager?.registerSection(id: sectionID)
+            focusManager?.activateSection(id: sectionID)
         }
 
         // Register ESC handler to dismiss the alert

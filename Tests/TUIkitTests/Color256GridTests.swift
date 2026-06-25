@@ -191,7 +191,7 @@ struct Color256GridFocusTests {
     func focusedNavigation() {
         let box = ColorBox(.rgb(0, 0, 0))
         let ctx = makeRenderContext()
-        let focusManager = ctx.environment.focusManager
+        let focusManager = ctx.environment.focusManager!
         let grid = _Color256GridCore(selection: box.binding, focusID: "grid-test")
 
         // Rendering registers the handler; as the sole focusable it auto-focuses,

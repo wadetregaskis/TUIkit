@@ -587,7 +587,7 @@ struct NavigationSplitViewResizeTests {
     /// frame and the resize reset.
     private func frame(_ view: some View, _ context: RenderContext) -> FrameBuffer {
         let ss = context.environment.stateStorage!
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
         ss.beginRenderPass(); fm.beginRenderPass()
         let buffer = renderToBuffer(view, context: context)
         fm.endRenderPass(); ss.endRenderPass()
@@ -597,7 +597,7 @@ struct NavigationSplitViewResizeTests {
     @Test("Arrow keys on the focused divider resize it — and the change persists across the GC")
     func keyboardResize() {
         let context = resizeContext()
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
 
         _ = frame(view, context)  // register divider section + handler
@@ -670,7 +670,7 @@ struct NavigationSplitViewResizeTests {
     @Test("A focused divider gains a (pulsing) background")
     func focusedDividerHasBackground() {
         let context = resizeContext(width: 60, height: 12)
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
 
         _ = frame(view, context)
@@ -685,7 +685,7 @@ struct NavigationSplitViewResizeTests {
     @Test("A focused divider's background stays in its own column (no bleed)")
     func backgroundDoesNotBleed() {
         let context = resizeContext(width: 40, height: 8)
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("S") } detail: { Text("D") }
 
         _ = frame(view, context)
@@ -706,7 +706,7 @@ struct NavigationSplitViewResizeTests {
     @Test("navigationSplitViewResizable(false) removes the handle and divider section")
     func optOut() {
         let context = resizeContext()
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
             .navigationSplitViewResizable(false)
 

@@ -796,7 +796,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// testing + focus, and rejects everything else.
     private func containerMouseHandler(
         state: PopulatedRenderState,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         topInset: Int
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
@@ -827,7 +827,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         captureHandler.toggleSelectionAtFocusedIndex()
                     }
                 }
-                focusManager.focus(id: captureFocusID)
+                focusManager?.focus(id: captureFocusID)
                 return true
             }
             return false

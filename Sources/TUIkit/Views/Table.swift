@@ -924,7 +924,7 @@ where Value.ID: Hashable {
     /// + focus, and rejects everything else.
     private func containerMouseHandler(
         state: PopulatedRenderState,
-        focusManager: FocusManager,
+        focusManager: FocusManager?,
         firstRowY: Int
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
@@ -964,7 +964,7 @@ where Value.ID: Hashable {
                         accumulated += height
                     }
                 }
-                focusManager.focus(id: captureFocusID)
+                focusManager?.focus(id: captureFocusID)
                 return true
             }
             return false

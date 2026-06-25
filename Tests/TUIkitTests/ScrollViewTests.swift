@@ -565,7 +565,7 @@ struct ScrollViewRenderingTests {
         var context = makeContext(width: 40, height: 24)
         context.hasExplicitWidth = true
         context.hasExplicitHeight = true
-        let fm = context.environment.focusManager
+        let fm = context.environment.focusManager!
 
         let view = VStack(alignment: .leading, spacing: 1) {
             Text("preceding content")

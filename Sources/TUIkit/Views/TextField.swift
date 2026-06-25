@@ -433,12 +433,12 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 // something else re-renders" symptom.
                 debugFocusLog("""
                     TextField click → focus(id: \(captureFocusID))
-                      sections: \(focusManager.debugSectionsSummary())
-                      focusedBefore: \(focusManager.currentFocusedID ?? "nil")
+                      sections: \(focusManager?.debugSectionsSummary() ?? "nil")
+                      focusedBefore: \(focusManager?.currentFocusedID ?? "nil")
                     """)
-                focusManager.focus(id: captureFocusID)
+                focusManager?.focus(id: captureFocusID)
                 debugFocusLog(
-                    "  focusedAfter: \(focusManager.currentFocusedID ?? "nil")")
+                    "  focusedAfter: \(focusManager?.currentFocusedID ?? "nil")")
                 return true
             default: return false
             }

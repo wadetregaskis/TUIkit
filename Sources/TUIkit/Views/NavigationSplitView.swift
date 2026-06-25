@@ -272,7 +272,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             // Register focus section for this column (skip during measurement)
             let sectionID = focusSectionID(for: column)
             if !columnContext.isMeasuring {
-                focusManager.registerSection(id: sectionID)
+                focusManager?.registerSection(id: sectionID)
             }
 
             // Create a context with the active focus section
@@ -280,7 +280,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             sectionContext.environment.activeFocusSectionID = sectionID
 
             // If this section is active, set the focus indicator color for borders (never active during measurement)
-            if !columnContext.isMeasuring && focusManager.isActiveSection(sectionID) {
+            if !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false) {
                 let accentColor = context.environment.palette.accent
                 let dimColor = accentColor.opacity(ViewConstants.focusBorderDim)
                 sectionContext.environment.focusIndicatorColor = Color.lerp(dimColor, accentColor, phase: context.environment.pulsePhase)
@@ -305,7 +305,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                     switch event.phase {
                     case .pressed: return true
                     case .released:
-                        captureManager.activateSection(id: captureSectionID)
+                        captureManager?.activateSection(id: captureSectionID)
                         return true
                     default: return false
                     }
@@ -563,9 +563,9 @@ extension _NavigationSplitViewCore {
         resizable: Bool,
         widths: SplitViewWidths?,
         context: RenderContext,
-        focusManager: FocusManager
+        focusManager: FocusManager?
     ) -> DividerRenderInfo {
-        guard resizable, !context.isMeasuring, let widths,
+        guard resizable, !context.isMeasuring, let widths, let focusManager,
             let stateStorage = context.environment.stateStorage
         else {
             return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)

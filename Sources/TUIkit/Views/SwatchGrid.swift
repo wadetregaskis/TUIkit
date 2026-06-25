@@ -177,7 +177,7 @@ struct _SwatchGridCore: View, Renderable {
                         guard event.phase == .released, event.button == .left else {
                             return event.phase == .pressed && event.button == .left
                         }
-                        focusManager.focus(id: persistedFocusID)
+                        focusManager?.focus(id: persistedFocusID)
                         handler.commit(to: index)
                         return true
                     }

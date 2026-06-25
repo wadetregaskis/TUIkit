@@ -115,7 +115,7 @@ struct MouseHitTestPropagationTests {
         // Now route a character through FocusManager.dispatchKeyEvent —
         // same path InputHandler.handle uses for the text-input layer.
         let typed = KeyEvent(key: .character("Z"))
-        _ = context.environment.focusManager.dispatchKeyEvent(typed)
+        _ = context.environment.focusManager!.dispatchKeyEvent(typed)
 
         #expect(
             searchState.wrappedValue == "Z",
@@ -148,11 +148,11 @@ struct MouseHitTestPropagationTests {
         // Several render passes back to back, simulating multiple
         // frames of the run loop.
         for _ in 0..<3 {
-            context.environment.focusManager.beginRenderPass()
+            context.environment.focusManager!.beginRenderPass()
             dispatcher.beginRenderPass()
             let buf = renderToBuffer(view, context: context)
             dispatcher.setRegions(buf.hitTestRegions)
-            context.environment.focusManager.endRenderPass()
+            context.environment.focusManager!.endRenderPass()
         }
 
         // Now click the second field. Need a fresh render pass with
@@ -171,8 +171,8 @@ struct MouseHitTestPropagationTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
-        guard let focused = context.environment.focusManager.currentFocused as? TextFieldHandler else {
-            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager.currentFocused))")
+        guard let focused = context.environment.focusManager!.currentFocused as? TextFieldHandler else {
+            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager!.currentFocused))")
             return
         }
         focused.text.wrappedValue = "marker"
@@ -226,8 +226,8 @@ struct MouseHitTestPropagationTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
-        guard let focused = context.environment.focusManager.currentFocused as? TextFieldHandler else {
-            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager.currentFocused))")
+        guard let focused = context.environment.focusManager!.currentFocused as? TextFieldHandler else {
+            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager!.currentFocused))")
             return
         }
         // Mutate through the focused handler — only the second field's
@@ -266,8 +266,8 @@ struct MouseHitTestPropagationTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
-        guard let focused = context.environment.focusManager.currentFocused as? TextFieldHandler else {
-            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager.currentFocused))")
+        guard let focused = context.environment.focusManager!.currentFocused as? TextFieldHandler else {
+            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager!.currentFocused))")
             return
         }
         // The text binding pointer identity tells us which field is
@@ -386,7 +386,7 @@ struct MouseHitTestPropagationTests {
         // specifically the TextField. We don't know its exact id (it's
         // auto-generated from view identity) but we can verify the
         // focused element is a TextFieldHandler.
-        let focused = context.environment.focusManager.currentFocused
+        let focused = context.environment.focusManager!.currentFocused
         #expect(focused != nil)
         #expect(focused is TextFieldHandler)
     }

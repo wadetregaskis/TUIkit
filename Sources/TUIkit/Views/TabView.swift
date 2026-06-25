@@ -687,7 +687,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 guard event.phase == .released, event.button == .left else {
                     return event.phase == .pressed && event.button == .left
                 }
-                focusManager.focus(id: captureFocusID)
+                focusManager?.focus(id: captureFocusID)
                 if let v = value.base as? SelectionValue { capture.wrappedValue = v }
                 return true
             }

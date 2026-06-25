@@ -252,7 +252,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         guard !context.isMeasuring else { return }
 
-        let focusManager = context.environment.focusManager
+        // No focus system → nothing to reveal-on-focus.
+        guard let focusManager = context.environment.focusManager else { return }
         let currentFocusedID = focusManager.currentFocusedID
         let currentInteractionGen = focusManager.focusedInteractionGeneration
 
@@ -481,7 +482,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 case .pressed:
                     return true
                 case .released:
-                    focusManager.focus(id: captureFocusID)
+                    focusManager?.focus(id: captureFocusID)
                     return true
                 default:
                     return false

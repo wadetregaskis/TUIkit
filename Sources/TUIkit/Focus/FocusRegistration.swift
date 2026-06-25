@@ -64,7 +64,9 @@ struct FocusRegistration {
 
         register(context: context, handler: handler)
 
-        let isFocused = context.isMeasuring ? false : context.environment.focusManager.isFocused(id: persistedFocusID)
+        let isFocused = context.isMeasuring
+            ? false
+            : (context.environment.focusManager?.isFocused(id: persistedFocusID) ?? false)
 
         return Self(persistedFocusID: persistedFocusID, isFocused: isFocused)
     }
@@ -105,7 +107,10 @@ struct FocusRegistration {
     ///   - handler: The focusable handler to register.
     static func register(context: RenderContext, handler: Focusable) {
         guard !context.isMeasuring else { return }
-        context.environment.focusManager.register(handler, inSection: context.environment.activeFocusSectionID)
+        // A nil focus manager means "no focus system" (e.g. an isolated test or
+        // dimmed-backdrop render): skip registration so nothing auto-focuses.
+        // markActive is unrelated to focus (state GC) and always runs.
+        context.environment.focusManager?.register(handler, inSection: context.environment.activeFocusSectionID)
         context.environment.stateStorage!.markActive(context.identity)
     }
 
@@ -118,6 +123,6 @@ struct FocusRegistration {
     ///   - focusID: The focusID to check.
     /// - Returns: `true` if the view is focused.
     static func isFocused(context: RenderContext, focusID: String) -> Bool {
-        context.isMeasuring ? false : context.environment.focusManager.isFocused(id: focusID)
+        context.isMeasuring ? false : (context.environment.focusManager?.isFocused(id: focusID) ?? false)
     }
 }

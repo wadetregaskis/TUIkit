@@ -307,7 +307,7 @@ struct ColorPickerPanelCrashSafetyTests {
     func switchToHSLTabRendersChannels() {
         let box = Box(.rgb(38, 139, 210))
         let ctx = makeRenderContext(width: 64, height: 30)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
         func render() -> String {
             renderToBuffer(panel, context: ctx).lines.map { $0.stripped }.joined(separator: "\n")
@@ -400,7 +400,7 @@ struct ColorPickerPanelCrashSafetyTests {
     func keyEventMonkeyDoesNotTrap() {
         let box = Box(.rgb(200, 100, 50))
         let ctx = makeRenderContext(width: 64, height: 30)
-        let fm = ctx.environment.focusManager
+        let fm = ctx.environment.focusManager!
         let panel = ColorPickerPanel("C", selection: box.binding, isPresented: .constant(true))
         // Render-loop-faithful: begin/endRenderPass so focus navigation stays
         // clean across the many tab switches the key stream triggers.
