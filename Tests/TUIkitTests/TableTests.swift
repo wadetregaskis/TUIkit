@@ -274,6 +274,40 @@ struct TableRenderingTests {
         #expect(joined.contains("name-99"), "wheel-scrolling to the end must reveal the last row")
         #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
     }
+
+    @Test("Clicking the Table scrollbar's down arrow scrolls the rows")
+    func tableScrollbarDownArrowScrolls() {
+        var context = createTestContext(width: 30, height: 8)  // content area = 5 rows
+        context.hasExplicitWidth = true
+        context.hasExplicitHeight = true
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+
+        let files = (0..<50).map {
+            FileInfo(id: "\($0)", name: "name-\($0)", size: "1 KB", modified: "2026")
+        }
+        let view = Table(files, selection: .constant(String?.none)) {
+            TableColumn("Name", value: \FileInfo.name)
+        }
+        .scrollbarVisibility(.automatic)
+
+        let before = renderToBuffer(view, context: context)
+        dispatcher.setRegions(before.hitTestRegions)
+        #expect(before.lines.map(\.stripped).joined().contains("name-0"), "first row visible initially")
+
+        // The bar's ▼ arrow: column availableWidth − 3 (= 27), bottom bar row
+        // (firstRowY 2 + contentHeight 5 − 1 = 6).
+        var joined = ""
+        for _ in 0..<8 {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 27, y: 6))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 27, y: 6))
+            let b = renderToBuffer(view, context: context)
+            dispatcher.setRegions(b.hitTestRegions)
+            joined = b.lines.map(\.stripped).joined()
+        }
+        #expect(!joined.contains("name-0"), "clicking ▼ scrolled the first row off-screen: \(joined)")
+        #expect(joined.contains("name-8"), "a later row is now visible: \(joined)")
+    }
 }
 
 // MARK: - Table Selection Tests

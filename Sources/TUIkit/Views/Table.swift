@@ -249,6 +249,9 @@ where Value.ID: Hashable {
         /// empty for a single-line table (the line offset is the row offset, with
         /// no per-frame array to allocate).
         let visibleRowHeights: [Int]
+        /// Whether a single-line scrollbar column was drawn (only the single-line
+        /// path shows one). Drives the bar's mouse handler in `attachMouseHandlers`.
+        var hasScrollbar = false
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -429,7 +432,8 @@ where Value.ID: Hashable {
             context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
         let handler = resolveHandler(
             persistedFocusID: persistedFocusID, stateStorage: stateStorage, context: context,
-            contentHeight: contentHeight, overflowing: data.count > contentHeight)
+            contentHeight: contentHeight, overflowing: data.count > contentHeight,
+            showsScrollbar: true)
         // The whole row area is visible — the bar, not a text indicator, marks the
         // off-screen rows — so the viewport is the full content height.
         handler.viewportHeight = contentHeight
@@ -471,7 +475,7 @@ where Value.ID: Hashable {
             lines,
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
-                scrollOffsetAbove: 0, visibleRowHeights: []))
+                scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true))
     }
 
     // MARK: - Multi-line content (variable row heights)
@@ -721,7 +725,8 @@ where Value.ID: Hashable {
         stateStorage: StateStorage,
         context: RenderContext,
         contentHeight: Int,
-        overflowing: Bool
+        overflowing: Bool,
+        showsScrollbar: Bool = false
     ) -> ItemListHandler<Value.ID> {
         // Clamp against the largest possible visible-row count (one
         // indicator, at an end); the exact viewport is finalised by
@@ -769,8 +774,10 @@ where Value.ID: Hashable {
             // line: that line could just show the row. So never rest at
             // offset 1 — snap to 0, where the first row shows with no
             // indicator (the freed line keeps the bottom row visible).
-            // Mirrors _ListCore.
-            if overflowing, handler.scrollOffset == 1 {
+            // Mirrors _ListCore. A scrollbar shows no such indicator line,
+            // so it has nothing to waste — and the snap would otherwise undo a
+            // single down-arrow click (0→1→0). Skip it when the bar is shown.
+            if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
                 handler.scrollOffset = 0
             }
         }
@@ -862,6 +869,32 @@ where Value.ID: Hashable {
         else { return }
         let focusManager = context.environment.focusManager
         let firstRowY = 2 + state.scrollOffsetAbove
+
+        // The scrollbar's own handler goes in first so the container's later
+        // insert(at: 0) pushes it to a higher index — hit-tested ahead of the
+        // container (reverse iteration) for its single column, while the container
+        // still wins everywhere else. The bar is the rightmost interior column
+        // (availableWidth − 3: border + padding each side, minus the bar) over the
+        // content rows; it is row-exact (one cell per row) for the single-line path.
+        if state.hasScrollbar {
+            let barHeight = max(1, context.availableHeight - 3)
+            let barHandler = ScrollbarRenderer.verticalMouseHandler(
+                for: state.handler, length: barHeight,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                behavior: context.environment.scrollbarClickBehavior)
+            let barHandlerID = mouseDispatcher.register(barHandler)
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: max(0, context.availableWidth - 3), offsetY: firstRowY,
+                    width: 1, height: barHeight, handlerID: barHandlerID),
+                at: 0
+            )
+            ScrollbarRenderer.driveAutoRepeat(
+                state: state.handler,
+                token: "table-scrollbar-repeat-\(context.identity.path)", context: context)
+        }
+
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
