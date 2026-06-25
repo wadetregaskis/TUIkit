@@ -151,4 +151,53 @@ struct OverlayTests {
 
         #expect(result.lines[0].stripped == "123XXX7890")
     }
+
+    /// Whether the final visible cell of a line is left in the underline SGR
+    /// state — scans the line's `ESC[…m` sequences, tracking `4` (on) / `24`,`0`
+    /// (off). Self-contained (no TUIkitCore-internal helpers).
+    private func endsUnderlined(_ line: String) -> Bool {
+        var underline = false
+        let chars = Array(line)
+        var i = 0
+        while i < chars.count {
+            guard chars[i] == "\u{1B}", i + 1 < chars.count, chars[i + 1] == "[" else {
+                i += 1
+                continue
+            }
+            var j = i + 2
+            var params: [Character] = []
+            while j < chars.count, chars[j].isNumber || chars[j] == ";" {
+                params.append(chars[j])
+                j += 1
+            }
+            if j < chars.count, chars[j] == "m" {  // an SGR sequence
+                for part in String(params).split(separator: ";", omittingEmptySubsequences: false) {
+                    switch String(part) {
+                    case "", "0", "24": underline = false
+                    case "4": underline = true
+                    default: break
+                    }
+                }
+            }
+            i = j < chars.count ? j + 1 : j
+        }
+        return underline
+    }
+
+    @Test("Compositing over underlined text doesn't leak underline into the trailing cell")
+    func compositeOverUnderlinedTextNoTrailingUnderlineLeak() {
+        // Repro of the Overlays-page bug: a DemoSection header `Text(title).underline()`
+        // line is plain-padded to width; a notification overlay composited over its
+        // start must leave the trailing padding plain — not re-apply the header's
+        // (leading) underline to the cell after the overlay's bottom-right corner.
+        let header = "\u{1B}[4mHow It Works\u{1B}[0m"  // 12 visible cells, underlined, then reset
+        let base = FrameBuffer(lines: [header.padToVisibleWidth(20)])  // + 8 plain padding cells
+        let overlay = FrameBuffer(lines: [String(repeating: "X", count: 18)])  // covers cols 0–17
+        let result = base.composited(with: overlay, at: (x: 0, y: 0))
+
+        #expect(result.lines[0].stripped.hasSuffix("XX  "), "visible layout intact")
+        #expect(
+            !endsUnderlined(result.lines[0]),
+            "padding after the overlay must not inherit the header underline")
+    }
 }

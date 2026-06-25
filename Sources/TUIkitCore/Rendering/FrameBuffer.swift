@@ -631,13 +631,17 @@ extension FrameBuffer {
         let prefix = base.ansiAwarePrefix(visibleCount: column)
         let suffix = base.ansiAwareSuffix(droppingVisible: afterOverlayColumn)
 
-        // Extract the leading ANSI state from the original (unpadded) base line.
-        // The leading sequences contain the full styling setup (BG + FG + dim)
-        // before any visible text. This is more reliable than scanning the whole
-        // string, because applyPersistentBackground appends a lone BG code after
-        // the final reset that doesn't represent the full styling state.
+        // Restore the styling ACTIVE at the suffix's start column (not the line's
+        // leading state). A uniform background set up at the leading is still in
+        // force there, so it's preserved; but inline text decorations the prefix
+        // turned on and then RESET (e.g. an underlined `DemoSection` header
+        // followed by plain padding) are NOT carried onto the suffix — the bug
+        // where the cell just past a composited overlay inherited the underline.
+        // `ansiStateBefore` nets the escapes before the column, so an open+reset
+        // pair leaves nothing while a persistent background (and its lone trailing
+        // BG code) nets to the background.
         let styleSource = originalBase ?? base
-        let baseStyle = styleSource.leadingANSISequences()
+        let baseStyle = styleSource.ansiStateBefore(visibleColumn: afterOverlayColumn)
 
         // Build: [prefix] + [reset] + [overlay] + [reset + base style restore] + [suffix]
         var result = prefix

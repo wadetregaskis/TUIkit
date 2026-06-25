@@ -982,4 +982,29 @@ extension String {
 
         return result
     }
+
+    /// The net SGR styling active just before visible column `column` — every SGR
+    /// escape that appears strictly before that column, concatenated (the terminal
+    /// nets them, so an opening sequence followed by a reset leaves no styling).
+    ///
+    /// Unlike ``leadingANSISequences()`` (the styling set up before the FIRST
+    /// visible character), this reflects styling reset or changed partway along
+    /// the line: underlined text followed by a reset and plain padding yields an
+    /// empty state past the reset, not a lingering underline. It restores the
+    /// correct tail state after an overlay is composited over a line's middle —
+    /// preserving a uniform background while not bleeding the prefix's text
+    /// decorations (bold/underline) onto the suffix. See `FrameBuffer.insertOverlay`.
+    public func ansiStateBefore(visibleColumn column: Int) -> String {
+        var visible = 0
+        var state = ""
+        for segment in ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                if isSGR && visible < column { state += sequence }
+            case .visible(let character):
+                visible += character.terminalWidth
+            }
+        }
+        return state
+    }
 }
