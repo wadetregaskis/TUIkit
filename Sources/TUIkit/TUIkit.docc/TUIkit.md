@@ -59,6 +59,8 @@ struct MyApp: App {
 - <doc:Preferences>
 - <doc:CustomViews>
 - <doc:KeyboardShortcuts>
+- <doc:MouseAndGestures>
+- <doc:Presentation>
 - <doc:PaletteReference>
 - <doc:ListAndTable>
 - <doc:LayoutSystem>

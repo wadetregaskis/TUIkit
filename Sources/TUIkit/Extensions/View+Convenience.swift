@@ -20,7 +20,7 @@ extension View {
     /// > Important: Do **not** present a `Dialog` with bare `.dimmed().overlay()`.
     /// > That only dims the *look* of the background; it leaves the background
     /// > focusable and clickable, and the dialog never captures focus. Use this
-    /// > modifier (or ``modal(isPresented:content:)`` / ``alert(title:isPresented:…)``).
+    /// > modifier (or ``modal(isPresented:content:)`` / `alert(_:isPresented:actions:message:)`).
     ///
     /// ## Example
     ///
