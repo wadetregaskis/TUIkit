@@ -1,23 +1,144 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 471 786" width="471" height="786" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-label="TUIkit application lifecycle and demand-driven main loop">
-<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8a8a"/></marker></defs>
-<path d="M 191.1,81.0 L 191.1,111.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,174.0 L 191.1,204.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,267.0 L 191.1,297.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,332.0 L 191.1,362.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,503.0 L 191.1,533.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,596.0 L 191.1,626.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,675.0 L 191.1,705.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<path d="M 191.1,424.0 L 191.1,454.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="181.4" y="431.0" width="19.4" height="15" rx="4" fill="#ffffff" opacity="0.92"/><text x="191.1" y="442.5" text-anchor="middle" font-size="10" fill="#4a4a4a">no</text>
-<path d="M 270.9,393.0 L 310.9,393.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/><rect x="278.1" y="378.0" width="25.6" height="15" rx="4" fill="#ffffff" opacity="0.92"/><text x="290.9" y="389.5" text-anchor="middle" font-size="10" fill="#4a4a4a">yes</text>
-<path d="M 64.0,736.5 L 26.0,736.5 L 26.0,393.0 L 111.3,393.0" fill="none" stroke="#8a8a8a" stroke-width="1.6" marker-end="url(#arrow)"/>
-<rect x="64.0" y="18.0" width="254.2" height="63.0" rx="9" ry="9" fill="#9c3d3d"/><text x="191.1" y="39.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Terminal setup</text><text x="191.1" y="55.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">install signals · alt screen</text><text x="191.1" y="69.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">raw mode · mouse tracking</text>
-<rect x="64.0" y="111.0" width="254.2" height="63.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="132.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Register observers</text><text x="191.1" y="148.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">AppState → requestRerender</text><text x="191.1" y="162.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">focus change → needsRender + wake()</text>
-<rect x="64.0" y="204.0" width="254.2" height="63.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="225.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Prepare animation timers</text><text x="191.1" y="241.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">Pulse · Cursor — started only while</text><text x="191.1" y="255.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">a rendered frame consumes them</text>
-<rect x="64.0" y="297.0" width="254.2" height="35.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="318.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Render first frame</text>
-<polygon points="191.1,362.0 270.9,393.0 191.1,424.0 111.3,393.0" fill="#1f9b76"/><text x="191.1" y="396.7" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">shouldShutdown?</text>
-<rect x="64.0" y="454.0" width="254.2" height="49.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="475.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Consume resize flag</text><text x="191.1" y="491.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">on SIGWINCH, invalidate the diff cache</text>
-<rect x="64.0" y="533.0" width="254.2" height="63.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="554.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Drain &amp; dispatch input</text><text x="191.1" y="570.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">≤ 128 events / frame</text><text x="191.1" y="584.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">keys: 5 layers · mouse: hit-test</text>
-<rect x="64.0" y="626.0" width="254.2" height="49.0" rx="9" ry="9" fill="#1f9b76"/><text x="191.1" y="647.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Render if a frame is due</text><text x="191.1" y="663.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">at most once per App.maxFrameRate</text>
-<rect x="64.0" y="705.0" width="254.2" height="63.0" rx="9" ry="9" fill="#13795b"/><text x="191.1" y="726.2" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Block until woken</text><text x="191.1" y="742.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">input · render request · signal</text><text x="191.1" y="756.2" text-anchor="middle" font-size="10.5" fill="#dff1ea">static screen ⇒ zero renders</text>
-<rect x="310.9" y="361.5" width="136.2" height="63.0" rx="9" ry="9" fill="#9c3d3d"/><text x="379.0" y="382.7" text-anchor="middle" font-size="13.0" font-weight="600" fill="#ffffff">Cleanup</text><text x="379.0" y="398.7" text-anchor="middle" font-size="10.5" fill="#dff1ea">restore terminal</text><text x="379.0" y="412.7" text-anchor="middle" font-size="10.5" fill="#dff1ea">show cursor · exit</text>
+<svg width="427pt" height="605pt"
+ viewBox="0.00 0.00 427.00 605.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 601.41)">
+<title>lifecycle&#45;main&#45;loop</title>
+<!-- setup -->
+<g id="node1" class="node">
+<title>setup</title>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M324.66,-597.41C324.66,-597.41 108.87,-597.41 108.87,-597.41 102.88,-597.41 96.87,-591.41 96.87,-585.41 96.87,-585.41 96.87,-573.41 96.87,-573.41 96.87,-567.41 102.87,-561.41 108.87,-561.41 108.87,-561.41 324.66,-561.41 324.66,-561.41 330.66,-561.41 336.66,-567.41 336.66,-573.41 336.66,-573.41 336.66,-585.41 336.66,-585.41 336.66,-591.41 330.66,-597.41 324.66,-597.41"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-580.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal setup</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-568.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">install signals · alt screen · raw mode · mouse</text>
+</g>
+<!-- observers -->
+<g id="node2" class="node">
+<title>observers</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M330.66,-528.41C330.66,-528.41 102.88,-528.41 102.88,-528.41 96.88,-528.41 90.87,-522.41 90.87,-516.41 90.87,-516.41 90.87,-504.08 90.87,-504.08 90.87,-498.08 96.87,-492.08 102.87,-492.08 102.87,-492.08 330.66,-492.08 330.66,-492.08 336.66,-492.08 342.66,-498.08 342.66,-504.08 342.66,-504.08 342.66,-516.41 342.66,-516.41 342.66,-522.41 336.66,-528.41 330.66,-528.41"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-512.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-500.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
+</g>
+<!-- setup&#45;&gt;observers -->
+<g id="edge1" class="edge">
+<title>setup&#45;&gt;observers</title>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-561.46C216.77,-553.85 216.77,-544.71 216.77,-536.32"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-536.47 216.77,-529.47 214.32,-536.47 219.22,-536.47"/>
+</g>
+<!-- timers -->
+<g id="node3" class="node">
+<title>timers</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M304.41,-459.08C304.41,-459.08 129.12,-459.08 129.12,-459.08 123.12,-459.08 117.12,-453.08 117.12,-447.08 117.12,-447.08 117.12,-435.08 117.12,-435.08 117.12,-429.08 123.12,-423.08 129.12,-423.08 129.12,-423.08 304.41,-423.08 304.41,-423.08 310.41,-423.08 316.41,-429.08 316.41,-435.08 316.41,-435.08 316.41,-447.08 316.41,-447.08 316.41,-453.08 310.41,-459.08 304.41,-459.08"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-442.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Prepare animation timers</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-430.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Pulse · Cursor — started on demand</text>
+</g>
+<!-- observers&#45;&gt;timers -->
+<g id="edge2" class="edge">
+<title>observers&#45;&gt;timers</title>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-492.3C216.77,-484.68 216.77,-475.54 216.77,-467.16"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-467.3 216.77,-460.3 214.32,-467.3 219.22,-467.3"/>
+</g>
+<!-- initial -->
+<g id="node4" class="node">
+<title>initial</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M259.79,-390.08C259.79,-390.08 173.75,-390.08 173.75,-390.08 167.75,-390.08 161.75,-384.08 161.75,-378.08 161.75,-378.08 161.75,-366.08 161.75,-366.08 161.75,-360.08 167.75,-354.08 173.75,-354.08 173.75,-354.08 259.79,-354.08 259.79,-354.08 265.79,-354.08 271.79,-360.08 271.79,-366.08 271.79,-366.08 271.79,-378.08 271.79,-378.08 271.79,-384.08 265.79,-390.08 259.79,-390.08"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-367.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render first frame</text>
+</g>
+<!-- timers&#45;&gt;initial -->
+<g id="edge3" class="edge">
+<title>timers&#45;&gt;initial</title>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-423.17C216.77,-415.58 216.77,-406.46 216.77,-398.1"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-398.26 216.77,-391.26 214.32,-398.26 219.22,-398.26"/>
+</g>
+<!-- shutdown -->
+<g id="node5" class="node">
+<title>shutdown</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.16,-318.05C205.16,-318.05 159.37,-306.11 159.37,-306.11 153.57,-304.59 153.57,-301.57 159.37,-300.05 159.37,-300.05 205.16,-288.11 205.16,-288.11 210.96,-286.59 222.58,-286.59 228.38,-288.11 228.38,-288.11 274.17,-300.05 274.17,-300.05 279.97,-301.57 279.97,-304.59 274.17,-306.11 274.17,-306.11 228.38,-318.05 228.38,-318.05 222.58,-319.57 210.96,-319.57 205.16,-318.05"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-298.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
+</g>
+<!-- initial&#45;&gt;shutdown -->
+<g id="edge4" class="edge">
+<title>initial&#45;&gt;shutdown</title>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-354.17C216.77,-346.58 216.77,-337.46 216.77,-329.1"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-329.26 216.77,-322.26 214.32,-329.26 219.22,-329.26"/>
+</g>
+<!-- resize -->
+<g id="node6" class="node">
+<title>resize</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M199.29,-243.33C199.29,-243.33 32.25,-243.33 32.25,-243.33 26.25,-243.33 20.25,-237.33 20.25,-231.33 20.25,-231.33 20.25,-219 20.25,-219 20.25,-213 26.25,-207 32.25,-207 32.25,-207 199.29,-207 199.29,-207 205.29,-207 211.29,-213 211.29,-219 211.29,-219 211.29,-231.33 211.29,-231.33 211.29,-237.33 205.29,-243.33 199.29,-243.33"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-227.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-215.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
+</g>
+<!-- shutdown&#45;&gt;resize -->
+<g id="edge5" class="edge">
+<title>shutdown&#45;&gt;resize</title>
+<path fill="none" stroke="#8a8a8a" d="M200.09,-289.54C185.12,-278.29 162.81,-261.52 144.9,-248.06"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="146.8,-246.42 139.73,-244.18 143.86,-250.34 146.8,-246.42"/>
+<text xml:space="preserve" text-anchor="middle" x="177.57" y="-260.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+</g>
+<!-- cleanup -->
+<g id="node10" class="node">
+<title>cleanup</title>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M389.54,-243.16C389.54,-243.16 248,-243.16 248,-243.16 242,-243.16 236,-237.16 236,-231.16 236,-231.16 236,-219.16 236,-219.16 236,-213.16 242,-207.16 248,-207.16 248,-207.16 389.54,-207.16 389.54,-207.16 395.54,-207.16 401.54,-213.16 401.54,-219.16 401.54,-219.16 401.54,-231.16 401.54,-231.16 401.54,-237.16 395.54,-243.16 389.54,-243.16"/>
+<text xml:space="preserve" text-anchor="middle" x="318.77" y="-226.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
+<text xml:space="preserve" text-anchor="middle" x="318.77" y="-214.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore terminal · show cursor</text>
+</g>
+<!-- shutdown&#45;&gt;cleanup -->
+<g id="edge6" class="edge">
+<title>shutdown&#45;&gt;cleanup</title>
+<path fill="none" stroke="#8a8a8a" d="M233.61,-289.54C248.83,-278.22 271.56,-261.3 289.71,-247.79"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="290.8,-250.03 294.95,-243.89 287.88,-246.1 290.8,-250.03"/>
+<text xml:space="preserve" text-anchor="middle" x="281" y="-260.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+</g>
+<!-- input -->
+<g id="node7" class="node">
+<title>input</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M219.54,-174C219.54,-174 12,-174 12,-174 6,-174 0,-168 0,-162 0,-162 0,-150 0,-150 0,-144 6,-138 12,-138 12,-138 219.54,-138 219.54,-138 225.54,-138 231.54,-144 231.54,-150 231.54,-150 231.54,-162 231.54,-162 231.54,-168 225.54,-174 219.54,-174"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-157.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-145.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys: 5 layers · mouse: hit&#45;test</text>
+</g>
+<!-- resize&#45;&gt;input -->
+<g id="edge7" class="edge">
+<title>resize&#45;&gt;input</title>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-207.22C115.77,-199.6 115.77,-190.46 115.77,-182.08"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-182.22 115.77,-175.22 113.32,-182.22 118.22,-182.22"/>
+</g>
+<!-- render -->
+<g id="node8" class="node">
+<title>render</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.29,-105C205.29,-105 26.25,-105 26.25,-105 20.25,-105 14.25,-99 14.25,-93 14.25,-93 14.25,-81 14.25,-81 14.25,-75 20.25,-69 26.25,-69 26.25,-69 205.29,-69 205.29,-69 211.29,-69 217.29,-75 217.29,-81 217.29,-81 217.29,-93 217.29,-93 217.29,-99 211.29,-105 205.29,-105"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-88.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-76.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">at most once per App.maxFrameRate</text>
+</g>
+<!-- input&#45;&gt;render -->
+<g id="edge8" class="edge">
+<title>input&#45;&gt;render</title>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-138.09C115.77,-130.5 115.77,-121.38 115.77,-113.02"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-113.18 115.77,-106.18 113.32,-113.18 118.22,-113.18"/>
+</g>
+<!-- block -->
+<g id="node9" class="node">
+<title>block</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M185.04,-36C185.04,-36 46.5,-36 46.5,-36 40.5,-36 34.5,-30 34.5,-24 34.5,-24 34.5,-12 34.5,-12 34.5,-6 40.5,0 46.5,0 46.5,0 185.04,0 185.04,0 191.04,0 197.04,-6 197.04,-12 197.04,-12 197.04,-24 197.04,-24 197.04,-30 191.04,-36 185.04,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Block until woken</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">input · render request · signal</text>
+</g>
+<!-- render&#45;&gt;block -->
+<g id="edge9" class="edge">
+<title>render&#45;&gt;block</title>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-69.09C115.77,-61.5 115.77,-52.38 115.77,-44.02"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-44.18 115.77,-37.18 113.32,-44.18 118.22,-44.18"/>
+</g>
+<!-- block&#45;&gt;shutdown -->
+<g id="edge10" class="edge">
+<title>block&#45;&gt;shutdown</title>
+<path fill="none" stroke="#8a8a8a" d="M175.45,-35.94C248.03,-60.22 366.65,-112.76 413.77,-207 443.19,-265.83 342.61,-288.58 274.49,-297.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="274.51,-294.67 267.85,-297.93 275.09,-299.53 274.51,-294.67"/>
+<text xml:space="preserve" text-anchor="middle" x="400.81" y="-152.32" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
+</g>
+</g>
 </svg>
