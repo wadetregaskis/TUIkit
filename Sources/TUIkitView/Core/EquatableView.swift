@@ -84,7 +84,7 @@ public struct EquatableView<Content: View & Equatable>: View {
 
 extension EquatableView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let cache = context.environment.renderCache!
+        let cache = context.renderCache!
         let identity = context.identity
 
         cache.markActive(identity)
@@ -136,7 +136,7 @@ extension EquatableView: Layoutable {
     /// buffer entries. When no cache is present (standalone measurement) this
     /// forwards straight to the content, uncached.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        guard let cache = context.environment.renderCache else {
+        guard let cache = context.renderCache else {
             return measureChild(content, proposal: proposal, context: context)
         }
         let key = RenderCache.SizeKey(

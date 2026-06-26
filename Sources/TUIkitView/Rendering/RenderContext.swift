@@ -30,6 +30,25 @@ public struct RenderContext {
     /// The environment values for this render pass.
     public var environment: EnvironmentValues
 
+    /// The subtree-memoization cache for this render pass, mirrored from
+    /// ``environment`` at construction.
+    ///
+    /// This is the same value as `environment.renderCache`, hoisted out of the
+    /// environment dictionary so the hot memoization paths (`EquatableView`,
+    /// `_MemoizedRow`) can read it as a stored field — a plain pointer load —
+    /// instead of routing every consult through
+    /// `EnvironmentValues.subscript<K: EnvironmentKey>` (an `ObjectIdentifier`
+    /// hash, an `[ObjectIdentifier: Any]` probe, and an `Any` downcast). A
+    /// profile showed that getter at ~4.5% of a text-heavy frame.
+    ///
+    /// - Important: This MUST stay in sync with `environment.renderCache`. Every
+    ///   initializer derives it from the environment being installed, and
+    ///   ``withEnvironment(_:)`` — the only method that replaces the whole
+    ///   environment — re-derives it. The structural copy helpers
+    ///   (`withChildIdentity`, `withAvailableWidth`, …) only mutate identity or
+    ///   size, so they carry this field unchanged for free.
+    public var renderCache: RenderCache?
+
     /// The current view's structural identity in the render tree.
     ///
     /// Built incrementally as `renderToBuffer` traverses the view hierarchy.
@@ -74,6 +93,7 @@ public struct RenderContext {
         self.availableHeight = availableHeight
         self.environment = environment
         self.identity = identity
+        self.renderCache = environment.renderCache
     }
 
     /// Creates a new context with the same size but different environment.
@@ -83,6 +103,11 @@ public struct RenderContext {
     public func withEnvironment(_ environment: EnvironmentValues) -> Self {
         var copy = self
         copy.environment = environment
+        // This replaces the WHOLE environment, so the mirrored stored field must
+        // be re-derived or it would go stale (the old cache served for a swapped
+        // environment). Every other copy helper only touches identity/size and so
+        // carries `renderCache` correctly via `var copy = self`.
+        copy.renderCache = environment.renderCache
         return copy
     }
 

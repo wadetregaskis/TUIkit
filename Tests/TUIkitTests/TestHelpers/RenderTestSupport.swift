@@ -99,7 +99,12 @@ extension RenderContext {
     /// render), which used to produce rare, confusing cross-suite failures.
     func isolatingRenderCache() -> RenderContext {
         var copy = self
-        copy.environment.renderCache = RenderCache()
+        let cache = RenderCache()
+        copy.environment.renderCache = cache
+        // `RenderContext` mirrors the env's render cache in a stored field for the
+        // hot memoization paths. This mutates the env on an existing context, so
+        // the field must be re-set to match or it would serve the old cache.
+        copy.renderCache = cache
         return copy
     }
 }

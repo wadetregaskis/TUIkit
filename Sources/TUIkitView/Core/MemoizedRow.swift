@@ -87,7 +87,7 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        guard let cache = context.environment.renderCache else {
+        guard let cache = context.renderCache else {
             return TUIkitView.renderToBuffer(content, context: context)
         }
         let identity = context.identity
@@ -148,7 +148,7 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
     }
 
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        guard let cache = context.environment.renderCache else {
+        guard let cache = context.renderCache else {
             return measureChild(content, proposal: proposal, context: context)
         }
         let key = RenderCache.SizeKey(
