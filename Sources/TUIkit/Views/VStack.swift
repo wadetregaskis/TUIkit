@@ -322,13 +322,20 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let rightPadding = String(repeating: " ", count: max(0, width - bufferOffset - buffer.width))
 
         // When the input is already uniform every line is exactly `buffer.width`,
-        // so the inner pad is empty — skip the per-line `strippedLength` entirely.
+        // so the inner pad is empty — skip the per-line measure entirely. For a
+        // ragged input (e.g. a column of word-wrapped `Text`) reuse the carried
+        // per-line widths when present, falling back to `strippedLength` only when
+        // they are unknown. This is the hot path for a `VStack` of wrapped text.
         let inputIsUniform = buffer.linesAreUniformWidth
-        for line in buffer.lines {
-            let paddedLine =
-                inputIsUniform
-                ? line
-                : line + String(repeating: " ", count: max(0, buffer.width - line.strippedLength))
+        let carriedWidths = buffer.lineWidths
+        for (index, line) in buffer.lines.enumerated() {
+            let paddedLine: String
+            if inputIsUniform {
+                paddedLine = line
+            } else {
+                let lineWidth = carriedWidths?[index] ?? line.strippedLength
+                paddedLine = line + String(repeating: " ", count: max(0, buffer.width - lineWidth))
+            }
             alignedLines.append(leftPadding + paddedLine + rightPadding)
         }
 

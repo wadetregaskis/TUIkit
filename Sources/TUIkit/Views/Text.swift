@@ -256,16 +256,18 @@ extension Text: Renderable, Layoutable {
         // Text has a fixed size based on its content.
         // If a width is proposed, we may word-wrap.
         let maxWidth = proposal.width ?? context.availableWidth
-        let wrappedLines = TextWrapping.wrap(content, width: maxWidth)
+        let wrapped = TextWrapping.wrapMeasured(content, width: maxWidth)
 
-        let naturalWidth = wrappedLines.map(\.strippedLength).max() ?? 0
+        // Reuse the per-line widths the wrap already computed instead of
+        // re-`strippedLength`-ing every line.
+        let naturalWidth = wrapped.widths.max() ?? 0
         // Never advertise a width wider than the wrap boundary: a word
         // longer than `maxWidth` is truncated at render time, so claiming
         // its full width would make the parent reserve unusable space.
         let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : naturalWidth
         // A line limit caps the reported height so a parent allocates only
         // the rows the text is allowed to occupy.
-        let height = min(wrappedLines.count, style.lineLimit.map { max(1, $0) } ?? wrappedLines.count)
+        let height = min(wrapped.lines.count, style.lineLimit.map { max(1, $0) } ?? wrapped.lines.count)
 
         // Text is never flexible - it has a fixed size
         return ViewSize.fixed(width, height)
@@ -346,14 +348,21 @@ extension Text: Renderable, Layoutable {
         // `TextWrapping` so text lays out the same way wherever it's shown.
         let lineLimit = style.lineLimit.map { max(1, $0) }
         let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
-        let truncated = TextWrapping.fit(
+        let wrapped = TextWrapping.fitMeasured(
             Self.applyingCase(effectiveCase, to: content),
             width: maxWidth, maxLines: maxHeight, mode: mode, atWordBoundary: atWordBoundary)
 
-        // Apply styling to each line
-        let styledLines = truncated.map { ANSIRenderer.render($0, with: resolvedStyle) }
+        // Apply styling to each line. ANSI escapes occupy zero visible cells, so
+        // the styled lines have exactly the same per-line widths as the plain
+        // wrapped lines — carry those widths (and the known max width) into the
+        // buffer so neither this construction nor a parent aligning the column
+        // re-`strippedLength`s the (now ANSI-laden) lines. The buffer stays
+        // ragged: per the layout contract `Text` does not pad its lines, so
+        // `linesAreUniformWidth` is left false (its default).
+        let styledLines = wrapped.lines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+        let knownWidth = wrapped.widths.max() ?? 0
 
-        return FrameBuffer(lines: styledLines)
+        return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: wrapped.widths)
     }
 
     /// The palette role this text draws with, used to match `.semanticColor`
