@@ -124,8 +124,8 @@ extension ANSIRenderer {
     /// - Returns: The string with persistent background applied.
     static func applyPersistentBackground(_ string: String, color: Color) -> String {
         let bgCode = backgroundCode(for: color)
-        let stringWithPersistentBg = string.replacingOccurrences(
-            of: reset,
+        let stringWithPersistentBg = string.replacing(
+            reset,
             with: reset + bgCode
         )
         return bgCode + stringWithPersistentBg
