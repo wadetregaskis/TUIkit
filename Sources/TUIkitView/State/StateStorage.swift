@@ -74,6 +74,18 @@ public final class StateStorage: @unchecked Sendable {
     /// its own context's cache (no process-wide singleton → no cross-test bleed).
     public weak var renderCache: RenderCache?
 
+    /// The last-rendered branch of each `ConditionalView`, keyed by the
+    /// conditional's own identity (`true` ⇒ the `.trueContent` branch was last
+    /// rendered, `false` ⇒ `.falseContent`).
+    ///
+    /// `ConditionalView.renderToBuffer` consults this to skip the inactive-branch
+    /// `invalidateDescendants` (and the identity-node alloc it needs) on frames
+    /// where the branch did **not** flip — the common case — only paying that cost
+    /// on an actual flip. Written only on the render path (never while measuring,
+    /// per the measure-side-effect rule) and pruned in ``endRenderPass`` alongside
+    /// the rest of the per-identity state, so removed conditionals don't leak.
+    private var lastConditionalCase: [ViewIdentity: Bool] = [:]
+
     /// Creates an empty state storage.
     public init() {}
 
@@ -115,6 +127,34 @@ extension StateStorage {
     /// - Parameter identity: The view identity to mark as active.
     public func markActive(_ identity: ViewIdentity) {
         activeIdentities.insert(identity)
+    }
+
+    // MARK: - Conditional Branch Tracking
+
+    /// Records which branch a `ConditionalView` rendered this frame, and reports
+    /// whether that **flipped** since the last frame it was recorded.
+    ///
+    /// Called by ``ConditionalView`` on the render path (gated `!isMeasuring`).
+    /// On the first record for an identity — or the first after the conditional
+    /// reappeared (its entry having been pruned while absent) — there is no prior
+    /// branch, so this returns `false`: the inactive branch has no persisted
+    /// state yet (nothing was ever rendered there, or it was already pruned when
+    /// the conditional left the tree), so its `invalidateDescendants` would be a
+    /// no-op and can be skipped.
+    ///
+    /// The identity is marked active so its entry survives ``endRenderPass``'s
+    /// prune; entries for conditionals no longer in the tree are dropped there.
+    ///
+    /// - Parameters:
+    ///   - identity: The conditional view's own identity.
+    ///   - isTrueBranch: `true` if the `.trueContent` branch rendered this frame.
+    /// - Returns: `true` if the branch differs from the last recorded one.
+    public func recordConditionalBranch(_ identity: ViewIdentity, isTrueBranch: Bool) -> Bool {
+        activeIdentities.insert(identity)
+        let previous = lastConditionalCase[identity]
+        lastConditionalCase[identity] = isTrueBranch
+        guard let previous else { return false }
+        return previous != isTrueBranch
     }
 
     // MARK: - onChange Tracking
@@ -171,6 +211,13 @@ extension StateStorage {
         for key in staleTrackedKeys {
             trackedValues.removeValue(forKey: key)
         }
+        // Drop branch records for conditionals no longer in the tree, so a
+        // conditional that left and later returns is treated as fresh (its
+        // descendant state was already pruned above).
+        let staleConditionals = lastConditionalCase.keys.filter { !activeIdentities.contains($0) }
+        for identity in staleConditionals {
+            lastConditionalCase.removeValue(forKey: identity)
+        }
     }
 
     /// Removes all state for descendants of the given identity.
@@ -196,6 +243,7 @@ extension StateStorage {
         trackedValues.removeAll()
         onChangeCounters.removeAll()
         activeIdentities.removeAll()
+        lastConditionalCase.removeAll()
     }
 }
 

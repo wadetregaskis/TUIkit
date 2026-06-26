@@ -140,12 +140,43 @@ extension EmptyView: Renderable {
 extension ConditionalView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let stateStorage = context.environment.stateStorage!
+
+        // On the render path, only invalidate the now-inactive branch when the
+        // case actually FLIPPED since the last rendered frame. On a non-flip
+        // frame the inactive branch was never rendered (or was already pruned by
+        // `endRenderPass` when it last left the tree), so it holds no persisted
+        // state and `invalidateDescendants` would be a no-op — eliding it, and
+        // the branch identity-node alloc it needs, is byte-identical.
+        //
+        // During measurement we must not mutate the branch-tracking map
+        // (measure-side-effect rule). The Layoutable conformance handles the
+        // measure pass and never renders here; a measure that *does* reach this
+        // path (a Renderable parent rendering us in measuring mode) keeps the
+        // original unconditional invalidate so output stays identical.
+        let isTrueBranch: Bool
+        switch self {
+        case .trueContent: isTrueBranch = true
+        case .falseContent: isTrueBranch = false
+        }
+
+        let shouldInvalidate: Bool
+        if context.isMeasuring {
+            shouldInvalidate = true
+        } else {
+            shouldInvalidate = stateStorage.recordConditionalBranch(
+                context.identity, isTrueBranch: isTrueBranch)
+        }
+
         switch self {
         case .trueContent(let content):
-            stateStorage.invalidateDescendants(of: context.identity.branch("false"))
+            if shouldInvalidate {
+                stateStorage.invalidateDescendants(of: context.identity.branch("false"))
+            }
             return TUIkitView.renderToBuffer(content, context: context.withBranchIdentity("true"))
         case .falseContent(let content):
-            stateStorage.invalidateDescendants(of: context.identity.branch("true"))
+            if shouldInvalidate {
+                stateStorage.invalidateDescendants(of: context.identity.branch("true"))
+            }
             return TUIkitView.renderToBuffer(content, context: context.withBranchIdentity("false"))
         }
     }
