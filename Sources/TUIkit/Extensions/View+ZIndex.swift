@@ -27,6 +27,10 @@ public struct _ZIndexView<Content: View>: View {
     public var body: some View {
         content
     }
+
+    /// Static witness used by the child-layout path to detect a z-index wrapper
+    /// without a runtime `as? ZIndexProviding` cast. See ``View/_providesZIndex``.
+    public static var _providesZIndex: Bool { true }
 }
 
 extension _ZIndexView: ZIndexProviding {}

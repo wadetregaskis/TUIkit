@@ -98,6 +98,12 @@ identifier_name:
   excluded:
     - id
     - to
+    # Framework-private static View witnesses, `_`-prefixed following the
+    # SwiftUI convention (as the `_`-prefixed types in `type_name.excluded`
+    # are). They let the child-layout path detect Spacer / z-index wrappers
+    # per type instead of with a speculative runtime conformance cast.
+    - _isSpacer
+    - _providesZIndex
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.

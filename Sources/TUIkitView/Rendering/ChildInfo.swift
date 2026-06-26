@@ -30,15 +30,19 @@ public struct ChildView {
     /// The minimum length of this spacer (only relevant if isSpacer is true).
     public let spacerMinLength: Int?
 
-    public init<V: View>(_ view: V) {
-        if let spacer = view as? SpacerProtocol {
-            self.isSpacer = true
-            self.spacerMinLength = spacer.spacerMinLength
-        } else {
-            self.isSpacer = false
-            self.spacerMinLength = nil
-        }
+    /// Resolves a child's spacer flag and minimum length without a speculative
+    /// runtime conformance cast on the common (non-spacer) path.
+    ///
+    /// The static witness ``View/_isSpacer`` answers the detection per type
+    /// (`false` for everything but `Spacer`); only the rare spacer is then cast
+    /// to `SpacerProtocol` to read its `spacerMinLength`.
+    static func spacerInfo<V: View>(of view: V) -> (isSpacer: Bool, minLength: Int?) {
+        guard V._isSpacer else { return (false, nil) }
+        return (true, (view as? SpacerProtocol)?.spacerMinLength)
+    }
 
+    public init<V: View>(_ view: V) {
+        (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.view = view
         self.identityType = nil
         self.childIndex = 0
@@ -54,14 +58,7 @@ public struct ChildView {
     ///   - view: The child view to wrap.
     ///   - childIndex: The positional index used for identity disambiguation.
     public init<V: View>(_ view: V, childIndex: Int) {
-        if let spacer = view as? SpacerProtocol {
-            self.isSpacer = true
-            self.spacerMinLength = spacer.spacerMinLength
-        } else {
-            self.isSpacer = false
-            self.spacerMinLength = nil
-        }
-
+        (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.view = view
         self.identityType = V.self
         self.childIndex = childIndex
@@ -84,14 +81,7 @@ public struct ChildView {
     public init<V: View, IdentityType>(
         _ view: V, identityType: IdentityType.Type, childIndex: Int
     ) {
-        if let spacer = view as? SpacerProtocol {
-            self.isSpacer = true
-            self.spacerMinLength = spacer.spacerMinLength
-        } else {
-            self.isSpacer = false
-            self.spacerMinLength = nil
-        }
-
+        (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.view = view
         self.identityType = identityType
         self.childIndex = childIndex
@@ -203,12 +193,15 @@ public protocol ChildViewProvider {
 /// - Returns: A ``ChildInfo`` describing the view.
 @MainActor
 public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> ChildInfo {
-    let zIndex = (view as? ZIndexProviding)?.zIndexValue ?? 0
-    if let spacer = view as? SpacerProtocol {
+    // Static witnesses gate the rare conformance casts: only a z-index wrapper
+    // is cast to `ZIndexProviding`, only a spacer to `SpacerProtocol`. The common
+    // child (neither) does no speculative cast at all.
+    let zIndex = V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0
+    if V._isSpacer {
         return ChildInfo(
             buffer: nil,
             isSpacer: true,
-            spacerMinLength: spacer.spacerMinLength,
+            spacerMinLength: (view as? SpacerProtocol)?.spacerMinLength,
             size: nil,
             zIndex: zIndex
         )

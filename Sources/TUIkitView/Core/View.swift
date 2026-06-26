@@ -73,4 +73,34 @@ public protocol View {
     /// call `renderToBuffer(context:)` instead.
     @ViewBuilder
     var body: Body { get }
+
+    /// Static witness: whether this view type is a spacer (the layout system's
+    /// flexible filler — `Spacer`). `false` for every view but `Spacer`, which
+    /// overrides it to `true`.
+    ///
+    /// The child layout path (`ChildView.init`, `makeChildInfo`) reads this
+    /// per-type instead of probing each child with `as? SpacerProtocol` — an
+    /// almost-always-failing runtime conformance cast on a hot path (`Spacer` is
+    /// the sole conformer). When the witness is `true`, the rare spacer is cast
+    /// to `SpacerProtocol` to read its `spacerMinLength`.
+    static var _isSpacer: Bool { get }
+
+    /// Static witness: whether this view type carries an explicit z-index (the
+    /// wrapper `View.zIndex(_:)` produces). `false` for every view but
+    /// `_ZIndexView`, which overrides it to `true`.
+    ///
+    /// `makeChildInfo` reads this per-type instead of probing each child with
+    /// `as? ZIndexProviding` — an almost-always-failing runtime conformance cast
+    /// (`_ZIndexView` is the sole conformer). When the witness is `true`, the
+    /// rare z-index wrapper is cast to `ZIndexProviding` to read its
+    /// `zIndexValue`.
+    static var _providesZIndex: Bool { get }
+}
+
+public extension View {
+    /// Default: a view is not a spacer. `Spacer` overrides this.
+    static var _isSpacer: Bool { false }
+
+    /// Default: a view carries no explicit z-index. `_ZIndexView` overrides this.
+    static var _providesZIndex: Bool { false }
 }

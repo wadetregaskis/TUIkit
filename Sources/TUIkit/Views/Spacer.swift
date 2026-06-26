@@ -44,6 +44,10 @@ public struct Spacer: View, Equatable {
     public var body: Never {
         fatalError("Spacer is a primitive view")
     }
+
+    /// Static witness used by the child-layout path to detect a spacer without a
+    /// runtime `as? SpacerProtocol` cast. See ``View/_isSpacer``.
+    public static var _isSpacer: Bool { true }
 }
 
 // MARK: - Divider
