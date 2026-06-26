@@ -25,10 +25,39 @@ enum WideFanoutScenario {
 }
 
 private struct WideFanoutView: View {
-    let config: StressConfig
+    let count: Int
+    /// Per-row label / slug / bar strings, synthesised ONCE in `init`.
+    private let labels: [String]
+    private let slugs: [String]
+    private let bars: [String]
+
+    init(config: StressConfig) {
+        let count = config.sized(2_000)
+        self.count = count
+        // Synthesise the row content once, not in `body`. The strings are pure
+        // functions of (seed, index); building them inline in `body` re-ran the
+        // RNG, `Synth.slug` interpolation, and `Synth.bar` — which is two
+        // `String(repeating:)` + a `+` — for all 2000 rows every frame, so the
+        // bench measured the harness's transient String churn instead of the
+        // container's O(n) layout (the thing this scenario exists to stress).
+        var labels: [String] = []
+        var slugs: [String] = []
+        var bars: [String] = []
+        labels.reserveCapacity(count)
+        slugs.reserveCapacity(count)
+        bars.reserveCapacity(count)
+        for index in 0..<count {
+            let h = mix(config.seed, index)
+            labels.append("#\(index)")
+            slugs.append(Synth.slug(h))
+            bars.append(Synth.bar(Double(h % 100) / 100, width: 12))
+        }
+        self.labels = labels
+        self.slugs = slugs
+        self.bars = bars
+    }
 
     var body: some View {
-        let count = config.sized(2_000)
         VStack(alignment: .leading, spacing: 0) {
             Text("Wide Fanout — \(count) siblings in one VStack").bold()
             Divider()
@@ -37,12 +66,11 @@ private struct WideFanoutView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<count, id: \.self) { index in
-                        let h = mix(config.seed, index)
                         HStack {
-                            Text("#\(index)").foregroundStyle(.secondary)
-                            Text(Synth.slug(h))
+                            Text(labels[index]).foregroundStyle(.secondary)
+                            Text(slugs[index])
                             Spacer()
-                            Text(Synth.bar(Double(h % 100) / 100, width: 12)).foregroundStyle(.accent)
+                            Text(bars[index]).foregroundStyle(.accent)
                         }
                     }
                 }
