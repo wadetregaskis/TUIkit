@@ -387,10 +387,17 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
     private func aligned(_ buffer: FrameBuffer, toWidth width: Int, alignment: HorizontalAlignment) -> FrameBuffer {
         let offset = max(0, alignment.childOffset(childWidth: buffer.width, in: width))
         guard offset > 0 else { return buffer }
-        let lines = buffer.lines.map { line in
+        let lines = buffer.lines.map { line -> String in
             let used = line.strippedLength
-            return String(repeating: " ", count: offset) + line
-                + String(repeating: " ", count: max(0, width - offset - used))
+            let rightPad = max(0, width - offset - used)
+            // Built in place (borrowed spaces, no `String(repeating:)` temporaries
+            // or `+`-chain): byte-identical to the leading/trailing concatenation.
+            var aligned = ""
+            aligned.reserveCapacity(line.utf8.count + offset + rightPad)
+            aligned += asciiSpaces(offset)
+            aligned += line
+            if rightPad > 0 { aligned += asciiSpaces(rightPad) }
+            return aligned
         }
         return buffer.replacingLines(lines, overlayShiftX: offset)
     }

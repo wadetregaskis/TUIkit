@@ -393,7 +393,6 @@ extension FrameBuffer {
 
         let maxHeight = max(height, other.height)
         let myWidth = width
-        let spacer = String(repeating: " ", count: spacing)
 
         // Pre-compute the new width
         let newWidth = myWidth + spacing + other.width
@@ -405,9 +404,22 @@ extension FrameBuffer {
             let left = row < lines.count ? lines[row] : ""
             let right = row < other.lines.count ? other.lines[row] : ""
 
-            // Pad the left side to consistent visible width
-            let leftPadded = left.padToVisibleWidth(myWidth)
-            result.append(leftPadded + spacer + right)
+            // Build each combined row in place: the left line padded to `myWidth`,
+            // then `spacing` spaces, then the right line. This is byte-identical to
+            // `left.padToVisibleWidth(myWidth) + spacer + right` but allocates the
+            // row once (capacity reserved) and appends the padding/gap as borrowed
+            // spaces — no per-row `String(repeating:)` spacer and no `+`-chain
+            // intermediates. The left pad replicates `padToVisibleWidth`: append
+            // `myWidth - leftWidth` trailing spaces only when the line is narrower.
+            let leftWidth = left.strippedLength
+            let leftPad = max(0, myWidth - leftWidth)
+            var combined = ""
+            combined.reserveCapacity(left.utf8.count + leftPad + spacing + right.utf8.count)
+            combined += left
+            if leftPad > 0 { combined += asciiSpaces(leftPad) }
+            if spacing > 0 { combined += asciiSpaces(spacing) }
+            combined += right
+            result.append(combined)
         }
 
         // `other`'s content lands to the right, past this buffer + spacing.

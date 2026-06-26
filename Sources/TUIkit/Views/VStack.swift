@@ -318,25 +318,32 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             bufferOffset = width - buffer.width
         }
 
-        let leftPadding = String(repeating: " ", count: bufferOffset)
-        let rightPadding = String(repeating: " ", count: max(0, width - bufferOffset - buffer.width))
+        let leftCount = bufferOffset
+        let rightCount = max(0, width - bufferOffset - buffer.width)
 
         // When the input is already uniform every line is exactly `buffer.width`,
         // so the inner pad is empty — skip the per-line measure entirely. For a
         // ragged input (e.g. a column of word-wrapped `Text`) reuse the carried
         // per-line widths when present, falling back to `strippedLength` only when
         // they are unknown. This is the hot path for a `VStack` of wrapped text.
+        //
+        // Each aligned line is built in place: reserve `width` cells then append
+        // the leading spaces, the line, the (ragged-only) inner pad, and the
+        // trailing spaces — all borrowed from the shared spaces run, with no
+        // `String(repeating:)` temporaries and no `+`-chain intermediates. The
+        // byte sequence is identical to `leftPadding + paddedLine + rightPadding`.
         let inputIsUniform = buffer.linesAreUniformWidth
         let carriedWidths = buffer.lineWidths
+        alignedLines.reserveCapacity(buffer.lines.count)
         for (index, line) in buffer.lines.enumerated() {
-            let paddedLine: String
-            if inputIsUniform {
-                paddedLine = line
-            } else {
-                let lineWidth = carriedWidths?[index] ?? line.strippedLength
-                paddedLine = line + String(repeating: " ", count: max(0, buffer.width - lineWidth))
-            }
-            alignedLines.append(leftPadding + paddedLine + rightPadding)
+            let innerPad = inputIsUniform ? 0 : max(0, buffer.width - (carriedWidths?[index] ?? line.strippedLength))
+            var aligned = ""
+            aligned.reserveCapacity(line.utf8.count + leftCount + innerPad + rightCount)
+            aligned += asciiSpaces(leftCount)
+            aligned += line
+            if innerPad > 0 { aligned += asciiSpaces(innerPad) }
+            aligned += asciiSpaces(rightCount)
+            alignedLines.append(aligned)
         }
 
         // Each aligned line is exactly `width` wide (leftPad + buffer.width +

@@ -499,24 +499,34 @@ extension WindowGroup: SceneRenderable {
         // Calculate offsets for centering
         let verticalOffset = max(0, (targetHeight - buffer.height) / 2)
         let horizontalOffset = max(0, (targetWidth - buffer.width) / 2)
-        let leftPadding = String(repeating: " ", count: horizontalOffset)
+
+        // The full-width blank rows are identical, so build one and reuse it.
+        let blankRow = String(asciiSpaces(targetWidth))
 
         // Add top padding (empty lines)
         for _ in 0..<verticalOffset {
-            result.append(String(repeating: " ", count: targetWidth))
+            result.append(blankRow)
         }
 
-        // Add content lines with horizontal centering
+        // Add content lines with horizontal centering. Each centred line is built
+        // in place — reserve once, then append the leading spaces, the line, and
+        // the trailing spaces as borrowed runs. Byte-identical to
+        // `leftPadding + line + String(repeating:)` without the temporaries.
         for row in 0..<min(buffer.height, targetHeight - verticalOffset) {
             let line = buffer.lines[row]
             let rightPadding = max(0, targetWidth - horizontalOffset - line.strippedLength)
-            result.append(leftPadding + line + String(repeating: " ", count: rightPadding))
+            var centered = ""
+            centered.reserveCapacity(line.utf8.count + horizontalOffset + rightPadding)
+            if horizontalOffset > 0 { centered += asciiSpaces(horizontalOffset) }
+            centered += line
+            if rightPadding > 0 { centered += asciiSpaces(rightPadding) }
+            result.append(centered)
         }
 
         // Add bottom padding (empty lines)
         let bottomPadding = max(0, targetHeight - verticalOffset - buffer.height)
         for _ in 0..<bottomPadding {
-            result.append(String(repeating: " ", count: targetWidth))
+            result.append(blankRow)
         }
 
         // The content shifted right by `horizontalOffset` and down by

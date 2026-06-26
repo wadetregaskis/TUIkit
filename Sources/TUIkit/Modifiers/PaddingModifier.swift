@@ -118,22 +118,33 @@ public struct PaddingModifier: ViewModifier {
 
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         var result: [String] = []
+        result.reserveCapacity(insets.top + buffer.lines.count + insets.bottom)
 
-        let leadingPad = String(repeating: " ", count: insets.leading)
-        let trailingPad = String(repeating: " ", count: insets.trailing)
+        let leadingCount = insets.leading
+        let trailingCount = insets.trailing
 
         // Calculate line width
         let lineWidth = buffer.width + insets.leading + insets.trailing
-        let emptyLine = String(repeating: " ", count: lineWidth)
+        // The full-width blank pad rows are all identical, so build one and reuse
+        // its value for every top/bottom row (cheaper than re-slicing per row).
+        let emptyLine = String(asciiSpaces(lineWidth))
 
         // Top padding (full lines)
         for _ in 0..<insets.top {
             result.append(emptyLine)
         }
 
-        // Content lines with horizontal padding
+        // Content lines with horizontal padding. Each padded line is built in
+        // place — reserve once, then append the leading spaces, the line, and the
+        // trailing spaces as borrowed runs — byte-identical to
+        // `leadingPad + line + trailingPad` without the `+`-chain intermediates.
         for line in buffer.lines {
-            result.append(leadingPad + line + trailingPad)
+            var padded = ""
+            padded.reserveCapacity(line.utf8.count + leadingCount + trailingCount)
+            if leadingCount > 0 { padded += asciiSpaces(leadingCount) }
+            padded += line
+            if trailingCount > 0 { padded += asciiSpaces(trailingCount) }
+            result.append(padded)
         }
 
         // Bottom padding (full lines)

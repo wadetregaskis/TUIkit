@@ -221,16 +221,32 @@ extension FlexibleFrameView: Renderable {
 
         let padding = targetWidth - visibleWidth
 
+        // Build the aligned line in place: reserve `line` plus its padding, then
+        // append the leading spaces (if any), the line, and the trailing spaces
+        // (if any) as borrowed runs from the shared spaces buffer. Byte-identical
+        // to the former `String(repeating:) + line + String(repeating:)` forms,
+        // without the per-line spaces temporaries or `+`-chain intermediates. This
+        // runs once per line of every `.frame(...)` (e.g. the `modifiers`
+        // scenario, two framed-and-padded chains per row).
+        let leftPad: Int
+        let rightPad: Int
         switch alignment.horizontal {
         case .leading:
-            return (line + String(repeating: " ", count: padding), targetWidth)
+            leftPad = 0
+            rightPad = padding
         case .center:
-            let left = padding / 2
-            let right = padding - left
-            return (String(repeating: " ", count: left) + line + String(repeating: " ", count: right), targetWidth)
+            leftPad = padding / 2
+            rightPad = padding - leftPad
         case .trailing:
-            return (String(repeating: " ", count: padding) + line, targetWidth)
+            leftPad = padding
+            rightPad = 0
         }
+        var aligned = ""
+        aligned.reserveCapacity(line.utf8.count + padding)
+        if leftPad > 0 { aligned += asciiSpaces(leftPad) }
+        aligned += line
+        if rightPad > 0 { aligned += asciiSpaces(rightPad) }
+        return (aligned, targetWidth)
     }
 }
 
