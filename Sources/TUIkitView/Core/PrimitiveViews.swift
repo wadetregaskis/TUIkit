@@ -96,22 +96,19 @@ public struct ViewArray<Element: View>: View {
 /// }
 /// ```
 public struct AnyView: View {
-    private let _render: (RenderContext) -> FrameBuffer
-    private let _measure: (ProposedSize, RenderContext) -> ViewSize
+    /// The wrapped child, stored as a single existential so the (often large,
+    /// deeply-generic) view value is boxed ONCE here rather than captured into a
+    /// pair of escaping measure / render closure contexts. The `Renderable` /
+    /// `Layoutable` conformances open it back to the concrete type via implicit
+    /// existential opening — identical dispatch to the old captured closures.
+    /// Mirrors `ChildView` (see `ChildInfo.swift`).
+    private let view: any View
 
     /// Creates an AnyView wrapping the given view.
     ///
     /// - Parameter view: The view to type-erase.
     public init<V: View>(_ view: V) {
-        self._render = { context in
-            TUIkitView.renderToBuffer(view, context: context)
-        }
-        // Capture the wrapped view's measurement too, so AnyView can forward
-        // `sizeThatFits` to it (see the `Layoutable` conformance) rather than
-        // falling into measureChild's render-to-measure fallback.
-        self._measure = { proposal, context in
-            measureChild(view, proposal: proposal, context: context)
-        }
+        self.view = view
     }
 
     public var body: Never {
@@ -123,7 +120,7 @@ public struct AnyView: View {
 
 extension AnyView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        _render(context)
+        TUIkitView.renderToBuffer(view, context: context)
     }
 }
 
@@ -209,32 +206,34 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // top of the real render. The render paths are unchanged, so output is
 // identical; only the measure pass gets cheaper.
 
-// AnyView forwards its measurement to the wrapped view (via the captured
-// `_measure`), so its type-erased subtree is measured structurally — like the
-// transparent wrappers above — instead of through measureChild's render-to-
-// measure fallback (which rendered the whole erased subtree to measure it).
-// This is behaviour-correct: the flexibility contract (`ViewSize`) settled that
-// `sizeThatFits` is canonical and the fallback's old "+8" probe *over-reported*
-// flexibility for wrapping content; with the stacks/containers reconciled to the
-// contract, the forwarded measure agrees with the render (the measure/render
-// equivalence harness — the oracle — covers AnyView(Text) and AnyView(flexFrame),
-// and any wrapped content it covers). The earlier "forwarded measure differs"
-// objection was against that imprecise +8 probe, not the render.
+// AnyView forwards its measurement to the wrapped view (opening the stored
+// `any View` existential to its concrete type), so its type-erased subtree is
+// measured structurally — like the transparent wrappers above — instead of
+// through measureChild's render-to-measure fallback (which rendered the whole
+// erased subtree to measure it). This is behaviour-correct: the flexibility
+// contract (`ViewSize`) settled that `sizeThatFits` is canonical and the
+// fallback's old "+8" probe *over-reported* flexibility for wrapping content;
+// with the stacks/containers reconciled to the contract, the forwarded measure
+// agrees with the render (the measure/render equivalence harness — the oracle —
+// covers AnyView(Text) and AnyView(flexFrame), and any wrapped content it
+// covers). The earlier "forwarded measure differs" objection was against that
+// imprecise +8 probe, not the render.
 //
-// ⚠️ Changing AnyView's stored layout (it now holds a second closure) requires a
-// CLEAN build (`swift package clean`). AnyView is a non-resilient struct used
+// ⚠️ Changing AnyView's stored layout (it holds a single `any View`
+// existential — a fixed 5-word inline buffer + metadata + witness table) requires
+// a CLEAN build (`swift package clean`). AnyView is a non-resilient struct used
 // across TUIkitView → TUIkit → consumers; a size change does not bump
 // TUIkitView's public interface hash, so an INCREMENTAL build may not recompile
-// cross-module dependents — they keep the old, smaller layout and corrupt memory
-// at runtime. This is an incremental-compilation (Swift driver / SwiftPM) bug,
-// not a codegen bug (witnesses are correct in -Onone IR). Clean builds are fine,
-// so this is benign in practice: clean-build after pulling a change to AnyView's
+// cross-module dependents — they keep the old layout and corrupt memory at
+// runtime. This is an incremental-compilation (Swift driver / SwiftPM) bug, not
+// a codegen bug (witnesses are correct in -Onone IR). Clean builds are fine, so
+// this is benign in practice: clean-build after pulling a change to AnyView's
 // storage.
 
 extension AnyView: Layoutable {
     /// Forwards measurement to the wrapped view — see the note above.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        _measure(proposal, context)
+        measureChild(view, proposal: proposal, context: context)
     }
 }
 
