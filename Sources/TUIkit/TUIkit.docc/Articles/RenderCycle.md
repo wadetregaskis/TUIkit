@@ -412,7 +412,7 @@ The `RenderCache` is **fully cleared** in two situations:
 | Any `@State` change | `StateBox.value.didSet` calls `renderCache.clearAll()` |
 | Environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
 
-Between these events: for example during Spinner animation frames at ~42 FPS: the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame.
+Between these events — for example during ``Spinner`` animation frames — the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame (the run loop renders only when a frame is actually due, capped at `App.maxFrameRate`).
 
 ### When to Use `.equatable()`
 
