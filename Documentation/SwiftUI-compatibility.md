@@ -412,18 +412,20 @@ Possible in a terminal, just not built yet. **Verdict: add over time**, roughly
 in this priority order. (Proposals are one-liners; trade-offs noted where
 non-obvious.)
 
+> **Since shipped** (now built; removed from the list below): `TabView` / `Tab`,
+> `ColorPicker` (with a full modal `ColorPickerPanel`), and the `.tint(_:)` modifier.
+
 | Feature | Why it matters | Design sketch / trade-off |
 |---|---|---|
 | **`NavigationStack` + `NavigationLink` + `navigationDestination(for:)` + `NavigationPath`** | Push/pop navigation is the backbone of most apps; TUIkit only has split-view. | Model a path stack of type-erased destinations; render the top of stack full-screen; back = pop. Biggest single gap. |
-| **`TabView` / `Tab` / `tabItem`** | Tabbed top-level structure. | A selection-bound container rendering one child at a time + a tab strip; keyboard/`focusSection` to switch. |
 | **Presentation: `confirmationDialog`, `popover`, `fullScreenCover`, `presentationDetents`** | Common modal patterns. | `confirmationDialog` ≈ an action-list `alert`; `popover`/`fullScreenCover` ≈ `modal` variants; detents → fractional-height modal. |
 | **`ScrollViewReader` / `ScrollViewProxy.scrollTo` / `.scrollPosition`** | Programmatic scrolling. | Expose the existing internal scroll-offset state through a proxy keyed by row id. |
 | **`@FocusState` as a property wrapper** *(also a §3-style fix)* | SwiftUI's focus is `@FocusState var x` + `.focused($x)`; TUIkit's `FocusState` is a manually-constructed class — source-incompatible. | Wrap the existing `FocusManager` in a `@propertyWrapper struct FocusState<Value: Hashable>` + `.focused(_:)`/`.focused(_:equals:)`. Trade-off: reconcile with the imperative manager API. |
 | **`.keyboardShortcut`** | Bind a key to any action, not just status-bar items. | A modifier registering an action with the key dispatcher for the view's focus scope. |
-| **Controls: `Label`, `Link`, `DatePicker`, `ColorPicker`, `Gauge`, `TextEditor`, multi-select `Picker`** | Everyday building blocks. | `Label`/`Gauge`/`TextEditor` are straightforward; `Link` opens via `openURL`; `DatePicker`/`ColorPicker` are bigger. |
+| **Controls: `Label`, `Link`, `DatePicker`, `Gauge`, `TextEditor`, multi-select `Picker`** | Everyday building blocks. | `Label`/`Gauge`/`TextEditor` are straightforward; `Link` opens via `openURL`; `DatePicker` is bigger. |
 | **`Image(systemName:)` → glyph map** *(see §2.4)* | Lets common SF Symbol names render as Unicode. | Curated `String → Character` table; falls back to a placeholder. |
 | **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. |
-| **Common modifiers: `.id`, `.tint`, `.opacity`(View), `.multilineTextAlignment`, `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. |
+| **Common modifiers: `.id`, `.opacity`(View), `.multilineTextAlignment`, `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. |
 | **Scoped wrappers: `@Bindable`, `@SceneStorage`, `@FocusedValue`** | `@Bindable` pairs with `@Observable`; the others are niche. | `@Bindable` is the useful one (binding into an `@Observable`); `@SceneStorage` ≈ `@AppStorage` for a single scene. |
 | **Env values: `\.isEnabled`, `\.locale`, `\.layoutDirection`, `\.dynamicTypeSize`, `\.openURL`, `\.scenePhase`** | Standard environment reads. | `\.isEnabled` comes with §3.3; `\.openURL`/`\.locale`/`\.scenePhase` are independently useful; size-class concepts map loosely to terminal dimensions. |
 | **Text richness: `Text(_:format:)`, `LocalizedStringKey`, `AttributedString`, Markdown, `Text + Text`** | Formatting & localization. | `Text + Text` concatenation and `Text(_:format:)` are tractable; full `AttributedString`/Markdown is larger. TUIkit has a localization service to build `LocalizedStringKey` on. |
@@ -483,7 +485,7 @@ quick, high-value ergonomics first; large subsystems last:
 | 7 | `frame` default alignment → `.center` (§3.6) | 3 | medium\* | removes a silent layout divergence (*behavioral — do early) |
 | 8 | `@FocusState` property wrapper + `.focused` (§4a) | 4a | medium | source-compatible focus; reconcile with `FocusManager` |
 | 9 | `NavigationStack`/`NavigationLink`/`navigationDestination` (§4a) | 4a | high | biggest structural gap |
-| 10 | `TabView`, `confirmationDialog`/`popover`, `ScrollViewReader`, `.id`/`.searchable`/`.keyboardShortcut`, controls (`Label`/`Gauge`/`TextEditor`/`Link`) | 4a | mixed | fill out breadth incrementally |
+| 10 | `confirmationDialog`/`popover`, `ScrollViewReader`, `.id`/`.searchable`/`.keyboardShortcut`, controls (`Label`/`Gauge`/`TextEditor`/`Link`) | 4a | mixed | fill out breadth incrementally |
 | 11 | `Button(action:label:)` + custom `ToggleStyle`/`PickerStyle` (§3.9) | 3 | med-high | view labels; unlock custom styles |
 
 Everything in §2 and §4b is intentional and should **not** change: the `Int`
