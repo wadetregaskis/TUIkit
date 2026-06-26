@@ -2,13 +2,13 @@
 
 ## Hard Constraints (non-negotiable)
 
-- **Swift 6.0 only**: `swift-tools-version: 6.0`. Never use features that require a newer compiler.
-- **Cross-platform**: Must build and run on both macOS and Linux. CI tests both (`macos-15` + `swift:6.0` container).
+- **Swift 6.2**: `swift-tools-version: 6.2`. Language features up to 6.2 are fair game; nothing newer.
+- **Cross-platform**: Must build and run on both macOS and Linux. CI tests both (`macos-15` + `swift:6.2` container).
 - **CI must pass**: All tests and linting must pass before merge.
 
 ## Project
 
-TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure Swift: no ncurses or C dependencies.
+TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure Swift: no ncurses or external C dependencies (the only C is the in-tree `stb_image` decoder).
 
 ## Build, Test & Lint
 
@@ -16,7 +16,7 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 # Build
 swift build
 
-# Run all tests (1172+ tests, Swift Testing framework)
+# Run all tests (~2,275 tests, Swift Testing framework)
 swift test
 
 # Run a single test suite
@@ -108,7 +108,7 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 
 ## Code Style
 
-- Line length: 140 characters (warning), 200 (error)
+- Line length: 160 characters (warning), 200 (error)
 - 4-space indentation
 - Trailing commas in multi-line collections
 - See `.swiftlint.yml` and `.swift-format` for full configuration

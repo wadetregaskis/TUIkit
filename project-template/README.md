@@ -68,12 +68,12 @@ tuikit-uninstall
 ## Requirements
 
 - macOS 15+ or Linux
-- Swift 6.0+
+- Swift 6.2+ (TUIkit requires a Swift 6.2 toolchain)
 - Bash shell
 
 ## Documentation
 
-- [TUIkit Documentation]([https://docs.tuikit.dev/documentation/tuikit/](https://swiftpackageindex.com/wadetregaskis/TUIkit/main/documentation/tuikit))
+- [TUIkit Documentation](https://swiftpackageindex.com/wadetregaskis/TUIkit/main/documentation/tuikit)
 - [TUIkit GitHub](https://github.com/wadetregaskis/TUIkit)
 
 ## License

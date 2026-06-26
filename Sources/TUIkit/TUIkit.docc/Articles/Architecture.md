@@ -26,11 +26,11 @@ Every UI component conforms to the ``View`` protocol. Views are composed declara
 
 Built-in views include:
 
-- **Content**: ``Text``, ``Spinner``, ``Divider``, ``EmptyView``
-- **Interactive controls**: ``Button``, ``TextField``, ``SecureField``, ``Toggle``, ``Slider``, ``Stepper``, ``RadioButtonGroup``, ``Menu``, ``ProgressView``
-- **Containers**: ``Card``, ``Panel``, ``Alert``, ``Dialog``, ``NavigationSplitView``
+- **Content**: ``Text``, ``Image``, ``Spinner``, ``Divider``, ``EmptyView``, ``LocalizedString``
+- **Interactive controls**: ``Button``, ``ButtonRow``, ``TextField``, ``SecureField``, ``Toggle``, ``Slider``, ``Stepper``, ``RadioButtonGroup``, ``Menu``, ``Picker``, ``ColorPicker``, ``ProgressView``
+- **Containers**: ``Card``, ``Panel``, ``Alert``, ``Dialog``, ``NavigationSplitView``, ``TabView``, ``ContentUnavailableView``, ``StatusBar``
 - **Data collections**: ``List``, ``Table``, ``Section``
-- **Layout**: ``VStack``, ``HStack``, ``ZStack``, ``LazyVStack``, ``LazyHStack``, ``Spacer``, ``ForEach``
+- **Layout & scrolling**: ``VStack``, ``HStack``, ``ZStack``, ``LazyVStack``, ``LazyHStack``, ``Group``, ``ViewThatFits``, ``Spacer``, ``ForEach``, ``ScrollView``
 
 ### 3. Layout Layer
 
@@ -57,7 +57,7 @@ Text("Hello")
 - **``State``**: Mutable per-view state that triggers re-renders
 - **``Binding``**: Two-way connection to a value owned elsewhere
 - **``EnvironmentValues``**: Values propagated down the view tree
-- **``AppStorage``**: Persistent key-value storage via `UserDefaults`
+- **``AppStorage``**: Persistent key-value storage. The default backend (`JSONFileStorage`) writes to an XDG config directory; `UserDefaultsStorage` is also available.
 
 ### 6. Rendering Layer
 
@@ -70,9 +70,9 @@ The rendering pipeline converts the view tree into terminal output:
 
 ## Event Loop
 
-`AppRunner` initializes all subsystems (Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, ThemeManager x2, TUIContext), creates InputHandler and RenderLoop, installs POSIX signal handlers, sets up the terminal (alternate screen, raw mode), starts PulseTimer (100 ms) and CursorTimer (50 ms), registers state and focus observers, and performs an initial render before entering the main loop.
+`AppRunner` initializes all subsystems (Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, ThemeManager x2, TUIContext), creates InputHandler and RenderLoop, installs POSIX signal handlers, sets up the terminal (alternate screen, raw mode, mouse tracking), registers state and focus observers, and performs an initial render before entering the main loop. PulseTimer (100 ms) and CursorTimer (50 ms) are demand-driven: each is started only while a rendered frame actually consumed it (an animating ``Spinner``, a focused ``TextField`` caret) and stopped otherwise, so a static screen drives no animation clocks.
 
-Each loop iteration checks `shouldShutdown` (set by SIGINT), consumes the resize flag to invalidate the diff cache if SIGWINCH fired, then renders when `consumeRerenderFlag()` or `appState.needsRender` is true. After rendering, it reads up to 128 non-blocking key events per frame and dispatches each through five handler layers. Each iteration then suspends ~24 ms with `await Task.sleep`, which throttles the loop to approximately 42 FPS and — being a real suspension point — releases the main actor so `Task`, `MainActor.run`, and `DispatchQueue.main` work runs between frames. Asynchronous render triggers (timers, @State changes, SIGWINCH, focus changes) feed back into the render decision via `appState.needsRender` or `signals.requestRerender()`.
+Rendering is **demand-driven and frame-capped**, not a fixed-rate poll. With nothing pending and nothing animating, the loop blocks in `await stdinArrival.waitForArrival(...)` until woken — by terminal input, a render request, or a signal — so a static screen does zero renders and consumes no CPU. When work is pending it renders at most once per frame interval (`App.maxFrameRate`, default 60 FPS), coalescing a burst of requests into a single frame. Each iteration checks `shouldShutdown` (set by SIGINT) and the in-app dismiss flag, consumes the resize flag to invalidate the diff cache if SIGWINCH fired, drains up to 128 pending terminal events (keys and mouse) and dispatches each — keys through five handler layers, mouse through the hit-test dispatcher — then renders if a frame is due and the frame-rate cap has cleared. The wait is a real suspension point, so it releases the main actor and lets `Task`, `MainActor.run`, and `DispatchQueue.main` work run between frames. Asynchronous render triggers (animation deadlines, @State changes, SIGWINCH, focus changes) feed back into the render decision via `appState.needsRender` or `signals.requestRerender()`, both of which also `wake()` the idle-blocked loop.
 
 @Image(source: "architecture-event-loop.png", alt: "Flowchart of the TUIkit event loop: @main entry initializes subsystems, sets up terminal, starts timers and observers, performs an initial render, then enters the main loop. The loop checks shouldShutdown, consumes the resize flag to invalidate the diff cache, checks rerenderFlag or needsRender to conditionally render, reads key events non-blocking up to 128 per frame, dispatches through 5 input layers, and sleeps 28ms. SIGINT exits to cleanup. Async render triggers from timers, state changes, SIGWINCH, and focus changes feed back into the needsRender check.")
 

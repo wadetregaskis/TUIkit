@@ -82,10 +82,12 @@ Color.palette(202)  // orange
 ### True Color (RGB)
 
 ```swift
-Color.rgb(255, 128, 0)   // orange via RGB components
-Color.hex(0xFF8000)       // orange via hex integer
-Color.hex("#FF8000")      // orange via hex string
-Color.hsl(30, 100, 50)   // orange via HSL
+Color.rgb(255, 128, 0)       // orange via RGB components
+Color.hex(0xFF8000)          // orange via hex integer
+Color.hex("#FF8000")         // orange via hex string
+Color.hsl(30, 100, 50)       // orange via HSL
+Color.hsb(30, 100, 100)      // orange via HSB
+Color.cmyk(0, 50, 100, 0)    // orange via CMYK
 ```
 
 ### Color Manipulation

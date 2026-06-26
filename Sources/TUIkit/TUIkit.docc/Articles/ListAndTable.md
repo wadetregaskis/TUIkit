@@ -115,7 +115,7 @@ struct ContentView: View {
 
 ### Column Configuration
 
-Columns support three width modes:
+Columns support four width modes:
 
 ```swift
 TableColumn("Name", value: \.name)
@@ -126,7 +126,14 @@ TableColumn("Size", value: \.size)
 
 TableColumn("Progress", value: \.progress)
     .width(.ratio(0.3))      // 30% of available width
+
+TableColumn("Title", value: \.title)
+    .width(.fit)             // Sizes to the widest header/cell (O(rows))
 ```
+
+`.fit` scans every value in the column (not just the visible rows) so the
+width stays stable while scrolling; prefer `.fixed` or `.flexible` for very
+large tables where a per-frame content scan is undesirable.
 
 ### Column Alignment
 
@@ -135,6 +142,28 @@ Align column content to leading, center, or trailing:
 ```swift
 TableColumn("Amount", value: \.amount)
     .alignment(.trailing)    // Right-align numbers
+```
+
+### Multi-Line Cells and Truncation
+
+By default each cell occupies a single line (the classic table look). Raise a
+column's line limit with `.lineLimit(_:)` to let wide values — or values
+containing explicit line breaks — wrap onto further lines; the row grows to its
+tallest cell, and content beyond the limit is folded into the last line and
+truncated with an ellipsis:
+
+```swift
+TableColumn("Notes", value: \.notes)
+    .lineLimit(3)            // Wrap up to 3 lines per cell
+```
+
+Cells are always clipped to the column width so the table stays aligned.
+`.truncationMode(_:)` chooses *which* part of an over-long value survives —
+for example `.head` keeps the end of a long file path:
+
+```swift
+TableColumn("Path", value: \.path)
+    .truncationMode(.head)   // Keep the end, drop the start
 ```
 
 ## Keyboard Navigation
@@ -151,6 +180,10 @@ Both List and Table support the same keyboard shortcuts:
 | Page Down | Move down by viewport height |
 | Enter / Space | Toggle selection |
 
+Hold Shift with Up/Down to move the cursor by several rows at once (clamping at
+the ends rather than wrapping). The step count is the `.shiftStepMultiplier(_:)`
+environment value (default 5).
+
 ## Scroll Indicators
 
 When content extends beyond the viewport, scroll indicators appear at the
@@ -165,6 +198,19 @@ top and bottom, reporting the number of rows hidden in each direction:
 │        ▼ 12 more below       │
 └──────────────────────────────┘
 ```
+
+In addition to these indicators, List and Table can draw an interactive
+scrollbar (hidden by default). Opt in and customize it with the shared
+scrollbar modifiers, which also apply to ScrollView:
+
+```swift
+List("Items", selection: $selected) { ... }
+    .scrollbarVisibility(.visible)   // .automatic / .visible / .hidden
+    .scrollbarArrows(.single)        // .none / .single / .double
+```
+
+The scrollbar supports a proportional thumb, drag, click-to-page or
+click-to-jump, end-arrow stepping, and auto-repeat while a button is held.
 
 ## Sections
 
@@ -244,6 +290,7 @@ List("Items", selection: $selected) {
 - ``Table``
 - ``TableColumn``
 - ``ColumnWidth``
+- ``TruncationMode``
 - ``Section``
 - ``ForEach``
 - ``SelectionMode``

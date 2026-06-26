@@ -10,7 +10,7 @@ A declarative, SwiftUI-like framework for building Terminal User Interfaces in S
 
 ## Overview
 
-TUIkit lets you build terminal applications using a familiar, declarative syntax inspired by SwiftUI. No ncurses, no C dependencies: pure Swift.
+TUIkit lets you build terminal applications using a familiar, declarative syntax inspired by SwiftUI. No ncurses, no system terminal libraries: rendering is pure Swift. (Image decoding bundles `stb_image` as an in-tree C target; there are no external system C dependencies.)
 
 ```swift
 @main
@@ -34,10 +34,10 @@ struct MyApp: App {
 
 - **Declarative syntax**: Build UIs with `VStack`, `HStack`, `Text`, `Button`, and more
 - **SwiftUI-like API**: `@State`, `@ViewBuilder`, environment values, modifiers
-- **Theming system**: 6 built-in palettes with full RGB color support
+- **Theming system**: 16 built-in palettes (6 phosphor presets + 10 terminal profiles) with full RGB color support
 - **Focus management**: Keyboard-driven navigation between interactive elements
 - **Status bar**: Configurable shortcut bar with context stack
-- **No dependencies**: Pure Swift, no ncurses or other C libraries
+- **No terminal libraries**: Rendering is pure Swift, with no ncurses or system terminal C libraries
 - **Cross-platform**: macOS and Linux
 
 ## Topics
@@ -80,6 +80,7 @@ struct MyApp: App {
 - ``AnyView``
 - ``Spinner``
 - ``Divider``
+- ``ContentUnavailableView``
 
 ### Interactive Controls
 
@@ -94,6 +95,7 @@ struct MyApp: App {
 - ``RadioButtonGroup``
 - ``Picker``
 - ``RadioButtonItem``
+- ``ColorPicker``
 - ``Menu``
 - ``MenuItem``
 - ``ProgressView``
@@ -108,6 +110,8 @@ struct MyApp: App {
 - ``Spacer``
 - ``Section``
 - ``ForEach``
+- ``Group``
+- ``ViewThatFits``
 - ``HorizontalAlignment``
 - ``VerticalAlignment``
 - ``Alignment``
@@ -121,6 +125,9 @@ struct MyApp: App {
 - ``Alert``
 - ``Dialog``
 - ``NavigationSplitView``
+- ``TabView``
+- ``Tab``
+- ``ScrollView``
 
 ### Data Collections
 
@@ -150,6 +157,8 @@ struct MyApp: App {
 
 - ``Palette``
 - ``SystemPalette``
+- ``TerminalProfilePalette``
+- ``PaletteRegistry``
 - ``Color``
 - ``TextStyle``
 
@@ -174,7 +183,9 @@ struct MyApp: App {
 - ``DefaultToggleStyle``
 - ``CheckboxToggleStyle``
 - ``SwitchToggleStyle``
+- ``CheckboxStyle``
 - ``TrackStyle``
+- ``IndeterminateStyle``
 - ``ListStyle``
 - ``PlainListStyle``
 - ``InsetGroupedListStyle``
@@ -182,6 +193,7 @@ struct MyApp: App {
 - ``TextCursorStyle``
 - ``TextContentType``
 - ``NavigationSplitViewStyle``
+- ``TabViewStyle``
 - ``PickerStyle``
 - ``AutomaticPickerStyle``
 - ``MenuPickerStyle``

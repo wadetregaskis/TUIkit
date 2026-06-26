@@ -54,14 +54,13 @@ import TUIkitCore
 /// }
 /// ```
 ///
-/// > Note: Only vertical scrolling is supported in this initial
-///   version. The `axes:` argument is accepted for SwiftUI API
-///   parity but `.horizontal` is silently treated as `.vertical`.
-///   Two-axis scrolling is tracked as a follow-up.
+/// > Note: Both axes are supported. Pass `.vertical` (the default),
+///   `.horizontal`, or `[.horizontal, .vertical]`. When horizontal
+///   scrolling is enabled the view also renders a bottom scrollbar and
+///   responds to a native horizontal wheel (or shift + vertical wheel).
 public struct ScrollView<Content: View>: View {
-    /// The axes along which content scrolls. Currently only
-    /// `.vertical` is implemented; `.horizontal` is accepted for
-    /// API parity but ignored.
+    /// The axes along which content scrolls (`.vertical`, `.horizontal`,
+    /// or both). Both are fully implemented.
     public let axes: Axis.Set
 
     /// Whether to show "N more above / below" indicators at the

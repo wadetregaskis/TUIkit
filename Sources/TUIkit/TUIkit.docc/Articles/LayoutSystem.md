@@ -122,7 +122,7 @@ Flexible children share remaining space equally. If multiple spacers exist, they
 | ``Slider`` | Yes | Width-flexible |
 | ``Divider`` | Yes | Width-flexible |
 | ``ProgressView`` | Yes | Width-flexible |
-| ``Image`` | Yes | Both-flexible (fills available space) |
+| ``Image`` | Yes | Fixed (aspect-fits the proposed/viewport box) |
 
 Views that are not `Layoutable` use the default implementation which renders first, then reports the buffer size as fixed.
 

@@ -123,25 +123,25 @@ Two controls edit a `Binding<Color>`, mirroring SwiftUI's `ColorPicker`:
   ```
 
 - ``ColorPickerPanel`` — the **full modal editor**, the terminal analogue of
-  macOS's colour panel: a live preview, tabs for the **RGB / HSL / HSB / CMYK**
-  colour models (one slider per channel), a **Semantic** tab that selects a
-  palette role (`.semantic(role)`, so the colour tracks the theme), and a
-  **256** tab showing the xterm palette as an arrow-navigable grid.
+  macOS's colour panel: a live preview plus tabs for the **RGB / HSL / HSB /
+  CMYK** colour models (one slider per channel), a **Semantic** tab that selects
+  a palette role (`.semantic(role)`, so the colour tracks the theme), a **256**
+  tab showing the xterm palette as an arrow-navigable grid, and **Greyscale**,
+  **Named**, **Web Safe** and **Crayons** tabs for picking from those curated
+  sets.
 
-  TUIkit modals are page-hosted (a `.modal` centres on the space available where
-  it's attached), so present the panel from a full-screen subtree — typically
-  the page root — rather than from deep inside a layout:
+  Present it with ``View/modal(isPresented:content:)``. The modal is centred and
+  dims the whole screen no matter where it is attached, so you can hang it off any
+  subtree — there is no need to host it from a special root:
 
   ```swift
   @State private var colour: Color = .rgb(80, 160, 255)
   @State private var editing = false
 
-  PageRoot {
-      Button("Edit colour…") { editing = true }
-  }
-  .modal(isPresented: $editing) {
-      ColorPickerPanel("Accent", selection: $colour, isPresented: $editing)
-  }
+  Button("Edit colour…") { editing = true }
+      .modal(isPresented: $editing) {
+          ColorPickerPanel("Accent", selection: $colour, isPresented: $editing)
+      }
   ```
 
   It edits the binding **live** (the preview and anything bound to `colour`

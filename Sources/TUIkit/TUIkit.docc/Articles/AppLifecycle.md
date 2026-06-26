@@ -53,7 +53,7 @@ Before the main loop starts, `run()` prepares the terminal:
 | 4 | Enable raw mode | Disable line buffering, echo, and signal processing |
 | 5 | Register state observer | `AppState` changes trigger re-renders via `signals.requestRerender()` |
 | 6 | Register focus observer | Focus changes reset the pulse timer and trigger re-renders |
-| 7 | Start timers | PulseTimer (100 ms) and CursorTimer (50 ms) for animations |
+| 7 | Prepare animation timers | PulseTimer (100 ms) and CursorTimer (50 ms), each started on demand only while a rendered frame consumes it |
 | 8 | Render first frame | Show the initial UI immediately |
 
 ### Raw Mode
@@ -63,28 +63,28 @@ In raw mode, the terminal delivers every keystroke immediately without waiting f
 - **No echo**: typed characters are not displayed
 - **No canonical mode**: input is byte-by-byte, not line-by-line
 - **No signal processing**: Ctrl+C is handled by TUIkit, not the OS
-- **100ms read timeout**: non-blocking input polling
+- **Non-blocking reads**: input is drained without blocking; when nothing is pending the loop sleeps until woken rather than polling on a fixed timeout (see Main Loop)
 
 The original terminal settings are saved and restored during cleanup.
 
 ## Main Loop
 
-`AppRunner.run()` is `async`. Each iteration renders and processes input synchronously, then suspends ~24 ms via `Task.sleep` — a real suspension point that releases the main actor so `Task`, `MainActor.run`, and `DispatchQueue.main` work runs interleaved between frames. The loop runs until shutdown:
+`AppRunner.run()` is `async` and **demand-driven**, not a fixed-rate poll. With nothing pending and nothing animating, the loop blocks in `await stdinArrival.waitForArrival(...)` until it is woken — by terminal input, a render request, or a signal (SIGWINCH arrives via a self-pipe) — so a static screen renders zero frames and uses no CPU. When work is pending it renders at most once per frame interval (`App.maxFrameRate`, default 60 FPS), coalescing a burst of requests into a single frame. The wait is a real suspension point, so it releases the main actor and lets `Task`, `MainActor.run`, and `DispatchQueue.main` work run between frames. The loop runs until shutdown:
 
-@Image(source: "lifecycle-main-loop.png", alt: "Flowchart of the main loop: run() performs terminal setup, registers observers, starts timers, renders first frame, then loops checking shouldShutdown, consumeResizeFlag to invalidate diff cache, rerenderFlag or needsRender to conditionally render, reads key events non-blocking up to 128 per frame, dispatches through 5 layers, and sleeps 28ms. On shouldShutdown, cleanup restores the terminal and exits.")
+@Image(source: "lifecycle-main-loop.png", alt: "Flowchart of the main loop: run() performs terminal setup, registers observers, prepares timers, renders the first frame, then loops checking shouldShutdown, consuming the resize flag to invalidate the diff cache, rendering at most once per frame interval when a render is pending, draining key and mouse events and dispatching them, and otherwise blocking until woken by input, a render request, or a signal. On shouldShutdown, cleanup restores the terminal and exits.")
 
 ### Re-render Triggers
 
-Several sources cause a new frame to be rendered, all converging on two boolean checks in the main loop:
+Several sources cause a new frame to be rendered. Each sets a flag the loop checks (`appState.needsRender` or the rerender flag) **and** `wake()`s the loop if it is currently idle-blocked:
 
 | Trigger | Path | Main loop check |
 |---------|------|-----------------|
-| SIGWINCH | Sets `signalNeedsRerender` + `signalTerminalResized` | `consumeRerenderFlag()` |
+| SIGWINCH | Sets `signalNeedsRerender` + `signalTerminalResized` (wakes via the self-pipe) | `consumeRerenderFlag()` |
 | @State mutation | `AppState` observer calls `signals.requestRerender()` | `consumeRerenderFlag()` |
-| PulseTimer / CursorTimer | Calls `appState.setNeedsRender()` | `appState.needsRender` |
+| PulseTimer / CursorTimer (while active) | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 | Focus change | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 
-All triggers set boolean flags. The actual rendering always happens on the main thread: signal handlers never render directly.
+All triggers set boolean flags and wake the loop; the actual rendering always happens on the main thread — signal handlers never render directly.
 
 ## Signal Handling
 
