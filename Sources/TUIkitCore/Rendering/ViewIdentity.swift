@@ -143,18 +143,53 @@ extension ViewIdentity {
     /// Whether the given identity is a strict descendant of this one.
     ///
     /// Used by `StateStorage` / `RenderCache` to invalidate all state under a
-    /// branch when a `ConditionalView` switches. Compares the rendered paths:
-    /// this is called on a `@State` / `@Published` change (to find affected
-    /// descendants), not per descent, so it is off the hot path — and string
-    /// `hasPrefix` keeps the exact prefix semantics uniformly for structural
-    /// and raw identities alike.
+    /// branch when a `ConditionalView` switches.
+    ///
+    /// **Structural fast path** (the only form production builds ever take — the
+    /// render tree's identities are uniformly structural, rooted at
+    /// ``init(rootType:)`` with typed/branch descents): decide ancestry by
+    /// walking the structural parent chain. `descendant` is strictly below `self`
+    /// iff `self`'s node lies on `descendant`'s *strict* parent chain — we climb
+    /// `descendant`'s chain to `self`'s depth, then compare that node to `self`'s
+    /// node structurally. An O(depth) pointer/value walk with **zero** path-string
+    /// materialisation. This is invoked once per stored key on a `@State` /
+    /// `@Published` change (`StateStorage.invalidateDescendants`), so eliminating
+    /// the per-key `renderPath()` allocation matters.
+    ///
+    /// **Raw fall-back**: a ``init(path:)`` identity is an opaque path *string*
+    /// (the whole path lives in one `.raw` node), so structural ancestry can't
+    /// see its `/` / `#` component boundaries. When either chain is raw-rooted we
+    /// fall back to the rendered-path prefix comparison, preserving the exact
+    /// prior semantics for the empty-root default and the identity tests. (A
+    /// render tree is uniformly structural or uniformly raw, so the two worlds
+    /// never mix in practice.)
     ///
     /// - Parameter descendant: The identity to check.
     /// - Returns: `true` if `descendant` is strictly below this identity.
     public func isAncestor(of descendant: ViewIdentity) -> Bool {
-        let prefix = path
-        let candidate = descendant.path
-        return candidate.hasPrefix(prefix + "/") || candidate.hasPrefix(prefix + "#")
+        // Raw-rooted identities carry their path as opaque string data; only the
+        // string-prefix comparison can see their component boundaries.
+        guard !node.rootIsRaw, !descendant.node.rootIsRaw else {
+            let prefix = path
+            let candidate = descendant.path
+            return candidate.hasPrefix(prefix + "/") || candidate.hasPrefix(prefix + "#")
+        }
+
+        let ancestorDepth = node.depth
+        // A node is its ancestor's *strict* descendant only if it sits deeper in
+        // the chain. Equal-or-shallower can't be a strict descendant.
+        guard descendant.node.depth > ancestorDepth else { return false }
+
+        // Climb the descendant's chain up to the ancestor's depth.
+        var cursor: IdentityNode? = descendant.node
+        while let n = cursor, n.depth > ancestorDepth {
+            cursor = n.parent
+        }
+        guard let candidate = cursor else { return false }
+
+        // `candidate` is the descendant's ancestor at exactly `ancestorDepth`.
+        // It must structurally equal `self`'s node for `self` to be an ancestor.
+        return IdentityNode.structurallyEqual(candidate, node)
     }
 }
 
@@ -220,6 +255,20 @@ final class IdentityNode: Sendable {
     func appending(_ step: Step) -> IdentityNode {
         guard depth < Self.maxDepth else { return self }
         return IdentityNode(parent: self, step: step)
+    }
+
+    /// Whether this chain is rooted in a `.raw` (opaque-string) node.
+    ///
+    /// A `.raw` step is only ever a chain's *root* (see ``Step/raw(_:)``), so the
+    /// answer is fixed by walking to the root once. ``ViewIdentity/isAncestor(of:)``
+    /// uses this to decide between the structural walk (structural chains) and the
+    /// string-prefix fall-back (raw chains, whose `/` / `#` boundaries live inside
+    /// the opaque string).
+    var rootIsRaw: Bool {
+        var cursor: IdentityNode = self
+        while let parent = cursor.parent { cursor = parent }
+        if case .raw = cursor.step { return true }
+        return false
     }
 
     /// Renders the readable `"TypeA/TypeB.1/TypeC"` path. Iterative (root→leaf)
