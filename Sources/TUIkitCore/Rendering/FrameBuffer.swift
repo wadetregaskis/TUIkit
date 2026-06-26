@@ -411,7 +411,22 @@ extension FrameBuffer {
             // spaces — no per-row `String(repeating:)` spacer and no `+`-chain
             // intermediates. The left pad replicates `padToVisibleWidth`: append
             // `myWidth - leftWidth` trailing spaces only when the line is narrower.
-            let leftWidth = left.strippedLength
+            // Reuse a known visible width instead of re-measuring per row: a
+            // uniform buffer's lines are each exactly `myWidth`, and a ragged
+            // buffer that carries `lineWidths` already knows each row's width.
+            // Only an unmeasured ragged buffer falls back to `strippedLength`
+            // (the dominant cost this avoids). Rows past this buffer's height
+            // are zero-wide.
+            let leftWidth: Int
+            if row >= lines.count {
+                leftWidth = 0
+            } else if linesAreUniformWidth {
+                leftWidth = myWidth
+            } else if let knownWidths = lineWidths {
+                leftWidth = knownWidths[row]
+            } else {
+                leftWidth = left.strippedLength
+            }
             let leftPad = max(0, myWidth - leftWidth)
             var combined = ""
             combined.reserveCapacity(left.utf8.count + leftPad + spacing + right.utf8.count)
@@ -427,8 +442,21 @@ extension FrameBuffer {
         let carriedRegions =
             hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacing, y: 0)
 
-        // Replace self with new buffer using pre-computed width
-        self = FrameBuffer(lines: result, width: newWidth)
+        // Replace self with the new buffer, supplying the uniform-width hint the
+        // bare `FrameBuffer(lines:width:)` used to discard (it defaults the flag
+        // to false), so downstream consumers can skip their per-line padding walk
+        // — the same hint discipline `appendVertically` follows. Each combined
+        // row's left half is exactly `myWidth` when this buffer is uniform (its
+        // lines are each `myWidth`, and the rows past its height pad up to
+        // `myWidth`); its right half is uniformly `other.width` only when `other`
+        // is uniform AND no row falls past `other.height` (a short-right row would
+        // be zero-wide). So the result is uniform exactly when both sides are
+        // uniform and `other` is at least as tall — anything less certain stays
+        // the safe `false` ("unknown", byte-identical: the consumer re-measures).
+        let resultUniform =
+            linesAreUniformWidth && other.linesAreUniformWidth && height <= other.height
+        self = FrameBuffer(
+            lines: result, width: newWidth, uniformWidth: resultUniform, lineWidths: nil)
         overlays = carriedOverlays
         hitTestRegions = carriedRegions
     }
