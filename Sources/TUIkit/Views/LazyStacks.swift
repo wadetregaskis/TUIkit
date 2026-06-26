@@ -31,6 +31,12 @@
 /// - Note: In TUIKit's terminal context, lazy rendering is based on
 ///   `availableHeight` in the render context. Items beyond this height
 ///   are not rendered until they scroll into view.
+///
+/// - Note: `LazyVStack` shares its rendering core (``_VStackCore``) with
+///   ``VStack``; the only difference is the `.window` overflow policy, which
+///   appends whole children while they fit `availableHeight` and stops at the
+///   first that would overflow (rather than `VStack`'s `.clip`, which distributes
+///   and clips trailing rows at the cell).
 public struct LazyVStack<Content: View>: View {
     /// The horizontal alignment of the children.
     public let alignment: HorizontalAlignment
@@ -58,129 +64,7 @@ public struct LazyVStack<Content: View>: View {
     }
 
     public var body: some View {
-        _LazyVStackCore(alignment: alignment, spacing: spacing, content: content)
-    }
-}
-
-// MARK: - Internal LazyVStack Core
-
-/// Internal view that handles the actual rendering of LazyVStack.
-private struct _LazyVStackCore<Content: View>: View, Renderable, Layoutable {
-    let alignment: HorizontalAlignment
-    let spacing: Int
-    let content: Content
-
-    var body: Never {
-        fatalError("_LazyVStackCore renders via Renderable")
-    }
-
-    /// Size from one render: the layout is *windowed* — it stops appending
-    /// children once the running height would exceed `availableHeight`, so the
-    /// rendered height ends on a child boundary and can fall short of the height
-    /// limit by a truncated child. Summing children analytically (as ``VStack``
-    /// does) would over-report that boundary, so the exact size must come from a
-    /// render under this context. Flexibility mirrors `renderToBuffer`'s fill
-    /// rules: a (vertical) spacer makes `maxWidth` become `availableWidth` and
-    /// expands the height, and any width/height-flexible child fills its axis.
-    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
-        var widthFlexible = false
-        var heightFlexible = false
-        for child in resolveChildViews(from: content, context: context) {
-            if child.isSpacer { widthFlexible = true; heightFlexible = true }
-            let childSize = child.measure(proposal: proposal, context: context)
-            if childSize.isWidthFlexible { widthFlexible = true }
-            if childSize.isHeightFlexible { heightFlexible = true }
-        }
-        return ViewSize(
-            width: size.width, height: size.height,
-            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
-    }
-
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let infos = resolveChildInfos(from: content, context: context)
-
-        // Lazy rendering: only render items that fit within availableHeight
-        let availableHeight = context.availableHeight
-
-        // Spacer distribution (same as VStack)
-        let spacerCount = infos.filter(\.isSpacer).count
-        let fixedHeight = infos.compactMap(\.buffer).reduce(0) { $0 + $1.height }
-        let totalSpacing = max(0, infos.count - 1) * spacing
-
-        let availableForSpacers = max(0, availableHeight - fixedHeight - totalSpacing)
-        let spacerHeight = spacerCount > 0 ? availableForSpacers / spacerCount : 0
-        let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
-
-        let childMaxWidth = infos.compactMap(\.buffer).map(\.width).max() ?? 0
-        let maxWidth = spacerCount > 0 ? context.availableWidth : childMaxWidth
-
-        var result = FrameBuffer()
-        var currentHeight = 0
-        var spacerIndex = 0
-
-        for (index, info) in infos.enumerated() {
-            let spacingToApply = index > 0 ? spacing : 0
-
-            if info.isSpacer {
-                let extraHeight = spacerIndex < spacerRemainder ? 1 : 0
-                let height = max(info.spacerMinLength ?? 0, spacerHeight + extraHeight)
-
-                // Lazy: check if spacer fits
-                if currentHeight + spacingToApply + height > availableHeight {
-                    break
-                }
-
-                result.appendVertically(FrameBuffer(emptyWithHeight: height), spacing: spacingToApply)
-                currentHeight += spacingToApply + height
-                spacerIndex += 1
-            } else if let buffer = info.buffer {
-                // Lazy: check if item fits
-                if currentHeight + spacingToApply + buffer.height > availableHeight {
-                    break
-                }
-
-                let alignedBuffer = alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
-                result.appendVertically(alignedBuffer, spacing: spacingToApply)
-                currentHeight += spacingToApply + buffer.height
-            }
-        }
-
-        return result
-    }
-
-    /// Aligns a buffer horizontally within the given width.
-    private func alignBuffer(_ buffer: FrameBuffer, toWidth width: Int, alignment: HorizontalAlignment) -> FrameBuffer {
-        guard buffer.width < width else { return buffer }
-
-        var alignedLines: [String] = []
-
-        let bufferOffset: Int
-        switch alignment {
-        case .leading:
-            bufferOffset = 0
-        case .center:
-            bufferOffset = (width - buffer.width) / 2
-        case .trailing:
-            bufferOffset = width - buffer.width
-        }
-
-        let leftPadding = String(repeating: " ", count: bufferOffset)
-        let rightPaddingCount = width - bufferOffset - buffer.width
-
-        for line in buffer.lines {
-            let lineWidth = line.strippedLength
-            let paddedLine = line + String(repeating: " ", count: max(0, buffer.width - lineWidth))
-            alignedLines.append(leftPadding + paddedLine + String(repeating: " ", count: max(0, rightPaddingCount)))
-        }
-
-        // Content shifted right by `bufferOffset`; carry overlays
-        // and hit-test regions by the same amount so they stay
-        // anchored. The bare FrameBuffer(lines:) initializer would
-        // drop them, breaking clicks on any interactive content
-        // inside a LazyVStack with a non-leading alignment or a
-        // child narrower than the stack.
-        return buffer.replacingLines(alignedLines, overlayShiftX: bufferOffset)
+        _VStackCore(alignment: alignment, spacing: spacing, overflow: .window, content: content)
     }
 }
 
@@ -211,6 +95,12 @@ private struct _LazyVStackCore<Content: View>: View, Renderable, Layoutable {
 /// - Note: In TUIKit's terminal context, lazy rendering is based on
 ///   `availableWidth` in the render context. Items beyond this width
 ///   are not rendered until they scroll into view.
+///
+/// - Note: `LazyHStack` shares its rendering core (``_HStackCore``) with
+///   ``HStack``; the only difference is the `.window` overflow policy, which
+///   appends whole children while they fit `availableWidth` and stops at the
+///   first that would overflow (rather than `HStack`'s `.clip`, which distributes
+///   and clips trailing columns at the cell).
 public struct LazyHStack<Content: View>: View {
     /// The vertical alignment of the children.
     public let alignment: VerticalAlignment
@@ -238,105 +128,7 @@ public struct LazyHStack<Content: View>: View {
     }
 
     public var body: some View {
-        _LazyHStackCore(alignment: alignment, spacing: spacing, content: content)
-    }
-}
-
-// MARK: - Internal LazyHStack Core
-
-/// Internal view that handles the actual rendering of LazyHStack.
-private struct _LazyHStackCore<Content: View>: View, Renderable, Layoutable {
-    let alignment: VerticalAlignment
-    let spacing: Int
-    let content: Content
-
-    var body: Never {
-        fatalError("_LazyHStackCore renders via Renderable")
-    }
-
-    /// Size from one render: the layout is *windowed* on `availableWidth` (it
-    /// stops appending columns once the running width would exceed it), so the
-    /// rendered width ends on a child boundary and can fall short of the width
-    /// limit by a truncated column — the exact size must come from a render under
-    /// this context, not an analytical sum. Flexibility mirrors `renderToBuffer`:
-    /// a (horizontal) spacer absorbs the slack and fills the width, and any
-    /// width/height-flexible child fills its axis.
-    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
-        var widthFlexible = false
-        var heightFlexible = false
-        for child in resolveChildViews(from: content, context: context) {
-            if child.isSpacer { widthFlexible = true }
-            let childSize = child.measure(proposal: proposal, context: context)
-            if childSize.isWidthFlexible { widthFlexible = true }
-            if childSize.isHeightFlexible { heightFlexible = true }
-        }
-        return ViewSize(
-            width: size.width, height: size.height,
-            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
-    }
-
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let infos = resolveChildInfos(from: content, context: context)
-
-        // Lazy rendering: only render items that fit within availableWidth
-        let availableWidth = context.availableWidth
-
-        // Spacer distribution (same as HStack)
-        let spacerCount = infos.filter(\.isSpacer).count
-        let fixedWidth = infos.compactMap(\.buffer).reduce(0) { $0 + $1.width }
-        let totalSpacing = max(0, infos.count - 1) * spacing
-
-        let availableForSpacers = max(0, availableWidth - fixedWidth - totalSpacing)
-        let spacerWidth = spacerCount > 0 ? availableForSpacers / spacerCount : 0
-        let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
-
-        // === PASS 1: Collect visible items and compute max height ===
-        // Each entry: (buffer, spacingBefore, isSpacer)
-        var collected: [(FrameBuffer, Int, Bool)] = []
-        var maxHeight = 1
-        var currentWidth = 0
-        var spacerIndex = 0
-
-        for (index, info) in infos.enumerated() {
-            let spacingToApply = index > 0 ? spacing : 0
-
-            if info.isSpacer {
-                let extraWidth = spacerIndex < spacerRemainder ? 1 : 0
-                let width = max(info.spacerMinLength ?? 0, spacerWidth + extraWidth)
-                if currentWidth + spacingToApply + width > availableWidth { break }
-                // Spacer height is set to maxHeight in pass 2
-                collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, true))
-                currentWidth += spacingToApply + width
-                spacerIndex += 1
-            } else if let buffer = info.buffer {
-                if currentWidth + spacingToApply + buffer.width > availableWidth { break }
-                maxHeight = max(maxHeight, buffer.height)
-                collected.append((buffer, spacingToApply, false))
-                currentWidth += spacingToApply + buffer.width
-            }
-        }
-
-        // === PASS 2: Apply vertical alignment and build result ===
-        var result = FrameBuffer()
-        for (buffer, spacingToApply, isSpacer) in collected {
-            let aligned: FrameBuffer
-            if isSpacer {
-                aligned = FrameBuffer(emptyWithWidth: buffer.width, height: maxHeight)
-            } else {
-                aligned = alignBufferVertically(buffer, toHeight: maxHeight)
-            }
-            result.appendHorizontally(aligned, spacing: spacingToApply)
-        }
-
-        return result
-    }
-
-    /// Pads a buffer with empty rows to reach `height`, positioning content
-    /// according to the stack's vertical alignment. Shared with the eager
-    /// `HStack` via ``FrameBuffer/verticallyAligned(toHeight:alignment:)``.
-    private func alignBufferVertically(_ buffer: FrameBuffer, toHeight height: Int) -> FrameBuffer {
-        buffer.verticallyAligned(toHeight: height, alignment: alignment)
+        _HStackCore(alignment: alignment, spacing: spacing, overflow: .window, content: content)
     }
 }
 

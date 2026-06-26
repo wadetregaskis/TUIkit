@@ -4,6 +4,34 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// MARK: - Stack Overflow Policy
+
+/// How a linear stack core (``VStack``/``HStack`` and their lazy variants)
+/// behaves when its children don't all fit the available extent along the
+/// layout axis.
+///
+/// The eager stacks (`VStack`/`HStack`) and the lazy stacks
+/// (`LazyVStack`/`LazyHStack`) share one rendering core; this policy is the
+/// *only* thing that distinguishes them.
+///
+/// - `clip`: the eager behaviour. Every child is laid out via
+///   ``distributeLinearSpace(naturalSizes:isFlexible:available:spacing:)``,
+///   which places leading children at their natural size and clips the trailing
+///   overflow *at the cell* (a child can be cut mid-content). The reported size
+///   is the analytic sum-and-clamp.
+/// - `window`: the lazy behaviour. Whole children are appended while they fit
+///   the available extent and the loop `break`s as soon as the next one would
+///   not — so the rendered extent always ends on a child boundary and may fall
+///   short of the limit by a truncated child. Because of that child-boundary
+///   truncation the reported size MUST be render-derived (an analytic sum would
+///   over-report it).
+enum StackOverflow {
+    /// Eager: distribute + clip trailing overflow at the cell.
+    case clip
+    /// Lazy: append whole children while they fit; stop at the first that won't.
+    case window
+}
+
 // MARK: - Linear Space Distribution
 
 /// Distributes `available` cells across a row or column of children.

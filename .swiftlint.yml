@@ -145,6 +145,10 @@ type_name:
     - _ListContentView
     - _TableCore
     - _ImageCore
+    # Shared by VStack/LazyVStack and HStack/LazyHStack (one core, two overflow
+    # policies), so these cores are internal rather than file-private.
+    - _VStackCore
+    - _HStackCore
     # Internal _-prefixed helper views and value types created by view
     # modifiers, following the same SwiftUI convention.
     - _TaggedView

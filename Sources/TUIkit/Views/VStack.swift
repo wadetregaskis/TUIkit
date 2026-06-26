@@ -56,16 +56,23 @@ public struct VStack<Content: View>: View {
     }
 
     public var body: some View {
-        _VStackCore(alignment: alignment, spacing: spacing, content: content)
+        _VStackCore(alignment: alignment, spacing: spacing, overflow: .clip, content: content)
     }
 }
 
 // MARK: - Internal VStack Core
 
-/// Internal view that handles the actual rendering of VStack.
-private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
+/// Internal view that handles the actual rendering of both ``VStack`` and
+/// ``LazyVStack``. The two differ only in their ``StackOverflow`` policy:
+/// `VStack` is `.clip` (distribute + clip trailing rows at the cell),
+/// `LazyVStack` is `.window` (append whole rows while they fit `availableHeight`,
+/// stopping at the first that won't).
+struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     let alignment: HorizontalAlignment
     let spacing: Int
+    /// Trailing-overflow behaviour: `.clip` (eager `VStack`) or `.window`
+    /// (lazy `LazyVStack`).
+    let overflow: StackOverflow
     let content: Content
 
     var body: Never {
@@ -74,6 +81,16 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
     /// Measures the VStack without rendering.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        switch overflow {
+        case .clip: return clipSizeThatFits(proposal: proposal, context: context)
+        case .window: return windowSizeThatFits(proposal: proposal, context: context)
+        }
+    }
+
+    /// `.clip` size: analytic sum-and-clamp. Sums child heights, takes the widest
+    /// child for the width, and clamps both to the constraint so the column never
+    /// over-reports the space it was given.
+    private func clipSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
 
@@ -114,7 +131,40 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         )
     }
 
+    /// `.window` size from one render: the layout stops appending children once
+    /// the running height would exceed `availableHeight`, so the rendered height
+    /// ends on a child boundary and can fall short of the height limit by a
+    /// truncated child. Summing children analytically (as `.clip` does) would
+    /// over-report that boundary, so the exact size must come from a render under
+    /// this context. Flexibility mirrors `renderWindow`'s fill rules: a (vertical)
+    /// spacer makes `maxWidth` become `availableWidth` and expands the height, and
+    /// any width/height-flexible child fills its axis.
+    private func windowSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var widthFlexible = false
+        var heightFlexible = false
+        for child in resolveChildViews(from: content, context: context) {
+            if child.isSpacer { widthFlexible = true; heightFlexible = true }
+            let childSize = child.measure(proposal: proposal, context: context)
+            if childSize.isWidthFlexible { widthFlexible = true }
+            if childSize.isHeightFlexible { heightFlexible = true }
+        }
+        return ViewSize(
+            width: size.width, height: size.height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        switch overflow {
+        case .clip: return renderClip(context: context)
+        case .window: return renderWindow(context: context)
+        }
+    }
+
+    /// `.clip` render (eager `VStack`): measure every child, distribute the
+    /// available height (clipping trailing rows at the cell), render, align, and
+    /// clamp.
+    private func renderClip(context: RenderContext) -> FrameBuffer {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
@@ -195,6 +245,61 @@ private struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         // Final guard against overflow on a terminal smaller than the content.
         return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// `.window` render (lazy `LazyVStack`): append whole children top-down while
+    /// they fit `availableHeight`, stopping at the first that won't. Items beyond
+    /// the available height are never rendered.
+    private func renderWindow(context: RenderContext) -> FrameBuffer {
+        let infos = resolveChildInfos(from: content, context: context)
+
+        // Lazy rendering: only render items that fit within availableHeight
+        let availableHeight = context.availableHeight
+
+        // Spacer distribution (same as VStack)
+        let spacerCount = infos.filter(\.isSpacer).count
+        let fixedHeight = infos.compactMap(\.buffer).reduce(0) { $0 + $1.height }
+        let totalSpacing = max(0, infos.count - 1) * spacing
+
+        let availableForSpacers = max(0, availableHeight - fixedHeight - totalSpacing)
+        let spacerHeight = spacerCount > 0 ? availableForSpacers / spacerCount : 0
+        let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
+
+        let childMaxWidth = infos.compactMap(\.buffer).map(\.width).max() ?? 0
+        let maxWidth = spacerCount > 0 ? context.availableWidth : childMaxWidth
+
+        var result = FrameBuffer()
+        var currentHeight = 0
+        var spacerIndex = 0
+
+        for (index, info) in infos.enumerated() {
+            let spacingToApply = index > 0 ? spacing : 0
+
+            if info.isSpacer {
+                let extraHeight = spacerIndex < spacerRemainder ? 1 : 0
+                let height = max(info.spacerMinLength ?? 0, spacerHeight + extraHeight)
+
+                // Lazy: check if spacer fits
+                if currentHeight + spacingToApply + height > availableHeight {
+                    break
+                }
+
+                result.appendVertically(FrameBuffer(emptyWithHeight: height), spacing: spacingToApply)
+                currentHeight += spacingToApply + height
+                spacerIndex += 1
+            } else if let buffer = info.buffer {
+                // Lazy: check if item fits
+                if currentHeight + spacingToApply + buffer.height > availableHeight {
+                    break
+                }
+
+                let alignedBuffer = alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
+                result.appendVertically(alignedBuffer, spacing: spacingToApply)
+                currentHeight += spacingToApply + buffer.height
+            }
+        }
+
+        return result
     }
 
     /// Aligns a buffer horizontally within the given width.

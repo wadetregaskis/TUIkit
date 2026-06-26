@@ -54,16 +54,23 @@ public struct HStack<Content: View>: View {
     }
 
     public var body: some View {
-        _HStackCore(alignment: alignment, spacing: spacing, content: content)
+        _HStackCore(alignment: alignment, spacing: spacing, overflow: .clip, content: content)
     }
 }
 
 // MARK: - Internal HStack Core
 
-/// Internal view that handles the actual rendering of HStack.
-private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
+/// Internal view that handles the actual rendering of both ``HStack`` and
+/// ``LazyHStack``. The two differ only in their ``StackOverflow`` policy:
+/// `HStack` is `.clip` (distribute + clip trailing columns at the cell),
+/// `LazyHStack` is `.window` (append whole columns while they fit
+/// `availableWidth`, stopping at the first that won't).
+struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     let alignment: VerticalAlignment
     let spacing: Int
+    /// Trailing-overflow behaviour: `.clip` (eager `HStack`) or `.window`
+    /// (lazy `LazyHStack`).
+    let overflow: StackOverflow
     let content: Content
 
     var body: Never {
@@ -131,6 +138,15 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
 
     /// Measures the HStack without rendering.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        switch overflow {
+        case .clip: return clipSizeThatFits(proposal: proposal, context: context)
+        case .window: return windowSizeThatFits(proposal: proposal, context: context)
+        }
+    }
+
+    /// `.clip` size: the shared `resolvedLayout` (measure → distribute → height),
+    /// reported with its analytic total width clamped to the constraint.
+    private func clipSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
         let layout = resolvedLayout(
@@ -143,7 +159,39 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         )
     }
 
+    /// `.window` size from one render: the layout is *windowed* on
+    /// `availableWidth` (it stops appending columns once the running width would
+    /// exceed it), so the rendered width ends on a child boundary and can fall
+    /// short of the width limit by a truncated column — the exact size must come
+    /// from a render under this context, not an analytical sum. Flexibility
+    /// mirrors `renderWindow`: a (horizontal) spacer absorbs the slack and fills
+    /// the width, and any width/height-flexible child fills its axis.
+    private func windowSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var widthFlexible = false
+        var heightFlexible = false
+        for child in resolveChildViews(from: content, context: context) {
+            if child.isSpacer { widthFlexible = true }
+            let childSize = child.measure(proposal: proposal, context: context)
+            if childSize.isWidthFlexible { widthFlexible = true }
+            if childSize.isHeightFlexible { heightFlexible = true }
+        }
+        return ViewSize(
+            width: size.width, height: size.height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        switch overflow {
+        case .clip: return renderClip(context: context)
+        case .window: return renderWindow(context: context)
+        }
+    }
+
+    /// `.clip` render (eager `HStack`): the shared `resolvedLayout` distributes
+    /// the width (clipping trailing columns at the cell), children render into the
+    /// row height, are vertically aligned, and the row is clamped.
+    private func renderClip(context: RenderContext) -> FrameBuffer {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
@@ -188,6 +236,65 @@ private struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // Final guard: the assembled row never exceeds the space we were given,
         // even when inter-child spacing alone would overflow a tiny terminal.
         return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// `.window` render (lazy `LazyHStack`): append whole children left-to-right
+    /// while they fit `availableWidth`, stopping at the first that won't. Columns
+    /// beyond the available width are never rendered.
+    private func renderWindow(context: RenderContext) -> FrameBuffer {
+        let infos = resolveChildInfos(from: content, context: context)
+
+        // Lazy rendering: only render items that fit within availableWidth
+        let availableWidth = context.availableWidth
+
+        // Spacer distribution (same as HStack)
+        let spacerCount = infos.filter(\.isSpacer).count
+        let fixedWidth = infos.compactMap(\.buffer).reduce(0) { $0 + $1.width }
+        let totalSpacing = max(0, infos.count - 1) * spacing
+
+        let availableForSpacers = max(0, availableWidth - fixedWidth - totalSpacing)
+        let spacerWidth = spacerCount > 0 ? availableForSpacers / spacerCount : 0
+        let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
+
+        // === PASS 1: Collect visible items and compute max height ===
+        // Each entry: (buffer, spacingBefore, isSpacer)
+        var collected: [(FrameBuffer, Int, Bool)] = []
+        var maxHeight = 1
+        var currentWidth = 0
+        var spacerIndex = 0
+
+        for (index, info) in infos.enumerated() {
+            let spacingToApply = index > 0 ? spacing : 0
+
+            if info.isSpacer {
+                let extraWidth = spacerIndex < spacerRemainder ? 1 : 0
+                let width = max(info.spacerMinLength ?? 0, spacerWidth + extraWidth)
+                if currentWidth + spacingToApply + width > availableWidth { break }
+                // Spacer height is set to maxHeight in pass 2
+                collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, true))
+                currentWidth += spacingToApply + width
+                spacerIndex += 1
+            } else if let buffer = info.buffer {
+                if currentWidth + spacingToApply + buffer.width > availableWidth { break }
+                maxHeight = max(maxHeight, buffer.height)
+                collected.append((buffer, spacingToApply, false))
+                currentWidth += spacingToApply + buffer.width
+            }
+        }
+
+        // === PASS 2: Apply vertical alignment and build result ===
+        var result = FrameBuffer()
+        for (buffer, spacingToApply, isSpacer) in collected {
+            let aligned: FrameBuffer
+            if isSpacer {
+                aligned = FrameBuffer(emptyWithWidth: buffer.width, height: maxHeight)
+            } else {
+                aligned = buffer.verticallyAligned(toHeight: maxHeight, alignment: alignment)
+            }
+            result.appendHorizontally(aligned, spacing: spacingToApply)
+        }
+
+        return result
     }
 }
 
