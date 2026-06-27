@@ -68,7 +68,19 @@ extension View {
     ///
     /// - Parameter title: The navigation title.
     /// - Returns: A view with the navigation title preference set.
-    public func navigationTitle(_ title: String) -> some View {
-        preference(key: NavigationTitleKey.self, value: title)
+    public func navigationTitle<S: StringProtocol>(_ title: S) -> some View {
+        preference(key: NavigationTitleKey.self, value: String(title))
+    }
+
+    /// Sets the navigation title for this view from a ``Text``.
+    ///
+    /// Mirrors SwiftUI's `navigationTitle(_:)` `Text` overload. The navigation
+    /// title renders as a plain string, so the `Text`'s styling (colour, bold, …)
+    /// is not carried — a terminal text-richness limit, not a parity gap.
+    ///
+    /// - Parameter title: The navigation title as a `Text`.
+    /// - Returns: A view with the navigation title preference set.
+    public func navigationTitle(_ title: Text) -> some View {
+        preference(key: NavigationTitleKey.self, value: title.content)
     }
 }
