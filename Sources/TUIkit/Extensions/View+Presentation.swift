@@ -158,6 +158,7 @@ extension View {
     /// - Returns: A view that presents a modal overlay conditionally.
     public func modal<Modal: View>(
         isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Modal
     ) -> some View {
         ModalPresentationModifier(
@@ -165,25 +166,67 @@ extension View {
             isPresented: isPresented,
             modal: content()
         )
+        .onChange(of: isPresented.wrappedValue) { wasPresented, isPresentedNow in
+            // Fire onDismiss on the presented → dismissed transition, covering
+            // every route that clears the binding: a Close button, a key, or a
+            // programmatic change.
+            if wasPresented, !isPresentedNow { onDismiss?() }
+        }
     }
 
     /// Presents content modally when a binding to a Boolean value is true.
     ///
-    /// A SwiftUI-compatible spelling of ``modal(isPresented:content:)``: the
-    /// terminal presents the content as a centred overlay that dims the
-    /// background rather than as a sliding sheet, but a call site written
-    /// against SwiftUI's `.sheet(isPresented:content:)` works unchanged.
+    /// A SwiftUI-compatible spelling of ``modal(isPresented:onDismiss:content:)``:
+    /// the terminal presents the content as a centred overlay that dims the
+    /// background rather than as a sliding sheet, but a call site written against
+    /// SwiftUI's `.sheet(isPresented:onDismiss:content:)` works unchanged.
     ///
     /// - Parameters:
     ///   - isPresented: A binding to a Boolean value that determines whether
     ///     to present the sheet.
+    ///   - onDismiss: An optional closure run when the sheet is dismissed.
     ///   - content: A ViewBuilder returning the sheet content.
     /// - Returns: A view that presents the content modally.
     public func sheet<Content: View>(
         isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        modal(isPresented: isPresented, content: content)
+        modal(isPresented: isPresented, onDismiss: onDismiss, content: content)
+    }
+
+    /// Presents a sheet for a currently-selected item.
+    ///
+    /// SwiftUI-compatible: a non-`nil` `Identifiable` value presents the sheet;
+    /// clearing the binding (or the content setting it to `nil`) dismisses it and
+    /// runs `onDismiss`. As with the `isPresented:` form, the terminal presents a
+    /// centred, background-dimming overlay rather than a sliding sheet.
+    ///
+    /// ```swift
+    /// @State var editing: Row?
+    /// List(rows, selection: $sel) { … }
+    ///     .sheet(item: $editing) { row in EditView(row) }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - item: A binding to an optional, identifiable item; non-`nil` presents.
+    ///   - onDismiss: An optional closure run when the sheet is dismissed.
+    ///   - content: A ViewBuilder building the sheet from the unwrapped item.
+    /// - Returns: A view that presents a sheet for the selected item.
+    public func sheet<Item: Identifiable, Content: View>(
+        item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        let isPresented = Binding<Bool>(
+            get: { item.wrappedValue != nil },
+            set: { presented in if !presented { item.wrappedValue = nil } }
+        )
+        return modal(isPresented: isPresented, onDismiss: onDismiss) {
+            if let value = item.wrappedValue {
+                content(value)
+            }
+        }
     }
 }
 
