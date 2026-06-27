@@ -163,6 +163,10 @@ type_name:
     - _PickerMenuCore
     - _PickerMenuHandler
     - _RawPickerOption
+    # Internal Form row/section model value types.
+    - _FormRow
+    - _FormSection
+    - _FormElement
     - _MemoizedRow
     - _SplitDividerHandler
     - _RawTab
