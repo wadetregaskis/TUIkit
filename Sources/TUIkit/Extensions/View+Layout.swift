@@ -117,6 +117,12 @@ extension View {
     ///   - width: The desired width in characters (nil preserves intrinsic width).
     ///   - height: The desired height in lines (nil preserves intrinsic height).
     ///   - alignment: The alignment within the frame (default: .topLeading).
+    ///     This **intentionally** differs from SwiftUI's `.center`: a terminal
+    ///     reads from the top-left, and a fixed `.frame(width:)` is overwhelmingly
+    ///     used to make a left-aligned, fixed-width column (labels, channel
+    ///     sliders, table cells), not to centre content in slack space. Centring
+    ///     by default would surprise TUI authors and silently shift such columns.
+    ///     Pass an explicit `alignment:` when you do want centring.
     /// - Returns: A view constrained to the specified frame.
     public func frame(
         width: Int? = nil,
