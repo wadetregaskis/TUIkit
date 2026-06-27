@@ -37,6 +37,7 @@ enum DemoPage: Int, CaseIterable {
     case theme
     case emptyState
     case tabViews
+    case forms
 }
 
 // MARK: - App-wide styling
@@ -198,6 +199,8 @@ struct ContentView: View {
             ContentUnavailablePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .tabViews:
             TabViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .forms:
+            FormPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
