@@ -15,11 +15,20 @@
 public struct ButtonStyleConfiguration {
     /// The button's label text.
     ///
-    /// - Note: SwiftUI exposes `label` as a type-erased `View`. In TUIkit a
-    ///   button's label is always plain text, so the configuration carries
-    ///   the `String` directly. This is a deliberate terminal-specific
-    ///   deviation — a custom style can wrap it in `Text` if it wants a view.
+    /// - Note: SwiftUI exposes `label` as a type-erased `View`. TUIkit's default
+    ///   button label is plain text, so the configuration carries the `String`
+    ///   directly for the common case. When the button was built with a
+    ///   `@ViewBuilder` label (`Button(action:label:)`), this is empty and the
+    ///   composed view is in ``labelView`` instead — read that when it's non-nil.
     public let label: String
+
+    /// The composed `@ViewBuilder` label, type-erased, when the button was built
+    /// with `Button(action:label:)`; `nil` for a plain string label.
+    ///
+    /// A custom style can place this view in its body to render an arbitrary
+    /// label (styled text, a glyph + text, …). The built-in styles render it
+    /// inside their chrome when present.
+    public let labelView: AnyView?
 
     /// The semantic role of the button, if any.
     ///
@@ -324,6 +333,12 @@ private struct _ButtonStyleBody: View, Renderable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // A `@ViewBuilder` label renders via view composition, preserving its own
+        // styling; plain string labels keep the procedural path below unchanged.
+        if let labelView = configuration.labelView {
+            return renderViewLabel(labelView, context: context)
+        }
+
         let palette = context.environment.palette
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
@@ -454,6 +469,67 @@ private struct _ButtonStyleBody: View, Renderable {
         )
 
         return FrameBuffer(lines: [openCap + styledLabel + closeCap])
+    }
+
+    /// Renders a `@ViewBuilder` button label (``ButtonStyleConfiguration/labelView``)
+    /// by composing TUIkit views, so the label's own styling and structure are
+    /// preserved. A plain `Text` label still picks up the style's tint because it
+    /// is rendered under a `.foregroundStyle(_:)` the explicit colours override.
+    /// The procedural string path above is left untouched for string labels.
+    private func renderViewLabel(_ labelView: AnyView, context: RenderContext) -> FrameBuffer {
+        let palette = context.environment.palette
+        let isDisabled = !configuration.isEnabled
+        let isFocused = configuration.isFocused
+        let isHovered = configuration.isHovered && !isFocused
+
+        let cascaded = context.environment.styleCascade.resolve(
+            for: [.all, .text, .control(.button), .controlVariant(.button, appearance.variant)])
+        let baseForeground: Color? =
+            configuration.role == .destructive ? Color.palette.error : appearance.foregroundColor
+        let cascadeForeground: Color? =
+            configuration.role == .destructive ? nil : cascaded.foreground
+
+        let labelFg: Color
+        if isDisabled {
+            labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        } else if let cascadeForeground {
+            labelFg = cascadeForeground.resolve(with: palette)
+        } else {
+            labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
+        }
+
+        // Plain: focus-indicator prefix + the label, no caps or background.
+        if appearance.isPlain {
+            let focusPrefix = BorderRenderer.focusIndicatorPrefix(
+                isFocused: isFocused && !isDisabled,
+                pulsePhase: context.environment.pulsePhase,
+                palette: palette)
+            let body = TUIkit.renderToBuffer(labelView.foregroundStyle(labelFg), context: context)
+            return FrameBuffer(lines: body.lines.map { focusPrefix + $0 })
+        }
+
+        // Standard: half-block caps around the background-tinted, padded label.
+        let buttonBg = palette.accent.opacity(
+            isHovered ? ViewConstants.hoverBackground : ViewConstants.focusBorderDim)
+        let capColor: Color
+        if isFocused && !isDisabled {
+            capColor = Color.lerp(
+                buttonBg,
+                palette.accent.opacity(ViewConstants.buttonCapPulseBright),
+                phase: context.environment.pulsePhase)
+        } else {
+            capColor = buttonBg
+        }
+
+        let composed = HStack(spacing: 0) {
+            Text(String(TerminalSymbols.openCap)).foregroundStyle(capColor)
+            labelView
+                .foregroundStyle(labelFg)
+                .padding(.horizontal, appearance.horizontalPadding)
+                .background(buttonBg)
+            Text(String(TerminalSymbols.closeCap)).foregroundStyle(capColor)
+        }
+        return TUIkit.renderToBuffer(composed, context: context)
     }
 
     /// Truncates a button label so it fits in `availableWidth` after

@@ -71,8 +71,18 @@ public struct ButtonRole: Equatable, Sendable {
 /// }
 /// ```
 public struct Button: View {
-    /// The button's label text.
+    /// The button's label text (used by the built-in styles' string path; empty
+    /// when the button was built with a `@ViewBuilder` label — see ``labelView``).
     let label: String
+
+    /// A composed `@ViewBuilder` label, type-erased, or `nil` for a string label.
+    ///
+    /// `Button` is deliberately **not** generic over its label (unlike SwiftUI's
+    /// `Button<Label>`): terminal idioms collect buttons into homogeneous arrays
+    /// (``ButtonRow``, ``Alert``'s `[Button]`), which a generic label type would
+    /// break. Erasing the label keeps `Button` a single concrete type while still
+    /// matching SwiftUI's `Button(action:label:)` call syntax.
+    let labelView: AnyView?
 
     /// The action to perform when pressed.
     let action: () -> Void
@@ -105,6 +115,7 @@ public struct Button: View {
         action: @escaping () -> Void
     ) {
         self.label = label
+        self.labelView = nil
         self.action = action
         self.role = nil
         // Auto-generated focusID from view identity (collision-free)
@@ -130,6 +141,7 @@ public struct Button: View {
         action: @escaping () -> Void
     ) {
         self.label = label
+        self.labelView = nil
         self.action = action
         self.role = role
         // Auto-generated focusID from view identity (collision-free)
@@ -137,9 +149,53 @@ public struct Button: View {
         self.isDisabled = false
     }
 
+    /// Creates a button with a custom `@ViewBuilder` label.
+    ///
+    /// Mirrors SwiftUI's `Button(action:label:)`. The label can be any view
+    /// (e.g. styled `Text`, or a glyph + text in an `HStack`); the built-in
+    /// styles render it inside their chrome, a plain `Text` label picking up the
+    /// style's tint via the foreground environment.
+    ///
+    /// - Parameters:
+    ///   - action: The action to perform when pressed.
+    ///   - label: A view builder producing the button's label.
+    public init<Label: View>(
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.label = ""
+        self.labelView = AnyView(label())
+        self.action = action
+        self.role = nil
+        self.focusID = nil
+        self.isDisabled = false
+    }
+
+    /// Creates a button with a semantic role and a custom `@ViewBuilder` label.
+    ///
+    /// Mirrors SwiftUI's `Button(role:action:label:)`.
+    ///
+    /// - Parameters:
+    ///   - role: An optional semantic role describing the button.
+    ///   - action: The action to perform when pressed.
+    ///   - label: A view builder producing the button's label.
+    public init<Label: View>(
+        role: ButtonRole?,
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.label = ""
+        self.labelView = AnyView(label())
+        self.action = action
+        self.role = role
+        self.focusID = nil
+        self.isDisabled = false
+    }
+
     public var body: some View {
         _ButtonCore(
             label: label,
+            labelView: labelView,
             action: action,
             role: role,
             focusID: focusID,
@@ -157,6 +213,7 @@ public struct Button: View {
 /// ``ButtonStyle`` read from the environment.
 private struct _ButtonCore: View, Renderable, Layoutable {
     let label: String
+    let labelView: AnyView?
     let action: () -> Void
     let role: ButtonRole?
     let focusID: String?
@@ -211,6 +268,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let style = context.environment.buttonStyle
         let configuration = ButtonStyleConfiguration(
             label: label,
+            labelView: labelView,
             role: role,
             isPressed: false,
             isFocused: isFocused && !isDisabled,

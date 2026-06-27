@@ -122,4 +122,27 @@ struct SwiftUICompatFixesTests {
             .map { $0.stripped }.joined()
         #expect(text.contains("body"))
     }
+
+    // MARK: - §3.9 Button @ViewBuilder label
+
+    @Test("Button(action:label:) renders a composed view label")
+    func buttonViewBuilderLabel() {
+        let view = Button {} label: { Text("Go") }
+        let text = renderToBuffer(view, context: makeRenderContext())
+            .lines.map { $0.stripped }.joined()
+        #expect(text.contains("Go"))
+    }
+
+    @Test("String and view-labelled buttons coexist in one ButtonRow")
+    func mixedButtonRow() {
+        // The payoff of keeping Button non-generic: a heterogeneous [Button].
+        let row = ButtonRow {
+            Button("Cancel") {}
+            Button {} label: { Text("OK").bold() }
+        }
+        let text = renderToBuffer(row, context: makeRenderContext())
+            .lines.map { $0.stripped }.joined()
+        #expect(text.contains("Cancel"))
+        #expect(text.contains("OK"))
+    }
 }
