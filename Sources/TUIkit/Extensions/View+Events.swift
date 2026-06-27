@@ -377,7 +377,44 @@ extension View {
         TaskModifier(
             content: self,
             task: action,
-            priority: priority
+            priority: priority,
+            idToken: nil
+        )
+    }
+
+    /// Starts an async task tied to an identifier, restarting it when the
+    /// identifier changes.
+    ///
+    /// The task starts when the view appears, is cancelled when it disappears,
+    /// and — unlike ``task(priority:_:)`` — is cancelled and **restarted**
+    /// whenever `id` changes. Mirrors SwiftUI's `task(id:priority:_:)`; use it to
+    /// re-run async work when an input changes (a search query, a selected row)
+    /// without hand-rolling `onChange` + cancellation.
+    ///
+    /// # Example
+    ///
+    /// ```swift
+    /// Text(results)
+    ///     .task(id: query) {
+    ///         results = await search(query)
+    ///     }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - id: A value whose change restarts the task.
+    ///   - priority: The task priority (default: .userInitiated).
+    ///   - action: The async action to execute.
+    /// - Returns: A view that (re)starts the task when `id` changes.
+    public func task<ID: Equatable>(
+        id value: ID,
+        priority: TaskPriority = .userInitiated,
+        _ action: @escaping @Sendable () async -> Void
+    ) -> some View {
+        TaskModifier(
+            content: self,
+            task: action,
+            priority: priority,
+            idToken: "\(value)"
         )
     }
 }

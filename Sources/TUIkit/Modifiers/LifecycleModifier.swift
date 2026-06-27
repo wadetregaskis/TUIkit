@@ -102,6 +102,14 @@ struct TaskModifier<Content: View>: View {
     /// Task priority.
     let priority: TaskPriority
 
+    /// The textual form of a `.task(id:)` identifier, folded into the lifecycle
+    /// token so the task restarts whenever it changes; `nil` for a plain
+    /// `.task`. A changed token means the old token is no longer recorded this
+    /// frame, so it "disappears" (cancelling the previous task) while the new
+    /// token appears fresh and starts the new task — the same appear/disappear
+    /// machinery that drives `.onAppear` / `.onDisappear`.
+    let idToken: String?
+
     var body: Never {
         fatalError("TaskModifier renders via Renderable")
     }
@@ -111,7 +119,8 @@ extension TaskModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         if !context.isMeasuring {
             let lifecycle = context.environment.lifecycle!
-            let token = lifecycleToken("task", context)
+            var token = lifecycleToken("task", context)
+            if let idToken { token += "-\(idToken)" }
 
             // Start the task only on the first appearance for this identity.
             let isFirstAppear = !lifecycle.hasAppeared(token: token)
