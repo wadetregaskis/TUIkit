@@ -1,12 +1,15 @@
 <svg width="413pt" height="116pt"
  viewBox="0.00 0.00 413.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
+.edge path { fill: none; stroke: #8a8a8a; }
+.edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
+.cluster path, .cluster polygon { fill: none; stroke: #c8c8c8; }
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
   .cluster text { fill: #9aa0a6; }
-  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+  .cluster path, .cluster polygon { stroke: #5a5a5a; }
 }
 </style>
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
@@ -26,8 +29,8 @@
 <!-- run&#45;&gt;input -->
 <g id="edge1" class="edge">
 <title>run&#45;&gt;input</title>
-<path fill="none" stroke="#8a8a8a" d="M164.67,-72.05C141.91,-62.16 113.06,-49.62 89.12,-39.21"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="90.32,-37.06 82.93,-36.51 88.37,-41.55 90.32,-37.06"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M164.67,-72.05C142.01,-62.2 113.31,-49.72 89.43,-39.34"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="90.6,-37.18 83.2,-36.63 88.65,-41.67 90.6,-37.18"/>
 </g>
 <!-- render -->
 <g id="node3" class="node">
@@ -38,8 +41,8 @@
 <!-- run&#45;&gt;render -->
 <g id="edge2" class="edge">
 <title>run&#45;&gt;render</title>
-<path fill="none" stroke="#8a8a8a" d="M191.06,-72.05C184.48,-63.2 176.32,-52.22 169.14,-42.55"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="171.16,-41.16 165.02,-37 167.23,-44.08 171.16,-41.16"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M191.06,-72.05C184.54,-63.28 176.48,-52.43 169.35,-42.83"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="171.34,-41.41 165.2,-37.25 167.41,-44.33 171.34,-41.41"/>
 </g>
 <!-- pulse -->
 <g id="node4" class="node">
@@ -51,8 +54,8 @@
 <!-- run&#45;&gt;pulse -->
 <g id="edge3" class="edge">
 <title>run&#45;&gt;pulse</title>
-<path fill="none" stroke="#8a8a8a" d="M216.47,-72.05C223.18,-63.2 231.49,-52.22 238.81,-42.55"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="240.75,-44.06 243.02,-37 236.84,-41.1 240.75,-44.06"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.47,-72.05C223.18,-63.2 231.49,-52.22 238.81,-42.55"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="240.56,-44.3 242.84,-37.24 236.66,-41.34 240.56,-44.3"/>
 </g>
 <!-- cursor -->
 <g id="node5" class="node">
@@ -64,8 +67,8 @@
 <!-- run&#45;&gt;cursor -->
 <g id="edge4" class="edge">
 <title>run&#45;&gt;cursor</title>
-<path fill="none" stroke="#8a8a8a" d="M242.13,-72.05C264.61,-62.16 293.11,-49.62 316.74,-39.21"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="317.43,-41.58 322.85,-36.52 315.46,-37.1 317.43,-41.58"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M242.13,-72.05C264.51,-62.2 292.86,-49.72 316.44,-39.34"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="317.15,-41.7 322.57,-36.64 315.18,-37.22 317.15,-41.7"/>
 </g>
 </g>
 </svg>

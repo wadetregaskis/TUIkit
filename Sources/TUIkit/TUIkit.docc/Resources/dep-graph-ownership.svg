@@ -1,19 +1,22 @@
 <svg width="496pt" height="715pt"
  viewBox="0.00 0.00 496.00 715.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
+.edge path { fill: none; stroke: #8a8a8a; }
+.edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
+.cluster path, .cluster polygon { fill: none; stroke: #c8c8c8; }
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
   .cluster text { fill: #9aa0a6; }
-  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+  .cluster path, .cluster polygon { stroke: #5a5a5a; }
 }
 </style>
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 711)">
 <title>dep&#45;graph&#45;ownership</title>
 <g id="clust1" class="cluster">
 <title>cluster_0</title>
-<path fill="none" stroke="#c8c8c8" d="M350.58,-112C350.58,-112 467.87,-112 467.87,-112 473.87,-112 479.87,-118 479.87,-124 479.87,-124 479.87,-400 479.87,-400 479.87,-406 473.87,-412 467.87,-412 467.87,-412 350.58,-412 350.58,-412 344.58,-412 338.58,-406 338.58,-400 338.58,-400 338.58,-124 338.58,-124 338.58,-118 344.58,-112 350.58,-112"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#c8c8c8" d="M350.58,-112C350.58,-112 467.87,-112 467.87,-112 473.87,-112 479.87,-118 479.87,-124 479.87,-124 479.87,-400 479.87,-400 479.87,-406 473.87,-412 467.87,-412 467.87,-412 350.58,-412 350.58,-412 344.58,-412 338.58,-406 338.58,-400 338.58,-400 338.58,-124 338.58,-124 338.58,-118 344.58,-112 350.58,-112"/>
 </g>
 <!-- lifecycle -->
 <g id="node1" class="node">
@@ -60,8 +63,8 @@
 <!-- runner&#45;&gt;signal -->
 <g id="edge1" class="edge">
 <title>runner&#45;&gt;signal</title>
-<path fill="none" stroke="#8a8a8a" d="M41.3,-370.85C44.28,-410.06 55.54,-505.51 96.54,-572 122.96,-614.85 171.32,-647.34 207.3,-667.08"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="206.12,-669.23 213.44,-670.39 208.44,-664.91 206.12,-669.23"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M41.3,-370.85C44.28,-410.06 55.54,-505.51 96.54,-572 122.96,-614.85 171.32,-647.34 207.3,-667.08"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="205.85,-669.09 213.18,-670.24 208.17,-664.77 205.85,-669.09"/>
 </g>
 <!-- terminal -->
 <g id="node8" class="node">
@@ -72,8 +75,8 @@
 <!-- runner&#45;&gt;terminal -->
 <g id="edge2" class="edge">
 <title>runner&#45;&gt;terminal</title>
-<path fill="none" stroke="#8a8a8a" d="M43.08,-370.98C48.74,-402.84 63.88,-470.23 96.54,-517 126.62,-560.07 179.03,-592.21 214.82,-610.54"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="213.48,-612.61 220.83,-613.56 215.68,-608.23 213.48,-612.61"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M43.08,-370.98C48.74,-402.84 63.88,-470.23 96.54,-517 126.49,-559.89 178.59,-591.94 214.37,-610.31"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="213.21,-612.47 220.56,-613.42 215.41,-608.09 213.21,-612.47"/>
 </g>
 <!-- appState -->
 <g id="node9" class="node">
@@ -84,8 +87,8 @@
 <!-- runner&#45;&gt;appState -->
 <g id="edge3" class="edge">
 <title>runner&#45;&gt;appState</title>
-<path fill="none" stroke="#8a8a8a" d="M45.91,-370.8C54.14,-394.68 71.26,-437.51 96.54,-467 128.52,-504.31 177.88,-532.65 212.58,-549.47"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="211.44,-551.64 218.82,-552.43 213.55,-547.22 211.44,-551.64"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M45.91,-370.8C54.14,-394.68 71.26,-437.51 96.54,-467 128.52,-504.31 177.88,-532.65 212.58,-549.47"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="211.17,-551.51 218.55,-552.3 213.28,-547.09 211.17,-551.51"/>
 </g>
 <!-- statusBar -->
 <g id="node10" class="node">
@@ -96,8 +99,8 @@
 <!-- runner&#45;&gt;statusBar -->
 <g id="edge4" class="edge">
 <title>runner&#45;&gt;statusBar</title>
-<path fill="none" stroke="#8a8a8a" d="M51.83,-370.79C62.21,-385.79 78.56,-407.12 96.54,-422 128.19,-448.2 169.29,-469.89 201.41,-484.67"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="200.19,-486.8 207.58,-487.46 202.21,-482.34 200.19,-486.8"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M51.83,-370.79C62.21,-385.79 78.56,-407.12 96.54,-422 128.06,-448.09 168.94,-469.71 201,-484.48"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="199.91,-486.67 207.3,-487.33 201.94,-482.21 199.91,-486.67"/>
 </g>
 <!-- appHeader -->
 <g id="node11" class="node">
@@ -108,8 +111,8 @@
 <!-- runner&#45;&gt;appHeader -->
 <g id="edge5" class="edge">
 <title>runner&#45;&gt;appHeader</title>
-<path fill="none" stroke="#8a8a8a" d="M68.67,-370.92C77.44,-376.1 87.24,-381.56 96.54,-386 128.03,-401.04 164.45,-414.97 194.21,-425.51"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="193.18,-427.75 200.59,-427.75 194.8,-423.12 193.18,-427.75"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M68.67,-370.92C77.44,-376.1 87.24,-381.56 96.54,-386 127.9,-400.98 164.14,-414.85 193.83,-425.38"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="192.89,-427.64 200.31,-427.65 194.52,-423.02 192.89,-427.64"/>
 </g>
 <!-- focus -->
 <g id="node12" class="node">
@@ -120,8 +123,8 @@
 <!-- runner&#45;&gt;focus -->
 <g id="edge6" class="edge">
 <title>runner&#45;&gt;focus</title>
-<path fill="none" stroke="#8a8a8a" d="M78.29,-358.54C111.72,-363.42 160.78,-370.57 198.4,-376.05"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="197.94,-378.46 205.22,-377.05 198.65,-373.61 197.94,-378.46"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M78.29,-358.54C111.72,-363.42 160.78,-370.57 198.4,-376.05"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="197.64,-378.42 204.93,-377 198.35,-373.57 197.64,-378.42"/>
 </g>
 <!-- themes -->
 <g id="node13" class="node">
@@ -132,8 +135,8 @@
 <!-- runner&#45;&gt;themes -->
 <g id="edge7" class="edge">
 <title>runner&#45;&gt;themes</title>
-<path fill="none" stroke="#8a8a8a" d="M78.29,-347.64C108.84,-343.33 152.42,-337.18 188.41,-332.1"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="188.35,-334.59 194.94,-331.18 187.66,-329.73 188.35,-334.59"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M78.29,-347.64C108.71,-343.35 152.06,-337.23 187.96,-332.17"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="188.05,-334.63 194.64,-331.22 187.36,-329.78 188.05,-334.63"/>
 </g>
 <!-- tuiContext -->
 <g id="node14" class="node">
@@ -144,8 +147,8 @@
 <!-- runner&#45;&gt;tuiContext -->
 <g id="edge8" class="edge">
 <title>runner&#45;&gt;tuiContext</title>
-<path fill="none" stroke="#8a8a8a" d="M78.37,-335.96C84.44,-333.28 90.65,-330.55 96.54,-328 133.69,-311.91 176,-294.09 207.23,-281.02"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="208.02,-283.35 213.53,-278.39 206.13,-278.83 208.02,-283.35"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M78.37,-335.96C84.44,-333.28 90.65,-330.55 96.54,-328 133.53,-311.98 175.64,-294.24 206.84,-281.19"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="207.74,-283.47 213.25,-278.51 205.85,-278.94 207.74,-283.47"/>
 </g>
 <!-- input -->
 <g id="node15" class="node">
@@ -156,8 +159,8 @@
 <!-- runner&#45;&gt;input -->
 <g id="edge9" class="edge">
 <title>runner&#45;&gt;input</title>
-<path fill="none" stroke="#8a8a8a" d="M52.94,-335.23C63.51,-321.24 79.54,-301.87 96.54,-288 129.52,-261.09 172,-238.06 204.36,-222.47"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="205.3,-224.73 210.57,-219.52 203.2,-220.31 205.3,-224.73"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M52.94,-335.23C63.51,-321.24 79.54,-301.87 96.54,-288 129.52,-261.09 172,-238.06 204.36,-222.47"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="205.03,-224.86 210.3,-219.65 202.93,-220.44 205.03,-224.86"/>
 </g>
 <!-- render -->
 <g id="node16" class="node">
@@ -168,8 +171,8 @@
 <!-- runner&#45;&gt;render -->
 <g id="edge10" class="edge">
 <title>runner&#45;&gt;render</title>
-<path fill="none" stroke="#8a8a8a" d="M44.73,-335.22C51.93,-309.46 68.26,-261.42 96.54,-230 126.25,-196.99 171.02,-172.94 205.06,-158.05"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="205.72,-160.43 211.2,-155.42 203.8,-155.92 205.72,-160.43"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M44.73,-335.22C51.93,-309.46 68.26,-261.42 96.54,-230 126.13,-197.13 170.65,-173.14 204.63,-158.24"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="205.45,-160.55 210.92,-155.54 203.52,-156.05 205.45,-160.55"/>
 </g>
 <!-- pulse -->
 <g id="node17" class="node">
@@ -180,8 +183,8 @@
 <!-- runner&#45;&gt;pulse -->
 <g id="edge11" class="edge">
 <title>runner&#45;&gt;pulse</title>
-<path fill="none" stroke="#8a8a8a" d="M41.35,-335.12C44.36,-299.44 55.55,-218.45 96.54,-167 125.06,-131.21 172.34,-107.52 207.46,-93.82"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="208.12,-96.2 213.79,-91.42 206.38,-91.61 208.12,-96.2"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M41.35,-335.12C44.36,-299.44 55.55,-218.45 96.54,-167 124.94,-131.36 171.94,-107.72 207.02,-94"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="207.84,-96.31 213.51,-91.53 206.1,-91.73 207.84,-96.31"/>
 </g>
 <!-- cursor -->
 <g id="node18" class="node">
@@ -192,45 +195,45 @@
 <!-- runner&#45;&gt;cursor -->
 <g id="edge12" class="edge">
 <title>runner&#45;&gt;cursor</title>
-<path fill="none" stroke="#8a8a8a" d="M42.3,-335.14C48.42,-284.03 68.01,-138.43 96.54,-101 123.31,-65.89 169.27,-44.05 204.46,-31.64"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="204.98,-34.05 210.82,-29.47 203.4,-29.41 204.98,-34.05"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M42.3,-335.14C48.42,-284.03 68.01,-138.43 96.54,-101 123.19,-66.03 168.88,-44.23 204.02,-31.8"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="204.7,-34.15 210.53,-29.57 203.12,-29.52 204.7,-34.15"/>
 </g>
 <!-- signal&#45;&gt;runner -->
 <g id="edge18" class="edge">
 <title>signal&#45;&gt;runner</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M208.83,-671.13C204.05,-667.7 199.69,-663.68 196.29,-659 169.03,-621.5 195.7,-599.22 178.29,-556.25 149.41,-484.98 92.76,-413.3 61.77,-377.12"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="63.72,-375.63 57.29,-371.93 60.01,-378.83 63.72,-375.63"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M208.83,-671.13C204.05,-667.7 199.69,-663.68 196.29,-659 169.03,-621.5 195.7,-599.22 178.29,-556.25 149.41,-484.98 92.76,-413.3 61.77,-377.12"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="63.92,-375.86 57.49,-372.16 60.21,-379.06 63.92,-375.86"/>
 <text xml:space="preserve" text-anchor="middle" x="137.41" y="-557.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">SIGINT · SIGWINCH</text>
 </g>
 <!-- tuiContext&#45;&gt;lifecycle -->
 <g id="edge13" class="edge">
 <title>tuiContext&#45;&gt;lifecycle</title>
-<path fill="none" stroke="#8a8a8a" d="M293.07,-278.34C299.82,-282.43 306.34,-287.31 311.58,-293 331.65,-314.83 317.51,-333.14 338.58,-354 341.74,-357.13 345.27,-359.95 349.03,-362.5"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="347.47,-364.41 354.72,-365.99 350.04,-360.24 347.47,-364.41"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M293.07,-278.34C299.82,-282.43 306.34,-287.31 311.58,-293 331.65,-314.83 317.51,-333.14 338.58,-354 341.66,-357.05 345.1,-359.81 348.75,-362.3"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="347.22,-364.24 354.46,-365.83 349.79,-360.07 347.22,-364.24"/>
 </g>
 <!-- tuiContext&#45;&gt;keyDispatch -->
 <g id="edge14" class="edge">
 <title>tuiContext&#45;&gt;keyDispatch</title>
-<path fill="none" stroke="#8a8a8a" d="M292.83,-277.08C311.69,-284.59 334.81,-293.79 355.39,-301.98"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="354.32,-304.19 361.73,-304.5 356.14,-299.63 354.32,-304.19"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M292.83,-277.08C311.61,-284.55 334.61,-293.71 355.12,-301.87"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="354.04,-304.08 361.45,-304.39 355.85,-299.52 354.04,-304.08"/>
 </g>
 <!-- tuiContext&#45;&gt;prefs -->
 <g id="edge15" class="edge">
 <title>tuiContext&#45;&gt;prefs</title>
-<path fill="none" stroke="#8a8a8a" d="M292.83,-262C308.22,-262 326.44,-262 343.8,-262"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="343.72,-264.45 350.72,-262 343.72,-259.55 343.72,-264.45"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M292.83,-262C308.22,-262 326.44,-262 343.8,-262"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="343.42,-264.45 350.42,-262 343.42,-259.55 343.42,-264.45"/>
 </g>
 <!-- tuiContext&#45;&gt;stateStore -->
 <g id="edge16" class="edge">
 <title>tuiContext&#45;&gt;stateStore</title>
-<path fill="none" stroke="#8a8a8a" d="M292.83,-246.92C312.57,-239.07 336.96,-229.36 358.23,-220.89"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="358.91,-223.26 364.5,-218.4 357.09,-218.71 358.91,-223.26"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M292.83,-246.92C312.48,-239.1 336.75,-229.44 357.95,-221.01"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="358.62,-223.37 364.22,-218.51 356.81,-218.82 358.62,-223.37"/>
 </g>
 <!-- tuiContext&#45;&gt;cache -->
 <g id="edge17" class="edge">
 <title>tuiContext&#45;&gt;cache</title>
-<path fill="none" stroke="#8a8a8a" d="M293.07,-246.36C299.82,-242.39 306.34,-237.62 311.58,-232 331.79,-210.31 317.64,-191.99 338.58,-171 343.87,-165.7 350.22,-161.23 356.9,-157.48"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="357.81,-159.77 362.9,-154.39 355.56,-155.42 357.81,-159.77"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M293.07,-246.36C299.82,-242.39 306.34,-237.62 311.58,-232 331.79,-210.31 317.64,-191.99 338.58,-171 343.75,-165.82 349.95,-161.42 356.47,-157.72"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="357.55,-159.93 362.64,-154.53 355.3,-155.58 357.55,-159.93"/>
 </g>
 </g>
 </svg>

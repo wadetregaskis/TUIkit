@@ -1,12 +1,15 @@
 <svg width="350pt" height="281pt"
  viewBox="0.00 0.00 350.00 281.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
+.edge path { fill: none; stroke: #8a8a8a; }
+.edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
+.cluster path, .cluster polygon { fill: none; stroke: #c8c8c8; }
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
   .cluster text { fill: #9aa0a6; }
-  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+  .cluster path, .cluster polygon { stroke: #5a5a5a; }
 }
 </style>
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 276.5)">
@@ -26,8 +29,8 @@
 <!-- rtb&#45;&gt;qr -->
 <g id="edge1" class="edge">
 <title>rtb&#45;&gt;qr</title>
-<path fill="none" stroke="#8a8a8a" d="M103.27,-236.67C103.27,-228.01 103.27,-217.27 103.27,-207.64"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="105.72,-207.72 103.27,-200.72 100.82,-207.72 105.72,-207.72"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M103.27,-236.67C103.27,-228.1 103.27,-217.49 103.27,-207.94"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="105.72,-208.02 103.27,-201.02 100.82,-208.02 105.72,-208.02"/>
 </g>
 <!-- proc -->
 <g id="node3" class="node">
@@ -39,8 +42,8 @@
 <!-- qr&#45;&gt;proc -->
 <g id="edge2" class="edge">
 <title>qr&#45;&gt;proc</title>
-<path fill="none" stroke="#8a8a8a" d="M99.03,-165.12C95.96,-153.98 91.73,-138.68 88.18,-125.79"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="90.58,-125.29 86.36,-119.2 85.86,-126.59 90.58,-125.29"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M99.03,-165.12C95.98,-154.09 91.81,-138.97 88.28,-126.16"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="90.66,-125.58 86.44,-119.49 85.94,-126.89 90.66,-125.58"/>
 <text xml:space="preserve" text-anchor="middle" x="100.71" y="-136.95" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- qb -->
@@ -52,8 +55,8 @@
 <!-- qr&#45;&gt;qb -->
 <g id="edge3" class="edge">
 <title>qr&#45;&gt;qb</title>
-<path fill="none" stroke="#8a8a8a" d="M120.8,-169.91C143.9,-155.95 184.68,-131.32 210.81,-115.53"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="212.07,-117.63 216.79,-111.91 209.53,-113.44 212.07,-117.63"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M120.8,-169.91C143.9,-155.95 184.68,-131.32 210.81,-115.53"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="211.81,-117.79 216.53,-112.07 209.28,-113.59 211.81,-117.79"/>
 <text xml:space="preserve" text-anchor="middle" x="182.42" y="-136.95" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- recurse -->
@@ -66,8 +69,8 @@
 <!-- qb&#45;&gt;recurse -->
 <g id="edge4" class="edge">
 <title>qb&#45;&gt;recurse</title>
-<path fill="none" stroke="#8a8a8a" d="M224.99,-85.94C215.55,-74.18 201.34,-56.47 189.91,-42.22"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="192.11,-41.06 185.82,-37.13 188.29,-44.13 192.11,-41.06"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M224.99,-85.94C215.63,-74.28 201.6,-56.79 190.22,-42.61"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="192.3,-41.3 186.01,-37.37 188.48,-44.36 192.3,-41.3"/>
 <text xml:space="preserve" text-anchor="middle" x="214.23" y="-55.2" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- empty -->
@@ -79,8 +82,8 @@
 <!-- qb&#45;&gt;empty -->
 <g id="edge5" class="edge">
 <title>qb&#45;&gt;empty</title>
-<path fill="none" stroke="#8a8a8a" d="M245.55,-85.94C254.99,-74.18 269.2,-56.47 280.63,-42.22"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="282.25,-44.13 284.72,-37.13 278.43,-41.06 282.25,-44.13"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M245.55,-85.94C254.91,-74.28 268.94,-56.79 280.32,-42.61"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="282.06,-44.36 284.53,-37.37 278.24,-41.3 282.06,-44.36"/>
 <text xml:space="preserve" text-anchor="middle" x="276.35" y="-55.2" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 </g>

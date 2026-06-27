@@ -1,12 +1,15 @@
 <svg width="314pt" height="618pt"
  viewBox="0.00 0.00 314.00 618.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
+.edge path { fill: none; stroke: #8a8a8a; }
+.edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
+.cluster path, .cluster polygon { fill: none; stroke: #c8c8c8; }
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
   .cluster text { fill: #9aa0a6; }
-  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+  .cluster path, .cluster polygon { stroke: #5a5a5a; }
 }
 </style>
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 614)">
@@ -26,8 +29,8 @@
 <!-- render&#45;&gt;terminal -->
 <g id="edge1" class="edge">
 <title>render&#45;&gt;terminal</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M83.91,-275.33C108.09,-278.5 139.3,-283.61 166.29,-291.25 179.52,-295 193.55,-300.3 205.99,-305.5"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="204.72,-307.62 212.12,-308.11 206.65,-303.11 204.72,-307.62"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M83.91,-275.33C108.09,-278.5 139.3,-283.61 166.29,-291.25 179.39,-294.96 193.29,-300.2 205.64,-305.35"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="204.44,-307.5 211.84,-307.99 206.36,-302.99 204.44,-307.5"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-292.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">writes output</text>
 </g>
 <!-- statusBar -->
@@ -39,8 +42,8 @@
 <!-- render&#45;&gt;statusBar -->
 <g id="edge2" class="edge">
 <title>render&#45;&gt;statusBar</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M43.82,-288.72C45.12,-328.39 53.54,-425.48 103.29,-484 123.29,-507.52 145.21,-490.7 166.29,-513.25 181.5,-529.51 169.56,-543.3 184.29,-560 187.3,-563.41 190.77,-566.53 194.49,-569.35"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="193,-571.31 200.15,-573.27 195.79,-567.28 193,-571.31"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M43.82,-288.72C45.12,-328.39 53.54,-425.48 103.29,-484 123.29,-507.52 145.21,-490.7 166.29,-513.25 181.5,-529.51 169.56,-543.3 184.29,-560 187.23,-563.33 190.6,-566.37 194.21,-569.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="192.76,-571.12 199.9,-573.1 195.55,-567.09 192.76,-571.12"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-514.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">inject env</text>
 </g>
 <!-- appHeader -->
@@ -52,8 +55,8 @@
 <!-- render&#45;&gt;appHeader -->
 <g id="edge3" class="edge">
 <title>render&#45;&gt;appHeader</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M46.09,-253.15C51.38,-220.19 66.51,-148.87 103.29,-102 125.29,-73.96 159.45,-53.25 188.59,-39.4"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="189.57,-41.65 194.9,-36.49 187.52,-37.2 189.57,-41.65"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M46.09,-253.15C51.38,-220.19 66.51,-148.87 103.29,-102 125.29,-73.96 159.45,-53.25 188.59,-39.4"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="189.3,-41.78 194.62,-36.62 187.24,-37.33 189.3,-41.78"/>
 </g>
 <!-- focus -->
 <g id="node6" class="node">
@@ -64,8 +67,8 @@
 <!-- render&#45;&gt;focus -->
 <g id="edge4" class="edge">
 <title>render&#45;&gt;focus</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M47.64,-288.87C54.79,-317.59 72,-374.68 103.29,-413 124.73,-439.26 144.4,-430.12 166.29,-456 178.62,-470.57 171.38,-480.94 184.29,-495 188.22,-499.29 192.83,-503.17 197.7,-506.66"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="196.03,-508.49 203.21,-510.33 198.74,-504.41 196.03,-508.49"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M47.64,-288.87C54.79,-317.59 72,-374.68 103.29,-413 124.73,-439.26 144.4,-430.12 166.29,-456 178.62,-470.57 171.38,-480.94 184.29,-495 188.13,-499.19 192.62,-503 197.37,-506.42"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="195.78,-508.31 202.96,-510.16 198.5,-504.23 195.78,-508.31"/>
 </g>
 <!-- themes -->
 <g id="node7" class="node">
@@ -76,8 +79,8 @@
 <!-- render&#45;&gt;themes -->
 <g id="edge5" class="edge">
 <title>render&#45;&gt;themes</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M57.46,-288.98C81.22,-319.18 132.3,-380.99 184.29,-424 191.72,-430.15 200.11,-436.23 208.19,-441.73"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="206.44,-443.51 213.62,-445.36 209.16,-439.43 206.44,-443.51"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M57.46,-288.98C81.22,-319.18 132.3,-380.99 184.29,-424 191.57,-430.02 199.77,-435.99 207.7,-441.4"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="206.19,-443.33 213.37,-445.19 208.92,-439.26 206.19,-443.33"/>
 </g>
 <!-- lifecycle -->
 <g id="node8" class="node">
@@ -88,8 +91,8 @@
 <!-- render&#45;&gt;lifecycle -->
 <g id="edge6" class="edge">
 <title>render&#45;&gt;lifecycle</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M83.96,-255.73C90.34,-253.88 96.94,-252.27 103.29,-251.25 129.36,-247.05 158.41,-248.29 183.32,-251.14"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="182.84,-253.55 190.09,-251.98 183.44,-248.69 182.84,-253.55"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M83.96,-255.73C90.34,-253.88 96.94,-252.27 103.29,-251.25 129.24,-247.07 158.16,-248.28 182.99,-251.1"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="182.54,-253.51 189.79,-251.94 183.14,-248.65 182.54,-253.51"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-252.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
 </g>
 <!-- stateStore -->
@@ -101,8 +104,8 @@
 <!-- render&#45;&gt;stateStore -->
 <g id="edge7" class="edge">
 <title>render&#45;&gt;stateStore</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M67.86,-253.04C78.32,-245.99 90.96,-238.39 103.29,-233.25 132,-221.29 165.94,-213.34 193.29,-208.33"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="193.6,-210.77 200.06,-207.13 192.74,-205.94 193.6,-210.77"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M67.86,-253.04C78.32,-245.99 90.96,-238.39 103.29,-233.25 131.88,-221.34 165.65,-213.41 192.94,-208.4"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="193.3,-210.82 199.76,-207.19 192.44,-206 193.3,-210.82"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-234.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
 </g>
 <!-- cache -->
@@ -114,8 +117,8 @@
 <!-- render&#45;&gt;cache -->
 <g id="edge8" class="edge">
 <title>render&#45;&gt;cache</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M54.75,-253.29C65.51,-237.35 83.12,-214.2 103.29,-199.25 129.94,-179.49 164.17,-164.88 192.19,-155.12"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="192.65,-157.55 198.49,-152.98 191.07,-152.91 192.65,-157.55"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M54.75,-253.29C65.51,-237.35 83.12,-214.2 103.29,-199.25 129.83,-179.57 163.88,-165.01 191.83,-155.24"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="192.36,-157.65 198.2,-153.08 190.78,-153.01 192.36,-157.65"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-200.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
 </g>
 <!-- prefs -->
@@ -127,8 +130,8 @@
 <!-- render&#45;&gt;prefs -->
 <g id="edge9" class="edge">
 <title>render&#45;&gt;prefs</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M48.4,-253.13C56.08,-227.3 73.45,-179.32 103.29,-149.25 124.81,-127.56 154.41,-111.41 180.9,-100.1"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="181.72,-102.41 187.24,-97.47 179.84,-97.88 181.72,-102.41"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M48.4,-253.13C56.08,-227.3 73.45,-179.32 103.29,-149.25 124.72,-127.65 154.15,-111.55 180.56,-100.24"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="181.44,-102.53 186.96,-97.58 179.56,-98 181.44,-102.53"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-150.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin pass</text>
 </g>
 <!-- keyDispatch -->
@@ -140,8 +143,8 @@
 <!-- render&#45;&gt;keyDispatch -->
 <g id="edge10" class="edge">
 <title>render&#45;&gt;keyDispatch</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M77.58,-288.97C85.95,-293.31 94.91,-297.88 103.29,-302 130.99,-315.62 142.06,-312.13 166.29,-331.25 176.41,-339.24 174.77,-345.3 184.29,-354 190.79,-359.94 198.29,-365.6 205.73,-370.66"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="204.06,-372.49 211.25,-374.31 206.76,-368.4 204.06,-372.49"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M77.58,-288.97C85.95,-293.31 94.91,-297.88 103.29,-302 130.99,-315.62 142.06,-312.13 166.29,-331.25 176.41,-339.24 174.77,-345.3 184.29,-354 190.66,-359.82 197.99,-365.36 205.28,-370.35"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="203.81,-372.32 211,-374.14 206.52,-368.23 203.81,-372.32"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-332.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">clear handlers</text>
 </g>
 <!-- input -->
@@ -153,29 +156,29 @@
 <!-- input&#45;&gt;statusBar -->
 <g id="edge12" class="edge">
 <title>input&#45;&gt;statusBar</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M76.03,-530.96C84.76,-535.48 94.28,-540.15 103.29,-544 130.92,-555.81 162.51,-566.81 188.75,-575.29"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="187.85,-577.58 195.27,-577.38 189.35,-572.91 187.85,-577.58"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M76.03,-530.96C84.76,-535.48 94.28,-540.15 103.29,-544 130.8,-555.76 162.24,-566.72 188.41,-575.18"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="187.57,-577.48 194.98,-577.29 189.06,-572.82 187.57,-577.48"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-568.33" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L1</text>
 </g>
 <!-- input&#45;&gt;focus -->
 <g id="edge11" class="edge">
 <title>input&#45;&gt;focus</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M85.24,-521.48C91.28,-522.47 97.43,-523.36 103.29,-524 131.56,-527.09 163.2,-528.41 189.3,-528.92"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="189.02,-531.37 196.06,-529.03 189.1,-526.47 189.02,-531.37"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M85.24,-521.48C91.28,-522.47 97.43,-523.36 103.29,-524 131.44,-527.08 162.93,-528.4 188.96,-528.91"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="188.71,-531.36 195.75,-529.03 188.8,-526.46 188.71,-531.36"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-529.43" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L0 + L3</text>
 </g>
 <!-- input&#45;&gt;themes -->
 <g id="edge14" class="edge">
 <title>input&#45;&gt;themes</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M64.56,-495.12C75.39,-486.93 89.27,-478 103.29,-473.25 127.23,-465.13 154.76,-462.06 179.08,-461.29"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="179.07,-463.74 186.02,-461.14 178.97,-458.84 179.07,-463.74"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M64.56,-495.12C75.39,-486.93 89.27,-478 103.29,-473.25 127.13,-465.17 154.52,-462.09 178.76,-461.3"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="178.77,-463.75 185.72,-461.14 178.66,-458.85 178.77,-463.75"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-474.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L4</text>
 </g>
 <!-- input&#45;&gt;keyDispatch -->
 <g id="edge13" class="edge">
 <title>input&#45;&gt;keyDispatch</title>
-<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M55.75,-495.23C66.67,-480.37 83.95,-459.53 103.29,-446.25 125.33,-431.11 152.25,-419.56 176.61,-411.16"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="177.13,-413.57 182.99,-409.02 175.57,-408.92 177.13,-413.57"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-dasharray="5,2" d="M55.75,-495.23C66.67,-480.37 83.95,-459.53 103.29,-446.25 125.24,-431.18 152.02,-419.67 176.29,-411.27"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="176.84,-413.67 182.7,-409.11 175.28,-409.02 176.84,-413.67"/>
 <text xml:space="preserve" text-anchor="middle" x="134.79" y="-447.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L2</text>
 </g>
 </g>

@@ -72,15 +72,31 @@ func postProcess(_ svg: String) -> String {
     if let start = s.range(of: "<svg") {
         s = String(s[start.lowerBound...])
     }
+    // Harden the stroke-only shapes (connector lines + cluster borders) so they
+    // survive hostile renderers. `vector-effect="non-scaling-stroke"` keeps a
+    // line a constant on-screen width when the SVG is scaled down, so thin
+    // connectors don't vanish; it's a presentation attribute, so it works even
+    // if a host strips the <style> below. (Node boxes have a fill and are left
+    // untouched — only `fill="none"` paths are stroke-only.)
+    s = s.replacingOccurrences(
+        of: "<path fill=\"none\"",
+        with: "<path vector-effect=\"non-scaling-stroke\" fill=\"none\"")
+    // Set the connector/cluster colours with CSS *rules* (base + dark): a class
+    // selector beats a host reset like `path { stroke: none }`, which would
+    // otherwise win over Graphviz's inline `stroke=` presentation attribute and
+    // drop every line. Node text is white-on-fill, so it is left alone.
     let style = """
 
     <style>
+    .edge path { fill: none; stroke: #8a8a8a; }
+    .edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
+    .cluster path, .cluster polygon { fill: none; stroke: #c8c8c8; }
     @media (prefers-color-scheme: dark) {
       .edge text { fill: #cdd1d5; }
       .edge path { stroke: #9aa0a6; }
       .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
       .cluster text { fill: #9aa0a6; }
-      .cluster polygon, .cluster path { stroke: #5a5a5a; }
+      .cluster path, .cluster polygon { stroke: #5a5a5a; }
     }
     </style>
     """

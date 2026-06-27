@@ -86,8 +86,8 @@ extension Diagram {
         out.append("  rankdir=\(rankdir); bgcolor=\"transparent\"; nodesep=0.35; ranksep=0.5;")
         out.append("  node [shape=box, style=\"rounded,filled\", penwidth=0, "
             + "fontname=\"Helvetica\", fontsize=11, fontcolor=\"white\", margin=\"0.16,0.07\"];")
-        out.append("  edge [color=\"#8a8a8a\", fontname=\"Helvetica\", fontsize=9, "
-            + "fontcolor=\"#555555\", arrowsize=0.7];")
+        out.append("  edge [color=\"#8a8a8a\", penwidth=1.2, fontname=\"Helvetica\", "
+            + "fontsize=9, fontcolor=\"#555555\", arrowsize=0.7];")
 
         // Nodes that belong to a cluster are emitted inside its subgraph.
         let clustered = Set(clusters.flatMap(\.nodes))
