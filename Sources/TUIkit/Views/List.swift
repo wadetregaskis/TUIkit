@@ -433,6 +433,109 @@ extension List where SelectionValue == Int, Footer == EmptyView {
     }
 }
 
+// MARK: - Data-Driven Initializers (Identifiable)
+
+// SwiftUI-parity `List(_:rowContent:)` sugar. Each overload builds the existing
+// `ForEach` row path internally — no new rendering — so large lists keep their
+// O(visible) windowed cost. Footer is `EmptyView` (data-driven lists take no
+// footer, as in SwiftUI). Selection variants fix `SelectionValue` to the row's
+// id type so the selection binding lines up with what `ForEach` keys rows by.
+
+extension List where Footer == EmptyView, SelectionValue == Int {
+    /// Creates a list from an `Identifiable` collection, without selection.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, Data.Element.ID, RowContent>, Data.Element: Identifiable {
+        self.init { ForEach(data, content: rowContent) }
+    }
+
+    /// Creates a list from a collection keyed by an explicit id, without selection.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - id: A key path to each element's stable identity.
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, ID: Hashable, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, ID>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, ID, RowContent> {
+        self.init { ForEach(data, id: id, content: rowContent) }
+    }
+}
+
+extension List where Footer == EmptyView {
+    /// Creates a list from an `Identifiable` collection with single selection.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - selection: A binding to the selected element's id (`nil` = none).
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, Data.Element.ID, RowContent>,
+            Data.Element: Identifiable, SelectionValue == Data.Element.ID {
+        self.init(selection: selection) { ForEach(data, content: rowContent) }
+    }
+
+    /// Creates a list from an `Identifiable` collection with multi-selection.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - selection: A binding to the set of selected element ids.
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, Data.Element.ID, RowContent>,
+            Data.Element: Identifiable, SelectionValue == Data.Element.ID {
+        self.init(selection: selection) { ForEach(data, content: rowContent) }
+    }
+
+    /// Creates a list keyed by an explicit id with single selection.
+    ///
+    /// The id key path's value type is the selection type, so `selection` binds
+    /// to the same id the rows are keyed by.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - id: A key path to each element's stable identity.
+    ///   - selection: A binding to the selected id (`nil` = none).
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, SelectionValue>,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, SelectionValue, RowContent> {
+        self.init(selection: selection) { ForEach(data, id: id, content: rowContent) }
+    }
+
+    /// Creates a list keyed by an explicit id with multi-selection.
+    ///
+    /// - Parameters:
+    ///   - data: The collection to show, one row per element.
+    ///   - id: A key path to each element's stable identity.
+    ///   - selection: A binding to the set of selected ids.
+    ///   - rowContent: Builds the row view for each element.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, SelectionValue>,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == ForEach<Data, SelectionValue, RowContent> {
+        self.init(selection: selection) { ForEach(data, id: id, content: rowContent) }
+    }
+}
+
 // MARK: - Convenience Modifiers
 
 extension List {
