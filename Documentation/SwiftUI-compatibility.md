@@ -51,7 +51,7 @@ must accept a `Double`. Keep these two ideas separate while reading the rest.
 
 1. [**Match** — ports cleanly, same API](#1-match)
 2. [**Intentional divergence** — different on purpose; keep as-is](#2-intentional-divergence)
-3. [**Unintentional divergence** — partial/accidental mismatch; should change](#3-unintentional-divergence)
+3. [**Remaining divergences** — most resolved; the rest deferred or intentional](#3-remaining-divergences)
 4. [**No overlap** — one framework has it, the other doesn't](#4-no-overlap)
    - [4a. SwiftUI has it, TUIkit should add it](#4a-swiftui-has-it--tuikit-should-add-it)
    - [4b. SwiftUI has it, TUIkit won't (bitmap vs. text-cell)](#4b-swiftui-has-it--tuikit-wont-bitmap-vs-text-cell)
@@ -68,17 +68,19 @@ Code that uses them compiles and behaves the same.
 | Area | API | TUIkit | Notes |
 |---|---|---|---|
 | Core | `View`, `some View`, `@ViewBuilder`, `ViewModifier` | ✓ | identity & composition match |
-| State | `@State`, `@Binding` (`init(get:set:)`, `.constant`), `@Environment(\.key)` | ✓ | `@State` lacks `init(initialValue:)` → §3.7; `@Binding` lacks dynamic-member lookup → §3.2 |
+| State | `@State` (`init(wrappedValue:)` + `init(initialValue:)`), `@Binding` (`init(get:set:)`, `.constant`, `init(projectedValue:)`, **dynamic-member lookup**), `@Environment(\.key)` | ✓ | `$model.field` and `initialValue:` now match (was §3.2/§3.7) |
 | Observation | `@Observable` + `@Environment(Type.self)` + `.environment(obj)` | ✓ | modern reference-type state ports as-is |
 | Env / prefs | `EnvironmentKey`, `EnvironmentValues`, `PreferenceKey`, `.environment(_:_:)`, `.preference`/`.onPreferenceChange` | ✓ | custom keys work the SwiftUI way |
 | Stacks | `VStack` / `HStack` / `ZStack` / `LazyVStack` / `LazyHStack` | ✓ | `spacing:` is `Int` → §2.1; default spacing → §2.1 note |
 | Iteration | `ForEach` (`id:` keypath, `Identifiable`, `Range<Int>`), `Section` (header/footer/title), `Group` | ✓ | all three `ForEach` forms present |
+| Data | `List` — content-closure **and** data-driven `List(_:id:selection:rowContent:)`, `Table` | ✓ | data-driven `List` routes through the windowed `ForEach` path, O(visible) (was §3.4) |
 | Scrolling | `ScrollView(_:content:)` | ✓ | the `showsIndicators:` variant mirrors a soft-deprecated SwiftUI init |
 | Adaptive | `ViewThatFits(in:content:)` | ✓ | |
-| Nav | `NavigationSplitView` (2/3-column, `columnVisibility:`) | ✓ | |
-| Lifecycle | `onAppear`, `onDisappear`, `task` (no `id:` → §3.9), `onChange(of:initial:_:)` (both current forms), `onHover` | ✓ | matches the *current* `onChange`; the deprecated `perform:` form is correctly absent |
-| Controls | `Toggle`, `Slider`, `ProgressView`, `TextField`, `SecureField`, `Picker`, `Divider`, `Spacer`, `EmptyView`, `AnyView`, `ContentUnavailableView` | ✓ | label/value details below; `Slider`/`ProgressView` already floating-point ✓ |
-| Modifiers | `padding`, `frame`, `overlay(alignment:content:)`, `fixedSize`, `foregroundStyle(.color)`, `tag`, `zIndex`, `badge`, `listStyle`, `disabled` (on controls), `lineLimit` (on `Text`) | ✓ | units are `Int` → §2.1; `frame` default alignment → §3.6 |
+| Nav | `NavigationSplitView` (2/3-column, `columnVisibility:`), `navigationTitle` (`StringProtocol` / `Text`) | ✓ | title overloads added (was §3.10) |
+| Presentation | `sheet(isPresented:onDismiss:content:)`, `sheet(item:onDismiss:content:)`, `alert` | ✓ | `onDismiss:`/`item:` added (was §3.5); presented as a centred, dimming overlay |
+| Lifecycle | `onAppear`, `onDisappear`, `task` (incl. `task(id:)`), `onChange(of:initial:_:)` (both current forms), `onHover` | ✓ | `task(id:)` added (was §3.8); matches the *current* `onChange`; deprecated `perform:` correctly absent |
+| Controls | `Button` (string **and** `Button(action:label:)`), `Toggle`, `Slider`, `Stepper`, `ProgressView`, `TextField`, `SecureField`, `Picker`, `Divider`, `Spacer`, `EmptyView`, `AnyView`, `ContentUnavailableView` | ✓ | `Slider`/`ProgressView`/`Stepper` are floating-point-capable (generic over the value); custom `ButtonStyle`/`ToggleStyle` via `makeBody` (was §3.1/§3.9) |
+| Modifiers | `padding`, `frame`, `overlay(alignment:content:)`, `fixedSize`, `foregroundStyle(.color)`, `disabled` (on any `View`), `tag`, `zIndex`, `badge`, `listStyle`, `lineLimit` (on `Text`) | ✓ | units are `Int` → §2.1; `disabled` cascades via `\.isEnabled`; `frame` default alignment is `.topLeading` → §2.7 |
 | App | `App`, `Scene`, `WindowGroup`, `SceneBuilder`, `@main`, `@AppStorage`, `@Environment(\.dismiss)` | ✓ | `@AppStorage` is *enhanced* (pluggable backend) |
 | Color values | `Color.red`/`.green`/`.primary`/`.secondary`/… and `.opacity(_:)` | ✓ | *constructing* a Color differs → §3 (Color) |
 
@@ -199,204 +201,61 @@ models that directly. (A `keyboardShortcut`-style modifier for non-status-bar
 actions is a fair §4a request, but the toolbar *container* concept does not
 transfer.)
 
----
-
-## 3. Unintentional divergence
-
-TUIkit has an equivalent that *should* line up with current SwiftUI but doesn't,
-through oversight or incompleteness. **These are the candidates to fix.** Each
-entry: the mismatch, whether to change (in plain terms), a design sketch, and
-trade-offs.
-
-### 3.1 `Stepper` is `Int`-only — should be generic over the value
-
-```swift
-// SwiftUI                                          // TUIkit (today)
-Stepper("Qty", value: $count, in: 0...10)           Stepper("Qty", value: $count, in: 0...10)   // count: Int only
-Stepper("°C", value: $celsius, step: 0.5)           // ❌ won't compile — Binding<Double> rejected
-```
-
-- **TUIkit:** all `Stepper` inits take `Binding<Int>`, `step: Int`
-  ([Stepper.swift:108](../Sources/TUIkit/Views/Stepper.swift)). The generics
-  present are over the *title* `StringProtocol`, not the value.
-- **SwiftUI:** generic over `V: Strideable` (covers `Int`, `Double`, `Float`, …).
-- **Should it change? Yes.** A `Stepper`'s value is *data-model* data (a price, a
-  temperature, a rating), not an interface measurement — so the §"measurement vs.
-  data" rule says it must not be pinned to `Int`. This is the one data-model
-  control that's inconsistent: `Slider` and `ProgressView` already use
-  `BinaryFloatingPoint` correctly.
-- **Proposal:** genericize as `Stepper<Label>` with
-  `init(_:value: Binding<V>, in: ClosedRange<V> = …, step: V.Stride = 1, …)`
-  where `V: Strideable`, mirroring SwiftUI. Keep an `Int`-defaulted convenience so
-  existing call sites are unchanged. Clamp/step in `V`'s arithmetic.
-- **Trade-offs / side-effects:** `Stepper` renders a *label* + `[- +]`, not the
-  numeric value itself, so there's no display-formatting fallout. Minor: bounds
-  clamping in floating-point needs the usual care at the range ends; `V.Stride`
-  vs `V` for `step`. Low risk, additive.
-
-### 3.2 `Binding` has no dynamic-member lookup or `init(projectedValue:)`
-
-```swift
-// SwiftUI                              // TUIkit (today)
-TextField("Name", text: $user.name)     // ❌ $user.name — no nested Binding
-Toggle("On", isOn: $settings.enabled)   // ❌
-```
-
-- **TUIkit:** `Binding` exposes `init(get:set:)` + `.constant`
-  ([State.swift:264](../Sources/TUIkitView/State/State.swift)) — but not
-  `@dynamicMemberLookup` nor `init(projectedValue:)`.
-- **Should it change? Yes.** Deriving a binding to a sub-property (`$model.field`)
-  is everyday SwiftUI; without it, forms over an `@Observable`/struct model are
-  far clumsier than they should be. Pure ergonomics, no terminal reason to omit.
-- **Proposal:** mark `Binding` `@dynamicMemberLookup` and add
-  `subscript<Subject>(dynamicMember: WritableKeyPath<Value, Subject>) -> Binding<Subject>`
-  plus `init(projectedValue:)`. Both are mechanical, matching SwiftUI verbatim.
-- **Trade-offs:** none of substance — purely additive; no rendering or layout
-  impact. High value-to-cost ratio.
-
-### 3.3 `disabled()` is per-control, not a `View` modifier
-
-```swift
-// SwiftUI                              // TUIkit (today)
-VStack { … }.disabled(isLocked)         // ❌ disabled only exists on Button/Toggle/…
-Text("x").disabled(true)                // ❌
-```
-
-- **TUIkit:** `disabled(_:)` is defined on each control type (Button, Toggle,
-  Slider, …) and returns that concrete type — there is no `View.disabled(_:)`.
-- **SwiftUI:** `View.disabled(_ disabled: Bool)` disables an entire subtree via
-  the environment.
-- **Should it change? Yes.** Disabling a *group* ("grey out this whole panel
-  while saving") is a basic need and currently impossible without touching every
-  child.
-- **Proposal:** add an `\.isEnabled` environment value that ANDs down the tree,
-  plus `extension View { func disabled(_:) }` that clears it; interactive views
-  read `environment.isEnabled` in their existing disabled check + skip focus
-  registration when disabled. (This also delivers the `\.isEnabled` env value
-  from §4a for free.)
-- **Trade-offs:** must audit every interactive control to consult the inherited
-  flag (several already gate on a local `isDisabled`); the per-control
-  `disabled(_:)` methods stay as sugar. Medium effort, well-contained.
-
-### 3.4 `List` has no data-driven initializer
-
-```swift
-// SwiftUI                              // TUIkit (today)
-List(items) { item in Text(item.name) } // ❌ no data-driven form
-List(items, id: \.id, selection: $sel)   // ❌
-                                        // must write:
-                                        List(selection: $sel) {
-                                          ForEach(items) { item in Text(item.name) }
-                                        }
-```
-
-- **TUIkit:** `List` is content-closure only
-  ([List.swift:58](../Sources/TUIkit/Views/List.swift)); data goes through an
-  explicit `ForEach`.
-- **SwiftUI:** ships ~50 data-driven `List(_:…rowContent:)` overloads.
-- **Should it change? Yes (convenience).** It's the most common `List` spelling
-  in SwiftUI tutorials and code; its absence is a visible papercut even though
-  the `ForEach` form is equivalent.
-- **Proposal:** add `List(_ data:, id:, selection:, rowContent:)` overloads that
-  internally construct the existing `ForEach` + windowed row path — no new
-  rendering, just initializer sugar.
-- **Trade-offs:** keep the overload count sane (mirror SwiftUI's selection
-  variants only); ensure the sugar routes through the same windowed extractor so
-  large lists keep their O(visible) cost. Low-medium effort.
-
-### 3.5 `sheet` lacks `onDismiss:` and the `item:` overload
-
-```swift
-// SwiftUI                                        // TUIkit (today)
-.sheet(isPresented: $show, onDismiss: cleanup){…} // ❌ no onDismiss
-.sheet(item: $editing) { row in EditView(row) }   // ❌ no item:
-.sheet(isPresented: $show) { … }                  // ✓ this form works
-```
-
-- **Should it change? Yes.** `onDismiss` (run cleanup when closed) and `item:`
-  (present *for* a selected value) are standard; both map cleanly to a terminal
-  modal.
-- **Proposal:** add `onDismiss: (() -> Void)? = nil` to the existing
-  `sheet`/`modal` modifiers (fire it when the overlay tears down), and add
-  `sheet(item: Binding<Item?>, …)` for `Item: Identifiable`.
-- **Trade-offs:** the modal teardown path must reliably invoke `onDismiss` on
-  every dismissal route (key, action, programmatic). Low-medium.
-
-### 3.6 Fixed-`frame` default alignment is `.topLeading`, SwiftUI's is `.center`
+### 2.7 Fixed-`frame` default alignment is `.topLeading`, not `.center`
 
 ```swift
 // Both compile; result differs:
 Text("hi").frame(width: 20, height: 3)   // SwiftUI: centered    TUIkit: top-left
 ```
 
-- **TUIkit:** `frame(width:height:alignment:)` defaults `alignment` to
-  `.topLeading`; SwiftUI defaults to `.center` (`SwiftUICore` `frame` decl).
-- **Should it change? Probably yes — reconcile to `.center`.** This is a *silent*
-  divergence: ported code lays out differently with no error. Unlike §2 there's
-  no terminal reason for it — both alignments are expressible. (If the top-left
-  default was a deliberate "text reads from the top-left" choice, document it as
-  §2 instead; absent that rationale, match SwiftUI.)
-- **Proposal:** change the default to `.center`.
-- **Trade-offs:** **behavioral** — existing TUIkit layouts relying on the current
-  default shift. Requires a sweep of the example app + updating any golden
-  snapshots. Worth doing once, early.
+**Why it's intentional / should NOT change:** SwiftUI centres content in a larger
+fixed frame because that's the GUI norm. A terminal reads from the top-left, and
+in practice a fixed `.frame(width:)` is used to build a **left-aligned,
+fixed-width column** — a label gutter, a channel slider, a table cell — far more
+often than to centre something in slack space. Defaulting to `.center` would
+silently shift every such column and surprise TUI authors (their text would
+suddenly centre). The default is therefore `.topLeading`; pass an explicit
+`alignment:` when you do want centring. (The *flexible* `frame(maxWidth:…,
+alignment:)` **does** default to `.center`, matching SwiftUI, because slack-space
+distribution is exactly when centring makes sense.)
 
-### 3.7 `@State` lacks `init(initialValue:)`
+> Previously listed as an unintentional divergence (old §3.6) to reconcile to
+> `.center`. On review the top-left default proved **load-bearing** — e.g.
+> `ColorPicker`'s per-channel `Slider.frame(width:)` relies on left alignment, and
+> changing the default broke it — and it is the better terminal default, so it is
+> reclassified here as intentional.
 
-- **TUIkit:** `init(wrappedValue:)` only; **SwiftUI:** also `init(initialValue:)`.
-- **Should it change? Yes (cheap).** Rarely written by hand, but some generic
-  code and macros use it.
-- **Proposal:** add the `init(initialValue:)` alias. **Trade-offs:** none.
+---
 
-### 3.8 `task` lacks the `id:` overload
+## 3. Remaining divergences
 
-```swift
-// SwiftUI                              // TUIkit (today)
-.task(id: query) { await search(query) } // ❌ no id: → can't restart on change
-.task { await load() }                    // ✓
-```
+Every item once listed here has been **resolved** — TUIkit now matches SwiftUI
+for them (they moved up to §1 Match) — except one borderline item deliberately
+kept as-is (3.11). Each fix was verified against the installed SDK
+(Swift 6.2.4 · SwiftUI 7.2.5) before landing.
 
-- **Should it change? Yes.** Re-running an async task when an input changes is a
-  core `.task` use; without it you hand-roll `onChange` + cancellation.
-- **Proposal:** add `task(id:priority:_:)` that folds `id` into the lifecycle
-  token and restarts when it changes — small extension of the existing
-  identity-keyed lifecycle mechanism.
-- **Trade-offs:** none beyond the token bookkeeping already in place. Low.
+### Resolved (now in §1 Match)
 
-### 3.9 `Button`/style labels are `String`, not views
+| Was | What shipped |
+|---|---|
+| **3.1** `Stepper` was `Int`-only | Generic over `V: Strideable` (`value: Binding<V>`, `step: V.Stride`, optional `in:`), with the value type **erased** into closures so `Stepper<Label>` keeps SwiftUI's exact shape. `Int` call sites are unchanged; `Double`/`Float` now work. |
+| **3.2** `Binding` had no dynamic-member lookup | Marked `@dynamicMemberLookup` with `subscript(dynamicMember: WritableKeyPath<Value, Subject>)` and added `init(projectedValue:)`. `$model.field` works. |
+| **3.3** `disabled()` was per-control | **Already shipped** (the entry was stale): `View.disabled(_:)` plus a cascading `\.isEnabled` environment value that every interactive control already reads. |
+| **3.4** `List` had no data-driven init | Added `List(_:rowContent:)` / `List(_:id:selection:rowContent:)` overloads (Identifiable + explicit `id:`, across no-/single-/multi-selection) that build the existing windowed `ForEach` path — initializer sugar only, O(visible) preserved. |
+| **3.5** `sheet` lacked `onDismiss:`/`item:` | Added `onDismiss:` to `modal`/`sheet` (fires on the presented→dismissed transition, covering button/key/programmatic dismissal) and `sheet(item:)` for `Identifiable`. |
+| **3.6** fixed-`frame` default alignment | **Reclassified** as an intentional terminal deviation → see **§2.7** (top-left is load-bearing and the right TUI default). |
+| **3.7** `@State` lacked `init(initialValue:)` | Added the `init(initialValue:)` alias. |
+| **3.8** `task` lacked `id:` | Added `task(id:priority:_:)`. The `id`'s textual form folds into the lifecycle token, so a changed `id` makes the old token "disappear" (cancelling its task) while the new one starts — reusing the existing appear/disappear machinery. |
+| **3.9** `Button`/style labels were `String`-only | `Button(action:label:)` / `Button(role:action:label:)` added — the label is erased to an optional `AnyView`, so `Button` stays **non-generic** and `ButtonRow`/`Alert`'s `[Button]` arrays keep working (a generic `Button<Label>` would break them); built-in styles render a view label via composition, string labels keep their procedural path (zero churn). `ButtonStyleConfiguration` gains `labelView`; `ToggleStyle` gains `makeBody` + `ToggleStyleConfiguration` (custom toggle styles; built-ins stay procedural). **`PickerStyle` is intentionally left a marker** — SwiftUI's `PickerStyle` has no public `makeBody` (only underscore SPI), so TUIkit already matches it; the original §3.9 note claiming otherwise was inaccurate. |
+| **3.10** `navigationTitle` took `String` only | Added `StringProtocol` and `Text` overloads (the `Text`'s styling isn't carried — the title renders as a plain string — but the spelling resolves). |
 
-```swift
-// SwiftUI                              // TUIkit (today)
-Button { save() } label: {              Button("Save", action: save)   // String only
-  Label("Save", systemImage: "tray")    // ❌ no @ViewBuilder label
-}
-```
-
-- **TUIkit:** `Button(_ label: String, action:)` only
-  ([Button.swift:103](../Sources/TUIkit/Views/Button.swift)); consequently
-  `ButtonStyle.Configuration.label` is a `String`, and `ToggleStyle`/`PickerStyle`
-  are empty marker protocols (built-in styles only).
-- **Should it change? Partially.** A terminal *can* render a composed label (icon
-  glyph + styled text), so a `@ViewBuilder label:` form is reasonable and unlocks
-  authoring custom styles. Lower priority than 3.1–3.5.
-- **Proposal:** add `Button(action:label:)` with a `@ViewBuilder` label; make the
-  style `Configuration.label` an opaque rendered view; give `ToggleStyle`/
-  `PickerStyle` a `makeBody(configuration:)` requirement.
-- **Trade-offs:** non-trivial — the style pipeline currently assumes string
-  labels; touches Button/Toggle/Picker rendering and the style configuration
-  types. Medium-high; stage after the quick wins.
-
-### 3.10 `navigationTitle` takes `String` only
-
-- **TUIkit:** `navigationTitle(_ title: String)`; **SwiftUI:** also `Text`,
-  `LocalizedStringKey`, and `Binding<String>` overloads.
-- **Should it change? Minor yes.** Add a `StringProtocol` (and optionally `Text`)
-  overload. **Trade-offs:** trivial; full localization is a separate §4a item.
+Regression tests for the above live in
+`Tests/TUIkitTests/SwiftUICompatFixesTests.swift`.
 
 ### 3.11 `foregroundStyle` takes `Color?`, not `some ShapeStyle`
 
-- **TUIkit:** `foregroundStyle(_ style: Color?)`; **SwiftUI:** `foregroundStyle<S: ShapeStyle>(_:)`.
-- **Should it change? No (for now) — borderline §2.** `.foregroundStyle(.red)`
+- **TUIkit:** `foregroundStyle(_ style: Color?)`; **SwiftUI:** `foregroundStyle<S: ShapeStyle>(_:)` (re-verified against the SDK — still `ShapeStyle`).
+- **Should it change? No — borderline §2.** `.foregroundStyle(.red)`
   already works. The only thing lost is non-color `ShapeStyle`s — gradients,
   materials — which are bitmap concepts that don't render in cells (see §4b). If
   a terminal-meaningful `ShapeStyle` (e.g. a 2-color gradient approximated per
@@ -413,7 +272,8 @@ in this priority order. (Proposals are one-liners; trade-offs noted where
 non-obvious.)
 
 > **Since shipped** (now built; removed from the list below): `TabView` / `Tab`,
-> `ColorPicker` (with a full modal `ColorPickerPanel`), and the `.tint(_:)` modifier.
+> `ColorPicker` (with a full modal `ColorPickerPanel`), the `.tint(_:)` modifier,
+> and `View.disabled(_:)` + the `\.isEnabled` environment value (the §3.3 fix).
 
 | Feature | Why it matters | Design sketch / trade-off |
 |---|---|---|
@@ -427,7 +287,7 @@ non-obvious.)
 | **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. |
 | **Common modifiers: `.id`, `.opacity`(View), `.multilineTextAlignment`, `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. |
 | **Scoped wrappers: `@Bindable`, `@SceneStorage`, `@FocusedValue`** | `@Bindable` pairs with `@Observable`; the others are niche. | `@Bindable` is the useful one (binding into an `@Observable`); `@SceneStorage` ≈ `@AppStorage` for a single scene. |
-| **Env values: `\.isEnabled`, `\.locale`, `\.layoutDirection`, `\.dynamicTypeSize`, `\.openURL`, `\.scenePhase`** | Standard environment reads. | `\.isEnabled` comes with §3.3; `\.openURL`/`\.locale`/`\.scenePhase` are independently useful; size-class concepts map loosely to terminal dimensions. |
+| **Env values: `\.locale`, `\.layoutDirection`, `\.dynamicTypeSize`, `\.openURL`, `\.scenePhase`** | Standard environment reads. | `\.isEnabled` already shipped (§3.3); `\.openURL`/`\.locale`/`\.scenePhase` are independently useful; size-class concepts map loosely to terminal dimensions. |
 | **Text richness: `Text(_:format:)`, `LocalizedStringKey`, `AttributedString`, Markdown, `Text + Text`** | Formatting & localization. | `Text + Text` concatenation and `Text(_:format:)` are tractable; full `AttributedString`/Markdown is larger. TUIkit has a localization service to build `LocalizedStringKey` on. |
 
 ### 4b. SwiftUI has it · TUIkit won't (bitmap vs. text-cell)
@@ -469,26 +329,27 @@ SwiftUI API (the CLAUDE.md rule).
 
 ---
 
-## 5. Recommended changes, prioritized
+## 5. Status
 
-Only §3 (unintentional) and §4a (addable) warrant change. Suggested order —
-quick, high-value ergonomics first; large subsystems last:
+All of §3 is now resolved, except **3.6**, which was reclassified to §2.7
+(intentional terminal deviation) rather than changed. The remaining roadmap is
+§4a (additive features).
 
-| # | Change | Category | Effort | Why first/last |
-|---|---|---|---|---|
-| 1 | `Binding` dynamic-member lookup + `init(projectedValue:)` (§3.2) | 3 | low | unblocks forms over models; purely additive |
-| 2 | `Stepper` generic over value type (§3.1) | 3 | low | correctness — data-model values must allow float |
-| 3 | `View.disabled(_:)` + `\.isEnabled` env (§3.3) | 3 / 4a | medium | basic capability; also delivers an env value |
-| 4 | `task(id:)` (§3.8), `@State.init(initialValue:)` (§3.7) | 3 | low | small, mechanical |
-| 5 | `sheet(onDismiss:)` + `sheet(item:)` (§3.5) | 3 | low-med | standard presentation ergonomics |
-| 6 | Data-driven `List(_:id:selection:rowContent:)` (§3.4) | 3 | low-med | the most-missed `List` spelling |
-| 7 | `frame` default alignment → `.center` (§3.6) | 3 | medium\* | removes a silent layout divergence (*behavioral — do early) |
-| 8 | `@FocusState` property wrapper + `.focused` (§4a) | 4a | medium | source-compatible focus; reconcile with `FocusManager` |
-| 9 | `NavigationStack`/`NavigationLink`/`navigationDestination` (§4a) | 4a | high | biggest structural gap |
-| 10 | `confirmationDialog`/`popover`, `ScrollViewReader`, `.id`/`.searchable`/`.keyboardShortcut`, controls (`Label`/`Gauge`/`TextEditor`/`Link`) | 4a | mixed | fill out breadth incrementally |
-| 11 | `Button(action:label:)` + custom `ToggleStyle`/`PickerStyle` (§3.9) | 3 | med-high | view labels; unlock custom styles |
+| # | Change | Status |
+|---|---|---|
+| 1 | `Binding` dynamic-member lookup + `init(projectedValue:)` (§3.2) | ✅ done |
+| 2 | `Stepper` generic over value type (§3.1) | ✅ done |
+| 3 | `View.disabled(_:)` + `\.isEnabled` env (§3.3) | ✅ already shipped |
+| 4 | `task(id:)` (§3.8), `@State.init(initialValue:)` (§3.7) | ✅ done |
+| 5 | `sheet(onDismiss:)` + `sheet(item:)` (§3.5) | ✅ done |
+| 6 | Data-driven `List(_:id:selection:rowContent:)` (§3.4) | ✅ done |
+| 7 | `frame` default alignment (§3.6) | ↪︎ reclassified intentional (§2.7) |
+| 8 | `navigationTitle` overloads (§3.10) | ✅ done |
+| 9 | `Button(action:label:)` + custom `ToggleStyle` (§3.9) | ✅ done (`PickerStyle` left a marker — already matches SwiftUI) |
+| — | `@FocusState`, `NavigationStack`, `confirmationDialog`/`popover`, `ScrollViewReader`, `.searchable`/`.keyboardShortcut`, `Label`/`Gauge`/`TextEditor`/`Link`, … | §4a roadmap |
 
 Everything in §2 and §4b is intentional and should **not** change: the `Int`
-measurement model, integer geometry, `@Observable`-only state, and the absence of
-fonts/animation/shapes/sub-cell-geometry are the honest consequences of
-rendering to a grid of character cells rather than a bitmap.
+measurement model, integer geometry, top-left fixed-`frame` alignment,
+`@Observable`-only state, and the absence of fonts/animation/shapes/sub-cell-
+geometry are the honest consequences of rendering to a grid of character cells
+rather than a bitmap.
