@@ -1,0 +1,71 @@
+<svg width="413pt" height="116pt"
+ viewBox="0.00 0.00 413.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>lifecycle&#45;run&#45;creates</title>
+<!-- run -->
+<g id="node1" class="node">
+<title>run</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M243.66,-108C243.66,-108 163.62,-108 163.62,-108 157.62,-108 151.62,-102 151.62,-96 151.62,-96 151.62,-84 151.62,-84 151.62,-78 157.62,-72 163.62,-72 163.62,-72 243.66,-72 243.66,-72 249.66,-72 255.66,-78 255.66,-84 255.66,-84 255.66,-96 255.66,-96 255.66,-102 249.66,-108 243.66,-108"/>
+<text xml:space="preserve" text-anchor="middle" x="203.64" y="-85.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppRunner.run()</text>
+</g>
+<!-- input -->
+<g id="node2" class="node">
+<title>input</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M73.29,-36C73.29,-36 12,-36 12,-36 6,-36 0,-30 0,-24 0,-24 0,-12 0,-12 0,-6 6,0 12,0 12,0 73.29,0 73.29,0 79.29,0 85.29,-6 85.29,-12 85.29,-12 85.29,-24 85.29,-24 85.29,-30 79.29,-36 73.29,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="42.64" y="-13.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">InputHandler</text>
+</g>
+<!-- run&#45;&gt;input -->
+<g id="edge1" class="edge">
+<title>run&#45;&gt;input</title>
+<path fill="none" stroke="#8a8a8a" d="M164.67,-72.05C141.91,-62.16 113.06,-49.62 89.12,-39.21"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="90.32,-37.06 82.93,-36.51 88.37,-41.55 90.32,-37.06"/>
+</g>
+<!-- render -->
+<g id="node3" class="node">
+<title>render</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M181.16,-36C181.16,-36 122.12,-36 122.12,-36 116.12,-36 110.12,-30 110.12,-24 110.12,-24 110.12,-12 110.12,-12 110.12,-6 116.12,0 122.12,0 122.12,0 181.16,0 181.16,0 187.16,0 193.16,-6 193.16,-12 193.16,-12 193.16,-24 193.16,-24 193.16,-30 187.16,-36 181.16,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="151.64" y="-13.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderLoop</text>
+</g>
+<!-- run&#45;&gt;render -->
+<g id="edge2" class="edge">
+<title>run&#45;&gt;render</title>
+<path fill="none" stroke="#8a8a8a" d="M191.06,-72.05C184.48,-63.2 176.32,-52.22 169.14,-42.55"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="171.16,-41.16 165.02,-37 167.23,-44.08 171.16,-41.16"/>
+</g>
+<!-- pulse -->
+<g id="node4" class="node">
+<title>pulse</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M283.54,-36C283.54,-36 229.75,-36 229.75,-36 223.75,-36 217.75,-30 217.75,-24 217.75,-24 217.75,-12 217.75,-12 217.75,-6 223.75,0 229.75,0 229.75,0 283.54,0 283.54,0 289.54,0 295.54,-6 295.54,-12 295.54,-12 295.54,-24 295.54,-24 295.54,-30 289.54,-36 283.54,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="256.64" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">PulseTimer</text>
+<text xml:space="preserve" text-anchor="middle" x="256.64" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">100 ms</text>
+</g>
+<!-- run&#45;&gt;pulse -->
+<g id="edge3" class="edge">
+<title>run&#45;&gt;pulse</title>
+<path fill="none" stroke="#8a8a8a" d="M216.47,-72.05C223.18,-63.2 231.49,-52.22 238.81,-42.55"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="240.75,-44.06 243.02,-37 236.84,-41.1 240.75,-44.06"/>
+</g>
+<!-- cursor -->
+<g id="node5" class="node">
+<title>cursor</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M392.54,-36C392.54,-36 332.75,-36 332.75,-36 326.75,-36 320.75,-30 320.75,-24 320.75,-24 320.75,-12 320.75,-12 320.75,-6 326.75,0 332.75,0 332.75,0 392.54,0 392.54,0 398.54,0 404.54,-6 404.54,-12 404.54,-12 404.54,-24 404.54,-24 404.54,-30 398.54,-36 392.54,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="362.64" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">CursorTimer</text>
+<text xml:space="preserve" text-anchor="middle" x="362.64" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">50 ms</text>
+</g>
+<!-- run&#45;&gt;cursor -->
+<g id="edge4" class="edge">
+<title>run&#45;&gt;cursor</title>
+<path fill="none" stroke="#8a8a8a" d="M242.13,-72.05C264.61,-62.16 293.11,-49.62 316.74,-39.21"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="317.43,-41.58 322.85,-36.52 315.46,-37.1 317.43,-41.58"/>
+</g>
+</g>
+</svg>

@@ -1,87 +1,89 @@
-<svg width="391pt" height="408pt"
- viewBox="0.00 0.00 391.00 408.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="391pt" height="428pt"
+ viewBox="0.00 0.00 391.00 428.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
 }
 </style>
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 404.49)">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 424.49)">
 <title>architecture&#45;event&#45;loop</title>
 <!-- init -->
 <g id="node1" class="node">
 <title>init</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M321.66,-400.49C321.66,-400.49 110.38,-400.49 110.38,-400.49 104.38,-400.49 98.37,-394.49 98.37,-388.49 98.37,-388.49 98.37,-366.41 98.37,-366.41 98.37,-360.41 104.37,-354.41 110.37,-354.41 110.37,-354.41 321.66,-354.41 321.66,-354.41 327.66,-354.41 333.66,-360.41 333.66,-366.41 333.66,-366.41 333.66,-388.49 333.66,-388.49 333.66,-394.49 327.66,-400.49 321.66,-400.49"/>
-<text xml:space="preserve" text-anchor="middle" x="216.02" y="-385" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Subsystems initialised</text>
-<text xml:space="preserve" text-anchor="middle" x="216.02" y="-373" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal · AppState · Focus · TUIContext</text>
-<text xml:space="preserve" text-anchor="middle" x="216.02" y="-361" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderLoop · InputHandler · signal handlers</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M321.66,-420.49C321.66,-420.49 110.38,-420.49 110.38,-420.49 104.38,-420.49 98.37,-414.49 98.37,-408.49 98.37,-408.49 98.37,-386.41 98.37,-386.41 98.37,-380.41 104.37,-374.41 110.37,-374.41 110.37,-374.41 321.66,-374.41 321.66,-374.41 327.66,-374.41 333.66,-380.41 333.66,-386.41 333.66,-386.41 333.66,-408.49 333.66,-408.49 333.66,-414.49 327.66,-420.49 321.66,-420.49"/>
+<text xml:space="preserve" text-anchor="middle" x="216.02" y="-405" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Subsystems initialised</text>
+<text xml:space="preserve" text-anchor="middle" x="216.02" y="-393" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal · AppState · Focus · TUIContext</text>
+<text xml:space="preserve" text-anchor="middle" x="216.02" y="-381" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderLoop · InputHandler · signal handlers</text>
 </g>
 <!-- shutdown -->
 <g id="node2" class="node">
 <title>shutdown</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M204.41,-318.38C204.41,-318.38 158.62,-306.44 158.62,-306.44 152.82,-304.92 152.82,-301.9 158.62,-300.38 158.62,-300.38 204.41,-288.44 204.41,-288.44 210.21,-286.92 221.83,-286.92 227.63,-288.44 227.63,-288.44 273.42,-300.38 273.42,-300.38 279.22,-301.9 279.22,-304.92 273.42,-306.44 273.42,-306.44 227.63,-318.38 227.63,-318.38 221.83,-319.9 210.21,-319.9 204.41,-318.38"/>
-<text xml:space="preserve" text-anchor="middle" x="216.02" y="-298.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M204.41,-334.38C204.41,-334.38 158.62,-322.44 158.62,-322.44 152.82,-320.92 152.82,-317.9 158.62,-316.38 158.62,-316.38 204.41,-304.44 204.41,-304.44 210.21,-302.92 221.83,-302.92 227.63,-304.44 227.63,-304.44 273.42,-316.38 273.42,-316.38 279.22,-317.9 279.22,-320.92 273.42,-322.44 273.42,-322.44 227.63,-334.38 227.63,-334.38 221.83,-335.9 210.21,-335.9 204.41,-334.38"/>
+<text xml:space="preserve" text-anchor="middle" x="216.02" y="-314.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
 </g>
 <!-- init&#45;&gt;shutdown -->
 <g id="edge1" class="edge">
 <title>init&#45;&gt;shutdown</title>
-<path fill="none" stroke="#8a8a8a" d="M216.02,-354.44C216.02,-346.54 216.02,-337.58 216.02,-329.44"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="218.47,-329.54 216.02,-322.54 213.57,-329.54 218.47,-329.54"/>
+<path fill="none" stroke="#8a8a8a" d="M216.02,-374.46C216.02,-365.41 216.02,-354.89 216.02,-345.55"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="218.47,-345.55 216.02,-338.55 213.57,-345.55 218.47,-345.55"/>
 </g>
 <!-- resize -->
 <g id="node3" class="node">
 <title>resize</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M210.54,-243.66C210.54,-243.66 43.5,-243.66 43.5,-243.66 37.5,-243.66 31.5,-237.66 31.5,-231.66 31.5,-231.66 31.5,-219.33 31.5,-219.33 31.5,-213.33 37.5,-207.33 43.5,-207.33 43.5,-207.33 210.54,-207.33 210.54,-207.33 216.54,-207.33 222.54,-213.33 222.54,-219.33 222.54,-219.33 222.54,-231.66 222.54,-231.66 222.54,-237.66 216.54,-243.66 210.54,-243.66"/>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-228.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-216.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M210.54,-255.66C210.54,-255.66 43.5,-255.66 43.5,-255.66 37.5,-255.66 31.5,-249.66 31.5,-243.66 31.5,-243.66 31.5,-231.33 31.5,-231.33 31.5,-225.33 37.5,-219.33 43.5,-219.33 43.5,-219.33 210.54,-219.33 210.54,-219.33 216.54,-219.33 222.54,-225.33 222.54,-231.33 222.54,-231.33 222.54,-243.66 222.54,-243.66 222.54,-249.66 216.54,-255.66 210.54,-255.66"/>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-240.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-228.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
 </g>
 <!-- shutdown&#45;&gt;resize -->
 <g id="edge2" class="edge">
 <title>shutdown&#45;&gt;resize</title>
-<path fill="none" stroke="#8a8a8a" d="M200.92,-289.53C187.9,-278.43 168.81,-262.14 153.29,-248.9"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="154.95,-247.1 148.04,-244.42 151.77,-250.83 154.95,-247.1"/>
-<text xml:space="preserve" text-anchor="middle" x="182.1" y="-260.86" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path fill="none" stroke="#8a8a8a" d="M201.72,-305.57C188.36,-293.57 168.12,-275.4 152.08,-261"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="153.91,-259.35 147.07,-256.49 150.64,-262.99 153.91,-259.35"/>
+<text xml:space="preserve" text-anchor="middle" x="182.1" y="-274.86" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- cleanup -->
 <g id="node7" class="node">
 <title>cleanup</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M352.04,-243.49C352.04,-243.49 260,-243.49 260,-243.49 254,-243.49 248,-237.49 248,-231.49 248,-231.49 248,-219.49 248,-219.49 248,-213.49 254,-207.49 260,-207.49 260,-207.49 352.04,-207.49 352.04,-207.49 358.04,-207.49 364.04,-213.49 364.04,-219.49 364.04,-219.49 364.04,-231.49 364.04,-231.49 364.04,-237.49 358.04,-243.49 352.04,-243.49"/>
-<text xml:space="preserve" text-anchor="middle" x="306.02" y="-227.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
-<text xml:space="preserve" text-anchor="middle" x="306.02" y="-215.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore the terminal</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M352.04,-255.49C352.04,-255.49 260,-255.49 260,-255.49 254,-255.49 248,-249.49 248,-243.49 248,-243.49 248,-231.49 248,-231.49 248,-225.49 254,-219.49 260,-219.49 260,-219.49 352.04,-219.49 352.04,-219.49 358.04,-219.49 364.04,-225.49 364.04,-231.49 364.04,-231.49 364.04,-243.49 364.04,-243.49 364.04,-249.49 358.04,-255.49 352.04,-255.49"/>
+<text xml:space="preserve" text-anchor="middle" x="306.02" y="-239.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
+<text xml:space="preserve" text-anchor="middle" x="306.02" y="-227.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore the terminal</text>
 </g>
 <!-- shutdown&#45;&gt;cleanup -->
 <g id="edge3" class="edge">
 <title>shutdown&#45;&gt;cleanup</title>
-<path fill="none" stroke="#8a8a8a" d="M231.29,-289.53C244.45,-278.43 263.76,-262.14 279.45,-248.9"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="281,-250.8 284.77,-244.42 277.84,-247.06 281,-250.8"/>
-<text xml:space="preserve" text-anchor="middle" x="273.53" y="-260.86" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+<path fill="none" stroke="#8a8a8a" d="M230.48,-305.57C243.99,-293.57 264.46,-275.4 280.68,-261"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="282.15,-262.97 285.76,-256.49 278.9,-259.3 282.15,-262.97"/>
+<text xml:space="preserve" text-anchor="middle" x="273.53" y="-274.86" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- input -->
 <g id="node4" class="node">
 <title>input</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M242.04,-174.33C242.04,-174.33 12,-174.33 12,-174.33 6,-174.33 0,-168.33 0,-162.33 0,-162.33 0,-150 0,-150 0,-144 6,-138 12,-138 12,-138 242.04,-138 242.04,-138 248.04,-138 254.04,-144 254.04,-150 254.04,-150 254.04,-162.33 254.04,-162.33 254.04,-168.33 248.04,-174.33 242.04,-174.33"/>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-158.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-146.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys → 5 layers · mouse → hit&#45;test</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M242.04,-182.33C242.04,-182.33 12,-182.33 12,-182.33 6,-182.33 0,-176.33 0,-170.33 0,-170.33 0,-158 0,-158 0,-152 6,-146 12,-146 12,-146 242.04,-146 242.04,-146 248.04,-146 254.04,-152 254.04,-158 254.04,-158 254.04,-170.33 254.04,-170.33 254.04,-176.33 248.04,-182.33 242.04,-182.33"/>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-166.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-154.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys → 5 layers · mouse → hit&#45;test</text>
 </g>
 <!-- resize&#45;&gt;input -->
 <g id="edge4" class="edge">
 <title>resize&#45;&gt;input</title>
-<path fill="none" stroke="#8a8a8a" d="M127.02,-207.5C127.02,-199.87 127.02,-190.71 127.02,-182.3"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-182.43 127.02,-175.43 124.57,-182.43 129.47,-182.43"/>
+<path fill="none" stroke="#8a8a8a" d="M127.02,-219.59C127.02,-210.89 127.02,-200.09 127.02,-190.42"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-190.46 127.02,-183.46 124.57,-190.46 129.47,-190.46"/>
 </g>
 <!-- render -->
 <g id="node5" class="node">
 <title>render</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M227.04,-105C227.04,-105 27,-105 27,-105 21,-105 15,-99 15,-93 15,-93 15,-81 15,-81 15,-75 21,-69 27,-69 27,-69 227.04,-69 227.04,-69 233.04,-69 239.04,-75 239.04,-81 239.04,-81 239.04,-93 239.04,-93 239.04,-99 233.04,-105 227.04,-105"/>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-88.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
-<text xml:space="preserve" text-anchor="middle" x="127.02" y="-76.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">coalesce requests · ≤ App.maxFrameRate</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M227.04,-109C227.04,-109 27,-109 27,-109 21,-109 15,-103 15,-97 15,-97 15,-85 15,-85 15,-79 21,-73 27,-73 27,-73 227.04,-73 227.04,-73 233.04,-73 239.04,-79 239.04,-85 239.04,-85 239.04,-97 239.04,-97 239.04,-103 233.04,-109 227.04,-109"/>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-92.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
+<text xml:space="preserve" text-anchor="middle" x="127.02" y="-80.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">coalesce requests · ≤ App.maxFrameRate</text>
 </g>
 <!-- input&#45;&gt;render -->
 <g id="edge5" class="edge">
 <title>input&#45;&gt;render</title>
-<path fill="none" stroke="#8a8a8a" d="M127.02,-138.22C127.02,-130.6 127.02,-121.46 127.02,-113.08"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-113.22 127.02,-106.22 124.57,-113.22 129.47,-113.22"/>
+<path fill="none" stroke="#8a8a8a" d="M127.02,-146.3C127.02,-137.61 127.02,-126.85 127.02,-117.2"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-117.26 127.02,-110.26 124.57,-117.26 129.47,-117.26"/>
 </g>
 <!-- block -->
 <g id="node6" class="node">
@@ -93,15 +95,15 @@
 <!-- render&#45;&gt;block -->
 <g id="edge6" class="edge">
 <title>render&#45;&gt;block</title>
-<path fill="none" stroke="#8a8a8a" d="M127.02,-69.09C127.02,-61.5 127.02,-52.38 127.02,-44.02"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-44.18 127.02,-37.18 124.57,-44.18 129.47,-44.18"/>
+<path fill="none" stroke="#8a8a8a" d="M127.02,-73.17C127.02,-64.51 127.02,-53.77 127.02,-44.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="129.47,-44.22 127.02,-37.22 124.57,-44.22 129.47,-44.22"/>
 </g>
 <!-- block&#45;&gt;shutdown -->
 <g id="edge7" class="edge">
 <title>block&#45;&gt;shutdown</title>
-<path fill="none" stroke="#8a8a8a" d="M184.85,-35.91C207,-43.94 231.78,-54.91 252.02,-69 320.02,-116.35 347.26,-130 377.02,-207.33 382.82,-222.4 386.28,-230.43 377.02,-243.66 354.11,-276.41 310.91,-290.97 275.02,-297.41"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="275.01,-294.92 268.51,-298.49 275.81,-299.76 275.01,-294.92"/>
-<text xml:space="preserve" text-anchor="middle" x="371.33" y="-152.49" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
+<path fill="none" stroke="#8a8a8a" d="M180.65,-35.99C203.89,-44.87 230.62,-57.21 252.02,-73 320.84,-123.79 347.41,-139.08 377.02,-219.33 382.61,-234.48 386.13,-242.33 377.02,-255.66 353.65,-289.85 308.66,-305.42 272.17,-312.5"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="271.99,-310.04 265.54,-313.69 272.86,-314.86 271.99,-310.04"/>
+<text xml:space="preserve" text-anchor="middle" x="369.85" y="-160.49" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
 </g>
 </g>
 </svg>

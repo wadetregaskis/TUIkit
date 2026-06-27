@@ -6,7 +6,7 @@ How keyboard input flows through TUIkit: from raw terminal bytes to your view ha
 
 TUIkit uses a layered event dispatch system. When a key is pressed, it passes through up to five layers. The first layer that consumes the event wins: remaining layers are skipped. Layer 0 (text input) and Layer 3 (focus system) are mutually exclusive: when a text input element is focused, Layer 0 runs and Layer 3 is skipped.
 
-@Image(source: "keyboard-event-dispatch.png", alt: "Flowchart showing keyboard event dispatch through five layers: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField). Layer 1: Status Bar Items (shortcut-triggered actions). Layer 2: View Handlers (.onKeyPress modifiers, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3: Focus System (focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 4: Default Bindings (quit, theme, appearance). Unmatched events are dropped.")
+@Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart showing keyboard event dispatch through five layers: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField). Layer 1: Status Bar Items (shortcut-triggered actions). Layer 2: View Handlers (.onKeyPress modifiers, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3: Focus System (focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 4: Default Bindings (quit, theme, appearance). Unmatched events are dropped.")
 
 Additionally, `Ctrl+C` (SIGINT) is handled at the OS signal level **before** any of these layers: it always terminates the application.
 

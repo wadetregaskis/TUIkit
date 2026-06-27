@@ -23,7 +23,7 @@ All triggers converge on boolean flags that the main loop checks each iteration.
 
 Each call to `RenderLoop.render()` executes these steps in order:
 
-@Image(source: "render-cycle-pipeline.png", alt: "Diagram showing the 12-step render pipeline: Step 1 clear per-frame state (key handlers, preferences, focus, status bar, app header), Step 2 begin lifecycle/state/cache tracking, Step 3 build environment with all subsystem values and services, Step 4 create render context, Step 5 evaluate scene, Step 6 render view tree, Step 7 build output lines, Step 8 begin buffered frame, Step 9 render app header and diff content, Step 10 render status bar, Step 11 flush frame, Step 12 end tracking (lifecycle onDisappear, state GC, cache cleanup).")
+@Image(source: "render-cycle-pipeline.svg", alt: "Diagram showing the 12-step render pipeline: Step 1 clear per-frame state (key handlers, preferences, focus, status bar, app header), Step 2 begin lifecycle/state/cache tracking, Step 3 build environment with all subsystem values and services, Step 4 create render context, Step 5 evaluate scene, Step 6 render view tree, Step 7 build output lines, Step 8 begin buffered frame, Step 9 render app header and diff content, Step 10 render status bar, Step 11 flush frame, Step 12 end tracking (lifecycle onDisappear, state GC, cache cleanup).")
 
 ### Step 1: Clear Per-Frame State
 
@@ -192,7 +192,7 @@ func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
 }
 ```
 
-@Image(source: "render-cycle-dispatch.png", alt: "Decision tree showing the dual rendering dispatch: renderToBuffer checks Renderable conformance first, then body recursion, then returns an empty buffer as fallback.")
+@Image(source: "render-cycle-dispatch.svg", alt: "Decision tree showing the dual rendering dispatch: renderToBuffer checks Renderable conformance first, then body recursion, then returns an empty buffer as fallback.")
 
 > Important: If a view conforms to `Renderable`, its `body` is never evaluated. This is intentional: `Renderable` views produce output directly and don't need compositional decomposition.
 

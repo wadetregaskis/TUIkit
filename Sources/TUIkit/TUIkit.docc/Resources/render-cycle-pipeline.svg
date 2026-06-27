@@ -1,0 +1,158 @@
+<svg width="222pt" height="836pt"
+ viewBox="0.00 0.00 222.00 836.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 832)">
+<title>render&#45;cycle&#45;pipeline</title>
+<!-- s1 -->
+<g id="node1" class="node">
+<title>s1</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M176.04,-828C176.04,-828 38.25,-828 38.25,-828 32.25,-828 26.25,-822 26.25,-816 26.25,-816 26.25,-804 26.25,-804 26.25,-798 32.25,-792 38.25,-792 38.25,-792 176.04,-792 176.04,-792 182.04,-792 188.04,-798 188.04,-804 188.04,-804 188.04,-816 188.04,-816 188.04,-822 182.04,-828 176.04,-828"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-811.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">1 · Clear per&#45;frame state</text>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-799.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">handlers · prefs · focus · bars</text>
+</g>
+<!-- s2 -->
+<g id="node2" class="node">
+<title>s2</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M160.29,-756C160.29,-756 54,-756 54,-756 48,-756 42,-750 42,-744 42,-744 42,-732 42,-732 42,-726 48,-720 54,-720 54,-720 160.29,-720 160.29,-720 166.29,-720 172.29,-726 172.29,-732 172.29,-732 172.29,-744 172.29,-744 172.29,-750 166.29,-756 160.29,-756"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-739.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">2 · Begin tracking</text>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-727.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">lifecycle · state · cache</text>
+</g>
+<!-- s1&#45;&gt;s2 -->
+<g id="edge1" class="edge">
+<title>s1&#45;&gt;s2</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-792.05C107.14,-783.71 107.14,-773.49 107.14,-764.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-764.3 107.15,-757.3 104.7,-764.3 109.6,-764.3"/>
+</g>
+<!-- s3 -->
+<g id="node3" class="node">
+<title>s3</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M174.91,-684C174.91,-684 39.37,-684 39.37,-684 33.38,-684 27.38,-678 27.38,-672 27.38,-672 27.38,-660 27.38,-660 27.38,-654 33.38,-648 39.38,-648 39.38,-648 174.91,-648 174.91,-648 180.91,-648 186.91,-654 186.91,-660 186.91,-660 186.91,-672 186.91,-672 186.91,-678 180.91,-684 174.91,-684"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-667.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">3 · Build environment</text>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-655.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">subsystem values + services</text>
+</g>
+<!-- s2&#45;&gt;s3 -->
+<g id="edge2" class="edge">
+<title>s2&#45;&gt;s3</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-720.05C107.14,-711.71 107.14,-701.49 107.14,-692.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-692.3 107.15,-685.3 104.7,-692.3 109.6,-692.3"/>
+</g>
+<!-- s4 -->
+<g id="node4" class="node">
+<title>s4</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M166.66,-612C166.66,-612 47.63,-612 47.63,-612 41.62,-612 35.62,-606 35.62,-600 35.62,-600 35.62,-588 35.62,-588 35.62,-582 41.62,-576 47.62,-576 47.62,-576 166.66,-576 166.66,-576 172.66,-576 178.66,-582 178.66,-588 178.66,-588 178.66,-600 178.66,-600 178.66,-606 172.66,-612 166.66,-612"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-589.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">4 · Create render context</text>
+</g>
+<!-- s3&#45;&gt;s4 -->
+<g id="edge3" class="edge">
+<title>s3&#45;&gt;s4</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-648.05C107.14,-639.71 107.14,-629.49 107.14,-620.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-620.3 107.15,-613.3 104.7,-620.3 109.6,-620.3"/>
+</g>
+<!-- s5 -->
+<g id="node5" class="node">
+<title>s5</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M150.91,-540C150.91,-540 63.38,-540 63.38,-540 57.37,-540 51.37,-534 51.37,-528 51.37,-528 51.37,-516 51.37,-516 51.37,-510 57.37,-504 63.37,-504 63.37,-504 150.91,-504 150.91,-504 156.91,-504 162.91,-510 162.91,-516 162.91,-516 162.91,-528 162.91,-528 162.91,-534 156.91,-540 150.91,-540"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-517.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">5 · Evaluate scene</text>
+</g>
+<!-- s4&#45;&gt;s5 -->
+<g id="edge4" class="edge">
+<title>s4&#45;&gt;s5</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-576.05C107.14,-567.71 107.14,-557.49 107.14,-548.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-548.3 107.15,-541.3 104.7,-548.3 109.6,-548.3"/>
+</g>
+<!-- s6 -->
+<g id="node6" class="node">
+<title>s6</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M155.41,-468C155.41,-468 58.87,-468 58.87,-468 52.88,-468 46.88,-462 46.88,-456 46.88,-456 46.88,-444 46.88,-444 46.88,-438 52.88,-432 58.88,-432 58.88,-432 155.41,-432 155.41,-432 161.41,-432 167.41,-438 167.41,-444 167.41,-444 167.41,-456 167.41,-456 167.41,-462 161.41,-468 155.41,-468"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-445.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">6 · Render view tree</text>
+</g>
+<!-- s5&#45;&gt;s6 -->
+<g id="edge5" class="edge">
+<title>s5&#45;&gt;s6</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-504.05C107.14,-495.71 107.14,-485.49 107.14,-476.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-476.3 107.15,-469.3 104.7,-476.3 109.6,-476.3"/>
+</g>
+<!-- s7 -->
+<g id="node7" class="node">
+<title>s7</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M155.04,-396C155.04,-396 59.25,-396 59.25,-396 53.25,-396 47.25,-390 47.25,-384 47.25,-384 47.25,-372 47.25,-372 47.25,-366 53.25,-360 59.25,-360 59.25,-360 155.04,-360 155.04,-360 161.04,-360 167.04,-366 167.04,-372 167.04,-372 167.04,-384 167.04,-384 167.04,-390 161.04,-396 155.04,-396"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-373.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">7 · Build output lines</text>
+</g>
+<!-- s6&#45;&gt;s7 -->
+<g id="edge6" class="edge">
+<title>s6&#45;&gt;s7</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-432.05C107.14,-423.71 107.14,-413.49 107.14,-404.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-404.3 107.15,-397.3 104.7,-404.3 109.6,-404.3"/>
+</g>
+<!-- s8 -->
+<g id="node8" class="node">
+<title>s8</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M164.79,-324C164.79,-324 49.5,-324 49.5,-324 43.5,-324 37.5,-318 37.5,-312 37.5,-312 37.5,-300 37.5,-300 37.5,-294 43.5,-288 49.5,-288 49.5,-288 164.79,-288 164.79,-288 170.79,-288 176.79,-294 176.79,-300 176.79,-300 176.79,-312 176.79,-312 176.79,-318 170.79,-324 164.79,-324"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-301.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">8 · Begin buffered frame</text>
+</g>
+<!-- s7&#45;&gt;s8 -->
+<g id="edge7" class="edge">
+<title>s7&#45;&gt;s8</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-360.05C107.14,-351.71 107.14,-341.49 107.14,-332.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-332.3 107.15,-325.3 104.7,-332.3 109.6,-332.3"/>
+</g>
+<!-- s9 -->
+<g id="node9" class="node">
+<title>s9</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M174.54,-252C174.54,-252 39.75,-252 39.75,-252 33.75,-252 27.75,-246 27.75,-240 27.75,-240 27.75,-228 27.75,-228 27.75,-222 33.75,-216 39.75,-216 39.75,-216 174.54,-216 174.54,-216 180.54,-216 186.54,-222 186.54,-228 186.54,-228 186.54,-240 186.54,-240 186.54,-246 180.54,-252 174.54,-252"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-229.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">9 · App header + diff content</text>
+</g>
+<!-- s8&#45;&gt;s9 -->
+<g id="edge8" class="edge">
+<title>s8&#45;&gt;s9</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-288.05C107.14,-279.71 107.14,-269.49 107.14,-260.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-260.3 107.15,-253.3 104.7,-260.3 109.6,-260.3"/>
+</g>
+<!-- s10 -->
+<g id="node10" class="node">
+<title>s10</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M160.29,-180C160.29,-180 54,-180 54,-180 48,-180 42,-174 42,-168 42,-168 42,-156 42,-156 42,-150 48,-144 54,-144 54,-144 160.29,-144 160.29,-144 166.29,-144 172.29,-150 172.29,-156 172.29,-156 172.29,-168 172.29,-168 172.29,-174 166.29,-180 160.29,-180"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-157.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">10 · Render status bar</text>
+</g>
+<!-- s9&#45;&gt;s10 -->
+<g id="edge9" class="edge">
+<title>s9&#45;&gt;s10</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-216.05C107.14,-207.71 107.14,-197.49 107.14,-188.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-188.3 107.15,-181.3 104.7,-188.3 109.6,-188.3"/>
+</g>
+<!-- s11 -->
+<g id="node11" class="node">
+<title>s11</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M149.79,-108C149.79,-108 64.5,-108 64.5,-108 58.5,-108 52.5,-102 52.5,-96 52.5,-96 52.5,-84 52.5,-84 52.5,-78 58.5,-72 64.5,-72 64.5,-72 149.79,-72 149.79,-72 155.79,-72 161.79,-78 161.79,-84 161.79,-84 161.79,-96 161.79,-96 161.79,-102 155.79,-108 149.79,-108"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-91.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">11 · Flush frame</text>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-79.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">one write() syscall</text>
+</g>
+<!-- s10&#45;&gt;s11 -->
+<g id="edge10" class="edge">
+<title>s10&#45;&gt;s11</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-144.05C107.14,-135.71 107.14,-125.49 107.14,-116.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-116.3 107.15,-109.3 104.7,-116.3 109.6,-116.3"/>
+</g>
+<!-- s12 -->
+<g id="node12" class="node">
+<title>s12</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M202.29,-36C202.29,-36 12,-36 12,-36 6,-36 0,-30 0,-24 0,-24 0,-12 0,-12 0,-6 6,0 12,0 12,0 202.29,0 202.29,0 208.29,0 214.29,-6 214.29,-12 214.29,-12 214.29,-24 214.29,-24 214.29,-30 208.29,-36 202.29,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">12 · End tracking</text>
+<text xml:space="preserve" text-anchor="middle" x="107.14" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">onDisappear · state GC · cache cleanup</text>
+</g>
+<!-- s11&#45;&gt;s12 -->
+<g id="edge11" class="edge">
+<title>s11&#45;&gt;s12</title>
+<path fill="none" stroke="#8a8a8a" d="M107.14,-72.05C107.14,-63.71 107.14,-53.49 107.14,-44.25"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="109.6,-44.3 107.15,-37.3 104.7,-44.3 109.6,-44.3"/>
+</g>
+</g>
+</svg>

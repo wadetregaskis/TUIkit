@@ -33,13 +33,24 @@ struct Edge {
     /// A back-edge (e.g. a loop): drawn without influencing rank order, so it
     /// doesn't distort the layout.
     var loop: Bool
+    /// Drawn dashed — e.g. a runtime reference rather than an ownership edge.
+    var dashed: Bool
 
-    init(_ from: String, _ to: String, label: String? = nil, loop: Bool = false) {
+    init(_ from: String, _ to: String, label: String? = nil,
+         loop: Bool = false, dashed: Bool = false) {
         self.from = from
         self.to = to
         self.label = label
         self.loop = loop
+        self.dashed = dashed
     }
+}
+
+/// A labelled, rounded box drawn around a group of nodes (a Graphviz cluster) —
+/// e.g. the children a container owns.
+struct Cluster {
+    let label: String
+    let nodes: [String]
 }
 
 struct Diagram {
@@ -47,6 +58,8 @@ struct Diagram {
     let title: String     // SVG accessibility label
     var nodes: [Node]
     var edges: [Edge]
+    var rankdir: String = "TB"     // "TB" (top→bottom) or "LR" (left→right)
+    var clusters: [Cluster] = []
 }
 
 extension Diagram {
@@ -59,26 +72,45 @@ extension Diagram {
         func label(_ n: Node) -> String {
             ([n.title] + n.detail).map(esc).joined(separator: "\\n")
         }
-
-        var out: [String] = []
-        out.append("digraph \"\(esc(name))\" {")
-        out.append("  rankdir=TB; bgcolor=\"transparent\"; nodesep=0.35; ranksep=0.45;")
-        out.append("  node [shape=box, style=\"rounded,filled\", penwidth=0, "
-            + "fontname=\"Helvetica\", fontsize=11, fontcolor=\"white\", margin=\"0.16,0.07\"];")
-        out.append("  edge [color=\"#8a8a8a\", fontname=\"Helvetica\", fontsize=9, "
-            + "fontcolor=\"#555555\", arrowsize=0.7];")
-        for n in nodes {
+        func nodeLine(_ n: Node, indent: String) -> String {
             var attrs = ["label=\"\(label(n))\"", "fillcolor=\"\(n.kind.fill)\""]
             if n.kind == .decision {
                 attrs.append("shape=diamond")
                 attrs.append("margin=\"0.04,0.0\"")
             }
-            out.append("  \"\(esc(n.id))\" [\(attrs.joined(separator: ", "))];")
+            return "\(indent)\"\(esc(n.id))\" [\(attrs.joined(separator: ", "))];"
+        }
+
+        var out: [String] = []
+        out.append("digraph \"\(esc(name))\" {")
+        out.append("  rankdir=\(rankdir); bgcolor=\"transparent\"; nodesep=0.35; ranksep=0.5;")
+        out.append("  node [shape=box, style=\"rounded,filled\", penwidth=0, "
+            + "fontname=\"Helvetica\", fontsize=11, fontcolor=\"white\", margin=\"0.16,0.07\"];")
+        out.append("  edge [color=\"#8a8a8a\", fontname=\"Helvetica\", fontsize=9, "
+            + "fontcolor=\"#555555\", arrowsize=0.7];")
+
+        // Nodes that belong to a cluster are emitted inside its subgraph.
+        let clustered = Set(clusters.flatMap(\.nodes))
+        for (i, c) in clusters.enumerated() {
+            out.append("  subgraph \"cluster_\(i)\" {")
+            out.append("    label=\"\(esc(c.label))\"; labelloc=t; labeljust=l; "
+                + "fontname=\"Helvetica\"; fontsize=10; fontcolor=\"#888888\"; "
+                + "color=\"#c8c8c8\"; style=\"rounded\"; margin=10;")
+            for id in c.nodes {
+                if let n = nodes.first(where: { $0.id == id }) {
+                    out.append(nodeLine(n, indent: "    "))
+                }
+            }
+            out.append("  }")
+        }
+        for n in nodes where !clustered.contains(n.id) {
+            out.append(nodeLine(n, indent: "  "))
         }
         for e in edges {
             var attrs: [String] = []
             if let l = e.label { attrs.append("label=\"\(esc(l))\"") }
             if e.loop { attrs.append("constraint=false") }
+            if e.dashed { attrs.append("style=dashed") }
             let suffix = attrs.isEmpty ? "" : " [\(attrs.joined(separator: ", "))]"
             out.append("  \"\(esc(e.from))\" -> \"\(esc(e.to))\"\(suffix);")
         }

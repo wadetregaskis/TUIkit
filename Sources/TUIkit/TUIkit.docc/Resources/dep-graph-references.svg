@@ -1,0 +1,182 @@
+<svg width="314pt" height="618pt"
+ viewBox="0.00 0.00 314.00 618.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 614)">
+<title>dep&#45;graph&#45;references</title>
+<!-- render -->
+<g id="node1" class="node">
+<title>render</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M72.16,-289C72.16,-289 13.12,-289 13.12,-289 7.12,-289 1.12,-283 1.12,-277 1.12,-277 1.12,-265 1.12,-265 1.12,-259 7.12,-253 13.12,-253 13.12,-253 72.16,-253 72.16,-253 78.16,-253 84.16,-259 84.16,-265 84.16,-265 84.16,-277 84.16,-277 84.16,-283 78.16,-289 72.16,-289"/>
+<text xml:space="preserve" text-anchor="middle" x="42.64" y="-266.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderLoop</text>
+</g>
+<!-- terminal -->
+<g id="node3" class="node">
+<title>terminal</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M264.7,-341C264.7,-341 225.16,-341 225.16,-341 219.16,-341 213.16,-335 213.16,-329 213.16,-329 213.16,-317 213.16,-317 213.16,-311 219.16,-305 225.16,-305 225.16,-305 264.7,-305 264.7,-305 270.7,-305 276.7,-311 276.7,-317 276.7,-317 276.7,-329 276.7,-329 276.7,-335 270.7,-341 264.7,-341"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-318.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal</text>
+</g>
+<!-- render&#45;&gt;terminal -->
+<g id="edge1" class="edge">
+<title>render&#45;&gt;terminal</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M83.91,-275.33C108.09,-278.5 139.3,-283.61 166.29,-291.25 179.52,-295 193.55,-300.3 205.99,-305.5"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="204.72,-307.62 212.12,-308.11 206.65,-303.11 204.72,-307.62"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-292.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">writes output</text>
+</g>
+<!-- statusBar -->
+<g id="node4" class="node">
+<title>statusBar</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M281.2,-610C281.2,-610 208.67,-610 208.67,-610 202.67,-610 196.67,-604 196.67,-598 196.67,-598 196.67,-586 196.67,-586 196.67,-580 202.67,-574 208.67,-574 208.67,-574 281.2,-574 281.2,-574 287.2,-574 293.2,-580 293.2,-586 293.2,-586 293.2,-598 293.2,-598 293.2,-604 287.2,-610 281.2,-610"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-587.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">StatusBarState</text>
+</g>
+<!-- render&#45;&gt;statusBar -->
+<g id="edge2" class="edge">
+<title>render&#45;&gt;statusBar</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M43.82,-288.72C45.12,-328.39 53.54,-425.48 103.29,-484 123.29,-507.52 145.21,-490.7 166.29,-513.25 181.5,-529.51 169.56,-543.3 184.29,-560 187.3,-563.41 190.77,-566.53 194.49,-569.35"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="193,-571.31 200.15,-573.27 195.79,-567.28 193,-571.31"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-514.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">inject env</text>
+</g>
+<!-- appHeader -->
+<g id="node5" class="node">
+<title>appHeader</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M284.95,-36C284.95,-36 204.92,-36 204.92,-36 198.92,-36 192.92,-30 192.92,-24 192.92,-24 192.92,-12 192.92,-12 192.92,-6 198.92,0 204.92,0 204.92,0 284.95,0 284.95,0 290.95,0 296.95,-6 296.95,-12 296.95,-12 296.95,-24 296.95,-24 296.95,-30 290.95,-36 284.95,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-13.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppHeaderState</text>
+</g>
+<!-- render&#45;&gt;appHeader -->
+<g id="edge3" class="edge">
+<title>render&#45;&gt;appHeader</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M46.09,-253.15C51.38,-220.19 66.51,-148.87 103.29,-102 125.29,-73.96 159.45,-53.25 188.59,-39.4"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="189.57,-41.65 194.9,-36.49 187.52,-37.2 189.57,-41.65"/>
+</g>
+<!-- focus -->
+<g id="node6" class="node">
+<title>focus</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M280.45,-547C280.45,-547 209.42,-547 209.42,-547 203.42,-547 197.42,-541 197.42,-535 197.42,-535 197.42,-523 197.42,-523 197.42,-517 203.42,-511 209.42,-511 209.42,-511 280.45,-511 280.45,-511 286.45,-511 292.45,-517 292.45,-523 292.45,-523 292.45,-535 292.45,-535 292.45,-541 286.45,-547 280.45,-547"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-524.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">FocusManager</text>
+</g>
+<!-- render&#45;&gt;focus -->
+<g id="edge4" class="edge">
+<title>render&#45;&gt;focus</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M47.64,-288.87C54.79,-317.59 72,-374.68 103.29,-413 124.73,-439.26 144.4,-430.12 166.29,-456 178.62,-470.57 171.38,-480.94 184.29,-495 188.22,-499.29 192.83,-503.17 197.7,-506.66"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="196.03,-508.49 203.21,-510.33 198.74,-504.41 196.03,-508.49"/>
+</g>
+<!-- themes -->
+<g id="node7" class="node">
+<title>themes</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M290.58,-482C290.58,-482 199.29,-482 199.29,-482 193.29,-482 187.29,-476 187.29,-470 187.29,-470 187.29,-458 187.29,-458 187.29,-452 193.29,-446 199.29,-446 199.29,-446 290.58,-446 290.58,-446 296.58,-446 302.58,-452 302.58,-458 302.58,-458 302.58,-470 302.58,-470 302.58,-476 296.58,-482 290.58,-482"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-459.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ThemeManager ×2</text>
+</g>
+<!-- render&#45;&gt;themes -->
+<g id="edge5" class="edge">
+<title>render&#45;&gt;themes</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M57.46,-288.98C81.22,-319.18 132.3,-380.99 184.29,-424 191.72,-430.15 200.11,-436.23 208.19,-441.73"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="206.44,-443.51 213.62,-445.36 209.16,-439.43 206.44,-443.51"/>
+</g>
+<!-- lifecycle -->
+<g id="node8" class="node">
+<title>lifecycle</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M286.45,-280C286.45,-280 203.42,-280 203.42,-280 197.42,-280 191.42,-274 191.42,-268 191.42,-268 191.42,-256 191.42,-256 191.42,-250 197.42,-244 203.42,-244 203.42,-244 286.45,-244 286.45,-244 292.45,-244 298.45,-250 298.45,-256 298.45,-256 298.45,-268 298.45,-268 298.45,-274 292.45,-280 286.45,-280"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-257.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">LifecycleManager</text>
+</g>
+<!-- render&#45;&gt;lifecycle -->
+<g id="edge6" class="edge">
+<title>render&#45;&gt;lifecycle</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M83.96,-255.73C90.34,-253.88 96.94,-252.27 103.29,-251.25 129.36,-247.05 158.41,-248.29 183.32,-251.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="182.84,-253.55 190.09,-251.98 183.44,-248.69 182.84,-253.55"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-252.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
+</g>
+<!-- stateStore -->
+<g id="node9" class="node">
+<title>stateStore</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M276.33,-219C276.33,-219 213.54,-219 213.54,-219 207.54,-219 201.54,-213 201.54,-207 201.54,-207 201.54,-195 201.54,-195 201.54,-189 207.54,-183 213.54,-183 213.54,-183 276.33,-183 276.33,-183 282.33,-183 288.33,-189 288.33,-195 288.33,-195 288.33,-207 288.33,-207 288.33,-213 282.33,-219 276.33,-219"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-196.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">StateStorage</text>
+</g>
+<!-- render&#45;&gt;stateStore -->
+<g id="edge7" class="edge">
+<title>render&#45;&gt;stateStore</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M67.86,-253.04C78.32,-245.99 90.96,-238.39 103.29,-233.25 132,-221.29 165.94,-213.34 193.29,-208.33"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="193.6,-210.77 200.06,-207.13 192.74,-205.94 193.6,-210.77"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-234.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
+</g>
+<!-- cache -->
+<g id="node10" class="node">
+<title>cache</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M278.2,-158C278.2,-158 211.67,-158 211.67,-158 205.67,-158 199.67,-152 199.67,-146 199.67,-146 199.67,-134 199.67,-134 199.67,-128 205.67,-122 211.67,-122 211.67,-122 278.2,-122 278.2,-122 284.2,-122 290.2,-128 290.2,-134 290.2,-134 290.2,-146 290.2,-146 290.2,-152 284.2,-158 278.2,-158"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-135.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderCache</text>
+</g>
+<!-- render&#45;&gt;cache -->
+<g id="edge8" class="edge">
+<title>render&#45;&gt;cache</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M54.75,-253.29C65.51,-237.35 83.12,-214.2 103.29,-199.25 129.94,-179.49 164.17,-164.88 192.19,-155.12"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="192.65,-157.55 198.49,-152.98 191.07,-152.91 192.65,-157.55"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-200.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin/end pass</text>
+</g>
+<!-- prefs -->
+<g id="node11" class="node">
+<title>prefs</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M290.2,-97C290.2,-97 199.67,-97 199.67,-97 193.67,-97 187.67,-91 187.67,-85 187.67,-85 187.67,-73 187.67,-73 187.67,-67 193.67,-61 199.67,-61 199.67,-61 290.2,-61 290.2,-61 296.2,-61 302.2,-67 302.2,-73 302.2,-73 302.2,-85 302.2,-85 302.2,-91 296.2,-97 290.2,-97"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-74.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">PreferenceStorage</text>
+</g>
+<!-- render&#45;&gt;prefs -->
+<g id="edge9" class="edge">
+<title>render&#45;&gt;prefs</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M48.4,-253.13C56.08,-227.3 73.45,-179.32 103.29,-149.25 124.81,-127.56 154.41,-111.41 180.9,-100.1"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="181.72,-102.41 187.24,-97.47 179.84,-97.88 181.72,-102.41"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-150.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">begin pass</text>
+</g>
+<!-- keyDispatch -->
+<g id="node12" class="node">
+<title>keyDispatch</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M293.58,-411C293.58,-411 196.29,-411 196.29,-411 190.29,-411 184.29,-405 184.29,-399 184.29,-399 184.29,-387 184.29,-387 184.29,-381 190.29,-375 196.29,-375 196.29,-375 293.58,-375 293.58,-375 299.58,-375 305.58,-381 305.58,-387 305.58,-387 305.58,-399 305.58,-399 305.58,-405 299.58,-411 293.58,-411"/>
+<text xml:space="preserve" text-anchor="middle" x="244.94" y="-388.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">KeyEventDispatcher</text>
+</g>
+<!-- render&#45;&gt;keyDispatch -->
+<g id="edge10" class="edge">
+<title>render&#45;&gt;keyDispatch</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M77.58,-288.97C85.95,-293.31 94.91,-297.88 103.29,-302 130.99,-315.62 142.06,-312.13 166.29,-331.25 176.41,-339.24 174.77,-345.3 184.29,-354 190.79,-359.94 198.29,-365.6 205.73,-370.66"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="204.06,-372.49 211.25,-374.31 206.76,-368.4 204.06,-372.49"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-332.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">clear handlers</text>
+</g>
+<!-- input -->
+<g id="node2" class="node">
+<title>input</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M73.29,-531C73.29,-531 12,-531 12,-531 6,-531 0,-525 0,-519 0,-519 0,-507 0,-507 0,-501 6,-495 12,-495 12,-495 73.29,-495 73.29,-495 79.29,-495 85.29,-501 85.29,-507 85.29,-507 85.29,-519 85.29,-519 85.29,-525 79.29,-531 73.29,-531"/>
+<text xml:space="preserve" text-anchor="middle" x="42.64" y="-508.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">InputHandler</text>
+</g>
+<!-- input&#45;&gt;statusBar -->
+<g id="edge12" class="edge">
+<title>input&#45;&gt;statusBar</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M76.03,-530.96C84.76,-535.48 94.28,-540.15 103.29,-544 130.92,-555.81 162.51,-566.81 188.75,-575.29"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="187.85,-577.58 195.27,-577.38 189.35,-572.91 187.85,-577.58"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-568.33" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L1</text>
+</g>
+<!-- input&#45;&gt;focus -->
+<g id="edge11" class="edge">
+<title>input&#45;&gt;focus</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M85.24,-521.48C91.28,-522.47 97.43,-523.36 103.29,-524 131.56,-527.09 163.2,-528.41 189.3,-528.92"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="189.02,-531.37 196.06,-529.03 189.1,-526.47 189.02,-531.37"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-529.43" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L0 + L3</text>
+</g>
+<!-- input&#45;&gt;themes -->
+<g id="edge14" class="edge">
+<title>input&#45;&gt;themes</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M64.56,-495.12C75.39,-486.93 89.27,-478 103.29,-473.25 127.23,-465.13 154.76,-462.06 179.08,-461.29"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="179.07,-463.74 186.02,-461.14 178.97,-458.84 179.07,-463.74"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-474.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L4</text>
+</g>
+<!-- input&#45;&gt;keyDispatch -->
+<g id="edge13" class="edge">
+<title>input&#45;&gt;keyDispatch</title>
+<path fill="none" stroke="#8a8a8a" stroke-dasharray="5,2" d="M55.75,-495.23C66.67,-480.37 83.95,-459.53 103.29,-446.25 125.33,-431.11 152.25,-419.56 176.61,-411.16"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="177.13,-413.57 182.99,-409.02 175.57,-408.92 177.13,-413.57"/>
+<text xml:space="preserve" text-anchor="middle" x="134.79" y="-447.45" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">L2</text>
+</g>
+</g>
+</svg>

@@ -79,6 +79,8 @@ func postProcess(_ svg: String) -> String {
       .edge text { fill: #cdd1d5; }
       .edge path { stroke: #9aa0a6; }
       .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+      .cluster text { fill: #9aa0a6; }
+      .cluster polygon, .cluster path { stroke: #5a5a5a; }
     }
     </style>
     """

@@ -1,0 +1,207 @@
+<svg width="815pt" height="550pt"
+ viewBox="0.00 0.00 815.00 550.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 546)">
+<title>lifecycle&#45;subsystem&#45;init</title>
+<g id="clust1" class="cluster">
+<title>cluster_0</title>
+<path fill="none" stroke="#c8c8c8" d="M669.95,-8C669.95,-8 787.24,-8 787.24,-8 793.24,-8 799.24,-14 799.24,-20 799.24,-20 799.24,-296 799.24,-296 799.24,-302 793.24,-308 787.24,-308 787.24,-308 669.95,-308 669.95,-308 663.95,-308 657.95,-302 657.95,-296 657.95,-296 657.95,-20 657.95,-20 657.95,-14 663.95,-8 669.95,-8"/>
+</g>
+<!-- lifecycle -->
+<g id="node1" class="node">
+<title>lifecycle</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M770.11,-54C770.11,-54 687.07,-54 687.07,-54 681.07,-54 675.07,-48 675.07,-42 675.07,-42 675.07,-30 675.07,-30 675.07,-24 681.07,-18 687.07,-18 687.07,-18 770.11,-18 770.11,-18 776.11,-18 782.11,-24 782.11,-30 782.11,-30 782.11,-42 782.11,-42 782.11,-48 776.11,-54 770.11,-54"/>
+<text xml:space="preserve" text-anchor="middle" x="728.59" y="-31.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">LifecycleManager</text>
+</g>
+<!-- keyDispatch -->
+<g id="node2" class="node">
+<title>keyDispatch</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M777.24,-115C777.24,-115 679.95,-115 679.95,-115 673.95,-115 667.95,-109 667.95,-103 667.95,-103 667.95,-91 667.95,-91 667.95,-85 673.95,-79 679.95,-79 679.95,-79 777.24,-79 777.24,-79 783.24,-79 789.24,-85 789.24,-91 789.24,-91 789.24,-103 789.24,-103 789.24,-109 783.24,-115 777.24,-115"/>
+<text xml:space="preserve" text-anchor="middle" x="728.59" y="-92.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">KeyEventDispatcher</text>
+</g>
+<!-- prefs -->
+<g id="node3" class="node">
+<title>prefs</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M773.86,-176C773.86,-176 683.32,-176 683.32,-176 677.32,-176 671.32,-170 671.32,-164 671.32,-164 671.32,-152 671.32,-152 671.32,-146 677.32,-140 683.32,-140 683.32,-140 773.86,-140 773.86,-140 779.86,-140 785.86,-146 785.86,-152 785.86,-152 785.86,-164 785.86,-164 785.86,-170 779.86,-176 773.86,-176"/>
+<text xml:space="preserve" text-anchor="middle" x="728.59" y="-153.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">PreferenceStorage</text>
+</g>
+<!-- stateStore -->
+<g id="node4" class="node">
+<title>stateStore</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M759.99,-237C759.99,-237 697.2,-237 697.2,-237 691.2,-237 685.2,-231 685.2,-225 685.2,-225 685.2,-213 685.2,-213 685.2,-207 691.2,-201 697.2,-201 697.2,-201 759.99,-201 759.99,-201 765.99,-201 771.99,-207 771.99,-213 771.99,-213 771.99,-225 771.99,-225 771.99,-231 765.99,-237 759.99,-237"/>
+<text xml:space="preserve" text-anchor="middle" x="728.59" y="-214.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">StateStorage</text>
+</g>
+<!-- cache -->
+<g id="node5" class="node">
+<title>cache</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M761.86,-298C761.86,-298 695.32,-298 695.32,-298 689.32,-298 683.32,-292 683.32,-286 683.32,-286 683.32,-274 683.32,-274 683.32,-268 689.32,-262 695.32,-262 695.32,-262 761.86,-262 761.86,-262 767.86,-262 773.86,-268 773.86,-274 773.86,-274 773.86,-286 773.86,-286 773.86,-292 767.86,-298 761.86,-298"/>
+<text xml:space="preserve" text-anchor="middle" x="728.59" y="-275.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">RenderCache</text>
+</g>
+<!-- main -->
+<g id="node6" class="node">
+<title>main</title>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M45.54,-359C45.54,-359 12,-359 12,-359 6,-359 0,-353 0,-347 0,-347 0,-335 0,-335 0,-329 6,-323 12,-323 12,-323 45.54,-323 45.54,-323 51.54,-323 57.54,-329 57.54,-335 57.54,-335 57.54,-347 57.54,-347 57.54,-353 51.54,-359 45.54,-359"/>
+<text xml:space="preserve" text-anchor="middle" x="28.77" y="-336.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">@main</text>
+</g>
+<!-- appMain -->
+<g id="node7" class="node">
+<title>appMain</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M157.83,-359C157.83,-359 105.54,-359 105.54,-359 99.54,-359 93.54,-353 93.54,-347 93.54,-347 93.54,-335 93.54,-335 93.54,-329 99.54,-323 105.54,-323 105.54,-323 157.83,-323 157.83,-323 163.83,-323 169.83,-329 169.83,-335 169.83,-335 169.83,-347 169.83,-347 169.83,-353 163.83,-359 157.83,-359"/>
+<text xml:space="preserve" text-anchor="middle" x="131.68" y="-336.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">App.main()</text>
+</g>
+<!-- main&#45;&gt;appMain -->
+<g id="edge1" class="edge">
+<title>main&#45;&gt;appMain</title>
+<path fill="none" stroke="#8a8a8a" d="M57.35,-341C66.01,-341 75.82,-341 85.38,-341"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="85.17,-343.45 92.17,-341 85.17,-338.55 85.17,-343.45"/>
+</g>
+<!-- inst -->
+<g id="node8" class="node">
+<title>inst</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M324.87,-359C324.87,-359 217.83,-359 217.83,-359 211.83,-359 205.83,-353 205.83,-347 205.83,-347 205.83,-335 205.83,-335 205.83,-329 211.83,-323 217.83,-323 217.83,-323 324.87,-323 324.87,-323 330.87,-323 336.87,-329 336.87,-335 336.87,-335 336.87,-347 336.87,-347 336.87,-353 330.87,-359 324.87,-359"/>
+<text xml:space="preserve" text-anchor="middle" x="271.35" y="-342.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Self()</text>
+<text xml:space="preserve" text-anchor="middle" x="271.35" y="-330.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">make the app instance</text>
+</g>
+<!-- appMain&#45;&gt;inst -->
+<g id="edge2" class="edge">
+<title>appMain&#45;&gt;inst</title>
+<path fill="none" stroke="#8a8a8a" d="M169.58,-341C178.26,-341 187.82,-341 197.48,-341"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="197.47,-343.45 204.47,-341 197.47,-338.55 197.47,-343.45"/>
+</g>
+<!-- init -->
+<g id="node9" class="node">
+<title>init</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M462.66,-359C462.66,-359 384.87,-359 384.87,-359 378.87,-359 372.87,-353 372.87,-347 372.87,-347 372.87,-335 372.87,-335 372.87,-329 378.87,-323 384.87,-323 384.87,-323 462.66,-323 462.66,-323 468.66,-323 474.66,-329 474.66,-335 474.66,-335 474.66,-347 474.66,-347 474.66,-353 468.66,-359 462.66,-359"/>
+<text xml:space="preserve" text-anchor="middle" x="423.76" y="-336.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppRunner.init()</text>
+</g>
+<!-- inst&#45;&gt;init -->
+<g id="edge3" class="edge">
+<title>inst&#45;&gt;init</title>
+<path fill="none" stroke="#8a8a8a" d="M336.58,-341C345.99,-341 355.64,-341 364.92,-341"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="364.8,-343.45 371.8,-341 364.8,-338.55 364.8,-343.45"/>
+</g>
+<!-- terminal -->
+<g id="node10" class="node">
+<title>terminal</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M591.07,-542C591.07,-542 551.53,-542 551.53,-542 545.53,-542 539.53,-536 539.53,-530 539.53,-530 539.53,-518 539.53,-518 539.53,-512 545.53,-506 551.53,-506 551.53,-506 591.07,-506 591.07,-506 597.07,-506 603.07,-512 603.07,-518 603.07,-518 603.07,-530 603.07,-530 603.07,-536 597.07,-542 591.07,-542"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-519.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal</text>
+</g>
+<!-- init&#45;&gt;terminal -->
+<g id="edge4" class="edge">
+<title>init&#45;&gt;terminal</title>
+<path fill="none" stroke="#8a8a8a" d="M430.78,-358.78C442.05,-389.79 469.03,-454.23 510.66,-494 516.82,-499.89 524.36,-504.86 531.98,-508.97"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="530.87,-511.16 538.22,-512.11 533.07,-506.78 530.87,-511.16"/>
+</g>
+<!-- appState -->
+<g id="node11" class="node">
+<title>appState</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M593.32,-481C593.32,-481 549.28,-481 549.28,-481 543.28,-481 537.28,-475 537.28,-469 537.28,-469 537.28,-457 537.28,-457 537.28,-451 543.28,-445 549.28,-445 549.28,-445 593.32,-445 593.32,-445 599.32,-445 605.32,-451 605.32,-457 605.32,-457 605.32,-469 605.32,-469 605.32,-475 599.32,-481 593.32,-481"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-458.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState</text>
+</g>
+<!-- init&#45;&gt;appState -->
+<g id="edge5" class="edge">
+<title>init&#45;&gt;appState</title>
+<path fill="none" stroke="#8a8a8a" d="M438.1,-358.69C453.8,-378.64 481.45,-411.12 510.66,-433 516.66,-437.49 523.42,-441.63 530.2,-445.3"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="528.82,-447.35 536.16,-448.4 531.08,-443 528.82,-447.35"/>
+</g>
+<!-- statusBar -->
+<g id="node12" class="node">
+<title>statusBar</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M607.57,-420C607.57,-420 535.03,-420 535.03,-420 529.03,-420 523.03,-414 523.03,-408 523.03,-408 523.03,-396 523.03,-396 523.03,-390 529.03,-384 535.03,-384 535.03,-384 607.57,-384 607.57,-384 613.57,-384 619.57,-390 619.57,-396 619.57,-396 619.57,-408 619.57,-408 619.57,-414 613.57,-420 607.57,-420"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-397.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">StatusBarState</text>
+</g>
+<!-- init&#45;&gt;statusBar -->
+<g id="edge6" class="edge">
+<title>init&#45;&gt;statusBar</title>
+<path fill="none" stroke="#8a8a8a" d="M467.64,-358.97C484.01,-365.83 502.81,-373.71 519.81,-380.84"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="518.68,-383.02 526.08,-383.47 520.58,-378.5 518.68,-383.02"/>
+</g>
+<!-- appHeader -->
+<g id="node13" class="node">
+<title>appHeader</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M611.32,-359C611.32,-359 531.28,-359 531.28,-359 525.28,-359 519.28,-353 519.28,-347 519.28,-347 519.28,-335 519.28,-335 519.28,-329 525.28,-323 531.28,-323 531.28,-323 611.32,-323 611.32,-323 617.32,-323 623.32,-329 623.32,-335 623.32,-335 623.32,-347 623.32,-347 623.32,-353 617.32,-359 611.32,-359"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-336.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppHeaderState</text>
+</g>
+<!-- init&#45;&gt;appHeader -->
+<g id="edge7" class="edge">
+<title>init&#45;&gt;appHeader</title>
+<path fill="none" stroke="#8a8a8a" d="M474.44,-341C486.22,-341 498.9,-341 511.05,-341"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="510.85,-343.45 517.85,-341 510.85,-338.55 510.85,-343.45"/>
+</g>
+<!-- focus -->
+<g id="node14" class="node">
+<title>focus</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M606.82,-298C606.82,-298 535.78,-298 535.78,-298 529.78,-298 523.78,-292 523.78,-286 523.78,-286 523.78,-274 523.78,-274 523.78,-268 529.78,-262 535.78,-262 535.78,-262 606.82,-262 606.82,-262 612.82,-262 618.82,-268 618.82,-274 618.82,-274 618.82,-286 618.82,-286 618.82,-292 612.82,-298 606.82,-298"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-275.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">FocusManager</text>
+</g>
+<!-- init&#45;&gt;focus -->
+<g id="edge8" class="edge">
+<title>init&#45;&gt;focus</title>
+<path fill="none" stroke="#8a8a8a" d="M467.64,-323.03C484.01,-316.17 502.81,-308.29 519.81,-301.16"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="520.58,-303.5 526.08,-298.53 518.68,-298.98 520.58,-303.5"/>
+</g>
+<!-- themes -->
+<g id="node15" class="node">
+<title>themes</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M619.95,-237C619.95,-237 522.66,-237 522.66,-237 516.66,-237 510.66,-231 510.66,-225 510.66,-225 510.66,-213 510.66,-213 510.66,-207 516.66,-201 522.66,-201 522.66,-201 619.95,-201 619.95,-201 625.95,-201 631.95,-207 631.95,-213 631.95,-213 631.95,-225 631.95,-225 631.95,-231 625.95,-237 619.95,-237"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-220.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ThemeManager ×2</text>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-208.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">palette · appearance</text>
+</g>
+<!-- init&#45;&gt;themes -->
+<g id="edge9" class="edge">
+<title>init&#45;&gt;themes</title>
+<path fill="none" stroke="#8a8a8a" d="M438.48,-323.22C454.31,-303.54 481.88,-271.73 510.66,-250 514.82,-246.86 519.34,-243.88 523.97,-241.08"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="525.14,-243.23 529.98,-237.62 522.7,-238.99 525.14,-243.23"/>
+</g>
+<!-- tuiContext -->
+<g id="node16" class="node">
+<title>tuiContext</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M598.57,-176C598.57,-176 544.03,-176 544.03,-176 538.03,-176 532.03,-170 532.03,-164 532.03,-164 532.03,-152 532.03,-152 532.03,-146 538.03,-140 544.03,-140 544.03,-140 598.57,-140 598.57,-140 604.57,-140 610.57,-146 610.57,-152 610.57,-152 610.57,-164 610.57,-164 610.57,-170 604.57,-176 598.57,-176"/>
+<text xml:space="preserve" text-anchor="middle" x="571.3" y="-153.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">TUIContext</text>
+</g>
+<!-- init&#45;&gt;tuiContext -->
+<g id="edge10" class="edge">
+<title>init&#45;&gt;tuiContext</title>
+<path fill="none" stroke="#8a8a8a" d="M430.87,-323.39C442.27,-292.68 469.45,-228.79 510.66,-189 514.93,-184.88 519.86,-181.17 525.02,-177.87"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="526.08,-180.09 530.85,-174.4 523.58,-175.87 526.08,-180.09"/>
+</g>
+<!-- tuiContext&#45;&gt;lifecycle -->
+<g id="edge11" class="edge">
+<title>tuiContext&#45;&gt;lifecycle</title>
+<path fill="none" stroke="#8a8a8a" d="M585.45,-140.26C600.96,-120.31 628.4,-87.97 657.95,-67 662.7,-63.63 667.87,-60.5 673.18,-57.63"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="674.03,-59.95 679.14,-54.57 671.8,-55.59 674.03,-59.95"/>
+</g>
+<!-- tuiContext&#45;&gt;keyDispatch -->
+<g id="edge12" class="edge">
+<title>tuiContext&#45;&gt;keyDispatch</title>
+<path fill="none" stroke="#8a8a8a" d="M610.29,-143.08C629.48,-135.54 653.09,-126.27 674.08,-118.02"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="674.95,-120.31 680.57,-115.47 673.16,-115.75 674.95,-120.31"/>
+</g>
+<!-- tuiContext&#45;&gt;prefs -->
+<g id="edge13" class="edge">
+<title>tuiContext&#45;&gt;prefs</title>
+<path fill="none" stroke="#8a8a8a" d="M610.29,-158C626.26,-158 645.28,-158 663.3,-158"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="662.99,-160.45 669.99,-158 662.99,-155.55 662.99,-160.45"/>
+</g>
+<!-- tuiContext&#45;&gt;stateStore -->
+<g id="edge14" class="edge">
+<title>tuiContext&#45;&gt;stateStore</title>
+<path fill="none" stroke="#8a8a8a" d="M610.29,-172.92C630.53,-180.87 655.67,-190.75 677.48,-199.32"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="676.53,-201.57 683.94,-201.85 678.32,-197.01 676.53,-201.57"/>
+</g>
+<!-- tuiContext&#45;&gt;cache -->
+<g id="edge15" class="edge">
+<title>tuiContext&#45;&gt;cache</title>
+<path fill="none" stroke="#8a8a8a" d="M610.36,-172.78C618.22,-177.12 625.92,-182.49 631.95,-189 651.98,-210.62 637.15,-229.12 657.95,-250 663.2,-255.27 669.53,-259.68 676.21,-263.35"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="674.85,-265.41 682.2,-266.36 677.05,-261.03 674.85,-265.41"/>
+</g>
+</g>
+</svg>

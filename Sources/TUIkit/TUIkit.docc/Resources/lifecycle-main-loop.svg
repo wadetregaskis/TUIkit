@@ -1,124 +1,126 @@
-<svg width="427pt" height="605pt"
- viewBox="0.00 0.00 427.00 605.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="427pt" height="637pt"
+ viewBox="0.00 0.00 427.00 637.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
 @media (prefers-color-scheme: dark) {
   .edge text { fill: #cdd1d5; }
   .edge path { stroke: #9aa0a6; }
   .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
 }
 </style>
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 601.41)">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 633.41)">
 <title>lifecycle&#45;main&#45;loop</title>
 <!-- setup -->
 <g id="node1" class="node">
 <title>setup</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M324.66,-597.41C324.66,-597.41 108.87,-597.41 108.87,-597.41 102.88,-597.41 96.87,-591.41 96.87,-585.41 96.87,-585.41 96.87,-573.41 96.87,-573.41 96.87,-567.41 102.87,-561.41 108.87,-561.41 108.87,-561.41 324.66,-561.41 324.66,-561.41 330.66,-561.41 336.66,-567.41 336.66,-573.41 336.66,-573.41 336.66,-585.41 336.66,-585.41 336.66,-591.41 330.66,-597.41 324.66,-597.41"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-580.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal setup</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-568.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">install signals · alt screen · raw mode · mouse</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M324.66,-629.41C324.66,-629.41 108.87,-629.41 108.87,-629.41 102.88,-629.41 96.87,-623.41 96.87,-617.41 96.87,-617.41 96.87,-605.41 96.87,-605.41 96.87,-599.41 102.87,-593.41 108.87,-593.41 108.87,-593.41 324.66,-593.41 324.66,-593.41 330.66,-593.41 336.66,-599.41 336.66,-605.41 336.66,-605.41 336.66,-617.41 336.66,-617.41 336.66,-623.41 330.66,-629.41 324.66,-629.41"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-612.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal setup</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-600.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">install signals · alt screen · raw mode · mouse</text>
 </g>
 <!-- observers -->
 <g id="node2" class="node">
 <title>observers</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M330.66,-528.41C330.66,-528.41 102.88,-528.41 102.88,-528.41 96.88,-528.41 90.87,-522.41 90.87,-516.41 90.87,-516.41 90.87,-504.08 90.87,-504.08 90.87,-498.08 96.87,-492.08 102.87,-492.08 102.87,-492.08 330.66,-492.08 330.66,-492.08 336.66,-492.08 342.66,-498.08 342.66,-504.08 342.66,-504.08 342.66,-516.41 342.66,-516.41 342.66,-522.41 336.66,-528.41 330.66,-528.41"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-512.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-500.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M330.66,-556.41C330.66,-556.41 102.88,-556.41 102.88,-556.41 96.88,-556.41 90.87,-550.41 90.87,-544.41 90.87,-544.41 90.87,-532.08 90.87,-532.08 90.87,-526.08 96.87,-520.08 102.87,-520.08 102.87,-520.08 330.66,-520.08 330.66,-520.08 336.66,-520.08 342.66,-526.08 342.66,-532.08 342.66,-532.08 342.66,-544.41 342.66,-544.41 342.66,-550.41 336.66,-556.41 330.66,-556.41"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-540.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-528.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
 </g>
 <!-- setup&#45;&gt;observers -->
 <g id="edge1" class="edge">
 <title>setup&#45;&gt;observers</title>
-<path fill="none" stroke="#8a8a8a" d="M216.77,-561.46C216.77,-553.85 216.77,-544.71 216.77,-536.32"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-536.47 216.77,-529.47 214.32,-536.47 219.22,-536.47"/>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-593.54C216.77,-584.86 216.77,-574.09 216.77,-564.44"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-564.5 216.77,-557.5 214.32,-564.5 219.22,-564.5"/>
 </g>
 <!-- timers -->
 <g id="node3" class="node">
 <title>timers</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M304.41,-459.08C304.41,-459.08 129.12,-459.08 129.12,-459.08 123.12,-459.08 117.12,-453.08 117.12,-447.08 117.12,-447.08 117.12,-435.08 117.12,-435.08 117.12,-429.08 123.12,-423.08 129.12,-423.08 129.12,-423.08 304.41,-423.08 304.41,-423.08 310.41,-423.08 316.41,-429.08 316.41,-435.08 316.41,-435.08 316.41,-447.08 316.41,-447.08 316.41,-453.08 310.41,-459.08 304.41,-459.08"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-442.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Prepare animation timers</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-430.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Pulse · Cursor — started on demand</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M304.41,-483.08C304.41,-483.08 129.12,-483.08 129.12,-483.08 123.12,-483.08 117.12,-477.08 117.12,-471.08 117.12,-471.08 117.12,-459.08 117.12,-459.08 117.12,-453.08 123.12,-447.08 129.12,-447.08 129.12,-447.08 304.41,-447.08 304.41,-447.08 310.41,-447.08 316.41,-453.08 316.41,-459.08 316.41,-459.08 316.41,-471.08 316.41,-471.08 316.41,-477.08 310.41,-483.08 304.41,-483.08"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-466.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Prepare animation timers</text>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-454.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Pulse · Cursor — started on demand</text>
 </g>
 <!-- observers&#45;&gt;timers -->
 <g id="edge2" class="edge">
 <title>observers&#45;&gt;timers</title>
-<path fill="none" stroke="#8a8a8a" d="M216.77,-492.3C216.77,-484.68 216.77,-475.54 216.77,-467.16"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-467.3 216.77,-460.3 214.32,-467.3 219.22,-467.3"/>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-520.38C216.77,-511.69 216.77,-500.93 216.77,-491.28"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-491.34 216.77,-484.34 214.32,-491.34 219.22,-491.34"/>
 </g>
 <!-- initial -->
 <g id="node4" class="node">
 <title>initial</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M259.79,-390.08C259.79,-390.08 173.75,-390.08 173.75,-390.08 167.75,-390.08 161.75,-384.08 161.75,-378.08 161.75,-378.08 161.75,-366.08 161.75,-366.08 161.75,-360.08 167.75,-354.08 173.75,-354.08 173.75,-354.08 259.79,-354.08 259.79,-354.08 265.79,-354.08 271.79,-360.08 271.79,-366.08 271.79,-366.08 271.79,-378.08 271.79,-378.08 271.79,-384.08 265.79,-390.08 259.79,-390.08"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-367.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render first frame</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M259.79,-410.08C259.79,-410.08 173.75,-410.08 173.75,-410.08 167.75,-410.08 161.75,-404.08 161.75,-398.08 161.75,-398.08 161.75,-386.08 161.75,-386.08 161.75,-380.08 167.75,-374.08 173.75,-374.08 173.75,-374.08 259.79,-374.08 259.79,-374.08 265.79,-374.08 271.79,-380.08 271.79,-386.08 271.79,-386.08 271.79,-398.08 271.79,-398.08 271.79,-404.08 265.79,-410.08 259.79,-410.08"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-387.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render first frame</text>
 </g>
 <!-- timers&#45;&gt;initial -->
 <g id="edge3" class="edge">
 <title>timers&#45;&gt;initial</title>
-<path fill="none" stroke="#8a8a8a" d="M216.77,-423.17C216.77,-415.58 216.77,-406.46 216.77,-398.1"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-398.26 216.77,-391.26 214.32,-398.26 219.22,-398.26"/>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-447.25C216.77,-438.59 216.77,-427.85 216.77,-418.22"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-418.3 216.77,-411.3 214.32,-418.3 219.22,-418.3"/>
 </g>
 <!-- shutdown -->
 <g id="node5" class="node">
 <title>shutdown</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.16,-318.05C205.16,-318.05 159.37,-306.11 159.37,-306.11 153.57,-304.59 153.57,-301.57 159.37,-300.05 159.37,-300.05 205.16,-288.11 205.16,-288.11 210.96,-286.59 222.58,-286.59 228.38,-288.11 228.38,-288.11 274.17,-300.05 274.17,-300.05 279.97,-301.57 279.97,-304.59 274.17,-306.11 274.17,-306.11 228.38,-318.05 228.38,-318.05 222.58,-319.57 210.96,-319.57 205.16,-318.05"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-298.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.16,-334.05C205.16,-334.05 159.37,-322.11 159.37,-322.11 153.57,-320.59 153.57,-317.57 159.37,-316.05 159.37,-316.05 205.16,-304.11 205.16,-304.11 210.96,-302.59 222.58,-302.59 228.38,-304.11 228.38,-304.11 274.17,-316.05 274.17,-316.05 279.97,-317.57 279.97,-320.59 274.17,-322.11 274.17,-322.11 228.38,-334.05 228.38,-334.05 222.58,-335.57 210.96,-335.57 205.16,-334.05"/>
+<text xml:space="preserve" text-anchor="middle" x="216.77" y="-314.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
 </g>
 <!-- initial&#45;&gt;shutdown -->
 <g id="edge4" class="edge">
 <title>initial&#45;&gt;shutdown</title>
-<path fill="none" stroke="#8a8a8a" d="M216.77,-354.17C216.77,-346.58 216.77,-337.46 216.77,-329.1"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-329.26 216.77,-322.26 214.32,-329.26 219.22,-329.26"/>
+<path fill="none" stroke="#8a8a8a" d="M216.77,-374.25C216.77,-365.59 216.77,-354.85 216.77,-345.22"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="219.22,-345.3 216.77,-338.3 214.32,-345.3 219.22,-345.3"/>
 </g>
 <!-- resize -->
 <g id="node6" class="node">
 <title>resize</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M199.29,-243.33C199.29,-243.33 32.25,-243.33 32.25,-243.33 26.25,-243.33 20.25,-237.33 20.25,-231.33 20.25,-231.33 20.25,-219 20.25,-219 20.25,-213 26.25,-207 32.25,-207 32.25,-207 199.29,-207 199.29,-207 205.29,-207 211.29,-213 211.29,-219 211.29,-219 211.29,-231.33 211.29,-231.33 211.29,-237.33 205.29,-243.33 199.29,-243.33"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-227.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-215.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M199.29,-255.33C199.29,-255.33 32.25,-255.33 32.25,-255.33 26.25,-255.33 20.25,-249.33 20.25,-243.33 20.25,-243.33 20.25,-231 20.25,-231 20.25,-225 26.25,-219 32.25,-219 32.25,-219 199.29,-219 199.29,-219 205.29,-219 211.29,-225 211.29,-231 211.29,-231 211.29,-243.33 211.29,-243.33 211.29,-249.33 205.29,-255.33 199.29,-255.33"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-239.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-227.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
 </g>
 <!-- shutdown&#45;&gt;resize -->
 <g id="edge5" class="edge">
 <title>shutdown&#45;&gt;resize</title>
-<path fill="none" stroke="#8a8a8a" d="M200.09,-289.54C185.12,-278.29 162.81,-261.52 144.9,-248.06"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="146.8,-246.42 139.73,-244.18 143.86,-250.34 146.8,-246.42"/>
-<text xml:space="preserve" text-anchor="middle" x="177.57" y="-260.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path fill="none" stroke="#8a8a8a" d="M200.99,-305.59C185.77,-293.55 162.4,-275.06 143.98,-260.48"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="145.63,-258.67 138.62,-256.25 142.59,-262.51 145.63,-258.67"/>
+<text xml:space="preserve" text-anchor="middle" x="177.57" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- cleanup -->
 <g id="node10" class="node">
 <title>cleanup</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M389.54,-243.16C389.54,-243.16 248,-243.16 248,-243.16 242,-243.16 236,-237.16 236,-231.16 236,-231.16 236,-219.16 236,-219.16 236,-213.16 242,-207.16 248,-207.16 248,-207.16 389.54,-207.16 389.54,-207.16 395.54,-207.16 401.54,-213.16 401.54,-219.16 401.54,-219.16 401.54,-231.16 401.54,-231.16 401.54,-237.16 395.54,-243.16 389.54,-243.16"/>
-<text xml:space="preserve" text-anchor="middle" x="318.77" y="-226.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
-<text xml:space="preserve" text-anchor="middle" x="318.77" y="-214.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore terminal · show cursor</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M389.54,-255.16C389.54,-255.16 248,-255.16 248,-255.16 242,-255.16 236,-249.16 236,-243.16 236,-243.16 236,-231.16 236,-231.16 236,-225.16 242,-219.16 248,-219.16 248,-219.16 389.54,-219.16 389.54,-219.16 395.54,-219.16 401.54,-225.16 401.54,-231.16 401.54,-231.16 401.54,-243.16 401.54,-243.16 401.54,-249.16 395.54,-255.16 389.54,-255.16"/>
+<text xml:space="preserve" text-anchor="middle" x="318.77" y="-238.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
+<text xml:space="preserve" text-anchor="middle" x="318.77" y="-226.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore terminal · show cursor</text>
 </g>
 <!-- shutdown&#45;&gt;cleanup -->
 <g id="edge6" class="edge">
 <title>shutdown&#45;&gt;cleanup</title>
-<path fill="none" stroke="#8a8a8a" d="M233.61,-289.54C248.83,-278.22 271.56,-261.3 289.71,-247.79"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="290.8,-250.03 294.95,-243.89 287.88,-246.1 290.8,-250.03"/>
-<text xml:space="preserve" text-anchor="middle" x="281" y="-260.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+<path fill="none" stroke="#8a8a8a" d="M232.71,-305.59C248.18,-293.47 271.99,-274.82 290.65,-260.2"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="292.07,-262.19 296.07,-255.95 289.05,-258.34 292.07,-262.19"/>
+<text xml:space="preserve" text-anchor="middle" x="281" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- input -->
 <g id="node7" class="node">
 <title>input</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M219.54,-174C219.54,-174 12,-174 12,-174 6,-174 0,-168 0,-162 0,-162 0,-150 0,-150 0,-144 6,-138 12,-138 12,-138 219.54,-138 219.54,-138 225.54,-138 231.54,-144 231.54,-150 231.54,-150 231.54,-162 231.54,-162 231.54,-168 225.54,-174 219.54,-174"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-157.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-145.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys: 5 layers · mouse: hit&#45;test</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M219.54,-182C219.54,-182 12,-182 12,-182 6,-182 0,-176 0,-170 0,-170 0,-158 0,-158 0,-152 6,-146 12,-146 12,-146 219.54,-146 219.54,-146 225.54,-146 231.54,-152 231.54,-158 231.54,-158 231.54,-170 231.54,-170 231.54,-176 225.54,-182 219.54,-182"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-165.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-153.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys: 5 layers · mouse: hit&#45;test</text>
 </g>
 <!-- resize&#45;&gt;input -->
 <g id="edge7" class="edge">
 <title>resize&#45;&gt;input</title>
-<path fill="none" stroke="#8a8a8a" d="M115.77,-207.22C115.77,-199.6 115.77,-190.46 115.77,-182.08"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-182.22 115.77,-175.22 113.32,-182.22 118.22,-182.22"/>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-219.3C115.77,-210.61 115.77,-199.85 115.77,-190.2"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-190.26 115.77,-183.26 113.32,-190.26 118.22,-190.26"/>
 </g>
 <!-- render -->
 <g id="node8" class="node">
 <title>render</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.29,-105C205.29,-105 26.25,-105 26.25,-105 20.25,-105 14.25,-99 14.25,-93 14.25,-93 14.25,-81 14.25,-81 14.25,-75 20.25,-69 26.25,-69 26.25,-69 205.29,-69 205.29,-69 211.29,-69 217.29,-75 217.29,-81 217.29,-81 217.29,-93 217.29,-93 217.29,-99 211.29,-105 205.29,-105"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-88.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-76.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">at most once per App.maxFrameRate</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.29,-109C205.29,-109 26.25,-109 26.25,-109 20.25,-109 14.25,-103 14.25,-97 14.25,-97 14.25,-85 14.25,-85 14.25,-79 20.25,-73 26.25,-73 26.25,-73 205.29,-73 205.29,-73 211.29,-73 217.29,-79 217.29,-85 217.29,-85 217.29,-97 217.29,-97 217.29,-103 211.29,-109 205.29,-109"/>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-92.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
+<text xml:space="preserve" text-anchor="middle" x="115.77" y="-80.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">at most once per App.maxFrameRate</text>
 </g>
 <!-- input&#45;&gt;render -->
 <g id="edge8" class="edge">
 <title>input&#45;&gt;render</title>
-<path fill="none" stroke="#8a8a8a" d="M115.77,-138.09C115.77,-130.5 115.77,-121.38 115.77,-113.02"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-113.18 115.77,-106.18 113.32,-113.18 118.22,-113.18"/>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-146.17C115.77,-137.51 115.77,-126.77 115.77,-117.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-117.22 115.77,-110.22 113.32,-117.22 118.22,-117.22"/>
 </g>
 <!-- block -->
 <g id="node9" class="node">
@@ -130,15 +132,15 @@
 <!-- render&#45;&gt;block -->
 <g id="edge9" class="edge">
 <title>render&#45;&gt;block</title>
-<path fill="none" stroke="#8a8a8a" d="M115.77,-69.09C115.77,-61.5 115.77,-52.38 115.77,-44.02"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-44.18 115.77,-37.18 113.32,-44.18 118.22,-44.18"/>
+<path fill="none" stroke="#8a8a8a" d="M115.77,-73.17C115.77,-64.51 115.77,-53.77 115.77,-44.14"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="118.22,-44.22 115.77,-37.22 113.32,-44.22 118.22,-44.22"/>
 </g>
 <!-- block&#45;&gt;shutdown -->
 <g id="edge10" class="edge">
 <title>block&#45;&gt;shutdown</title>
-<path fill="none" stroke="#8a8a8a" d="M175.45,-35.94C248.03,-60.22 366.65,-112.76 413.77,-207 443.19,-265.83 342.61,-288.58 274.49,-297.14"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" points="274.51,-294.67 267.85,-297.93 275.09,-299.53 274.51,-294.67"/>
-<text xml:space="preserve" text-anchor="middle" x="400.81" y="-152.32" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
+<path fill="none" stroke="#8a8a8a" d="M169.38,-35.9C241.35,-61.94 365.73,-119.56 413.77,-219 442.81,-279.12 340.84,-303.31 272.9,-312.62"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="272.91,-310.15 266.29,-313.49 273.55,-315.01 272.91,-310.15"/>
+<text xml:space="preserve" text-anchor="middle" x="400.11" y="-160.32" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
 </g>
 </g>
 </svg>

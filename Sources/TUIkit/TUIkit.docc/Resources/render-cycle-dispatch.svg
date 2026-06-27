@@ -1,0 +1,87 @@
+<svg width="350pt" height="281pt"
+ viewBox="0.00 0.00 350.00 281.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<style>
+@media (prefers-color-scheme: dark) {
+  .edge text { fill: #cdd1d5; }
+  .edge path { stroke: #9aa0a6; }
+  .edge polygon { stroke: #9aa0a6; fill: #9aa0a6; }
+  .cluster text { fill: #9aa0a6; }
+  .cluster polygon, .cluster path { stroke: #5a5a5a; }
+}
+</style>
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 276.5)">
+<title>render&#45;cycle&#45;dispatch</title>
+<!-- rtb -->
+<g id="node1" class="node">
+<title>rtb</title>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M153.41,-272.5C153.41,-272.5 53.12,-272.5 53.12,-272.5 47.12,-272.5 41.12,-266.5 41.12,-260.5 41.12,-260.5 41.12,-248.5 41.12,-248.5 41.12,-242.5 47.12,-236.5 53.12,-236.5 53.12,-236.5 153.41,-236.5 153.41,-236.5 159.41,-236.5 165.41,-242.5 165.41,-248.5 165.41,-248.5 165.41,-260.5 165.41,-260.5 165.41,-266.5 159.41,-272.5 153.41,-272.5"/>
+<text xml:space="preserve" text-anchor="middle" x="103.27" y="-250.05" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">renderToBuffer(view)</text>
+</g>
+<!-- qr -->
+<g id="node2" class="node">
+<title>qr</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M91.95,-195.51C91.95,-195.51 63.58,-185.49 63.58,-185.49 57.92,-183.5 57.92,-179.5 63.58,-177.51 63.58,-177.51 91.95,-167.49 91.95,-167.49 97.61,-165.5 108.93,-165.5 114.59,-167.49 114.59,-167.49 142.96,-177.51 142.96,-177.51 148.62,-179.5 148.62,-183.5 142.96,-185.49 142.96,-185.49 114.59,-195.51 114.59,-195.51 108.93,-197.5 97.61,-197.5 91.95,-195.51"/>
+<text xml:space="preserve" text-anchor="middle" x="103.27" y="-177.05" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Renderable?</text>
+</g>
+<!-- rtb&#45;&gt;qr -->
+<g id="edge1" class="edge">
+<title>rtb&#45;&gt;qr</title>
+<path fill="none" stroke="#8a8a8a" d="M103.27,-236.67C103.27,-228.01 103.27,-217.27 103.27,-207.64"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="105.72,-207.72 103.27,-200.72 100.82,-207.72 105.72,-207.72"/>
+</g>
+<!-- proc -->
+<g id="node3" class="node">
+<title>proc</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M150.54,-117.75C150.54,-117.75 12,-117.75 12,-117.75 6,-117.75 0,-111.75 0,-105.75 0,-105.75 0,-93.75 0,-93.75 0,-87.75 6,-81.75 12,-81.75 12,-81.75 150.54,-81.75 150.54,-81.75 156.54,-81.75 162.54,-87.75 162.54,-93.75 162.54,-93.75 162.54,-105.75 162.54,-105.75 162.54,-111.75 156.54,-117.75 150.54,-117.75"/>
+<text xml:space="preserve" text-anchor="middle" x="81.27" y="-101.3" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">renderToBuffer(context:)</text>
+<text xml:space="preserve" text-anchor="middle" x="81.27" y="-89.3" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">procedural — leaves, _*Core</text>
+</g>
+<!-- qr&#45;&gt;proc -->
+<g id="edge2" class="edge">
+<title>qr&#45;&gt;proc</title>
+<path fill="none" stroke="#8a8a8a" d="M99.03,-165.12C95.96,-153.98 91.73,-138.68 88.18,-125.79"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="90.58,-125.29 86.36,-119.2 85.86,-126.59 90.58,-125.29"/>
+<text xml:space="preserve" text-anchor="middle" x="100.71" y="-136.95" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+</g>
+<!-- qb -->
+<g id="node4" class="node">
+<title>qb</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M224.03,-113.55C224.03,-113.55 198.32,-103.95 198.32,-103.95 192.7,-101.85 192.7,-97.65 198.32,-95.55 198.32,-95.55 224.03,-85.95 224.03,-85.95 229.65,-83.85 240.89,-83.85 246.51,-85.95 246.51,-85.95 272.22,-95.55 272.22,-95.55 277.84,-97.65 277.84,-101.85 272.22,-103.95 272.22,-103.95 246.51,-113.55 246.51,-113.55 240.89,-115.65 229.65,-115.65 224.03,-113.55"/>
+<text xml:space="preserve" text-anchor="middle" x="235.27" y="-95.3" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">has a body?</text>
+</g>
+<!-- qr&#45;&gt;qb -->
+<g id="edge3" class="edge">
+<title>qr&#45;&gt;qb</title>
+<path fill="none" stroke="#8a8a8a" d="M120.8,-169.91C143.9,-155.95 184.68,-131.32 210.81,-115.53"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="212.07,-117.63 216.79,-111.91 209.53,-113.44 212.07,-117.63"/>
+<text xml:space="preserve" text-anchor="middle" x="182.42" y="-136.95" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+</g>
+<!-- recurse -->
+<g id="node5" class="node">
+<title>recurse</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M219.91,-36C219.91,-36 122.62,-36 122.62,-36 116.62,-36 110.62,-30 110.62,-24 110.62,-24 110.62,-12 110.62,-12 110.62,-6 116.62,0 122.62,0 122.62,0 219.91,0 219.91,0 225.91,0 231.91,-6 231.91,-12 231.91,-12 231.91,-24 231.91,-24 231.91,-30 225.91,-36 219.91,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="171.27" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Recurse into body</text>
+<text xml:space="preserve" text-anchor="middle" x="171.27" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">compose child views</text>
+</g>
+<!-- qb&#45;&gt;recurse -->
+<g id="edge4" class="edge">
+<title>qb&#45;&gt;recurse</title>
+<path fill="none" stroke="#8a8a8a" d="M224.99,-85.94C215.55,-74.18 201.34,-56.47 189.91,-42.22"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="192.11,-41.06 185.82,-37.13 188.29,-44.13 192.11,-41.06"/>
+<text xml:space="preserve" text-anchor="middle" x="214.23" y="-55.2" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+</g>
+<!-- empty -->
+<g id="node6" class="node">
+<title>empty</title>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M329.54,-36C329.54,-36 269,-36 269,-36 263,-36 257,-30 257,-24 257,-24 257,-12 257,-12 257,-6 263,0 269,0 269,0 329.54,0 329.54,0 335.54,0 341.54,-6 341.54,-12 341.54,-12 341.54,-24 341.54,-24 341.54,-30 335.54,-36 329.54,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="299.27" y="-13.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Empty buffer</text>
+</g>
+<!-- qb&#45;&gt;empty -->
+<g id="edge5" class="edge">
+<title>qb&#45;&gt;empty</title>
+<path fill="none" stroke="#8a8a8a" d="M245.55,-85.94C254.99,-74.18 269.2,-56.47 280.63,-42.22"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" points="282.25,-44.13 284.72,-37.13 278.43,-41.06 282.25,-44.13"/>
+<text xml:space="preserve" text-anchor="middle" x="276.35" y="-55.2" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+</g>
+</g>
+</svg>
