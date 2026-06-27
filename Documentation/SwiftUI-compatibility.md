@@ -273,7 +273,9 @@ non-obvious.)
 
 > **Since shipped** (now built; removed from the list below): `TabView` / `Tab`,
 > `ColorPicker` (with a full modal `ColorPickerPanel`), the `.tint(_:)` modifier,
-> and `View.disabled(_:)` + the `\.isEnabled` environment value (the §3.3 fix).
+> `View.disabled(_:)` + the `\.isEnabled` environment value (the §3.3 fix), and
+> `Form` / `LabeledContent` with `formStyle(_:)` (`.columns` — the default, the
+> classic macOS layout — and `.grouped`).
 
 | Feature | Why it matters | Design sketch / trade-off |
 |---|---|---|
