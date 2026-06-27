@@ -204,6 +204,7 @@ public enum StateRegistration {
 /// }
 /// ```
 @propertyWrapper
+@dynamicMemberLookup
 public struct Binding<Value> {
     /// The getter for the value.
     private let getValue: () -> Value
@@ -238,6 +239,33 @@ public struct Binding<Value> {
     /// - Returns: A binding that always returns the given value.
     public static func constant(_ value: Value) -> Binding<Value> {
         Self(get: { value }, set: { _ in })
+    }
+
+    /// Creates a binding from an existing binding's projected value.
+    ///
+    /// Mirrors SwiftUI's `Binding(projectedValue:)`; used by generic code and
+    /// macros that re-wrap a `$value` projection.
+    ///
+    /// - Parameter projectedValue: The binding to wrap.
+    public init(projectedValue: Binding<Value>) {
+        self = projectedValue
+    }
+
+    /// Derives a binding to a sub-property of the wrapped value via key path.
+    ///
+    /// This is what makes `$model.field` work: writing to the derived binding
+    /// reads the parent value, mutates the addressed member, and writes the
+    /// whole value back through this binding's setter. Matches SwiftUI's
+    /// `@dynamicMemberLookup` `Binding` exactly. A `ReferenceWritableKeyPath`
+    /// is a `WritableKeyPath`, so reference members work through this subscript
+    /// too.
+    public subscript<Subject>(
+        dynamicMember keyPath: WritableKeyPath<Value, Subject>
+    ) -> Binding<Subject> {
+        Binding<Subject>(
+            get: { self.wrappedValue[keyPath: keyPath] },
+            set: { newValue in self.wrappedValue[keyPath: keyPath] = newValue }
+        )
     }
 }
 
@@ -312,6 +340,15 @@ public struct State<Value> {
     /// render time (keyed by the view's own identity), not at construction.
     public init(wrappedValue: Value) {
         self.backing = StateBacking(wrappedValue)
+    }
+
+    /// Creates a state with an initial value (SwiftUI-parity alias for
+    /// ``init(wrappedValue:)``).
+    ///
+    /// Rarely written by hand, but some generic code and macros construct
+    /// `@State` via `initialValue:` rather than `wrappedValue:`.
+    public init(initialValue value: Value) {
+        self.backing = StateBacking(value)
     }
 }
 
