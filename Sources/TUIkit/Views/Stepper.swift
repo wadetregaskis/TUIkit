@@ -53,17 +53,21 @@
 /// }
 /// ```
 public struct Stepper<Label: View>: View {
-    /// The binding to the current value.
-    let value: Binding<Int>
-
-    /// The optional range of valid values.
-    let bounds: ClosedRange<Int>?
-
-    /// The step size for increment/decrement.
-    let step: Int
-
     /// The label view describing the stepper's purpose.
     let label: Label?
+
+    /// The current value rendered for display, with the value type erased.
+    /// SwiftUI's `Stepper<Label>` never shows the value, so it can erase `V`
+    /// outright; TUIkit *does* show it, so it captures a formatter here.
+    let display: () -> String
+
+    /// Builds the (value-type-erased) focus handler from a focusID and whether
+    /// it may take focus. Captures the value binding, bounds, and step in `V`.
+    let makeHandler: (String, Bool) -> any StepperDriving
+
+    /// Re-points the persisted handler at this render's value binding — the only
+    /// `V`-typed state that must be refreshed each frame.
+    let syncValue: (any StepperDriving) -> Void
 
     /// Custom increment callback.
     let onIncrement: (() -> Void)?
@@ -80,19 +84,41 @@ public struct Stepper<Label: View>: View {
     /// Callback when editing begins or ends.
     let onEditingChanged: ((Bool) -> Void)?
 
+    /// Designated initializer over the value-type-erased representation. The
+    /// public inits below capture a `Binding<V>` into these closures via
+    /// ``eraseStepperValue(value:bounds:step:)``.
+    fileprivate init(
+        label: Label?,
+        display: @escaping () -> String,
+        makeHandler: @escaping (String, Bool) -> any StepperDriving,
+        syncValue: @escaping (any StepperDriving) -> Void,
+        onIncrement: (() -> Void)?,
+        onDecrement: (() -> Void)?,
+        onEditingChanged: @escaping (Bool) -> Void
+    ) {
+        self.label = label
+        self.display = display
+        self.makeHandler = makeHandler
+        self.syncValue = syncValue
+        self.onIncrement = onIncrement
+        self.onDecrement = onDecrement
+        self.focusID = nil
+        self.isDisabled = false
+        self.onEditingChanged = onEditingChanged
+    }
+
     public var body: some View {
         // The label renders inline to the left of the control (SwiftUI parity):
         // "Qty ◀ 5 ▶". An empty/absent label collapses so there's no stray
         // leading space ("◀ 5 ▶"). The control's mouse regions are offset by the
-        // composing HStack, so `_StepperCore` is unchanged. `controlKind` lets the
-        // label resolve `.stepperTextStyle` like the value.
+        // composing HStack. `controlKind` lets the label resolve
+        // `.stepperTextStyle` like the value.
         HStack(spacing: 0) {
             _CollapsingLabel(label: label)
             _StepperCore(
-                value: value,
-                bounds: bounds,
-                step: step,
-                label: Optional<EmptyView>.none,
+                display: display,
+                makeHandler: makeHandler,
+                syncValue: syncValue,
                 onIncrement: onIncrement,
                 onDecrement: onDecrement,
                 focusID: focusID,
@@ -102,6 +128,30 @@ public struct Stepper<Label: View>: View {
         }
         .environment(\.controlKind, .stepper)
     }
+}
+
+/// Captures a `Binding<V>` (plus optional bounds and step) into the value-type-
+/// erased closures ``Stepper`` stores, so `Stepper<Label>` need not be generic
+/// over `V` — exactly as SwiftUI's `Stepper<Label>` is not. The persisted
+/// ``StepperHandler`` carries all the `V` arithmetic; only its value binding
+/// needs refreshing each frame (`syncValue`).
+private func eraseStepperValue<V: Strideable>(
+    value: Binding<V>,
+    bounds: ClosedRange<V>?,
+    step: V.Stride
+) -> (
+    display: () -> String,
+    makeHandler: (String, Bool) -> any StepperDriving,
+    syncValue: (any StepperDriving) -> Void
+) {
+    let display: () -> String = { "\(value.wrappedValue)" }
+    let makeHandler: (String, Bool) -> any StepperDriving = { focusID, canBeFocused in
+        StepperHandler(focusID: focusID, value: value, bounds: bounds, step: step, canBeFocused: canBeFocused)
+    }
+    let syncValue: (any StepperDriving) -> Void = { handler in
+        (handler as? StepperHandler<V>)?.value = value
+    }
+    return (display, makeHandler, syncValue)
 }
 
 /// Renders an inline control label followed by one separating space — or
@@ -136,27 +186,26 @@ private struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
 extension Stepper where Label == Text {
     /// Creates a stepper with a title and value binding.
     ///
+    /// The value is generic over any `Strideable` (`Int`, `Double`, `Float`, …),
+    /// mirroring SwiftUI — a stepper's value is data-model data, not an interface
+    /// measurement, so it is not pinned to `Int`.
+    ///
     /// - Parameters:
     ///   - title: The title of the stepper.
     ///   - value: The binding to the current value.
     ///   - step: The step size. Defaults to `1`.
     ///   - onEditingChanged: A callback for when editing begins and ends.
-    public init<S: StringProtocol>(
+    public init<S: StringProtocol, V: Strideable>(
         _ title: S,
-        value: Binding<Int>,
-        step: Int = 1,
+        value: Binding<V>,
+        step: V.Stride = 1,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
-        self.value = value
-        self.bounds = nil
-        self.step = step
-        self.label = Text(String(title))
-        self.onIncrement = nil
-        self.onDecrement = nil
-        // Auto-generated focusID from view identity (collision-free)
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let erased = eraseStepperValue(value: value, bounds: nil, step: step)
+        self.init(
+            label: Text(String(title)),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: nil, onDecrement: nil, onEditingChanged: onEditingChanged)
     }
 
     /// Creates a stepper with a title, value binding, and range.
@@ -167,23 +216,18 @@ extension Stepper where Label == Text {
     ///   - bounds: The range of valid values.
     ///   - step: The step size. Defaults to `1`.
     ///   - onEditingChanged: A callback for when editing begins and ends.
-    public init<S: StringProtocol>(
+    public init<S: StringProtocol, V: Strideable>(
         _ title: S,
-        value: Binding<Int>,
-        in bounds: ClosedRange<Int>,
-        step: Int = 1,
+        value: Binding<V>,
+        in bounds: ClosedRange<V>,
+        step: V.Stride = 1,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
-        self.value = value
-        self.bounds = bounds
-        self.step = step
-        self.label = Text(String(title))
-        self.onIncrement = nil
-        self.onDecrement = nil
-        // Auto-generated focusID from view identity (collision-free)
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let erased = eraseStepperValue(value: value, bounds: bounds, step: step)
+        self.init(
+            label: Text(String(title)),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: nil, onDecrement: nil, onEditingChanged: onEditingChanged)
     }
 }
 
@@ -204,16 +248,12 @@ extension Stepper where Label == Text {
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         var dummy = 0
-        self.value = Binding(get: { dummy }, set: { dummy = $0 })
-        self.bounds = nil
-        self.step = 1
-        self.label = Text(String(title))
-        self.onIncrement = onIncrement
-        self.onDecrement = onDecrement
-        // Auto-generated focusID from view identity (collision-free)
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let value = Binding(get: { dummy }, set: { dummy = $0 })
+        let erased = eraseStepperValue(value: value, bounds: nil, step: 1)
+        self.init(
+            label: Text(String(title)),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: onIncrement, onDecrement: onDecrement, onEditingChanged: onEditingChanged)
     }
 }
 
@@ -227,21 +267,17 @@ extension Stepper {
     ///   - step: The step size. Defaults to `1`.
     ///   - label: A view describing the purpose of the stepper.
     ///   - onEditingChanged: A callback for when editing begins and ends.
-    public init(
-        value: Binding<Int>,
-        step: Int = 1,
+    public init<V: Strideable>(
+        value: Binding<V>,
+        step: V.Stride = 1,
         @ViewBuilder label: () -> Label,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
-        self.value = value
-        self.bounds = nil
-        self.step = step
-        self.label = label()
-        self.onIncrement = nil
-        self.onDecrement = nil
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let erased = eraseStepperValue(value: value, bounds: nil, step: step)
+        self.init(
+            label: label(),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: nil, onDecrement: nil, onEditingChanged: onEditingChanged)
     }
 
     /// Creates a stepper with a custom label, value binding, and range.
@@ -252,22 +288,18 @@ extension Stepper {
     ///   - step: The step size. Defaults to `1`.
     ///   - label: A view describing the purpose of the stepper.
     ///   - onEditingChanged: A callback for when editing begins and ends.
-    public init(
-        value: Binding<Int>,
-        in bounds: ClosedRange<Int>,
-        step: Int = 1,
+    public init<V: Strideable>(
+        value: Binding<V>,
+        in bounds: ClosedRange<V>,
+        step: V.Stride = 1,
         @ViewBuilder label: () -> Label,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
-        self.value = value
-        self.bounds = bounds
-        self.step = step
-        self.label = label()
-        self.onIncrement = nil
-        self.onDecrement = nil
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let erased = eraseStepperValue(value: value, bounds: bounds, step: step)
+        self.init(
+            label: label(),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: nil, onDecrement: nil, onEditingChanged: onEditingChanged)
     }
 
     /// Creates a stepper with a custom label and increment/decrement callbacks.
@@ -284,15 +316,12 @@ extension Stepper {
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         var dummy = 0
-        self.value = Binding(get: { dummy }, set: { dummy = $0 })
-        self.bounds = nil
-        self.step = 1
-        self.label = label()
-        self.onIncrement = onIncrement
-        self.onDecrement = onDecrement
-        self.focusID = nil
-        self.isDisabled = false
-        self.onEditingChanged = onEditingChanged
+        let value = Binding(get: { dummy }, set: { dummy = $0 })
+        let erased = eraseStepperValue(value: value, bounds: nil, step: 1)
+        self.init(
+            label: label(),
+            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            onIncrement: onIncrement, onDecrement: onDecrement, onEditingChanged: onEditingChanged)
     }
 }
 
@@ -333,12 +362,14 @@ private enum StepperStateIndex {
     static let decrementRepeat = 4
 }
 
-/// Internal view that handles the actual rendering of Stepper.
-private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
-    let value: Binding<Int>
-    let bounds: ClosedRange<Int>?
-    let step: Int
-    let label: Label?
+/// Internal view that handles the actual rendering of Stepper. The value type is
+/// erased into `display`/`makeHandler`/`syncValue` (see ``Stepper``), so this
+/// core is not generic over it. The label is a separate `_CollapsingLabel`
+/// sibling in ``Stepper``'s body, so the core has none of its own.
+private struct _StepperCore: View, Renderable, Layoutable {
+    let display: () -> String
+    let makeHandler: (String, Bool) -> any StepperDriving
+    let syncValue: (any StepperDriving) -> Void
     let onIncrement: (() -> Void)?
     let onDecrement: (() -> Void)?
     let focusID: String?
@@ -349,14 +380,10 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
         fatalError("_StepperCore renders via Renderable")
     }
 
-    /// Size from one render (label + fixed stepper controls), flexibility from
-    /// the label — a flexible label (e.g. a maxWidth frame) makes the row grow.
+    /// Fixed-size: the arrows plus the value read-out. The label (and any
+    /// flexibility it carries) lives in the sibling `_CollapsingLabel`.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
-        let labelFlexible = label.map {
-            measureChild($0, proposal: proposal, context: context).isWidthFlexible
-        } ?? false
-        return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
+        measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
     private typealias StateIndex = StepperStateIndex
@@ -373,23 +400,18 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
             propertyIndex: StateIndex.focusID
         )
 
-        // Get or create persistent handler from state storage
+        // Get or create the persistent (value-type-erased) handler.
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.handler)
-        let handlerBox: StateBox<StepperHandler<Int>> = stateStorage.storage(
+        let handlerBox: StateBox<any StepperDriving> = stateStorage.storage(
             for: handlerKey,
-            default: StepperHandler(
-                focusID: persistedFocusID,
-                value: value,
-                bounds: bounds,
-                step: step,
-                canBeFocused: !isDisabled
-            )
+            default: makeHandler(persistedFocusID, !isDisabled)
         )
         let handler = handlerBox.value
 
-        // Keep handler in sync with current values
-        handler.value = value
+        // Keep handler in sync with current values. `syncValue` refreshes the
+        // one `V`-typed field (the value binding); the rest are value-type-free.
+        syncValue(handler)
         handler.canBeFocused = !isDisabled
         // Captured at render so Shift+arrow can accelerate at event time.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
@@ -443,7 +465,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
-        handler: StepperHandler<Int>,
+        handler: any StepperDriving,
         hoverBox: StateBox<Bool>,
         persistedFocusID: String,
         stateStorage: StateStorage
@@ -501,7 +523,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
                 timer: incrementTimer,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
-                action: { handler.increment() }
+                action: { handler.increment(times: 1) }
             )
         )
         buffer.hitTestRegions.append(
@@ -518,7 +540,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
                 timer: decrementTimer,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
-                action: { handler.decrement() }
+                action: { handler.decrement(times: 1) }
             )
         )
         buffer.hitTestRegions.append(
@@ -533,7 +555,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
     /// Builds the row-wide mouse handler closure: scroll-wheel,
     /// hover, focus-only clicks on the value area.
     private func wholeRowHandler(
-        handler: StepperHandler<Int>,
+        handler: any StepperDriving,
         hoverBox: StateBox<Bool>,
         focusManager: FocusManager?,
         focusID: String
@@ -553,11 +575,11 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
             case .scrollUp:
                 // Wheel up matches "scrolling up through the
                 // values" — towards smaller / earlier.
-                handler.decrement()
+                handler.decrement(times: 1)
                 focusManager?.focus(id: focusID)
                 return true
             case .scrollDown:
-                handler.increment()
+                handler.increment(times: 1)
                 focusManager?.focus(id: focusID)
                 return true
             case .left:
@@ -656,7 +678,7 @@ private struct _StepperCore<Label: View>: View, Renderable, Layoutable {
         let effectiveValueColor =
             isDisabled ? valueColor : (valueStyle.foreground?.resolve(with: palette) ?? valueColor)
         let valueText = ANSIRenderer.colorize(
-            " \(value.wrappedValue) ",
+            " \(display()) ",
             foreground: effectiveValueColor,
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false))

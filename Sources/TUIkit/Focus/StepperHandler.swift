@@ -4,6 +4,24 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+/// The value-type-erased surface of a stepper's focus handler.
+///
+/// This lets ``Stepper`` and `_StepperCore` stay non-generic over the value
+/// type `V` — matching SwiftUI's `Stepper<Label>`, which also erases `V` — while
+/// still driving the generic ``StepperHandler`` for keyboard/mouse stepping.
+/// The one `V`-typed piece (the value binding) is refreshed separately through
+/// a closure captured where `V` is statically known.
+protocol StepperDriving: Focusable {
+    var canBeFocused: Bool { get set }
+    var shiftStepMultiplier: Int { get set }
+    var onIncrement: (() -> Void)? { get set }
+    var onDecrement: (() -> Void)? { get set }
+    var onEditingChanged: ((Bool) -> Void)? { get set }
+    func increment(times: Int)
+    func decrement(times: Int)
+    func clampValue()
+}
+
 /// A focus handler for stepper components.
 ///
 /// `StepperHandler` manages value changes and keyboard input for `Stepper`.
@@ -235,3 +253,10 @@ extension StepperHandler {
         endEditingIfNeeded()
     }
 }
+
+// MARK: - Value-type-erased driving
+
+/// All requirements are met by `StepperHandler`'s existing members (including
+/// `increment(times:)`/`decrement(times:)`, whose default `times` argument still
+/// satisfies the non-defaulted protocol requirement).
+extension StepperHandler: StepperDriving {}
