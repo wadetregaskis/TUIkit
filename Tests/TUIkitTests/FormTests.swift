@@ -85,6 +85,37 @@ struct FormTests {
         ).joined(separator: "\n")
         #expect(out.contains("== FORM =="))
     }
+
+    // MARK: - Sections + varied controls
+
+    @Test("Form sections render headers, varied controls, and full-width rows")
+    func sectionsWithVariedControls() {
+        let out = lines(
+            Form {
+                Section("Profile") {
+                    LabeledContent("Name") { TextField("", text: .constant("Ada")) }
+                    LabeledContent("Password") { SecureField("", text: .constant("x")) }
+                }
+                Section("Settings") {
+                    LabeledContent("Theme") {
+                        Picker("", selection: .constant(0)) {
+                            Text("Light").tag(0)
+                            Text("Dark").tag(1)
+                        }
+                    }
+                    LabeledContent("Volume") { Slider(value: .constant(50.0), in: 0...100) }
+                    LabeledContent("Count") { Stepper("", value: .constant(3), in: 0...10) }
+                    LabeledContent("Push") { Toggle("", isOn: .constant(true)) }
+                    Button("Sign Out") {}
+                }
+            },
+            width: 60, height: 30
+        ).joined(separator: "\n")
+
+        for label in ["Profile", "Name", "Password", "Settings", "Theme", "Volume", "Count", "Push", "Sign Out"] {
+            #expect(out.contains(label), "missing '\(label)' in:\n\(out)")
+        }
+    }
 }
 
 /// A custom form style exercising ``FormStyle/makeBody(configuration:)``.
