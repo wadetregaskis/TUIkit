@@ -145,4 +145,27 @@ struct SwiftUICompatFixesTests {
         #expect(text.contains("Cancel"))
         #expect(text.contains("OK"))
     }
+
+    @Test("A custom ToggleStyle.makeBody is used; built-in styles still render")
+    func customToggleStyle() {
+        let custom = renderToBuffer(
+            Toggle("Wi-Fi", isOn: .constant(true)).toggleStyle(WordToggleStyle()),
+            context: makeRenderContext()
+        ).lines.map { $0.stripped }.joined()
+        #expect(custom.contains("ON"))
+
+        // The built-in checkbox style keeps rendering its label procedurally.
+        let builtIn = renderToBuffer(
+            Toggle("Wi-Fi", isOn: .constant(true)).toggleStyle(.checkbox),
+            context: makeRenderContext()
+        ).lines.map { $0.stripped }.joined()
+        #expect(builtIn.contains("Wi-Fi"))
+    }
+}
+
+/// A custom toggle style exercising ``ToggleStyle/makeBody(configuration:)``.
+private struct WordToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Text(configuration.isOn.wrappedValue ? "ON" : "OFF")
+    }
 }

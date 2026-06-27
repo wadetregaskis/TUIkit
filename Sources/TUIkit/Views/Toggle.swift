@@ -19,12 +19,74 @@
 /// | `.checkbox` | Classic checkbox |
 /// | `.switch` | Switch style (renders same as checkbox in TUI) |
 ///
-/// > Note: In TUIkit, all of these `ToggleStyle`s render identically — a
-/// > checkbox — due to terminal constraints; the API matches SwiftUI for
-/// > compatibility. The *glyphs* of that checkbox (⬛/⬜ by default, or `[x]`/`[ ]`)
-/// > are a separate, TUI-specific choice — see ``CheckboxStyle`` and
+/// > Note: The built-in `ToggleStyle`s render identically — a checkbox — due to
+/// > terminal constraints; the API matches SwiftUI for compatibility. The
+/// > *glyphs* of that checkbox (⬛/⬜ by default, or `[x]`/`[ ]`) are a separate,
+/// > TUI-specific choice — see ``CheckboxStyle`` and
 /// > ``SwiftUICore/View/checkboxStyle(_:)``.
-public protocol ToggleStyle: Sendable {}
+///
+/// ## Custom styles
+///
+/// Conform to `ToggleStyle` and implement ``makeBody(configuration:)`` to draw a
+/// toggle however you like (a different glyph, an `ON`/`OFF` word, …). The
+/// built-in styles above don't implement `makeBody` — they render procedurally
+/// (with the focus glow and ``CheckboxStyle`` glyphs); only custom styles use it.
+public protocol ToggleStyle: Sendable {
+    /// A view representing the toggle's appearance.
+    associatedtype Body: View = EmptyView
+
+    /// Creates a view that represents the body of a toggle.
+    ///
+    /// - Parameter configuration: The properties of the toggle being styled.
+    @MainActor @ViewBuilder
+    func makeBody(configuration: Configuration) -> Body
+
+    /// The properties of a toggle.
+    typealias Configuration = ToggleStyleConfiguration
+}
+
+extension ToggleStyle {
+    /// Default body for the built-in marker styles, which TUIkit renders
+    /// procedurally rather than through `makeBody`. A custom style overrides it.
+    @MainActor public func makeBody(configuration: Configuration) -> EmptyView {
+        EmptyView()
+    }
+
+    /// Renders this style's body for `configuration` into a frame buffer. Opens
+    /// the `any ToggleStyle` existential so ``makeBody(configuration:)`` can
+    /// return its concrete ``Body``. Used only for custom styles.
+    @MainActor
+    func makeBuffer(configuration: Configuration, context: RenderContext) -> FrameBuffer {
+        renderToBuffer(makeBody(configuration: configuration), context: context)
+    }
+}
+
+/// The properties of a toggle, passed to a ``ToggleStyle`` so it can produce the
+/// toggle's appearance.
+///
+/// You don't create this — TUIkit builds one per ``Toggle`` and hands it to a
+/// custom style's ``ToggleStyle/makeBody(configuration:)``. Mirrors SwiftUI's
+/// `ToggleStyleConfiguration` (`label`, `isOn`) plus terminal-specific focus /
+/// hover / enabled flags, exactly as ``ButtonStyleConfiguration`` does, because
+/// toggle rendering is procedural.
+public struct ToggleStyleConfiguration {
+    /// The toggle's label, type-erased.
+    public let label: AnyView
+
+    /// A binding to the toggle's on/off state. Read `isOn.wrappedValue`; write it
+    /// to flip the toggle.
+    public let isOn: Binding<Bool>
+
+    /// Whether the toggle currently holds keyboard focus. (Terminal-specific
+    /// addition, like ``ButtonStyleConfiguration/isFocused``.)
+    public let isFocused: Bool
+
+    /// Whether the cursor is hovering over the toggle. (Terminal-specific.)
+    public let isHovered: Bool
+
+    /// Whether the toggle is enabled. (Terminal-specific.)
+    public let isEnabled: Bool
+}
 
 // MARK: - Built-in Toggle Styles
 
@@ -370,30 +432,44 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             for: hoverKey, default: false)
         let isHovered = !isDisabled && !isFocused && hoverBox.value
 
-        // Render the label, keeping its colour styling. Stripping the ANSI
-        // here left the label with no foreground colour at all, so it drew
-        // in the terminal's default — unreadable against the themed
-        // background. A disabled toggle dims its label; otherwise the label
-        // inherits the normal foreground colour.
-        var labelContext = context
-        // Tag the label subtree so its Text resolves `.control(.toggle)` style
-        // entries (e.g. `.toggleTextStyle { … }`).
-        labelContext.environment.controlKind = .toggle
-        if isDisabled {
-            labelContext.environment.foregroundStyle =
-                palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        // The built-in styles render procedurally (focus glow + `CheckboxStyle`
+        // glyphs); a custom `ToggleStyle` renders through its `makeBody`. Either
+        // way the interaction wiring below (focus, mouse) is the core's job.
+        var buffer: FrameBuffer
+        let toggleStyle = context.environment.toggleStyle
+        if toggleStyle is DefaultToggleStyle || toggleStyle is CheckboxToggleStyle
+            || toggleStyle is SwitchToggleStyle {
+            // Render the label, keeping its colour styling. Stripping the ANSI
+            // here left the label with no foreground colour at all, so it drew
+            // in the terminal's default — unreadable against the themed
+            // background. A disabled toggle dims its label; otherwise the label
+            // inherits the normal foreground colour.
+            var labelContext = context
+            // Tag the label subtree so its Text resolves `.control(.toggle)` style
+            // entries (e.g. `.toggleTextStyle { … }`).
+            labelContext.environment.controlKind = .toggle
+            if isDisabled {
+                labelContext.environment.foregroundStyle =
+                    palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            }
+            let labelBuffer = TUIkit.renderToBuffer(label, context: labelContext)
+            let labelText = labelBuffer.lines.joined(separator: " ")
+
+            let styledIndicator = styledToggleIndicator(
+                isOnValue: isOnValue, isDisabled: isDisabled,
+                isFocused: isFocused, isHovered: isHovered, context: context)
+
+            // Combine: [indicator] label
+            buffer = FrameBuffer(lines: [styledIndicator + " " + labelText])
+        } else {
+            let configuration = ToggleStyleConfiguration(
+                label: AnyView(label),
+                isOn: isOn,
+                isFocused: isFocused && !isDisabled,
+                isHovered: isHovered,
+                isEnabled: !isDisabled)
+            buffer = toggleStyle.makeBuffer(configuration: configuration, context: context)
         }
-        let labelBuffer = TUIkit.renderToBuffer(label, context: labelContext)
-        let labelText = labelBuffer.lines.joined(separator: " ")
-
-        let styledIndicator = styledToggleIndicator(
-            isOnValue: isOnValue, isDisabled: isDisabled,
-            isFocused: isFocused, isHovered: isHovered, context: context)
-
-        // Combine: [indicator] label
-        let combinedLine = styledIndicator + " " + labelText
-
-        var buffer = FrameBuffer(lines: [combinedLine])
 
         // Hit-test region: a left-button release anywhere on the
         // toggle row flips its value, mirroring how Space / Enter
