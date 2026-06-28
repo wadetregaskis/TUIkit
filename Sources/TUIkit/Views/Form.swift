@@ -328,26 +328,45 @@ private func columnsElementView(
     }
 }
 
-/// Grouped layout for one element: a section is a content-sized bordered box (its
-/// title bold above it); a bare row renders as-is. Buttons aren't right-aligned
-/// here — that is a columns rule — so `contentWidth` is 0.
+/// Grouped layout for one element: a section is a bordered box (its title bold
+/// above it); a bare row renders as-is. Every section box is framed to the same
+/// `contentWidth` (the form's widest row) so the boxes' right borders line up
+/// vertically, and buttons right-align to that edge inside the box — matching the
+/// columns layout's button rule.
 @MainActor @ViewBuilder
-private func groupedElementView(_ element: _FormElement, pillar: Int) -> some View {
+private func groupedElementView(_ element: _FormElement, pillar: Int, contentWidth: Int) -> some View {
     switch element {
     case .row(let row):
-        formRowView(row, pillar: pillar, contentWidth: 0)
+        formRowView(row, pillar: pillar, contentWidth: contentWidth)
     case .section(let section):
         VStack(alignment: .leading, spacing: 0) {
             if let header = section.header { header.bold() }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<section.rows.count) { index in
-                    formRowView(section.rows[index], pillar: pillar, contentWidth: 0)
+                    groupedRowView(section.rows[index], pillar: pillar)
                 }
             }
+            .frame(width: contentWidth, alignment: .leading)
             .padding(.horizontal, 1)
             .border()
             if let footer = section.footer { footer }
         }
+    }
+}
+
+/// One row inside a grouped section's box. The box is framed to a uniform width,
+/// so a button right-aligns to *that* width with a leading `Spacer` (not a fixed
+/// frame — the form's `contentWidth` is measured at the wider form edge and would
+/// overshoot the bordered box); everything else keeps its natural per-kind layout.
+@MainActor @ViewBuilder
+private func groupedRowView(_ row: _FormRow, pillar: Int) -> some View {
+    if case .button = row.kind {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            baseRowView(row.kind, pillar: pillar)
+        }
+    } else {
+        baseRowView(row.kind, pillar: pillar)
     }
 }
 
@@ -384,12 +403,14 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
 
         let elements = formElements(from: content)
         let pillar = pillarWidth(of: elements, context: context)
-        let contentWidth = grouped ? 0 : contentWidth(of: elements, pillar: pillar, context: context)
+        // The widest non-button row drives both layouts now: in columns it's the
+        // edge buttons right-align to; in grouped it's the shared box width.
+        let contentWidth = contentWidth(of: elements, pillar: pillar, context: context)
 
         let composed = VStack(alignment: .leading, spacing: grouped ? 1 : 0) {
             ForEach(0..<elements.count) { index in
                 if grouped {
-                    groupedElementView(elements[index], pillar: pillar)
+                    groupedElementView(elements[index], pillar: pillar, contentWidth: contentWidth)
                 } else {
                     columnsElementView(
                         elements[index], pillar: pillar, contentWidth: contentWidth,
