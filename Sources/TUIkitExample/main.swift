@@ -41,5 +41,9 @@ struct ExampleApp: App {
     }
 }
 
+// Register the example app's own localized strings with the shared
+// LocalizationService before the UI renders, so `L(_:)` resolves them.
+registerExampleLocalizations()
+
 // Run the app
 await ExampleApp.main()

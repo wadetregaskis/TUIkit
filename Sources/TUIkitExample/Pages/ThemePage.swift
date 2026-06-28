@@ -105,6 +105,14 @@ struct ThemePage: View {
             get: { styling.checkboxStyle == .ascii ? "ASCII" : "Squares" },
             set: { name in styling.checkboxStyle = (name == "ASCII") ? .ascii : .squares }
         )
+        let languageSelection = Binding(
+            get: { LocalizationService.shared.currentLanguage.rawValue },
+            set: { code in
+                if let language = LocalizationService.Language(rawValue: code) {
+                    LocalizationService.shared.setLanguage(language)
+                }
+            }
+        )
         // Drives the modal colour editor: true while a colour is open for editing.
         let editingBinding = Binding(
             get: { editing != nil },
@@ -113,6 +121,15 @@ struct ThemePage: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
+
+                DemoSection(L("page.theme.language")) {
+                    Picker("Language", selection: languageSelection) {
+                        ForEach(LocalizationService.Language.allCases, id: \.rawValue) { language in
+                            Text(language.displayName).tag(language.rawValue)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+                }
 
                 DemoSection("Preset Palette") {
                     Picker("Preset", selection: presetSelection) {

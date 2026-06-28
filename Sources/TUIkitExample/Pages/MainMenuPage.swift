@@ -51,36 +51,36 @@ struct MainMenuPage: View {
             HStack {
                 Spacer()
                 Menu(
-                    title: "Select a Demo",
+                    title: L("menu.title"),
                     items: [
-                        MenuItem(label: "Text Styles", shortcut: "1"),
-                        MenuItem(label: "Colors", shortcut: "2"),
-                        MenuItem(label: "Container Views", shortcut: "3"),
-                        MenuItem(label: "Overlays & Modals", shortcut: "4"),
-                        MenuItem(label: "Layout System", shortcut: "5"),
-                        MenuItem(label: "Buttons & Focus", shortcut: "6"),
-                        MenuItem(label: "Toggles", shortcut: "7"),
-                        MenuItem(label: "Text Fields", shortcut: "8"),
-                        MenuItem(label: "Secure Fields", shortcut: "\\"),
-                        MenuItem(label: "Radio Buttons", shortcut: "9"),
-                        MenuItem(label: "Spinners", shortcut: "0"),
-                        MenuItem(label: "Lists", shortcut: "-"),
-                        MenuItem(label: "Tables", shortcut: "="),
-                        MenuItem(label: "Scroll View", shortcut: "s"),
-                        MenuItem(label: "Sliders", shortcut: "["),
-                        MenuItem(label: "Steppers", shortcut: "]"),
-                        MenuItem(label: "Split View", shortcut: ";"),
-                        MenuItem(label: "Image (File)", shortcut: "'"),
-                        MenuItem(label: "Image (URL)", shortcut: ","),
-                        MenuItem(label: "Emoji", shortcut: "."),
-                        MenuItem(label: "Picker", shortcut: "/"),
-                        MenuItem(label: "Progress", shortcut: "`"),
-                        MenuItem(label: "Mouse", shortcut: "m"),
-                        MenuItem(label: "Theme", shortcut: "t"),
-                        MenuItem(label: "Empty State", shortcut: "e"),
-                        MenuItem(label: "Tab Views", shortcut: "v"),
-                        MenuItem(label: "Forms", shortcut: "f"),
-                        MenuItem(label: "Advanced", shortcut: "g"),
+                        MenuItem(label: L("menu.item.textStyles"), shortcut: "1"),
+                        MenuItem(label: L("menu.item.colors"), shortcut: "2"),
+                        MenuItem(label: L("menu.item.containers"), shortcut: "3"),
+                        MenuItem(label: L("menu.item.overlays"), shortcut: "4"),
+                        MenuItem(label: L("menu.item.layout"), shortcut: "5"),
+                        MenuItem(label: L("menu.item.buttons"), shortcut: "6"),
+                        MenuItem(label: L("menu.item.toggles"), shortcut: "7"),
+                        MenuItem(label: L("menu.item.textFields"), shortcut: "8"),
+                        MenuItem(label: L("menu.item.secureFields"), shortcut: "\\"),
+                        MenuItem(label: L("menu.item.radioButtons"), shortcut: "9"),
+                        MenuItem(label: L("menu.item.spinners"), shortcut: "0"),
+                        MenuItem(label: L("menu.item.lists"), shortcut: "-"),
+                        MenuItem(label: L("menu.item.tables"), shortcut: "="),
+                        MenuItem(label: L("menu.item.scrollView"), shortcut: "s"),
+                        MenuItem(label: L("menu.item.sliders"), shortcut: "["),
+                        MenuItem(label: L("menu.item.steppers"), shortcut: "]"),
+                        MenuItem(label: L("menu.item.splitView"), shortcut: ";"),
+                        MenuItem(label: L("menu.item.imageFile"), shortcut: "'"),
+                        MenuItem(label: L("menu.item.imageURL"), shortcut: ","),
+                        MenuItem(label: L("menu.item.emoji"), shortcut: "."),
+                        MenuItem(label: L("menu.item.picker"), shortcut: "/"),
+                        MenuItem(label: L("menu.item.progress"), shortcut: "`"),
+                        MenuItem(label: L("menu.item.mouse"), shortcut: "m"),
+                        MenuItem(label: L("menu.item.theme"), shortcut: "t"),
+                        MenuItem(label: L("menu.item.emptyState"), shortcut: "e"),
+                        MenuItem(label: L("menu.item.tabViews"), shortcut: "v"),
+                        MenuItem(label: L("menu.item.forms"), shortcut: "f"),
+                        MenuItem(label: L("menu.item.advanced"), shortcut: "g"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in
@@ -102,10 +102,10 @@ struct MainMenuPage: View {
             HStack {
                 Spacer()
                 HStack(spacing: 3) {
-                    FeatureBox("Pure Swift", "No ncurses").equatable()
-                    FeatureBox("Declarative", "SwiftUI-like").equatable()
-                    FeatureBox("Composable", "View protocol").equatable()
-                    FeatureBox("Unicode compatible", "所有语言 🥳🤙🏽").equatable()
+                    FeatureBox(L("feature.pureSwift.title"), L("feature.pureSwift.subtitle")).equatable()
+                    FeatureBox(L("feature.declarative.title"), L("feature.declarative.subtitle")).equatable()
+                    FeatureBox(L("feature.composable.title"), L("feature.composable.subtitle")).equatable()
+                    FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
                 }
                 Spacer()
             }
@@ -114,8 +114,8 @@ struct MainMenuPage: View {
         }
         .appHeader {
             DemoAppHeader(
-                "🖥️ TUIkit Example App 💫",
-                subtitle: "A SwiftUI-like framework for Terminal User Interfaces 😎"
+                L("app.title"),
+                subtitle: L("app.subtitle")
             )
         }
     }
