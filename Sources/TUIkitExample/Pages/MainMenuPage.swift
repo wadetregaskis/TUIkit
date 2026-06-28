@@ -80,6 +80,7 @@ struct MainMenuPage: View {
                         MenuItem(label: "Empty State", shortcut: "e"),
                         MenuItem(label: "Tab Views", shortcut: "v"),
                         MenuItem(label: "Forms", shortcut: "f"),
+                        MenuItem(label: "Advanced", shortcut: "g"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in
