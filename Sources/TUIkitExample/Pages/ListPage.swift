@@ -167,6 +167,51 @@ struct ListPage: View {
                 }
             }
 
+            DemoSection("List styles (.listStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "Apply a list style with .listStyle(.plain) or "
+                            + ".listStyle(.insetGrouped) — the two built-in "
+                            + "ListStyles, matching SwiftUI's leading-dot syntax."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    // Untitled lists, so a title border doesn't mask the
+                    // borderless `.plain` style — the label is a Text above each.
+                    HStack(spacing: 2) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(".plain").dim()
+                            List {
+                                ForEach(FileItem.sampleFiles.prefix(3)) { file in
+                                    HStack(spacing: 1) {
+                                        Text(file.icon)
+                                        Text(file.name)
+                                    }
+                                }
+                            }
+                            .listStyle(.plain)
+                            .frame(height: 5)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(".insetGrouped").dim()
+                            List {
+                                ForEach(FileItem.sampleFiles.prefix(3)) { file in
+                                    HStack(spacing: 1) {
+                                        Text(file.icon)
+                                        Text(file.name)
+                                    }
+                                }
+                            }
+                            .listStyle(.insetGrouped)
+                            .frame(height: 5)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+
             KeyboardHelpSection(
                 "Navigation",
                 shortcuts: [

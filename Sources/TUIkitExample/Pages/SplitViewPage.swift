@@ -127,31 +127,60 @@ struct SplitViewPage: View {
     @State private var selectedFolder: String? = "inbox"
     @State private var selectedMessage: String? = "1"
     @State private var visibility: NavigationSplitViewVisibility = .all
+    @State private var styleName: String = "balanced"
 
     var body: some View {
         VStack(spacing: 0) {
-            NavigationSplitView(columnVisibility: $visibility) {
-                // Sidebar: Folder list
-                List("Folders", selection: $selectedFolder) {
-                    ForEach(Folder.samples) { folder in
-                        HStack(spacing: 1) {
-                            Text(folder.icon)
-                            Text(folder.name)
-                        }
-                        .badge(folder.unreadCount)
-                    }
-                }
-            } content: {
-                // Content: Message list
-                messageListContent
-            } detail: {
-                // Detail: Message content
-                detailColumn
+            // Switch the split style live. `.balanced` shrinks the detail to make
+            // room for the leading columns; `.prominentDetail` keeps the detail's
+            // size and overlays/hides the leading columns instead; `.automatic`
+            // resolves a sensible default for the context.
+            Picker("Style", selection: $styleName) {
+                Text("Automatic").tag("automatic")
+                Text("Balanced").tag("balanced")
+                Text("Prominent Detail").tag("prominentDetail")
             }
-            .navigationSplitViewStyle(.balanced)
+            .pickerStyle(.radioGroup)
+            .padding(.horizontal, 1)
+
+            styledSplitView
         }
         .appHeader {
             DemoAppHeader("NavigationSplitView Demo")
+        }
+    }
+
+    /// The shared three-column split view with the currently-selected
+    /// ``NavigationSplitViewStyle`` applied.
+    @ViewBuilder private var styledSplitView: some View {
+        switch styleName {
+        case "automatic":
+            splitView.navigationSplitViewStyle(.automatic)
+        case "prominentDetail":
+            splitView.navigationSplitViewStyle(.prominentDetail)
+        default:
+            splitView.navigationSplitViewStyle(.balanced)
+        }
+    }
+
+    private var splitView: some View {
+        NavigationSplitView(columnVisibility: $visibility) {
+            // Sidebar: Folder list
+            List("Folders", selection: $selectedFolder) {
+                ForEach(Folder.samples) { folder in
+                    HStack(spacing: 1) {
+                        Text(folder.icon)
+                        Text(folder.name)
+                    }
+                    .badge(folder.unreadCount)
+                }
+            }
+        } content: {
+            // Content: Message list
+            messageListContent
+        } detail: {
+            // Detail: Message content
+            detailColumn
         }
     }
 }

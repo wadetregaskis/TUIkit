@@ -31,6 +31,9 @@ struct MousePage: View {
     @State var dragDeltaY: Int = 0
     @State var rightClicks: Int = 0
     @State var lastModifier: String = "—"
+    @State var isHovering: Bool = false
+    @State var scrollTicks: Int = 0
+    @State var lastScrollDirection: String = "—"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -172,6 +175,41 @@ struct MousePage: View {
                 }
             }
 
+            DemoSection("Hover (.onHover)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Move the cursor over the box — the label and colour change while hovered.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(isHovering ? "[ hovering ]" : "[ hover me ]")
+                        .bold()
+                        .foregroundStyle(isHovering ? .palette.accent : .palette.foregroundSecondary)
+                        .padding(EdgeInsets(horizontal: 2, vertical: 0))
+                        .border(color: isHovering ? .palette.accent : .palette.border)
+                        .onHover { hovering in
+                            isHovering = hovering
+                        }
+                    ValueDisplayRow("State:", isHovering ? "hovering" : "outside")
+                }
+            }
+
+            DemoSection("Scroll gesture (.onScrollGesture)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Scroll the wheel over the box. .onScrollGesture reports a direction per tick.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text("[ scroll over me ]")
+                        .foregroundStyle(.palette.accent)
+                        .padding(EdgeInsets(horizontal: 2, vertical: 0))
+                        .border(color: .palette.border)
+                        .onScrollGesture { direction in
+                            scrollTicks += 1
+                            lastScrollDirection = describeScroll(direction)
+                        }
+                    HStack(spacing: 2) {
+                        ValueDisplayRow("Ticks:", "\(scrollTicks)")
+                        ValueDisplayRow("Last direction:", lastScrollDirection)
+                    }
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
@@ -228,6 +266,15 @@ struct MousePage: View {
         case .began: return "began"
         case .moved: return "moved"
         case .ended: return "ended"
+        }
+    }
+
+    private func describeScroll(_ direction: ScrollDirection) -> String {
+        switch direction {
+        case .up: return "up"
+        case .down: return "down"
+        case .left: return "left"
+        case .right: return "right"
         }
     }
 

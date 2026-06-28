@@ -49,6 +49,7 @@ private struct FileEntry: Identifiable, Sendable {
 struct TablePage: View {
     @State var singleSelection: String?
     @State var multiSelection: Set<String> = []
+    @State var ratioSelection: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -90,6 +91,21 @@ struct TablePage: View {
                     .width(.fixed(22))
                     .lineLimit(2)
             }
+
+            Text("Ratio widths (.width(.ratio(_:))) — each column a share of the table)")
+                .foregroundStyle(.palette.foregroundSecondary)
+            Table(FileEntry.sampleFiles, selection: $ratioSelection) {
+                // `.ratio` sizes each column to a fraction of the table's
+                // width: Name takes half, Size and Type split the rest.
+                TableColumn("Name", value: \FileEntry.name)
+                    .width(.ratio(0.5))
+                TableColumn("Size", value: \FileEntry.size)
+                    .width(.ratio(0.25))
+                    .alignment(.trailing)
+                TableColumn("Type", value: \FileEntry.type)
+                    .width(.ratio(0.25))
+            }
+            .frame(height: 6)
 
             DemoSection("Current Selections") {
                 VStack(alignment: .leading, spacing: 1) {

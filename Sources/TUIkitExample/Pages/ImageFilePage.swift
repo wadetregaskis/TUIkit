@@ -25,14 +25,36 @@ struct ImageFilePage: View {
         // The image lives in a two-axis ScrollView fitted to the viewport: at zoom 1
         // the whole image shows with no scrollbars; `+`/`-` zoom in and out, and the
         // scrollbars appear automatically once it grows past the visible area.
-        imageContent
-            .imageCharacterSet(charSet)
-            .imageColorMode(colorMode)
-            .imageDithering(dithering)
-            .statusBarItems(statusBarItems)
-            .appHeader {
-                DemoAppHeader("Image (File)")
+        // The Pickers and status-bar shortcuts drive the same @State, so either
+        // changes the character set / colour mode.
+        VStack(alignment: .leading, spacing: 1) {
+            pickerControls
+            imageContent
+                .imageCharacterSet(charSet)
+                .imageColorMode(colorMode)
+                .imageDithering(dithering)
+        }
+        .statusBarItems(statusBarItems)
+        .appHeader {
+            DemoAppHeader("Image (File)")
+        }
+    }
+
+    /// Live Pickers that switch the rendered character set and colour
+    /// mode across every available value.
+    @ViewBuilder private var pickerControls: some View {
+        HStack(spacing: 2) {
+            Picker("Characters", selection: $charSetIndex) {
+                ForEach(ImageDemoHelpers.charSets.indices, id: \.self) { index in
+                    Text(ImageDemoHelpers.charSetLabel(index)).tag(index)
+                }
             }
+            Picker("Colour", selection: $colorModeIndex) {
+                ForEach(ImageDemoHelpers.colorModes.indices, id: \.self) { index in
+                    Text(ImageDemoHelpers.colorModeLabel(index)).tag(index)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var imageContent: some View {

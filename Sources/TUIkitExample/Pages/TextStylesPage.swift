@@ -47,6 +47,22 @@ struct TextStylesPage: View {
                 Text("Inverted colors").inverted()
             }
 
+            DemoSection("Font weight (.fontWeight)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(
+                        "A terminal has only three weights, so the nine SwiftUI "
+                            + "weights collapse: ultraLight/thin/light → dim, "
+                            + "regular/medium → normal, semibold/bold/heavy/black → bold."
+                    )
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    Text("Thin").fontWeight(.thin)
+                    Text("Regular").fontWeight(.regular)
+                    Text("Semibold").fontWeight(.semibold)
+                    Text("Black").fontWeight(.black)
+                }
+            }
+
             DemoSection("Truncation & Line Limits") {
                 VStack(alignment: .leading, spacing: 1) {
                     let long = "A long line that will not fit inside a 30-column frame"

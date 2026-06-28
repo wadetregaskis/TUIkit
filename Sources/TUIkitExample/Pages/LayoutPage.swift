@@ -101,6 +101,30 @@ struct LayoutPage: View {
                 .border(color: .brightBlack)
             }
 
+            DemoSection("LazyVStack / LazyHStack") {
+                // Same API shape as VStack/HStack, but rows/columns are
+                // realised lazily — only the part scrolled into view is
+                // rendered. Handy inside a ScrollView with many children.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Only the on-screen window of children is rendered.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        Text("Lazy row 1")
+                        Text("Lazy row 2")
+                        Text("Lazy row 3")
+                    }
+                    .border(color: .brightBlack)
+
+                    LazyHStack(spacing: 2) {
+                        Text("Col 1")
+                        Text("Col 2")
+                        Text("Col 3")
+                    }
+                    .border(color: .brightBlack)
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
