@@ -100,8 +100,11 @@ identifier_name:
     - to
     # The example app's terse localized-string lookup, `L("key")` — a deliberate
     # one-letter helper (à la gettext's `_`) kept short because it wraps almost
-    # every user-facing string.
+    # every user-facing string. `Lf("key", args...)` is its formatting sibling
+    # (positional `{0}` substitution) used by the stress harness; both read as
+    # proper nouns, so the leading-capital convention is intentional.
     - L
+    - Lf
     # Framework-private static View witnesses, `_`-prefixed following the
     # SwiftUI convention (as the `_`-prefixed types in `type_name.excluded`
     # are). They let the child-layout path detect Spacer / z-index wrappers

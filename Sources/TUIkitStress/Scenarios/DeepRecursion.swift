@@ -30,7 +30,7 @@ private struct DeepRecursionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Deep Recursion — depth \(depth)").bold()
+            Text(Lf("stress.scenario.deep.heading", depth)).bold()
             Divider()
             ScrollView {
                 Nest(level: 0, maxDepth: depth, seed: seed)
@@ -50,10 +50,10 @@ private struct Nest: View {
     var body: some View {
         let h = mix(seed, level)
         if level >= maxDepth {
-            Text("leaf @ \(level): \(Synth.slug(h))").foregroundStyle(.accent)
+            Text(Lf("stress.scenario.deep.leaf", level, Synth.slug(h))).foregroundStyle(.accent)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                Text("level \(level)").foregroundStyle(level.isMultiple(of: 2) ? .secondary : .primary)
+                Text(Lf("stress.scenario.deep.level", level)).foregroundStyle(level.isMultiple(of: 2) ? .secondary : .primary)
                 Self(level: level + 1, maxDepth: maxDepth, seed: seed)
                     .padding(1)
             }

@@ -33,7 +33,7 @@ private struct ChurnUpdateView: View {
         let count = config.sized(300)
         let tick = clock.tick
         return VStack(alignment: .leading, spacing: 0) {
-            Text("Churn Update — frame \(tick), \(count) rows invalidated/frame").bold()
+            Text(Lf("stress.scenario.churn.heading", tick, count)).bold()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

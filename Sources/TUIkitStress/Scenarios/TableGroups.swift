@@ -104,12 +104,12 @@ private struct TablesInScrollViewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Tables in a ScrollView — \(tables.count) tables × \(tables.first?.count ?? 0) rows").bold()
+            Text(Lf("stress.scenario.tables-scroll.heading", tables.count, tables.first?.count ?? 0)).bold()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
                     ForEach(0..<tables.count, id: \.self) { index in
-                        StressTable(title: "Table \(index + 1)", rows: tables[index])
+                        StressTable(title: Lf("stress.scenario.tables.tableLabel", index + 1), rows: tables[index])
                     }
                 }
             }
@@ -130,10 +130,10 @@ private struct TablesInVStackView: View {
         // No ScrollView — the tables sit directly in the VStack, which measures
         // and lays out each one (the contrast with the ScrollView case).
         VStack(alignment: .leading, spacing: 1) {
-            Text("Tables in a VStack — \(tables.count) tables × \(tables.first?.count ?? 0) rows").bold()
+            Text(Lf("stress.scenario.tables-vstack.heading", tables.count, tables.first?.count ?? 0)).bold()
             Divider()
             ForEach(0..<tables.count, id: \.self) { index in
-                StressTable(title: "Table \(index + 1)", rows: tables[index])
+                StressTable(title: Lf("stress.scenario.tables.tableLabel", index + 1), rows: tables[index])
             }
         }
     }

@@ -18,16 +18,26 @@ import TUIkit
 /// (For AnyView-free micro-profiling of a specific shape, add a tree to
 /// `Tools/Profiling/RenderHarness/Trees.swift` instead.)
 struct Scenario {
-    /// Stable id used by `--scenario` / `TUIKIT_STRESS_SCENARIO`.
+    /// Stable id used by `--scenario` / `TUIKIT_STRESS_SCENARIO`. Also the key
+    /// stem for this scenario's localized strings (`stress.scenario.<id>.*`).
     let id: String
-    /// Menu title.
+    /// Menu title, in English. The interactive shell shows ``localizedTitle``;
+    /// this stays English for the `--selfcheck` stdout listing.
     let title: String
-    /// One-line description.
+    /// One-line description, in English (see ``localizedBlurb``).
     let blurb: String
-    /// Which part of the pipeline this is built to stress.
+    /// Which part of the pipeline this is built to stress, in English
+    /// (see ``localizedStresses``).
     let stresses: String
     /// Builds the scenario's view for the given configuration.
     let make: @MainActor (StressConfig) -> AnyView
+
+    /// The menu title for the current language (falls back to ``title``).
+    var localizedTitle: String { L("stress.scenario.\(id).title") }
+    /// The one-line description for the current language (falls back to ``blurb``).
+    var localizedBlurb: String { L("stress.scenario.\(id).blurb") }
+    /// The "stresses" summary for the current language (falls back to ``stresses``).
+    var localizedStresses: String { L("stress.scenario.\(id).stresses") }
 }
 
 // MARK: - Registry

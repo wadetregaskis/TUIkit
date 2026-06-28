@@ -44,7 +44,7 @@ private struct WideTableView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Wide Table — \(rows.count) rows × 8 columns").bold()
+            Text(Lf("stress.scenario.table.heading", rows.count)).bold()
             Divider()
             Table(rows, selection: Binding<Int?>.constant(nil)) {
                 TableColumn("ID") { (row: StressItem) in "\(row.id)" }

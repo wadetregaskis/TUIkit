@@ -107,35 +107,39 @@ private struct RootView: View {
     /// generate no re-render load at all — i.e. do nothing visible. The live
     /// frame number is also the user's signal that autopilot is running.
     private var autopilotStatus: String {
-        clock.autopilot ? "on · frame \(clock.tick)" : "off"
+        clock.autopilot
+            ? "\(L("stress.shell.autopilot.on")) · \(L("stress.shell.autopilot.frame")) \(clock.tick)"
+            : L("stress.shell.autopilot.off")
     }
 
     private var menu: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("TUIkit — Stress Test").bold()
-            Text("scale \(scale) · seed \(config.seed) · autopilot \(autopilotStatus)")
+            Text(L("stress.shell.menu.title")).bold()
+            Text("\(L("stress.shell.label.scale")) \(scale) · \(L("stress.shell.label.seed")) \(config.seed) "
+                + "· \(L("stress.shell.label.autopilot")) \(autopilotStatus)")
                 .foregroundStyle(.secondary)
             Divider()
             ForEach(0..<Scenarios.all.count, id: \.self) { index in
                 let scenario = Scenarios.all[index]
                 HStack {
-                    Text(index == menuIndex ? "▶ \(scenario.title)" : "  \(scenario.title)")
+                    Text(index == menuIndex ? "▶ \(scenario.localizedTitle)" : "  \(scenario.localizedTitle)")
                         .foregroundStyle(index == menuIndex ? .accent : .primary)
                     Spacer()
-                    Text(scenario.stresses).foregroundStyle(.secondary)
+                    Text(scenario.localizedStresses).foregroundStyle(.secondary)
                 }
             }
             Divider()
-            Text("↑/↓ select · enter open · +/− scale · a autopilot · esc quit")
+            Text(L("stress.shell.menu.help"))
                 .foregroundStyle(.secondary)
         }
         .padding(1)
     }
 
     private func footer(for id: String) -> String {
-        let title = Scenarios.byID(id)?.title ?? id
-        return "\(title) · scale \(scale) · autopilot \(autopilotStatus)"
-            + "   [esc back · +/− scale · a autopilot]"
+        let title = Scenarios.byID(id)?.localizedTitle ?? id
+        return "\(title) · \(L("stress.shell.label.scale")) \(scale) "
+            + "· \(L("stress.shell.label.autopilot")) \(autopilotStatus)"
+            + "   [\(L("stress.shell.footer.hint"))]"
     }
 
     // MARK: Navigation

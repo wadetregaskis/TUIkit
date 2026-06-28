@@ -31,7 +31,7 @@ private struct KitchenSinkView: View {
         let cards = config.sized(9)
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Items (\(listCount))").bold()
+                Text(Lf("stress.scenario.kitchensink.heading.items", listCount)).bold()
                 Divider()
                 List {
                     ForEach(0..<listCount, id: \.self) { index in
@@ -47,7 +47,7 @@ private struct KitchenSinkView: View {
             }
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Metrics").bold()
+                Text(L("stress.scenario.kitchensink.heading.metrics")).bold()
                 Divider()
                 ScrollView {
                     VStack(spacing: 1) {

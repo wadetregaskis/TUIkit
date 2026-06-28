@@ -30,7 +30,7 @@ private struct ModifierChainsView: View {
     var body: some View {
         let count = config.sized(400)
         VStack(alignment: .leading, spacing: 0) {
-            Text("Modifier Chains — \(count) deeply-modified rows").bold()
+            Text(Lf("stress.scenario.modifiers.heading", count)).bold()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

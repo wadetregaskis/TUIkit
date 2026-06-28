@@ -31,7 +31,7 @@ private struct MegaListView: View {
     var body: some View {
         let count = config.sized(50_000)
         VStack(alignment: .leading, spacing: 0) {
-            Text("Mega List — \(count) rows").bold()
+            Text(Lf("stress.scenario.megalist.heading", count)).bold()
             Divider()
             List {
                 ForEach(0..<count, id: \.self) { index in

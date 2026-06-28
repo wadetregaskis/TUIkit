@@ -55,7 +55,7 @@ private struct TextWallView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Text Wall — \(count) wrapping paragraphs").bold()
+            Text(Lf("stress.scenario.textwall.heading", count)).bold()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {

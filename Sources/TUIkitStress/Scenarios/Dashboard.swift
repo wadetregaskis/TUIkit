@@ -33,7 +33,7 @@ private struct DashboardView: View {
         let columns = 3
         let rows = (cards + columns - 1) / columns
         VStack(alignment: .leading, spacing: 0) {
-            Text("Dashboard — \(cards) metric panels").bold()
+            Text(Lf("stress.scenario.dashboard.heading", cards)).bold()
             Divider()
             ScrollView {
                 VStack(spacing: 1) {

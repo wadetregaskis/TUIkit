@@ -59,7 +59,7 @@ private struct WideFanoutView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Wide Fanout — \(count) siblings in one VStack").bold()
+            Text(Lf("stress.scenario.fanout.heading", count)).bold()
             Divider()
             // Inside a ScrollView so it's viewable, but the VStack itself is
             // non-lazy: all `count` children are laid out regardless of viewport.

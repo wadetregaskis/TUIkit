@@ -30,7 +30,7 @@ private struct AnyViewStormView: View {
     var body: some View {
         let count = config.sized(500)
         VStack(alignment: .leading, spacing: 0) {
-            Text("AnyView Storm — \(count) type-erased rows").bold()
+            Text(Lf("stress.scenario.anyview.heading", count)).bold()
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

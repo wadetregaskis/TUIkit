@@ -39,7 +39,7 @@ private struct MultiLineTableView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Multi-line Table — \(rows.count) rows, Details wraps to ≤3 lines").bold()
+            Text(Lf("stress.scenario.table-multiline.heading", rows.count)).bold()
             Divider()
             Table(rows, selection: Binding<Int?>.constant(nil)) {
                 TableColumn("ID") { (row: StressItem) in "\(row.id)" }

@@ -26,6 +26,11 @@ import Dispatch
 import Foundation
 import TUIkit
 
+// Register the harness's own localized strings with the shared
+// LocalizationService before any UI renders, so `L(_:)` resolves them. Harmless
+// in the headless `--bench` / `--selfcheck` modes (they never read the result).
+registerStressLocalizations()
+
 let rawArgs = Array(CommandLine.arguments.dropFirst())
 let config = StressConfig.fromEnvironmentAndArgs(rawArgs)
 
