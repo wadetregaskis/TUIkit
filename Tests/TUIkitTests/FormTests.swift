@@ -143,6 +143,30 @@ struct FormTests {
         #expect(buttonRow.contains("Sign Out"))
     }
 
+    @Test("formRowAlignment(.leading) overrides a button's default right-alignment")
+    func formRowAlignmentOverridesButton() {
+        // A field gives the form a content width wider than the button, so a
+        // right-aligned button gains leading whitespace and a left-aligned one
+        // does not — letting us tell the two apart.
+        let defaultOut = lines(
+            Form {
+                LabeledContent("Account email", value: "ada@example.com")
+                Button("Reset") {}
+            })
+        let overriddenOut = lines(
+            Form {
+                LabeledContent("Account email", value: "ada@example.com")
+                Button("Reset") {}.formRowAlignment(.leading)
+            })
+        let defaultRow = defaultOut.first { $0.contains("Reset") } ?? ""
+        let overriddenRow = overriddenOut.first { $0.contains("Reset") } ?? ""
+        // Default: right-aligned → leading whitespace. Override: left-aligned → the
+        // button (its chrome) starts at column 0, so no leading whitespace.
+        #expect(defaultRow.hasPrefix(" "), "default button should be right-aligned: \(defaultOut)")
+        #expect(!overriddenRow.hasPrefix(" ") && overriddenRow.contains("Reset"),
+                "overridden button should be left-aligned: \(overriddenOut)")
+    }
+
     @Test("A columns section header is right-aligned to the pillar")
     func sectionHeaderRightAligned() {
         let out = lines(

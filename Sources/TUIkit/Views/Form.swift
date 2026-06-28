@@ -57,7 +57,7 @@ public struct Form<Content: View>: View {
 // MARK: - Form Row Model
 
 /// One form row, by kind — each laid out per macOS form conventions.
-enum _FormRow {
+enum _FormRowKind {
     /// A field: right-aligned pillar label + a control/value left-aligned after it.
     case field(label: AnyView, content: AnyView)
     /// A self-labelled control (checkbox/radio): box-first, in the control column,
@@ -67,6 +67,19 @@ enum _FormRow {
     case button(AnyView)
     /// Anything else: a full-width row.
     case plain(AnyView)
+}
+
+/// A form row: its kind plus an optional explicit horizontal alignment from
+/// ``SwiftUICore/View/formRowAlignment(_:)``, which overrides the kind's default
+/// (e.g. a button's right-alignment).
+struct _FormRow {
+    var kind: _FormRowKind
+    var alignment: HorizontalAlignment?
+
+    init(_ kind: _FormRowKind, alignment: HorizontalAlignment? = nil) {
+        self.kind = kind
+        self.alignment = alignment
+    }
 }
 
 /// A grouped run of rows with an optional header/footer (from a ``Section``).
@@ -96,6 +109,48 @@ extension Toggle: FormControlRow {}
 extension RadioButtonGroup: FormControlRow {}
 extension Button: FormButtonRow {}
 
+// MARK: - Per-row alignment override
+
+extension View {
+    /// Overrides a row's horizontal alignment within a ``Form``'s **columns**
+    /// layout, taking precedence over the kind's default (e.g. left-align a
+    /// `Button` that would otherwise be right-aligned). Outside a columns form it
+    /// has no effect.
+    ///
+    /// ```swift
+    /// Form {
+    ///     Button("Reset") { … }.formRowAlignment(.leading)  // not right-aligned
+    /// }
+    /// ```
+    ///
+    /// - Parameter alignment: The horizontal alignment for the row within the
+    ///   form's content width.
+    /// - Returns: A view whose form row uses the given alignment.
+    public func formRowAlignment(_ alignment: HorizontalAlignment) -> some View {
+        _FormRowAlignmentModifier(content: self, alignment: alignment)
+    }
+}
+
+/// Carries a ``SwiftUICore/View/formRowAlignment(_:)`` override; transparent
+/// outside a form (it just renders its content).
+struct _FormRowAlignmentModifier<Content: View>: View {
+    let content: Content
+    let alignment: HorizontalAlignment
+    var body: some View { content }
+}
+
+/// A view carrying a per-row alignment override the form applies during extraction.
+@MainActor
+protocol FormRowAligning {
+    var formRowAlignmentValue: HorizontalAlignment { get }
+    func formRowInnerElements() -> [_FormElement]
+}
+
+extension _FormRowAlignmentModifier: FormRowAligning {
+    var formRowAlignmentValue: HorizontalAlignment { alignment }
+    func formRowInnerElements() -> [_FormElement] { formElements(from: content) }
+}
+
 // MARK: - Form Content Extraction
 
 /// Views that can contribute rows/sections to a ``Form``.
@@ -114,16 +169,37 @@ protocol FormContentExtractor {
 /// row, or a plain full-width row depending on its kind.
 @MainActor
 func formElements(from view: some View) -> [_FormElement] {
+    if let aligned = view as? FormRowAligning {
+        let alignment = aligned.formRowAlignmentValue
+        return aligned.formRowInnerElements().map { stamped($0, alignment: alignment) }
+    }
     if let extractor = view as? FormContentExtractor {
         return extractor.extractFormElements()
     }
     if view is FormControlRow {
-        return [.row(.control(AnyView(view)))]
+        return [.row(_FormRow(.control(AnyView(view))))]
     }
     if view is FormButtonRow {
-        return [.row(.button(AnyView(view)))]
+        return [.row(_FormRow(.button(AnyView(view))))]
     }
-    return [.row(.plain(AnyView(view)))]
+    return [.row(_FormRow(.plain(AnyView(view))))]
+}
+
+/// Stamps an explicit alignment onto an element's row(s), without clobbering an
+/// inner override already present (the innermost `formRowAlignment` wins).
+private func stamped(_ element: _FormElement, alignment: HorizontalAlignment) -> _FormElement {
+    func apply(_ row: _FormRow) -> _FormRow {
+        var row = row
+        if row.alignment == nil { row.alignment = alignment }
+        return row
+    }
+    switch element {
+    case .row(let row):
+        return .row(apply(row))
+    case .section(var section):
+        section.rows = section.rows.map(apply)
+        return .section(section)
+    }
 }
 
 /// Flattens elements to their rows (a section contributes its rows).
@@ -138,7 +214,7 @@ private func formRows(of elements: [_FormElement]) -> [_FormRow] {
 
 extension LabeledContent: FormContentExtractor {
     func extractFormElements() -> [_FormElement] {
-        [.row(.field(label: AnyView(label), content: AnyView(content)))]
+        [.row(_FormRow(.field(label: AnyView(label), content: AnyView(content))))]
     }
 }
 
@@ -178,12 +254,13 @@ extension EmptyView: FormContentExtractor {
 /// label/control gap), or column 0 when there are no field labels.
 private func controlIndent(pillar: Int) -> Int { pillar == 0 ? 0 : pillar + 1 }
 
-/// Builds one row's view. Buttons are framed to `contentWidth` so they
-/// right-align to the form's content edge; checkbox/radio controls are indented
-/// to the control column; fields put a right-aligned label in the pillar.
+/// One row's natural per-kind layout, before any explicit alignment override:
+/// a field puts a right-aligned label in the pillar then its content; a
+/// checkbox/radio control is indented to the control column; a button and a plain
+/// row render at their natural width.
 @MainActor @ViewBuilder
-private func formRowView(_ row: _FormRow, pillar: Int, contentWidth: Int) -> some View {
-    switch row {
+private func baseRowView(_ kind: _FormRowKind, pillar: Int) -> some View {
+    switch kind {
     case .field(let label, let content):
         HStack(spacing: 1) {
             label.frame(width: pillar, alignment: .trailing)
@@ -192,15 +269,28 @@ private func formRowView(_ row: _FormRow, pillar: Int, contentWidth: Int) -> som
     case .control(let view):
         view.padding(.leading, controlIndent(pillar: pillar))
     case .button(let view):
-        // Right-align to the content edge in columns; natural width when
-        // contentWidth is 0 (grouped passes 0 — right-alignment is a columns rule).
-        if contentWidth > 0 {
-            view.frame(width: contentWidth, alignment: .trailing)
-        } else {
-            view
-        }
+        view
     case .plain(let view):
         view
+    }
+}
+
+/// Builds one row's view. An explicit ``SwiftUICore/View/formRowAlignment(_:)``
+/// frames the row to `contentWidth` at that alignment (columns only); otherwise a
+/// button defaults to right-aligned and every other kind keeps its natural width.
+/// `contentWidth` is 0 in grouped, where row-level horizontal alignment doesn't
+/// apply.
+@MainActor @ViewBuilder
+private func formRowView(_ row: _FormRow, pillar: Int, contentWidth: Int) -> some View {
+    let base = baseRowView(row.kind, pillar: pillar)
+    if contentWidth > 0, let alignment = row.alignment {
+        // Explicit override (e.g. left-align a button that defaults to the right).
+        base.frame(width: contentWidth, alignment: Alignment(horizontal: alignment, vertical: .center))
+    } else if contentWidth > 0, case .button = row.kind {
+        // Buttons default to the content edge in columns.
+        base.frame(width: contentWidth, alignment: .trailing)
+    } else {
+        base
     }
 }
 
@@ -315,7 +405,7 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
     private func pillarWidth(of elements: [_FormElement], context: RenderContext) -> Int {
         formRows(of: elements)
             .compactMap { row -> Int? in
-                guard case .field(let label, _) = row else { return nil }
+                guard case .field(let label, _) = row.kind else { return nil }
                 return measureChild(
                     label, proposal: ProposedSize(width: nil, height: nil), context: context
                 ).width
@@ -328,7 +418,7 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
     private func contentWidth(of elements: [_FormElement], pillar: Int, context: RenderContext) -> Int {
         formRows(of: elements)
             .compactMap { row -> Int? in
-                if case .button = row { return nil }
+                if case .button = row.kind { return nil }
                 return measureChild(
                     formRowView(row, pillar: pillar, contentWidth: 0),
                     proposal: ProposedSize(width: nil, height: nil), context: context

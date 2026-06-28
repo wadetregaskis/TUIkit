@@ -165,8 +165,11 @@ type_name:
     - _RawPickerOption
     # Internal Form row/section model value types.
     - _FormRow
+    - _FormRowKind
     - _FormSection
     - _FormElement
+    # Carries a per-row .formRowAlignment(_:) override into the form.
+    - _FormRowAlignmentModifier
     - _MemoizedRow
     - _SplitDividerHandler
     - _RawTab
