@@ -274,8 +274,14 @@ non-obvious.)
 > **Since shipped** (now built; removed from the list below): `TabView` / `Tab`,
 > `ColorPicker` (with a full modal `ColorPickerPanel`), the `.tint(_:)` modifier,
 > `View.disabled(_:)` + the `\.isEnabled` environment value (the §3.3 fix), and
-> `Form` / `LabeledContent` with `formStyle(_:)` (`.columns` — the default, the
-> classic macOS layout — and `.grouped`).
+> `Form` / `LabeledContent` with `formStyle(_:)` (`.columns` — the default,
+> following the classic macOS layout — and `.grouped`). The columns layout
+> follows the macOS conventions: a right-aligned label pillar, box-first
+> checkboxes, right-aligned buttons (override per row with `formRowAlignment(_:)`,
+> a TUI-specific modifier), bold right-aligned section headers, and explanatory
+> subtext on a checkbox via SwiftUI's multi-view label
+> (`Toggle(isOn:) { Text("Title"); Text("Help") }` — the second view renders below
+> the title, indented to the label, in the secondary colour).
 
 | Feature | Why it matters | Design sketch / trade-off |
 |---|---|---|
