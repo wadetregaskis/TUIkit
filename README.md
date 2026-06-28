@@ -131,7 +131,7 @@ struct ContentView: View {
 swift run TUIkitExample
 ```
 
-Press `q` or `ESC` to exit.
+Press `q` to exit. (Inside a demo page, `ESC` goes back to the menu.)
 
 ## Installation
 

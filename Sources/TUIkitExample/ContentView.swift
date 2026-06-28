@@ -98,12 +98,14 @@ struct ContentView: View {
             .onKeyPress { event in
                 switch event.key {
                 case .escape:
-                    // ESC goes back to menu (or exits if already on menu)
+                    // ESC goes back to the menu from a sub-page. On the menu it
+                    // does nothing — quitting is `q` (no default ESC→quit binding),
+                    // so we leave the event unconsumed rather than implying it exits.
                     if currentPage != .menu {
                         pageSetter.wrappedValue = .menu
                         return true  // Consumed
                     }
-                    return false  // Let default handler exit the app
+                    return false
                 case .f2:
                     // Load the next built-in preset into the app palette. Function
                     // keys are used (not a letter) so the shortcut works on EVERY
