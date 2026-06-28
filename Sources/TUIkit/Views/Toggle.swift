@@ -111,10 +111,11 @@ public struct CheckboxToggleStyle: ToggleStyle {
     public init() {}
 }
 
-/// A toggle style that displays a leading label and a trailing switch.
+/// A toggle style that displays the toggle as a two-position switch.
 ///
-/// > Note: In TUIkit, this renders identically to `CheckboxToggleStyle`
-/// > due to terminal constraints. The API exists for SwiftUI compatibility.
+/// In TUIkit this renders a two-cell track with a knob (⬛︎) on the side the
+/// switch points to — left for off, right for on — over a distinct background
+/// (the accent colour when on), so it reads as a switch rather than a checkbox.
 public struct SwitchToggleStyle: ToggleStyle {
     public init() {}
 }
@@ -401,6 +402,35 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
     }
 
+    /// A two-cell switch track: a knob (⬛︎) on the side the switch points to —
+    /// left for off, right for on — over a distinct background so it reads as a
+    /// two-position switch rather than a checkbox. The track is the accent colour
+    /// when on and a muted neutral when off (dimmed when disabled); the knob
+    /// punches through in a contrasting colour.
+    private func styledSwitchIndicator(
+        isOnValue: Bool, isDisabled: Bool, context: RenderContext
+    ) -> String {
+        let palette = context.environment.palette
+        let knob = "\u{2B1B}\u{FE0E}"  // ⬛︎
+
+        let trackColor: Color
+        let knobColor: Color
+        if isDisabled {
+            trackColor = palette.foregroundQuaternary
+            knobColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+        } else if isOnValue {
+            trackColor = palette.accent
+            knobColor = palette.background
+        } else {
+            trackColor = palette.foregroundQuaternary
+            knobColor = palette.foreground
+        }
+
+        // Off: knob then a blank cell; on: a blank cell then knob.
+        let cells = isOnValue ? " " + knob : knob + " "
+        return ANSIRenderer.colorize(cells, foreground: knobColor, background: trackColor)
+    }
+
     /// Composes a built-in toggle's buffer from its indicator and label.
     ///
     /// A single-view label is flattened onto the indicator line, as before. A
@@ -524,9 +554,16 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                     palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
             }
 
-            let styledIndicator = styledToggleIndicator(
-                isOnValue: isOnValue, isDisabled: isDisabled,
-                isFocused: isFocused, isHovered: isHovered, context: context)
+            // The switch style renders a two-position track (knob left = off,
+            // right = on) on a distinct background, so it reads as a switch rather
+            // than a checkbox; the others use the checkbox glyph.
+            let styledIndicator =
+                toggleStyle is SwitchToggleStyle
+                ? styledSwitchIndicator(
+                    isOnValue: isOnValue, isDisabled: isDisabled, context: context)
+                : styledToggleIndicator(
+                    isOnValue: isOnValue, isDisabled: isDisabled,
+                    isFocused: isFocused, isHovered: isHovered, context: context)
 
             let composed = composeLabelBuffer(
                 indicator: styledIndicator, labelContext: labelContext,
