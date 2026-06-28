@@ -140,14 +140,20 @@ public struct InsetGroupedListStyle: ListStyle {
 
 // MARK: - List Style Convenience
 
-extension ListStyle {
+extension ListStyle where Self == PlainListStyle {
     /// The plain list style with no borders or backgrounds.
-    public static var plain: some ListStyle {
+    ///
+    /// Usable with leading-dot syntax: `.listStyle(.plain)`.
+    public static var plain: PlainListStyle {
         PlainListStyle()
     }
+}
 
+extension ListStyle where Self == InsetGroupedListStyle {
     /// The inset grouped list style with borders and alternating rows.
-    public static var insetGrouped: some ListStyle {
+    ///
+    /// Usable with leading-dot syntax: `.listStyle(.insetGrouped)`.
+    public static var insetGrouped: InsetGroupedListStyle {
         InsetGroupedListStyle()
     }
 }

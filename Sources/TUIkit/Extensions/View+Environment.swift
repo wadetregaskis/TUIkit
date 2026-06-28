@@ -126,7 +126,7 @@ extension View {
     ///
     /// - Parameter style: The list style to apply.
     /// - Returns: A view with the list style applied.
-    public func listStyle(_ style: any ListStyle) -> some View {
+    public func listStyle<S: ListStyle>(_ style: S) -> some View {
         environment(\.listStyle, style)
     }
 
