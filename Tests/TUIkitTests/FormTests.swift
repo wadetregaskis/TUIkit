@@ -157,6 +157,32 @@ struct FormTests {
         #expect(headerRow.hasPrefix(" "))
         #expect(headerRow.contains("On"))
     }
+
+    @Test("A Toggle's click zone in a form covers its label (full row clickable)")
+    func toggleClickZoneCoversLabel() {
+        // A field label gives the toggle a non-zero control-column indent; the
+        // toggle's native hit region (box + gap + label) must shift with it.
+        let ctx = makeRenderContext(width: 50, height: 10) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let buffer = renderToBuffer(
+            Form {
+                LabeledContent("Account name", value: "ada")
+                Toggle("Wi-Fi", isOn: .constant(true))
+            },
+            context: ctx)
+        let toggleRow = buffer.lines.firstIndex { $0.stripped.contains("Wi-Fi") } ?? -1
+        let stripped = toggleRow >= 0 ? buffer.lines[toggleRow].stripped : ""
+        let labelCol = stripped.range(of: "Wi-Fi").map {
+            stripped.distance(from: stripped.startIndex, to: $0.lowerBound)
+        } ?? -1
+        let covered = buffer.hitTestRegions.contains { region in
+            region.offsetY <= toggleRow && toggleRow < region.offsetY + region.height
+                && region.offsetX <= labelCol && labelCol < region.offsetX + region.width
+        }
+        #expect(toggleRow >= 0 && labelCol >= 0)
+        #expect(covered, "a hit region should cover the label at row \(toggleRow), col \(labelCol)")
+    }
 }
 
 /// A custom form style exercising ``FormStyle/makeBody(configuration:)``.
