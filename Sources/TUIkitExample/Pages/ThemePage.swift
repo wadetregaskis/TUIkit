@@ -178,11 +178,10 @@ struct ThemePage: View {
                         }
                     }
                     .onChange(of: [borderTL, borderTR, borderBL, borderBR, borderH, borderV]) {
-                        // Live-update only while a custom border is active, so typing
-                        // here doesn't hijack a built-in appearance selection.
-                        if styling.customBorder != nil {
-                            styling.customBorder = currentBorderStyle()
-                        }
+                        // Any edit to a field activates and applies the custom
+                        // border live, so typing immediately updates the preview.
+                        // "Use built-in appearance" reverts to the built-in border.
+                        styling.customBorder = currentBorderStyle()
                     }
                 }
 
