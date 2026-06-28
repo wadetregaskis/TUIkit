@@ -145,7 +145,11 @@ public protocol NavigationSplitViewStyle: Sendable {
 /// A navigation split style that resolves its appearance automatically based
 /// on the current context.
 ///
-/// In TUIkit, this style behaves identically to ``BalancedNavigationSplitViewStyle``.
+/// In TUIkit this resolves to a sensible, detail-favoured default: the leading
+/// column(s) take a modest share and the detail column gets the larger
+/// remainder — wider than ``BalancedNavigationSplitViewStyle`` (which keeps the
+/// columns comparable) but not as detail-dominant as
+/// ``ProminentDetailNavigationSplitViewStyle``.
 ///
 /// Use the ``NavigationSplitViewStyle/automatic`` static property to access
 /// this style.
@@ -165,7 +169,10 @@ public struct AutomaticNavigationSplitViewStyle: NavigationSplitViewStyle {
 /// A navigation split style that reduces the size of the detail content to
 /// make room when showing the leading column or columns.
 ///
-/// This style distributes space proportionally among all visible columns.
+/// This style distributes space so the sidebar and detail are *comparable* in
+/// width (the detail shrinks to make room for the leading columns), rather than
+/// favouring the detail. The leading columns therefore take a larger share than
+/// under ``AutomaticNavigationSplitViewStyle``.
 ///
 /// Use the ``NavigationSplitViewStyle/balanced`` static property to access
 /// this style.
@@ -173,10 +180,10 @@ public struct BalancedNavigationSplitViewStyle: NavigationSplitViewStyle {
     /// Creates a balanced navigation split view style.
     public init() {}
 
-    public var sidebarProportion: Double { 0.33 }
+    public var sidebarProportion: Double { 0.42 }
 
     public var threeColumnProportions: (sidebar: Double, content: Double, detail: Double) {
-        (0.25, 0.25, 0.50)
+        (0.30, 0.30, 0.40)
     }
 }
 
@@ -194,10 +201,10 @@ public struct ProminentDetailNavigationSplitViewStyle: NavigationSplitViewStyle 
     /// Creates a prominent detail navigation split view style.
     public init() {}
 
-    public var sidebarProportion: Double { 0.25 }
+    public var sidebarProportion: Double { 0.22 }
 
     public var threeColumnProportions: (sidebar: Double, content: Double, detail: Double) {
-        (0.20, 0.20, 0.60)
+        (0.18, 0.18, 0.64)
     }
 }
 

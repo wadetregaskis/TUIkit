@@ -50,20 +50,48 @@ extension View {
 
 // MARK: - Persistent Column Widths
 
-/// The user-chosen width of each resizable (non-trailing) column of a
+/// The width of each resizable (non-trailing) column of a
 /// ``NavigationSplitView``, keyed by column index. Persisted in
 /// `StateStorage` so a drag / keyboard resize survives across renders. The
 /// trailing column is always flexible and absorbs the remaining width, so it
 /// is never stored here.
 ///
-/// Values are the *raw* user intent; ``NavigationSplitView`` clamps them to
-/// the viable range on each render and writes the clamped result back, so the
-/// stored value is always the effective width after the previous frame.
+/// A column is either **style-derived** (its width comes from the active
+/// ``NavigationSplitViewStyle``'s proportions, recomputed each frame and stored
+/// only so a first drag/keyboard resize has a seed) or **user-set** (the user
+/// dragged or keyed it, after which it is pinned to that intent and no longer
+/// follows the style). ``isUserSet(_:)`` distinguishes them. This is what lets
+/// changing the style re-flow the columns that the user hasn't touched, while
+/// still honouring an explicit resize.
+///
+/// Stored values are the *effective* width after the previous frame: the split
+/// view clamps the raw intent / style default to the viable range each render
+/// and writes the clamped result back via ``setClamped(_:for:)``.
 final class SplitViewWidths {
     private var widths: [Int: Int] = [:]
+    /// Columns the user has explicitly resized (drag / keyboard). These override
+    /// the style default; columns absent here track the style.
+    private var userSet: Set<Int> = []
 
     func value(for column: Int) -> Int? { widths[column] }
-    func set(_ width: Int, for column: Int) { widths[column] = width }
+
+    /// Whether `column` has been explicitly resized by the user (so it should
+    /// override the style default).
+    func isUserSet(_ column: Int) -> Bool { userSet.contains(column) }
+
+    /// Records an explicit user resize: stores the width *and* pins the column
+    /// to user intent so it no longer follows the style. Called by the drag and
+    /// keyboard handlers.
+    func set(_ width: Int, for column: Int) {
+        widths[column] = width
+        userSet.insert(column)
+    }
+
+    /// Stores the clamped effective width for a frame *without* marking the
+    /// column as user-set. Used by the split view's per-frame write-back so a
+    /// style-derived column keeps a valid drag/keyboard seed while still
+    /// re-deriving from the style when the style changes.
+    func setClamped(_ width: Int, for column: Int) { widths[column] = width }
 }
 
 // MARK: - Divider Handler (keyboard + drag)

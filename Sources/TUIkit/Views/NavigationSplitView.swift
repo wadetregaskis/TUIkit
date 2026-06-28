@@ -402,17 +402,46 @@ extension _NavigationSplitViewCore {
         }
     }
 
-    /// Fixed column widths for sidebar and content (TUI-specific).
-    /// Only the rightmost column adapts to terminal width changes.
-    private var fixedSidebarWidth: Int { 25 }
-    private var fixedContentWidth: Int { 30 }
+    /// The default width of a left (non-trailing) column, derived from the
+    /// active ``NavigationSplitViewStyle``'s proportions and the usable width.
+    ///
+    /// This is what makes `.automatic`, `.balanced`, and `.prominentDetail`
+    /// render distinctly: a wider `sidebarProportion` / leading
+    /// `threeColumnProportions` yields wider leading columns, leaving the
+    /// trailing detail column (which absorbs the remainder) correspondingly
+    /// narrower. `.prominentDetail`'s small leading proportions thus give it a
+    /// noticeably wider detail; `.balanced`'s larger ones make the columns
+    /// comparable. Clamped to at least `minimumColumnWidth` so a tiny terminal
+    /// still shows every column.
+    private func defaultColumnWidth(
+        for column: NavigationSplitViewColumn,
+        style: any NavigationSplitViewStyle,
+        isThreeColumnLayout: Bool,
+        usableWidth: Int
+    ) -> Int {
+        let proportion: Double
+        if isThreeColumnLayout {
+            let props = style.threeColumnProportions
+            switch column {
+            case .sidebar: proportion = props.sidebar
+            case .content: proportion = props.content
+            default: proportion = props.detail
+            }
+        } else {
+            // Two-column: only the sidebar is a leading column; the detail
+            // absorbs the rest, so its proportion is implied (1 − sidebar).
+            proportion = column == .sidebar ? style.sidebarProportion : 1 - style.sidebarProportion
+        }
+        return max(minimumColumnWidth, Int((Double(usableWidth) * proportion).rounded()))
+    }
 
     /// Calculates the width for each visible column.
     ///
     /// TUI-specific: every left column has a width, the rightmost column is
     /// flexible and absorbs the remainder. A left column's width is the user's
     /// stored width (from a drag / keyboard resize) when present, otherwise its
-    /// default; either way it is clamped so the column keeps at least
+    /// style-derived default (see ``defaultColumnWidth(for:style:isThreeColumnLayout:usableWidth:)``);
+    /// either way it is clamped so the column keeps at least
     /// `minimumColumnWidth` and leaves at least that much for each column to its
     /// right. When `writeBack` is set (the real render of a resizable split),
     /// the clamped width is written back so the next arrow-key step starts from
@@ -441,18 +470,15 @@ extension _NavigationSplitViewCore {
                 // Last column gets all remaining width
                 result.append(max(minimumColumnWidth, remainingWidth))
             } else {
-                // Default width for left columns, overridden by a stored
-                // user resize when present.
-                let defaultWidth: Int
-                switch column {
-                case .sidebar:
-                    defaultWidth = fixedSidebarWidth
-                case .content:
-                    defaultWidth = fixedContentWidth
-                default:
-                    defaultWidth = minimumColumnWidth
-                }
-                let desired = widths?.value(for: index) ?? defaultWidth
+                // A user-resized column keeps its stored width; an untouched
+                // column follows the style default (so changing the style
+                // re-flows it live).
+                let defaultWidth = defaultColumnWidth(
+                    for: column, style: style,
+                    isThreeColumnLayout: isThreeColumn, usableWidth: usableWidth)
+                let desired =
+                    (widths?.isUserSet(index) == true ? widths?.value(for: index) : nil)
+                    ?? defaultWidth
                 // Reserve at least minimumColumnWidth for every column still to
                 // the right, so a wide left column can't starve them.
                 let columnsToTheRight = visibleColumns.count - index - 1
@@ -460,8 +486,12 @@ extension _NavigationSplitViewCore {
                     remainingWidth - minimumColumnWidth * columnsToTheRight
                 let width = max(
                     minimumColumnWidth, min(desired, max(minimumColumnWidth, maxForColumn)))
+                // Persist the clamped effective width WITHOUT marking it
+                // user-set, so a style-derived column keeps a valid drag/keyboard
+                // seed yet still re-derives when the style changes; a user-set
+                // column simply keeps its (now re-clamped) value.
                 if writeBack {
-                    widths?.set(width, for: index)
+                    widths?.setClamped(width, for: index)
                 }
                 result.append(width)
                 remainingWidth -= width

@@ -140,34 +140,48 @@ struct NavigationSplitViewStyleTests {
         #expect(props.detail == 0.50)
     }
 
-    @Test("BalancedNavigationSplitViewStyle has correct sidebar proportion")
+    @Test("BalancedNavigationSplitViewStyle keeps sidebar and detail comparable")
     func balancedStyleSidebarProportion() {
         let style = BalancedNavigationSplitViewStyle()
-        #expect(style.sidebarProportion == 0.33)
+        #expect(style.sidebarProportion == 0.42)
     }
 
     @Test("BalancedNavigationSplitViewStyle has correct three-column proportions")
     func balancedStyleThreeColumnProportions() {
         let style = BalancedNavigationSplitViewStyle()
         let props = style.threeColumnProportions
-        #expect(props.sidebar == 0.25)
-        #expect(props.content == 0.25)
-        #expect(props.detail == 0.50)
+        #expect(props.sidebar == 0.30)
+        #expect(props.content == 0.30)
+        #expect(props.detail == 0.40)
     }
 
     @Test("ProminentDetailNavigationSplitViewStyle has narrower sidebar")
     func prominentDetailStyleSidebarProportion() {
         let style = ProminentDetailNavigationSplitViewStyle()
-        #expect(style.sidebarProportion == 0.25)
+        #expect(style.sidebarProportion == 0.22)
     }
 
     @Test("ProminentDetailNavigationSplitViewStyle gives more space to detail")
     func prominentDetailStyleThreeColumnProportions() {
         let style = ProminentDetailNavigationSplitViewStyle()
         let props = style.threeColumnProportions
-        #expect(props.sidebar == 0.20)
-        #expect(props.content == 0.20)
-        #expect(props.detail == 0.60)
+        #expect(props.sidebar == 0.18)
+        #expect(props.content == 0.18)
+        #expect(props.detail == 0.64)
+    }
+
+    @Test("The three built-in styles favour the detail to different degrees")
+    func stylesFavourDetailDistinctly() {
+        // automatic: detail-favoured default; balanced: comparable columns
+        // (largest sidebar); prominentDetail: most detail-dominant (smallest
+        // sidebar). These orderings are what make the styles render distinctly.
+        let auto = AutomaticNavigationSplitViewStyle()
+        let balanced = BalancedNavigationSplitViewStyle()
+        let prominent = ProminentDetailNavigationSplitViewStyle()
+        #expect(prominent.sidebarProportion < auto.sidebarProportion)
+        #expect(auto.sidebarProportion < balanced.sidebarProportion)
+        #expect(prominent.threeColumnProportions.detail > auto.threeColumnProportions.detail)
+        #expect(auto.threeColumnProportions.detail > balanced.threeColumnProportions.detail)
     }
 
     @Test("Static style properties are accessible")
@@ -177,8 +191,8 @@ struct NavigationSplitViewStyleTests {
         let prominent: any NavigationSplitViewStyle = .prominentDetail
 
         #expect(auto.sidebarProportion == 0.33)
-        #expect(balanced.sidebarProportion == 0.33)
-        #expect(prominent.sidebarProportion == 0.25)
+        #expect(balanced.sidebarProportion == 0.42)
+        #expect(prominent.sidebarProportion == 0.22)
     }
 }
 
@@ -306,6 +320,38 @@ struct NavigationSplitViewRenderingTests {
         #expect(content.contains("Detail"))
     }
 
+    /// The width of the leading (sidebar) column in a rendered two-column split:
+    /// the run of `S` glyphs at the start of the first row, where the sidebar is
+    /// filled with `S` and the detail with `D`, separated by the divider space.
+    private func sidebarWidth(style: any NavigationSplitViewStyle, width: Int = 100) -> Int {
+        let view = NavigationSplitView {
+            Text(String(repeating: "S", count: 300))
+        } detail: {
+            Text(String(repeating: "D", count: 300))
+        }
+        .navigationSplitViewStyle(style)
+        .navigationSplitViewResizable(false)  // no stored-width override: pure style default
+        let context = testContext(width: width, height: 4)
+        let first = renderToBuffer(view, context: context).lines.first?.stripped ?? ""
+        return first.prefix { $0 == "S" }.count
+    }
+
+    @Test("The three styles render visibly different column widths")
+    func stylesRenderDistinctColumnWidths() {
+        let automatic = sidebarWidth(style: .automatic)
+        let balanced = sidebarWidth(style: .balanced)
+        let prominent = sidebarWidth(style: .prominentDetail)
+
+        // prominentDetail → narrowest sidebar (widest detail);
+        // balanced → widest sidebar (comparable columns);
+        // automatic → in between. All three differ.
+        #expect(prominent < automatic, "prominentDetail sidebar (\(prominent)) < automatic (\(automatic))")
+        #expect(automatic < balanced, "automatic sidebar (\(automatic)) < balanced (\(balanced))")
+        // The spread is substantial, not a rounding wobble.
+        #expect(balanced - prominent >= 5,
+            "styles differ substantially (balanced \(balanced) vs prominent \(prominent))")
+    }
+
     @Test("Split view respects available height")
     func splitViewRespectsAvailableHeight() {
         let splitView = NavigationSplitView {
@@ -429,7 +475,7 @@ struct NavigationSplitViewStyleEnvironmentTests {
         environment.navigationSplitViewStyle = ProminentDetailNavigationSplitViewStyle()
 
         let style = environment.navigationSplitViewStyle
-        #expect(style.sidebarProportion == 0.25)
+        #expect(style.sidebarProportion == 0.22)
     }
 
     @Test("navigationSplitViewStyle modifier sets environment")
