@@ -88,12 +88,14 @@ struct ButtonsPage: View {
             }
 
             DemoSection(L("page.buttons.section.tinted")) {
-                // .tint cascades the accent to every control inside.
+                // .tint cascades the accent to every control inside. The toggle
+                // drives it: flip it off and the green tint (on the button AND on
+                // the toggle's own checkbox) disappears — a live cascade demo.
                 VStack(alignment: .leading, spacing: 1) {
                     Button(L("page.buttons.primary")) { clickCount += 1 }.buttonStyle(.primary)
                     Toggle(L("page.buttons.toggle"), isOn: $tintToggle)
                 }
-                .tint(.palette.success)
+                .tint(tintToggle ? .palette.success : nil)
             }
 
             DemoSection(L("page.buttons.section.plain")) {
