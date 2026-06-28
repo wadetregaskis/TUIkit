@@ -1,7 +1,7 @@
 <p align="center">
     <img alt="Platforms" src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux-005c00">
     <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-00b300?logo=swift&logoColor=white">
-    <img alt="i18n" src="https://img.shields.io/badge/i18n-5%20Languages-00d900">
+    <img alt="i18n" src="https://img.shields.io/badge/i18n-7%20Languages-00d900">
     <img alt="License" src="https://img.shields.io/badge/License-MIT-00b300?style=flat">
     <a href="https://github.com/wadetregaskis/TUIkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/wadetregaskis/TUIkit/ci.yml?branch=main&label=CI&color=009900"></a>
 </p>
@@ -109,7 +109,7 @@ struct ContentView: View {
 
 ### Internationalization (i18n)
 
-- **5 languages built-in**: English, German, French, Italian, Spanish
+- **7 languages built-in**: English, German, French, Italian, Spanish, Simplified Chinese, Japanese
 - **Type-safe string constants**: the compile-time-verified `LocalizationKey` namespace
 - **Persistent language selection**: stored under the XDG config path
 - **Fallback chain**: current language → English → key itself
@@ -204,7 +204,7 @@ Available presets (`SystemPalette.Preset`):
 
 ## Internationalization
 
-TUIkit includes comprehensive i18n support with 5 languages and type-safe string constants:
+TUIkit includes comprehensive i18n support with 7 languages and type-safe string constants:
 
 ```swift
 import TUIkit
@@ -228,7 +228,18 @@ struct MyView: View {
 }
 ```
 
-**Supported languages**: English, Deutsch, Français, Italiano, Español
+**Supported languages**: English, Deutsch, Français, Italiano, Español, 简体中文, 日本語
+
+Apps can localize **their own** strings through the same service — register
+language-keyed tables once at startup, then look them up by key:
+
+```swift
+LocalizationService.shared.register(translations: [
+    "en": ["app.greeting": "Hello"],
+    "de": ["app.greeting": "Hallo"],
+])
+LocalizationService.shared.string(for: "app.greeting")  // honours the current language
+```
 
 The `LocalizationKey` namespace groups all framework strings into `Button`, `Label`, `Error`, `Placeholder`, `Menu`, `Dialog`, and `Validation`, with typed-key overloads for `Text(localized:)`, `LocalizedString(_:)`, and `LocalizationService.string(for:)`. The fallback chain is current language → English → the key itself, and the selection is persisted under the XDG config path (macOS: `~/Library/Application Support/tuikit`; Linux: `$XDG_CONFIG_HOME/tuikit`).
 
