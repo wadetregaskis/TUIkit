@@ -41,6 +41,14 @@ struct ContainerConfig: Sendable, Equatable {
     /// `.leading`; `.center`/`.trailing` shift the (narrower-than-the-box) footer.
     var footerAlignment: HorizontalAlignment
 
+    /// Whether the container draws a border. When `false`, no top/bottom/side
+    /// border glyphs are drawn (body and footer render at full width with no
+    /// side walls) and the chrome height excludes the two border rows. This is
+    /// distinct from a `nil` ``borderStyle``, which still draws a border using
+    /// the appearance default — it is the only "no border at all" path. Used by
+    /// `.listStyle(.plain)` (``PlainListStyle/showsBorder`` is `false`).
+    var hasBorder: Bool
+
     /// Creates a container configuration.
     ///
     /// - Parameters:
@@ -50,13 +58,15 @@ struct ContainerConfig: Sendable, Equatable {
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - showFooterSeparator: Show separator before footer (default: true).
     ///   - footerAlignment: How to align the footer (default: leading).
+    ///   - hasBorder: Whether to draw a border at all (default: true).
     init(
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
         showFooterSeparator: Bool = true,
-        footerAlignment: HorizontalAlignment = .leading
+        footerAlignment: HorizontalAlignment = .leading,
+        hasBorder: Bool = true
     ) {
         self.borderStyle = borderStyle
         self.borderColor = borderColor
@@ -64,6 +74,7 @@ struct ContainerConfig: Sendable, Equatable {
         self.padding = padding
         self.showFooterSeparator = showFooterSeparator
         self.footerAlignment = footerAlignment
+        self.hasBorder = hasBorder
     }
 
     /// Default configuration.
@@ -92,6 +103,9 @@ struct ContainerStyle: Sendable, Equatable {
     /// leading). See ``ContainerConfig/footerAlignment``.
     var footerAlignment: HorizontalAlignment
 
+    /// Whether the container draws a border. See ``ContainerConfig/hasBorder``.
+    var hasBorder: Bool
+
     /// Creates a container style with the specified options.
     ///
     /// - Parameters:
@@ -100,18 +114,21 @@ struct ContainerStyle: Sendable, Equatable {
     ///   - borderStyle: The border style (default: appearance default).
     ///   - borderColor: The border color (default: theme border).
     ///   - footerAlignment: How to align the footer (default: leading).
+    ///   - hasBorder: Whether to draw a border at all (default: true).
     init(
         showHeaderSeparator: Bool = true,
         showFooterSeparator: Bool = true,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
-        footerAlignment: HorizontalAlignment = .leading
+        footerAlignment: HorizontalAlignment = .leading,
+        hasBorder: Bool = true
     ) {
         self.showHeaderSeparator = showHeaderSeparator
         self.showFooterSeparator = showFooterSeparator
         self.borderStyle = borderStyle
         self.borderColor = borderColor
         self.footerAlignment = footerAlignment
+        self.hasBorder = hasBorder
     }
 
     /// Creates a `ContainerStyle` from a ``ContainerConfig``.
@@ -123,6 +140,7 @@ struct ContainerStyle: Sendable, Equatable {
         self.borderStyle = config.borderStyle
         self.borderColor = config.borderColor
         self.footerAlignment = config.footerAlignment
+        self.hasBorder = config.hasBorder
     }
 
     /// Default container style.
@@ -157,7 +175,8 @@ internal func renderContainer<Content: View, Footer: View>(
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
         borderColor: config.borderColor,
-        footerAlignment: config.footerAlignment
+        footerAlignment: config.footerAlignment,
+        hasBorder: config.hasBorder
     )
 
     let container = ContainerView(
@@ -209,7 +228,8 @@ internal func measureContainer<Content: View, Footer: View>(
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
         borderColor: config.borderColor,
-        footerAlignment: config.footerAlignment
+        footerAlignment: config.footerAlignment,
+        hasBorder: config.hasBorder
     )
 
     let container = ContainerView(
@@ -427,8 +447,10 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         base.availableWidth = proposal.width ?? context.availableWidth
         base.availableHeight = proposal.height ?? context.availableHeight
 
-        // Inner context between the side borders (width − 2), matching render.
-        var innerContext = base.forBorderedContent()
+        // Inner context between the side borders (width − 2 when bordered, full
+        // width when borderless), matching render.
+        let hasBorder = style.hasBorder
+        var innerContext = base.forBorderedContent(hasBorder: hasBorder)
         innerContext.environment.focusIndicatorColor = nil
         let innerWidthAvailable = innerContext.availableWidth
 
@@ -441,10 +463,11 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
         let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
 
-        // Vertical chrome: top + bottom border, plus the optional footer
-        // separator — the same arithmetic renderToBuffer uses.
+        // Vertical chrome: top + bottom border (only when bordered), plus the
+        // optional footer separator — the same arithmetic renderToBuffer uses.
         let hasFooter = footer != nil
-        let chromeHeight = 2 + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
+        let borderRows = hasBorder ? 2 : 0
+        let chromeHeight = borderRows + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
         let innerAvailableHeight = max(0, base.availableHeight - chromeHeight)
 
         // Footer at its natural (full inner) width: gives the height the body
@@ -510,8 +533,11 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
 
         let footerPresent = hasFooter && footerFinalHeight > 0
         let separator = (footerPresent && style.showFooterSeparator) ? 1 : 0
-        let totalHeight = 1 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0) + 1
-        let totalWidth = innerWidth + 2
+        // Top + bottom border rows / left + right border columns only when bordered.
+        let totalHeight =
+            borderRows / 2 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0)
+            + borderRows / 2
+        let totalWidth = innerWidth + (hasBorder ? 2 : 0)
 
         // Width-flexibility is render-derived, not inherited from the body's
         // (sometimes soft) flag: `resolveContainerWidth` caps the inner width at
@@ -533,10 +559,12 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let effectiveBorderStyle = style.borderStyle ?? appearance.borderStyle
         let palette = context.environment.palette
         let borderColor = style.borderColor?.resolve(with: palette) ?? palette.border
+        let hasBorder = style.hasBorder
 
-        // Inner context for content between the side borders (width − 2).
+        // Inner context for content between the side borders (width − 2 when
+        // bordered, full width when borderless).
         // Padding width reduction is handled by PaddingModifier.adjustContext.
-        var innerContext = context.forBorderedContent()
+        var innerContext = context.forBorderedContent(hasBorder: hasBorder)
 
         // Consume focus indicator so nested containers don't also show it.
         let indicatorColor = context.environment.focusIndicatorColor
@@ -548,11 +576,12 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
         let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
 
-        // Vertical chrome: top + bottom border, plus the optional footer
-        // separator. The body and footer must share whatever is left so the
-        // assembled container never grows taller than `availableHeight`.
+        // Vertical chrome: top + bottom border (only when bordered), plus the
+        // optional footer separator. The body and footer must share whatever is
+        // left so the assembled container never grows taller than `availableHeight`.
         let hasFooter = footer != nil
-        let chromeHeight = 2 + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
+        let borderRows = hasBorder ? 2 : 0
+        let chromeHeight = borderRows + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
         let innerAvailableHeight = max(0, context.availableHeight - chromeHeight)
 
         // Measure the footer first (without side-effects) so the body knows
@@ -610,15 +639,24 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             footerBuffer = nil
         }
 
-        let assembled = renderStandardStyle(
-            bodyBuffer: bodyBuffer,
-            footerBuffer: footerBuffer,
-            innerWidth: innerWidth,
-            borderStyle: effectiveBorderStyle,
-            borderColor: borderColor,
-            context: context,
-            focusIndicatorColor: indicatorColor
-        )
+        let assembled =
+            hasBorder
+            ? renderStandardStyle(
+                bodyBuffer: bodyBuffer,
+                footerBuffer: footerBuffer,
+                innerWidth: innerWidth,
+                borderStyle: effectiveBorderStyle,
+                borderColor: borderColor,
+                context: context,
+                focusIndicatorColor: indicatorColor
+            )
+            : renderBorderless(
+                bodyBuffer: bodyBuffer,
+                footerBuffer: footerBuffer,
+                innerWidth: innerWidth,
+                borderColor: borderColor,
+                context: context
+            )
         // Final guard: never exceed the space the container was given.
         return assembled.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
@@ -742,6 +780,73 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
             carriedOverlays += footerBuf.shiftedOverlays(byX: 1, y: footerRow)
             carriedRegions += footerBuf.shiftedHitTestRegions(byX: 1, y: footerRow)
+        }
+        result.overlays = carriedOverlays
+        result.hitTestRegions = carriedRegions
+        return result
+    }
+
+    // MARK: - Borderless Rendering
+
+    /// Renders without any border chrome: the title (if any), body, optional
+    /// footer separator, and footer are emitted at full width with no top/bottom
+    /// border rows and no side walls. Used by ``ContainerConfig/hasBorder`` ==
+    /// `false` (e.g. `.listStyle(.plain)`), so a plain list reads as flush
+    /// content with no box around it.
+    ///
+    /// Body and footer content already sit at column 0, so their overlays and
+    /// hit-test regions shift only vertically (by the rows above them) — there is
+    /// no left wall to step past.
+    private func renderBorderless(
+        bodyBuffer: FrameBuffer,
+        footerBuffer: FrameBuffer?,
+        innerWidth: Int,
+        borderColor: Color,
+        context: RenderContext
+    ) -> FrameBuffer {
+        let palette = context.environment.palette
+        var lines: [String] = []
+
+        // Pads a content line to the full inner width (no side walls).
+        func padded(_ line: String) -> String {
+            let used = line.strippedLength
+            guard used < innerWidth else { return line }
+            return line + asciiSpaces(innerWidth - used)
+        }
+
+        // Optional title line, rendered plainly (no border decoration) since
+        // there is no top border to host it.
+        var titleRows = 0
+        if let titleText = title {
+            let styled = ANSIRenderer.colorize(
+                titleText, foreground: titleColor?.resolve(with: palette) ?? palette.accent)
+            lines.append(padded(styled))
+            titleRows = 1
+        }
+
+        // Body lines at full width.
+        for line in bodyBuffer.lines { lines.append(padded(line)) }
+
+        // Footer section (separator + footer lines), if present.
+        var footerSeparatorRows = 0
+        if let footerBuf = footerBuffer, !footerBuf.isEmpty {
+            if style.showFooterSeparator {
+                lines.append(
+                    ANSIRenderer.colorize(
+                        String(repeating: "─", count: max(0, innerWidth)), foreground: borderColor))
+                footerSeparatorRows = 1
+            }
+            for line in footerBuf.lines { lines.append(padded(line)) }
+        }
+
+        var result = FrameBuffer(lines: lines, width: innerWidth, uniformWidth: true)
+        // Content sits at column 0 (no wall), shifted down by the title rows.
+        var carriedOverlays = bodyBuffer.shiftedOverlays(byX: 0, y: titleRows)
+        var carriedRegions = bodyBuffer.shiftedHitTestRegions(byX: 0, y: titleRows)
+        if let footerBuf = footerBuffer, !footerBuf.isEmpty {
+            let footerRow = titleRows + bodyBuffer.lines.count + footerSeparatorRows
+            carriedOverlays += footerBuf.shiftedOverlays(byX: 0, y: footerRow)
+            carriedRegions += footerBuf.shiftedHitTestRegions(byX: 0, y: footerRow)
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions

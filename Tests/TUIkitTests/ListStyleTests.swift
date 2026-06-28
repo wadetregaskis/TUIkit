@@ -173,4 +173,51 @@ struct ListStyleTests {
         let style: ListGroupingStyle = .plain
         let _: ListGroupingStyle = style
     }
+
+    // MARK: - Border rendering (plain vs. bordered)
+
+    /// The box-drawing glyphs a bordered container draws — none of which a
+    /// borderless (`.plain`) list may emit.
+    private static let borderGlyphs: Set<Character> = [
+        "┌", "┐", "└", "┘", "├", "┤", "│", "─",
+        "╭", "╮", "╰", "╯",
+        "╔", "╗", "╚", "╝", "║", "═",
+        "┏", "┓", "┗", "┛", "┃", "━",
+    ]
+
+    @MainActor
+    private func renderedListLines<S: ListStyle>(_ style: S) -> [String] {
+        let list = List {
+            ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { name in
+                Text(name)
+            }
+        }
+        .listStyle(style)
+        .frame(height: 6)
+        return renderToBuffer(list, context: makeRenderContext(width: 30, height: 8))
+            .lines.map { $0.stripped }
+    }
+
+    @Test("PlainListStyle renders no border glyphs")
+    @MainActor
+    func plainListStyleDrawsNoBorder() {
+        let lines = renderedListLines(PlainListStyle())
+        let joined = lines.joined()
+        let offending = Set(joined).intersection(Self.borderGlyphs)
+        #expect(offending.isEmpty, "plain list must draw no border glyphs, found \(offending) in \(lines)")
+        // The rows are still rendered (content survives the borderless path).
+        #expect(joined.contains("Alpha") && joined.contains("Bravo") && joined.contains("Charlie"))
+    }
+
+    @Test("InsetGroupedListStyle renders border glyphs")
+    @MainActor
+    func insetGroupedListStyleDrawsBorder() {
+        let lines = renderedListLines(InsetGroupedListStyle())
+        let joined = lines.joined()
+        let present = Set(joined).intersection(Self.borderGlyphs)
+        #expect(!present.isEmpty, "inset-grouped list must draw a border, found none in \(lines)")
+        // Side walls specifically: every interior row is flanked by `│`.
+        #expect(joined.contains("│"), "bordered list draws vertical side walls")
+        #expect(joined.contains("Alpha") && joined.contains("Charlie"))
+    }
 }

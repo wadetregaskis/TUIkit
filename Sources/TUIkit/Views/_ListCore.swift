@@ -252,11 +252,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var buffer = renderContainer(
             title: title,
             config: ContainerConfig(
-                borderStyle: style.showsBorder ? context.environment.appearance.borderStyle : nil,
-                borderColor: style.showsBorder ? palette.border : nil,
+                borderStyle: context.environment.appearance.borderStyle,
+                borderColor: palette.border,
                 titleColor: nil,
                 padding: style.rowPadding,
-                showFooterSeparator: showFooterSeparator
+                showFooterSeparator: showFooterSeparator,
+                hasBorder: style.showsBorder
             ),
             content: _ListContentView(lines: paddedContentLines),
             footer: footer,
@@ -287,8 +288,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let intrinsicWidth = max(placeholderWidth, titleWidth)
         let targetWidth: Int
         if context.hasExplicitWidth {
-            // The "−2" accounts for the two border characters.
-            targetWidth = max(intrinsicWidth, context.availableWidth - 2)
+            // Subtract the two border columns only when the style draws a border;
+            // a borderless (`.plain`) list fills the full available width.
+            let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
+            targetWidth = max(intrinsicWidth, context.availableWidth - borderOverhead)
         } else {
             targetWidth = intrinsicWidth
         }
@@ -378,7 +381,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if context.environment.fixedSizeWidth {
             rowWidth = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
         } else {
-            rowWidth = max(maxRowWidth, context.availableWidth - 2)
+            // Fill the interior: full available width when borderless (`.plain`),
+            // minus the two border columns when bordered.
+            let borderOverhead = style.showsBorder ? 2 : 0
+            rowWidth = max(maxRowWidth, context.availableWidth - borderOverhead)
         }
 
         let lines: [String]

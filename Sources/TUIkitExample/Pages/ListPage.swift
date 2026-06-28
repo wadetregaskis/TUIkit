@@ -157,8 +157,10 @@ struct ListPage: View {
                     Text(L("page.list.stylesBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    // Untitled lists, so a title border doesn't mask the
-                    // borderless `.plain` style — the label is a Text above each.
+                    // Untitled lists so the styles read purely as their box
+                    // chrome: `.plain` is borderless (rows flush, no walls),
+                    // `.insetGrouped` wraps the rows in a bordered container.
+                    // The label is a Text above each.
                     HStack(spacing: 2) {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(".plain").dim()
