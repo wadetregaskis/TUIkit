@@ -27,9 +27,9 @@ struct ImageURLPage: View {
 
         VStack(alignment: .leading) {
             HStack(spacing: 1) {
-                Text("URL:")
+                Text(L("page.imageURL.urlLabel"))
                     .foregroundStyle(.palette.foregroundSecondary)
-                TextField("Enter image URL...", text: $imageURL)
+                TextField(L("page.imageURL.urlPlaceholder"), text: $imageURL)
                     .onSubmit {
                         activeURL = imageURL
                     }
@@ -41,7 +41,7 @@ struct ImageURLPage: View {
                 // Loaded image fills the rest of the page in a viewport-fitted,
                 // zoomable two-axis scroll (+/- to zoom; scrollbars appear on zoom).
                 Image(.url(activeURL))
-                    .imagePlaceholder("Downloading...")
+                    .imagePlaceholder(L("page.imageURL.downloading"))
                     .imagePlaceholderSpinner(true)
                     .zoomableImageScroll(zoom: zoom)
                     .border(color: .palette.border)
@@ -49,7 +49,7 @@ struct ImageURLPage: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Text("Press Enter to load the image")
+                    Text(L("page.imageURL.pressEnter"))
                         .foregroundStyle(.palette.foregroundTertiary)
                         .italic()
                     Spacer()
@@ -62,7 +62,7 @@ struct ImageURLPage: View {
         .imageDithering(dithering)
         .statusBarItems(statusBarItems)
         .appHeader {
-            DemoAppHeader("Image (URL)")
+            DemoAppHeader(L("page.imageURL.title"))
         }
     }
 
@@ -70,7 +70,7 @@ struct ImageURLPage: View {
         let charSetCount = ImageDemoHelpers.charSets.count
         let colorModeCount = ImageDemoHelpers.colorModes.count
         return [
-            StatusBarItem(shortcut: Shortcut.escape, label: "back"),
+            StatusBarItem(shortcut: Shortcut.escape, label: L("page.imageURL.back")),
             // c|C — lowercase cycles forward, uppercase cycles
             // backward. The "C" item is hidden so the bar shows
             // a single entry with the dual-key indicator.
@@ -121,7 +121,7 @@ struct ImageURLPage: View {
             StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
                 zoom = ImageDemoHelpers.zoomedOut(zoom)
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "scroll"),
+            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("page.imageURL.scroll")),
         ]
     }
 }

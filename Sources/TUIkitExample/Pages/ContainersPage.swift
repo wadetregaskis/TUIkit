@@ -16,22 +16,22 @@ struct ContainerTypesRow: View, Equatable {
             VStack(alignment: .leading) {
                 Text("Card").bold().foregroundStyle(.palette.accent)
                 Card(borderColor: .palette.border) {
-                    Text("A Card view").foregroundStyle(.palette.foreground)
-                    Text("with padding").foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.containers.aCardView")).foregroundStyle(.palette.foreground)
+                    Text(L("page.containers.withPadding")).foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             VStack(alignment: .leading) {
                 Text(".border()").bold().foregroundStyle(.palette.accent)
-                Text("Simple bordered content")
+                Text(L("page.containers.simpleBordered"))
                     .foregroundStyle(.palette.foreground)
                     .border()
             }
 
             VStack(alignment: .leading) {
                 Text("Panel").bold().foregroundStyle(.palette.accent)
-                Panel("Info", titleColor: .palette.accent) {
-                    Text("Title in border").foregroundStyle(.palette.foreground)
+                Panel(L("page.containers.info"), titleColor: .palette.accent) {
+                    Text(L("page.containers.titleInBorder")).foregroundStyle(.palette.foreground)
                 }
             }
         }
@@ -45,17 +45,17 @@ struct ContainerTypesRow: View, Equatable {
 struct SettingsAndAlignmentRow: View, Equatable {
     var body: some View {
         HStack(spacing: 2) {
-            DemoSection("Panel (Header + Footer)") {
-                Panel("Settings", titleColor: .palette.accent) {
-                    Text("Primary text (foreground)").foregroundStyle(.palette.foreground)
-                    Text("Secondary text (foregroundSecondary)").foregroundStyle(.palette.foregroundSecondary)
-                    Text("Tertiary text (foregroundTertiary)").foregroundStyle(.palette.foregroundTertiary)
+            DemoSection(L("page.containers.section.panelHeaderFooter")) {
+                Panel(L("page.containers.settings"), titleColor: .palette.accent) {
+                    Text(L("page.containers.primaryText")).foregroundStyle(.palette.foreground)
+                    Text(L("page.containers.secondaryText")).foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.containers.tertiaryText")).foregroundStyle(.palette.foregroundTertiary)
                 } footer: {
-                    Text("Footer: Press Enter to confirm").foregroundStyle(.palette.foreground)
+                    Text(L("page.containers.footerConfirm")).foregroundStyle(.palette.foreground)
                 }
             }
 
-            DemoSection("Content Alignment") {
+            DemoSection(L("page.containers.section.contentAlignment")) {
                 // Each bordered box uses `.frame(maxWidth: .infinity)` so the
                 // three share the row evenly. When the terminal is wide they
                 // expand and you can see "short" pushed against the
@@ -65,22 +65,22 @@ struct SettingsAndAlignmentRow: View, Equatable {
                 // box ever disappears and "short" stays visible underneath.
                 HStack(spacing: 1) {
                     VStack(alignment: .leading) {
-                        Text("Leading align").foregroundStyle(.palette.foreground)
-                        Text("short").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.containers.leadingAlign")).foregroundStyle(.palette.foreground)
+                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .border()
 
                     VStack(alignment: .center) {
-                        Text("Center align").foregroundStyle(.palette.foreground)
-                        Text("short").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.containers.centerAlign")).foregroundStyle(.palette.foreground)
+                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .border()
 
                     VStack(alignment: .trailing) {
-                        Text("Trailing align").foregroundStyle(.palette.foreground)
-                        Text("short").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.containers.trailingAlign")).foregroundStyle(.palette.foreground)
+                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .border()
@@ -109,17 +109,17 @@ struct ContainersPage: View {
             // (press the back-tick shortcut on the menu) covering both
             // determinate and indeterminate variants of every style.
 
-            DemoSection("Collapsible Detail (@State)") {
+            DemoSection(L("page.containers.section.collapsible")) {
                 VStack(alignment: .leading) {
                     HStack(spacing: 2) {
-                        Button(showDetails ? "Hide Details" : "Show Details") {
+                        Button(showDetails ? L("page.containers.hideDetails") : L("page.containers.showDetails")) {
                             showDetails.toggle()
                         }
-                        Text(showDetails ? "expanded" : "collapsed")
+                        Text(showDetails ? L("page.containers.expanded") : L("page.containers.collapsed"))
                             .dim()
                     }
                     if showDetails {
-                        Panel("Padding Examples", titleColor: .palette.accent) {
+                        Panel(L("page.containers.paddingExamples"), titleColor: .palette.accent) {
                             HStack(spacing: 1) {
                                 Text("h:1 v:0").foregroundStyle(.palette.foreground)
                                     .padding(.horizontal, 1)
@@ -138,15 +138,15 @@ struct ContainersPage: View {
                 }
             }
 
-            DemoSection("Appearance & BorderStyle") {
-                Text("BorderStyle is determined by Appearance. Press 'a' to cycle.").foregroundStyle(.palette.foregroundSecondary)
+            DemoSection(L("page.containers.section.appearance")) {
+                Text(L("page.containers.borderStyleHelp")).foregroundStyle(.palette.foregroundSecondary)
             }
 
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Container Views Demo")
+            DemoAppHeader(L("page.containers.header"))
         }
     }
 }

@@ -36,7 +36,7 @@ struct ImageFilePage: View {
         }
         .statusBarItems(statusBarItems)
         .appHeader {
-            DemoAppHeader("Image (File)")
+            DemoAppHeader(L("page.imageFile.title"))
         }
     }
 
@@ -44,12 +44,12 @@ struct ImageFilePage: View {
     /// mode across every available value.
     @ViewBuilder private var pickerControls: some View {
         HStack(spacing: 2) {
-            Picker("Characters", selection: $charSetIndex) {
+            Picker(L("page.imageFile.characters"), selection: $charSetIndex) {
                 ForEach(ImageDemoHelpers.charSets.indices, id: \.self) { index in
                     Text(ImageDemoHelpers.charSetLabel(index)).tag(index)
                 }
             }
-            Picker("Colour", selection: $colorModeIndex) {
+            Picker(L("page.imageFile.colour"), selection: $colorModeIndex) {
                 ForEach(ImageDemoHelpers.colorModes.indices, id: \.self) { index in
                     Text(ImageDemoHelpers.colorModeLabel(index)).tag(index)
                 }
@@ -60,11 +60,11 @@ struct ImageFilePage: View {
     @ViewBuilder private var imageContent: some View {
         if let path = Bundle.module.path(forResource: "demo-image", ofType: "jpg", inDirectory: "Resources") {
             Image(.file(path))
-                .imagePlaceholder("Loading image...")
+                .imagePlaceholder(L("page.imageFile.loading"))
                 .imagePlaceholderSpinner(true)
                 .zoomableImageScroll(zoom: zoom)
         } else {
-            Text("Resource not found: demo-image.jpg")
+            Text("\(L("page.imageFile.resourceNotFound")): demo-image.jpg")
                 .foregroundStyle(.error)
         }
     }
@@ -73,7 +73,7 @@ struct ImageFilePage: View {
         let charSetCount = ImageDemoHelpers.charSets.count
         let colorModeCount = ImageDemoHelpers.colorModes.count
         return [
-            StatusBarItem(shortcut: Shortcut.escape, label: "back"),
+            StatusBarItem(shortcut: Shortcut.escape, label: L("page.imageFile.back")),
             // c|C — lowercase cycles forward, uppercase cycles
             // backward. The "C" item is hidden so the bar shows
             // a single entry with the dual-key indicator.
@@ -124,7 +124,7 @@ struct ImageFilePage: View {
             StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
                 zoom = ImageDemoHelpers.zoomedOut(zoom)
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "scroll"),
+            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("page.imageFile.scroll")),
         ]
     }
 }

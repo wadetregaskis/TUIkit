@@ -22,38 +22,38 @@ struct PickerPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Menu Style (Drop-down)") {
-                Picker("Favourite Fruit", selection: $fruit) {
-                    Text("Apple").tag("apple")
-                    Text("Banana").tag("banana")
-                    Text("Cherry").tag("cherry")
-                    Text("Dragonfruit").tag("dragonfruit")
+            DemoSection(L("page.picker.menuStyle")) {
+                Picker(L("page.picker.favouriteFruit"), selection: $fruit) {
+                    Text(L("page.picker.apple")).tag("apple")
+                    Text(L("page.picker.banana")).tag("banana")
+                    Text(L("page.picker.cherry")).tag("cherry")
+                    Text(L("page.picker.dragonfruit")).tag("dragonfruit")
                 }
             }
 
-            DemoSection("Long Menu (scrolls)") {
+            DemoSection(L("page.picker.longMenu")) {
                 // More options than fit the screen: the drop-down windows them and
                 // shows a scrollbar (wheel, arrows, Home/End, and the bar all scroll).
-                Picker("Pick a number", selection: $number) {
+                Picker(L("page.picker.pickANumber"), selection: $number) {
                     ForEach(1...200, id: \.self) { value in
-                        Text("Number \(value)").tag(value)
+                        Text("\(L("page.picker.number")) \(value)").tag(value)
                     }
                 }
             }
 
-            DemoSection("Radio-group Style") {
-                Picker("T-shirt Size", selection: $size) {
-                    Text("Small").tag("small")
-                    Text("Medium").tag("medium")
-                    Text("Large").tag("large")
+            DemoSection(L("page.picker.radioGroupStyle")) {
+                Picker(L("page.picker.tshirtSize"), selection: $size) {
+                    Text(L("page.picker.small")).tag("small")
+                    Text(L("page.picker.medium")).tag("medium")
+                    Text(L("page.picker.large")).tag("large")
                 }
                 .pickerStyle(.radioGroup)
             }
 
-            DemoSection("Inline Style (+ .pickerTextStyle)") {
-                Picker("Priority", selection: $priority) {
+            DemoSection(L("page.picker.inlineStyle")) {
+                Picker(L("page.picker.priority"), selection: $priority) {
                     ForEach(1..<4) { level in
-                        Text("Level \(level)").tag(level)
+                        Text("\(L("page.picker.level")) \(level)").tag(level)
                     }
                 }
                 .pickerStyle(.inline)
@@ -61,21 +61,21 @@ struct PickerPage: View {
                 .pickerTextStyle { $0.foreground = .palette.accent }
             }
 
-            DemoSection("Current Selections") {
+            DemoSection(L("page.picker.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Fruit:", fruit)
-                    ValueDisplayRow("Size:", size)
-                    ValueDisplayRow("Priority:", "\(priority)")
-                    ValueDisplayRow("Number:", "\(number)")
+                    ValueDisplayRow(L("page.picker.fruitLabel"), fruit)
+                    ValueDisplayRow(L("page.picker.sizeLabel"), size)
+                    ValueDisplayRow(L("page.picker.priorityLabel"), "\(priority)")
+                    ValueDisplayRow(L("page.picker.numberLabel"), "\(number)")
                 }
             }
 
             KeyboardHelpSection(
-                "Picker Navigation",
+                L("page.picker.pickerNavigation"),
                 shortcuts: [
-                    "Use [Tab] to move focus between pickers",
-                    "Use [Enter], [Space] or [↓] to open a menu picker",
-                    "Use [↑/↓] to move, [Enter] to choose, [Esc] to cancel",
+                    L("page.picker.help.moveFocus"),
+                    L("page.picker.help.openMenu"),
+                    L("page.picker.help.moveChoose"),
                 ]
             )
 
@@ -83,7 +83,7 @@ struct PickerPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Picker Demo")
+            DemoAppHeader(L("page.picker.title"))
         }
     }
 }

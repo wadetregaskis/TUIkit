@@ -20,7 +20,7 @@ import TUIkit
 struct TextFieldPage: View {
     @State var demoText: String = ""
     @State var searchQuery: String = ""
-    @State var disabledText: String = "Cannot edit"
+    @State var disabledText: String = L("page.textField.cannotEdit")
     @State var submittedValue: String = ""
 
     @State var cursorShapeIndex: Int = 0
@@ -45,60 +45,60 @@ struct TextFieldPage: View {
 
     private var shapeLabel: String {
         switch currentShape {
-        case .block: "█ Block"
-        case .bar: "│ Bar"
-        case .underscore: "▁ Underscore"
+        case .block: "█ \(L("page.textField.shape.block"))"
+        case .bar: "│ \(L("page.textField.shape.bar"))"
+        case .underscore: "▁ \(L("page.textField.shape.underscore"))"
         }
     }
 
     private var animationLabel: String {
         switch currentAnimation {
-        case .none: "Static"
-        case .blink: "Blink"
-        case .pulse: "Pulse"
+        case .none: L("page.textField.animation.static")
+        case .blink: L("page.textField.animation.blink")
+        case .pulse: L("page.textField.animation.pulse")
         }
     }
 
     private var speedLabel: String {
         switch currentSpeed {
-        case .slow: "Slow"
-        case .regular: "Regular"
-        case .fast: "Fast"
+        case .slow: L("page.textField.speed.slow")
+        case .regular: L("page.textField.speed.regular")
+        case .fast: L("page.textField.speed.fast")
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Cursor Demo") {
+            DemoSection(L("page.textField.section.cursorDemo")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Input:").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Input", text: $demoText, prompt: Text("Type here..."))
+                        Text("\(L("page.textField.input")):").foregroundStyle(.palette.foregroundSecondary)
+                        TextField("Input", text: $demoText, prompt: Text(L("page.textField.typeHere")))
                     }
                     HStack(spacing: 1) {
-                        Text("Search:").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Search", text: $searchQuery, prompt: Text("Enter search term..."))
+                        Text("\(L("page.textField.search")):").foregroundStyle(.palette.foregroundSecondary)
+                        TextField("Search", text: $searchQuery, prompt: Text(L("page.textField.enterSearchTerm")))
                             .onSubmit { submittedValue = searchQuery }
                     }
                     if !submittedValue.isEmpty {
                         HStack(spacing: 1) {
-                            Text("Submitted:").foregroundStyle(.palette.foregroundSecondary)
+                            Text("\(L("page.textField.submitted")):").foregroundStyle(.palette.foregroundSecondary)
                             Text(submittedValue).foregroundStyle(.palette.success)
                         }
                     }
-                    Text("Cursor style set on container, inherited by all fields").dim()
+                    Text(L("page.textField.cursorInherited")).dim()
                 }
                 // .textFieldTextStyle re-themes the entered text of all fields
                 // in this section (cursor, selection and prompt keep their colours).
                 .textFieldTextStyle { $0.foreground = .palette.accent }
             }
 
-            DemoSection("Disabled TextField") {
+            DemoSection(L("page.textField.section.disabled")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Disabled:").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Disabled", text: $disabledText, prompt: Text("Cannot edit"))
+                        Text("\(L("page.textField.disabled")):").foregroundStyle(.palette.foregroundSecondary)
+                        TextField("Disabled", text: $disabledText, prompt: Text(L("page.textField.cannotEdit")))
                             .disabled()
                     }
                 }
@@ -106,20 +106,20 @@ struct TextFieldPage: View {
 
             HStack(alignment: .top, spacing: 3) {
                 KeyboardHelpSection(shortcuts: [
-                    "[←] [→] Move cursor left/right",
-                    "[Home] [End] Jump to start/end",
-                    "[Backspace] Delete before cursor",
-                    "[Delete] Delete at cursor",
-                    "[Enter] Submit (triggers onSubmit)",
-                    "[Tab] Move to next field",
+                    L("page.textField.help.moveCursor"),
+                    L("page.textField.help.jumpStartEnd"),
+                    L("page.textField.help.backspace"),
+                    L("page.textField.help.delete"),
+                    L("page.textField.help.submit"),
+                    L("page.textField.help.nextField"),
                 ])
 
                 KeyboardHelpSection(
-                    "Cursor Settings",
+                    L("page.textField.section.cursorSettings"),
                     shortcuts: [
-                        "[F1] Shape: Block, Bar, Underscore",
-                        "[F2] Animation: Static, Blink, Pulse",
-                        "[F3] Speed: Slow, Regular, Fast",
+                        L("page.textField.help.f1Shape"),
+                        L("page.textField.help.f2Animation"),
+                        L("page.textField.help.f3Speed"),
                     ]
                 )
             }
@@ -131,13 +131,13 @@ struct TextFieldPage: View {
         .statusBarItems(cursorStatusBarItems)
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("TextField Demo")
+            DemoAppHeader(L("page.textField.header"))
         }
     }
 
     private var cursorStatusBarItems: [any StatusBarItemProtocol] {
         [
-            StatusBarItem(shortcut: Shortcut.escape, label: "back"),
+            StatusBarItem(shortcut: Shortcut.escape, label: L("page.textField.back")),
             StatusBarItem(shortcut: Shortcut.f1, label: shapeLabel) {
                 cursorShapeIndex = (cursorShapeIndex + 1) % shapes.count
             },

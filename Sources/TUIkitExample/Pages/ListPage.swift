@@ -58,7 +58,7 @@ struct ListPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader("List Demo")
+            DemoAppHeader(L("page.list.title"))
         }
     }
 
@@ -67,7 +67,7 @@ struct ListPage: View {
 
             HStack(spacing: 2) {
                 List(
-                    "Single Selection",
+                    L("page.list.singleSelection"),
                     selection: $singleSelection
                 ) {
                     ForEach(FileItem.sampleFiles) { file in
@@ -81,7 +81,7 @@ struct ListPage: View {
                 .frame(height: 10)
 
                 List(
-                    "Multi Selection",
+                    L("page.list.multiSelection"),
                     selection: $multiSelection
                 ) {
                     ForEach(FileItem.sampleFiles) { file in
@@ -95,35 +95,26 @@ struct ListPage: View {
                 .frame(height: 10)
             }
 
-            DemoSection("Current Selections") {
+            DemoSection(L("page.list.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Single:", singleSelection ?? "(none)")
+                    ValueDisplayRow(L("page.list.single"), singleSelection ?? L("page.list.none"))
                     ValueDisplayRow(
-                        "Multi:",
+                        L("page.list.multi"),
                         multiSelection.isEmpty
-                            ? "(none)"
+                            ? L("page.list.none")
                             : multiSelection.sorted().joined(separator: ", ")
                     )
                 }
             }
 
             DemoSection(
-                "Wheel scrolling + scrollbar — long list, no live selection"
+                L("page.list.wheelSection")
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Scroll the wheel anywhere over the list below. "
-                            + "It scrolls even when the list doesn't have "
-                            + "focus — wheel events go to the viewport, "
-                            + "not the selection. (Arrow keys still move "
-                            + "the selection, but only when the list is "
-                            + "focused.) The opt-in scrollbar on the right "
-                            + "(.scrollbarVisibility(.visible)) tracks the "
-                            + "visible region in lines, with a sub-cell thumb."
-                    )
+                    Text(L("page.list.wheelBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    List("\(longLines.count) lines") {
+                    List("\(longLines.count) \(L("page.list.linesSuffix"))") {
                         ForEach(longLines, id: \.self) { line in
                             Text(line)
                         }
@@ -134,20 +125,14 @@ struct ListPage: View {
             }
 
             DemoSection(
-                "Unfocused-selection visibility: .hidden"
+                L("page.list.unfocusedSection")
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Click an item, then click somewhere else on the "
-                            + "page so the list loses focus. The selection "
-                            + "highlight disappears, but the underlying "
-                            + "binding is still set — focus the list again "
-                            + "(Tab / click) and the highlight returns."
-                    )
+                    Text(L("page.list.unfocusedBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     List(
-                        "Transient picker",
+                        L("page.list.transientPicker"),
                         selection: $transientSelection
                     ) {
                         ForEach(FileItem.sampleFiles) { file in
@@ -161,19 +146,15 @@ struct ListPage: View {
                     .unfocusedSelectionVisibility(.hidden)
 
                     ValueDisplayRow(
-                        "Bound value:",
-                        transientSelection ?? "(none)"
+                        L("page.list.boundValue"),
+                        transientSelection ?? L("page.list.none")
                     )
                 }
             }
 
-            DemoSection("List styles (.listStyle)") {
+            DemoSection(L("page.list.stylesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Apply a list style with .listStyle(.plain) or "
-                            + ".listStyle(.insetGrouped) — the two built-in "
-                            + "ListStyles, matching SwiftUI's leading-dot syntax."
-                    )
+                    Text(L("page.list.stylesBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // Untitled lists, so a title border doesn't mask the
@@ -213,16 +194,14 @@ struct ListPage: View {
             }
 
             KeyboardHelpSection(
-                "Navigation",
+                L("page.list.navigation"),
                 shortcuts: [
-                    "Use [↑/↓] to navigate items",
-                    "Use [Home/End] to jump to first/last",
-                    "Use [PageUp/PageDown] for fast scrolling",
-                    "Use [Enter/Space] to select/deselect",
-                    "Use [Tab] to switch between lists",
-                    "Use the mouse wheel to scroll any list "
-                        + "(works whether or not the list has focus, "
-                        + "and whether or not it has a selection binding)",
+                    L("page.list.help.navigate"),
+                    L("page.list.help.jump"),
+                    L("page.list.help.fastScroll"),
+                    L("page.list.help.select"),
+                    L("page.list.help.switch"),
+                    L("page.list.help.wheel"),
                 ]
             )
         }

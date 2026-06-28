@@ -16,33 +16,33 @@ struct ContentUnavailablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Title only") {
-                ContentUnavailableView("No Results")
+            DemoSection(L("page.contentUnavailable.titleOnly")) {
+                ContentUnavailableView(L("page.contentUnavailable.noResults"))
             }
 
-            DemoSection("Title + description") {
+            DemoSection(L("page.contentUnavailable.titleDescription")) {
                 ContentUnavailableView(
-                    "No Messages",
-                    description: "Messages you receive will appear here.")
+                    L("page.contentUnavailable.noMessages"),
+                    description: L("page.contentUnavailable.noMessagesDescription"))
             }
 
-            DemoSection("Custom label, description & actions") {
+            DemoSection(L("page.contentUnavailable.customForm")) {
                 ContentUnavailableView {
-                    Text("✶  Nothing Selected").bold().foregroundStyle(.palette.accent)
+                    Text("✶  \(L("page.contentUnavailable.nothingSelected"))").bold().foregroundStyle(.palette.accent)
                 } description: {
-                    Text("Choose an item from the list to see its details.")
+                    Text(L("page.contentUnavailable.chooseItem"))
                         .foregroundStyle(.palette.foregroundSecondary)
                 } actions: {
-                    Button("Refresh") { refreshes += 1 }
+                    Button(L("page.contentUnavailable.refresh")) { refreshes += 1 }
                 }
-                ValueDisplayRow("Refresh pressed:", "\(refreshes)×")
+                ValueDisplayRow(L("page.contentUnavailable.refreshPressed"), "\(refreshes)×")
             }
 
             KeyboardHelpSection(
                 "ContentUnavailableView",
                 shortcuts: [
-                    "A placeholder for empty states — pair it with `if items.isEmpty`",
-                    "[Tab] focuses the action button, [Enter]/[Space] activates it",
+                    L("page.contentUnavailable.help.placeholder"),
+                    L("page.contentUnavailable.help.tabFocuses"),
                 ]
             )
 
@@ -50,7 +50,7 @@ struct ContentUnavailablePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Empty State Demo")
+            DemoAppHeader(L("page.contentUnavailable.title"))
         }
     }
 }

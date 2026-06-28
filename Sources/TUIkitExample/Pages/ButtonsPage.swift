@@ -24,14 +24,14 @@ struct ButtonsPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader("Buttons & Focus Demo")
+            DemoAppHeader(L("page.buttons.header"))
         }
     }
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Interactive Counter (@State)") {
+            DemoSection(L("page.buttons.section.counter")) {
                 HStack(spacing: 2) {
                     Button("+1") {
                         clickCount += 1
@@ -41,103 +41,100 @@ struct ButtonsPage: View {
                         clickCount += 10
                     }
                     .buttonStyle(.success)
-                    Button("Reset") {
+                    Button(L("page.buttons.reset")) {
                         clickCount = 0
                     }
                     .buttonStyle(.destructive)
-                    Text("Clicks: \(clickCount)")
+                    Text("\(L("page.buttons.clicks")): \(clickCount)")
                         .bold()
                         .foregroundStyle(.palette.accent)
                 }
             }
 
-            DemoSection("Button Styles") {
+            DemoSection(L("page.buttons.section.styles")) {
                 HStack(spacing: 2) {
-                    Button("Default") {
+                    Button(L("page.buttons.default")) {
                         clickCount += 1
                     }
-                    Button("Primary") {
+                    Button(L("page.buttons.primary")) {
                         clickCount += 1
                     }
                     .buttonStyle(.primary)
-                    Button("Success") {
+                    Button(L("page.buttons.success")) {
                         clickCount += 1
                     }
                     .buttonStyle(.success)
-                    Button("Destructive") {
+                    Button(L("page.buttons.destructive")) {
                         clickCount += 1
                     }
                     .buttonStyle(.destructive)
                 }
             }
 
-            DemoSection("Disabled Button") {
+            DemoSection(L("page.buttons.section.disabled")) {
                 HStack(spacing: 2) {
-                    Button("Enabled") { clickCount += 1 }
-                    Button("Disabled") {}.disabled()
+                    Button(L("page.buttons.enabled")) { clickCount += 1 }
+                    Button(L("page.buttons.disabled")) {}.disabled()
                 }
             }
 
-            DemoSection("Cascading .disabled (whole group)") {
+            DemoSection(L("page.buttons.section.cascadingDisabled")) {
                 // .disabled on a container cascades to every control inside.
                 VStack(alignment: .leading, spacing: 1) {
-                    Button("Can't click me") { clickCount += 1 }
-                    Toggle("Can't toggle me", isOn: .constant(true))
+                    Button(L("page.buttons.cantClick")) { clickCount += 1 }
+                    Toggle(L("page.buttons.cantToggle"), isOn: .constant(true))
                 }
                 .disabled(true)
             }
 
-            DemoSection("Tinted group (.tint)") {
+            DemoSection(L("page.buttons.section.tinted")) {
                 // .tint cascades the accent to every control inside.
                 VStack(alignment: .leading, spacing: 1) {
-                    Button("Primary") { clickCount += 1 }.buttonStyle(.primary)
-                    Toggle("Toggle", isOn: $tintToggle)
+                    Button(L("page.buttons.primary")) { clickCount += 1 }.buttonStyle(.primary)
+                    Toggle(L("page.buttons.toggle"), isOn: $tintToggle)
                 }
                 .tint(.palette.success)
             }
 
-            DemoSection("Plain Style (No Border)") {
+            DemoSection(L("page.buttons.section.plain")) {
                 HStack(spacing: 2) {
-                    Button("Link 1") { clickCount += 1 }
+                    Button("\(L("page.buttons.link")) 1") { clickCount += 1 }
                         .buttonStyle(.plain)
-                    Button("Link 2") { clickCount += 1 }
+                    Button("\(L("page.buttons.link")) 2") { clickCount += 1 }
                         .buttonStyle(.plain)
                 }
             }
 
-            DemoSection("ButtonRow (Horizontal Group)") {
+            DemoSection(L("page.buttons.section.buttonRow")) {
                 ButtonRow(spacing: 3) {
-                    Button("Cancel") { clickCount += 1 }
-                    Button("Save") { clickCount += 1 }
+                    Button(L("page.buttons.cancel")) { clickCount += 1 }
+                    Button(L("page.buttons.save")) { clickCount += 1 }
                 }
                 .buttonStyle(.primary)
             }
 
-            DemoSection("Themeable button text (.buttonTextStyle)") {
+            DemoSection(L("page.buttons.section.themeableText")) {
                 VStack(alignment: .leading, spacing: 1) {
                     // .buttonTextStyle re-themes the label text of every button in
                     // the subtree; the brackets/background stay as the style draws
                     // them.
                     HStack(spacing: 2) {
-                        Button("One") { clickCount += 1 }
-                        Button("Two") { clickCount += 1 }
-                        Button("Delete", role: .destructive) { clickCount += 1 }
+                        Button(L("page.buttons.one")) { clickCount += 1 }
+                        Button(L("page.buttons.two")) { clickCount += 1 }
+                        Button(L("page.buttons.delete"), role: .destructive) { clickCount += 1 }
                     }
                     .buttonTextStyle { $0.bold = true; $0.foreground = .green }
 
-                    Text(
-                        "Labels go green + bold — except the destructive one, "
-                            + "whose colour is load-bearing."
-                    )
+                    Text(L("page.buttons.themeableNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             KeyboardHelpSection(
-                "Focus Navigation",
+                L("page.buttons.section.focusNav"),
                 shortcuts: [
-                    "Use [Tab] to move focus between buttons",
-                    "Use [Enter] or [Space] to press the focused button",
+                    L("page.buttons.help.tab"),
+                    L("page.buttons.help.enterSpace"),
                 ]
             )
         }

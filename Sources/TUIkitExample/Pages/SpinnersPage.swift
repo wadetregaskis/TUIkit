@@ -11,31 +11,31 @@ struct SpinnersPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Dots (Braille Rotation)") {
-                Spinner("Loading data...")
+            DemoSection(L("page.spinners.dotsSection")) {
+                Spinner(L("page.spinners.loadingData"))
             }
 
-            DemoSection("Line (ASCII Rotation)") {
-                Spinner("Compiling...", style: .line)
+            DemoSection(L("page.spinners.lineSection")) {
+                Spinner(L("page.spinners.compiling"), style: .line)
             }
 
-            DemoSection("Bouncing (Knight Rider)") {
-                Spinner("Processing...", style: .bouncing)
+            DemoSection(L("page.spinners.bouncingSection")) {
+                Spinner(L("page.spinners.processing"), style: .bouncing)
             }
 
-            DemoSection("Custom Color") {
+            DemoSection(L("page.spinners.customColorSection")) {
                 // A literal colour, deliberately distinct from the theme accent
                 // (the default spinner colour) so the customisation is visible —
                 // the green theme's `.palette.success` is nearly identical to its
                 // `.palette.accent`, which made this look uncustomised.
-                Spinner("Installing...", style: .bouncing, color: .magenta)
+                Spinner(L("page.spinners.installing"), style: .bouncing, color: .magenta)
             }
 
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Spinners")
+            DemoAppHeader(L("page.spinners.title"))
         }
     }
 }

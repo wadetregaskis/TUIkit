@@ -23,58 +23,58 @@ struct RadioButtonPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Color Selection (Vertical)") {
+            DemoSection(L("page.radioButton.section.colorVertical")) {
                 RadioButtonGroup(selection: $colorChoice) {
-                    RadioButtonItem("red", "Red")
-                    RadioButtonItem("green", "Green")
-                    RadioButtonItem("blue", "Blue")
-                    RadioButtonItem("yellow", "Yellow")
+                    RadioButtonItem("red", L("page.radioButton.red"))
+                    RadioButtonItem("green", L("page.radioButton.green"))
+                    RadioButtonItem("blue", L("page.radioButton.blue"))
+                    RadioButtonItem("yellow", L("page.radioButton.yellow"))
                 }
             }
 
-            DemoSection("Size Selection (Vertical)") {
+            DemoSection(L("page.radioButton.section.sizeVertical")) {
                 RadioButtonGroup(selection: $sizeChoice) {
-                    RadioButtonItem("small", "Small")
-                    RadioButtonItem("medium", "Medium")
-                    RadioButtonItem("large", "Large")
+                    RadioButtonItem("small", L("page.radioButton.small"))
+                    RadioButtonItem("medium", L("page.radioButton.medium"))
+                    RadioButtonItem("large", L("page.radioButton.large"))
                 }
             }
 
-            DemoSection("Layout Style (Horizontal, + .radioButtonTextStyle)") {
+            DemoSection(L("page.radioButton.section.layoutHorizontal")) {
                 RadioButtonGroup(selection: $layoutChoice, orientation: .horizontal) {
-                    RadioButtonItem("vertical", "Vertical")
-                    RadioButtonItem("horizontal", "Horizontal")
+                    RadioButtonItem("vertical", L("page.radioButton.vertical"))
+                    RadioButtonItem("horizontal", L("page.radioButton.horizontal"))
                 }
                 // .radioButtonTextStyle re-themes the labels (●/○ indicator unaffected).
                 .radioButtonTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
-            DemoSection("Disabled Group") {
+            DemoSection(L("page.radioButton.section.disabled")) {
                 // Several items so both disabled states show: the selected one
                 // (●, dimmed) and the unselected ones (◌, the dotted "not
                 // pickable" circle).
                 RadioButtonGroup(selection: Binding(get: { "selected" }, set: { _ in })) {
-                    RadioButtonItem("selected", "This group is disabled (selected)")
-                    RadioButtonItem("a", "An unavailable option")
-                    RadioButtonItem("b", "Another unavailable option")
+                    RadioButtonItem("selected", L("page.radioButton.disabledSelected"))
+                    RadioButtonItem("a", L("page.radioButton.unavailable"))
+                    RadioButtonItem("b", L("page.radioButton.anotherUnavailable"))
                 }
                 .disabled()
             }
 
-            DemoSection("Current Selections") {
+            DemoSection(L("page.radioButton.section.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Color:", colorChoice)
-                    ValueDisplayRow("Size:", sizeChoice)
-                    ValueDisplayRow("Layout:", layoutChoice)
+                    ValueDisplayRow("\(L("page.radioButton.color")):", colorChoice)
+                    ValueDisplayRow("\(L("page.radioButton.size")):", sizeChoice)
+                    ValueDisplayRow("\(L("page.radioButton.layout")):", layoutChoice)
                 }
             }
 
             KeyboardHelpSection(
-                "Focus Navigation",
+                L("page.radioButton.section.focusNav"),
                 shortcuts: [
-                    "Use [↑/↓] to navigate vertically",
-                    "Use [←/→] to navigate horizontally",
-                    "Use [Enter] or [Space] to select",
+                    L("page.radioButton.help.navVertical"),
+                    L("page.radioButton.help.navHorizontal"),
+                    L("page.radioButton.help.select"),
                 ]
             )
 
@@ -82,7 +82,7 @@ struct RadioButtonPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Radio Buttons Demo")
+            DemoAppHeader(L("page.radioButton.header"))
         }
     }
 }

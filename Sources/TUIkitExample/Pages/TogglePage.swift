@@ -24,63 +24,60 @@ struct TogglePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Toggles") {
+            DemoSection(L("page.toggle.section.toggles")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Toggle("Enable Notifications", isOn: $notificationsEnabled)
-                    Toggle("Dark Mode", isOn: $darkModeEnabled)
-                    Toggle("Show Hidden Files", isOn: $showHiddenFiles)
-                    Toggle("Disabled (OFF)", isOn: .constant(false)).disabled()
-                    Toggle("Disabled (ON)", isOn: .constant(true)).disabled()
+                    Toggle(L("page.toggle.enableNotifications"), isOn: $notificationsEnabled)
+                    Toggle(L("page.toggle.darkMode"), isOn: $darkModeEnabled)
+                    Toggle(L("page.toggle.showHiddenFiles"), isOn: $showHiddenFiles)
+                    Toggle(L("page.toggle.disabledOff"), isOn: .constant(false)).disabled()
+                    Toggle(L("page.toggle.disabledOn"), isOn: .constant(true)).disabled()
                 }
             }
 
-            DemoSection("Explanatory subtitle (a multi-Text label)") {
+            DemoSection(L("page.toggle.section.explanatory")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("A second Text in the label closure renders below the title — "
-                        + "indented to the label, in the secondary colour — exactly as in SwiftUI.")
+                    Text(L("page.toggle.explanatoryNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(isOn: $pushNotifications) {
-                        Text("Push notifications")
-                        Text("Receive alerts even when the app is closed")
+                        Text(L("page.toggle.pushNotifications"))
+                        Text(L("page.toggle.pushSubtitle"))
                     }
                 }
             }
 
-            DemoSection("Themeable label text (.toggleTextStyle)") {
+            DemoSection(L("page.toggle.section.themeableLabel")) {
                 VStack(alignment: .leading, spacing: 1) {
                     // Only the labels are restyled; the checkbox glyph is unaffected.
-                    Toggle("Italic, info-coloured label", isOn: $styledLabelA)
-                    Toggle("…and this one too", isOn: $styledLabelB)
+                    Toggle(L("page.toggle.italicLabel"), isOn: $styledLabelA)
+                    Toggle(L("page.toggle.andThisOne"), isOn: $styledLabelB)
                 }
                 .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
             }
 
-            DemoSection("Checkbox glyph style (.checkboxStyle)") {
+            DemoSection(L("page.toggle.section.checkboxGlyph")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("CheckboxStyle customises the glyphs. The app-wide default is set "
-                        + "on the Theme page; here both are shown side by side.")
+                    Text(L("page.toggle.checkboxNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(".squares (default)").dim()
-                            Toggle("On", isOn: .constant(true))
-                            Toggle("Off", isOn: .constant(false))
+                            Text("\(".squares") (\(L("page.toggle.default")))").dim()
+                            Toggle(L("page.toggle.on"), isOn: .constant(true))
+                            Toggle(L("page.toggle.off"), isOn: .constant(false))
                         }
                         .checkboxStyle(.squares)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(".ascii").dim()
-                            Toggle("On", isOn: .constant(true))
-                            Toggle("Off", isOn: .constant(false))
+                            Toggle(L("page.toggle.on"), isOn: .constant(true))
+                            Toggle(L("page.toggle.off"), isOn: .constant(false))
                         }
                         .checkboxStyle(.ascii)
                     }
                 }
             }
 
-            DemoSection("Toggle style (.toggleStyle)") {
+            DemoSection(L("page.toggle.section.toggleStyle")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("All three styles render as a checkbox in the terminal; the API "
-                        + "mirrors SwiftUI (.automatic / .checkbox / .switch).")
+                    Text(L("page.toggle.toggleStyleNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle("automatic", isOn: .constant(true)).toggleStyle(.automatic)
                     Toggle("checkbox", isOn: .constant(true)).toggleStyle(.checkbox)
@@ -88,10 +85,10 @@ struct TogglePage: View {
                 }
             }
 
-            DemoSection("Keyboard Controls") {
+            DemoSection(L("page.toggle.section.keyboard")) {
                 VStack(alignment: .leading) {
-                    Text("[Tab] Move focus between toggles").dim()
-                    Text("[Space] or [Enter] Toggle the focused item").dim()
+                    Text(L("page.toggle.help.tab")).dim()
+                    Text(L("page.toggle.help.spaceEnter")).dim()
                 }
             }
 
@@ -99,7 +96,7 @@ struct TogglePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Toggle Demo")
+            DemoAppHeader(L("page.toggle.header"))
         }
     }
 }

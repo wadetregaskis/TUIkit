@@ -54,19 +54,19 @@ struct TabViewPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Compact Style (no chrome)") {
+            DemoSection(L("page.tabView.compactStyle")) {
                 TabView(selection: $compactSelection) {
-                    Tab("Profile", value: 0) {
+                    Tab(L("page.tabView.profile"), value: 0) {
                         VStack(alignment: .leading) {
                             Text("Ada Lovelace").bold()
-                            Text("First programmer")
+                            Text(L("page.tabView.firstProgrammer"))
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
-                    Tab("Settings", value: 1) {
-                        Toggle("Notifications", isOn: $notify)
+                    Tab(L("page.tabView.settings"), value: 1) {
+                        Toggle(L("page.tabView.notifications"), isOn: $notify)
                     }
-                    Tab("About", value: 2) {
+                    Tab(L("page.tabView.about"), value: 2) {
                         Text("TUIkit · v1.0")
                     }
                 }
@@ -74,32 +74,31 @@ struct TabViewPage: View {
                 .tabViewHeaderAlignment(.leading)
             }
 
-            DemoSection("Bordered Style (line-drawing chrome)") {
+            DemoSection(L("page.tabView.borderedStyle")) {
                 TabView(selection: $borderedSelection) {
-                    Tab("Overview", value: 0) {
-                        Text("A bordered tab view wraps the tabs and content "
-                            + "together, opening the border under the active tab.")
+                    Tab(L("page.tabView.overview"), value: 0) {
+                        Text(L("page.tabView.borderedDescription"))
                     }
-                    Tab("Audio", value: 1) {
+                    Tab(L("page.tabView.audio"), value: 1) {
                         VStack(alignment: .leading) {
-                            Text("Volume")
+                            Text(L("page.tabView.volume"))
                             Slider(value: $volume, in: 0...1)
                                 .frame(width: 24)
                         }
                     }
-                    Tab("Status", value: 2) {
-                        Toggle("Online", isOn: $notify)
+                    Tab(L("page.tabView.status"), value: 2) {
+                        Toggle(L("page.tabView.online"), isOn: $notify)
                     }
-                    Tab("Help", value: 3) {
-                        Text("Use ◀ ▶ to switch tabs when the strip is focused.")
+                    Tab(L("page.tabView.help"), value: 3) {
+                        Text(L("page.tabView.helpSwitchTabs"))
                     }
                 }
                 .tabViewStyle(.bordered)
             }
 
-            DemoSection("Adjustable (try the settings)") {
+            DemoSection(L("page.tabView.adjustable")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Picker("Tab strip alignment", selection: $headerAlignment) {
+                    Picker(L("page.tabView.tabStripAlignment"), selection: $headerAlignment) {
                         ForEach(HeaderAlignment.allCases, id: \.self) { choice in
                             Text(choice.rawValue).tag(choice)
                         }
@@ -109,12 +108,12 @@ struct TabViewPage: View {
                     // several rows) instead of keeping it on one wide row — the
                     // same choice the colour picker makes. With it on, the
                     // alignment above visibly shifts each folded row.
-                    Toggle("Fold strip to content width", isOn: $foldStrip)
+                    Toggle(L("page.tabView.foldStrip"), isOn: $foldStrip)
 
                     TabView(selection: $adjustableSelection) {
                         ForEach(Array(["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"].enumerated()), id: \.offset) { index, name in
                             Tab(name, value: index) {
-                                Text("Settings and details for the \(name) section.")
+                                Text("\(L("page.tabView.sectionDetailsPrefix")) \(name) \(L("page.tabView.sectionDetailsSuffix"))")
                             }
                         }
                     }
@@ -125,11 +124,11 @@ struct TabViewPage: View {
             }
 
             KeyboardHelpSection(
-                "TabView Navigation",
+                L("page.tabView.navigation"),
                 shortcuts: [
-                    "Use [Tab] to focus a tab strip",
-                    "Use [←/→] to switch between tabs",
-                    "Click a tab header to select it",
+                    L("page.tabView.helpFocusStrip"),
+                    L("page.tabView.helpSwitchKeys"),
+                    L("page.tabView.helpClickHeader"),
                 ]
             )
 
@@ -137,7 +136,7 @@ struct TabViewPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("TabView Demo")
+            DemoAppHeader(L("page.tabView.title"))
         }
     }
 }

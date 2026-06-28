@@ -24,16 +24,16 @@ private enum OverlayDemo: Int, CaseIterable {
     /// Display label for the menu.
     var label: String {
         switch self {
-        case .alertStandard: "Alert (Standard)"
-        case .alertWarning: "Alert (Warning)"
-        case .alertError: "Alert (Error)"
-        case .alertInfo: "Alert (Info)"
-        case .alertSuccess: "Alert (Success)"
-        case .dialog: "Dialog"
-        case .dialogWithFooter: "Dialog with Footer"
-        case .dialogAuth: "Dialog (Authentication)"
-        case .modalCustom: "Modal (Custom)"
-        case .notification: "Notification"
+        case .alertStandard: L("page.overlays.label.alertStandard")
+        case .alertWarning: L("page.overlays.label.alertWarning")
+        case .alertError: L("page.overlays.label.alertError")
+        case .alertInfo: L("page.overlays.label.alertInfo")
+        case .alertSuccess: L("page.overlays.label.alertSuccess")
+        case .dialog: L("page.overlays.label.dialog")
+        case .dialogWithFooter: L("page.overlays.label.dialogWithFooter")
+        case .dialogAuth: L("page.overlays.label.dialogAuth")
+        case .modalCustom: L("page.overlays.label.modalCustom")
+        case .notification: L("page.overlays.label.notification")
         }
     }
 
@@ -41,25 +41,25 @@ private enum OverlayDemo: Int, CaseIterable {
     var description: String {
         switch self {
         case .alertStandard:
-            "A standard alert with default theme colors. Uses .alert(isPresented:) modifier."
+            L("page.overlays.desc.alertStandard")
         case .alertWarning:
-            "A warning-style alert with palette warning colors. Uses Alert.warning() preset."
+            L("page.overlays.desc.alertWarning")
         case .alertError:
-            "An error-style alert with palette error colors. Uses Alert.error() preset."
+            L("page.overlays.desc.alertError")
         case .alertInfo:
-            "An info-style alert with palette info colors. Uses Alert.info() preset."
+            L("page.overlays.desc.alertInfo")
         case .alertSuccess:
-            "A success-style alert with palette success colors. Uses Alert.success() preset."
+            L("page.overlays.desc.alertSuccess")
         case .dialog:
-            "A Dialog view with custom content. More flexible than Alert — accepts any views."
+            L("page.overlays.desc.dialog")
         case .dialogWithFooter:
-            "A Dialog with a footer section for action buttons, separated by a divider line."
+            L("page.overlays.desc.dialogWithFooter")
         case .dialogAuth:
-            "A Dialog with TextField + SecureField and Sign-in / Cancel buttons, demonstrating how to host interactive form input inside a modal."
+            L("page.overlays.desc.dialogAuth")
         case .modalCustom:
-            "A custom modal overlay using .modal(isPresented:). Accepts any view as content."
+            L("page.overlays.desc.modalCustom")
         case .notification:
-            "A fire-and-forget notification. Fades in, stays 3s, fades out. Posted via NotificationService."
+            L("page.overlays.desc.notification")
         }
     }
 
@@ -132,17 +132,17 @@ struct OverlaysPage: View {
     private var statusBarItems: [any StatusBarItemProtocol] {
         if showOverlay {
             return [
-                StatusBarItem(shortcut: Shortcut.escape, label: "close") {
+                StatusBarItem(shortcut: Shortcut.escape, label: L("page.overlays.status.close")) {
                     showOverlay = false
                 },
             ]
         } else {
             return [
-                StatusBarItem(shortcut: Shortcut.escape, label: "back") {
+                StatusBarItem(shortcut: Shortcut.escape, label: L("page.overlays.status.back")) {
                     onBack()
                 },
-                StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav"),
-                StatusBarItem(shortcut: Shortcut.enter, label: "show"),
+                StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("page.overlays.status.nav")),
+                StatusBarItem(shortcut: Shortcut.enter, label: L("page.overlays.status.show")),
             ]
         }
     }
@@ -155,7 +155,7 @@ struct OverlaysPage: View {
             HStack(spacing: 3) {
                 // Left: Demo menu
                 Menu(
-                    title: "Select a Demo",
+                    title: L("page.overlays.selectDemo"),
                     items: OverlayDemo.allCases.map { demo in
                         MenuItem(label: demo.label, shortcut: nil)
                     },
@@ -163,7 +163,7 @@ struct OverlaysPage: View {
                     onSelect: { _ in
                         if selectedDemo.isNotification {
                             NotificationService.current.post(
-                                "Operation completed successfully!"
+                                L("page.overlays.alert.successMessage")
                             )
                         } else {
                             showOverlay = true
@@ -177,16 +177,16 @@ struct OverlaysPage: View {
                 descriptionPanel
             }
 
-            DemoSection("How It Works") {
-                Text("All overlays use the SwiftUI-style presentation API:")
+            DemoSection(L("page.overlays.section.howItWorks")) {
+                Text(L("page.overlays.howItWorks.intro"))
                     .foregroundStyle(.palette.foregroundSecondary)
-                Text("  .alert(isPresented:)        — for Alert views")
+                Text("  .alert(isPresented:)        — \(L("page.overlays.howItWorks.alertLine"))")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Text("  .modal(isPresented:)        — for Dialog, custom content")
+                Text("  .modal(isPresented:)        — \(L("page.overlays.howItWorks.modalLine"))")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Text("  NotificationService.current.post() — fire-and-forget with fade")
+                Text("  NotificationService.current.post() — \(L("page.overlays.howItWorks.notifLine"))")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Text("Modals dim the background. Notifications stay non-blocking.")
+                Text(L("page.overlays.howItWorks.summary"))
                     .bold()
                     .foregroundStyle(.palette.accent)
             }
@@ -195,7 +195,7 @@ struct OverlaysPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Overlays, Modals & Notifications Demo")
+            DemoAppHeader(L("page.overlays.header"))
         }
     }
 
@@ -210,7 +210,7 @@ struct OverlaysPage: View {
 
                 Text("")
 
-                Text("API:")
+                Text(L("page.overlays.apiLabel"))
                     .bold()
                     .foregroundStyle(.palette.accent)
                 Text("  \(selectedDemo.apiUsage)")
@@ -231,11 +231,11 @@ struct OverlaysPage: View {
             alertContent(for: demo)
 
         case .dialog:
-            Dialog(title: "Settings", borderColor: .palette.border, titleColor: .palette.accent) {
+            Dialog(title: L("page.overlays.dialog.settingsTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
                 VStack(alignment: .leading) {
-                    Text("Theme: Dark").foregroundStyle(.palette.foreground)
-                    Text("Language: English").foregroundStyle(.palette.foreground)
-                    Text("Notifications: On").foregroundStyle(.palette.foreground)
+                    Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
+                    Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
+                    Text(L("page.overlays.dialog.notificationsOn")).foregroundStyle(.palette.foreground)
                     Text("")
                     dismissButton
                 }
@@ -243,31 +243,31 @@ struct OverlaysPage: View {
             .frame(width: 50)
 
         case .dialogWithFooter:
-            Dialog(title: "Confirm Action", borderColor: .palette.border, titleColor: .palette.accent) {
-                Text("Are you sure you want to proceed?").foregroundStyle(.palette.foreground)
-                Text("This action cannot be undone.").foregroundStyle(.palette.foregroundSecondary)
+            Dialog(title: L("page.overlays.dialog.confirmTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
+                Text(L("page.overlays.dialog.confirmBody")).foregroundStyle(.palette.foreground)
+                Text(L("page.overlays.dialog.confirmUndone")).foregroundStyle(.palette.foregroundSecondary)
             } footer: {
                 dismissButton
             }
             .frame(width: 50)
 
         case .dialogAuth:
-            Dialog(title: "Sign in", borderColor: .palette.border, titleColor: .palette.accent) {
+            Dialog(title: L("page.overlays.dialog.signInTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Please enter your credentials.")
+                    Text(L("page.overlays.dialog.enterCredentials"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    TextField("Username", text: $authUsername, prompt: Text("e.g. admin"))
-                    SecureField("Password", text: $authPassword, prompt: Text("required"))
+                    TextField(L("page.overlays.dialog.username"), text: $authUsername, prompt: Text(L("page.overlays.dialog.usernamePrompt")))
+                    SecureField(L("page.overlays.dialog.password"), text: $authPassword, prompt: Text(L("page.overlays.dialog.passwordPrompt")))
                 }
             } footer: {
                 HStack {
                     Spacer()
-                    Button("Cancel") {
+                    Button(L("page.overlays.button.cancel")) {
                         authUsername = ""
                         authPassword = ""
                         showOverlay = false
                     }
-                    Button("Sign in") {
+                    Button(L("page.overlays.button.signIn")) {
                         // Demo only — clear the password for safety.
                         authPassword = ""
                         showOverlay = false
@@ -298,33 +298,33 @@ struct OverlaysPage: View {
         switch demo {
         case .alertStandard:
             Alert(
-                title: "Standard Alert",
-                message: "This is a standard alert with default theme colors.",
+                title: L("page.overlays.alert.standardTitle"),
+                message: L("page.overlays.alert.standardMessage"),
                 borderColor: .palette.border,
                 titleColor: .palette.accent
             ) { EmptyView() }.frame(width: 60)
         case .alertWarning:
             Alert(
-                title: "Warning",
-                message: "Something might go wrong. Please check your input.",
+                title: L("page.overlays.alert.warningTitle"),
+                message: L("page.overlays.alert.warningMessage"),
                 titleColor: .palette.warning
             ) { EmptyView() }.frame(width: 60)
         case .alertError:
             Alert(
-                title: "Error",
-                message: "An unexpected error occurred. Please try again.",
+                title: L("page.overlays.alert.errorTitle"),
+                message: L("page.overlays.alert.errorMessage"),
                 titleColor: .palette.error
             ) { EmptyView() }.frame(width: 60)
         case .alertInfo:
             Alert(
-                title: "Info",
-                message: "This is an informational message for the user.",
+                title: L("page.overlays.alert.infoTitle"),
+                message: L("page.overlays.alert.infoMessage"),
                 titleColor: .palette.info
             ) { EmptyView() }.frame(width: 60)
         case .alertSuccess:
             Alert(
-                title: "Success",
-                message: "Operation completed successfully!",
+                title: L("page.overlays.alert.successTitle"),
+                message: L("page.overlays.alert.successMessage"),
                 titleColor: .palette.success
             ) { EmptyView() }.frame(width: 60)
         default:
@@ -338,7 +338,7 @@ struct OverlaysPage: View {
     private var dismissButton: some View {
         HStack {
             Spacer()
-            Button("Dismiss") {
+            Button(L("page.overlays.button.dismiss")) {
                 showOverlay = false
             }
             .buttonStyle(.primary)
@@ -354,26 +354,26 @@ struct OverlaysPage: View {
     /// HStack's flexible Spacer stretches the parent VStack to the full
     /// screen width, defeating the whole point of "size-to-fit".)
     private var modalCustomBody: some View {
-        let lines = [
-            "Custom Modal Content",
-            "This modal uses .modal(isPresented:)",
-            "with completely custom view content.",
-            "No Alert or Dialog — just any View!",
-        ]
+        let title = L("page.overlays.modal.title")
+        let line1 = L("page.overlays.modal.line1")
+        let line2 = L("page.overlays.modal.line2")
+        let line3 = L("page.overlays.modal.line3")
+        let dismissLabel = L("page.overlays.button.dismiss")
+        let lines = [title, line1, line2, line3]
         let maxLineWidth = lines.map(\.count).max() ?? 0
         // The .primary button style wraps the label in two side caps
         // (▐ … ▌) and a space of inner padding on each side.
-        let buttonRenderedWidth = "Dismiss".count + 4
+        let buttonRenderedWidth = dismissLabel.count + 4
         let leadingPad = max(0, maxLineWidth - buttonRenderedWidth)
 
         return VStack(alignment: .leading, spacing: 1) {
-            Text("Custom Modal Content").bold().foregroundStyle(.palette.accent)
+            Text(title).bold().foregroundStyle(.palette.accent)
             Text("")
-            Text("This modal uses .modal(isPresented:)").foregroundStyle(.palette.foreground)
-            Text("with completely custom view content.").foregroundStyle(.palette.foregroundSecondary)
-            Text("No Alert or Dialog — just any View!").foregroundStyle(.palette.foregroundSecondary)
+            Text(line1).foregroundStyle(.palette.foreground)
+            Text(line2).foregroundStyle(.palette.foregroundSecondary)
+            Text(line3).foregroundStyle(.palette.foregroundSecondary)
             Text("")
-            Button("Dismiss") {
+            Button(dismissLabel) {
                 showOverlay = false
             }
             .buttonStyle(.primary)

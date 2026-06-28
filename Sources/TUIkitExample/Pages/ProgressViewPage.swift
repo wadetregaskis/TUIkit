@@ -42,7 +42,7 @@ struct ProgressViewPage: View {
         let current = Self.cyclableStyles[determinateStyleIndex]
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Determinate") {
+            DemoSection(L("page.progressView.determinate")) {
                 // Both bars animate slowly via `animatedFraction` — they
                 // share the same wall-clock phase so they stay in sync,
                 // and the PulseTimer's ~10 Hz re-render makes the
@@ -50,11 +50,11 @@ struct ProgressViewPage: View {
                 // The `s` shortcut cycles the style applied to just these two.
                 VStack(alignment: .leading, spacing: 1) {
                     let fraction = animatedFraction()
-                    ProgressView("Downloading files…", value: fraction)
+                    ProgressView(L("page.progressView.downloadingFiles"), value: fraction)
                         .progressViewStyle(current.style)
 
                     ProgressView(value: fraction) {
-                        Text("Build progress")
+                        Text(L("page.progressView.buildProgress"))
                             .foregroundStyle(.palette.foreground)
                     } currentValueLabel: {
                         Text("\(Int((fraction * 100).rounded()))%")
@@ -64,25 +64,25 @@ struct ProgressViewPage: View {
                 }
             }
 
-            DemoSection("Indeterminate (no known total)") {
+            DemoSection(L("page.progressView.indeterminate")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ProgressView("Connecting…")
+                    ProgressView(L("page.progressView.connecting"))
 
                     ProgressView {
-                        Text("Reticulating splines")
+                        Text(L("page.progressView.reticulatingSplines"))
                             .foregroundStyle(.palette.foreground)
                     }
 
                     // Pure indeterminate, no label — useful inline against
                     // another control.
                     HStack(spacing: 1) {
-                        Text("Working").dim()
+                        Text(L("page.progressView.working")).dim()
                         ProgressView()
                     }
                 }
             }
 
-            DemoSection("Determinate styles") {
+            DemoSection(L("page.progressView.determinateStyles")) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 1) {
                         Text("Style       ").dim()
@@ -118,7 +118,7 @@ struct ProgressViewPage: View {
                 }
             }
 
-            DemoSection("Indeterminate animations") {
+            DemoSection(L("page.progressView.indeterminateAnimations")) {
                 VStack(alignment: .leading, spacing: 0) {
                     indeterminateRow(label: "sweep       ", style: .sweep)
                     indeterminateRow(label: "barberPole  ", style: .barberPole)
@@ -132,12 +132,12 @@ struct ProgressViewPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Progress Views")
+            DemoAppHeader(L("page.progressView.title"))
         }
         // Merges with the page's back / scroll items. Cycles only the top
         // "Determinate" section's style; the style catalogues below stay put.
         .statusBarItems {
-            StatusBarItem(shortcut: "s", label: "style: \(current.name)") {
+            StatusBarItem(shortcut: "s", label: "\(L("page.progressView.styleLabel")): \(current.name)") {
                 determinateStyleIndex =
                     (determinateStyleIndex + 1) % Self.cyclableStyles.count
             }

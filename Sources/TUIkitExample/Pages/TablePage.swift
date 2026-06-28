@@ -54,7 +54,7 @@ struct TablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            Text("File Browser (Name sized to fit, Type fills, opt-in scrollbar)")
+            Text(L("page.table.fileBrowserCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(
                 FileEntry.sampleFiles,
@@ -62,14 +62,14 @@ struct TablePage: View {
             ) {
                 // `.fit` sizes the Name column to its widest value
                 // (".swiftlint.yml") so no filename is ever truncated.
-                TableColumn("Name", value: \FileEntry.name)
+                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
                     .width(.fit)
-                TableColumn("Size", value: \FileEntry.size)
+                TableColumn(L("page.table.column.size"), value: \FileEntry.size)
                     .width(.fixed(10))
                     .alignment(.trailing)
-                TableColumn("Modified", value: \FileEntry.modified)
+                TableColumn(L("page.table.column.modified"), value: \FileEntry.modified)
                     .width(.fixed(12))
-                TableColumn("Type", value: \FileEntry.type)
+                TableColumn(L("page.table.column.type"), value: \FileEntry.type)
                     .width(.flexible)
             }
             // A short height so the rows overflow, plus an opt-in scrollbar that
@@ -77,51 +77,51 @@ struct TablePage: View {
             .frame(height: 8)
             .scrollbarVisibility(.visible)
 
-            Text("Multi-Selection + multi-line Details (.lineLimit(2))")
+            Text(L("page.table.multiSelectionCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(
                 FileEntry.sampleFiles,
                 selection: $multiSelection
             ) {
-                TableColumn("Name", value: \FileEntry.name)
+                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
                     .width(.fit)
                 // A narrow column with .lineLimit(2): the Details value wraps onto
                 // a second line, growing the row, and clips the rest.
-                TableColumn("Details", value: \FileEntry.details)
+                TableColumn(L("page.table.column.details"), value: \FileEntry.details)
                     .width(.fixed(22))
                     .lineLimit(2)
             }
 
-            Text("Ratio widths (.width(.ratio(_:))) — each column a share of the table)")
+            Text(L("page.table.ratioCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(FileEntry.sampleFiles, selection: $ratioSelection) {
                 // `.ratio` sizes each column to a fraction of the table's
                 // width: Name takes half, Size and Type split the rest.
-                TableColumn("Name", value: \FileEntry.name)
+                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
                     .width(.ratio(0.5))
-                TableColumn("Size", value: \FileEntry.size)
+                TableColumn(L("page.table.column.size"), value: \FileEntry.size)
                     .width(.ratio(0.25))
                     .alignment(.trailing)
-                TableColumn("Type", value: \FileEntry.type)
+                TableColumn(L("page.table.column.type"), value: \FileEntry.type)
                     .width(.ratio(0.25))
             }
             .frame(height: 6)
 
-            DemoSection("Current Selections") {
+            DemoSection(L("page.table.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Single:", singleSelection ?? "(none)")
-                    ValueDisplayRow("Multi:", multiSelection.isEmpty ? "(none)" : multiSelection.sorted().joined(separator: ", "))
+                    ValueDisplayRow(L("page.table.single"), singleSelection ?? L("page.table.none"))
+                    ValueDisplayRow(L("page.table.multi"), multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
                 }
             }
 
             KeyboardHelpSection(
-                "Navigation",
+                L("page.table.navigation"),
                 shortcuts: [
-                    "Use [Up/Down] to navigate rows",
-                    "Use [Home/End] to jump to first/last",
-                    "Use [PageUp/PageDown] for fast scrolling",
-                    "Use [Enter/Space] to select/deselect",
-                    "Use [Tab] to switch between tables",
+                    L("page.table.help.navigate"),
+                    L("page.table.help.jump"),
+                    L("page.table.help.fastScroll"),
+                    L("page.table.help.select"),
+                    L("page.table.help.switch"),
                 ]
             )
 
@@ -129,7 +129,7 @@ struct TablePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Table Demo")
+            DemoAppHeader(L("page.table.title"))
         }
     }
 }

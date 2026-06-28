@@ -20,29 +20,32 @@ struct StepperPage: View {
     @State var volume: Int = 50
     @State var colorIndex: Int = 0
 
-    let colors = ["Red", "Green", "Blue", "Yellow", "Purple"]
+    var colors: [String] {
+        [L("page.stepper.colorRed"), L("page.stepper.colorGreen"), L("page.stepper.colorBlue"),
+         L("page.stepper.colorYellow"), L("page.stepper.colorPurple")]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Basic Stepper (+ .stepperTextStyle)") {
+            DemoSection(L("page.stepper.basicSection")) {
                 // The label renders inline (SwiftUI parity); no separate Text needed.
-                Stepper("Quantity", value: $quantity)
+                Stepper(L("page.stepper.quantity"), value: $quantity)
                     // .stepperTextStyle re-themes the stepper's text (arrows unaffected).
                     .stepperTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
-            DemoSection("With Range Constraints") {
+            DemoSection(L("page.stepper.rangeSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Stepper("Rating (1-5)", value: $rating, in: 1...5)
-                    Stepper("Volume (0-100, step 10)", value: $volume, in: 0...100, step: 10)
+                    Stepper(L("page.stepper.rating"), value: $rating, in: 1...5)
+                    Stepper(L("page.stepper.volume"), value: $volume, in: 0...100, step: 10)
                 }
             }
 
-            DemoSection("With Custom Callbacks") {
+            DemoSection(L("page.stepper.callbacksSection")) {
                 HStack(spacing: 1) {
                     Stepper(
-                        "Color",
+                        L("page.stepper.color"),
                         onIncrement: {
                             colorIndex = (colorIndex + 1) % colors.count
                         },
@@ -54,28 +57,28 @@ struct StepperPage: View {
                 }
             }
 
-            DemoSection("Current Values") {
+            DemoSection(L("page.stepper.currentValuesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Quantity:", "\(quantity)")
-                    ValueDisplayRow("Rating:", "\(rating)")
-                    ValueDisplayRow("Volume:", "\(volume)")
-                    ValueDisplayRow("Color:", colors[colorIndex])
+                    ValueDisplayRow("\(L("page.stepper.quantity")):", "\(quantity)")
+                    ValueDisplayRow("\(L("page.stepper.ratingLabel")):", "\(rating)")
+                    ValueDisplayRow("\(L("page.stepper.volumeLabel")):", "\(volume)")
+                    ValueDisplayRow("\(L("page.stepper.colorLabel")):", colors[colorIndex])
                 }
             }
 
             KeyboardHelpSection(shortcuts: [
-                "[<-] [->] Decrease/Increase by step",
-                "[-] [+] Decrease/Increase by step",
-                "[Home] Jump to minimum (if range defined)",
-                "[End] Jump to maximum (if range defined)",
-                "[Tab] Move to next stepper",
+                "[<-] [->] \(L("page.stepper.helpStep"))",
+                "[-] [+] \(L("page.stepper.helpStep"))",
+                "[Home] \(L("page.stepper.helpHome"))",
+                "[End] \(L("page.stepper.helpEnd"))",
+                "[Tab] \(L("page.stepper.helpTab"))",
             ])
 
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Stepper Demo")
+            DemoAppHeader(L("page.stepper.title"))
         }
     }
 }

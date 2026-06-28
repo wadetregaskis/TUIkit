@@ -123,7 +123,7 @@ struct ThemePage: View {
             VStack(alignment: .leading, spacing: 1) {
 
                 DemoSection(L("page.theme.language")) {
-                    Picker("Language", selection: languageSelection) {
+                    Picker(L("page.theme.languageLabel"), selection: languageSelection) {
                         ForEach(LocalizationService.Language.allCases, id: \.rawValue) { language in
                             Text(language.displayName).tag(language.rawValue)
                         }
@@ -131,8 +131,8 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
                 }
 
-                DemoSection("Preset Palette") {
-                    Picker("Preset", selection: presetSelection) {
+                DemoSection(L("page.theme.presetPalette")) {
+                    Picker(L("page.theme.presetLabel"), selection: presetSelection) {
                         ForEach(0..<PaletteRegistry.all.count, id: \.self) { index in
                             Text(PaletteRegistry.all[index].name).tag(PaletteRegistry.all[index].id)
                         }
@@ -140,8 +140,8 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
                 }
 
-                DemoSection("Border Appearance") {
-                    Picker("Appearance", selection: appearanceSelection) {
+                DemoSection(L("page.theme.borderAppearance")) {
+                    Picker(L("page.theme.appearanceLabel"), selection: appearanceSelection) {
                         ForEach(0..<appearances.count, id: \.self) { index in
                             Text(appearances[index].name).tag(appearances[index].id)
                         }
@@ -149,19 +149,17 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
                 }
 
-                DemoSection("Custom border characters — applies app-wide") {
+                DemoSection(L("page.theme.customBorder")) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Build a border from any characters — type ASCII into the "
-                            + "fields, or pick a preset for box-drawing glyphs. It overrides "
-                            + "the appearance above across the whole app.")
+                        Text(L("page.theme.customBorderDescription"))
                             .foregroundStyle(.palette.foregroundSecondary)
 
                         HStack(spacing: 1) {
-                            Button("Rounded") { applyBorderPreset("╭", "╮", "╰", "╯", "─", "│") }
+                            Button(L("page.theme.borderRounded")) { applyBorderPreset("╭", "╮", "╰", "╯", "─", "│") }
                             Button("ASCII") { applyBorderPreset("+", "+", "+", "+", "-", "|") }
-                            Button("Stars") { applyBorderPreset("*", "*", "*", "*", "*", "*") }
-                            Button("Blocks") { applyBorderPreset("█", "█", "█", "█", "█", "█") }
-                            Button("Dots") { applyBorderPreset("·", "·", "·", "·", "·", "·") }
+                            Button(L("page.theme.borderStars")) { applyBorderPreset("*", "*", "*", "*", "*", "*") }
+                            Button(L("page.theme.borderBlocks")) { applyBorderPreset("█", "█", "█", "█", "█", "█") }
+                            Button(L("page.theme.borderDots")) { applyBorderPreset("·", "·", "·", "·", "·", "·") }
                         }
 
                         HStack(spacing: 2) {
@@ -173,10 +171,10 @@ struct ThemePage: View {
                             borderCharField("│", $borderV)
                         }
 
-                        Button("Use built-in appearance") { styling.customBorder = nil }
+                        Button(L("page.theme.useBuiltInAppearance")) { styling.customBorder = nil }
 
-                        Panel("Live preview") {
-                            Text("This box uses the app-wide border.")
+                        Panel(L("page.theme.livePreviewPanel")) {
+                            Text(L("page.theme.boxUsesAppWideBorder"))
                         }
                     }
                     .onChange(of: [borderTL, borderTR, borderBL, borderBR, borderH, borderV]) {
@@ -188,16 +186,12 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Live styling — applies to every page") {
+                DemoSection(L("page.theme.liveStyling")) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(
-                            "These use the styling cascade: tint overrides the "
-                                + "accent app-wide; the toggles add a chrome and a "
-                                + "control-scoped text style across all pages."
-                        )
+                        Text(L("page.theme.liveStylingDescription"))
                         .foregroundStyle(.palette.foregroundSecondary)
 
-                        Picker("Tint", selection: tintSelection) {
+                        Picker(L("page.theme.tintLabel"), selection: tintSelection) {
                             ForEach(0..<Self.tintOptions.count, id: \.self) { index in
                                 Text(Self.tintOptions[index].name).tag(Self.tintOptions[index].name)
                             }
@@ -205,17 +199,17 @@ struct ThemePage: View {
                         .pickerStyle(.radioGroup)
 
                         Toggle(
-                            "UPPERCASE section headers",
+                            L("page.theme.uppercaseSectionHeaders"),
                             isOn: Binding(
                                 get: { styling.uppercaseSectionHeaders },
                                 set: { styling.uppercaseSectionHeaders = $0 }))
                         Toggle(
-                            "Bold button text",
+                            L("page.theme.boldButtonText"),
                             isOn: Binding(
                                 get: { styling.boldButtons },
                                 set: { styling.boldButtons = $0 }))
 
-                        Picker("Checkboxes", selection: checkboxSelection) {
+                        Picker(L("page.theme.checkboxesLabel"), selection: checkboxSelection) {
                             Text("Squares ⬛").tag("Squares")
                             Text("ASCII [x]").tag("ASCII")
                         }
@@ -223,7 +217,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Semantic Colours — full set") {
+                DemoSection(L("page.theme.semanticColours")) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(0..<Self.semanticColors.count, id: \.self) { index in
                             swatchRow(
@@ -233,7 +227,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Customise (compact inline editor)") {
+                DemoSection(L("page.theme.customiseCompact")) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(0..<Self.editableColors.count, id: \.self) { index in
                             ColorPicker(
@@ -243,9 +237,9 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Full colour editor (RGB · HSL · HSB · CMYK · semantic · 256)") {
+                DemoSection(L("page.theme.fullColourEditor")) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Open the modal editor for any colour — tabs for every colour model, the palette's semantic roles, and the 256-colour grid.")
+                        Text(L("page.theme.fullColourEditorDescription"))
                             .foregroundStyle(.palette.foregroundSecondary)
                         ForEach(0..<Self.editableColors.count, id: \.self) { index in
                             editorRow(index)
@@ -253,7 +247,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("Live Preview") {
+                DemoSection(L("page.theme.livePreview")) {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 2) {
                             Text("Accent").foregroundStyle(.palette.accent)
@@ -262,20 +256,20 @@ struct ThemePage: View {
                             Text("Error").foregroundStyle(.palette.error)
                             Text("Info").foregroundStyle(.palette.info)
                         }
-                        Panel("Sample Panel") {
-                            Text("Body text in the secondary foreground colour.")
+                        Panel(L("page.theme.samplePanel")) {
+                            Text(L("page.theme.bodyText"))
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
                 }
 
                 KeyboardHelpSection(
-                    "Theme",
+                    L("page.theme.themeHelp"),
                     shortcuts: [
-                        "Choose a preset, or edit the colours below to make a custom theme",
-                        "[Tab] / [↑↓] move focus; [←→] adjust the focused colour channel",
-                        "[F2] / [F3] cycle palette / appearance from any page",
-                        "Every change here re-themes the whole app instantly",
+                        L("page.theme.help.choosePreset"),
+                        L("page.theme.help.moveFocus"),
+                        L("page.theme.help.cyclePalette"),
+                        L("page.theme.help.everyChange"),
                     ]
                 )
             }
@@ -289,7 +283,7 @@ struct ThemePage: View {
             }
         }
         .appHeader {
-            DemoAppHeader("Theme Demo")
+            DemoAppHeader(L("page.theme.title"))
         }
     }
 
@@ -300,7 +294,7 @@ struct ThemePage: View {
         let entry = Self.editableColors[index]
         HStack(spacing: 1) {
             Text("███").foregroundStyle(palette[keyPath: entry.keyPath])
-            Button("Edit \(entry.name)…") { editing = index }
+            Button("\(L("page.theme.edit")) \(entry.name)…") { editing = index }
         }
     }
 

@@ -24,7 +24,7 @@ struct MousePage: View {
     @State var lastTapAt: String = "—"
     @State var scrollDeltaY: Int = 0
     @State var scrollDeltaX: Int = 0
-    @State var dragPhase: String = "idle"
+    @State var dragPhase: String = L("page.mouse.phaseIdle")
     @State var dragX: Int = 0
     @State var dragY: Int = 0
     @State var dragDeltaX: Int = 0
@@ -38,11 +38,11 @@ struct MousePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Tap Counter") {
+            DemoSection(L("page.mouse.tapCounter")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Click the box. Coordinates are local to the box's top-left.")
+                    Text(L("page.mouse.tapInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("[ Click me ]")
+                    Text(L("page.mouse.clickMe"))
                         .bold()
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
@@ -59,17 +59,17 @@ struct MousePage: View {
                             lastTapAt = "(\(cx), \(cy))"
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Taps:", "\(tapCount)")
-                        ValueDisplayRow("Last tap at:", lastTapAt)
+                        ValueDisplayRow(L("page.mouse.tapsLabel"), "\(tapCount)")
+                        ValueDisplayRow(L("page.mouse.lastTapAtLabel"), lastTapAt)
                     }
                 }
             }
 
-            DemoSection("Scroll Counter") {
+            DemoSection(L("page.mouse.scrollCounter")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Scroll inside the box. Hold Shift to scroll horizontally on terminals that forward it.")
+                    Text(L("page.mouse.scrollInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("(Apple Terminal.app intercepts Shift+wheel for its own scrollback — use a trackpad's horizontal scroll on Terminal.app, or test in iTerm2 / kitty / wezterm for Shift+wheel.)")  // swiftlint:disable:this line_length
+                    Text(L("page.mouse.scrollTerminalNote"))
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
                     // 2-D scroll position display. The vertical and
@@ -114,17 +114,17 @@ struct MousePage: View {
                         }
                     }
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Vertical:", "\(scrollDeltaY)")
-                        ValueDisplayRow("Horizontal:", "\(scrollDeltaX)")
+                        ValueDisplayRow(L("page.mouse.verticalLabel"), "\(scrollDeltaY)")
+                        ValueDisplayRow(L("page.mouse.horizontalLabel"), "\(scrollDeltaX)")
                     }
                 }
             }
 
-            DemoSection("Drag Tracker") {
+            DemoSection(L("page.mouse.dragTracker")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Press and drag across the box. Coords are clamped to its visible area.")
+                    Text(L("page.mouse.dragInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("┊  drag area  ┊")
+                    Text(L("page.mouse.dragArea"))
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(color: .palette.border)
@@ -141,18 +141,18 @@ struct MousePage: View {
                             dragDeltaY = event.translationY
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Phase:", dragPhase)
-                        ValueDisplayRow("At:", "(\(dragX), \(dragY))")
+                        ValueDisplayRow(L("page.mouse.phaseLabel"), dragPhase)
+                        ValueDisplayRow(L("page.mouse.atLabel"), "(\(dragX), \(dragY))")
                         ValueDisplayRow("Δ:", "(\(dragDeltaX), \(dragDeltaY))")
                     }
                 }
             }
 
-            DemoSection("Raw Events (right-click / modifiers)") {
+            DemoSection(L("page.mouse.rawEvents")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Right-click the box, or hold Shift / Ctrl / Alt while clicking.")
+                    Text(L("page.mouse.rawEventsInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("[ right- or modified-click here ]")
+                    Text(L("page.mouse.rightOrModifiedClick"))
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(color: .palette.border)
                         .onMouseEvent { event in
@@ -169,17 +169,17 @@ struct MousePage: View {
                             }
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Right-clicks:", "\(rightClicks)")
-                        ValueDisplayRow("Modifiers:", lastModifier)
+                        ValueDisplayRow(L("page.mouse.rightClicksLabel"), "\(rightClicks)")
+                        ValueDisplayRow(L("page.mouse.modifiersLabel"), lastModifier)
                     }
                 }
             }
 
-            DemoSection("Hover (.onHover)") {
+            DemoSection(L("page.mouse.hover")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Move the cursor over the box — the label and colour change while hovered.")
+                    Text(L("page.mouse.hoverInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(isHovering ? "[ hovering ]" : "[ hover me ]")
+                    Text(isHovering ? L("page.mouse.hovering") : L("page.mouse.hoverMe"))
                         .bold()
                         .foregroundStyle(isHovering ? .palette.accent : .palette.foregroundSecondary)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
@@ -187,15 +187,15 @@ struct MousePage: View {
                         .onHover { hovering in
                             isHovering = hovering
                         }
-                    ValueDisplayRow("State:", isHovering ? "hovering" : "outside")
+                    ValueDisplayRow(L("page.mouse.stateLabel"), isHovering ? L("page.mouse.stateHovering") : L("page.mouse.stateOutside"))
                 }
             }
 
-            DemoSection("Scroll gesture (.onScrollGesture)") {
+            DemoSection(L("page.mouse.scrollGesture")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Scroll the wheel over the box. .onScrollGesture reports a direction per tick.")
+                    Text(L("page.mouse.scrollGestureInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("[ scroll over me ]")
+                    Text(L("page.mouse.scrollOverMe"))
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(color: .palette.border)
@@ -204,8 +204,8 @@ struct MousePage: View {
                             lastScrollDirection = describeScroll(direction)
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Ticks:", "\(scrollTicks)")
-                        ValueDisplayRow("Last direction:", lastScrollDirection)
+                        ValueDisplayRow(L("page.mouse.ticksLabel"), "\(scrollTicks)")
+                        ValueDisplayRow(L("page.mouse.lastDirectionLabel"), lastScrollDirection)
                     }
                 }
             }
@@ -215,9 +215,9 @@ struct MousePage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                "Mouse Demo",
+                L("page.mouse.title"),
                 subtitle:
-                    "Tap, scroll, drag, and raw events on arbitrary views"
+                    L("page.mouse.subtitle")
             )
         }
     }
@@ -226,11 +226,11 @@ struct MousePage: View {
     /// reported tap coordinates. Width = label width plus the box's
     /// 2-column horizontal padding on each side, plus the two border
     /// characters. Height = 1 row of content plus the two border rows.
-    private var tapBoxWidth: Int { "[ Click me ]".count + 4 + 2 }
+    private var tapBoxWidth: Int { L("page.mouse.clickMe").count + 4 + 2 }
     private var tapBoxHeight: Int { 3 }
 
     /// Visible interior dimensions of the drag target.
-    private var dragBoxWidth: Int { "┊  drag area  ┊".count + 4 + 2 }
+    private var dragBoxWidth: Int { L("page.mouse.dragArea").count + 4 + 2 }
     private var dragBoxHeight: Int { 3 }
 
     /// Horizontal width of the 2-D scroll field, in cells.
@@ -263,18 +263,18 @@ struct MousePage: View {
 
     private func describePhase(_ phase: DragGestureEvent.Phase) -> String {
         switch phase {
-        case .began: return "began"
-        case .moved: return "moved"
-        case .ended: return "ended"
+        case .began: return L("page.mouse.phaseBegan")
+        case .moved: return L("page.mouse.phaseMoved")
+        case .ended: return L("page.mouse.phaseEnded")
         }
     }
 
     private func describeScroll(_ direction: ScrollDirection) -> String {
         switch direction {
-        case .up: return "up"
-        case .down: return "down"
-        case .left: return "left"
-        case .right: return "right"
+        case .up: return L("page.mouse.directionUp")
+        case .down: return L("page.mouse.directionDown")
+        case .left: return L("page.mouse.directionLeft")
+        case .right: return L("page.mouse.directionRight")
         }
     }
 
@@ -284,7 +284,7 @@ struct MousePage: View {
         if event.ctrl { parts.append("Ctrl") }
         if event.meta { parts.append("Alt") }
         if parts.isEmpty {
-            return event.button == .right ? "(plain right-click)" : "(plain left-click)"
+            return event.button == .right ? L("page.mouse.plainRightClick") : L("page.mouse.plainLeftClick")
         }
         return parts.joined(separator: "+")
     }

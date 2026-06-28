@@ -38,18 +38,9 @@ struct ScrollViewPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Long text — naked ScrollView with default indicators") {
+            DemoSection(L("page.scrollView.longTextSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "ScrollView draws no chrome of its own beyond "
-                            + "the optional 'N more above / below' "
-                            + "indicators — there's no border, no "
-                            + "background, no padding. The visible box "
-                            + "below is just a .border() applied to the "
-                            + "ScrollView; remove that line and the "
-                            + "ScrollView is invisible except for the "
-                            + "indicators and any content it shows."
-                    )
+                    Text(L("page.scrollView.longTextBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView {
@@ -64,45 +55,35 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection("Mixed-widget content — inner controls still work") {
+            DemoSection(L("page.scrollView.mixedSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "ScrollView doesn't impose any row structure — "
-                            + "it just windows whatever you put in it. "
-                            + "Click and type into the field, tap the "
-                            + "buttons, drag the slider — all of it "
-                            + "works exactly as outside a ScrollView. "
-                            + "Wheel events on top of an inner control "
-                            + "fall through to the ScrollView, so "
-                            + "scrolling works even when the cursor is "
-                            + "over a Button."
-                    )
+                    Text(L("page.scrollView.mixedBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("A heading inside the scroll view").bold()
+                            Text(L("page.scrollView.heading")).bold()
                             HStack(spacing: 1) {
-                                Text("Filter:")
-                                TextField("Filter", text: $searchText,
-                                          prompt: Text("type to filter…"))
+                                Text(L("page.scrollView.filter"))
+                                TextField(L("page.scrollView.filterField"), text: $searchText,
+                                          prompt: Text(L("page.scrollView.filterPrompt")))
                             }
-                            ValueDisplayRow("Search:", searchText)
+                            ValueDisplayRow(L("page.scrollView.search"), searchText)
 
-                            Text("Buttons in a scroll view:").bold()
+                            Text(L("page.scrollView.buttonsLabel")).bold()
                             HStack(spacing: 1) {
                                 Button("-1") { counter -= 1 }
                                 Button("+1") { counter += 1 }
-                                Button("Reset", role: .destructive) { counter = 0 }
+                                Button(L("page.scrollView.reset"), role: .destructive) { counter = 0 }
                             }
-                            ValueDisplayRow("Counter:", "\(counter)")
+                            ValueDisplayRow(L("page.scrollView.counter"), "\(counter)")
 
-                            Text("A slider:").bold()
+                            Text(L("page.scrollView.sliderLabel")).bold()
                             Slider(value: $sliderValue, in: 0...100, step: 1)
                             ValueDisplayRow(
-                                "Slider value:", String(format: "%.0f", sliderValue))
+                                L("page.scrollView.sliderValue"), String(format: "%.0f", sliderValue))
 
-                            Text("And a long block of trailing text:").bold()
+                            Text(L("page.scrollView.trailingLabel")).bold()
                             ForEach(Array(loremLines.prefix(20)), id: \.self) { Text($0) }
                         }
                     }
@@ -111,15 +92,9 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection("Scrollbar — opt-in, fully configurable") {
+            DemoSection(L("page.scrollView.scrollbarSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "A scrollbar is opt-in and configurable. The thumb is "
-                            + "proportional to the visible region at 1/8-cell "
-                            + "precision and filled with a background colour (no "
-                            + "inter-cell gaps). Change the controls below and watch "
-                            + "the bar on the right of the box update live."
-                    )
+                    Text(L("page.scrollView.scrollbarBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // Few enough lines (18) in a tall enough viewport (10) that the
@@ -141,37 +116,30 @@ struct ScrollViewPage: View {
                     .scrollbarProportionalThumb(barProportional)
                     .scrollbarClickBehavior(barClickBehavior)
 
-                    Text(
-                        "The bar is interactive: click the arrows to step, click "
-                            + "the track to page (or jump), and drag the thumb."
-                    )
+                    Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    Picker("Visibility", selection: $barVisibility) {
-                        Text("Automatic (only when overflowing)").tag(ScrollbarVisibility.automatic)
-                        Text("Always visible").tag(ScrollbarVisibility.visible)
-                        Text("Hidden").tag(ScrollbarVisibility.hidden)
+                    Picker(L("page.scrollView.visibility"), selection: $barVisibility) {
+                        Text(L("page.scrollView.visibility.automatic")).tag(ScrollbarVisibility.automatic)
+                        Text(L("page.scrollView.visibility.visible")).tag(ScrollbarVisibility.visible)
+                        Text(L("page.scrollView.visibility.hidden")).tag(ScrollbarVisibility.hidden)
                     }
-                    Picker("End arrows", selection: $barArrows) {
-                        Text("None").tag(ScrollbarArrows.none)
-                        Text("Single (one at each end)").tag(ScrollbarArrows.single)
-                        Text("Double (both at each end)").tag(ScrollbarArrows.double)
+                    Picker(L("page.scrollView.endArrows"), selection: $barArrows) {
+                        Text(L("page.scrollView.arrows.none")).tag(ScrollbarArrows.none)
+                        Text(L("page.scrollView.arrows.single")).tag(ScrollbarArrows.single)
+                        Text(L("page.scrollView.arrows.double")).tag(ScrollbarArrows.double)
                     }
-                    Picker("Track click", selection: $barClickBehavior) {
-                        Text("Page towards the click").tag(ScrollbarClickBehavior.page)
-                        Text("Jump to the click").tag(ScrollbarClickBehavior.jump)
+                    Picker(L("page.scrollView.trackClick"), selection: $barClickBehavior) {
+                        Text(L("page.scrollView.click.page")).tag(ScrollbarClickBehavior.page)
+                        Text(L("page.scrollView.click.jump")).tag(ScrollbarClickBehavior.jump)
                     }
-                    Toggle("Proportional thumb (off = fixed one cell)", isOn: $barProportional)
+                    Toggle(L("page.scrollView.proportionalThumb"), isOn: $barProportional)
                 }
             }
 
-            DemoSection("Indicators off — fully naked") {
+            DemoSection(L("page.scrollView.indicatorsOffSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "The same long-text content with "
-                            + ".showsIndicators(false) and no .border(). "
-                            + "Just the scrolling effect, nothing else."
-                    )
+                    Text(L("page.scrollView.indicatorsOffBody"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView(showsIndicators: false) {
@@ -188,12 +156,12 @@ struct ScrollViewPage: View {
             Spacer()
 
             KeyboardHelpSection(
-                "ScrollView shortcuts",
+                L("page.scrollView.shortcutsTitle"),
                 shortcuts: [
-                    "Mouse wheel: scroll the viewport anywhere (no focus needed)",
-                    "[↑/↓]: scroll one line (when focused)",
-                    "[PageUp/PageDown]: scroll one viewport",
-                    "[Home/End]: jump to top / bottom",
+                    L("page.scrollView.help.wheel"),
+                    L("page.scrollView.help.line"),
+                    L("page.scrollView.help.page"),
+                    L("page.scrollView.help.jump"),
                 ]
             )
         }
@@ -205,8 +173,8 @@ struct ScrollViewPage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                "ScrollView",
-                subtitle: "Generic scrollable container for arbitrary content"
+                L("page.scrollView.title"),
+                subtitle: L("page.scrollView.subtitle")
             )
         }
     }

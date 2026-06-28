@@ -16,12 +16,12 @@ private struct Folder: Identifiable {
     let unreadCount: Int
 
     static let samples: [Self] = [
-        Self(id: "inbox", name: "Inbox", icon: "[>]", unreadCount: 12),
-        Self(id: "starred", name: "Starred", icon: "[*]", unreadCount: 3),
-        Self(id: "sent", name: "Sent", icon: "[^]", unreadCount: 0),
-        Self(id: "drafts", name: "Drafts", icon: "[~]", unreadCount: 2),
-        Self(id: "archive", name: "Archive", icon: "[=]", unreadCount: 0),
-        Self(id: "trash", name: "Trash", icon: "[x]", unreadCount: 0),
+        Self(id: "inbox", name: L("page.splitView.folderInbox"), icon: "[>]", unreadCount: 12),
+        Self(id: "starred", name: L("page.splitView.folderStarred"), icon: "[*]", unreadCount: 3),
+        Self(id: "sent", name: L("page.splitView.folderSent"), icon: "[^]", unreadCount: 0),
+        Self(id: "drafts", name: L("page.splitView.folderDrafts"), icon: "[~]", unreadCount: 2),
+        Self(id: "archive", name: L("page.splitView.folderArchive"), icon: "[=]", unreadCount: 0),
+        Self(id: "trash", name: L("page.splitView.folderTrash"), icon: "[x]", unreadCount: 0),
     ]
 }
 
@@ -135,10 +135,10 @@ struct SplitViewPage: View {
             // room for the leading columns; `.prominentDetail` keeps the detail's
             // size and overlays/hides the leading columns instead; `.automatic`
             // resolves a sensible default for the context.
-            Picker("Style", selection: $styleName) {
-                Text("Automatic").tag("automatic")
-                Text("Balanced").tag("balanced")
-                Text("Prominent Detail").tag("prominentDetail")
+            Picker(L("page.splitView.style"), selection: $styleName) {
+                Text(L("page.splitView.styleAutomatic")).tag("automatic")
+                Text(L("page.splitView.styleBalanced")).tag("balanced")
+                Text(L("page.splitView.styleProminentDetail")).tag("prominentDetail")
             }
             .pickerStyle(.radioGroup)
             .padding(.horizontal, 1)
@@ -146,7 +146,7 @@ struct SplitViewPage: View {
             styledSplitView
         }
         .appHeader {
-            DemoAppHeader("NavigationSplitView Demo")
+            DemoAppHeader(L("page.splitView.title"))
         }
     }
 
@@ -166,7 +166,7 @@ struct SplitViewPage: View {
     private var splitView: some View {
         NavigationSplitView(columnVisibility: $visibility) {
             // Sidebar: Folder list
-            List("Folders", selection: $selectedFolder) {
+            List(L("page.splitView.folders"), selection: $selectedFolder) {
                 ForEach(Folder.samples) { folder in
                     HStack(spacing: 1) {
                         Text(folder.icon)
@@ -194,7 +194,7 @@ extension SplitViewPage {
         if messages.isEmpty {
             VStack {
                 Spacer()
-                Text("No messages in this folder").dim()
+                Text(L("page.splitView.noMessages")).dim()
                 Spacer()
             }
         } else {
@@ -226,11 +226,11 @@ extension SplitViewPage {
                 Text(message.subject).bold().foregroundStyle(.palette.accent)
                 Spacer(minLength: 1)
                 HStack(spacing: 1) {
-                    Text("From:").foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.splitView.from")).foregroundStyle(.palette.foregroundSecondary)
                     Text(message.from)
                 }
                 HStack(spacing: 1) {
-                    Text("Date:").foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.splitView.date")).foregroundStyle(.palette.foregroundSecondary)
                     Text(message.date)
                 }
                 Spacer(minLength: 1)
@@ -242,7 +242,7 @@ extension SplitViewPage {
                 Spacer()
                 HStack {
                     Spacer()
-                    Text("Select a message to view").dim()
+                    Text(L("page.splitView.selectMessage")).dim()
                     Spacer()
                 }
                 Spacer()
@@ -256,7 +256,7 @@ extension SplitViewPage {
 
 extension SplitViewPage {
     fileprivate var folderTitle: String {
-        Folder.samples.first { $0.id == selectedFolder }?.name ?? "Messages"
+        Folder.samples.first { $0.id == selectedFolder }?.name ?? L("page.splitView.messages")
     }
 
     fileprivate var currentMessage: Message? {
@@ -266,10 +266,10 @@ extension SplitViewPage {
 
     fileprivate var visibilityLabel: String {
         switch visibility {
-        case .all: return "All"
-        case .doubleColumn: return "Double"
-        case .detailOnly: return "Detail"
-        default: return "Auto"
+        case .all: return L("page.splitView.visibilityAll")
+        case .doubleColumn: return L("page.splitView.visibilityDouble")
+        case .detailOnly: return L("page.splitView.visibilityDetail")
+        default: return L("page.splitView.visibilityAuto")
         }
     }
 }

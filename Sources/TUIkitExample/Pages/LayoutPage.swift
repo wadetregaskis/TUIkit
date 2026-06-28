@@ -17,109 +17,109 @@ struct LayoutPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("VStack (Vertical)") {
+            DemoSection(L("page.layout.section.vstack")) {
                 VStack(spacing: 0) {
-                    Text("Item 1")
-                    Text("Item 2")
-                    Text("Item 3")
+                    Text("\(L("page.layout.item")) 1")
+                    Text("\(L("page.layout.item")) 2")
+                    Text("\(L("page.layout.item")) 3")
                 }
                 .border(color: .brightBlack)
             }
 
-            DemoSection("HStack (Horizontal)") {
+            DemoSection(L("page.layout.section.hstack")) {
                 HStack(spacing: 2) {
-                    Text("Left")
-                    Text("Center")
-                    Text("Right")
+                    Text(L("page.layout.left"))
+                    Text(L("page.layout.center"))
+                    Text(L("page.layout.right"))
                 }
                 .border()
             }
 
-            DemoSection("Spacer") {
+            DemoSection(L("page.layout.section.spacer")) {
                 HStack {
-                    Text("Start")
+                    Text(L("page.layout.start"))
                     Spacer()
-                    Text("End")
+                    Text(L("page.layout.end"))
                 }
                 .border()
             }
 
-            DemoSection("Padding & Frame") {
+            DemoSection(L("page.layout.section.paddingFrame")) {
                 HStack(spacing: 2) {
                     VStack {
                         Text(".padding()").dim()
-                        Text("Padded")
+                        Text(L("page.layout.padded"))
                             .frame(width: 25, alignment: .center)
                             .padding(EdgeInsets(all: 1))
                             .border()  // Uses appearance default
                     }
                     VStack {
                         Text(".frame()").dim()
-                        Text("Framed")
+                        Text(L("page.layout.framed"))
                             .frame(width: 15, alignment: .center)
                             .border()  // Uses appearance default
                     }
                 }
             }
 
-            DemoSection("ViewThatFits (Adaptive)") {
+            DemoSection(L("page.layout.section.viewThatFits")) {
                 // A single row when there is room; the same items stacked
                 // vertically when the terminal is too narrow for the row.
                 ViewThatFits {
                     HStack(spacing: 2) {
-                        Text("[ Profile ]")
-                        Text("[ Settings ]")
-                        Text("[ Sign Out ]")
+                        Text("[ \(L("page.layout.profile")) ]")
+                        Text("[ \(L("page.layout.settings")) ]")
+                        Text("[ \(L("page.layout.signOut")) ]")
                     }
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("[ Profile ]")
-                        Text("[ Settings ]")
-                        Text("[ Sign Out ]")
+                        Text("[ \(L("page.layout.profile")) ]")
+                        Text("[ \(L("page.layout.settings")) ]")
+                        Text("[ \(L("page.layout.signOut")) ]")
                     }
                 }
                 .border(color: .brightBlack)
             }
 
-            DemoSection("ZStack (Layering)") {
+            DemoSection(L("page.layout.section.zstack")) {
                 // Children stack back-to-front; alignment positions them within
                 // the union of their sizes. Here a label is centred over a band.
                 ZStack(alignment: .center) {
                     Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
-                    Text(" on top ").bold().inverted()
+                    Text(" \(L("page.layout.onTop")) ").bold().inverted()
                 }
                 .border(color: .brightBlack)
             }
 
-            DemoSection("Divider") {
+            DemoSection(L("page.layout.section.divider")) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Above")
+                    Text(L("page.layout.above"))
                     Divider()
-                    Text("Between")
+                    Text(L("page.layout.between"))
                     Divider(character: "═")
-                    Text("Below")
+                    Text(L("page.layout.below"))
                 }
                 .border(color: .brightBlack)
             }
 
-            DemoSection("LazyVStack / LazyHStack") {
+            DemoSection(L("page.layout.section.lazy")) {
                 // Same API shape as VStack/HStack, but rows/columns are
                 // realised lazily — only the part scrolled into view is
                 // rendered. Handy inside a ScrollView with many children.
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Only the on-screen window of children is rendered.")
+                    Text(L("page.layout.lazyExplain"))
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        Text("Lazy row 1")
-                        Text("Lazy row 2")
-                        Text("Lazy row 3")
+                        Text("\(L("page.layout.lazyRow")) 1")
+                        Text("\(L("page.layout.lazyRow")) 2")
+                        Text("\(L("page.layout.lazyRow")) 3")
                     }
                     .border(color: .brightBlack)
 
                     LazyHStack(spacing: 2) {
-                        Text("Col 1")
-                        Text("Col 2")
-                        Text("Col 3")
+                        Text("\(L("page.layout.col")) 1")
+                        Text("\(L("page.layout.col")) 2")
+                        Text("\(L("page.layout.col")) 3")
                     }
                     .border(color: .brightBlack)
                 }
@@ -129,7 +129,7 @@ struct LayoutPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Layout System Demo")
+            DemoAppHeader(L("page.layout.header"))
         }
     }
 }

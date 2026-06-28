@@ -35,37 +35,37 @@ struct EmojiPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Bug cases (the rows TUIkit has to compensate)") {
+            DemoSection(L("page.emoji.bugCasesSection")) {
                 VStack(alignment: .leading) {
-                    BugCaseRow(label: "Normal",
-                               description: "advance matches glyph width",
+                    BugCaseRow(label: L("page.emoji.bugNormalLabel"),
+                               description: L("page.emoji.bugNormalDesc"),
                                clusters: ["🤙", "🥳", "😀", "👋", "🔥", "🎉", "💩"])
 
-                    BugCaseRow(label: "VS-16 under-advance (Bug A)",
-                               description: "<base>+U+FE0F: paints 2, advances 1",
+                    BugCaseRow(label: L("page.emoji.bugVS16Label"),
+                               description: L("page.emoji.bugVS16Desc"),
                                clusters: ["🖥️", "🛡️", "🚸", "📞", "✏️", "❤️"])
 
-                    BugCaseRow(label: "Fitzpatrick over-advance (Bug B)",
-                               description: "<base>+skin-tone: paints 2, advances 4",
+                    BugCaseRow(label: L("page.emoji.bugFitzpatrickLabel"),
+                               description: L("page.emoji.bugFitzpatrickDesc"),
                                clusters: ["🤙🏽", "✊🏻", "👍🏼", "👋🏿", "👨🏽", "🙏🏼"])
 
-                    BugCaseRow(label: "BMP skin-tone bases (Bug B variant)",
-                               description: "BMP base + skin-tone: paints 2, advances 3",
+                    BugCaseRow(label: L("page.emoji.bugBMPSkinToneLabel"),
+                               description: L("page.emoji.bugBMPSkinToneDesc"),
                                clusters: ["☝🏻", "✌🏼", "✍🏽", "⛹🏾", "✊🏿"])
 
-                    BugCaseRow(label: "Our terminalWidth is wrong (claim 1, paint 2)",
-                               description: "BMP emoji-presentation codepoints",
+                    BugCaseRow(label: L("page.emoji.bugTerminalWidthLabel"),
+                               description: L("page.emoji.bugTerminalWidthDesc"),
                                clusters: ["⌚", "⌛", "⏩", "⏪", "⏫", "⏬", "⏰", "⏳"])
                 }
             }
 
             HStack(spacing: 1) {
-                Text("Filter:").foregroundStyle(.palette.foregroundSecondary)
-                TextField("Filter", text: $filter,
-                          prompt: Text("type a name, hex codepoint, or paste an emoji…"))
+                Text(L("page.emoji.filterLabel")).foregroundStyle(.palette.foregroundSecondary)
+                TextField(L("page.emoji.filterField"), text: $filter,
+                          prompt: Text(L("page.emoji.filterPrompt")))
             }
 
-            List("\(filteredEmoji.count) of \(Self.allEmoji.count) emoji",
+            List("\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) \(L("page.emoji.emojiCountSuffix"))",
                  selection: $selectedID)
             {
                 ForEach(filteredEmoji) { entry in
@@ -80,8 +80,8 @@ struct EmojiPage: View {
         // content and is greedy in height (it fills the viewport and scrolls
         // itself). Nesting it in a page ScrollView would defeat both.
         .appHeader {
-            DemoAppHeader("Emoji",
-                          subtitle: "Rendering quirks + searchable corpus")
+            DemoAppHeader(L("page.emoji.title"),
+                          subtitle: L("page.emoji.subtitle"))
         }
     }
 

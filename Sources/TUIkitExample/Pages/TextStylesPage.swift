@@ -19,53 +19,49 @@ struct TextStylesPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader("Text Styles Demo")
+            DemoAppHeader(L("page.textStyles.header"))
         }
     }
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
-            DemoSection("Basic Styles") {
-                Text("Normal text - no styling applied")
-                Text("Bold text").bold()
-                Text("Italic text").italic()
-                Text("Underlined text").underline()
-                Text("Strikethrough text").strikethrough()
-                Text("Dimmed text").dim()
+            DemoSection(L("page.textStyles.section.basic")) {
+                Text(L("page.textStyles.normal"))
+                Text(L("page.textStyles.bold")).bold()
+                Text(L("page.textStyles.italic")).italic()
+                Text(L("page.textStyles.underline")).underline()
+                Text(L("page.textStyles.strikethrough")).strikethrough()
+                Text(L("page.textStyles.dimmed")).dim()
             }
 
-            DemoSection("Combined Styles") {
-                Text("Bold + Italic").bold().italic()
-                Text("Bold + Underline").bold().underline()
-                Text("Bold + Color").bold().foregroundStyle(.palette.accent)
-                Text("Italic + Dim").italic().dim()
-                Text("All combined").bold().italic().underline().foregroundStyle(.palette.accent)
+            DemoSection(L("page.textStyles.section.combined")) {
+                Text(L("page.textStyles.boldItalic")).bold().italic()
+                Text(L("page.textStyles.boldUnderline")).bold().underline()
+                Text(L("page.textStyles.boldColor")).bold().foregroundStyle(.palette.accent)
+                Text(L("page.textStyles.italicDim")).italic().dim()
+                Text(L("page.textStyles.allCombined")).bold().italic().underline().foregroundStyle(.palette.accent)
             }
 
-            DemoSection("Special Effects") {
-                Text("Blinking text (if terminal supports)").blink()
-                Text("Inverted colors").inverted()
+            DemoSection(L("page.textStyles.section.special")) {
+                Text(L("page.textStyles.blinking")).blink()
+                Text(L("page.textStyles.inverted")).inverted()
             }
 
-            DemoSection("Font weight (.fontWeight)") {
+            DemoSection(L("page.textStyles.section.fontWeight")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "A terminal has only three weights, so the nine SwiftUI "
-                            + "weights collapse: ultraLight/thin/light → dim, "
-                            + "regular/medium → normal, semibold/bold/heavy/black → bold."
-                    )
+                    Text(L("page.textStyles.fontWeightExplain"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    Text("Thin").fontWeight(.thin)
-                    Text("Regular").fontWeight(.regular)
-                    Text("Semibold").fontWeight(.semibold)
-                    Text("Black").fontWeight(.black)
+                    Text(L("page.textStyles.thin")).fontWeight(.thin)
+                    Text(L("page.textStyles.regular")).fontWeight(.regular)
+                    Text(L("page.textStyles.semibold")).fontWeight(.semibold)
+                    Text(L("page.textStyles.black")).fontWeight(.black)
                 }
             }
 
-            DemoSection("Truncation & Line Limits") {
+            DemoSection(L("page.textStyles.section.truncation")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    let long = "A long line that will not fit inside a 30-column frame"
+                    let long = L("page.textStyles.longLine")
                     // Single-line truncation, cut at different ends (note the ellipsis).
                     // `lineLimit`/`truncationMode` are Text modifiers, so they come
                     // before `.frame` (which returns `some View`).
@@ -73,69 +69,60 @@ struct TextStylesPage: View {
                     Text(long).lineLimit(1).truncationMode(.head).frame(width: 30)
                     Text(long).lineLimit(1).truncationMode(.middle).frame(width: 30)
                     // Multi-line wrap clamped to two lines.
-                    Text(
-                        "This paragraph wraps across several lines, but .lineLimit(2) "
-                            + "clamps it to the first two and drops the rest of the text."
-                    )
+                    Text(L("page.textStyles.wrapClamp"))
                     .lineLimit(2)
                     .frame(width: 46)
                 }
             }
 
-            DemoSection("Cascading styles — applied to a whole subtree") {
+            DemoSection(L("page.textStyles.section.cascading")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Container-level modifiers cascade to every descendant, "
-                            + "like SwiftUI's — and a descendant can override."
-                    )
+                    Text(L("page.textStyles.cascadingExplain"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // .bold() on the VStack makes all three lines bold; the middle
                     // one opts out with .bold(false) (the closer modifier wins).
                     VStack(alignment: .leading) {
-                        Text("Bold by inheritance")
-                        Text("…but this line opts out").bold(false)
-                        Text("Bold again")
+                        Text(L("page.textStyles.boldByInheritance"))
+                        Text(L("page.textStyles.optsOut")).bold(false)
+                        Text(L("page.textStyles.boldAgain"))
                     }
                     .bold()
 
                     // A whole block uppercased via .textCase.
                     VStack(alignment: .leading) {
-                        Text("uppercased as a block")
-                        Text("via .textCase(.uppercase)")
+                        Text(L("page.textStyles.uppercasedBlock"))
+                        Text(L("page.textStyles.viaTextCase"))
                     }
                     .textCase(.uppercase)
 
                     // Role-scoped: dim ALL secondary-coloured text in this block,
                     // without touching the primary line.
                     VStack(alignment: .leading) {
-                        Text("Primary text stays normal")
-                        Text("Secondary text is dimmed by its role")
+                        Text(L("page.textStyles.primaryStaysNormal"))
+                        Text(L("page.textStyles.secondaryDimmed"))
                             .foregroundStyle(.palette.foregroundSecondary)
                     }
                     .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
                 }
             }
 
-            DemoSection("Themeable chrome — section headers") {
+            DemoSection(L("page.textStyles.section.chrome")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "A Section's header/footer styling is themeable via "
-                            + ".style(.chrome(...)); headers are bold + dim by default."
-                    )
+                    Text(L("page.textStyles.chromeExplain"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     Section {
-                        Text("Body line")
+                        Text(L("page.textStyles.bodyLine"))
                     } header: {
-                        Text("Default header")
+                        Text(L("page.textStyles.defaultHeader"))
                     }
 
                     // The same header, re-themed: uppercased and not bold.
                     Section {
-                        Text("Body line")
+                        Text(L("page.textStyles.bodyLine"))
                     } header: {
-                        Text("Themed header")
+                        Text(L("page.textStyles.themedHeader"))
                     }
                     .style(.chrome(.sectionHeader)) {
                         $0.textCase = .uppercase

@@ -25,74 +25,74 @@ struct SecureFieldPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Password Fields") {
+            DemoSection(L("page.secureField.section.passwordFields")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Password:").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField("Password", text: $password)
+                        Text("\(L("page.secureField.password")):").foregroundStyle(.palette.foregroundSecondary)
+                        SecureField(L("page.secureField.password"), text: $password)
                     }
                     HStack(spacing: 1) {
-                        Text("Confirm:").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField("Confirm", text: $confirmPassword, prompt: Text("Re-enter password"))
+                        Text("\(L("page.secureField.confirm")):").foregroundStyle(.palette.foregroundSecondary)
+                        SecureField("Confirm", text: $confirmPassword, prompt: Text(L("page.secureField.reenterPassword")))
                     }
                 }
             }
 
-            DemoSection("With onSubmit") {
+            DemoSection(L("page.secureField.section.onSubmit")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("API Key:").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField("API Key", text: $apiKey)
+                        Text("\(L("page.secureField.apiKey")):").foregroundStyle(.palette.foregroundSecondary)
+                        SecureField(L("page.secureField.apiKey"), text: $apiKey)
                             .onSubmit {
-                                submittedPassword = "Submitted \(apiKey.count) characters"
+                                submittedPassword = "\(L("page.secureField.submittedPrefix")) \(apiKey.count) \(L("page.secureField.characters"))"
                             }
                     }
                     if !submittedPassword.isEmpty {
                         HStack(spacing: 1) {
-                            Text("Status:").foregroundStyle(.palette.foregroundSecondary)
+                            Text("\(L("page.secureField.status")):").foregroundStyle(.palette.foregroundSecondary)
                             Text(submittedPassword).foregroundStyle(.palette.success)
                         }
                     }
                 }
             }
 
-            DemoSection("Disabled SecureField") {
+            DemoSection(L("page.secureField.section.disabled")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Disabled:").foregroundStyle(.palette.foregroundSecondary)
+                        Text("\(L("page.secureField.disabled")):").foregroundStyle(.palette.foregroundSecondary)
                         SecureField("Disabled", text: $disabledPassword).disabled()
                     }
                 }
             }
 
-            DemoSection("Password Validation") {
+            DemoSection(L("page.secureField.section.validation")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Length:").foregroundStyle(.palette.foregroundSecondary)
-                        Text("\(password.count) characters")
+                        Text("\(L("page.secureField.length")):").foregroundStyle(.palette.foregroundSecondary)
+                        Text("\(password.count) \(L("page.secureField.characters"))")
                             .foregroundStyle(password.count >= 8 ? .palette.success : .palette.warning)
                     }
                     HStack(spacing: 1) {
-                        Text("Match:").foregroundStyle(.palette.foregroundSecondary)
+                        Text("\(L("page.secureField.match")):").foregroundStyle(.palette.foregroundSecondary)
                         if password.isEmpty && confirmPassword.isEmpty {
-                            Text("(enter passwords)").dim()
+                            Text(L("page.secureField.enterPasswords")).dim()
                         } else if password == confirmPassword {
-                            Text("Passwords match").foregroundStyle(.palette.success)
+                            Text(L("page.secureField.passwordsMatch")).foregroundStyle(.palette.success)
                         } else {
-                            Text("Passwords differ").foregroundStyle(.palette.error)
+                            Text(L("page.secureField.passwordsDiffer")).foregroundStyle(.palette.error)
                         }
                     }
                 }
             }
 
             KeyboardHelpSection(shortcuts: [
-                "Type any character to insert at cursor",
-                "[Left] [Right] Move cursor left/right",
-                "[Home] [End] Jump to start/end",
-                "[Backspace] Delete before cursor",
-                "[Delete] Delete at cursor",
-                "[Enter] Submit (triggers onSubmit)",
-                "[Tab] Move to next field",
+                L("page.secureField.help.typeInsert"),
+                L("page.secureField.help.moveCursor"),
+                L("page.secureField.help.jumpStartEnd"),
+                L("page.secureField.help.backspace"),
+                L("page.secureField.help.delete"),
+                L("page.secureField.help.submit"),
+                L("page.secureField.help.nextField"),
             ])
 
             Spacer()
@@ -100,7 +100,7 @@ struct SecureFieldPage: View {
         .padding(.horizontal, 1)
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("SecureField Demo")
+            DemoAppHeader(L("page.secureField.header"))
         }
     }
 }

@@ -24,81 +24,81 @@ struct SliderPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader("Slider Demo")
+            DemoAppHeader(L("page.slider.title"))
         }
     }
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("Basic Slider (Block Style)") {
+            DemoSection(L("page.slider.basicSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Volume:").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.volume")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume)
                     }
                 }
             }
 
-            DemoSection("Track Styles") {
+            DemoSection(L("page.slider.trackStylesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Block:").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.block")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume).trackStyle(.block)
                     }
                     HStack(spacing: 1) {
-                        Text("Shade:").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.shade")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume).trackStyle(.shade)
                     }
                     HStack(spacing: 1) {
-                        Text("Dot:  ").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.dot")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume).trackStyle(.dot)
                     }
                     HStack(spacing: 1) {
-                        Text("Bar:  ").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.bar")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume).trackStyle(.bar)
                     }
                 }
             }
 
-            DemoSection("Custom Ranges") {
+            DemoSection(L("page.slider.customRangesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
-                        Text("Brightness (0-100, step 5):").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.brightnessLabel")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $brightness, in: 0...100, step: 5)
                     }
                     HStack(spacing: 1) {
-                        Text("Rating (1-5, step 1):      ").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.ratingLabel")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $rating, in: 1...5, step: 1)
                     }
                     HStack(spacing: 1) {
-                        Text("Precision (0-1, step 0.05):").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.precisionLabel")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $precision, in: 0...1, step: 0.05)
                     }
                 }
             }
 
-            DemoSection("Current Values") {
+            DemoSection(L("page.slider.currentValuesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("Volume:", String(format: "%.0f%%", volume * 100))
-                    ValueDisplayRow("Brightness:", String(format: "%.0f", brightness))
-                    ValueDisplayRow("Rating:", String(format: "%.0f", rating))
-                    ValueDisplayRow("Precision:", String(format: "%.2f", precision))
+                    ValueDisplayRow(L("page.slider.volume"), String(format: "%.0f%%", volume * 100))
+                    ValueDisplayRow(L("page.slider.brightness"), String(format: "%.0f", brightness))
+                    ValueDisplayRow(L("page.slider.rating"), String(format: "%.0f", rating))
+                    ValueDisplayRow(L("page.slider.precision"), String(format: "%.2f", precision))
                 }
             }
 
-            DemoSection("Themed value read-out (.sliderTextStyle)") {
+            DemoSection(L("page.slider.themedSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     // .sliderTextStyle re-themes only the percentage read-out;
                     // the track and arrows are unaffected. Shown directly below a
                     // default slider (same value) so the difference is visible:
                     // the themed "%" is bold, underlined and success-coloured.
                     HStack(spacing: 1) {
-                        Text("Default:").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.default")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume)
                     }
                     HStack(spacing: 1) {
-                        Text("Themed: ").foregroundStyle(.palette.foregroundSecondary)
+                        Text(L("page.slider.themed")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume)
                             .sliderTextStyle {
                                 $0.bold = true
@@ -110,11 +110,11 @@ struct SliderPage: View {
             }
 
             KeyboardHelpSection(shortcuts: [
-                "[<-] [->] Decrease/Increase by step",
-                "[-] [+] Decrease/Increase by step",
-                "[Home] Jump to minimum",
-                "[End] Jump to maximum",
-                "[Tab] Move to next slider",
+                L("page.slider.help.arrows"),
+                L("page.slider.help.plusMinus"),
+                L("page.slider.help.home"),
+                L("page.slider.help.end"),
+                L("page.slider.help.tab"),
             ])
         }
     }

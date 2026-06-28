@@ -26,90 +26,89 @@ struct FormPage: View {
     /// between them is the `formStyle`. (The bindings are shared too, so it is
     /// literally the same form shown twice.)
     @ViewBuilder private var formContent: some View {
-        Section("Profile") {
-            LabeledContent("Name") { TextField("", text: $name) }
-            LabeledContent("Email") { TextField("", text: $email) }
-            LabeledContent("Password") { SecureField("", text: $password) }
+        Section(L("page.form.profile")) {
+            LabeledContent(L("page.form.name")) { TextField("", text: $name) }
+            LabeledContent(L("page.form.email")) { TextField("", text: $email) }
+            LabeledContent(L("page.form.password")) { SecureField("", text: $password) }
         }
-        Section("Appearance") {
-            LabeledContent("Theme") {
+        Section(L("page.form.appearance")) {
+            LabeledContent(L("page.form.theme")) {
                 Picker("", selection: $theme) {
-                    Text("Light").tag(0)
-                    Text("Dark").tag(1)
-                    Text("System").tag(2)
+                    Text(L("page.form.light")).tag(0)
+                    Text(L("page.form.dark")).tag(1)
+                    Text(L("page.form.system")).tag(2)
                 }
             }
-            LabeledContent("Density") {
+            LabeledContent(L("page.form.density")) {
                 Picker("", selection: $density) {
-                    Text("Compact").tag(0)
-                    Text("Comfortable").tag(1)
+                    Text(L("page.form.compact")).tag(0)
+                    Text(L("page.form.comfortable")).tag(1)
                 }
             }
-            LabeledContent("Version", value: "1.0.3")
+            LabeledContent(L("page.form.version"), value: "1.0.3")
         }
-        Section("Notifications") {
+        Section(L("page.form.notifications")) {
             // Checkboxes use their own (clickable) label and sit in the control
             // column, box first — the canonical macOS style. A multi-`Text` label
             // is SwiftUI's "title + explanatory text" form: the second line renders
             // below the title, indented to the label and in the secondary colour.
             Toggle(isOn: $push) {
-                Text("Push notifications")
-                Text("Receive alerts even when the app is closed")
+                Text(L("page.form.pushNotifications"))
+                Text(L("page.form.pushNotificationsDetail"))
             }
-            Toggle("Marketing email", isOn: $marketing)
-            LabeledContent("Volume") { Slider(value: $volume, in: 0...100) }
+            Toggle(L("page.form.marketingEmail"), isOn: $marketing)
+            LabeledContent(L("page.form.volume")) { Slider(value: $volume, in: 0...100) }
         }
-        Section("Account") {
-            LabeledContent("Trusted devices") { Stepper("", value: $devices, in: 0...10) }
-            LabeledContent("Status", value: "Active")
+        Section(L("page.form.account")) {
+            LabeledContent(L("page.form.trustedDevices")) { Stepper("", value: $devices, in: 0...10) }
+            LabeledContent(L("page.form.status"), value: L("page.form.statusActive"))
             // A push button is right-aligned, as on macOS.
-            Button("Sign Out", role: .destructive) {}
+            Button(L("page.form.signOut"), role: .destructive) {}
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            DemoSection("Columns style (.columns — the default, macOS convention)") {
+            DemoSection(L("page.form.columnsSection")) {
                 Form { formContent }
             }
 
-            DemoSection("Grouped style (.grouped) — same content, different style") {
+            DemoSection(L("page.form.groupedSection")) {
                 Form { formContent }
                     .formStyle(.grouped)
             }
 
-            DemoSection("Per-row alignment override (.formRowAlignment)") {
+            DemoSection(L("page.form.rowAlignmentSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Buttons right-align to the content edge by default in columns; "
-                        + ".formRowAlignment(.leading) overrides one row to the left.")
+                    Text(L("page.form.rowAlignmentDescription"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     // The wide field sets the content width; the short buttons then
                     // visibly differ: \"Default\" hugs the right edge, \"Overridden\"
                     // the left.
                     Form {
-                        LabeledContent("Trusted devices on your account", value: "3")
-                        Button("Default") {}
-                        Button("Overridden") {}
+                        LabeledContent(L("page.form.trustedDevicesAccount"), value: "3")
+                        Button(L("page.form.defaultButton")) {}
+                        Button(L("page.form.overriddenButton")) {}
                             .formRowAlignment(.leading)
                     }
                 }
             }
 
-            DemoSection("About forms") {
+            DemoSection(L("page.form.aboutSection")) {
                 VStack(alignment: .leading) {
-                    Text("Both demos above show the same form — only the formStyle differs.")
+                    Text(L("page.form.aboutSameForm"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("Columns: field labels + bold section headers right-align to a shared")
+                    Text(L("page.form.aboutColumns1"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("pillar; checkboxes sit box-first in the control column; buttons right-align.")
+                    Text(L("page.form.aboutColumns2"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("A checkbox label with a 2nd line shows explanatory subtext (secondary,")
+                    Text(L("page.form.aboutCheckbox1"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("indented to the label) — the SwiftUI title+description label form.")
+                    Text(L("page.form.aboutCheckbox2"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("Grouped: each Section is a bordered box.")
+                    Text(L("page.form.aboutGrouped"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("[Tab] move focus · the whole checkbox row (box + label) is clickable").dim()
+                    Text(L("page.form.aboutFocusHint")).dim()
                 }
             }
 
@@ -117,7 +116,7 @@ struct FormPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Forms", subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
+            DemoAppHeader(L("page.form.title"), subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
         }
     }
 }

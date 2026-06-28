@@ -12,7 +12,7 @@ import TUIkit
 /// bottom-up value propagation (the mirror image of `@Environment`, which
 /// flows top-down). The last value set wins (the default `reduce`).
 private struct DemoMessageKey: PreferenceKey {
-    static let defaultValue: String = "(none yet)"
+    static var defaultValue: String { L("page.advanced.noneYet") }
 
     static func reduce(value: inout String, nextValue: () -> String) {
         value = nextValue()
@@ -44,40 +44,31 @@ struct AdvancedPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("@AppStorage — persisted across launches") {
+            DemoSection(L("page.advanced.appStorageSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "These values are written to disk immediately. Bump the "
-                            + "counter or flip the toggle, quit, relaunch — they "
-                            + "come back exactly as you left them."
-                    )
+                    Text(L("page.advanced.appStorageDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    Button("Tap to increment (persisted)") {
+                    Button(L("page.advanced.tapToIncrement")) {
                         launchTaps += 1
                     }
-                    Toggle("Remember me (persisted)", isOn: $remembered)
+                    Toggle(L("page.advanced.rememberMe"), isOn: $remembered)
 
                     HStack(spacing: 2) {
-                        ValueDisplayRow("Stored taps:", "\(launchTaps)")
-                        ValueDisplayRow("Remembered:", remembered ? "yes" : "no")
+                        ValueDisplayRow(L("page.advanced.storedTaps"), "\(launchTaps)")
+                        ValueDisplayRow(L("page.advanced.remembered"), remembered ? L("page.advanced.yes") : L("page.advanced.no"))
                     }
                 }
             }
 
-            DemoSection("Lifecycle — .onAppear / .onDisappear / .task") {
+            DemoSection(L("page.advanced.lifecycleSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        ".onAppear logs a line when the page is shown; .task logs "
-                            + "one shortly after from an async task. .onDisappear "
-                            + "logs on the way out (you'll see it next time you open "
-                            + "the page, since the log itself is reset on appear)."
-                    )
+                    Text(L("page.advanced.lifecycleDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     VStack(alignment: .leading, spacing: 0) {
                         if lifecycleLog.isEmpty {
-                            Text("(waiting…)").dim()
+                            Text(L("page.advanced.waiting")).dim()
                         } else {
                             ForEach(lifecycleLog, id: \.self) { line in
                                 Text(line)
@@ -89,47 +80,39 @@ struct AdvancedPage: View {
                 .onAppear {
                     // Reset and seed the log each time the page appears so the
                     // demo reads clearly on every visit.
-                    lifecycleLog = ["onAppear — page shown"]
+                    lifecycleLog = [L("page.advanced.logOnAppear")]
                 }
                 .onDisappear {
-                    appendLog("onDisappear — page hidden")
+                    appendLog(L("page.advanced.logOnDisappear"))
                 }
                 .task {
                     await runStartupTask()
                 }
             }
 
-            DemoSection("Key logger — .onKeyPress") {
+            DemoSection(L("page.advanced.keyLoggerSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Press any key — the raw .onKeyPress handler reports the "
-                            + "last one. It returns false (doesn't consume the "
-                            + "event), so Esc still navigates back."
-                    )
+                    Text(L("page.advanced.keyLoggerDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
-                    ValueDisplayRow("Last key:", lastKey)
+                    ValueDisplayRow(L("page.advanced.lastKey"), lastKey)
                 }
             }
 
-            DemoSection("Explicit focus — .focusID / .focusSection") {
+            DemoSection(L("page.advanced.explicitFocusSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Two focus sections, each with two buttons that carry an "
-                            + "explicit .focusID. Tab moves through them in order; "
-                            + "the IDs are stable identities you can target."
-                    )
+                    Text(L("page.advanced.explicitFocusDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     HStack(spacing: 3) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Section A").dim()
+                            Text(L("page.advanced.sectionA")).dim()
                             Button("A · One") {}.focusID("advanced-a-one")
                             Button("A · Two") {}.focusID("advanced-a-two")
                         }
                         .focusSection("advanced-section-a")
 
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Section B").dim()
+                            Text(L("page.advanced.sectionB")).dim()
                             Button("B · One") {}.focusID("advanced-b-one")
                             Button("B · Two") {}.focusID("advanced-b-two")
                         }
@@ -138,39 +121,31 @@ struct AdvancedPage: View {
                 }
             }
 
-            DemoSection("Shift-accelerated stepping — .shiftStepMultiplier(10)") {
+            DemoSection(L("page.advanced.shiftSteppingSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Focus the stepper (Tab) and use ←/→ or the ± controls. A "
-                            + "plain press steps by 1; holding Shift jumps by 10× "
-                            + "(terminals that forward Shift+arrow)."
-                    )
+                    Text(L("page.advanced.shiftSteppingDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    Stepper("Value", value: $stepValue, in: 0...1000, step: 1)
+                    Stepper(L("page.advanced.value"), value: $stepValue, in: 0...1000, step: 1)
                         .shiftStepMultiplier(10)
-                    ValueDisplayRow("Value:", "\(stepValue)")
+                    ValueDisplayRow(L("page.advanced.valueLabel"), "\(stepValue)")
                 }
             }
 
-            DemoSection("Preferences — child sets, parent reads") {
+            DemoSection(L("page.advanced.preferencesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(
-                        "Preferences flow up the tree. The child below sets "
-                            + "DemoMessageKey; this section reads it via "
-                            + ".onPreferenceChange into @State."
-                    )
+                    Text(L("page.advanced.preferencesDescription"))
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // The child sets a preference value; an ancestor observes it.
-                    Text("Child view (sets the preference)")
+                    Text(L("page.advanced.childView"))
                         .dim()
                         .preference(
                             key: DemoMessageKey.self,
-                            value: "Hello from the child view"
+                            value: L("page.advanced.helloFromChild")
                         )
 
-                    ValueDisplayRow("Parent received:", childMessage)
+                    ValueDisplayRow(L("page.advanced.parentReceived"), childMessage)
                 }
             }
 
@@ -186,7 +161,7 @@ struct AdvancedPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader("Advanced")
+            DemoAppHeader(L("page.advanced.title"))
         }
     }
 
@@ -205,7 +180,7 @@ struct AdvancedPage: View {
     /// async load that finishes after the first frame.
     private func runStartupTask() async {
         try? await Task.sleep(for: .milliseconds(200))
-        appendLog("task — async work finished")
+        appendLog(L("page.advanced.logTaskFinished"))
     }
 
     /// A readable description of a key event for the logger.
