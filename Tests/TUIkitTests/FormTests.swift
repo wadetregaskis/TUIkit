@@ -105,7 +105,7 @@ struct FormTests {
                     }
                     LabeledContent("Volume") { Slider(value: .constant(50.0), in: 0...100) }
                     LabeledContent("Count") { Stepper("", value: .constant(3), in: 0...10) }
-                    LabeledContent("Push") { Toggle("", isOn: .constant(true)) }
+                    Toggle("Push", isOn: .constant(true))   // native: box-first control column
                     Button("Sign Out") {}
                 }
             },
@@ -115,6 +115,47 @@ struct FormTests {
         for label in ["Profile", "Name", "Password", "Settings", "Theme", "Volume", "Count", "Push", "Sign Out"] {
             #expect(out.contains(label), "missing '\(label)' in:\n\(out)")
         }
+    }
+
+    // MARK: - macOS columns conventions
+
+    @Test("A bare Toggle is box-first in the control column (its label is clickable)")
+    func toggleBoxFirstInControlColumn() {
+        let out = lines(Form { Toggle("Wi-Fi", isOn: .constant(true)) })
+        let row = out.first { $0.contains("Wi-Fi") } ?? ""
+        // Box first: the row leads with the checkbox glyph, not the label. (The
+        // native Toggle's hit region — covering box, gap, and label — is what
+        // makes the whole row clickable.)
+        #expect(!row.hasPrefix("Wi-Fi"))
+        #expect(row.contains("Wi-Fi"))
+    }
+
+    @Test("A Button is right-aligned in the columns layout")
+    func buttonRightAlignedColumns() {
+        let out = lines(
+            Form {
+                LabeledContent("Account email", value: "ada@example.com")
+                Button("Sign Out") {}
+            })
+        let buttonRow = out.first { $0.contains("Sign Out") } ?? ""
+        // Right-aligned to the content edge → leading whitespace before the button.
+        #expect(buttonRow.hasPrefix(" "))
+        #expect(buttonRow.contains("Sign Out"))
+    }
+
+    @Test("A columns section header is right-aligned to the pillar")
+    func sectionHeaderRightAligned() {
+        let out = lines(
+            Form {
+                Section("On") {
+                    LabeledContent("Notifications", value: "all")
+                }
+            })
+        // "On" (capital O) only appears in the header; the field row has "Notifications".
+        let headerRow = out.first { $0.contains("On") && !$0.contains("Notifications") } ?? ""
+        // Right-aligned to the "Notifications" pillar → leading whitespace.
+        #expect(headerRow.hasPrefix(" "))
+        #expect(headerRow.contains("On"))
     }
 }
 

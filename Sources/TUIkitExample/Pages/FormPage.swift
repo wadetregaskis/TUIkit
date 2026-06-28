@@ -48,13 +48,16 @@ struct FormPage: View {
             LabeledContent("Version", value: "1.0.3")
         }
         Section("Notifications") {
-            LabeledContent("Push") { Toggle("", isOn: $push) }
-            LabeledContent("Marketing email") { Toggle("", isOn: $marketing) }
+            // Checkboxes use their own (clickable) label and sit in the control
+            // column, box first — the canonical macOS style.
+            Toggle("Push", isOn: $push)
+            Toggle("Marketing email", isOn: $marketing)
             LabeledContent("Volume") { Slider(value: $volume, in: 0...100) }
         }
         Section("Account") {
             LabeledContent("Trusted devices") { Stepper("", value: $devices, in: 0...10) }
             LabeledContent("Status", value: "Active")
+            // A push button is right-aligned, as on macOS.
             Button("Sign Out", role: .destructive) {}
         }
     }
@@ -74,11 +77,13 @@ struct FormPage: View {
                 VStack(alignment: .leading) {
                     Text("Both demos above show the same form — only the formStyle differs.")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("Columns right-aligns labels to a shared pillar; grouped boxes each Section.")
+                    Text("Columns: field labels + bold section headers right-align to a shared")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("A row that isn't LabeledContent (e.g. the Sign Out button) spans the full width.")
+                    Text("pillar; checkboxes sit box-first in the control column; buttons right-align.")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text("[Tab] move focus between fields").dim()
+                    Text("Grouped: each Section is a bordered box.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text("[Tab] move focus · the whole checkbox row (box + label) is clickable").dim()
                 }
             }
 
