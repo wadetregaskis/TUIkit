@@ -89,6 +89,10 @@ struct ThemePage: View {
             get: { Self.tintOptions.first { $0.color == styling.tint }?.name ?? "None" },
             set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color }
         )
+        let checkboxSelection = Binding(
+            get: { styling.checkboxStyle == .ascii ? "ASCII" : "Squares" },
+            set: { name in styling.checkboxStyle = (name == "ASCII") ? .ascii : .squares }
+        )
         // Drives the modal colour editor: true while a colour is open for editing.
         let editingBinding = Binding(
             get: { editing != nil },
@@ -142,6 +146,12 @@ struct ThemePage: View {
                             isOn: Binding(
                                 get: { styling.boldButtons },
                                 set: { styling.boldButtons = $0 }))
+
+                        Picker("Checkboxes", selection: checkboxSelection) {
+                            Text("Squares ⬛").tag("Squares")
+                            Text("ASCII [x]").tag("ASCII")
+                        }
+                        .pickerStyle(.radioGroup)
                     }
                 }
 
