@@ -252,6 +252,87 @@ struct ToggleTests {
         )
         #expect(line.contains(dimLabel), "A disabled toggle's label should be dimmed, got: \(line)")
     }
+
+    // MARK: - Explanatory subtitle (SwiftUI "title + description" label)
+
+    @Test("A multi-view toggle label renders a title plus an indented subtitle")
+    func toggleLabelWithDescription() {
+        let context = createTestContext()
+        let buffer = renderToBuffer(
+            Toggle(isOn: .constant(true)) {
+                Text("Push notifications")
+                Text("Receive alerts even when closed")
+            },
+            context: context)
+
+        #expect(buffer.height == 2, "title + one subtitle line, got \(buffer.lines.map(\.stripped))")
+        let title = buffer.lines[0].stripped
+        let subtitle = buffer.lines[1].stripped
+        #expect(title.contains("Push notifications"))
+        #expect(subtitle.contains("Receive alerts even when closed"))
+
+        // The subtitle aligns to the title's *label* column (past the box), not
+        // column 0. Measure the DISPLAY column (the checkbox glyph is one grapheme
+        // but two cells wide), not the grapheme index.
+        func displayColumn(of needle: String, in line: String) -> Int? {
+            guard let range = line.range(of: needle) else { return nil }
+            return FrameBuffer(lines: [String(line[line.startIndex..<range.lowerBound])]).width
+        }
+        let titleCol = displayColumn(of: "Push", in: title)
+        let subtitleCol = displayColumn(of: "Receive", in: subtitle)
+        #expect(titleCol != nil && titleCol == subtitleCol,
+                "subtitle aligns to the label column: title=\(titleCol as Int?) subtitle=\(subtitleCol as Int?)")
+        #expect((subtitleCol ?? 0) > 0, "subtitle is indented past column 0")
+        #expect(!subtitle.contains("\u{2B1B}") && !subtitle.contains("\u{2B1C}"),
+                "subtitle must not repeat the checkbox glyph")
+    }
+
+    @Test("A toggle's explanatory subtitle is drawn in the secondary colour")
+    func toggleDescriptionSecondaryColour() {
+        let context = createTestContext()
+        let subtitleLine = renderToBuffer(
+            Toggle(isOn: .constant(false)) {
+                Text("Sync")
+                Text("Across devices")
+            },
+            context: context).lines[1]
+
+        let palette = context.environment.palette
+        let secondary = ANSIRenderer.colorize("Across devices", foreground: palette.foregroundSecondary)
+        #expect(subtitleLine.contains(secondary),
+                "the subtitle should use the secondary colour, got: \(subtitleLine)")
+    }
+
+    @Test("A toggle's explanatory subtitle is not part of the click target")
+    func toggleDescriptionNotClickable() {
+        let ctx = makeRenderContext(width: 50, height: 10) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let buffer = renderToBuffer(
+            Toggle(isOn: .constant(true)) {
+                Text("Wi-Fi")
+                Text("Join networks automatically")
+            },
+            context: ctx)
+
+        #expect(buffer.height == 2)
+        // A hit region covers the title row (0) but none reach the subtitle (row 1).
+        let coversTitle = buffer.hitTestRegions.contains { $0.offsetY <= 0 && 0 < $0.offsetY + $0.height }
+        let coversSubtitle = buffer.hitTestRegions.contains { $0.offsetY <= 1 && 1 < $0.offsetY + $0.height }
+        #expect(coversTitle, "the title row should be clickable")
+        #expect(!coversSubtitle, "the subtitle row must not be clickable")
+    }
+
+    @Test("A single-view toggle label is unchanged (one line, fully clickable)")
+    func toggleSingleLabelUnchanged() {
+        let ctx = makeRenderContext(width: 50, height: 10) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let buffer = renderToBuffer(Toggle("Wi-Fi", isOn: .constant(true)), context: ctx)
+        #expect(buffer.height == 1)
+        // The whole single line is the click target.
+        #expect(buffer.hitTestRegions.contains { $0.height == 1 && $0.width == buffer.width })
+    }
 }
 
 // MARK: - Toggle Handler Tests

@@ -49,8 +49,13 @@ struct FormPage: View {
         }
         Section("Notifications") {
             // Checkboxes use their own (clickable) label and sit in the control
-            // column, box first — the canonical macOS style.
-            Toggle("Push", isOn: $push)
+            // column, box first — the canonical macOS style. A multi-`Text` label
+            // is SwiftUI's "title + explanatory text" form: the second line renders
+            // below the title, indented to the label and in the secondary colour.
+            Toggle(isOn: $push) {
+                Text("Push notifications")
+                Text("Receive alerts even when the app is closed")
+            }
             Toggle("Marketing email", isOn: $marketing)
             LabeledContent("Volume") { Slider(value: $volume, in: 0...100) }
         }
@@ -80,6 +85,10 @@ struct FormPage: View {
                     Text("Columns: field labels + bold section headers right-align to a shared")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text("pillar; checkboxes sit box-first in the control column; buttons right-align.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text("A checkbox label with a 2nd line shows explanatory subtext (secondary,")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text("indented to the label) — the SwiftUI title+description label form.")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text("Grouped: each Section is a bordered box.")
                         .foregroundStyle(.palette.foregroundSecondary)

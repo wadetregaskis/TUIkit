@@ -401,6 +401,63 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
     }
 
+    /// Composes a built-in toggle's buffer from its indicator and label.
+    ///
+    /// A single-view label is flattened onto the indicator line, as before. A
+    /// label closure holding two or more views is the SwiftUI "title +
+    /// explanatory text" form: the first view becomes the clickable title on the
+    /// indicator line, and the rest become an explanatory subtitle on the line(s)
+    /// below — indented to the title column and drawn in the secondary colour, the
+    /// macOS checkbox-with-help-text convention. The subtitle is not a click
+    /// target.
+    ///
+    /// - Returns: the composed buffer, plus the width and row count of the
+    ///   clickable title (the indicator line) for the hit-test region.
+    private func composeLabelBuffer(
+        indicator: String, labelContext: RenderContext, isDisabled: Bool, palette: any Palette
+    ) -> (buffer: FrameBuffer, titleWidth: Int, titleRows: Int) {
+        let parts = resolveChildViews(from: label, context: labelContext)
+
+        // Single-view label: flatten the whole label next to the indicator.
+        guard parts.count >= 2 else {
+            let labelText = TUIkit.renderToBuffer(label, context: labelContext)
+                .lines.joined(separator: " ")
+            let buffer = FrameBuffer(lines: [indicator + " " + labelText])
+            return (buffer, buffer.width, buffer.height)
+        }
+
+        // Title = the first label view, flattened onto the indicator line.
+        let titleText = renderLabelPart(parts[0], context: labelContext)
+            .lines.joined(separator: " ")
+        let titleLine = indicator + " " + titleText
+        let titleWidth = FrameBuffer(lines: [titleLine]).width
+
+        // Subtitle = the remaining label views: secondary, and indented to the
+        // title column (past "<indicator> ") so it left-aligns to the label, not
+        // the box. A disabled toggle keeps the inherited dimmed colour.
+        var subtitleContext = labelContext
+        subtitleContext.environment.controlKind = nil
+        if !isDisabled {
+            subtitleContext.environment.foregroundStyle = palette.foregroundSecondary
+        }
+        let indicatorWidth = FrameBuffer(lines: [indicator]).width
+        let indent = String(repeating: " ", count: indicatorWidth + 1)
+
+        var lines = [titleLine]
+        for index in 1..<parts.count {
+            for line in renderLabelPart(parts[index], context: subtitleContext).lines {
+                lines.append(indent + line)
+            }
+        }
+        return (FrameBuffer(lines: lines), titleWidth, 1)
+    }
+
+    /// Renders a single label part at its natural size.
+    private func renderLabelPart(_ part: ChildView, context: RenderContext) -> FrameBuffer {
+        let size = part.measure(proposal: ProposedSize(width: nil, height: nil), context: context)
+        return part.render(width: size.width, height: size.height, context: context)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
@@ -436,6 +493,11 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // glyphs); a custom `ToggleStyle` renders through its `makeBody`. Either
         // way the interaction wiring below (focus, mouse) is the core's job.
         var buffer: FrameBuffer
+        // Extent of the *clickable* part of the toggle (the indicator + title
+        // row). An explanatory subtitle below the title is not a click target,
+        // so the hit region must not extend over it.
+        let clickWidth: Int
+        let clickHeight: Int
         let toggleStyle = context.environment.toggleStyle
         if toggleStyle is DefaultToggleStyle || toggleStyle is CheckboxToggleStyle
             || toggleStyle is SwitchToggleStyle {
@@ -452,15 +514,17 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 labelContext.environment.foregroundStyle =
                     palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
             }
-            let labelBuffer = TUIkit.renderToBuffer(label, context: labelContext)
-            let labelText = labelBuffer.lines.joined(separator: " ")
 
             let styledIndicator = styledToggleIndicator(
                 isOnValue: isOnValue, isDisabled: isDisabled,
                 isFocused: isFocused, isHovered: isHovered, context: context)
 
-            // Combine: [indicator] label
-            buffer = FrameBuffer(lines: [styledIndicator + " " + labelText])
+            let composed = composeLabelBuffer(
+                indicator: styledIndicator, labelContext: labelContext,
+                isDisabled: isDisabled, palette: palette)
+            buffer = composed.buffer
+            clickWidth = composed.titleWidth
+            clickHeight = composed.titleRows
         } else {
             let configuration = ToggleStyleConfiguration(
                 label: AnyView(label),
@@ -469,6 +533,8 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 isHovered: isHovered,
                 isEnabled: !isDisabled)
             buffer = toggleStyle.makeBuffer(configuration: configuration, context: context)
+            clickWidth = buffer.width
+            clickHeight = buffer.height
         }
 
         // Hit-test region: a left-button release anywhere on the
@@ -506,8 +572,8 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 HitTestRegion(
                     offsetX: 0,
                     offsetY: 0,
-                    width: buffer.width,
-                    height: buffer.height,
+                    width: clickWidth,
+                    height: clickHeight,
                     handlerID: handlerID,
                     focusID: persistedFocusID
                 )
