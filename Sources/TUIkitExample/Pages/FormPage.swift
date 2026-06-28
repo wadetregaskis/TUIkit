@@ -78,6 +78,23 @@ struct FormPage: View {
                     .formStyle(.grouped)
             }
 
+            DemoSection("Per-row alignment override (.formRowAlignment)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Buttons right-align to the content edge by default in columns; "
+                        + ".formRowAlignment(.leading) overrides one row to the left.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // The wide field sets the content width; the short buttons then
+                    // visibly differ: \"Default\" hugs the right edge, \"Overridden\"
+                    // the left.
+                    Form {
+                        LabeledContent("Trusted devices on your account", value: "3")
+                        Button("Default") {}
+                        Button("Overridden") {}
+                            .formRowAlignment(.leading)
+                    }
+                }
+            }
+
             DemoSection("About forms") {
                 VStack(alignment: .leading) {
                     Text("Both demos above show the same form — only the formStyle differs.")
