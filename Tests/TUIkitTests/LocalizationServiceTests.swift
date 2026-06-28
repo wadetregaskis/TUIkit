@@ -221,6 +221,9 @@ final class LocalizationServiceTests {
         #expect(LocalizationService.Language.french.rawValue == "fr")
         #expect(LocalizationService.Language.italian.rawValue == "it")
         #expect(LocalizationService.Language.spanish.rawValue == "es")
+        #expect(LocalizationService.Language.simplifiedChinese.rawValue == "zh")
+        #expect(LocalizationService.Language.japanese.rawValue == "ja")
+        #expect(LocalizationService.Language.allCases.count == 7)
     }
 
     @Test("Language enum display names are correct")
@@ -230,6 +233,45 @@ final class LocalizationServiceTests {
         #expect(LocalizationService.Language.french.displayName == "Français")
         #expect(LocalizationService.Language.italian.displayName == "Italiano")
         #expect(LocalizationService.Language.spanish.displayName == "Español")
+        #expect(LocalizationService.Language.simplifiedChinese.displayName == "简体中文")
+        #expect(LocalizationService.Language.japanese.displayName == "日本語")
+    }
+
+    @Test("Simplified Chinese and Japanese translations resolve")
+    func asianLanguageTranslations() {
+        sut.setLanguage(.simplifiedChinese)
+        #expect(sut.string(for: "button.ok") == "确定")
+        #expect(sut.string(for: "button.cancel") == "取消")
+
+        sut.setLanguage(.japanese)
+        #expect(sut.string(for: "button.cancel") == "キャンセル")
+        #expect(sut.string(for: "menu.file") == "ファイル")
+    }
+
+    // MARK: - App-registered translations
+
+    @Test("App-registered translations resolve and override the bundled strings")
+    func appRegisteredTranslations() {
+        sut.setLanguage(.english)
+        sut.register(translations: [
+            "en": ["app.title": "Settings", "button.ok": "Okay"],
+            "de": ["app.title": "Einstellungen"],
+        ])
+        // App key resolves.
+        #expect(sut.string(for: "app.title") == "Settings")
+        // App value overrides the bundled framework string.
+        #expect(sut.string(for: "button.ok") == "Okay")
+
+        // The app key resolves in the registered language too.
+        sut.setLanguage(.german)
+        #expect(sut.string(for: "app.title") == "Einstellungen")
+        // German has no app override for button.ok, so the bundled German wins.
+        #expect(sut.string(for: "button.ok") == "OK")
+    }
+
+    @Test("An unregistered app key falls through to the key itself")
+    func unregisteredAppKeyFallsThrough() {
+        #expect(sut.string(for: "app.totally.unknown.key") == "app.totally.unknown.key")
     }
 
     @Test("Language enum is codable")

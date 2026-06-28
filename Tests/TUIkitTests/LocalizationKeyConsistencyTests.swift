@@ -63,6 +63,40 @@ final class LocalizationKeyConsistencyTests {
         }
     }
 
+    /// Loads a specific language's translation table (bundle first, then source).
+    private static func loadTranslations(language code: String) -> [String: String] {
+        var url = Bundle.module.url(
+            forResource: code, withExtension: "json", subdirectory: "translations")
+        if url == nil {
+            let sourcePath = (FileManager.default.currentDirectoryPath as NSString)
+                .appendingPathComponent("Sources/TUIkit/Localization/translations/\(code).json")
+            if FileManager.default.fileExists(atPath: sourcePath) {
+                url = URL(fileURLWithPath: sourcePath)
+            }
+        }
+        guard let url, let data = try? Data(contentsOf: url),
+            let dict = try? JSONSerialization.jsonObject(
+                with: data, options: .fragmentsAllowed) as? [String: String]
+        else { return [:] }
+        return dict
+    }
+
+    // MARK: - Cross-language parity
+
+    @Test("Every language file has exactly the English key set")
+    func everyLanguageHasEnglishKeys() {
+        let englishKeys = Set(englishTranslations.keys)
+        #expect(!englishKeys.isEmpty, "English translations failed to load")
+        for language in LocalizationService.Language.allCases where language != .english {
+            let keys = Set(Self.loadTranslations(language: language.rawValue).keys)
+            let missing = englishKeys.subtracting(keys).sorted()
+            let extra = keys.subtracting(englishKeys).sorted()
+            #expect(
+                keys == englishKeys,
+                "\(language.rawValue).json differs from en.json — missing: \(missing); extra: \(extra)")
+        }
+    }
+
     // MARK: - Button Key Tests
 
     @Test("All button keys exist in translations")

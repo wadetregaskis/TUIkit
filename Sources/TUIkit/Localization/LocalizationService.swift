@@ -14,14 +14,16 @@ import Foundation
 /// dot-notation keys, and persists language preference to disk.
 public final class LocalizationService: @unchecked Sendable {
     /// Supported languages
-    public enum Language: String, Codable {
+    public enum Language: String, Codable, CaseIterable {
         case english = "en"
         case german = "de"
         case french = "fr"
         case italian = "it"
         case spanish = "es"
+        case simplifiedChinese = "zh"
+        case japanese = "ja"
 
-        /// Human-readable name
+        /// Human-readable name (in the language itself).
         public var displayName: String {
             switch self {
             case .english: "English"
@@ -29,6 +31,8 @@ public final class LocalizationService: @unchecked Sendable {
             case .french: "Français"
             case .italian: "Italiano"
             case .spanish: "Español"
+            case .simplifiedChinese: "简体中文"
+            case .japanese: "日本語"
             }
         }
     }
@@ -46,6 +50,12 @@ public final class LocalizationService: @unchecked Sendable {
 
     /// Cached translations: [languageCode: [dotPath: localizedString]]
     private var translationCache: [String: [String: String]] = [:]
+
+    /// App-supplied translations: [languageCode: [dotPath: localizedString]],
+    /// registered by the host application via ``register(translations:)``. These
+    /// are checked before the bundled framework strings, so an app can add its
+    /// own keys and override framework defaults.
+    private var appTranslations: [String: [String: String]] = [:]
 
     /// Lock for thread-safe access
     private let lock = NSLock()
@@ -105,6 +115,33 @@ public final class LocalizationService: @unchecked Sendable {
         currentLanguage = language
     }
 
+    /// Registers additional translations supplied by the host application.
+    ///
+    /// The framework only bundles translations for its own strings; an app uses
+    /// this to localize its own UI through the same service. The outer dictionary
+    /// is keyed by language code (``Language/rawValue`` — e.g. `"en"`, `"de"`,
+    /// `"zh"`); the inner dictionary maps dot-notation keys to localized strings.
+    /// Registrations merge across calls and take precedence over the bundled
+    /// framework strings for the same key. A re-render is requested so visible
+    /// strings refresh.
+    ///
+    /// ```swift
+    /// LocalizationService.shared.register(translations: [
+    ///     "en": ["app.title": "Settings"],
+    ///     "de": ["app.title": "Einstellungen"],
+    /// ])
+    /// ```
+    ///
+    /// - Parameter translations: Language-code-keyed translation tables to add.
+    public func register(translations: [String: [String: String]]) {
+        lock.lock()
+        defer { lock.unlock() }
+        for (code, table) in translations {
+            appTranslations[code, default: [:]].merge(table) { _, new in new }
+        }
+        AppState.shared.setNeedsRender()
+    }
+
     /// Resolves a localized string using a dot-notation key.
     ///
     /// Falls back to English if the key is missing in the current language,
@@ -157,9 +194,15 @@ public final class LocalizationService: @unchecked Sendable {
 
     /// Retrieves a value from translations using dot-notation path.
     ///
+    /// App-registered translations (``register(translations:)``) win over the
+    /// bundled framework strings for the same key.
+    ///
     /// - Important: Caller must hold `lock`.
     private func _translationValue(_ key: String, in language: Language) -> String? {
-        _translations(for: language)[key]
+        if let appValue = appTranslations[language.rawValue]?[key] {
+            return appValue
+        }
+        return _translations(for: language)[key]
     }
 
     /// Loads translations from bundled JSON file.
