@@ -26,6 +26,16 @@ struct ThemePage: View {
     /// editor (``ColorPickerPanel``), or `nil` when it is dismissed.
     @State private var editing: Int?
 
+    /// The six editable characters of the custom border (single chars, typeable
+    /// in ASCII; box-drawing glyphs come from the preset buttons). Default to an
+    /// ASCII set so the fields start usable.
+    @State private var borderTL = "+"
+    @State private var borderTR = "+"
+    @State private var borderBL = "+"
+    @State private var borderBR = "+"
+    @State private var borderH = "-"
+    @State private var borderV = "|"
+
     /// Tint options offered in the live-styling section (name + colour).
     private static let tintOptions: [(name: String, color: Color?)] = [
         ("None", nil),
@@ -82,6 +92,8 @@ struct ThemePage: View {
             set: { id in
                 if let appearance = appearances.first(where: { $0.id == id }) {
                     appearanceManager.setCurrent(appearance)
+                    // Picking a built-in border deactivates any custom one.
+                    styling.customBorder = nil
                 }
             }
         )
@@ -118,6 +130,45 @@ struct ThemePage: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
+                }
+
+                DemoSection("Custom border characters — applies app-wide") {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Build a border from any characters — type ASCII into the "
+                            + "fields, or pick a preset for box-drawing glyphs. It overrides "
+                            + "the appearance above across the whole app.")
+                            .foregroundStyle(.palette.foregroundSecondary)
+
+                        HStack(spacing: 1) {
+                            Button("Rounded") { applyBorderPreset("╭", "╮", "╰", "╯", "─", "│") }
+                            Button("ASCII") { applyBorderPreset("+", "+", "+", "+", "-", "|") }
+                            Button("Stars") { applyBorderPreset("*", "*", "*", "*", "*", "*") }
+                            Button("Blocks") { applyBorderPreset("█", "█", "█", "█", "█", "█") }
+                            Button("Dots") { applyBorderPreset("·", "·", "·", "·", "·", "·") }
+                        }
+
+                        HStack(spacing: 2) {
+                            borderCharField("┌", $borderTL)
+                            borderCharField("┐", $borderTR)
+                            borderCharField("└", $borderBL)
+                            borderCharField("┘", $borderBR)
+                            borderCharField("─", $borderH)
+                            borderCharField("│", $borderV)
+                        }
+
+                        Button("Use built-in appearance") { styling.customBorder = nil }
+
+                        Panel("Live preview") {
+                            Text("This box uses the app-wide border.")
+                        }
+                    }
+                    .onChange(of: [borderTL, borderTR, borderBL, borderBR, borderH, borderV]) {
+                        // Live-update only while a custom border is active, so typing
+                        // here doesn't hijack a built-in appearance selection.
+                        if styling.customBorder != nil {
+                            styling.customBorder = currentBorderStyle()
+                        }
+                    }
                 }
 
                 DemoSection("Live styling — applies to every page") {
@@ -260,5 +311,47 @@ struct ThemePage: View {
             get: { palette[keyPath: keyPath] },
             set: { palette[keyPath: keyPath] = $0 }
         )
+    }
+
+    /// Applies a preset custom border: fills the editable fields and activates it
+    /// app-wide (overriding the built-in appearance).
+    private func applyBorderPreset(
+        _ tl: Character, _ tr: Character, _ bl: Character,
+        _ br: Character, _ h: Character, _ v: Character
+    ) {
+        borderTL = String(tl); borderTR = String(tr)
+        borderBL = String(bl); borderBR = String(br)
+        borderH = String(h); borderV = String(v)
+        styling.customBorder = BorderStyle(
+            topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br,
+            horizontal: h, vertical: v)
+    }
+
+    /// Builds a ``BorderStyle`` from the current editable characters (each field's
+    /// first character, with an ASCII fallback for an empty field).
+    private func currentBorderStyle() -> BorderStyle {
+        func first(_ string: String, else fallback: Character) -> Character {
+            string.first ?? fallback
+        }
+        return BorderStyle(
+            topLeft: first(borderTL, else: "+"),
+            topRight: first(borderTR, else: "+"),
+            bottomLeft: first(borderBL, else: "+"),
+            bottomRight: first(borderBR, else: "+"),
+            horizontal: first(borderH, else: "-"),
+            vertical: first(borderV, else: "|"))
+    }
+
+    /// A labelled single-character field (clamped to one character) for one
+    /// border glyph.
+    @ViewBuilder
+    private func borderCharField(_ label: String, _ text: Binding<String>) -> some View {
+        let clamped = Binding(
+            get: { text.wrappedValue },
+            set: { text.wrappedValue = String($0.suffix(1)) })
+        VStack(spacing: 0) {
+            Text(label).foregroundStyle(.palette.foregroundTertiary)
+            TextField("", text: clamped).frame(width: 3)
+        }
     }
 }
