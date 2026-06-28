@@ -18,6 +18,9 @@ struct TogglePage: View {
     @State var styledLabelA: Bool = true
     @State var styledLabelB: Bool = false
 
+    // Toggle whose label carries explanatory subtext.
+    @State var pushNotifications: Bool = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -31,6 +34,18 @@ struct TogglePage: View {
                 }
             }
 
+            DemoSection("Explanatory subtitle (a multi-Text label)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("A second Text in the label closure renders below the title — "
+                        + "indented to the label, in the secondary colour — exactly as in SwiftUI.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(isOn: $pushNotifications) {
+                        Text("Push notifications")
+                        Text("Receive alerts even when the app is closed")
+                    }
+                }
+            }
+
             DemoSection("Themeable label text (.toggleTextStyle)") {
                 VStack(alignment: .leading, spacing: 1) {
                     // Only the labels are restyled; the checkbox glyph is unaffected.
@@ -38,6 +53,39 @@ struct TogglePage: View {
                     Toggle("…and this one too", isOn: $styledLabelB)
                 }
                 .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
+            }
+
+            DemoSection("Checkbox glyph style (.checkboxStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("CheckboxStyle customises the glyphs. The app-wide default is set "
+                        + "on the Theme page; here both are shown side by side.")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(spacing: 4) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(".squares (default)").dim()
+                            Toggle("On", isOn: .constant(true))
+                            Toggle("Off", isOn: .constant(false))
+                        }
+                        .checkboxStyle(.squares)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(".ascii").dim()
+                            Toggle("On", isOn: .constant(true))
+                            Toggle("Off", isOn: .constant(false))
+                        }
+                        .checkboxStyle(.ascii)
+                    }
+                }
+            }
+
+            DemoSection("Toggle style (.toggleStyle)") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("All three styles render as a checkbox in the terminal; the API "
+                        + "mirrors SwiftUI (.automatic / .checkbox / .switch).")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle("automatic", isOn: .constant(true)).toggleStyle(.automatic)
+                    Toggle("checkbox", isOn: .constant(true)).toggleStyle(.checkbox)
+                    Toggle("switch", isOn: .constant(true)).toggleStyle(.switch)
+                }
             }
 
             DemoSection("Keyboard Controls") {
