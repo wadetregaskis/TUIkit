@@ -323,6 +323,31 @@ struct ToggleTests {
         #expect(!coversSubtitle, "the subtitle row must not be clickable")
     }
 
+    @Test("A long explanatory subtitle wraps to the available width")
+    func toggleDescriptionWraps() {
+        // Render the toggle in a width-constrained VStack so the subtitle must
+        // wrap. The stack hands the toggle the same width to measure and to
+        // render, so the wrapped height it reports is the height it draws.
+        let narrow = 30
+        let context = createTestContext(width: narrow, height: 12)
+        let buffer = renderToBuffer(
+            VStack(alignment: .leading) {
+                Toggle(isOn: .constant(true)) {
+                    Text("Push notifications")
+                    Text("Receive alerts on this device even when the application is closed")
+                }
+            },
+            context: context)
+
+        // The long subtitle (>30 cols) must wrap onto multiple lines: title +
+        // 2-or-more subtitle rows.
+        #expect(buffer.height >= 3, "subtitle should wrap, got \(buffer.height) lines: \(buffer.lines.map(\.stripped))")
+        // Nothing exceeds the available width (no overflow / clipping artefacts).
+        #expect(buffer.width <= narrow, "buffer width \(buffer.width) must fit \(narrow)")
+        // The title is intact on the first line.
+        #expect(buffer.lines[0].stripped.contains("Push notifications"))
+    }
+
     @Test("A single-view toggle label is unchanged (one line, fully clickable)")
     func toggleSingleLabelUnchanged() {
         let ctx = makeRenderContext(width: 50, height: 10) { environment, tui in

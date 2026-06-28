@@ -427,7 +427,7 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         }
 
         // Title = the first label view, flattened onto the indicator line.
-        let titleText = renderLabelPart(parts[0], context: labelContext)
+        let titleText = renderLabelPart(parts[0], maxWidth: nil, context: labelContext)
             .lines.joined(separator: " ")
         let titleLine = indicator + " " + titleText
         let titleWidth = FrameBuffer(lines: [titleLine]).width
@@ -441,21 +441,30 @@ private struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             subtitleContext.environment.foregroundStyle = palette.foregroundSecondary
         }
         let indicatorWidth = FrameBuffer(lines: [indicator]).width
-        let indent = String(repeating: " ", count: indicatorWidth + 1)
+        let indent = indicatorWidth + 1
+        let indentString = String(repeating: " ", count: indent)
+        // Wrap the subtitle to the width left after the indent. The enclosing
+        // stack hands the toggle the same `availableWidth` in both the measure
+        // pass (it proposes `.unspecified`, which falls back to `availableWidth`)
+        // and the render pass (it renders children at `availableWidth`), so
+        // wrapping to this width is layout-consistent — exactly as a wrapping
+        // `Text` is.
+        let subtitleWidth = max(1, labelContext.availableWidth - indent)
 
         var lines = [titleLine]
         for index in 1..<parts.count {
-            for line in renderLabelPart(parts[index], context: subtitleContext).lines {
-                lines.append(indent + line)
+            for line in renderLabelPart(parts[index], maxWidth: subtitleWidth, context: subtitleContext).lines {
+                lines.append(indentString + line)
             }
         }
         return (FrameBuffer(lines: lines), titleWidth, 1)
     }
 
-    /// Renders a single label part at its natural size.
-    private func renderLabelPart(_ part: ChildView, context: RenderContext) -> FrameBuffer {
-        let size = part.measure(proposal: ProposedSize(width: nil, height: nil), context: context)
-        return part.render(width: size.width, height: size.height, context: context)
+    /// Renders a single label part, wrapped to `maxWidth` when given (the
+    /// subtitle), or at its natural size when `maxWidth` is nil (the title).
+    private func renderLabelPart(_ part: ChildView, maxWidth: Int?, context: RenderContext) -> FrameBuffer {
+        let size = part.measure(proposal: ProposedSize(width: maxWidth, height: nil), context: context)
+        return part.render(width: maxWidth ?? size.width, height: size.height, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
