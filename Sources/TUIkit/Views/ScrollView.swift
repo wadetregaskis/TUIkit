@@ -340,13 +340,18 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // render; on the very first frame nothing has overflowed yet, so an
         // automatic bar appears one frame after the content first overflows.
         let wantsHorizontal = axes.contains(.horizontal)
-        let barVisibility = context.environment.scrollbarVisibility
-        let wantsScrollbar =
-            barVisibility != .hidden
-            && (barVisibility == .visible || handler.contentHeight > viewportHeight)
-        let wantsHorizontalBar =
-            wantsHorizontal && barVisibility != .hidden
-            && (barVisibility == .visible || handler.horizontal.extent > viewportWidth)
+
+        // Decide scrollbar reservation from THIS frame's measured content (not the
+        // previous frame's persisted extents), so a bar appears / disappears on the
+        // same frame the content crosses the viewport edge — no one-frame lag, and
+        // the "N more below" hint never flashes a frame without its bar. See
+        // `resolveScrollbars` for the monotonic fixpoint (which also prevents the
+        // reserve-bar → content-fits → drop-bar → overflows → … oscillation).
+        let bars = resolveScrollbars(
+            viewportWidth: viewportWidth, viewportHeight: viewportHeight,
+            horizontal: wantsHorizontal, context: context)
+        let wantsScrollbar = bars.vertical
+        let wantsHorizontalBar = bars.horizontal
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
@@ -497,28 +502,70 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         )
     }
 
-    /// Renders the content to its full (unwindowed) buffer, sized so a flexible
-    /// filler behaves well.
+    /// Resolves which scrollbars to reserve this frame, from the CURRENT content's
+    /// measured extents, to a monotonic fixpoint.
     ///
-    /// The natural height is measured with a generous height budget (a stack's
-    /// measure clamps its report to `availableHeight`, so a small budget would cap
-    /// tall content) and an unspecified height proposal, which collapses a flexible
-    /// filler such as `Spacer()` to its minimum. The content is then rendered at the
-    /// larger of the viewport and that natural height: a Spacer expands only as far
-    /// as the viewport — spreading content across the visible area when it fits
-    /// (e.g. `VStack { Text; Spacer; Text }` puts the two at top and bottom) — and
-    /// collapses when the content is taller, so it scrolls without the filler
-    /// forcing extra height. (Rendering into a fixed tall canvas would instead let a
-    /// Spacer expand to thousands of lines and report a phantom overflow.)
+    /// Each bar steals one cell (vertical → trailing column, horizontal → bottom
+    /// row), shrinking the area the content lays into — which, for a `.viewport`-fit
+    /// image, resizes the image and can tip the OTHER axis over — so we re-measure
+    /// after each reservation. Bars are only ever ADDED within the pass, never
+    /// dropped because the content then fits the reduced area: dropping is exactly
+    /// what oscillates (bar → fits → no bar → overflows → bar → …). Measuring is
+    /// side-effect-free (`measureChild`), so this never double-fires the content's
+    /// effects; the content is rendered once, afterwards, at the resolved size.
+    /// `.visible` forces both bars on, `.hidden` forces them off.
+    private func resolveScrollbars(
+        viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
+    ) -> (vertical: Bool, horizontal: Bool) {
+        let barVisibility = context.environment.scrollbarVisibility
+        var wantsScrollbar = barVisibility == .visible
+        var wantsHorizontalBar = horizontal && barVisibility == .visible
+        guard barVisibility == .automatic else {
+            return (wantsScrollbar, wantsHorizontalBar)
+        }
+        // ≤2 reservations (one per axis) ⇒ converges in ≤3 measure rounds.
+        for _ in 0..<3 {
+            let probeWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
+            let probeHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
+            let extents = contentExtents(
+                contentWidth: probeWidth, viewportHeight: probeHeight,
+                horizontal: horizontal, context: context)
+            var changed = false
+            if !wantsScrollbar, extents.height > probeHeight {
+                wantsScrollbar = true
+                changed = true
+            }
+            if horizontal, !wantsHorizontalBar, extents.width > probeWidth {
+                wantsHorizontalBar = true
+                changed = true
+            }
+            if !changed { break }
+        }
+        return (wantsScrollbar, wantsHorizontalBar)
+    }
+
+    /// The content's natural extents at a candidate viewport, WITHOUT building a
+    /// buffer — the same measures `renderedContent` uses to size its render, so the
+    /// scrollbar-reservation decision matches what will actually be drawn.
     ///
-    /// The content renders under its OWN child identity, distinct from the
+    /// `height` is the rendered buffer's height, `max(viewportHeight,
+    /// naturalHeight)`: the natural height is measured with a generous height budget
+    /// (a stack's measure clamps its report to `availableHeight`, so a small budget
+    /// would cap tall content) and an unspecified height proposal, which collapses a
+    /// flexible filler such as `Spacer()` to its minimum. (Rendering into a fixed
+    /// tall canvas would instead let a Spacer expand to thousands of lines and
+    /// report a phantom overflow.) `width` is the render width: the content's
+    /// natural width when horizontal scrolling is on — so it can be wider than the
+    /// viewport and scroll, rather than wrapping to fit — else `contentWidth`.
+    ///
+    /// Measures under the content's OWN child identity, distinct from the
     /// ScrollView's: otherwise a directly-stateful content view would bind its
     /// `@State` (property indices 0, 1, …) at the ScrollView's identity, colliding
-    /// with the ScrollView's own state keys (handler, focusID, …) and corrupting
-    /// both. The measure uses the same child identity, so state hydrates consistently.
-    private func renderedContent(
+    /// with the ScrollView's own state keys (handler, focusID, …). `renderedContent`
+    /// uses the same identity, so state hydrates consistently.
+    private func contentExtents(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
-    ) -> FrameBuffer {
+    ) -> (width: Int, height: Int) {
         var measureContext = context.withChildIdentity(type: Content.self)
         // Publish the visible viewport so descendants can fit to it instead of the
         // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
@@ -526,9 +573,6 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             width: contentWidth, height: viewportHeight)
         measureContext.availableHeight = max(viewportHeight * 64, 4096)
 
-        // When horizontal scrolling is on, let the content take its natural width
-        // (measured under a generous budget so the width report isn't clamped) so it
-        // can be wider than the viewport and scroll, rather than wrapping to fit.
         let renderWidth: Int
         if horizontal {
             measureContext.availableWidth = max(contentWidth * 64, 4096)
@@ -546,7 +590,27 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             proposal: ProposedSize(width: renderWidth, height: nil),
             context: measureContext
         ).height
-        measureContext.availableHeight = max(viewportHeight, naturalHeight)
+        return (width: renderWidth, height: max(viewportHeight, naturalHeight))
+    }
+
+    /// Renders the content to its full (unwindowed) buffer, sized via
+    /// ``contentExtents(contentWidth:viewportHeight:horizontal:context:)`` so a
+    /// flexible filler behaves well: a Spacer expands only as far as the viewport
+    /// (spreading content across the visible area when it fits — e.g.
+    /// `VStack { Text; Spacer; Text }` puts the two at top and bottom) and collapses
+    /// when the content is taller, so it scrolls without the filler forcing extra
+    /// height.
+    private func renderedContent(
+        contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
+    ) -> FrameBuffer {
+        let extents = contentExtents(
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: horizontal, context: context)
+        var measureContext = context.withChildIdentity(type: Content.self)
+        measureContext.environment.scrollViewportSize = ScrollViewportSize(
+            width: contentWidth, height: viewportHeight)
+        measureContext.availableWidth = extents.width
+        measureContext.availableHeight = extents.height
         return TUIkit.renderToBuffer(content, context: measureContext)
     }
 

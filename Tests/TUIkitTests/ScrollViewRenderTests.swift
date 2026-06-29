@@ -242,4 +242,45 @@ struct ScrollViewRenderTests {
         // The text "N more below" indicator is still shown.
         #expect(buffer.lines.map { $0.stripped }.joined().contains("more below"))
     }
+
+    // MARK: - Single-pass convergence (no one-frame lag, no oscillation)
+
+    @Test("An automatic scrollbar is reserved on the FIRST render when content overflows")
+    func automaticScrollbarAppearsFirstRender() {
+        // The bar is decided from THIS frame's measured content, so overflowing
+        // content shows it immediately — it used to take a second render for the
+        // handler's persisted height to catch up (a visible one-frame lag).
+        let buffer = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<20, id: \.self) { Text("line \($0)") }
+                }
+            }
+            .scrollbarVisibility(.automatic),
+            context: ctx(width: 20, height: 6)
+        )
+        let lastColumn = buffer.lines.map { $0.stripped.last ?? " " }
+        #expect(
+            lastColumn.first == "▲" && lastColumn.last == "▼",
+            "vertical scrollbar present on the first render: \(lastColumn)")
+        // The bar supersedes the text indicator — they never show together (the
+        // old lag flashed "more below" for a frame before the bar caught up).
+        #expect(
+            !buffer.lines.map { $0.stripped }.joined().contains("more below"),
+            "no 'more below' text once the bar is shown")
+    }
+
+    @Test("Consecutive automatic renders are identical (the scrollbar does not oscillate)")
+    func automaticScrollbarConvergesInOnePass() {
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<20, id: \.self) { Text("line \($0)") }
+            }
+        }
+        .scrollbarVisibility(.automatic)
+        let context = ctx(width: 20, height: 6)
+        let first = renderToBuffer(view, context: context).lines.map { $0.stripped }
+        let second = renderToBuffer(view, context: context).lines.map { $0.stripped }
+        #expect(first == second, "two consecutive renders settle to the same output")
+    }
 }
