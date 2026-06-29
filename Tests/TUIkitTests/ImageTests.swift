@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -611,5 +612,58 @@ struct ImageSizingTests {
         #expect(
             hasVerticalScrollbar(Image(.file("/no/such/x.png"))),
             "the default image overflows the short viewport → scrollbar appears")
+    }
+}
+
+// MARK: - Decoder Parity
+
+@Suite("Platform decoder parity")
+struct PlatformDecoderParityTests {
+
+    // A 2×2 PNG with four distinct opaque corners — top-left red, top-right
+    // green, bottom-left blue, bottom-right white. Decoding it pins channel
+    // order (R, G, B), row orientation (row 0 = top, not vertically flipped)
+    // and opaque alpha for whichever backend `PlatformImageLoader` selects
+    // (NSImage on Apple platforms via `canImport(AppKit)`, stb_image
+    // elsewhere), so the two backends stay interchangeable.
+    private static let cornerPNGBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP4z8DwHwyBNBgAAEnICfcD2WTxAAAAAElFTkSuQmCC"
+
+    private static func cornerPNGData() throws -> Data {
+        try #require(Data(base64Encoded: cornerPNGBase64))
+    }
+
+    /// Tolerates ±a few per channel (colour-management rounding) while still
+    /// catching channel-swap or vertical-flip bugs, which are off by ~255.
+    private func expectCorners(_ image: RGBAImage) {
+        #expect(image.width == 2)
+        #expect(image.height == 2)
+
+        func expectNear(_ pixel: RGBA, _ r: UInt8, _ g: UInt8, _ b: UInt8, _ corner: String) {
+            #expect(abs(Int(pixel.r) - Int(r)) <= 6, "\(corner) red")
+            #expect(abs(Int(pixel.g) - Int(g)) <= 6, "\(corner) green")
+            #expect(abs(Int(pixel.b) - Int(b)) <= 6, "\(corner) blue")
+            #expect(pixel.a == 255, "\(corner) alpha")
+        }
+
+        expectNear(image.pixel(at: 0, 0), 255, 0, 0, "top-left")
+        expectNear(image.pixel(at: 1, 0), 0, 255, 0, "top-right")
+        expectNear(image.pixel(at: 0, 1), 0, 0, 255, "bottom-left")
+        expectNear(image.pixel(at: 1, 1), 255, 255, 255, "bottom-right")
+    }
+
+    @Test("Decodes a known 2×2 image from data with correct channels, orientation and alpha")
+    func decodesKnownCornersFromData() throws {
+        try expectCorners(PlatformImageLoader().loadImage(from: Self.cornerPNGData()))
+    }
+
+    @Test("Decodes the same image identically from a file path")
+    func decodesKnownCornersFromPath() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tuikit-corner-\(UUID().uuidString).png")
+        try Self.cornerPNGData().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try expectCorners(PlatformImageLoader().loadImage(from: url.path))
     }
 }

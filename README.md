@@ -66,7 +66,7 @@ struct ContentView: View {
 ### Views & components
 
 - **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image`
-  - **`Image`** renders raster images (PNG/JPEG, decoded by the bundled `stb_image`) as terminal art. Five character sets via `.imageCharacterSet(_:)` — `fineBlocks` (the default; half-block `▄` cells giving near-square sub-pixels), `coarseBlocks`, `shapeBased` (shape-vector matching), `ascii`, and `braille`. Four colour modes via `.imageColorMode(_:)` — `trueColor` (default), `ansi256`, `grayscale`, `mono` — auto-downgraded to the terminal's capability, with optional Floyd–Steinberg dithering. Loads asynchronously from a file path or URL (session-cached) behind a placeholder spinner, and supports aspect-fit/fill, zoom including sub-1× (`.imageZoom(_:)`), and fit targets (`.imageFitTarget(.proposedSize | .viewport)`).
+  - **`Image`** renders raster images (PNG/JPEG, decoded by AppKit's `NSImage` on Apple platforms and the bundled `stb_image` elsewhere) as terminal art. Five character sets via `.imageCharacterSet(_:)` — `fineBlocks` (the default; half-block `▄` cells giving near-square sub-pixels), `coarseBlocks`, `shapeBased` (shape-vector matching), `ascii`, and `braille`. Four colour modes via `.imageColorMode(_:)` — `trueColor` (default), `ansi256`, `grayscale`, `mono` — auto-downgraded to the terminal's capability, with optional Floyd–Steinberg dithering. Loads asynchronously from a file path or URL (session-cached) behind a placeholder spinner, and supports aspect-fit/fill, zoom including sub-1× (`.imageZoom(_:)`), and fit targets (`.imageFitTarget(.proposedSize | .viewport)`).
 - **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack`, `Group`, `ViewThatFits`, and `TabView` / `Tab`
 - **Interactive controls**: `Button`, `ButtonRow`, `Toggle`, `Menu`, `Picker`, `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup`, and `ColorPicker` (with a rich `ColorPickerPanel` offering RGB/HSL/HSB/CMYK editing, a 256-colour grid, and named / web-safe / crayon palettes) — all with keyboard navigation and focus
   - `Picker` styles: `.automatic` (default), `.menu`, `.inline`, `.radioGroup`
@@ -249,7 +249,7 @@ For complete documentation, see the [Localization Guide](https://github.com/wade
 
 - **Modular package**: 5 Swift library modules + 1 in-tree C target (see Project Structure below)
 - **No singletons for state**: application state flows through the Environment system
-- **Pure ANSI rendering**: no ncurses runtime dependency; the only C is the bundled `stb_image` decoder
+- **Pure ANSI rendering**: no ncurses runtime dependency; the only C is the bundled `stb_image` decoder, and only as the fallback where AppKit's `NSImage` is unavailable (selected via `canImport(AppKit)`, not a hard-coded platform list)
 - **Linux compatible**: works on macOS and Linux (XDG paths supported)
 - **Value types**: views are structs, just like SwiftUI
 
@@ -263,14 +263,15 @@ For complete documentation, see the [Localization Guide](https://github.com/wade
 
 ```
 Sources/
-├── CSTBImage/            C target: bundled stb_image (PNG/JPEG decoding)
+├── CSTBImage/            C target: bundled stb_image — image decoder fallback (non-Apple platforms)
 ├── TUIkitCore/           Primitives, key/input parsing, frame buffer, concurrency helpers
 │                         (Concurrency, Environment, Extensions, Input, Rendering)
 ├── TUIkitStyling/        Color, theme palettes, border styles (Color, Styles, Theme)
 ├── TUIkitView/           View protocol, ViewBuilder, State, Environment, Renderable
 │                         (Core, Environment, Rendering, State)
 ├── TUIkitImage/          ASCII-art converter (braille / fine-blocks / shape / dithering),
-│                         image loading (depends on CSTBImage + TUIkitStyling)
+│                         image loading — NSImage on Apple, else stb_image
+│                         (depends on CSTBImage + TUIkitStyling)
 ├── TUIkit/               Umbrella module: App, Views, Modifiers, Focus, StatusBar, ...
 │   ├── App/              App, Scene, WindowGroup
 │   ├── AppHeader/        App header chrome

@@ -1,6 +1,6 @@
 # Contributing to TUIkit
 
-TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure Swift, with no ncurses or external C dependencies (the only C is the in-tree `stb_image` decoder). It targets SwiftUI API parity wherever possible.
+TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure Swift, with no ncurses or external C dependencies (the only C is the in-tree `stb_image` decoder, used as the image-decoding fallback where AppKit's `NSImage` is unavailable). It targets SwiftUI API parity wherever possible.
 
 ## Hard Requirements (non-negotiable)
 
