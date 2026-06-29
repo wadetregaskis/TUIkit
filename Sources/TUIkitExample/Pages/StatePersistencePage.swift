@@ -68,18 +68,27 @@ struct StatePersistencePage: View {
     }
 
     /// The on-disk settings file `@AppStorage` writes to, resolved the same way
-    /// the framework's `JSONFileStorage` does: `$XDG_CONFIG_HOME/<app>/settings.json`
-    /// or `~/.config/<app>/settings.json`.
+    /// the framework's `JSONFileStorage` does: `~/Library/Application
+    /// Support/<app>/settings.json` on macOS, or `$XDG_CONFIG_HOME/<app>` (else
+    /// `~/.config/<app>`) `/settings.json` elsewhere.
     private static var settingsPath: String {
         let appName = ProcessInfo.processInfo.processName
         let configDir: URL
-        if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
-            configDir = URL(fileURLWithPath: xdg).appendingPathComponent(appName)
-        } else {
-            configDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".config")
-                .appendingPathComponent(appName)
-        }
+        #if os(macOS)
+            let base =
+                FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Application Support")
+            configDir = base.appendingPathComponent(appName)
+        #else
+            if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
+                configDir = URL(fileURLWithPath: xdg).appendingPathComponent(appName)
+            } else {
+                configDir = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".config")
+                    .appendingPathComponent(appName)
+            }
+        #endif
         let full = configDir.appendingPathComponent("settings.json").path
         // Abbreviate the home prefix to keep the line short.
         let home = FileManager.default.homeDirectoryForCurrentUser.path

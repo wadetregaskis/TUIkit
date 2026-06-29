@@ -14,9 +14,10 @@ import Testing
 @Suite("LocalizationService")
 final class LocalizationServiceTests {
     /// Isolated config dir so these tests never read or write the user's real
-    /// language preference (`~/Library/Application Support/tuikit/language` on
-    /// macOS, `~/.config/tuikit/language` on Linux). swift-testing builds a fresh
-    /// suite instance per test, so each test gets — and cleans up — its own.
+    /// language preference (the app's own config dir, e.g. `~/Library/Application
+    /// Support/<App>/language` on macOS, `~/.config/<App>/language` on Linux).
+    /// swift-testing builds a fresh suite instance per test, so each gets — and
+    /// cleans up — its own.
     let configDir: String
     var sut: LocalizationService
 

@@ -9,8 +9,8 @@ TUIkit provides built-in support for 5 languages: English, German, French, Itali
 ### Key Features
 
 - **Type-safe keys**: Compile-time verified `LocalizationKey` enums with IDE autocomplete
-- **5 languages built-in**: EN, DE, FR, IT, ES with complete translations
-- **Persistent storage**: Language preference automatically saved and restored (XDG-compatible paths)
+- **7 languages built-in**: EN, DE, FR, IT, ES, ZH, JA with complete translations
+- **Persistent storage**: Language preference saved and restored per-app, in the platform config directory (macOS Application Support, Linux XDG config)
 - **Fallback chain**: Current language → English → key itself for graceful degradation
 - **Thread-safe**: Safe language switching from any thread at runtime
 - **JSON-based**: Easy to extend with new strings and languages
@@ -191,11 +191,14 @@ LocalizationService.shared.setLanguage(.french)
 
 ### Language Persistence
 
-Language preferences are automatically saved to:
-- **macOS**: `~/Library/Application Support/tuikit/language`
-- **Linux**: `~/.config/tuikit/language`
+Language preferences are automatically saved per-app, in the same
+platform-idiomatic configuration directory `@AppStorage` uses:
+- **macOS**: `~/Library/Application Support/<App>/language`
+- **Linux**: `$XDG_CONFIG_HOME/<App>/language` (else `~/.config/<App>/language`)
 
-The saved preference is restored when the app restarts.
+`<App>` is the executable's (sanitized) process name, so each app keeps its own
+preference. The saved preference is restored when the app restarts; with no
+saved preference the system locale is used, falling back to English.
 
 ### Fallback Behavior
 

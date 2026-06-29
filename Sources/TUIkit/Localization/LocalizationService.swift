@@ -298,20 +298,14 @@ public final class LocalizationService: @unchecked Sendable {
         return (dir as NSString).appendingPathComponent("language")
     }
 
-    /// Returns the XDG-compatible default config directory path.
+    /// The default config directory for the language preference.
+    ///
+    /// This is the app-specific, platform-idiomatic directory shared with
+    /// `@AppStorage` (see `appConfigDirectory()`): `~/Library/Application
+    /// Support/<App>` on macOS, `$XDG_CONFIG_HOME/<App>` (else `~/.config/<App>`)
+    /// elsewhere. Per-app, so the language preference lives alongside the app's
+    /// other settings and no longer leaks between TUIkit apps.
     static func defaultConfigDirectoryPath() -> String {
-        #if os(macOS)
-            let appSupport =
-                FileManager.default.urls(
-                    for: .applicationSupportDirectory,
-                    in: .userDomainMask
-                ).first?.path ?? NSHomeDirectory()
-            return (appSupport as NSString).appendingPathComponent("tuikit")
-        #else
-            let configHome =
-                ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"]
-                ?? ((NSHomeDirectory() as NSString).appendingPathComponent(".config"))
-            return (configHome as NSString).appendingPathComponent("tuikit")
-        #endif
+        appConfigDirectory().path
     }
 }

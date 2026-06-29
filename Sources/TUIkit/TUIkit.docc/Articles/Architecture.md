@@ -57,7 +57,7 @@ Text("Hello")
 - **``State``**: Mutable per-view state that triggers re-renders
 - **``Binding``**: Two-way connection to a value owned elsewhere
 - **``EnvironmentValues``**: Values propagated down the view tree
-- **``AppStorage``**: Persistent key-value storage. The default backend (`JSONFileStorage`) writes to an XDG config directory; `UserDefaultsStorage` is also available.
+- **``AppStorage``**: Persistent key-value storage. The default backend (`JSONFileStorage`) writes to the app-specific platform config directory (macOS `~/Library/Application Support/<App>`, Linux `$XDG_CONFIG_HOME/<App>` or `~/.config/<App>`); `UserDefaultsStorage` is also available.
 
 ### 6. Rendering Layer
 

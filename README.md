@@ -111,7 +111,7 @@ struct ContentView: View {
 
 - **7 languages built-in**: English, German, French, Italian, Spanish, Simplified Chinese, Japanese
 - **Type-safe string constants**: the compile-time-verified `LocalizationKey` namespace
-- **Persistent language selection**: stored under the XDG config path
+- **Persistent language selection**: stored per-app in the platform config dir (macOS `~/Library/Application Support/<App>`, Linux `$XDG_CONFIG_HOME/<App>`)
 - **Fallback chain**: current language → English → key itself
 - **Thread-safe operations**: safe language switching at runtime
 
@@ -119,7 +119,7 @@ struct ContentView: View {
 
 - **Lifecycle modifiers**: `.onAppear()`, `.onDisappear()`, `.task()`, `.onChange(of:initial:)`
 - **Key handling**: `.onKeyPress()` (a raw handler, a key-set handler, and a single-key action), with modifier keys (ctrl, alt, shift) and function keys F1–F12
-- **Storage**: `@AppStorage` with a JSON file backend (XDG paths, default) and a `UserDefaults` backend
+- **Storage**: `@AppStorage` with a JSON file backend (per-app platform config dir, default) and a `UserDefaults` backend
 - **Preferences**: bottom-up data flow with `PreferenceKey` — `.preference(key:value:)`, `.onPreferenceChange(_:perform:)`, `.navigationTitle(_:)`
 - **Focus system**: Tab / Shift+Tab navigation, `.focusSection(_:)` for grouped areas, and `.focusID(_:)` to set an explicit identity on a control
 - **Accelerated stepping**: `.shiftStepMultiplier(_:)` controls how far a Shift-accelerated key press moves (scrolling, list/table cursor movement, and `Stepper` / `Slider` value changes; default 5)
@@ -241,7 +241,7 @@ LocalizationService.shared.register(translations: [
 LocalizationService.shared.string(for: "app.greeting")  // honours the current language
 ```
 
-The `LocalizationKey` namespace groups all framework strings into `Button`, `Label`, `Error`, `Placeholder`, `Menu`, `Dialog`, and `Validation`, with typed-key overloads for `Text(localized:)`, `LocalizedString(_:)`, and `LocalizationService.string(for:)`. The fallback chain is current language → English → the key itself, and the selection is persisted under the XDG config path (macOS: `~/Library/Application Support/tuikit`; Linux: `$XDG_CONFIG_HOME/tuikit`).
+The `LocalizationKey` namespace groups all framework strings into `Button`, `Label`, `Error`, `Placeholder`, `Menu`, `Dialog`, and `Validation`, with typed-key overloads for `Text(localized:)`, `LocalizedString(_:)`, and `LocalizationService.string(for:)`. The fallback chain is current language → English → the key itself, and the selection is persisted per-app in the platform config directory alongside `@AppStorage` (macOS: `~/Library/Application Support/<App>/language`; Linux: `$XDG_CONFIG_HOME/<App>/language`, else `~/.config/<App>/language`).
 
 For complete documentation, see the [Localization Guide](https://github.com/wadetregaskis/TUIkit/blob/main/Sources/TUIkit/TUIkit.docc/Articles/Localization.md) in the DocC documentation.
 

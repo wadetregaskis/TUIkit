@@ -48,34 +48,45 @@ func sanitizedProcessName(_ name: String) -> String {
 
 // MARK: - Config Directory
 
-/// Returns the app-specific configuration directory.
+/// Returns the app-specific, platform-idiomatic configuration directory.
 ///
-/// Resolves the directory in this order:
-/// 1. `$XDG_CONFIG_HOME/<appName>` (Linux convention)
-/// 2. `~/.config/<appName>` (fallback)
+/// Each executable gets its own directory, named after the sanitized process
+/// name, in the conventional per-platform location:
+/// - **macOS**: `~/Library/Application Support/<appName>`
+/// - **Linux / other**: `$XDG_CONFIG_HOME/<appName>`, falling back to
+///   `~/.config/<appName>` (XDG Base Directory convention).
 ///
-/// This ensures correct behavior on Linux where `$XDG_CONFIG_HOME`
-/// may differ from `~/.config`.
-private func appConfigDirectory() -> URL {
+/// Shared by `@AppStorage`'s file backend (`JSONFileStorage`) and
+/// `LocalizationService`, so all of an app's persisted configuration lives in
+/// one place rather than scattered across directories.
+func appConfigDirectory() -> URL {
     let appName = sanitizedProcessName(ProcessInfo.processInfo.processName)
 
-    if let xdgConfig = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdgConfig.isEmpty {
-        return URL(fileURLWithPath: xdgConfig)
+    #if os(macOS)
+        let base =
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent(appName)
+    #else
+        if let xdgConfig = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdgConfig.isEmpty {
+            return URL(fileURLWithPath: xdgConfig)
+                .appendingPathComponent(appName)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config")
             .appendingPathComponent(appName)
-    }
-
-    return FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config")
-        .appendingPathComponent(appName)
+    #endif
 }
 
 // MARK: - JSON File Storage
 
 /// A storage backend that persists data to a JSON file.
 ///
-/// This is the default storage backend for TUIkit apps.
-/// Data is stored in `$XDG_CONFIG_HOME/[appName]/settings.json`
-/// or `~/.config/[appName]/settings.json` as fallback.
+/// This is the default storage backend for TUIkit apps. Data is stored in the
+/// app-specific configuration directory (see `appConfigDirectory()`):
+/// `~/Library/Application Support/[appName]/settings.json` on macOS, or
+/// `$XDG_CONFIG_HOME/[appName]/settings.json` (else `~/.config/...`) elsewhere.
 public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// The file URL for the storage file.
     private let fileURL: URL
