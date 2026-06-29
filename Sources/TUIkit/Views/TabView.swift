@@ -81,100 +81,8 @@ extension View {
     }
 }
 
-// MARK: - Header alignment (TUI-specific)
-
-private struct TabViewHeaderAlignmentKey: EnvironmentKey {
-    static let defaultValue: HorizontalAlignment = .center
-}
-
-extension EnvironmentValues {
-    /// How the tab strip is aligned across the width of a `TabView`.
-    public var tabViewHeaderAlignment: HorizontalAlignment {
-        get { self[TabViewHeaderAlignmentKey.self] }
-        set { self[TabViewHeaderAlignmentKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Aligns the tab headers (leading, centre, or trailing) within `TabView`s
-    /// in this view. Defaults to ``HorizontalAlignment/center``.
-    ///
-    /// TUI-specific: SwiftUI has no equivalent, so this is kept separate from the
-    /// SwiftUI-parity ``tabViewStyle(_:)``.
-    public func tabViewHeaderAlignment(_ alignment: HorizontalAlignment) -> some View {
-        environment(\.tabViewHeaderAlignment, alignment)
-    }
-}
-
-// MARK: - Header wrapping (TUI-specific)
-
-/// How eagerly a `TabView` wraps its header strip onto multiple rows.
-public enum TabViewHeaderWrap: Sendable {
-    /// Keep the headers on as few rows as fit the available width — wrap only
-    /// when a single row would overflow. The panel may be as wide as the
-    /// one-row strip. The default.
-    case minimal
-    /// Fold the headers to the width of the widest tab's content, even when
-    /// there's room for fewer rows — so a many-tabbed view (a colour picker)
-    /// stays as narrow as its content instead of being stretched wide by a long
-    /// header strip.
-    case toContentWidth
-}
-
-private struct TabViewHeaderWrapKey: EnvironmentKey {
-    static let defaultValue: TabViewHeaderWrap = .minimal
-}
-
-extension EnvironmentValues {
-    /// How `TabView`s in this view wrap their header strip.
-    public var tabViewHeaderWrap: TabViewHeaderWrap {
-        get { self[TabViewHeaderWrapKey.self] }
-        set { self[TabViewHeaderWrapKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Controls how eagerly `TabView`s in this view wrap their header strip.
-    /// Defaults to ``TabViewHeaderWrap/minimal`` (wrap only on overflow).
-    ///
-    /// TUI-specific: SwiftUI has no equivalent.
-    public func tabViewHeaderWrap(_ wrap: TabViewHeaderWrap) -> some View {
-        environment(\.tabViewHeaderWrap, wrap)
-    }
-}
-
-// MARK: - Content padding (TUI-specific)
-
-private struct TabViewContentPaddingKey: EnvironmentKey {
-    /// `nil` means "use the per-style default" (none for ``TabViewStyle/compact``,
-    /// a comfortable inset for ``TabViewStyle/bordered``).
-    static let defaultValue: EdgeInsets? = nil
-}
-
-extension EnvironmentValues {
-    /// The interior padding applied around every tab's content. `nil` resolves
-    /// to the per-style default.
-    public var tabViewContentPadding: EdgeInsets? {
-        get { self[TabViewContentPaddingKey.self] }
-        set { self[TabViewContentPaddingKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// Sets the interior padding around the content of every tab in `TabView`s
-    /// within this view. Applied to the full content subtree, so a single
-    /// application on the `TabView` covers all of its tabs.
-    ///
-    /// TUI-specific: SwiftUI has no equivalent.
-    public func tabViewContentPadding(_ insets: EdgeInsets) -> some View {
-        environment(\.tabViewContentPadding, insets)
-    }
-
-    /// Sets a uniform interior padding around every tab's content.
-    public func tabViewContentPadding(_ length: Int) -> some View {
-        environment(\.tabViewContentPadding, EdgeInsets(all: length))
-    }
-}
+// The TUI-specific TabView environment modifiers (header alignment, header
+// wrapping, content sizing, content padding) live in `TabViewModifiers.swift`.
 
 // MARK: - TabView
 
@@ -223,9 +131,10 @@ public struct TabView<SelectionValue: Hashable, Content: View>: View {
 private enum TabViewStateIndex {
     static let focusID = 0
     static let handler = 1
-    /// Per-tab measured content widths (`[tab value: width]`), so the panel can
-    /// size to the widest tab without re-measuring every tab each pass.
-    static let widthCache = 2
+    /// Per-tab measured content sizes (`[tab value: ViewSize]`), so the panel can
+    /// size to the widest *and* tallest tab without re-measuring every tab each
+    /// pass.
+    static let sizeCache = 2
 }
 
 /// Renders the tab strip plus the selected tab's content.
@@ -255,37 +164,37 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         return child
     }
 
-    /// The widest tab's natural (unconstrained) content width — the panel sizes to
-    /// it (stable across tab switches) and the strip folds to it, rather than a
-    /// wide strip ballooning the panel. Capped to what's available.
+    /// Each tab's natural (unconstrained) content size, memoised per tab.
     ///
     /// Only the *selected* tab is measured each pass; the others reuse their last
-    /// measured width from a per-tab cache. Measuring every tab each pass would
+    /// measured size from a per-tab cache. Measuring every tab each pass would
     /// fully render the non-`Layoutable` tabs (channel editors, the 139/216/256-
     /// swatch grids) hundreds of cells at a time — pathologically slow. A tab not
     /// yet seen is measured once to seed its entry. So the selected tab tracks its
     /// own `@State` (e.g. the 256-grid's "show numbers"), and the panel holds the
-    /// widest of all tabs without re-rendering them.
+    /// widest/tallest of all tabs without re-rendering them.
     ///
     /// The cache is a pure memo keyed by content identity (it can only ever equal
     /// what a measure would compute), so writing it during a measure pass is
-    /// benign — it doesn't perturb layout, only avoids recomputation.
-    private func widestContentWidth(
+    /// benign — it doesn't perturb layout, only avoids recomputation. A single
+    /// `measureChild` already yields both axes, so caching the full ``ViewSize``
+    /// (rather than only the width) lets the panel size to the tallest tab too,
+    /// at no extra measure cost.
+    private func tabContentSizes(
         insets: EdgeInsets, available: Int, context: RenderContext
-    ) -> Int {
-        let cap = { (w: Int) in min(max(1, w), max(1, available)) }
-        func measureTab(_ index: Int) -> Int {
+    ) -> [AnyHashable: ViewSize] {
+        func measureTab(_ index: Int) -> ViewSize {
             var branch = context.withBranchIdentity("tab-\(tabs[index].value)")
             branch.availableWidth = available
             return measureChild(
                 tabs[index].content.padding(insets),
-                proposal: ProposedSize(width: nil, height: nil), context: branch).width
+                proposal: ProposedSize(width: nil, height: nil), context: branch)
         }
         guard let stateStorage = context.environment.stateStorage else {
-            return cap(measureTab(selectedIndex))
+            return [AnyHashable(tabs[selectedIndex].value): measureTab(selectedIndex)]
         }
-        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.widthCache)
-        let box: StateBox<[AnyHashable: Int]> = stateStorage.storage(for: key, default: [:])
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.sizeCache)
+        let box: StateBox<[AnyHashable: ViewSize]> = stateStorage.storage(for: key, default: [:])
         var cache = box.value
         cache[AnyHashable(tabs[selectedIndex].value)] = measureTab(selectedIndex)
         for (i, tab) in tabs.enumerated() where cache[AnyHashable(tab.value)] == nil {
@@ -294,8 +203,38 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let present = Set(tabs.map { AnyHashable($0.value) })
         cache = cache.filter { present.contains($0.key) }  // drop removed tabs
         box.value = cache
-        let widest = tabs.map { cache[AnyHashable($0.value)] ?? 0 }.max() ?? 0
-        return cap(widest)
+        return cache
+    }
+
+    /// The widest tab's natural (unconstrained) content width — the panel sizes to
+    /// it (stable across tab switches) and the strip folds to it, rather than a
+    /// wide strip ballooning the panel. Capped to what's available.
+    private func widestContentWidth(
+        insets: EdgeInsets, available: Int, context: RenderContext
+    ) -> Int {
+        let cache = tabContentSizes(insets: insets, available: available, context: context)
+        let widest = tabs.map { cache[AnyHashable($0.value)]?.width ?? 0 }.max() ?? 0
+        return min(max(1, widest), max(1, available))
+    }
+
+    /// The tallest tab's natural (unconstrained) content height — the panel sizes
+    /// to it so switching tabs doesn't change the panel height (mirroring how
+    /// ``widestContentWidth`` keeps the width stable). Opt out per
+    /// ``EnvironmentValues/tabViewContentSizing``: `.activeTab` returns the
+    /// selected tab's height instead, so the panel tracks each tab's own height.
+    ///
+    /// Measuring the natural height at the same single per-tab measure the width
+    /// uses makes this free. It is a safe panel height: the selected content is
+    /// rendered at the (widest-tab) panel width, which is at least each tab's
+    /// natural width, so it wraps no taller than its natural height.
+    private func tallestContentHeight(
+        insets: EdgeInsets, available: Int, context: RenderContext
+    ) -> Int {
+        let cache = tabContentSizes(insets: insets, available: available, context: context)
+        if context.environment.tabViewContentSizing == .activeTab {
+            return max(0, cache[AnyHashable(tabs[selectedIndex].value)]?.height ?? 0)
+        }
+        return tabs.map { cache[AnyHashable($0.value)]?.height ?? 0 }.max() ?? 0
     }
 
     /// The selected tab's natural (unconstrained) content width — what its ink
@@ -366,13 +305,12 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 style: .compact,
                 available: stripWrapBudget(widest: widest, available: avail, context: ctx))
             let chrome = 2 * rows.count + 2
-            let contentSize = measureChild(
-                tabs[selectedIndex].content.padding(insets),
-                proposal: ProposedSize(width: avail, height: nil),
-                context: contentContext(ctx, stripHeight: chrome))
+            // Size to the TALLEST tab (stable across switches), not just the
+            // selected one — mirroring the widest-tab width.
+            let contentHeight = tallestContentHeight(insets: insets, available: avail, context: ctx)
             let interior = max(widest, rows.map(folderRowWidth).max() ?? 0)
             return ViewSize(
-                width: interior + 2, height: chrome + contentSize.height,
+                width: interior + 2, height: chrome + contentHeight,
                 isWidthFlexible: false, isHeightFlexible: false)
         }
 
@@ -382,13 +320,13 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let rows = stripRowGroups(
             style: style,
             available: stripWrapBudget(widest: widest, available: ctx.availableWidth, context: ctx))
-        let contentSize = measureChild(
-            tabs[selectedIndex].content.padding(insets),
-            proposal: ProposedSize(width: ctx.availableWidth, height: nil),
-            context: contentContext(ctx, stripHeight: rows.count))
+        // Size to the TALLEST tab (stable across switches), not just the selected
+        // one — mirroring the widest-tab width.
+        let contentHeight = tallestContentHeight(
+            insets: insets, available: ctx.availableWidth, context: ctx)
         let panelWidth = max(widest, rows.map(compactRowWidth).max() ?? 0)
         return ViewSize(
-            width: panelWidth, height: rows.count + contentSize.height,
+            width: panelWidth, height: rows.count + contentHeight,
             isWidthFlexible: false, isHeightFlexible: false)
     }
 
@@ -613,11 +551,17 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
         }
         let leftPad = max(0, (panelWidth - content.width) / 2)
-        let centredContent = content.replacingLines(
-            content.lines.map { line in
-                let used = line.strippedLength
-                return surfFill(leftPad) + line + surfFill(max(0, panelWidth - leftPad - used))
-            }, overlayShiftX: leftPad)
+        var centredLines = content.lines.map { line -> String in
+            let used = line.strippedLength
+            return surfFill(leftPad) + line + surfFill(max(0, panelWidth - leftPad - used))
+        }
+        // Size the panel to the TALLEST tab so switching tabs doesn't change the
+        // panel height: pad the (selected) content down to that height with
+        // surface-filled rows, so the shorter tabs read as the same island.
+        let panelContentHeight = tallestContentHeight(
+            insets: insets, available: context.availableWidth, context: context)
+        while centredLines.count < panelContentHeight { centredLines.append(surfFill(panelWidth)) }
+        let centredContent = content.replacingLines(centredLines, overlayShiftX: leftPad)
 
         var buffer = FrameBuffer(lines: stripLines)
         buffer.appendVertically(centredContent)
@@ -826,6 +770,13 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             let used = line.strippedLength
             lines.append(
                 bc("│") + surf(contentPad) + line + surf(max(0, interior - contentPad - used)) + bc("│"))
+        }
+        // Size the box to the TALLEST tab so switching tabs doesn't change the
+        // box height: pad the (selected) content down to that height with
+        // surface-filled interior rows before the bottom border.
+        let panelContentHeight = tallestContentHeight(insets: insets, available: avail, context: context)
+        while lines.count - contentStartY < panelContentHeight {
+            lines.append(bc("│") + surf(interior) + bc("│"))
         }
         lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
 

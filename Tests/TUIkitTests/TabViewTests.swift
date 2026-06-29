@@ -260,6 +260,50 @@ struct TabViewTests {
         #expect(narrow.width <= 20, "panel stays within the available width, got \(narrow.width)")
     }
 
+    // MARK: - Vertical sizing (tallest tab)
+
+    /// A TabView whose tabs have very different heights: a one-line tab and a
+    /// five-line tab. Rendered at `sel` with the given content-sizing mode.
+    private func unevenHeightTabs(
+        _ sel: Int, sizing: TabViewContentSizing? = nil
+    ) -> FrameBuffer {
+        let view = TabView(selection: .constant(sel)) {
+            Tab("Short", value: 0) { Text("one line") }
+            Tab("Tall", value: 1) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<5, id: \.self) { Text("row \($0)") }
+                }
+            }
+        }
+        .tabViewStyle(.compact)
+        let base = AnyView(view)
+        let configured = sizing.map { AnyView(base.tabViewContentSizing($0)) } ?? base
+        // A generous height so the panel sizes to content, not the viewport.
+        return renderToBuffer(configured, context: makeRenderContext(width: 30, height: 20))
+    }
+
+    @Test("By default the panel sizes to the tallest tab — height is stable across switches")
+    func panelSizesToTallestTab() {
+        // Both the short tab and the tall tab render at the SAME panel height
+        // (the tallest tab's), so switching tabs doesn't resize the panel.
+        let onShort = unevenHeightTabs(0).height
+        let onTall = unevenHeightTabs(1).height
+        #expect(onShort == onTall,
+                "panel height is stable across tabs (short=\(onShort), tall=\(onTall))")
+        // And that height accommodates the tall tab's five content rows + strip.
+        #expect(onTall >= 6, "panel is tall enough for the five-row tab plus the strip: \(onTall)")
+        // The short tab's content still shows (it's just padded out below).
+        #expect(unevenHeightTabs(0).lines.map { $0.stripped }.joined().contains("one line"))
+    }
+
+    @Test("`.tabViewContentSizing(.activeTab)` makes the panel track the active tab's height")
+    func activeTabSizingTracksSelection() {
+        let onShort = unevenHeightTabs(0, sizing: .activeTab).height
+        let onTall = unevenHeightTabs(1, sizing: .activeTab).height
+        #expect(onShort < onTall,
+                "with .activeTab the short tab's panel is shorter than the tall tab's (short=\(onShort), tall=\(onTall))")
+    }
+
     @Test("Changing the selection shows a different tab's content")
     func selectionSwitchesContent() {
         func body(_ sel: Int) -> [String] {

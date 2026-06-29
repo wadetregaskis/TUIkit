@@ -148,6 +148,11 @@ public struct ColorPickerPanel: View {
                 // dialog stays as narrow as its editors rather than being
                 // stretched wide by a long single-row strip.
                 .tabViewHeaderWrap(.toContentWidth)
+                // These tabs have wildly different heights (3 slider rows vs the
+                // tall swatch grids, each already scrollable via `tabBody`), so
+                // size the panel to the ACTIVE tab — the tallest-tab default
+                // would pad the slim slider tabs out to the 256-grid's height.
+                .tabViewContentSizing(.activeTab)
             }
         } footer: {
             // No leading Spacer: a Spacer is width-flexible, which would make the
