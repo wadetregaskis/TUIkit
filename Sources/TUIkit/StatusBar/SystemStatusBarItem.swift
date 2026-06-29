@@ -18,31 +18,42 @@
 public enum SystemStatusBarItem {
     /// The quit item (`q quit`).
     ///
-    /// This item is always present and exits the application.
-    public static let quit = StatusBarItem(
-        shortcut: "q",
-        label: "quit",
-        order: .quit
-    )
+    /// This item is always present and exits the application. The label is
+    /// localized via the shared ``LocalizationService`` (key `statusbar.quit`),
+    /// so it reads in the app's current language.
+    public static var quit: StatusBarItem {
+        StatusBarItem(
+            shortcut: "q",
+            label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.quit),
+            order: .quit
+        )
+    }
 
     /// The appearance item (`a appearance`).
     ///
     /// Cycles through available appearances (border styles).
-    /// Action must be set by the framework.
-    public static let appearance = StatusBarItem(
-        shortcut: "a",
-        label: "appearance",
-        order: .appearance
-    )
+    /// Action must be set by the framework. The label is localized via the
+    /// shared ``LocalizationService`` (key `statusbar.appearance`).
+    public static var appearance: StatusBarItem {
+        StatusBarItem(
+            shortcut: "a",
+            label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.appearance),
+            order: .appearance
+        )
+    }
 
     /// The theme item (`t theme`).
     ///
     /// Cycles through available themes. Action must be set by the framework.
-    public static let theme = StatusBarItem(
-        shortcut: "t",
-        label: "theme",
-        order: .theme
-    )
+    /// The label is localized via the shared ``LocalizationService`` (key
+    /// `statusbar.theme`).
+    public static var theme: StatusBarItem {
+        StatusBarItem(
+            shortcut: "t",
+            label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.theme),
+            order: .theme
+        )
+    }
 
     /// All system items in their default order.
     public static var all: [StatusBarItem] {
@@ -67,11 +78,12 @@ extension SystemStatusBarItem {
     ) -> [StatusBarItem] {
         var result: [StatusBarItem] = []
 
-        // Quit is always present
+        // Quit is always present. Labels are localized via the shared
+        // LocalizationService so they read in the app's current language.
         result.append(
             StatusBarItem(
                 shortcut: "q",
-                label: "quit",
+                label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.quit),
                 order: .quit,
                 action: onQuit
             )
@@ -82,7 +94,7 @@ extension SystemStatusBarItem {
             result.append(
                 StatusBarItem(
                     shortcut: "a",
-                    label: "appearance",
+                    label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.appearance),
                     order: .appearance,
                     action: onAppearance
                 )
@@ -94,7 +106,7 @@ extension SystemStatusBarItem {
             result.append(
                 StatusBarItem(
                     shortcut: "t",
-                    label: "theme",
+                    label: LocalizationService.shared.string(for: LocalizationKey.StatusBar.theme),
                     order: .theme,
                     action: onTheme
                 )

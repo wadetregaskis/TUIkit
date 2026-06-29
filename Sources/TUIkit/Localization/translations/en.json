@@ -67,6 +67,10 @@
   "menu.save": "Save",
   "menu.exit": "Exit",
 
+  "statusbar.quit": "quit",
+  "statusbar.appearance": "appearance",
+  "statusbar.theme": "theme",
+
   "dialog.confirm": "Confirm",
   "dialog.delete_confirmation": "Are you sure you want to delete this?",
   "dialog.unsaved_changes": "You have unsaved changes. Do you want to save them?",

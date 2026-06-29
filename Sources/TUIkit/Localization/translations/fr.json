@@ -67,6 +67,10 @@
   "menu.save": "Enregistrer",
   "menu.exit": "Quitter",
 
+  "statusbar.quit": "quitter",
+  "statusbar.appearance": "apparence",
+  "statusbar.theme": "thème",
+
   "dialog.confirm": "Confirmer",
   "dialog.delete_confirmation": "Êtes-vous sûr de vouloir supprimer ceci?",
   "dialog.unsaved_changes": "Vous avez des modifications non enregistrées. Voulez-vous les enregistrer?",

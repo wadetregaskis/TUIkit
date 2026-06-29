@@ -49,6 +49,16 @@ struct TabViewPage: View {
             case .trailing: .trailing
             }
         }
+
+        /// The localization key for the displayed name (the `rawValue` stays the
+        /// stable, English `Picker` tag; only the shown text is localized).
+        var localizationKey: String {
+            switch self {
+            case .leading: "page.tabView.alignLeading"
+            case .center: "page.tabView.alignCentre"
+            case .trailing: "page.tabView.alignTrailing"
+            }
+        }
     }
 
     var body: some View {
@@ -100,7 +110,7 @@ struct TabViewPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Picker(L("page.tabView.tabStripAlignment"), selection: $headerAlignment) {
                         ForEach(HeaderAlignment.allCases, id: \.self) { choice in
-                            Text(choice.rawValue).tag(choice)
+                            Text(L(choice.localizationKey)).tag(choice)
                         }
                     }
                     .pickerStyle(.inline)

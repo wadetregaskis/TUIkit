@@ -67,6 +67,10 @@
   "menu.save": "保存",
   "menu.exit": "退出",
 
+  "statusbar.quit": "退出",
+  "statusbar.appearance": "外观",
+  "statusbar.theme": "主题",
+
   "dialog.confirm": "确认",
   "dialog.delete_confirmation": "确定要删除吗？",
   "dialog.unsaved_changes": "您有未保存的更改。要保存吗？",

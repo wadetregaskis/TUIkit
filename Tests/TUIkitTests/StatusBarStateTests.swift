@@ -395,12 +395,15 @@ struct SystemStatusBarItemsTests {
 
         let items = state.currentItems
 
-        // Should be sorted: early, default, late, quit (system)
+        // Should be sorted: early, default, late, quit (system).
+        // The user items are located by their caller-set labels; the system
+        // quit item is located by its stable `q` shortcut, since its displayed
+        // label is now localized (and so varies by language).
         let labels = items.map { $0.label }
         let earlyIndex = labels.firstIndex(of: "early")!
         let defaultIndex = labels.firstIndex(of: "default")!
         let lateIndex = labels.firstIndex(of: "late")!
-        let quitIndex = labels.firstIndex(of: "quit")!
+        let quitIndex = items.firstIndex { $0.shortcut == "q" }!
 
         #expect(earlyIndex < defaultIndex)
         #expect(defaultIndex < lateIndex)

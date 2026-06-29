@@ -184,10 +184,17 @@ public final class StatusBarState: @unchecked Sendable {
 
         var items: [StatusBarItem] = []
         if isQuitAllowed {
+            // Localize the displayed quit label only when it's the framework
+            // default; a custom `QuitShortcut` (e.g. label "exit") keeps its
+            // own label verbatim. Resolving here (not at construction) means a
+            // runtime language switch re-localizes it live.
+            let quitLabel = quitShortcut.label == QuitShortcut.q.label
+                ? LocalizationService.shared.string(for: LocalizationKey.StatusBar.quit)
+                : quitShortcut.label
             items.append(
                 StatusBarItem(
                     shortcut: quitShortcut.shortcutSymbol,
-                    label: quitShortcut.label,
+                    label: quitLabel,
                     order: .quit
                 )
             )

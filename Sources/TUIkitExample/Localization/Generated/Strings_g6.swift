@@ -39,6 +39,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "Use [Tab] to focus a tab strip",
             "page.tabView.helpSwitchKeys": "Use [←/→] to switch between tabs",
             "page.tabView.helpClickHeader": "Click a tab header to select it",
+            "page.tabView.alignLeading": "Leading",
+            "page.tabView.alignCentre": "Centre",
+            "page.tabView.alignTrailing": "Trailing",
 
             // Form page
             "page.form.profile": "Profile",
@@ -142,6 +145,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "Mit [Tab] eine Tab-Leiste fokussieren",
             "page.tabView.helpSwitchKeys": "Mit [←/→] zwischen Tabs wechseln",
             "page.tabView.helpClickHeader": "Auf einen Tab-Kopf klicken, um ihn auszuwählen",
+            "page.tabView.alignLeading": "Führend",
+            "page.tabView.alignCentre": "Zentriert",
+            "page.tabView.alignTrailing": "Nachfolgend",
 
             // Form page
             "page.form.profile": "Profil",
@@ -245,6 +251,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "Utilisez [Tab] pour cibler une barre d'onglets",
             "page.tabView.helpSwitchKeys": "Utilisez [←/→] pour changer d'onglet",
             "page.tabView.helpClickHeader": "Cliquez sur un en-tête d'onglet pour le sélectionner",
+            "page.tabView.alignLeading": "Début",
+            "page.tabView.alignCentre": "Centré",
+            "page.tabView.alignTrailing": "Fin",
 
             // Form page
             "page.form.profile": "Profil",
@@ -348,6 +357,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "Usa [Tab] per mettere a fuoco una barra delle schede",
             "page.tabView.helpSwitchKeys": "Usa [←/→] per cambiare scheda",
             "page.tabView.helpClickHeader": "Fai clic su un'intestazione di scheda per selezionarla",
+            "page.tabView.alignLeading": "Iniziale",
+            "page.tabView.alignCentre": "Centrato",
+            "page.tabView.alignTrailing": "Finale",
 
             // Form page
             "page.form.profile": "Profilo",
@@ -451,6 +463,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "Usa [Tab] para enfocar una barra de pestañas",
             "page.tabView.helpSwitchKeys": "Usa [←/→] para cambiar entre pestañas",
             "page.tabView.helpClickHeader": "Haz clic en un encabezado de pestaña para seleccionarla",
+            "page.tabView.alignLeading": "Inicio",
+            "page.tabView.alignCentre": "Centrado",
+            "page.tabView.alignTrailing": "Final",
 
             // Form page
             "page.form.profile": "Perfil",
@@ -554,6 +569,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "使用 [Tab] 聚焦标签栏",
             "page.tabView.helpSwitchKeys": "使用 [←/→] 在标签之间切换",
             "page.tabView.helpClickHeader": "点击标签头以选中它",
+            "page.tabView.alignLeading": "左对齐",
+            "page.tabView.alignCentre": "居中",
+            "page.tabView.alignTrailing": "右对齐",
 
             // Form page
             "page.form.profile": "个人资料",
@@ -657,6 +675,9 @@ extension ExampleStrings {
             "page.tabView.helpFocusStrip": "[Tab] でタブストリップにフォーカスします",
             "page.tabView.helpSwitchKeys": "[←/→] でタブを切り替えます",
             "page.tabView.helpClickHeader": "タブヘッダーをクリックして選択します",
+            "page.tabView.alignLeading": "先頭揃え",
+            "page.tabView.alignCentre": "中央揃え",
+            "page.tabView.alignTrailing": "末尾揃え",
 
             // Form page
             "page.form.profile": "プロフィール",

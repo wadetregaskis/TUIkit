@@ -166,8 +166,8 @@ struct ContentView: View {
             // status bar would be noise.
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
                 .statusBarItems {
-                    StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "nav")
-                    StatusBarItem(shortcut: Shortcut.enter, label: "select", key: .enter)
+                    StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("status.nav"))
+                    StatusBarItem(shortcut: Shortcut.enter, label: L("status.select"), key: .enter)
                 }
         case .textStyles:
             TextStylesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
@@ -232,10 +232,10 @@ struct ContentView: View {
     /// Common status bar items for sub-pages.
     private func subPageItems(pageSetter: Binding<DemoPage>) -> [any StatusBarItemProtocol] {
         [
-            StatusBarItem(shortcut: Shortcut.escape, label: "back") { [pageSetter] in
+            StatusBarItem(shortcut: Shortcut.escape, label: L("status.back")) { [pageSetter] in
                 pageSetter.wrappedValue = .menu
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "scroll"),
+            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("status.scroll")),
         ]
     }
 

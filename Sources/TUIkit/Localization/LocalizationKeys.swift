@@ -119,6 +119,13 @@ public enum LocalizationKey {
         case usernameTaken = "validation.username_taken"
         case fieldRequired = "validation.field_required"
     }
+
+    /// Built-in status bar item labels (quit / appearance / theme).
+    public enum StatusBar: String {
+        case quit = "statusbar.quit"
+        case appearance = "statusbar.appearance"
+        case theme = "statusbar.theme"
+    }
 }
 
 // MARK: - Convenient Localization Extensions
@@ -165,6 +172,11 @@ extension LocalizedString {
     public init(_ key: LocalizationKey.Validation) {
         self.init(key.rawValue)
     }
+
+    /// Creates a localized string view from a status bar key.
+    public init(_ key: LocalizationKey.StatusBar) {
+        self.init(key.rawValue)
+    }
 }
 
 extension Text {
@@ -209,6 +221,11 @@ extension Text {
     public init(localized key: LocalizationKey.Validation) {
         self.init(localized: key.rawValue)
     }
+
+    /// Creates a text view with a localized string from a status bar key.
+    public init(localized key: LocalizationKey.StatusBar) {
+        self.init(localized: key.rawValue)
+    }
 }
 
 extension LocalizationService {
@@ -251,6 +268,11 @@ extension LocalizationService {
 
     /// Retrieves a localized string for a validation key.
     public func string(for key: LocalizationKey.Validation) -> String {
+        string(for: key.rawValue)
+    }
+
+    /// Retrieves a localized string for a status bar key.
+    public func string(for key: LocalizationKey.StatusBar) -> String {
         string(for: key.rawValue)
     }
 }

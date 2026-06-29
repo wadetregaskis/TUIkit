@@ -67,6 +67,10 @@
   "menu.save": "Speichern",
   "menu.exit": "Beenden",
 
+  "statusbar.quit": "beenden",
+  "statusbar.appearance": "Aussehen",
+  "statusbar.theme": "Design",
+
   "dialog.confirm": "Bestätigung",
   "dialog.delete_confirmation": "Sind Sie sicher, dass Sie das löschen möchten?",
   "dialog.unsaved_changes": "Sie haben ungespeicherte Änderungen. Möchten Sie diese speichern?",

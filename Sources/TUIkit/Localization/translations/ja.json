@@ -67,6 +67,10 @@
   "menu.save": "保存",
   "menu.exit": "終了",
 
+  "statusbar.quit": "終了",
+  "statusbar.appearance": "外観",
+  "statusbar.theme": "テーマ",
+
   "dialog.confirm": "確認",
   "dialog.delete_confirmation": "本当に削除しますか？",
   "dialog.unsaved_changes": "保存されていない変更があります。保存しますか？",
