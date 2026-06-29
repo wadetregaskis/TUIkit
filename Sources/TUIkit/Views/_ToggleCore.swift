@@ -95,10 +95,20 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     }
 
     /// A two-cell switch track: a knob (⬛︎) on the side the switch points to —
-    /// left for off, right for on — over a distinct background so it reads as a
-    /// two-position switch rather than a checkbox. The track is the accent colour
-    /// when on and a muted neutral when off (dimmed when disabled); the knob
-    /// punches through in a contrasting colour.
+    /// left for off, right for on — over a coloured track so it reads as a
+    /// two-position switch rather than a checkbox, mirroring a macOS switch.
+    ///
+    /// The track colour carries the state, distinctly in all three states:
+    /// - **on**: the accent (highlight) colour, like macOS's blue;
+    /// - **off**: a solid neutral grey;
+    /// - **disabled**: a *dimmed* version of the off grey, with a dimmed knob.
+    ///
+    /// The off grey is a fixed neutral (`.brightBlack`), not a palette shade, so it
+    /// reads as grey under every theme — including accent-tinted ones whose neutral
+    /// foregrounds are themselves tinted. Disabled is that grey dimmed via `opacity`
+    /// (which darkens toward black), so it is always darker than the off grey and
+    /// the two never look alike. The knob is the background colour so it contrasts
+    /// the track on light and dark terminals alike (dimmed to match when disabled).
     private func styledSwitchIndicator(
         isOnValue: Bool, isDisabled: Bool, context: RenderContext
     ) -> String {
@@ -108,14 +118,19 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let trackColor: Color
         let knobColor: Color
         if isDisabled {
-            trackColor = palette.foregroundQuaternary
-            knobColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            // A dimmed (darker) grey with a dim knob — reads as greyed-out /
+            // inactive, and is always darker than the solid "off" grey (opacity
+            // darkens toward black), so the two never look alike in any theme.
+            trackColor = Color.brightBlack.opacity(ViewConstants.disabledForeground)
+            knobColor = palette.background.opacity(ViewConstants.disabledForeground)
         } else if isOnValue {
             trackColor = palette.accent
             knobColor = palette.background
         } else {
-            trackColor = palette.foregroundQuaternary
-            knobColor = palette.foreground
+            // Off: a neutral dark grey like macOS — independent of the accent, so a
+            // switch that's off never reads as a dimmer "on".
+            trackColor = .brightBlack
+            knobColor = palette.background
         }
 
         // Off: knob then a blank cell; on: a blank cell then knob.
