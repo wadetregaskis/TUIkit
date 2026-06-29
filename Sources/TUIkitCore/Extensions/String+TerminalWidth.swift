@@ -501,8 +501,8 @@ extension StringProtocol {
 /// Time-Profiler trace, with the `_StringGuts` growth helpers it feeds another
 /// ~11% combined. The padding count is always a small terminal column count, so
 /// one fixed run covers it: ``asciiSpaces(_:)`` returns a borrowed `Substring`
-/// prefix of this run with **zero** per-call allocation. The run is read-only
-/// for the lifetime of the process, so a `nonisolated(unsafe) static let` is
+/// prefix of this run with **zero** per-call allocation. The run is an immutable
+/// `Sendable` `String` initialized once, so a plain `static let` is already
 /// data-race-free (every access is a pure read of immutable storage).
 private enum ASCIISpaces {
     /// The cached length. Generous relative to real terminal widths (a 1024-cell
@@ -511,7 +511,7 @@ private enum ASCIISpaces {
     static let count = 1024
 
     /// `count` ASCII spaces. Immutable after initialization.
-    nonisolated(unsafe) static let run = String(repeating: " ", count: count)
+    static let run = String(repeating: " ", count: count)
 }
 
 /// Returns `count` ASCII spaces (`U+0020`) as a borrowed `Substring`, allocating

@@ -119,7 +119,6 @@ struct FocusPage: View {
         case .f12: return "F12"
         case .character(let ch): return "'\(ch)'"
         case .paste: return "(paste)"
-        default: return "(other)"
         }
     }
     // swiftlint:enable cyclomatic_complexity
