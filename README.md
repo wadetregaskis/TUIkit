@@ -257,7 +257,7 @@ For complete documentation, see the [Localization Guide](https://github.com/wade
 
 - [swift-collections](https://github.com/apple/swift-collections) — `DequeModule`, used by the terminal output queue
 - [swift-docc-plugin](https://github.com/swiftlang/swift-docc-plugin) — documentation
-- [ordo-one/benchmark](https://github.com/ordo-one/package-benchmark) — performance benchmarks, run via `swift package benchmark`
+- [ordo-one/benchmark](https://github.com/ordo-one/package-benchmark) — performance benchmarks, opt-in via the `TUIKIT_BENCHMARKS` flag: `TUIKIT_BENCHMARKS=1 swift package benchmark` (kept out of the default build/test graph)
 
 ## Project structure
 
@@ -304,7 +304,7 @@ Tools/
 Benchmarks/
 └── TUIkitBenchmarks/     ordo-one/package-benchmark suite (color, frame buffer, image,
                           input parsing, layout, list/table, render, scroll, text width,
-                          view identity); run via `swift package benchmark`
+                          view identity); run via `TUIKIT_BENCHMARKS=1 swift package benchmark`
 ```
 
 The package also vends each library as an individual product. `import TUIkit` re-exports `TUIkitCore`, `TUIkitStyling`, `TUIkitView`, and `TUIkitImage` (via `@_exported`), so the umbrella import gives full API access; import the sub-modules individually for finer control.
@@ -318,7 +318,7 @@ The package also vends each library as an individual product. `import TUIkit` re
 
 - Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~2,275 tests across 316 suites in 186 files.
 - Most tests run in parallel; a small subset that mutates global state is serialised, so the whole suite runs in a few seconds.
-- Benchmarks: `swift package benchmark` (full suite) — see `Benchmarks/TUIkitBenchmarks`.
+- Benchmarks: `TUIKIT_BENCHMARKS=1 swift package benchmark` (full suite) — see `Benchmarks/TUIkitBenchmarks`. The `TUIKIT_BENCHMARKS` flag opts the `ordo-one/benchmark` dependency into the graph; without it the default build/test stays benchmark-free (no jemalloc requirement, no plugin deprecation warnings).
 - Profiling: see [Tools/Profiling/README.md](Tools/Profiling/README.md) (Instruments Time Profiler via a PTY, plus the no-PTY `RenderHarness` for `xctrace --launch`).
 - The `Terminal` class handles raw mode and cursor control via POSIX `termios`.
 

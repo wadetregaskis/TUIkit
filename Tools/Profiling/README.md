@@ -23,8 +23,9 @@ path end to end. This directory makes that repeatable.
 | **A — headless render harness** | `renderToBuffer(view:)` on fixed view trees in a tight loop — deterministic, fully CPU-bound, no input timing | ✅ working (`RenderHarness`) |
 
 Mode B is the realism check. Mode A is the microscope for iterating on a
-fix; it pairs with the existing `swift package benchmark` malloc/CPU
-counters for regression guards.
+fix; it pairs with the existing `TUIKIT_BENCHMARKS=1 swift package benchmark`
+malloc/CPU counters for regression guards (benchmarks are opt-in behind the
+`TUIKIT_BENCHMARKS` flag).
 
 > **`--attach` vs `--launch`.** Mode B has `drive.py` fork the app in a
 > PTY and points `xctrace record --attach <pid>` at it. Some environments

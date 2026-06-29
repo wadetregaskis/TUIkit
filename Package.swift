@@ -35,12 +35,10 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.5.1"),
-        // swift-benchmark (ordo-one/benchmark): proper warmup /
-        // statistics / baseline tracking for the perf-sensitive
-        // code paths. The plugin is invoked via 'swift package
-        // benchmark'; see
-        // https://swiftpackageindex.com/ordo-one/benchmark
-        .package(url: "https://github.com/ordo-one/benchmark", from: "1.29.4", traits: []),
+        // ordo-one/benchmark is added conditionally at the bottom of this file
+        // (gated on TUIKIT_BENCHMARKS), so the default build/test graph stays
+        // free of its plugin's upstream deprecation warnings and the jemalloc
+        // build requirement.
     ],
     targets: [
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────
@@ -108,11 +106,23 @@ let package = Package(
             dependencies: ["TUIkit"],
             path: "Tools/Profiling/RenderHarness"
         ),
+    ]
+)
 
-        // ── Benchmarks ──────────────────────────────────────────────────────────────────────────────────
-        // Driven by ordo-one/package-benchmark. Invoke via
-        // 'swift package benchmark' (full suite) or
-        // 'swift package benchmark run TUIkitBenchmarks <name>' (one).
+// ── Benchmarks (opt-in) ───────────────────────────────────────────────────────────────────────────
+// ordo-one/package-benchmark and the `TUIkitBenchmarks` target are gated behind
+// an environment flag so the default `swift build` / `swift test` graph never
+// pulls in the benchmark dependency. That keeps test output free of the plugin's
+// upstream PackagePlugin deprecation warnings and removes the jemalloc build
+// requirement for ordinary development. Enable benchmarking by exporting
+// TUIKIT_BENCHMARKS, e.g.
+//   TUIKIT_BENCHMARKS=1 swift package benchmark
+//   TUIKIT_BENCHMARKS=1 swift package benchmark run TUIkitBenchmarks <name>
+if Context.environment["TUIKIT_BENCHMARKS"] != nil {
+    package.dependencies.append(
+        .package(url: "https://github.com/ordo-one/benchmark", from: "1.29.4", traits: [])
+    )
+    package.targets.append(
         .executableTarget(
             name: "TUIkitBenchmarks",
             dependencies: [
@@ -121,8 +131,8 @@ let package = Package(
             ],
             path: "Benchmarks/TUIkitBenchmarks",
             plugins: [
-                .plugin(name: "BenchmarkPlugin", package: "benchmark"),
+                .plugin(name: "BenchmarkPlugin", package: "benchmark")
             ]
-        ),
-    ]
-)
+        )
+    )
+}
