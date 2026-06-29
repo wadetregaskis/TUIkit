@@ -13,25 +13,35 @@ import Testing
 
 @Suite("LocalizationService")
 final class LocalizationServiceTests {
+    /// Isolated config dir so these tests never read or write the user's real
+    /// language preference (`~/Library/Application Support/tuikit/language` on
+    /// macOS, `~/.config/tuikit/language` on Linux). swift-testing builds a fresh
+    /// suite instance per test, so each test gets — and cleans up — its own.
+    let configDir: String
     var sut: LocalizationService
 
     init() {
-        sut = LocalizationService()
+        configDir = NSTemporaryDirectory() + "tuikit-loc-\(UUID().uuidString)"
+        sut = LocalizationService(configDirectoryPath: configDir)
         sut.setLanguage(.english)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(atPath: configDir)
     }
 
     // MARK: - Bundle Loading Tests
 
     @Test("Loads English translations from bundle")
     func loadEnglishTranslations() {
-        let sut = LocalizationService()
+        let sut = LocalizationService(configDirectoryPath: configDir)
         let englishStrings = sut.string(for: "button.ok")
         #expect(englishStrings == "OK")
     }
 
     @Test("Loads German translations from bundle")
     func loadGermanTranslations() {
-        let sut = LocalizationService()
+        let sut = LocalizationService(configDirectoryPath: configDir)
         sut.setLanguage(.german)
         let germanStrings = sut.string(for: "button.ok")
         #expect(germanStrings == "OK")
@@ -39,7 +49,7 @@ final class LocalizationServiceTests {
 
     @Test("Loads French translations from bundle")
     func loadFrenchTranslations() {
-        let sut = LocalizationService()
+        let sut = LocalizationService(configDirectoryPath: configDir)
         sut.setLanguage(.french)
         let frenchStrings = sut.string(for: "button.cancel")
         #expect(frenchStrings == "Annuler")
@@ -47,7 +57,7 @@ final class LocalizationServiceTests {
 
     @Test("Loads Italian translations from bundle")
     func loadItalianTranslations() {
-        let sut = LocalizationService()
+        let sut = LocalizationService(configDirectoryPath: configDir)
         sut.setLanguage(.italian)
         let italianStrings = sut.string(for: "button.yes")
         #expect(italianStrings == "Sì")
@@ -55,7 +65,7 @@ final class LocalizationServiceTests {
 
     @Test("Loads Spanish translations from bundle")
     func loadSpanishTranslations() {
-        let sut = LocalizationService()
+        let sut = LocalizationService(configDirectoryPath: configDir)
         sut.setLanguage(.spanish)
         let spanishStrings = sut.string(for: "button.no")
         #expect(spanishStrings == "No")
@@ -321,11 +331,19 @@ final class LocalizationServiceTests {
 
 @Suite("LocalizationKey")
 final class LocalizationKeyTests {
+    /// Isolated config dir — see `LocalizationServiceTests`; keeps the suite from
+    /// reading or writing the user's real language preference.
+    let configDir: String
     var service: LocalizationService
 
     init() {
-        service = LocalizationService()
+        configDir = NSTemporaryDirectory() + "tuikit-lockey-\(UUID().uuidString)"
+        service = LocalizationService(configDirectoryPath: configDir)
         service.setLanguage(.english)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(atPath: configDir)
     }
 
     @Test("Button keys resolve correctly")
