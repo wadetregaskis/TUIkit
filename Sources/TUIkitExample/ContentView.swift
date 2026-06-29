@@ -82,6 +82,10 @@ struct ContentView: View {
     @State var menuSelection: Int = 0
     /// Which built-in preset F2 last loaded — so F2 can cycle from there.
     @State private var presetIndex: Int = 0
+    /// Lifecycle-demo counters, owned here so they survive leaving and
+    /// re-entering the Lifecycle page (per-page `@State` resets on each visit,
+    /// so the `.onAppear` / `.task` counts could never be seen to climb).
+    @State private var lifecycle = LifecycleCounters()
 
     // Appearance (border style) is the other app-wide theme axis; cycling it
     // re-renders every page. (Palette lives in `palette` above, not here.)
@@ -225,7 +229,7 @@ struct ContentView: View {
         case .statePersistence:
             StatePersistencePage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .lifecycle:
-            LifecyclePage().statusBarItems(subPageItems(pageSetter: pageSetter))
+            LifecyclePage(counters: $lifecycle).statusBarItems(subPageItems(pageSetter: pageSetter))
         case .preferences:
             PreferencesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .focus:

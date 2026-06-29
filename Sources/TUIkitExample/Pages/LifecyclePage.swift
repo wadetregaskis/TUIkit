@@ -6,20 +6,32 @@
 
 import TUIkit
 
+/// Session-scoped counters for the lifecycle demo.
+///
+/// Hoisted into `ContentView` (which lives for the whole session) and handed to
+/// `LifecyclePage` as a binding, so the counts survive leaving and re-entering
+/// the page. Per-page `@State` would reset to zero on every visit — the page
+/// leaves the view tree when you return to the menu, exactly as in SwiftUI — so
+/// the counters could never be seen to climb across revisits.
+struct LifecycleCounters: Equatable {
+    var appear = 0
+    var task = 0
+    var change = 0
+    var tick = 0
+    var lastEvent = "—"
+}
+
 /// View-lifecycle demo page.
 ///
 /// Demonstrates the lifecycle hooks with live, on-screen counters that tick up
-/// as each hook fires: `.onAppear` (runs when the page is shown — revisit it from
-/// the menu to watch it climb), `.task` (async work that completes ~¼s after the
-/// first frame), and `.onChange` (fires when a tracked value changes — bump it
-/// and watch the count follow). The "last event" line names whichever hook fired
-/// most recently.
+/// as each hook fires: `.onAppear` (runs on every appearance — leave to the menu
+/// and revisit to watch it climb), `.task` (async work that completes ~¼s after
+/// the first frame, and re-runs on each revisit), and `.onChange` (fires when a
+/// tracked value changes — bump it and watch the count follow). The "last event"
+/// line names whichever hook fired most recently. The counts live in
+/// `ContentView` (see ``LifecycleCounters``) so they persist across revisits.
 struct LifecyclePage: View {
-    @State private var appearCount: Int = 0
-    @State private var taskCount: Int = 0
-    @State private var changeCount: Int = 0
-    @State private var tick: Int = 0
-    @State private var lastEvent: String = "—"
+    @Binding var counters: LifecycleCounters
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -30,20 +42,20 @@ struct LifecyclePage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        ValueDisplayRow(".onAppear", "\(appearCount)")
-                        ValueDisplayRow(".task", "\(taskCount)")
-                        ValueDisplayRow(".onChange", "\(changeCount)")
+                        ValueDisplayRow(".onAppear", "\(counters.appear)")
+                        ValueDisplayRow(".task", "\(counters.task)")
+                        ValueDisplayRow(".onChange", "\(counters.change)")
                     }
                     .border(color: .brightBlack)
 
-                    ValueDisplayRow(L("page.lifecycle.lastEvent"), lastEvent)
+                    ValueDisplayRow(L("page.lifecycle.lastEvent"), counters.lastEvent)
                 }
                 // The hooks live on the section whose lifecycle they describe.
                 // onAppear runs on each appearance (revisit the page to see it
                 // climb); task runs once the first frame is on screen.
                 .onAppear {
-                    appearCount += 1
-                    lastEvent = L("page.lifecycle.evAppear")
+                    counters.appear += 1
+                    counters.lastEvent = L("page.lifecycle.evAppear")
                 }
                 .task {
                     await runStartupTask()
@@ -55,13 +67,13 @@ struct LifecyclePage: View {
                     Text(L("page.lifecycle.onChangeDescription"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 2) {
-                        Button(L("page.lifecycle.bump")) { tick += 1 }
-                        ValueDisplayRow(L("page.lifecycle.tracked"), "\(tick)")
+                        Button(L("page.lifecycle.bump")) { counters.tick += 1 }
+                        ValueDisplayRow(L("page.lifecycle.tracked"), "\(counters.tick)")
                     }
                 }
-                .onChange(of: tick) {
-                    changeCount += 1
-                    lastEvent = "\(L("page.lifecycle.evChange")) \(tick)"
+                .onChange(of: counters.tick) {
+                    counters.change += 1
+                    counters.lastEvent = "\(L("page.lifecycle.evChange")) \(counters.tick)"
                 }
             }
 
@@ -79,7 +91,7 @@ struct LifecyclePage: View {
     /// mirroring an async load that finishes after the first frame.
     private func runStartupTask() async {
         try? await Task.sleep(for: .milliseconds(250))
-        taskCount += 1
-        lastEvent = L("page.lifecycle.evTask")
+        counters.task += 1
+        counters.lastEvent = L("page.lifecycle.evTask")
     }
 }
