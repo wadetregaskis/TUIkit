@@ -15,11 +15,26 @@ private func createTestContext(width: Int = 20, height: Int = 6) -> RenderContex
     let focusManager = FocusManager()
     var environment = EnvironmentValues()
     environment.focusManager = focusManager
+    // Side-effect-free (snapshot) render: the lifecycle must NOT fire `.task`
+    // effects. `Image` otherwise starts an async load of the (nonexistent)
+    // source on first render; for a missing file that task fails fast and
+    // flips the loading phase to `.failure`, so under full-suite contention a
+    // render here could land on the "Error: …" path instead of the spinner —
+    // an intermittent flake that broke the `"⠋"` assertions (notably the
+    // force-unwrap in `spinnerHorizontallyCentred`). Pinning the lifecycle so
+    // effects don't fire keeps the phase at `.loading` — the only output an
+    // isolated synchronous render is meant to pin (see suite comment below) —
+    // and mirrors how `ViewRenderer` performs its snapshot renders.
+    let tuiContext = TUIContext(
+        lifecycle: LifecycleManager(firesEffects: false),
+        keyEventDispatcher: KeyEventDispatcher(),
+        preferences: PreferenceStorage()
+    )
     return RenderContext(
         availableWidth: width,
         availableHeight: height,
         environment: environment,
-        tuiContext: TUIContext()
+        tuiContext: tuiContext
     ).isolatingRenderCache()
 }
 
@@ -58,9 +73,11 @@ struct ImageRenderTests {
     }
 
     @Test("Spinner is horizontally centred within the frame")
-    func spinnerHorizontallyCentred() {
+    func spinnerHorizontallyCentred() throws {
         let buffer = renderToBuffer(Image(.file("/nope.png")), context: createTestContext(width: 21, height: 5))
-        let row = buffer.lines.map { $0.stripped }.first { $0.contains("⠋") }!
+        // `#require` rather than a force-unwrap: a missing spinner row reports a
+        // clean test failure instead of trapping the whole process.
+        let row = try #require(buffer.lines.map { $0.stripped }.first { $0.contains("⠋") })
         let leading = row.prefix { $0 == " " }.count
         // One glyph in a 21-wide row centres at ~10 leading spaces.
         #expect(leading == 10)
