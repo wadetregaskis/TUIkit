@@ -109,6 +109,14 @@ extension _PaletteScene: RootPaletteOverrideProvidingScene {
     }
 }
 
+extension _PaletteScene: RootAppearanceOverrideProvidingScene {
+    /// Pass-through: forward any wrapped scene's appearance override so
+    /// `.palette(...)` composes with `.appearance(...)` in either order.
+    func rootAppearanceOverride() -> Appearance? {
+        (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
+    }
+}
+
 extension _PaletteScene: SceneRenderable {
     /// The palette is applied by `RenderLoop` through ``rootPaletteOverride()``;
     /// rendering simply forwards to the wrapped scene.

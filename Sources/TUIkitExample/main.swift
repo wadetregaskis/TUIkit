@@ -38,6 +38,13 @@ struct ExampleApp: App {
                 .notificationHost()
         }
         .theme(Theme(palette: palette, tint: styling.tint))
+        // Apply the user-built custom border (Theme page) at the *scene* level so
+        // it reaches the app header and status bar too — not just the page
+        // content. `nil` (no custom border) defers to the appearance manager, so
+        // F2 / F3 / the appearance picker keep driving the built-in border.
+        .appearance(styling.customBorder.map {
+            Appearance(id: Appearance.ID(rawValue: "custom"), borderStyle: $0)
+        })
     }
 }
 

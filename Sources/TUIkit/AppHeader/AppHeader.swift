@@ -41,8 +41,11 @@ extension AppHeader: Renderable {
             lines.append(line.padToVisibleWidth(width))
         }
 
-        // Thin divider line
-        let divider = String(repeating: "─", count: width)
+        // Thin divider line, drawn with the current appearance's horizontal
+        // border glyph so a custom border (or F2/F3/the appearance picker)
+        // restyles the header divider in step with the rest of the app's chrome.
+        let glyph = context.environment.appearance.borderStyle.horizontal
+        let divider = String(repeating: glyph, count: width)
         let styledDivider = ANSIRenderer.colorize(divider, foreground: palette.border)
         lines.append(styledDivider)
 

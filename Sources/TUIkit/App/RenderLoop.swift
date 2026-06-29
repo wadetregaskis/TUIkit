@@ -265,6 +265,16 @@ extension RenderLoop {
         {
             environment.palette = paletteOverride
         }
+        // A scene-level `.appearance(...)` override wins over the appearance
+        // manager's current selection for the WHOLE frame — content tree and the
+        // out-of-tree app header / status bar alike. `nil` (no scene override)
+        // leaves the manager-derived appearance from `buildEnvironment()` intact,
+        // so F2/F3/the appearance picker keep working.
+        if let appearanceOverrideScene = scene as? any RootAppearanceOverrideProvidingScene,
+            let appearanceOverride = appearanceOverrideScene.rootAppearanceOverride()
+        {
+            environment.appearance = appearanceOverride
+        }
         // Capture the scene's base ``MouseSupport`` configuration; the
         // effective per-frame configuration is the union of this and
         // any features requested by view modifiers during render. The

@@ -101,3 +101,14 @@ extension _MouseSupportScene: RootPaletteOverrideProvidingScene {
         return nil
     }
 }
+
+// MARK: - Appearance Override Forwarding
+
+extension _MouseSupportScene: RootAppearanceOverrideProvidingScene {
+    /// Forward the appearance-override lookup to the wrapped scene so
+    /// `.mouseSupport(...)` can be composed with `.appearance(...)` in either
+    /// order without losing either.
+    func rootAppearanceOverride() -> Appearance? {
+        (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
+    }
+}

@@ -93,12 +93,6 @@ struct ContentView: View {
         // Capture bindings for use in closures
         let pageSetter = $currentPage
 
-        // The app-wide border: a user-built custom border (Theme page) wins;
-        // otherwise the appearance manager's current built-in (F2/F3/picker).
-        let effectiveAppearance: Appearance = styling.customBorder.map {
-            Appearance(id: Appearance.ID(rawValue: "custom"), borderStyle: $0)
-        } ?? (appearanceManager.currentAppearance ?? .default)
-
         // Show current page based on state
         // Note: Background color is set by AppRunner using theme.background
         pageContent(for: currentPage, pageSetter: pageSetter)
@@ -112,10 +106,11 @@ struct ContentView: View {
             // App-wide checkbox glyphs: a local `.checkboxStyle` (e.g. the Toggle
             // page's side-by-side demo) still overrides this for its own subtree.
             .checkboxStyle(styling.checkboxStyle)
-            // App-wide border: a user-built custom border overrides the manager's
-            // built-in appearance; otherwise the built-in (F2/F3/picker) flows
-            // through unchanged. A local `.appearance(_:)` still overrides per view.
-            .appearance(effectiveAppearance)
+            // The app-wide border now flows from the scene: `main.swift` applies
+            // `.appearance(...)` for the user-built custom border (or defers to
+            // the appearance manager / F2 / F3 / picker), reaching the app header
+            // and status bar as well as this content. A local `.appearance(_:)`
+            // still overrides per view.
             .onKeyPress { event in
                 switch event.key {
                 case .escape:
