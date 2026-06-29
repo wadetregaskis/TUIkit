@@ -148,7 +148,10 @@ struct QuitShortcutTests {
         let quitItem = systemItems.first { $0.order == .quit }
         #expect(quitItem != nil)
         #expect(quitItem?.shortcut == Shortcut.escape)
-        #expect(quitItem?.label == "quit")
+        // The default quit label is localized for display, so it tracks the
+        // active language (e.g. "quit" / "beenden"); compare against the same
+        // localized value rather than hardcoding English.
+        #expect(quitItem?.label == LocalizationService.shared.string(for: LocalizationKey.StatusBar.quit))
     }
 
     @Test("StatusBarState defaults to q shortcut")

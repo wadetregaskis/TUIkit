@@ -80,7 +80,10 @@ struct MainMenuPage: View {
                         MenuItem(label: L("menu.item.emptyState"), shortcut: "e"),
                         MenuItem(label: L("menu.item.tabViews"), shortcut: "v"),
                         MenuItem(label: L("menu.item.forms"), shortcut: "f"),
-                        MenuItem(label: L("menu.item.advanced"), shortcut: "g"),
+                        MenuItem(label: L("menu.item.statePersistence"), shortcut: "p"),
+                        MenuItem(label: L("menu.item.lifecycle"), shortcut: "l"),
+                        MenuItem(label: L("menu.item.preferences"), shortcut: "r"),
+                        MenuItem(label: L("menu.item.focus"), shortcut: "k"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in

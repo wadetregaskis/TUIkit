@@ -15,7 +15,7 @@ enum ExampleStrings {
         let base: [String: [String: String]] = [
             "en": en, "de": de, "fr": fr, "it": it, "es": es, "zh": zh, "ja": ja,
         ]
-        let fragments: [[String: [String: String]]] = [base, g1, g2, g3, g4, g5, g6]
+        let fragments: [[String: [String: String]]] = [base, g1, g2, g3, g4, g5, g6, g7]
         var result: [String: [String: String]] = [:]
         for fragment in fragments {
             for (lang, table) in fragment {

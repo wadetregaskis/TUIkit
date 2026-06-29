@@ -19,6 +19,7 @@ struct StepperPage: View {
     @State var rating: Int = 3
     @State var volume: Int = 50
     @State var colorIndex: Int = 0
+    @State var bigValue: Int = 0
 
     var colors: [String] {
         [L("page.stepper.colorRed"), L("page.stepper.colorGreen"), L("page.stepper.colorBlue"),
@@ -54,6 +55,18 @@ struct StepperPage: View {
                         }
                     )
                     Text(colors[colorIndex]).foregroundStyle(.palette.accent)
+                }
+            }
+
+            DemoSection(L("page.stepper.shiftSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.stepper.shiftDescription"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // .shiftStepMultiplier scales the step while Shift is held,
+                    // so a Shift+arrow jumps by 10× the normal step (1 → 10 here).
+                    Stepper(L("page.stepper.bigValue"), value: $bigValue, in: 0...1000, step: 1)
+                        .shiftStepMultiplier(10)
+                    ValueDisplayRow(L("page.stepper.bigValueLabel"), "\(bigValue)")
                 }
             }
 

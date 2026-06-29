@@ -38,7 +38,10 @@ enum DemoPage: Int, CaseIterable {
     case emptyState
     case tabViews
     case forms
-    case advanced
+    case statePersistence
+    case lifecycle
+    case preferences
+    case focus
 }
 
 // MARK: - App-wide styling
@@ -219,8 +222,14 @@ struct ContentView: View {
             TabViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .forms:
             FormPage().statusBarItems(subPageItems(pageSetter: pageSetter))
-        case .advanced:
-            AdvancedPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .statePersistence:
+            StatePersistencePage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .lifecycle:
+            LifecyclePage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .preferences:
+            PreferencesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .focus:
+            FocusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
@@ -248,7 +257,9 @@ struct ContentView: View {
             ";": .splitView, "'": .imageFile, ",": .imageURL,
             ".": .emoji, "/": .pickers, "`": .progress,
             "m": .mouse, "t": .theme, "e": .emptyState,
-            "v": .tabViews, "g": .advanced,
+            "v": .tabViews,
+            "p": .statePersistence, "l": .lifecycle,
+            "r": .preferences, "k": .focus,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
