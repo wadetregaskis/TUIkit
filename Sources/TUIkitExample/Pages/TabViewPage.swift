@@ -25,8 +25,10 @@ import TUIkit
 /// active tab breathes on the pulse clock while the strip is focused.
 ///
 /// A third **adjustable** demo wires the header alignment
-/// (`.tabViewHeaderAlignment(_:)`) and wrap mode (`.tabViewHeaderWrap(_:)`) to
-/// live controls so the strip's placement and folding can be tried interactively.
+/// (`.tabViewHeaderAlignment(_:)`), wrap mode (`.tabViewHeaderWrap(_:)`) and
+/// content sizing (`.tabViewContentSizing(_:)`, size to the tallest tab vs the
+/// visible one) to live controls so the strip's placement, folding and vertical
+/// sizing can be tried interactively.
 struct TabViewPage: View {
     @State private var compactSelection = 0
     @State private var borderedSelection = 0
@@ -37,6 +39,10 @@ struct TabViewPage: View {
     @State private var adjustableSelection = 0
     @State private var headerAlignment: HeaderAlignment = .center
     @State private var foldStrip = true
+    // Off (default) sizes the box to the tallest tab so it never jumps as you
+    // switch; on sizes it to whichever tab is visible. Drives
+    // `.tabViewContentSizing(_:)` on the adjustable demo below.
+    @State private var sizeToVisibleTab = false
 
     /// A `Picker`-friendly (`Hashable`) stand-in for ``HorizontalAlignment``,
     /// which is `Sendable` but not `Hashable`, so it can't be a selection tag.
@@ -119,17 +125,32 @@ struct TabViewPage: View {
                     // same choice the colour picker makes. With it on, the
                     // alignment above visibly shifts each folded row.
                     Toggle(L("page.tabView.foldStrip"), isOn: $foldStrip)
+                    // Each tab below is taller than the one before, so this
+                    // toggle has a visible effect: off (the default,
+                    // `.largestTab`) holds the box at the tallest tab's height so
+                    // it never jumps as you switch tabs; on (`.activeTab`) shrinks
+                    // the box to whichever tab is showing.
+                    Toggle(L("page.tabView.sizeToVisibleTab"), isOn: $sizeToVisibleTab)
 
                     TabView(selection: $adjustableSelection) {
                         ForEach(Array(["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"].enumerated()), id: \.offset) { index, name in
                             Tab(name, value: index) {
-                                Text("\(L("page.tabView.sectionDetailsPrefix")) \(name) \(L("page.tabView.sectionDetailsSuffix"))")
+                                // Taller the further right you go (1…6 lines), to
+                                // make the content-sizing toggle's effect visible.
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text("\(L("page.tabView.sectionDetailsPrefix")) \(name) \(L("page.tabView.sectionDetailsSuffix"))")
+                                    ForEach(0..<index, id: \.self) { line in
+                                        Text("• \(name) \(line + 1)")
+                                            .foregroundStyle(.palette.foregroundSecondary)
+                                    }
+                                }
                             }
                         }
                     }
                     .tabViewStyle(.bordered)
                     .tabViewHeaderAlignment(headerAlignment.alignment)
                     .tabViewHeaderWrap(foldStrip ? .toContentWidth : .minimal)
+                    .tabViewContentSizing(sizeToVisibleTab ? .activeTab : .largestTab)
                 }
             }
 
