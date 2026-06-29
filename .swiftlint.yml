@@ -96,8 +96,8 @@ identifier_name:
     warning: 60
     error: 80
   excluded:
-    - id
-    - to
+    # (`id` / `to` need no entry: min_length warns only below 2 characters, so
+    #  two-letter names already pass.)
     # The example app's terse localized-string lookup, `L("key")` — a deliberate
     # one-letter helper (à la gettext's `_`) kept short because it wraps almost
     # every user-facing string. `Lf("key", args...)` is its formatting sibling
@@ -149,14 +149,14 @@ type_name:
     error: 60
   excluded:
     - ID
-    # Internal _Core views follow SwiftUI pattern (e.g. _AlertCore, _DialogCore)
+    # Internal _Core views follow SwiftUI pattern (e.g. _AlertCore, _DialogCore).
+    # Private _Core views (Card's _CardCore, Table's _TableCore) need no entry —
+    # SwiftLint already permits a leading underscore on private declarations.
     - _AlertCore
     - _DialogCore
     - _PanelCore
-    - _CardCore
     - _ListCore
     - _ListContentView
-    - _TableCore
     - _ImageCore
     - _ToggleCore
     # Shared by VStack/LazyVStack and HStack/LazyHStack (one core, two overflow
