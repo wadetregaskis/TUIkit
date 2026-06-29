@@ -260,7 +260,15 @@ public struct PlatformImageLoader: ImageLoader {
                     space: CGColorSpaceCreateDeviceRGB(),
                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
                 ) else { return false }
-                context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+                // CoreGraphics emits a benign one-time IOKit probe line to stderr
+                // the first time it rasterizes an image in a VM (e.g.
+                // "IOServiceMatching failed for: AppleM2ScalerParavirtDriver").
+                // Harmless in a normal app, but a TUI owns the alternate screen,
+                // so swallow stderr just around the draw — the only thing that
+                // triggers it — and restore it immediately.
+                Self.suppressingStandardError {
+                    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+                }
                 return true
             }
             guard drew else {
@@ -301,6 +309,31 @@ public struct PlatformImageLoader: ImageLoader {
                 }
             }
             return pixels
+        }
+
+        /// Runs `body` with stderr (fd 2) temporarily redirected to `/dev/null`.
+        ///
+        /// Used to swallow the benign one-time IOKit probe line CoreGraphics
+        /// writes to stderr during the first image rasterization in a VM, which
+        /// would otherwise corrupt the alternate-screen TUI. The window is the
+        /// single synchronous draw call; a concurrent stderr write (none is
+        /// expected mid-render — the renderer writes stdout) would be lost.
+        private static func suppressingStandardError(_ body: () -> Void) {
+            fflush(stderr)
+            let saved = dup(STDERR_FILENO)
+            let devNull = open("/dev/null", O_WRONLY)
+            if devNull >= 0 {
+                dup2(devNull, STDERR_FILENO)
+                close(devNull)
+            }
+            defer {
+                fflush(stderr)
+                if saved >= 0 {
+                    dup2(saved, STDERR_FILENO)
+                    close(saved)
+                }
+            }
+            body()
         }
     }
 #endif
