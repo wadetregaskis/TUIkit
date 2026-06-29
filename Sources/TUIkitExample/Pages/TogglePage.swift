@@ -21,6 +21,10 @@ struct TogglePage: View {
     // Toggle whose label carries explanatory subtext.
     @State var pushNotifications: Bool = true
 
+    // Shared by the three "Toggle style" rows so they flip together — flipping any
+    // one shows every style in the same on/off state for a side-by-side compare.
+    @State var styleDemoOn: Bool = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -79,9 +83,14 @@ struct TogglePage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.toggle.toggleStyleNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Toggle("automatic", isOn: .constant(true)).toggleStyle(.automatic)
-                    Toggle("checkbox", isOn: .constant(true)).toggleStyle(.checkbox)
-                    Toggle("switch", isOn: .constant(true)).toggleStyle(.switch)
+                    Toggle("automatic", isOn: $styleDemoOn).toggleStyle(.automatic)
+                    Toggle("checkbox", isOn: $styleDemoOn).toggleStyle(.checkbox)
+                    Toggle("switch", isOn: $styleDemoOn).toggleStyle(.switch)
+                    // A disabled switch in the same state, so its dimmed track reads
+                    // as clearly distinct from the active "off"/"on" switch above.
+                    Toggle(L("page.toggle.switchDisabled"), isOn: $styleDemoOn)
+                        .toggleStyle(.switch)
+                        .disabled()
                 }
             }
 
