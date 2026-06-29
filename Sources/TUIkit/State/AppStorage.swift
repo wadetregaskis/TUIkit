@@ -216,9 +216,22 @@ extension JSONFileStorage {
 public enum StorageDefaults {
     /// The default storage backend used by ``AppStorage``.
     ///
-    /// Defaults to a ``JSONFileStorage`` instance that persists to
-    /// `$XDG_CONFIG_HOME/[appName]/settings.json`.
-    nonisolated(unsafe) public static var backend: StorageBackend = JSONFileStorage()
+    /// Matches SwiftUI's `@AppStorage`, which is backed by `UserDefaults`:
+    /// - **Apple platforms**: ``UserDefaultsStorage`` over `UserDefaults.standard`,
+    ///   so values land in the system preferences domain —
+    ///   `~/Library/Preferences/<bundle-identifier>.plist` when the app is bundled
+    ///   (the identifier comes from its `Info.plist`), else
+    ///   `~/Library/Preferences/<executable-name>.plist` for a plain CLI binary.
+    /// - **Linux / other**: ``JSONFileStorage``, since Foundation's `UserDefaults`
+    ///   does not reliably persist there — written under `appConfigDirectory()`
+    ///   (`$XDG_CONFIG_HOME/<app>/settings.json`, else `~/.config/<app>/…`).
+    ///
+    /// Override before creating any `@AppStorage` properties to use a custom backend.
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        nonisolated(unsafe) public static var backend: StorageBackend = UserDefaultsStorage()
+    #else
+        nonisolated(unsafe) public static var backend: StorageBackend = JSONFileStorage()
+    #endif
 }
 
 // MARK: - AppStorage Property Wrapper

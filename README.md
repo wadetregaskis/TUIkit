@@ -119,7 +119,7 @@ struct ContentView: View {
 
 - **Lifecycle modifiers**: `.onAppear()`, `.onDisappear()`, `.task()`, `.onChange(of:initial:)`
 - **Key handling**: `.onKeyPress()` (a raw handler, a key-set handler, and a single-key action), with modifier keys (ctrl, alt, shift) and function keys F1–F12
-- **Storage**: `@AppStorage` with a JSON file backend (per-app platform config dir, default) and a `UserDefaults` backend
+- **Storage**: `@AppStorage`, backed by `UserDefaults` on Apple platforms (the preferences domain, like SwiftUI — `~/Library/Preferences/<id>.plist`) and a JSON file under the XDG config dir on Linux
 - **Preferences**: bottom-up data flow with `PreferenceKey` — `.preference(key:value:)`, `.onPreferenceChange(_:perform:)`, `.navigationTitle(_:)`
 - **Focus system**: Tab / Shift+Tab navigation, `.focusSection(_:)` for grouped areas, and `.focusID(_:)` to set an explicit identity on a control
 - **Accelerated stepping**: `.shiftStepMultiplier(_:)` controls how far a Shift-accelerated key press moves (scrolling, list/table cursor movement, and `Stepper` / `Slider` value changes; default 5)

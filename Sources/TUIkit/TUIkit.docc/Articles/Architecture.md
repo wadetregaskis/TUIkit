@@ -57,7 +57,7 @@ Text("Hello")
 - **``State``**: Mutable per-view state that triggers re-renders
 - **``Binding``**: Two-way connection to a value owned elsewhere
 - **``EnvironmentValues``**: Values propagated down the view tree
-- **``AppStorage``**: Persistent key-value storage. The default backend (`JSONFileStorage`) writes to the app-specific platform config directory (macOS `~/Library/Application Support/<App>`, Linux `$XDG_CONFIG_HOME/<App>` or `~/.config/<App>`); `UserDefaultsStorage` is also available.
+- **``AppStorage``**: Persistent key-value storage, matching SwiftUI's `UserDefaults` backing. The default backend is `UserDefaultsStorage` on Apple platforms (the preferences domain — `~/Library/Preferences/<bundle-id-or-executable>.plist`) and `JSONFileStorage` on Linux (`$XDG_CONFIG_HOME/<App>` or `~/.config/<App>`, since Foundation's `UserDefaults` doesn't reliably persist there). Either backend can be set explicitly.
 
 ### 6. Rendering Layer
 

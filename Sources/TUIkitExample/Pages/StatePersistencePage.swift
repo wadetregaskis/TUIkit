@@ -67,20 +67,19 @@ struct StatePersistencePage: View {
         }
     }
 
-    /// The on-disk settings file `@AppStorage` writes to, resolved the same way
-    /// the framework's `JSONFileStorage` does: `~/Library/Application
-    /// Support/<app>/settings.json` on macOS, or `$XDG_CONFIG_HOME/<app>` (else
-    /// `~/.config/<app>`) `/settings.json` elsewhere.
+    /// Where `@AppStorage` persists, resolved the same way the framework's default
+    /// backend does: on macOS it's `UserDefaults.standard`, so the preferences
+    /// domain — `~/Library/Preferences/<app>.plist` for this CLI binary (a bundled
+    /// app would use its `Info.plist` bundle identifier). Elsewhere it's a JSON
+    /// file under `$XDG_CONFIG_HOME/<app>` (else `~/.config/<app>`).
     private static var settingsPath: String {
         let appName = ProcessInfo.processInfo.processName
-        let configDir: URL
+        let full: String
         #if os(macOS)
-            let base =
-                FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Library/Application Support")
-            configDir = base.appendingPathComponent(appName)
+            full = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Preferences/\(appName).plist").path
         #else
+            let configDir: URL
             if let xdg = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"], !xdg.isEmpty {
                 configDir = URL(fileURLWithPath: xdg).appendingPathComponent(appName)
             } else {
@@ -88,8 +87,8 @@ struct StatePersistencePage: View {
                     .appendingPathComponent(".config")
                     .appendingPathComponent(appName)
             }
+            full = configDir.appendingPathComponent("settings.json").path
         #endif
-        let full = configDir.appendingPathComponent("settings.json").path
         // Abbreviate the home prefix to keep the line short.
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return full.hasPrefix(home) ? "~" + full.dropFirst(home.count) : full
