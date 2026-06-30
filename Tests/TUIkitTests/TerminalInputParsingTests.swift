@@ -100,6 +100,49 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(key: .up)))
     }
 
+    @Test("A mouse report split before its terminator completes, never leaking 'M'")
+    func splitMouseReportNeverLeaksTerminator() {
+        let (terminal, stage) = makeTerminal()
+
+        // An SGR mouse report "ESC [ < 0 ; 50 ; 20 M" arrives without its final
+        // 'M' (the read split right before the terminator).
+        stage(Array("\u{1B}[<0;50;20".utf8))
+        var results: [TerminalInput?] = []
+        for _ in 0..<3 { results.append(terminal.readEvent()) }  // waits, no leak
+
+        // The terminator arrives now and completes the report.
+        stage(Array("M".utf8))
+        for _ in 0..<2 { results.append(terminal.readEvent()) }
+
+        // Never a literal 'M' (which would flip the Image demo's colour mode),
+        // and the report is recognised as a mouse event.
+        let leakedM = results.contains(.key(KeyEvent(character: "M")))
+        #expect(!leakedM, "a split mouse report leaked its 'M' terminator as a keystroke")
+        let mouseEvents = results.filter { if case .mouse = $0 { return true } else { return false } }
+        #expect(mouseEvents.count == 1, "the split report should complete as one mouse event")
+    }
+
+    @Test("A new sequence after a truncated one is parsed cleanly, no leak")
+    func newSequenceAfterTruncatedOneDoesNotLeak() {
+        let (terminal, stage) = makeTerminal()
+
+        // A report whose terminator is genuinely lost, immediately followed by a
+        // complete report. The truncated one must be abandoned (not have the next
+        // report's '[' mistaken for its terminator, leaking the remainder).
+        stage(Array("\u{1B}[<0;50;20".utf8))  // truncated (no terminator ever)
+        _ = terminal.readEvent()
+        _ = terminal.readEvent()
+        stage(Array("\u{1B}[<1;5;5M".utf8))  // a fresh, complete report
+
+        var results: [TerminalInput?] = []
+        for _ in 0..<4 { results.append(terminal.readEvent()) }
+
+        let leakedKey = results.contains { if case .key = $0 { return true } else { return false } }
+        #expect(!leakedKey, "a truncated sequence let the following report leak as keystrokes")
+        let mouseEvents = results.filter { if case .mouse = $0 { return true } else { return false } }
+        #expect(mouseEvents.count == 1, "the fresh report should still parse as a mouse event")
+    }
+
     @Test("Escape followed (after the timeout) by a real key yields both")
     func escapeThenKeyYieldsBoth() {
         let (terminal, stage) = makeTerminal()

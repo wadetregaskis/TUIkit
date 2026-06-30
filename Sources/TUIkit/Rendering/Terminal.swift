@@ -494,6 +494,18 @@ extension Terminal {
     /// coords).
     private static let maxEventBytes = 32
 
+    /// Stale frames before a lone `ESC` is committed (the Escape-vs-sequence
+    /// timeout). Short, so Escape stays responsive.
+    private static let bareEscStaleFrames = 2
+
+    /// Stale frames before an incomplete `ESC [` / `ESC O` is abandoned as a
+    /// dead sequence. Generous: a read-split sequence's tail arrives within a
+    /// frame or two, so by the time we reach this any real terminator is long
+    /// present — we only get here for a sequence the terminal truly never
+    /// finished. Until then we keep waiting rather than stranding its bytes
+    /// (the leak that turned a split mouse report's `M` into a keystroke).
+    private static let deadSequenceStaleFrames = 8
+
     /// Tries to peel one complete regular (non-paste) event off the
     /// front of ``inputBuffer``. Returns the raw bytes, or `nil` if
     /// the buffer doesn't have a complete sequence yet — in which
@@ -565,6 +577,15 @@ extension Terminal {
 
         while i < cap {
             let b = input[i]
+            if b == 0x1B {
+                // A new escape sequence started before this one terminated, so
+                // this one was truncated (its terminator never arrived). Drop
+                // just the malformed prefix and let the new sequence parse from
+                // its `ESC` — otherwise its `[` would be mistaken for this
+                // sequence's terminator and the rest would leak as keystrokes.
+                consume(i)
+                return nil
+            }
             if b >= 0x40 && b <= 0x7E {
                 var bytes = [UInt8]()
                 bytes.reserveCapacity(i + 1)
@@ -707,46 +728,64 @@ extension Terminal {
         // never finish.
         if added == 0 {
             staleFrames += 1
-
-            if staleFrames >= 2 {
-                staleFrames = 0
-                return resolveStuckPartial()
-            }
+            return resolveStuckPartial()
         }
 
         return nil
     }
 
-    /// Decides what to do with a partial that has sat at the front of the
-    /// buffer for two stale frames without completing — without ever stranding
-    /// an escape-sequence introducer as a literal keystroke.
+    /// Called once per stale frame while a partial sits at the front of the
+    /// buffer, and decides — based on how long it has been stuck — how to make
+    /// progress without ever stranding part of a split escape sequence as a
+    /// literal keystroke. Returns an event only when it pops a lone non-ESC
+    /// byte; otherwise `nil` (still waiting, or it deferred/discarded).
     ///
-    /// - A lone `ESC` is *deferred* (``pendingBareEsc``), not committed: its
+    /// - A lone `ESC` is *deferred* (``pendingBareEsc``) after the short
+    ///   ``bareEscStaleFrames`` timeout, not committed outright: its
     ///   continuation may be a CSI/SS3 sequence split into a later read. The
     ///   next ``readEvent()`` re-attaches it if a `[`/`O` arrived, else commits
     ///   the Escape.
-    /// - An `ESC` followed by a `[`/`O` introducer whose terminator never came
-    ///   is a truncated CSI/SS3: the whole partial is dropped as a unit. Popping
-    ///   only the `ESC` would leave the `[`/`O` to be parsed as a literal next
-    ///   pass — the bug that occasionally jumped `TUIkitExample` to its `[` =
-    ///   Sliders page.
-    /// - Any other stuck byte is consumed singly, as before, to make progress.
+    /// - An incomplete `ESC [` / `ESC O` is unambiguously a control sequence, so
+    ///   we KEEP WAITING for its terminator — a read-split sequence's tail
+    ///   (arrow, mouse report, …) arrives on a later read and completes it.
+    ///   Stranding it instead leaked bytes as keystrokes: the introducer `[`
+    ///   (→ Sliders page) or, for a mouse drag, the terminator `M` (→ a stray
+    ///   key). Only after the generous ``deadSequenceStaleFrames`` timeout — by
+    ///   which point any real terminator has long arrived — is a truly dead
+    ///   sequence dropped as a unit.
+    /// - Any other stuck byte is consumed singly to make progress.
     private func resolveStuckPartial() -> TerminalInput? {
         let first = input[0]
 
         if first == 0x1B {
             if input.count == 1 {
-                input.removeFirst(1)
-                pendingBareEsc = true
+                // Lone ESC — Escape-vs-sequence ambiguity. Defer after the
+                // short timeout so a split sequence's tail can still cancel it.
+                if staleFrames >= Self.bareEscStaleFrames {
+                    staleFrames = 0
+                    input.removeFirst(1)
+                    pendingBareEsc = true
+                }
                 return nil
             }
-            // ESC + introducer, no terminator: truncated sequence. Drop it all.
-            consume(input.count)
-            return nil
+            if input[1] == 0x5B || input[1] == 0x4F {
+                // Incomplete CSI/SS3: wait for the terminator; drop only a
+                // long-dead sequence.
+                if staleFrames >= Self.deadSequenceStaleFrames {
+                    staleFrames = 0
+                    consume(input.count)
+                }
+                return nil
+            }
         }
 
-        if let byte = input.popFirst() {
-            return finalize(bytes: [byte])
+        // Any other stuck byte (not a recognised escape introducer): make
+        // progress by popping one, after the short timeout.
+        if staleFrames >= Self.bareEscStaleFrames {
+            staleFrames = 0
+            if let byte = input.popFirst() {
+                return finalize(bytes: [byte])
+            }
         }
         return nil
     }
