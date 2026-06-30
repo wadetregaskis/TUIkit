@@ -143,6 +143,24 @@ struct TerminalInputParsingTests {
         #expect(mouseEvents.count == 1, "the fresh report should still parse as a mouse event")
     }
 
+    @Test("hasPendingInput is true while an ESC is held, false once it resolves")
+    func hasPendingInputTracksHeldPartial() {
+        // The run loop polls on a bounded deadline only while this is true, so a
+        // held ESC resolves promptly without external activity, and a truly idle
+        // screen (false) still blocks with no wakeups.
+        let (terminal, stage) = makeTerminal()
+
+        stage([0x1B])
+        _ = terminal.readEvent()
+        #expect(terminal.hasPendingInput, "a buffered lone ESC must keep the loop polling")
+
+        _ = terminal.readEvent()  // deferred (still pending)
+        #expect(terminal.hasPendingInput)
+
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .escape)))  // committed
+        #expect(!terminal.hasPendingInput, "once resolved the loop can go idle")
+    }
+
     @Test("Escape followed (after the timeout) by a real key yields both")
     func escapeThenKeyYieldsBoth() {
         let (terminal, stage) = makeTerminal()

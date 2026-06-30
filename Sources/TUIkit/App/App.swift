@@ -288,12 +288,23 @@ extension AppRunner {
 
             // How long to wait until the next render is due (cap and/or animation
             // folded into one instant), or nil to block until woken.
-            let waitNanos = Self.waitUntilNextRender(
+            var waitNanos = Self.waitUntilNextRender(
                 now: now,
                 pendingRender: pendingRender,
                 lastRenderAtNanos: lastRenderAtNanos,
                 frameIntervalNanos: frameIntervalNanos,
                 animationDeadlineNanos: animationDeadlineNanos)
+
+            // While the input parser is holding something that resolves on a
+            // timeout — a lone ESC being disambiguated from a sequence, or a
+            // split sequence awaiting its tail — poll soon so it resolves on a
+            // bounded wall-clock deadline (a prompt Escape) instead of waiting
+            // for unrelated input or an animation tick. Only active while a
+            // partial is buffered, so a genuinely idle screen still blocks with
+            // no wakeups.
+            if terminal.hasPendingInput {
+                waitNanos = min(waitNanos ?? Self.pendingInputPollNanos, Self.pendingInputPollNanos)
+            }
 
             // Block until woken (stdin data or a render-request `wake()`), or —
             // when a render is pending or an animation is due — until that target.
@@ -350,6 +361,13 @@ extension AppRunner {
         tuiContext.mouseEventDispatcher.setActiveSupport(effective)
         return (DispatchTime.now().uptimeNanoseconds, deadline)
     }
+
+    /// How long to wait before re-checking the input parser while it holds a
+    /// partial (a lone ESC being disambiguated, a split sequence awaiting its
+    /// tail). At ~25 ms a bare Escape commits within a few of these (~75 ms) —
+    /// well under the "feels instant" threshold — without depending on any other
+    /// activity to wake the loop.
+    fileprivate static var pendingInputPollNanos: UInt64 { 25_000_000 }
 
     /// The delay until the next render is due, or `nil` to block until woken.
     ///

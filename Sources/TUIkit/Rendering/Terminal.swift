@@ -651,6 +651,20 @@ extension Terminal {
         return nil
     }
 
+    /// Whether the parser is holding something that needs another
+    /// ``readEvent()`` soon to resolve, even if no new bytes arrive: a lone
+    /// `ESC` mid Escape-vs-sequence disambiguation, a deferred bare `ESC`, or an
+    /// incomplete escape sequence awaiting its terminator.
+    ///
+    /// The run loop reads this to schedule a bounded wake while it's true, so
+    /// these resolve on a wall-clock deadline (a prompt Escape, a dropped dead
+    /// sequence) instead of waiting for unrelated input or animation to tick the
+    /// loop. It's `false` the rest of the time, so a genuinely idle screen still
+    /// blocks with zero wakeups.
+    var hasPendingInput: Bool {
+        !input.isEmpty || pendingBareEsc
+    }
+
     /// Reads up to one complete event from the input stream.
     /// Returns `nil` when nothing is ready right now.
     ///
