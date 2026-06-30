@@ -97,12 +97,35 @@ final class Terminal: TerminalProtocol {
     /// - Bare-Esc disambiguation: `0x1B` alone looks identical to
     ///   the first byte of a CSI / SS3 / Alt+key sequence until
     ///   something definitive arrives. After two stale frames
-    ///   (~48ms) we commit it as an Esc keystroke.
+    ///   (~48ms) we *defer* it via ``pendingBareEsc`` rather than
+    ///   committing immediately — so a split sequence's late tail
+    ///   can still cancel it (see ``resolveStuckPartial()``).
     /// - Stuck-byte recovery: if a malformed or truncated sequence
     ///   sits at the front and the terminal really isn't sending
     ///   anything more, we consume one byte to make progress and
     ///   let the parser try again.
     private var staleFrames: Int = 0
+
+    /// Set when a lone `ESC` has gone stale and we've removed it from the
+    /// buffer but not yet committed it as the Escape key.
+    ///
+    /// A `0x1B` at the front is ambiguous: it can be the Escape key, OR the
+    /// introducer of a CSI/SS3 sequence (arrow key, mouse report, focus event,
+    /// …) whose remaining bytes were split into a later `read()`. Committing it
+    /// as Escape too early strands the sequence's `[` / `O` to be parsed as a
+    /// literal keystroke on the next pass — which is how an arrow key could
+    /// momentarily register as `[` (e.g. jumping `TUIkitExample` to its `[` =
+    /// Sliders page). So instead we hold the decision one round: the next
+    /// ``readEvent()`` re-attaches the `ESC` if a `[`/`O` arrived (parsing the
+    /// real sequence, no Escape emitted), and otherwise commits the Escape.
+    private var pendingBareEsc: Bool = false
+
+    /// The raw byte source feeding the parser. Production reads from stdin;
+    /// tests inject a closure to script split reads deterministically, since
+    /// the parser is otherwise impossible to drive without a live TTY.
+    var readSource: (UnsafeMutableBufferPointer<UInt8>) -> Int = { buffer in
+        read(STDIN_FILENO, buffer.baseAddress, buffer.count)
+    }
 
     /// The original terminal settings.
     private var originalTermios: termios?
@@ -439,7 +462,7 @@ extension Terminal {
         // free; subsequent drains can reuse the expanded capacity.
         input.append(addingCount: Self.baselineCapacity) { (span: inout OutputSpan<UInt8>) in
             span.withUnsafeMutableBufferPointer { buffer, written in
-                let n = read(STDIN_FILENO, buffer.baseAddress, buffer.count)
+                let n = readSource(buffer)
                 if n > 0 {
                     written = n
                     added += n
@@ -621,6 +644,21 @@ extension Terminal {
             appendDrain()
         }
 
+        // Resolve a deferred bare ESC (armed by `resolveStuckPartial`). If a CSI
+        // `[` or SS3 `O` introducer is now at the front, the earlier `ESC` was
+        // this sequence's introducer, split into a later read — re-attach it and
+        // parse the real sequence (no Escape emitted, no `[` leaked as a literal
+        // page shortcut). Otherwise the `ESC` really was the Escape key: commit
+        // it now (the next byte, if any, is handled on the following call).
+        if pendingBareEsc {
+            pendingBareEsc = false
+            if !input.isEmpty, input[0] == 0x5B || input[0] == 0x4F {
+                input.insert(0x1B, at: 0)
+            } else {
+                return finalize(bytes: [0x1B])
+            }
+        }
+
         if inPasteMode {
             if let event = tryExtractPaste() {
                 staleFrames = 0
@@ -662,8 +700,8 @@ extension Terminal {
         }
 
         // We have a stuck partial at the front. Wait one more frame
-        // for the rest; if still nothing comes, give up on the
-        // front byte. This recovers bare Esc (which looks identical
+        // for the rest; if still nothing comes, give up on the front
+        // of the buffer. This recovers bare Esc (which looks identical
         // to a partial CSI introducer until something definitive
         // arrives) and any truncated sequence the terminal will
         // never finish.
@@ -672,13 +710,44 @@ extension Terminal {
 
             if staleFrames >= 2 {
                 staleFrames = 0
-
-                if let b = input.popFirst() {
-                    return finalize(bytes: [b])
-                }
+                return resolveStuckPartial()
             }
         }
 
+        return nil
+    }
+
+    /// Decides what to do with a partial that has sat at the front of the
+    /// buffer for two stale frames without completing — without ever stranding
+    /// an escape-sequence introducer as a literal keystroke.
+    ///
+    /// - A lone `ESC` is *deferred* (``pendingBareEsc``), not committed: its
+    ///   continuation may be a CSI/SS3 sequence split into a later read. The
+    ///   next ``readEvent()`` re-attaches it if a `[`/`O` arrived, else commits
+    ///   the Escape.
+    /// - An `ESC` followed by a `[`/`O` introducer whose terminator never came
+    ///   is a truncated CSI/SS3: the whole partial is dropped as a unit. Popping
+    ///   only the `ESC` would leave the `[`/`O` to be parsed as a literal next
+    ///   pass — the bug that occasionally jumped `TUIkitExample` to its `[` =
+    ///   Sliders page.
+    /// - Any other stuck byte is consumed singly, as before, to make progress.
+    private func resolveStuckPartial() -> TerminalInput? {
+        let first = input[0]
+
+        if first == 0x1B {
+            if input.count == 1 {
+                input.removeFirst(1)
+                pendingBareEsc = true
+                return nil
+            }
+            // ESC + introducer, no terminator: truncated sequence. Drop it all.
+            consume(input.count)
+            return nil
+        }
+
+        if let byte = input.popFirst() {
+            return finalize(bytes: [byte])
+        }
         return nil
     }
 
