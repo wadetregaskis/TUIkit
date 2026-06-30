@@ -46,15 +46,16 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Falls back gracefully on monochrome terminals: the two pixels are
     /// thresholded against mid-luminance and drawn with space / `▀` / `▄` / `█`.
     ///
-    /// > Note: Because the top pixel is the cell *background*, every cell is
-    /// > filled edge-to-edge — so a faithful image needs a terminal that paints
-    /// > the cell background with **no inter-line gap**. A profile configured
-    /// > with extra line or character spacing leaves that leading unpainted, so
-    /// > the window background shows through as thin dark lines between rows
-    /// > (invisible over dark areas, obvious over bright ones). That is a
-    /// > terminal rendering setting, not the emitted output — the cell grid
-    /// > itself is gap-free (see `FineBlocksRenderTests`). Set line spacing to
-    /// > 1.0, or use ``coarseBlocks`` (foreground-only, so it is unaffected).
+    /// > Note: `.fineBlocks` paints pixel data into BOTH the cell foreground
+    /// > and background, so a faithful image depends on the terminal drawing
+    /// > the block glyph (`▄`) cleanly across the whole cell. The emitted cell
+    /// > grid is itself gap-free — every cell carries a real foreground and
+    /// > background (pinned by `FineBlocksRenderTests`) — so thin seams between
+    /// > cells come from the terminal's glyph rendering, not the output. (One
+    /// > observed case: macOS Terminal.app intermittently rasterised the block
+    /// > glyphs with seams until the font was re-applied from its profile
+    /// > settings.) ``coarseBlocks`` is foreground-only if a terminal proves
+    /// > troublesome.
     case fineBlocks
 
     /// Shape-based character lookup, after Alex Harri's "ASCII characters
