@@ -9,17 +9,17 @@ import Testing
 @testable import TUIkit
 @testable import TUIkitView
 
-/// Regression coverage for the SwiftUI-parity fixes from
-/// `Documentation/SwiftUI-compatibility.md` §3 (Binding dynamic-member lookup,
-/// `@State.init(initialValue:)`, generic `Stepper`, data-driven `List`,
+/// Regression coverage for the SwiftUI-parity surface in
+/// `Documentation/SwiftUI-compatibility.md` §1 Match (Binding dynamic-member
+/// lookup, `@State.init(initialValue:)`, generic `Stepper`, data-driven `List`,
 /// `task(id:)`, `sheet(onDismiss:)` / `sheet(item:)`, `navigationTitle`
-/// overloads). Each test locks in the new public signature so it can't silently
+/// overloads). Each test locks in the public signature so it can't silently
 /// regress.
 @MainActor
-@Suite("SwiftUI compatibility fixes (§3)")
+@Suite("SwiftUI compatibility fixes")
 struct SwiftUICompatFixesTests {
 
-    // MARK: - §3.2 Binding dynamic-member lookup + init(projectedValue:)
+    // MARK: - Binding dynamic-member lookup + init(projectedValue:)
 
     @Test("Binding derives a binding to a sub-property via dynamic-member lookup")
     func bindingDynamicMember() {
@@ -42,7 +42,7 @@ struct SwiftUICompatFixesTests {
         #expect(outer.wrappedValue == 42)
     }
 
-    // MARK: - §3.7 @State init(initialValue:)
+    // MARK: - @State init(initialValue:)
 
     @Test("@State has an init(initialValue:) alias")
     func stateInitialValue() {
@@ -50,7 +50,7 @@ struct SwiftUICompatFixesTests {
         #expect(state.wrappedValue == 99)
     }
 
-    // MARK: - §3.1 Stepper generic over the value type
+    // MARK: - Stepper generic over the value type
 
     @Test("Stepper is generic over a Strideable value (Double)")
     func stepperOverDouble() {
@@ -69,7 +69,7 @@ struct SwiftUICompatFixesTests {
         #expect(text.contains("7"))
     }
 
-    // MARK: - §3.4 Data-driven List initializers
+    // MARK: - Data-driven List initializers
 
     @Test("List has data-driven initializers (Identifiable + id:, all selection modes)")
     func dataDrivenList() {
@@ -97,7 +97,7 @@ struct SwiftUICompatFixesTests {
         #expect(keyedSel.contains("BBB"))
     }
 
-    // MARK: - §3.8 / §3.5 / §3.10 signature regression guards
+    // MARK: - task(id:) / sheet(onDismiss:) / navigationTitle signature guards
 
     @Test("task(id:), sheet(onDismiss:)/sheet(item:), navigationTitle overloads resolve")
     func newModifierSignatures() {
@@ -123,7 +123,7 @@ struct SwiftUICompatFixesTests {
         #expect(text.contains("body"))
     }
 
-    // MARK: - §3.9 Button @ViewBuilder label
+    // MARK: - Button @ViewBuilder label
 
     @Test("Button(action:label:) renders a composed view label")
     func buttonViewBuilderLabel() {
