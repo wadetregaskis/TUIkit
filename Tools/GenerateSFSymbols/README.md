@@ -74,9 +74,12 @@ builds carry none of it.
 
 ### Why this shape
 
-The representation was chosen by benchmarking (compile time, lookup ns/op,
-first-access cost, binary size, correctness) — see the commit that introduced
-it. The findings:
+The representation was chosen by benchmarking five candidates (compile time,
+lookup ns/op, first-access cost, binary size, correctness) and adversarially
+verifying the winner — the full record, methodology, and takeaways for baking any
+large static Swift table are in
+[Documentation/Baking a large static lookup table in Swift.md](../../Documentation/Baking%20a%20large%20static%20lookup%20table%20in%20Swift.md).
+In brief:
 
 - A literal `[(String, Character)]` array — the obvious form — takes **~114 s**
   under `-O` (the optimiser chokes on 8466 tuples); even parallel `[String]` /
