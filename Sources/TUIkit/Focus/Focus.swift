@@ -501,8 +501,15 @@ extension FocusManager {
     /// `endRenderPass` validates the stale `focusedID` once the section
     /// has been re-populated, so it is safe to defer the choice.
     ///
-    /// - Parameter id: The section identifier to activate.
-    func activateSection(id: String) {
+    /// - Parameters:
+    ///   - id: The section identifier to activate.
+    ///   - focusBoundary: When non-`nil`, focus lands on the section's boundary
+    ///     element for a directional move — its first focusable for `.forward`,
+    ///     its last for `.backward` — rather than on its remembered element.
+    ///     Tab / Shift+Tab section cycling passes this so the ring keeps
+    ///     advancing; modal presentation leaves it `nil` to resume where the
+    ///     user left off.
+    func activateSection(id: String, focusBoundary: FocusDirection? = nil) {
         guard sections.contains(where: { $0.id == id }) else { return }
 
         // Re-activating the section we're already on is a no-op: leave
@@ -525,8 +532,13 @@ extension FocusManager {
         activeSectionID = id
         focusedID = nil
 
-        // Restore the new section's remembered focus, else its first element.
-        restoreFocusForActiveSection()
+        // Enter at the directional boundary when cycling with Tab / Shift+Tab;
+        // otherwise restore the section's remembered focus.
+        if let focusBoundary {
+            focusBoundaryOfActiveSection(direction: focusBoundary)
+        } else {
+            restoreFocusForActiveSection()
+        }
 
         onFocusChange?()
     }
@@ -572,6 +584,22 @@ extension FocusManager {
             focusedID = firstFocusable.focusID
             firstFocusable.onFocusReceived()
         }
+    }
+
+    /// Focuses the active section's boundary element for a directional move:
+    /// the first focusable when moving `.forward`, the last when moving
+    /// `.backward`.
+    ///
+    /// Used when Tab / Shift+Tab crosses a section boundary, so the new section
+    /// is entered at its edge rather than at whatever element was remembered
+    /// from a previous visit — otherwise the ring collapses into a two-element
+    /// oscillation between adjacent sections' remembered elements.
+    private func focusBoundaryOfActiveSection(direction: FocusDirection) {
+        guard let section = activeSection else { return }
+        let available = section.focusables.filter { $0.canBeFocused }
+        guard let boundary = direction == .forward ? available.first : available.last else { return }
+        focusedID = boundary.focusID
+        boundary.onFocusReceived()
     }
 
     /// Prepares the focus manager for a new render pass.
@@ -634,7 +662,7 @@ extension FocusManager {
 // MARK: - Private Helpers
 
 /// The direction in which focus moves.
-private enum FocusDirection {
+enum FocusDirection {
     case forward, backward
 }
 
@@ -657,7 +685,7 @@ extension FocusManager {
             sectionIndex = direction == .forward ? 0 : sections.count - 1
         }
 
-        activateSection(id: sections[sectionIndex].id)
+        activateSection(id: sections[sectionIndex].id, focusBoundary: direction)
     }
 
     /// Moves focus within the active section.

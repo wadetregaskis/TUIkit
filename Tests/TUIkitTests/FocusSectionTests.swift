@@ -283,4 +283,61 @@ struct FocusSectionTests {
 
         #expect(manager.isFocused(btn2))
     }
+
+    /// Regression: two sections of two elements each must keep looping across
+    /// multiple laps. Previously the section-cycling path restored each
+    /// section's *remembered* element on re-entry, so the second lap collapsed
+    /// into a two-element oscillation between the sections' last (Tab) or first
+    /// (Shift+Tab) rows. Drives two full laps to catch it.
+    @Test("Tab loops across multi-element sections for more than one lap")
+    func tabLoopsMultiElementSectionsAcrossLaps() {
+        let manager = FocusManager()
+        manager.registerSection(id: "sec-a")
+        manager.registerSection(id: "sec-b")
+
+        let a1 = MockFocusable(id: "a-one")
+        let a2 = MockFocusable(id: "a-two")
+        let b1 = MockFocusable(id: "b-one")
+        let b2 = MockFocusable(id: "b-two")
+        manager.register(a1, inSection: "sec-a")
+        manager.register(a2, inSection: "sec-a")
+        manager.register(b1, inSection: "sec-b")
+        manager.register(b2, inSection: "sec-b")
+
+        #expect(manager.isFocused(a1))
+
+        let tab = KeyEvent(key: .tab, ctrl: false, alt: false, shift: false)
+        // Two full laps: a1 → a2 → b1 → b2 → a1 → a2 → b1 → b2 → a1
+        let forwardOrder = [a2, b1, b2, a1, a2, b1, b2, a1]
+        for (step, expected) in forwardOrder.enumerated() {
+            manager.dispatchKeyEvent(tab)
+            #expect(manager.isFocused(expected), "Tab step \(step + 1) should focus \(expected.focusID)")
+        }
+    }
+
+    @Test("Shift+Tab loops across multi-element sections for more than one lap")
+    func shiftTabLoopsMultiElementSectionsAcrossLaps() {
+        let manager = FocusManager()
+        manager.registerSection(id: "sec-a")
+        manager.registerSection(id: "sec-b")
+
+        let a1 = MockFocusable(id: "a-one")
+        let a2 = MockFocusable(id: "a-two")
+        let b1 = MockFocusable(id: "b-one")
+        let b2 = MockFocusable(id: "b-two")
+        manager.register(a1, inSection: "sec-a")
+        manager.register(a2, inSection: "sec-a")
+        manager.register(b1, inSection: "sec-b")
+        manager.register(b2, inSection: "sec-b")
+
+        #expect(manager.isFocused(a1))
+
+        let shiftTab = KeyEvent(key: .tab, ctrl: false, alt: false, shift: true)
+        // Two full laps backward: a1 → b2 → b1 → a2 → a1 → b2 → b1 → a2 → a1
+        let backwardOrder = [b2, b1, a2, a1, b2, b1, a2, a1]
+        for (step, expected) in backwardOrder.enumerated() {
+            manager.dispatchKeyEvent(shiftTab)
+            #expect(manager.isFocused(expected), "Shift+Tab step \(step + 1) should focus \(expected.focusID)")
+        }
+    }
 }
