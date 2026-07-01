@@ -77,7 +77,7 @@ Code that uses them compiles and behaves the same.
 | Scrolling | `ScrollView(_:content:)` | ✓ | the `showsIndicators:` variant mirrors a soft-deprecated SwiftUI init |
 | Adaptive | `ViewThatFits(in:content:)` | ✓ | |
 | Nav | `NavigationSplitView` (2/3-column, `columnVisibility:`), `navigationTitle` (`StringProtocol` / `Text`) | ✓ | a `Text` title renders as a plain string (its styling isn't carried) |
-| Containers | `TabView` / `Tab`, `Form`, `LabeledContent` | ✓ | `formStyle(.columns)` (default, classic macOS layout) / `.grouped` |
+| Containers | `TabView` / `Tab`, `Form`, `LabeledContent`, `Label` (incl. `Label(_:systemImage:)`) | ✓ | `Label(_:systemImage:)` renders an SF Symbol glyph on Apple terminals → §2.4; `formStyle(.columns)` (default) / `.grouped` |
 | Presentation | `sheet(isPresented:onDismiss:content:)`, `sheet(item:onDismiss:content:)`, `alert` | ✓ | presented as a centred, dimming overlay |
 | Lifecycle | `onAppear`, `onDisappear`, `task` (incl. `task(id:)`), `onChange(of:initial:_:)` (both current forms), `onHover` | ✓ | matches the *current* `onChange`; deprecated `perform:` correctly absent |
 | Controls | `Button` (string **and** `Button(action:label:)`), `Toggle`, `Slider`, `Stepper`, `ProgressView`, `TextField`, `SecureField`, `Picker`, `ColorPicker`, `Divider`, `Spacer`, `EmptyView`, `AnyView`, `ContentUnavailableView` | ✓ | `Slider`/`ProgressView`/`Stepper` are floating-point-capable (generic over the value); custom `ButtonStyle`/`ToggleStyle` via `makeBody`; `PickerStyle` is a marker protocol, matching SwiftUI (which exposes no public `makeBody`) |
@@ -161,21 +161,33 @@ keep one clear way to do it, not an omission. (These SwiftUI wrappers are
 *not* deprecated — they coexist — so this is a deliberate non-support, not a
 "correctly omitted deprecated API.")
 
-### 2.4 `Image` is text/ASCII, not bitmaps or SF Symbols
+### 2.4 `Image` is text/ASCII; SF Symbols render as glyphs, in narrow circumstances
 
 ```swift
 // SwiftUI                              // TUIkit
-Image(systemName: "star.fill")          // no SF Symbols (a glyph map is a §4a idea)
 Image("Logo")        // asset catalog   Image(.file("logo.png"))   // rasterised → ASCII art
                                         Image(.url("https://…/x.png"))
+Label("Star", systemImage: "star.fill") Label("Star", systemImage: "star.fill")  // glyph, Apple only
 ```
 
-**Why it's intentional / should NOT change:** a cell grid can't blit a bitmap or
-render a vector glyph. TUIkit converts a raster source to ASCII/ANSI art with its
-own controls (`.imageCharacterSet`, `.imageColorMode`, `.imageDithering`). A
-curated `systemName:` → Unicode-glyph mapping (e.g. `"star.fill"` → `★`) would be
-a reasonable future addition — tracked in §4a — but bitmap/vector `Image` itself
-stays out.
+**Bitmap / vector `Image` stays out.** A cell grid can't blit a bitmap or render
+a vector glyph, so TUIkit converts a raster source to ASCII/ANSI art with its own
+controls (`.imageCharacterSet`, `.imageColorMode`, `.imageDithering`). There is
+no `Image(systemName:)`: an SF Symbol is not a resizable image in a terminal, only
+a character, so it is modelled as text.
+
+**SF Symbols DO render as glyphs — but only in very limited circumstances.**
+`Label(_:systemImage:)` matches SwiftUI's signature, and `SFSymbol.glyph(named:)`
+/ `SFSymbol.all` expose the mapping directly. Each SF Symbol lives in the
+Plane-16 Private Use Area, so it renders **only** where a font supplies its
+glyphs: an **Apple platform**, in a terminal using a font that has them
+(**Terminal.app with SF Mono**, with the **SF Symbols font installed** — not the
+default). Everywhere else — Linux, or a terminal without the font —
+`Label(_:systemImage:)` shows just its title and `SFSymbol` resolves nothing, so
+code stays correct; the glyph simply appears only where it can. The name →
+codepoint table is Apple's own, extracted deterministically from the SF Symbols
+app (`Tools/GenerateSFSymbols`), and the Private-Use width/advance is handled the
+same way as VS-16 emoji. See `SFSymbol` for the full rules.
 
 ### 2.5 Theming is `palette` / `appearance`; there is no `colorScheme`
 
@@ -262,8 +274,7 @@ non-obvious.)
 | **`@FocusState` as a property wrapper** | SwiftUI's focus is `@FocusState var x` + `.focused($x)`; TUIkit's `FocusState` is a manually-constructed class — source-incompatible. | Wrap the existing `FocusManager` in a `@propertyWrapper struct FocusState<Value: Hashable>` + `.focused(_:)`/`.focused(_:equals:)`. Trade-off: reconcile with the imperative manager API. |
 | **`.keyboardShortcut`** | Bind a key to any action, not just status-bar items. | A modifier registering an action with the key dispatcher for the view's focus scope. |
 | **`.onTapGesture(count:)`** | Double/triple-click handling (TUIkit's tap gesture is single-count today). | Count clicks within a window; surface integer cell coords (§2.2). |
-| **Controls: `Label`, `Link`, `DatePicker`, `Gauge`, `TextEditor`, multi-select `Picker`** | Everyday building blocks. | `Label`/`Gauge`/`TextEditor` are straightforward; `Link` opens via `openURL`; `DatePicker` is bigger. |
-| **`Image(systemName:)` → glyph map** *(see §2.4)* | Lets common SF Symbol names render as Unicode. | Curated `String → Character` table; falls back to a placeholder. |
+| **Controls: `Link`, `DatePicker`, `Gauge`, `TextEditor`, multi-select `Picker`** | Everyday building blocks. | `Gauge`/`TextEditor` are straightforward; `Link` opens via `openURL`; `DatePicker` is bigger. (`Label` shipped — see §2.4.) |
 | **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. |
 | **Common modifiers: `.id`, `.opacity`(View), `.multilineTextAlignment`, `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. |
 | **Scoped wrappers: `@Bindable`, `@SceneStorage`, `@FocusedValue`** | `@Bindable` pairs with `@Observable`; the others are niche. | `@Bindable` is the useful one (binding into an `@Observable`); `@SceneStorage` ≈ `@AppStorage` for a single scene. |
