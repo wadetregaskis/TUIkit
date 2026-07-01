@@ -203,8 +203,8 @@ struct ASCIIConverterTests {
     @Test("Fine-block conversion uses two vertical pixels per cell")
     func fineBlocksUsesTwoPixelsPerCell() {
         // Solid red image. With .fineBlocks the converter scales to
-        // (width, height*2) pixels and emits ▄ with a foreground = bottom
-        // pixel and a background = top pixel for each cell.
+        // (width, height*2) pixels and emits ▀ with a foreground = top
+        // pixel and a background = bottom pixel for each cell.
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
         let image = RGBAImage(width: 8, height: 8, pixels: pixels)
         let converter = ASCIIConverter(
@@ -213,11 +213,11 @@ struct ASCIIConverterTests {
         withColorDepth(.truecolor) {
             let lines = converter.convert(image, width: 8, height: 4)
             #expect(lines.count == 4, "Output height matches the requested cell count")
-            #expect(lines[0].contains("\u{2584}"), "Each cell uses the lower-half-block glyph")
+            #expect(lines[0].contains("\u{2580}"), "Each cell uses the upper-half-block glyph")
             // True-colour mode emits both 38;2; (fg) and 48;2; (bg) codes — bg is
             // what makes the half-block effectively double the vertical resolution.
             #expect(lines[0].contains("38;2;"), "Foreground colour is emitted")
-            #expect(lines[0].contains("48;2;"), "Background colour is emitted (top pixel)")
+            #expect(lines[0].contains("48;2;"), "Background colour is emitted (bottom pixel)")
         }
     }
 

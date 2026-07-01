@@ -12,16 +12,16 @@ import Testing
 // MARK: - Fine-Block Grid Integrity
 //
 // `.fineBlocks` is the only image mode that encodes pixel data in the cell
-// *background*: each cell is `▄` (Lower Half Block) painted with the bottom
-// pixel as foreground and the TOP pixel as the cell's background. The cell is
-// therefore filled edge-to-edge — top half = bg = top pixel, bottom half =
-// fg = bottom pixel — so a correctly-emitted grid has NO unpainted cells.
+// *background*: each cell is `▀` (Upper Half Block) painted with the top
+// pixel as foreground and the BOTTOM pixel as the cell's background. The cell
+// is therefore filled edge-to-edge — top half = fg = top pixel, bottom half =
+// bg = bottom pixel — so a correctly-emitted grid has NO unpainted cells.
 //
 // If a terminal shows thin gaps between rows of such an image, that is the
 // terminal failing to paint the SGR background across its inter-line leading
 // (a line-/character-spacing setting), NOT a gap in the bytes TUIkit writes —
 // those gaps fall in the unaddressable space *between* cells. These tests pin
-// the invariant that the bytes are gap-free at the source: every `▄` carries a
+// the invariant that the bytes are gap-free at the source: every `▀` carries a
 // real background, and the frame-diff line builder never drops a cell's bg
 // (e.g. via a future clip/erase/reset optimisation). A failure here WOULD be a
 // real, in-our-output gap.
@@ -47,8 +47,8 @@ struct FineBlocksRenderTests {
     }
 
     /// Walks a rendered line and returns the active background SGR — `""` when
-    /// none is set — at every `▄` glyph, in visible order. An empty entry means
-    /// that cell's top half would show the terminal/app background: a gap.
+    /// none is set — at every `▀` glyph, in visible order. An empty entry means
+    /// that cell's bottom half would show the terminal/app background: a gap.
     private func backgroundsAtBlocks(in line: String) -> [String] {
         var activeBg = ""
         var result: [String] = []
@@ -70,7 +70,7 @@ struct FineBlocksRenderTests {
                 index = end + 1
                 continue
             }
-            if Character(scalars[index]) == "\u{2584}" { result.append(activeBg) }
+            if Character(scalars[index]) == "\u{2580}" { result.append(activeBg) }
             index += 1
         }
         return result
@@ -101,7 +101,7 @@ struct FineBlocksRenderTests {
             for (row, line) in lines.enumerated() {
                 let emptyColumns = backgroundsAtBlocks(in: line)
                     .enumerated().filter { $0.element.isEmpty }.map(\.offset)
-                #expect(emptyColumns.isEmpty, "row \(row): ▄ with no background at columns \(emptyColumns)")
+                #expect(emptyColumns.isEmpty, "row \(row): ▀ with no background at columns \(emptyColumns)")
             }
         }
     }
@@ -151,7 +151,7 @@ struct FineBlocksRenderTests {
                         .enumerated().filter { $0.element.isEmpty }.map(\.offset)
                     #expect(
                         emptyColumns.isEmpty,
-                        "offset \(offset) row \(row): sliced ▄ with no background at \(emptyColumns)")
+                        "offset \(offset) row \(row): sliced ▀ with no background at \(emptyColumns)")
                 }
             }
         }

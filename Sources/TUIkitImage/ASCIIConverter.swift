@@ -33,13 +33,13 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// detail matters, prefer ``fineBlocks``.
     case coarseBlocks
 
-    /// Half-block cells (`▄`) with independent foreground / background colours,
+    /// Half-block cells (`▀`) with independent foreground / background colours,
     /// doubling the effective vertical resolution compared with
     /// ``coarseBlocks``. This is the default character set.
     ///
     /// Each terminal cell encodes two image pixels — the top one is painted
-    /// as the cell's background, the bottom one as the foreground of the
-    /// lower-half block glyph. Because terminal characters are roughly twice
+    /// as the foreground of the upper-half block glyph, the bottom one as the
+    /// cell's background. Because terminal characters are roughly twice
     /// as tall as they are wide, the resulting sub-cell pixels are very
     /// nearly square — vertical and horizontal resolutions match.
     ///
@@ -48,14 +48,17 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     ///
     /// > Note: `.fineBlocks` paints pixel data into BOTH the cell foreground
     /// > and background, so a faithful image depends on the terminal drawing
-    /// > the block glyph (`▄`) cleanly across the whole cell. The emitted cell
-    /// > grid is itself gap-free — every cell carries a real foreground and
-    /// > background (pinned by `FineBlocksRenderTests`) — so thin seams between
-    /// > cells come from the terminal's glyph rendering, not the output. (One
-    /// > observed case: macOS Terminal.app intermittently rasterised the block
-    /// > glyphs with seams until the font was re-applied from its profile
-    /// > settings.) ``coarseBlocks`` is foreground-only if a terminal proves
-    /// > troublesome.
+    /// > the block glyph (`▀`) cleanly. The *upper* half block is chosen so the
+    /// > colour boundary sits mid-cell: some terminals (Terminal.app with SF
+    /// > Mono at certain sizes, including the default 11 pt) don't rasterise a
+    /// > half-block all the way to the cell's far edge, and putting that
+    /// > shortfall mid-cell against the matching background colour hides it —
+    /// > whereas the lower-half block would leave a visible band at the cell's
+    /// > bottom edge. The emitted cell grid is itself gap-free — every cell
+    /// > carries a real foreground and background (pinned by
+    /// > `FineBlocksRenderTests`) — so any remaining seams come from the
+    /// > terminal's glyph rendering, not the output. ``coarseBlocks`` is
+    /// > foreground-only if a terminal proves troublesome.
     case fineBlocks
 
     /// Shape-based character lookup, after Alex Harri's "ASCII characters
