@@ -252,15 +252,37 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let cells = model.cells(date: selection.wrappedValue, activeIndex: isFocused ? handler.activeIndex : -1)
         let activeKind: DateFieldModel.Kind? = isFocused ? handler.activeKind : nil
 
+        // The focused, active component is drawn as a dark glyph on a *pulsing
+        // accent* block — explicit palette colours (not SGR reverse-video, which
+        // inverts the terminal's default colours and collapses to dark-on-dark
+        // on a mid-tone theme), so it's readable on every palette and visibly
+        // breathes while focused, the same affordance List/Picker rows use.
+        // Gated on `!isMeasuring` so the measure pass never reads `pulsePhase`;
+        // it's colour-only, so width is identical whether or not it's applied.
+        let activeHighlight: Color? = (isFocused && !context.isMeasuring)
+            ? Color.lerp(
+                palette.accent.opacity(ViewConstants.focusPulseMin),
+                palette.accent.opacity(ViewConstants.focusPulseMax),
+                phase: context.environment.pulsePhase)
+            : nil
+
         var line = ""
         for cell in cells {
             var style = TextStyle()
             if cell.kind == nil {
+                // Separators (the "-", ":" and spaces) stay quiet.
                 style.foregroundColor = palette.foregroundSecondary
-            } else if let activeKind, cell.kind == activeKind {
-                style.isInverted = true  // colour-only highlight — never changes width
+            } else if let activeKind, cell.kind == activeKind, let activeHighlight {
+                // Bright text on the pulsing accent block — the same
+                // high-contrast, readable affordance List/Picker focused rows use.
+                style.backgroundColor = activeHighlight
+                style.foregroundColor = palette.foreground
+                style.isUnderlined = !isDisabled
             } else {
+                // Every editable component is underlined so the field reads as
+                // fillable even before it takes focus.
                 style.foregroundColor = isDisabled ? palette.foregroundTertiary : palette.foreground
+                style.isUnderlined = !isDisabled
             }
             line += ANSIRenderer.render(cell.text, with: style.resolved(with: palette))
         }
