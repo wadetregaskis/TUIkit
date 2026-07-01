@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Buttons and focus demo page.
@@ -129,6 +130,18 @@ struct ButtonsPage: View {
 
                     Text(L("page.buttons.themeableNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
+                }
+            }
+
+            // A Link is a button that opens a URL, so it belongs with the other
+            // activatable controls: Tab to it and press Enter, or click it.
+            DemoSection(L("page.buttons.section.links")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.newControls.linkHint")).foregroundStyle(.palette.foregroundSecondary)
+                    Link("swift.org", destination: URL(string: "https://swift.org")!)
+                    Link(destination: URL(string: "https://github.com/apple/swift")!) {
+                        Label("apple/swift", systemImage: "swift")
+                    }
                 }
             }
 

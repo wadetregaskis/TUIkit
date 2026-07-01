@@ -53,7 +53,7 @@ extension ExampleStrings {
             "page.progressView.working": "Working",
             "page.progressView.determinateStyles": "Determinate styles",
             "page.progressView.indeterminateAnimations": "Indeterminate animations",
-            "page.progressView.title": "Progress Views",
+            "page.progressView.title": "Progress & Gauges",
             "page.progressView.styleLabel": "style",
             // Mouse
             "page.mouse.tapCounter": "Tap Counter",
@@ -189,7 +189,7 @@ extension ExampleStrings {
             "page.progressView.working": "Arbeitet",
             "page.progressView.determinateStyles": "Bestimmte Stile",
             "page.progressView.indeterminateAnimations": "Unbestimmte Animationen",
-            "page.progressView.title": "Fortschrittsanzeigen",
+            "page.progressView.title": "Fortschritt & Anzeigen",
             "page.progressView.styleLabel": "Stil",
             // Mouse
             "page.mouse.tapCounter": "Klickzähler",
@@ -325,7 +325,7 @@ extension ExampleStrings {
             "page.progressView.working": "En cours",
             "page.progressView.determinateStyles": "Styles déterminés",
             "page.progressView.indeterminateAnimations": "Animations indéterminées",
-            "page.progressView.title": "Indicateurs de progression",
+            "page.progressView.title": "Progression et jauges",
             "page.progressView.styleLabel": "style",
             // Mouse
             "page.mouse.tapCounter": "Compteur de clics",
@@ -461,7 +461,7 @@ extension ExampleStrings {
             "page.progressView.working": "In corso",
             "page.progressView.determinateStyles": "Stili determinati",
             "page.progressView.indeterminateAnimations": "Animazioni indeterminate",
-            "page.progressView.title": "Indicatori di avanzamento",
+            "page.progressView.title": "Avanzamento e indicatori",
             "page.progressView.styleLabel": "stile",
             // Mouse
             "page.mouse.tapCounter": "Contatore clic",
@@ -597,7 +597,7 @@ extension ExampleStrings {
             "page.progressView.working": "Trabajando",
             "page.progressView.determinateStyles": "Estilos determinados",
             "page.progressView.indeterminateAnimations": "Animaciones indeterminadas",
-            "page.progressView.title": "Indicadores de progreso",
+            "page.progressView.title": "Progreso e indicadores",
             "page.progressView.styleLabel": "estilo",
             // Mouse
             "page.mouse.tapCounter": "Contador de clics",
@@ -733,7 +733,7 @@ extension ExampleStrings {
             "page.progressView.working": "处理中",
             "page.progressView.determinateStyles": "确定样式",
             "page.progressView.indeterminateAnimations": "不确定动画",
-            "page.progressView.title": "进度视图",
+            "page.progressView.title": "进度与仪表",
             "page.progressView.styleLabel": "样式",
             // Mouse
             "page.mouse.tapCounter": "点击计数器",
@@ -869,7 +869,7 @@ extension ExampleStrings {
             "page.progressView.working": "処理中",
             "page.progressView.determinateStyles": "確定スタイル",
             "page.progressView.indeterminateAnimations": "不確定アニメーション",
-            "page.progressView.title": "進捗ビュー",
+            "page.progressView.title": "進捗とゲージ",
             "page.progressView.styleLabel": "スタイル",
             // Mouse
             "page.mouse.tapCounter": "タップカウンター",

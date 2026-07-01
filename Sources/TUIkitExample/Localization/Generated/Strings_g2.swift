@@ -15,7 +15,7 @@ extension ExampleStrings {
     static let g2: [String: [String: String]] = [
         "en": [
             // Buttons
-            "page.buttons.header": "Buttons & Focus Demo",
+            "page.buttons.header": "Buttons & Links Demo",
             "page.buttons.section.counter": "Interactive Counter (@State)",
             "page.buttons.reset": "Reset",
             "page.buttons.clicks": "Clicks",
@@ -158,7 +158,7 @@ extension ExampleStrings {
         ],
         "de": [
             // Buttons
-            "page.buttons.header": "Schaltflächen- & Fokus-Demo",
+            "page.buttons.header": "Schaltflächen- & Links-Demo",
             "page.buttons.section.counter": "Interaktiver Zähler (@State)",
             "page.buttons.reset": "Zurücksetzen",
             "page.buttons.clicks": "Klicks",
@@ -301,7 +301,7 @@ extension ExampleStrings {
         ],
         "fr": [
             // Buttons
-            "page.buttons.header": "Démo boutons et focus",
+            "page.buttons.header": "Démo boutons et liens",
             "page.buttons.section.counter": "Compteur interactif (@State)",
             "page.buttons.reset": "Réinitialiser",
             "page.buttons.clicks": "Clics",
@@ -444,7 +444,7 @@ extension ExampleStrings {
         ],
         "it": [
             // Buttons
-            "page.buttons.header": "Demo pulsanti e focus",
+            "page.buttons.header": "Demo pulsanti e collegamenti",
             "page.buttons.section.counter": "Contatore interattivo (@State)",
             "page.buttons.reset": "Reimposta",
             "page.buttons.clicks": "Clic",
@@ -587,7 +587,7 @@ extension ExampleStrings {
         ],
         "es": [
             // Buttons
-            "page.buttons.header": "Demo de botones y foco",
+            "page.buttons.header": "Demo de botones y enlaces",
             "page.buttons.section.counter": "Contador interactivo (@State)",
             "page.buttons.reset": "Restablecer",
             "page.buttons.clicks": "Clics",
@@ -730,7 +730,7 @@ extension ExampleStrings {
         ],
         "zh": [
             // Buttons
-            "page.buttons.header": "按钮与焦点演示",
+            "page.buttons.header": "按钮与链接演示",
             "page.buttons.section.counter": "交互式计数器 (@State)",
             "page.buttons.reset": "重置",
             "page.buttons.clicks": "点击次数",
@@ -873,7 +873,7 @@ extension ExampleStrings {
         ],
         "ja": [
             // Buttons
-            "page.buttons.header": "ボタンとフォーカスのデモ",
+            "page.buttons.header": "ボタンとリンクのデモ",
             "page.buttons.section.counter": "インタラクティブなカウンター (@State)",
             "page.buttons.reset": "リセット",
             "page.buttons.clicks": "クリック数",

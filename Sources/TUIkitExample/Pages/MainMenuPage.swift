@@ -73,8 +73,7 @@ struct MainMenuPage: View {
                         MenuItem(label: L("menu.item.layout"), shortcut: "5"),
                         MenuItem(label: L("menu.item.buttons"), shortcut: "6"),
                         MenuItem(label: L("menu.item.toggles"), shortcut: "7"),
-                        MenuItem(label: L("menu.item.textFields"), shortcut: "8"),
-                        MenuItem(label: L("menu.item.secureFields"), shortcut: "\\"),
+                        MenuItem(label: L("menu.item.textInput"), shortcut: "8"),
                         MenuItem(label: L("menu.item.radioButtons"), shortcut: "9"),
                         MenuItem(label: L("menu.item.spinners"), shortcut: "0"),
                         MenuItem(label: L("menu.item.lists"), shortcut: "-"),
@@ -97,7 +96,6 @@ struct MainMenuPage: View {
                         MenuItem(label: L("menu.item.lifecycle"), shortcut: "l"),
                         MenuItem(label: L("menu.item.preferences"), shortcut: "r"),
                         MenuItem(label: L("menu.item.focus"), shortcut: "k"),
-                        MenuItem(label: L("menu.item.newControls"), shortcut: "g"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in

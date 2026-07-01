@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Picker demo page.
@@ -18,6 +19,7 @@ struct PickerPage: View {
     @State var size: String = "medium"
     @State var priority: Int = 2
     @State var number: Int = 1
+    @State private var date = Date()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -59,6 +61,17 @@ struct PickerPage: View {
                 .pickerStyle(.inline)
                 // .pickerTextStyle re-themes the picker's label + option text.
                 .pickerTextStyle { $0.foreground = .palette.accent }
+            }
+
+            // A DatePicker is a picker for a date/time, so it belongs here. It
+            // renders as an inline field: Left/Right pick a component, Up/Down
+            // or typing digits edit it (the active field pulses when focused).
+            DemoSection(L("page.picker.dateSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    DatePicker(L("page.newControls.dateBoth"), selection: $date)
+                    DatePicker(L("page.newControls.dateOnly"), selection: $date, displayedComponents: .date)
+                    DatePicker(L("page.newControls.timeOnly"), selection: $date, displayedComponents: .hourAndMinute)
+                }
             }
 
             DemoSection(L("page.picker.currentSelections")) {

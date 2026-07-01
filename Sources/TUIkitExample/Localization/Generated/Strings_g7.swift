@@ -92,6 +92,14 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "Time",
             "page.newControls.helpNav": "Move between fields / open",
             "page.newControls.helpEdit": "Adjust the focused field",
+
+            // Reorganised pages: the controls above now live on focused pages.
+            "menu.item.textInput": "Text Input",
+            "page.textInput.title": "Text Input",
+            "page.textInput.editorSection": "Multi-line editor",
+            "page.progressView.gaugeSection": "Gauges",
+            "page.picker.dateSection": "Date & time",
+            "page.buttons.section.links": "Links",
         ],
 
         "de": [
@@ -165,6 +173,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "Uhrzeit",
             "page.newControls.helpNav": "Zwischen Feldern wechseln / öffnen",
             "page.newControls.helpEdit": "Fokussiertes Feld anpassen",
+
+            "menu.item.textInput": "Texteingabe",
+            "page.textInput.title": "Texteingabe",
+            "page.textInput.editorSection": "Mehrzeiliger Editor",
+            "page.progressView.gaugeSection": "Anzeigen",
+            "page.picker.dateSection": "Datum & Uhrzeit",
+            "page.buttons.section.links": "Links",
         ],
 
         "fr": [
@@ -238,6 +253,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "Heure",
             "page.newControls.helpNav": "Se déplacer entre les champs / ouvrir",
             "page.newControls.helpEdit": "Ajuster le champ ciblé",
+
+            "menu.item.textInput": "Saisie de texte",
+            "page.textInput.title": "Saisie de texte",
+            "page.textInput.editorSection": "Éditeur multiligne",
+            "page.progressView.gaugeSection": "Jauges",
+            "page.picker.dateSection": "Date et heure",
+            "page.buttons.section.links": "Liens",
         ],
 
         "it": [
@@ -311,6 +333,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "Ora",
             "page.newControls.helpNav": "Sposta tra i campi / apri",
             "page.newControls.helpEdit": "Regola il campo attivo",
+
+            "menu.item.textInput": "Immissione testo",
+            "page.textInput.title": "Immissione testo",
+            "page.textInput.editorSection": "Editor multiriga",
+            "page.progressView.gaugeSection": "Indicatori",
+            "page.picker.dateSection": "Data e ora",
+            "page.buttons.section.links": "Collegamenti",
         ],
 
         "es": [
@@ -384,6 +413,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "Hora",
             "page.newControls.helpNav": "Moverse entre campos / abrir",
             "page.newControls.helpEdit": "Ajustar el campo enfocado",
+
+            "menu.item.textInput": "Entrada de texto",
+            "page.textInput.title": "Entrada de texto",
+            "page.textInput.editorSection": "Editor multilínea",
+            "page.progressView.gaugeSection": "Indicadores",
+            "page.picker.dateSection": "Fecha y hora",
+            "page.buttons.section.links": "Enlaces",
         ],
 
         "zh": [
@@ -457,6 +493,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "时间",
             "page.newControls.helpNav": "在字段间移动 / 打开",
             "page.newControls.helpEdit": "调整聚焦的字段",
+
+            "menu.item.textInput": "文本输入",
+            "page.textInput.title": "文本输入",
+            "page.textInput.editorSection": "多行编辑器",
+            "page.progressView.gaugeSection": "仪表",
+            "page.picker.dateSection": "日期和时间",
+            "page.buttons.section.links": "链接",
         ],
 
         "ja": [
@@ -530,6 +573,13 @@ extension ExampleStrings {
             "page.newControls.timeOnly": "時刻",
             "page.newControls.helpNav": "フィールド間を移動 / 開く",
             "page.newControls.helpEdit": "フォーカス中のフィールドを調整",
+
+            "menu.item.textInput": "テキスト入力",
+            "page.textInput.title": "テキスト入力",
+            "page.textInput.editorSection": "複数行エディター",
+            "page.progressView.gaugeSection": "ゲージ",
+            "page.picker.dateSection": "日付と時刻",
+            "page.buttons.section.links": "リンク",
         ],
     ]
 }

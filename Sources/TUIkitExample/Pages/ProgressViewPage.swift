@@ -128,6 +128,31 @@ struct ProgressViewPage: View {
                 }
             }
 
+            // A Gauge is the sibling of ProgressView — it shows where a value
+            // sits in a range rather than progress toward completion — so it
+            // lives here. Its default shaded meter reads distinctly from the
+            // ProgressView bars above; the `GaugeStyle` variants follow.
+            DemoSection(L("page.progressView.gaugeSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    let fraction = animatedFraction()
+                    Gauge(value: fraction, in: 0...1) {
+                        Text(L("page.newControls.gaugeLabel"))
+                    } currentValueLabel: {
+                        Text("\(Int((fraction * 100).rounded()))%")
+                    } minimumValueLabel: {
+                        Text("0")
+                    } maximumValueLabel: {
+                        Text("100")
+                    }
+                    gaugeRow(label: "accessoryLinear         ", fraction: fraction, style: .accessoryLinear)
+                    gaugeRow(label: "accessoryLinearCapacity ", fraction: fraction, style: .accessoryLinearCapacity)
+                    HStack(spacing: 3) {
+                        circularGauge(label: "accessoryCircular", fraction: fraction, style: .accessoryCircular)
+                        circularGauge(label: "…Capacity", fraction: fraction, style: .accessoryCircularCapacity)
+                    }
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
@@ -165,6 +190,31 @@ struct ProgressViewPage: View {
         HStack(spacing: 1) {
             Text(label).dim()
             ProgressView().frame(width: 36).indeterminateStyle(style)
+        }
+    }
+
+    /// A `[style name | linear gauge]` row, echoing the ProgressView catalogue.
+    @ViewBuilder
+    private func gaugeRow(label: String, fraction: Double, style: GaugeStyle) -> some View {
+        HStack(spacing: 1) {
+            Text(label).dim()
+            Gauge(value: fraction) { EmptyView() } currentValueLabel: {
+                Text("\(Int((fraction * 100).rounded()))%")
+            }
+            .gaugeStyle(style)
+            .frame(width: 28)
+        }
+    }
+
+    /// A circular gauge with its style name below it.
+    @ViewBuilder
+    private func circularGauge(label: String, fraction: Double, style: GaugeStyle) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Gauge(value: fraction) { EmptyView() } currentValueLabel: {
+                Text("\(Int((fraction * 100).rounded()))%")
+            }
+            .gaugeStyle(style)
+            Text(label).dim()
         }
     }
 }

@@ -18,8 +18,7 @@ enum DemoPage: Int, CaseIterable {
     case layout
     case buttons
     case toggles
-    case textFields
-    case secureFields
+    case textInput
     case radioButtons
     case spinners
     case lists
@@ -42,7 +41,6 @@ enum DemoPage: Int, CaseIterable {
     case lifecycle
     case preferences
     case focus
-    case newControls
 }
 
 // MARK: - App-wide styling
@@ -186,10 +184,8 @@ struct ContentView: View {
             ButtonsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .toggles:
             TogglePage().statusBarItems(subPageItems(pageSetter: pageSetter))
-        case .textFields:
-            TextFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter))
-        case .secureFields:
-            SecureFieldPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .textInput:
+            TextInputPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .radioButtons:
             RadioButtonPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .spinners:
@@ -235,8 +231,6 @@ struct ContentView: View {
             PreferencesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .focus:
             FocusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
-        case .newControls:
-            NewControlsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
@@ -257,7 +251,7 @@ struct ContentView: View {
         let mapping: [Character: DemoPage] = [
             "1": .textStyles, "2": .colors, "3": .containers,
             "4": .overlays, "5": .layout, "6": .buttons,
-            "7": .toggles, "8": .textFields, "\\": .secureFields,
+            "7": .toggles, "8": .textInput,
             "9": .radioButtons, "0": .spinners, "-": .lists,
             "=": .tables, "s": .scrollView,
             "[": .sliders, "]": .steppers,
@@ -267,7 +261,6 @@ struct ContentView: View {
             "v": .tabViews,
             "p": .statePersistence, "l": .lifecycle,
             "r": .preferences, "k": .focus,
-            "g": .newControls,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
