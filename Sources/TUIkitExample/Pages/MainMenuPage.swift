@@ -54,7 +54,9 @@ struct MainMenuPage: View {
             .compactMap { SFSymbol.glyph(named: $0) }
             .joined()
         let caveat = L("feature.sfSymbols.macOSOnly")
-        return examples.isEmpty ? caveat : "\(examples) \(caveat)"
+        // The caveat now names the font requirement too, so it's wide — give it
+        // its own line beneath the glyphs.
+        return examples.isEmpty ? caveat : "\(examples)\n\(caveat)"
     }
 
     var body: some View {

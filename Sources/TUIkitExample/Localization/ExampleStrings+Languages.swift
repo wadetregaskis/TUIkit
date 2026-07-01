@@ -52,7 +52,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "View protocol",
         "feature.unicode.title": "Unicode compatible",
         "feature.sfSymbols.title": "Supports SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(macOS only)",
+        "feature.sfSymbols.macOSOnly": "(macOS only; requires the SF Symbols font)",
         "page.theme.language": "Language",
     ]
 
@@ -99,7 +99,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "View-Protokoll",
         "feature.unicode.title": "Unicode-kompatibel",
         "feature.sfSymbols.title": "Unterstützt SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(nur macOS)",
+        "feature.sfSymbols.macOSOnly": "(nur macOS; erfordert die SF-Symbols-Schrift)",
         "page.theme.language": "Sprache",
     ]
 
@@ -146,7 +146,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "Protocole View",
         "feature.unicode.title": "Compatible Unicode",
         "feature.sfSymbols.title": "Compatible SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(macOS uniquement)",
+        "feature.sfSymbols.macOSOnly": "(macOS uniquement ; nécessite la police SF Symbols)",
         "page.theme.language": "Langue",
     ]
 
@@ -193,7 +193,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "Protocollo View",
         "feature.unicode.title": "Compatibile Unicode",
         "feature.sfSymbols.title": "Supporta SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(solo macOS)",
+        "feature.sfSymbols.macOSOnly": "(solo macOS; richiede il font SF Symbols)",
         "page.theme.language": "Lingua",
     ]
 
@@ -240,7 +240,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "Protocolo View",
         "feature.unicode.title": "Compatible con Unicode",
         "feature.sfSymbols.title": "Compatible con SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(solo macOS)",
+        "feature.sfSymbols.macOSOnly": "(solo macOS; requiere la fuente SF Symbols)",
         "page.theme.language": "Idioma",
     ]
 
@@ -287,7 +287,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "View 协议",
         "feature.unicode.title": "兼容 Unicode",
         "feature.sfSymbols.title": "支持 SF Symbols",
-        "feature.sfSymbols.macOSOnly": "(仅 macOS)",
+        "feature.sfSymbols.macOSOnly": "(仅 macOS；需安装 SF Symbols 字体)",
         "page.theme.language": "语言",
     ]
 
@@ -334,7 +334,7 @@ extension ExampleStrings {
         "feature.composable.subtitle": "Viewプロトコル",
         "feature.unicode.title": "Unicode対応",
         "feature.sfSymbols.title": "SF Symbols 対応",
-        "feature.sfSymbols.macOSOnly": "(macOS のみ)",
+        "feature.sfSymbols.macOSOnly": "(macOS のみ；SF Symbols フォントが必要)",
         "page.theme.language": "言語",
     ]
 }
