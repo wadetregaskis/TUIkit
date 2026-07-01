@@ -47,6 +47,7 @@ struct ListPage: View {
     @State var singleSelection: String?
     @State var multiSelection: Set<String> = []
     @State var transientSelection: String?
+    @State var multiLineSelection: String?
 
     var body: some View {
         // The page is taller than most terminals, so it's wrapped in a
@@ -193,6 +194,22 @@ struct ListPage: View {
                         .frame(maxWidth: .infinity)
                     }
                 }
+            }
+
+            // Rows can be any height — a `List` measures each row's rendered
+            // height and windows/scrolls by lines, so a two-line cell just works.
+            // 12 items in an 8-row frame → it scrolls, with a scrollbar.
+            DemoSection(L("page.list.multiLineSection")) {
+                List(selection: $multiLineSelection) {
+                    ForEach(FileItem.sampleFiles) { file in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("\(file.icon) \(file.name)").bold()
+                            Text(file.size).foregroundStyle(.palette.foregroundSecondary)
+                        }
+                    }
+                }
+                .frame(height: 8)
+                .scrollbarVisibility(.visible)
             }
 
             KeyboardHelpSection(
