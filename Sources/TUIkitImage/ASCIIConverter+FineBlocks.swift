@@ -38,6 +38,14 @@ extension ASCIIConverter {
     }
 
     /// Colour variant: top pixel → background, bottom pixel → foreground of `▄`.
+    ///
+    /// The `▄` glyph is emitted **bold** (SGR 1). At some SF Mono sizes in
+    /// Terminal.app (incl. the default 11 pt) the regular-weight lower-half
+    /// block is rasterised a hair short of the cell's bottom edge, so the cell
+    /// background (the *top* pixel's colour) bleeds through as a thin band along
+    /// each row's bottom. Bold selects a heavier glyph that fills to the edge on
+    /// the affected sizes; in true colour the fill colour is explicit RGB, so
+    /// bold changes only the glyph weight, not the colour, and never the width.
     private func convertFineBlocksColor(
         _ image: RGBAImage,
         width: Int,
@@ -45,6 +53,7 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let lowerHalfBlock: Character = "▄"
+        let bold = "\(ANSIEscape.csi)1m"
 
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -63,10 +72,10 @@ extension ASCIIConverter {
                 let bgCode = backgroundColorCode(for: topPixel, mode: mode)
 
                 if fgCode != lastFg || bgCode != lastBg {
-                    if !lastFg.isEmpty || !lastBg.isEmpty {
-                        line += ANSIEscape.reset
-                    }
-                    line += fgCode + bgCode
+                    // The reset clears bold too, so re-assert it with each colour
+                    // run (bold persists across cells that reuse the same colours).
+                    line += ANSIEscape.reset
+                    line += bold + fgCode + bgCode
                     lastFg = fgCode
                     lastBg = bgCode
                 }
