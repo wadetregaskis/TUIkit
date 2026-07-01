@@ -44,6 +44,19 @@ struct MainMenuPage: View {
     @Binding var currentPage: DemoPage
     @Binding var menuSelection: Int
 
+    /// Subtitle for the SF Symbols feature box: a few thematic glyphs — the
+    /// Swift logo, a terminal, and the ⌘ key, resolved through the very API the
+    /// box advertises (``SFSymbol/glyph(named:)``) — followed by the "(macOS
+    /// only)" caveat. Off Apple platforms the symbols resolve to nothing, so
+    /// only the caveat remains.
+    private var sfSymbolsSubtitle: String {
+        let examples = ["swift", "apple.terminal", "command"]
+            .compactMap { SFSymbol.glyph(named: $0) }
+            .joined(separator: " ")
+        let caveat = L("feature.sfSymbols.macOSOnly")
+        return examples.isEmpty ? caveat : "\(examples)  \(caveat)"
+    }
+
     var body: some View {
         VStack(spacing: 1) {
             Spacer(minLength: 1)
@@ -109,6 +122,7 @@ struct MainMenuPage: View {
                     FeatureBox(L("feature.declarative.title"), L("feature.declarative.subtitle")).equatable()
                     FeatureBox(L("feature.composable.title"), L("feature.composable.subtitle")).equatable()
                     FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
+                    FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle).equatable()
                 }
                 Spacer()
             }
