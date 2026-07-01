@@ -42,6 +42,7 @@ enum DemoPage: Int, CaseIterable {
     case lifecycle
     case preferences
     case focus
+    case newControls
 }
 
 // MARK: - App-wide styling
@@ -234,6 +235,8 @@ struct ContentView: View {
             PreferencesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .focus:
             FocusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .newControls:
+            NewControlsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
@@ -264,6 +267,7 @@ struct ContentView: View {
             "v": .tabViews,
             "p": .statePersistence, "l": .lifecycle,
             "r": .preferences, "k": .focus,
+            "g": .newControls,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {

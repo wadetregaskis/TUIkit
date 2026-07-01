@@ -97,6 +97,7 @@ struct MainMenuPage: View {
                         MenuItem(label: L("menu.item.lifecycle"), shortcut: "l"),
                         MenuItem(label: L("menu.item.preferences"), shortcut: "r"),
                         MenuItem(label: L("menu.item.focus"), shortcut: "k"),
+                        MenuItem(label: L("menu.item.newControls"), shortcut: "g"),
                     ],
                     selection: $menuSelection,
                     onSelect: { index in

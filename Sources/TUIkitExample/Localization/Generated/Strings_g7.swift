@@ -78,6 +78,20 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Hold Shift while pressing ← / → (or +/−) to step by 10× the normal amount.",
             "page.stepper.bigValue": "Value (×10 with Shift)",
             "page.stepper.bigValueLabel": "Value",
+
+            // New controls page (Gauge, Link, TextEditor, DatePicker)
+            "menu.item.newControls": "New Controls",
+            "page.newControls.title": "New Controls",
+            "page.newControls.gaugeLabel": "Signal",
+            "page.newControls.gaugeHint": "Drag the slider to change the gauge",
+            "page.newControls.linkHint": "Tab to a link, then Enter to open it",
+            "page.newControls.editorHint": "Multi-line — Enter starts a new line",
+            "page.newControls.editorSample": "TUIkit TextEditor\nEdit me — Enter adds a line.",
+            "page.newControls.dateBoth": "Date & time",
+            "page.newControls.dateOnly": "Date",
+            "page.newControls.timeOnly": "Time",
+            "page.newControls.helpNav": "Move between fields / open",
+            "page.newControls.helpEdit": "Adjust the focused field",
         ],
 
         "de": [
@@ -138,6 +152,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Halte Shift, während du ← / → (oder +/−) drückst, um in 10× der normalen Schrittweite zu springen.",
             "page.stepper.bigValue": "Wert (×10 mit Shift)",
             "page.stepper.bigValueLabel": "Wert",
+
+            "menu.item.newControls": "Neue Steuerelemente",
+            "page.newControls.title": "Neue Steuerelemente",
+            "page.newControls.gaugeLabel": "Signal",
+            "page.newControls.gaugeHint": "Ziehen Sie den Regler, um die Anzeige zu ändern",
+            "page.newControls.linkHint": "Mit Tab zu einem Link, dann Enter zum Öffnen",
+            "page.newControls.editorHint": "Mehrzeilig — Enter beginnt eine neue Zeile",
+            "page.newControls.editorSample": "TUIkit TextEditor\nBearbeite mich — Enter fügt eine Zeile hinzu.",
+            "page.newControls.dateBoth": "Datum & Uhrzeit",
+            "page.newControls.dateOnly": "Datum",
+            "page.newControls.timeOnly": "Uhrzeit",
+            "page.newControls.helpNav": "Zwischen Feldern wechseln / öffnen",
+            "page.newControls.helpEdit": "Fokussiertes Feld anpassen",
         ],
 
         "fr": [
@@ -198,6 +225,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Maintenez Maj en appuyant sur ← / → (ou +/−) pour avancer de 10× la valeur normale.",
             "page.stepper.bigValue": "Valeur (×10 avec Maj)",
             "page.stepper.bigValueLabel": "Valeur",
+
+            "menu.item.newControls": "Nouveaux contrôles",
+            "page.newControls.title": "Nouveaux contrôles",
+            "page.newControls.gaugeLabel": "Signal",
+            "page.newControls.gaugeHint": "Faites glisser le curseur pour changer la jauge",
+            "page.newControls.linkHint": "Tab vers un lien, puis Entrée pour l'ouvrir",
+            "page.newControls.editorHint": "Multiligne — Entrée commence une nouvelle ligne",
+            "page.newControls.editorSample": "TUIkit TextEditor\nModifiez-moi — Entrée ajoute une ligne.",
+            "page.newControls.dateBoth": "Date et heure",
+            "page.newControls.dateOnly": "Date",
+            "page.newControls.timeOnly": "Heure",
+            "page.newControls.helpNav": "Se déplacer entre les champs / ouvrir",
+            "page.newControls.helpEdit": "Ajuster le champ ciblé",
         ],
 
         "it": [
@@ -258,6 +298,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Tieni premuto Shift mentre premi ← / → (o +/−) per avanzare di 10× il valore normale.",
             "page.stepper.bigValue": "Valore (×10 con Shift)",
             "page.stepper.bigValueLabel": "Valore",
+
+            "menu.item.newControls": "Nuovi controlli",
+            "page.newControls.title": "Nuovi controlli",
+            "page.newControls.gaugeLabel": "Segnale",
+            "page.newControls.gaugeHint": "Trascina il cursore per cambiare l'indicatore",
+            "page.newControls.linkHint": "Tab su un link, poi Invio per aprirlo",
+            "page.newControls.editorHint": "Multiriga — Invio inizia una nuova riga",
+            "page.newControls.editorSample": "TUIkit TextEditor\nModificami — Invio aggiunge una riga.",
+            "page.newControls.dateBoth": "Data e ora",
+            "page.newControls.dateOnly": "Data",
+            "page.newControls.timeOnly": "Ora",
+            "page.newControls.helpNav": "Sposta tra i campi / apri",
+            "page.newControls.helpEdit": "Regola il campo attivo",
         ],
 
         "es": [
@@ -318,6 +371,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Mantén Mayús mientras pulsas ← / → (o +/−) para avanzar 10× el valor normal.",
             "page.stepper.bigValue": "Valor (×10 con Mayús)",
             "page.stepper.bigValueLabel": "Valor",
+
+            "menu.item.newControls": "Controles nuevos",
+            "page.newControls.title": "Controles nuevos",
+            "page.newControls.gaugeLabel": "Señal",
+            "page.newControls.gaugeHint": "Arrastra el control deslizante para cambiar el indicador",
+            "page.newControls.linkHint": "Tab a un enlace, luego Intro para abrirlo",
+            "page.newControls.editorHint": "Multilínea — Intro inicia una nueva línea",
+            "page.newControls.editorSample": "TUIkit TextEditor\nEdítame — Intro añade una línea.",
+            "page.newControls.dateBoth": "Fecha y hora",
+            "page.newControls.dateOnly": "Fecha",
+            "page.newControls.timeOnly": "Hora",
+            "page.newControls.helpNav": "Moverse entre campos / abrir",
+            "page.newControls.helpEdit": "Ajustar el campo enfocado",
         ],
 
         "zh": [
@@ -378,6 +444,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "按住 Shift 同时按 ← / →（或 +/−）以 10× 的正常幅度步进。",
             "page.stepper.bigValue": "值（按住 Shift ×10）",
             "page.stepper.bigValueLabel": "值",
+
+            "menu.item.newControls": "新控件",
+            "page.newControls.title": "新控件",
+            "page.newControls.gaugeLabel": "信号",
+            "page.newControls.gaugeHint": "拖动滑块以改变仪表",
+            "page.newControls.linkHint": "用 Tab 切换到链接，再按 Enter 打开",
+            "page.newControls.editorHint": "多行 — Enter 换行",
+            "page.newControls.editorSample": "TUIkit TextEditor\n编辑我 — Enter 添加一行。",
+            "page.newControls.dateBoth": "日期和时间",
+            "page.newControls.dateOnly": "日期",
+            "page.newControls.timeOnly": "时间",
+            "page.newControls.helpNav": "在字段间移动 / 打开",
+            "page.newControls.helpEdit": "调整聚焦的字段",
         ],
 
         "ja": [
@@ -438,6 +517,19 @@ extension ExampleStrings {
             "page.stepper.shiftDescription": "Shift を押しながら ← / →（または +/−）を押すと、通常の10倍の幅でステップします。",
             "page.stepper.bigValue": "値（Shift で ×10）",
             "page.stepper.bigValueLabel": "値",
+
+            "menu.item.newControls": "新しいコントロール",
+            "page.newControls.title": "新しいコントロール",
+            "page.newControls.gaugeLabel": "信号",
+            "page.newControls.gaugeHint": "スライダーをドラッグしてゲージを変更",
+            "page.newControls.linkHint": "Tab でリンクへ、Enter で開く",
+            "page.newControls.editorHint": "複数行 — Enter で改行",
+            "page.newControls.editorSample": "TUIkit TextEditor\n編集してください — Enter で行を追加。",
+            "page.newControls.dateBoth": "日付と時刻",
+            "page.newControls.dateOnly": "日付",
+            "page.newControls.timeOnly": "時刻",
+            "page.newControls.helpNav": "フィールド間を移動 / 開く",
+            "page.newControls.helpEdit": "フォーカス中のフィールドを調整",
         ],
     ]
 }
