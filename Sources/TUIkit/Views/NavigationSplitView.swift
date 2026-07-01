@@ -249,14 +249,18 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             context.environment.stateStorage!.markActive(context.identity)
         }
 
-        // Calculate column widths
-        let columnWidths = calculateColumnWidths(
-            visibleColumns: visibleColumns,
-            style: style,
-            availableWidth: context.availableWidth,
-            widths: widths,
-            writeBack: resizable && !context.isMeasuring
-        )
+        // Calculate column widths — content-fit-from-left, or proportional.
+        let columnWidths =
+            style.sizesToFit
+            ? sizeToFitColumnWidths(
+                visibleColumns: visibleColumns, availableWidth: context.availableWidth, context: context)
+            : calculateColumnWidths(
+                visibleColumns: visibleColumns,
+                style: style,
+                availableWidth: context.availableWidth,
+                widths: widths,
+                writeBack: resizable && !context.isMeasuring
+            )
 
         // Render each visible column
         var buffers: [FrameBuffer] = []
@@ -499,6 +503,84 @@ extension _NavigationSplitViewCore {
         }
 
         return result
+    }
+
+    /// Measures a column's content: its natural width and whether it's
+    /// width-flexible (fills its column) — used by the size-to-fit style.
+    private func measureColumn(
+        _ column: NavigationSplitViewColumn, proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize {
+        switch column {
+        case .sidebar:
+            return measureChild(sidebar, proposal: proposal, context: context.withChildIdentity(type: type(of: sidebar)))
+        case .content:
+            return measureChild(content, proposal: proposal, context: context.withChildIdentity(type: type(of: content)))
+        case .detail:
+            return measureChild(detail, proposal: proposal, context: context.withChildIdentity(type: type(of: detail)))
+        default:
+            return ViewSize(width: 0, height: 0)
+        }
+    }
+
+    /// Sizes columns to fit their content from the left: a naturally-narrow
+    /// (non-flexible) column takes its content width; the width-flexible columns
+    /// share the remainder, the last absorbing rounding. When the fixed columns
+    /// would leave less than the minimum for each flexible column, they're shrunk
+    /// from the right (their content truncates). Every column keeps at least
+    /// `minimumColumnWidth`, and the widths always sum to the usable width.
+    fileprivate func sizeToFitColumnWidths(
+        visibleColumns: [NavigationSplitViewColumn], availableWidth: Int, context: RenderContext
+    ) -> [Int] {
+        let count = visibleColumns.count
+        let usable = availableWidth - max(0, count - 1)
+        guard usable > 0, count > 0 else { return Array(repeating: 0, count: count) }
+
+        let measureContext = context.withAvailableSize(width: usable, height: context.availableHeight)
+        let proposal = ProposedSize(width: usable, height: nil)
+        var natural = [Int](repeating: minimumColumnWidth, count: count)
+        var flexible = [Bool](repeating: false, count: count)
+        for (index, column) in visibleColumns.enumerated() {
+            let size = measureColumn(column, proposal: proposal, context: measureContext)
+            natural[index] = max(minimumColumnWidth, size.width)
+            flexible[index] = size.isWidthFlexible
+        }
+
+        var widths = [Int](repeating: minimumColumnWidth, count: count)
+        let flexIndices = (0..<count).filter { flexible[$0] }
+        let fixedIndices = (0..<count).filter { !flexible[$0] }
+        for index in fixedIndices { widths[index] = natural[index] }
+        var fixedSum = fixedIndices.reduce(0) { $0 + widths[$1] }
+
+        guard !flexIndices.isEmpty else {
+            // No flexible column — the rightmost absorbs the slack so the split
+            // still fills its width.
+            widths[count - 1] += max(0, usable - fixedSum)
+            return widths
+        }
+
+        // Shrink fixed columns from the right if they'd starve the flexible ones.
+        var freeForFlex = usable - fixedSum
+        let flexMinTotal = flexIndices.count * minimumColumnWidth
+        if freeForFlex < flexMinTotal {
+            var deficit = flexMinTotal - freeForFlex
+            for index in fixedIndices.reversed() where deficit > 0 {
+                let give = min(widths[index] - minimumColumnWidth, deficit)
+                widths[index] -= give
+                deficit -= give
+            }
+            fixedSum = fixedIndices.reduce(0) { $0 + widths[$1] }
+            freeForFlex = usable - fixedSum
+        }
+
+        // Split the remainder evenly; the last flexible column absorbs rounding.
+        let per = max(minimumColumnWidth, freeForFlex / flexIndices.count)
+        for (position, index) in flexIndices.enumerated() {
+            widths[index] =
+                position == flexIndices.count - 1
+                ? max(minimumColumnWidth, freeForFlex - per * (flexIndices.count - 1))
+                : per
+        }
+        return widths
     }
 
     /// Returns the focus section ID for a column.

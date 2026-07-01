@@ -139,6 +139,7 @@ struct SplitViewPage: View {
                 Text(L("page.splitView.styleAutomatic")).tag("automatic")
                 Text(L("page.splitView.styleBalanced")).tag("balanced")
                 Text(L("page.splitView.styleProminentDetail")).tag("prominentDetail")
+                Text(L("page.splitView.styleSizeToFit")).tag("sizeToFit")
             }
             .pickerStyle(.radioGroup)
             .padding(.horizontal, 1)
@@ -158,6 +159,8 @@ struct SplitViewPage: View {
             splitView.navigationSplitViewStyle(.automatic)
         case "prominentDetail":
             splitView.navigationSplitViewStyle(.prominentDetail)
+        case "sizeToFit":
+            splitView.navigationSplitViewStyle(.sizeToFitFromLeft)
         default:
             splitView.navigationSplitViewStyle(.balanced)
         }

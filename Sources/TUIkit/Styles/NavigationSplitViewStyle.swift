@@ -138,6 +138,19 @@ public protocol NavigationSplitViewStyle: Sendable {
     ///
     /// Returns (sidebar, content, detail) proportions that sum to 1.0.
     var threeColumnProportions: (sidebar: Double, content: Double, detail: Double) { get }
+
+    /// When `true`, columns are sized to fit their content from the left rather
+    /// than by proportion: a column whose content is naturally narrow (it hugs
+    /// its width) is given just that width, and the width-flexible columns
+    /// (Lists, filling VStacks) share what's left — the rightmost absorbing the
+    /// remainder. Default `false` (proportional sizing).
+    var sizesToFit: Bool { get }
+}
+
+extension NavigationSplitViewStyle {
+    /// Proportional styles don't size to fit; ``SizeToFitFromLeftNavigationSplitViewStyle``
+    /// overrides this.
+    public var sizesToFit: Bool { false }
 }
 
 // MARK: - AutomaticNavigationSplitViewStyle
@@ -208,7 +221,44 @@ public struct ProminentDetailNavigationSplitViewStyle: NavigationSplitViewStyle 
     }
 }
 
+// MARK: - SizeToFitFromLeftNavigationSplitViewStyle
+
+/// A navigation split style that sizes columns to fit their content, biased to
+/// the left, rather than by fixed proportion.
+///
+/// A column whose content is naturally narrow — it hugs its width, e.g. a
+/// sidebar of short labels — is given just that width. The width-flexible
+/// columns (Lists, filling VStacks) split the remaining space, with the
+/// rightmost column absorbing the remainder. When the terminal is too narrow,
+/// columns shrink and their content truncates, honouring each column's minimum.
+///
+/// Use the ``NavigationSplitViewStyle/sizeToFitFromLeft`` static property to
+/// access this style.
+public struct SizeToFitFromLeftNavigationSplitViewStyle: NavigationSplitViewStyle {
+    /// Creates a size-to-fit-from-left navigation split view style.
+    public init() {}
+
+    public var sizesToFit: Bool { true }
+
+    // Proportional fallbacks (used only if a caller reads them directly); the
+    // real sizing is content-driven when `sizesToFit` is honoured.
+    public var sidebarProportion: Double { 0.33 }
+
+    public var threeColumnProportions: (sidebar: Double, content: Double, detail: Double) {
+        (0.25, 0.25, 0.50)
+    }
+}
+
 // MARK: - Style Static Properties
+
+extension NavigationSplitViewStyle where Self == SizeToFitFromLeftNavigationSplitViewStyle {
+    /// A navigation split style that sizes columns to fit their content from the
+    /// left: naturally-narrow columns hug their width, flexible columns share
+    /// the rest.
+    public static var sizeToFitFromLeft: Self {
+        Self()
+    }
+}
 
 extension NavigationSplitViewStyle where Self == AutomaticNavigationSplitViewStyle {
     /// A navigation split style that resolves its appearance automatically

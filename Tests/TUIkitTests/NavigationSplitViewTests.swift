@@ -257,6 +257,21 @@ struct NavigationSplitViewRenderingTests {
         #expect(content.contains("Detail"))
     }
 
+    @Test("sizeToFitFromLeft hugs a naturally-narrow column; the split still fills")
+    func sizeToFitHugsSidebar() {
+        // The detail's start column = the sidebar's width plus the divider.
+        func detailColumn(style: some NavigationSplitViewStyle) -> Int {
+            let split = NavigationSplitView { Text("Fifteen chars!!") } detail: { Text("XYZ") }
+                .navigationSplitViewStyle(style)
+            let row = renderToBuffer(split, context: testContext(width: 80)).lines.first?.stripped ?? ""
+            return row.range(of: "XYZ").map { row.distance(from: row.startIndex, to: $0.lowerBound) } ?? -1
+        }
+        // Size-to-fit hugs the 15-wide sidebar; balanced gives it a ~0.42 share.
+        let fitCol = detailColumn(style: .sizeToFitFromLeft)
+        #expect(fitCol > 0 && fitCol <= 17)
+        #expect(fitCol < detailColumn(style: .balanced))
+    }
+
     @Test("detailOnly visibility hides sidebar in two-column")
     func detailOnlyHidesSidebar() {
         var visibility = NavigationSplitViewVisibility.detailOnly
