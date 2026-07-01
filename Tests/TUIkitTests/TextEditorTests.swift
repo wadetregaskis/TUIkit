@@ -75,7 +75,9 @@ struct TextEditorTests {
     func verticalMotionKeepsColumn() {
         let sink = StringSink("long line\nx\nanother")
         let editor = handler(sink)
-        _ = editor.handleKeyEvent(KeyEvent(key: .end))  // column 9, desired 9
+        // Ctrl-E moves to the end of the current line (Home/End now span the
+        // whole field). "long line" is 9 characters, so this sets desired = 9.
+        _ = editor.handleKeyEvent(KeyEvent(key: .character("e"), ctrl: true))  // column 9, desired 9
         _ = editor.handleKeyEvent(KeyEvent(key: .down))  // "x" (len 1) → column clamps to 1
         #expect(editor.cursorLine == 1)
         #expect(editor.cursorColumn == 1)
@@ -136,8 +138,161 @@ struct TextEditorTests {
         let sink = StringSink("hi")
         let buffer = renderToBuffer(
             TextEditor(text: sink.binding), context: makeRenderContext(width: 12, height: 3))
-        // The cursor cell is inverted → an SGR escape appears in the raw output.
+        // The cursor cell is a coloured block → an SGR escape appears in the raw output.
         #expect(buffer.lines.joined().contains("\u{1B}["))
         #expect(buffer.height == 3)
+    }
+
+    // MARK: - Standard / Emacs key bindings
+
+    /// A Ctrl+letter chord, as the terminal parser delivers it.
+    private func ctrl(_ character: Character) -> KeyEvent {
+        KeyEvent(key: .character(character), ctrl: true)
+    }
+
+    /// An Option/Alt+letter chord.
+    private func alt(_ character: Character) -> KeyEvent {
+        KeyEvent(key: .character(character), alt: true)
+    }
+
+    @Test("Home/End span the whole field, not the line")
+    func homeEndSpanField() {
+        let sink = StringSink("first\nmiddle\nlast")
+        let editor = handler(sink)
+        editor.cursorLine = 1
+        editor.cursorColumn = 3
+        _ = editor.handleKeyEvent(KeyEvent(key: .end))
+        #expect(editor.cursorLine == 2)  // last line
+        #expect(editor.cursorColumn == 4)  // end of "last"
+        _ = editor.handleKeyEvent(KeyEvent(key: .home))
+        #expect(editor.cursorLine == 0)
+        #expect(editor.cursorColumn == 0)
+    }
+
+    @Test("Ctrl-A / Ctrl-E move to the line's start / end")
+    func ctrlAEMoveWithinLine() {
+        let sink = StringSink("one\ntwo three\nfour")
+        let editor = handler(sink)
+        editor.cursorLine = 1
+        editor.cursorColumn = 4
+        _ = editor.handleKeyEvent(ctrl("a"))
+        #expect(editor.cursorLine == 1)
+        #expect(editor.cursorColumn == 0)
+        _ = editor.handleKeyEvent(ctrl("e"))
+        #expect(editor.cursorLine == 1)
+        #expect(editor.cursorColumn == 9)  // "two three"
+    }
+
+    @Test("Ctrl-B/F/P/N mirror the arrow keys")
+    func ctrlBFPNMotion() {
+        let sink = StringSink("ab\ncd")
+        let editor = handler(sink)
+        editor.cursorLine = 1
+        editor.cursorColumn = 0
+        _ = editor.handleKeyEvent(ctrl("b"))  // wraps to end of "ab"
+        #expect(editor.cursorLine == 0)
+        #expect(editor.cursorColumn == 2)
+        _ = editor.handleKeyEvent(ctrl("f"))  // wraps back to start of "cd"
+        #expect(editor.cursorLine == 1)
+        #expect(editor.cursorColumn == 0)
+        _ = editor.handleKeyEvent(ctrl("n"))  // already the last line: no-op
+        #expect(editor.cursorLine == 1)
+        _ = editor.handleKeyEvent(ctrl("p"))  // up to the first line
+        #expect(editor.cursorLine == 0)
+    }
+
+    @Test("Ctrl-D deletes forward")
+    func ctrlDDeletesForward() {
+        let sink = StringSink("abc")
+        let editor = handler(sink)
+        editor.cursorColumn = 1
+        _ = editor.handleKeyEvent(ctrl("d"))
+        #expect(sink.value == "ac")
+        #expect(editor.cursorColumn == 1)
+    }
+
+    @Test("Ctrl-K kills to end of line, Ctrl-Y yanks it back")
+    func killAndYank() {
+        let sink = StringSink("hello world")
+        let editor = handler(sink)
+        editor.cursorColumn = 6  // before "world"
+        _ = editor.handleKeyEvent(ctrl("k"))
+        #expect(sink.value == "hello ")
+        _ = editor.handleKeyEvent(ctrl("y"))
+        #expect(sink.value == "hello world")
+        #expect(editor.cursorColumn == 11)
+    }
+
+    @Test("Ctrl-K at end of line kills the newline (joins)")
+    func killNewline() {
+        let sink = StringSink("a\nb")
+        let editor = handler(sink)
+        editor.cursorLine = 0
+        editor.cursorColumn = 1  // end of "a"
+        _ = editor.handleKeyEvent(ctrl("k"))
+        #expect(sink.value == "ab")
+    }
+
+    @Test("Ctrl-T transposes the two characters around the cursor")
+    func transpose() {
+        let sink = StringSink("abcd")
+        let editor = handler(sink)
+        editor.cursorColumn = 2  // between b and c
+        _ = editor.handleKeyEvent(ctrl("t"))
+        #expect(sink.value == "acbd")
+        #expect(editor.cursorColumn == 3)
+    }
+
+    @Test("Ctrl-O opens a line after the cursor without moving it")
+    func openLine() {
+        let sink = StringSink("abcd")
+        let editor = handler(sink)
+        editor.cursorColumn = 2
+        _ = editor.handleKeyEvent(ctrl("o"))
+        #expect(sink.value == "ab\ncd")
+        #expect(editor.cursorLine == 0)
+        #expect(editor.cursorColumn == 2)
+    }
+
+    @Test("Option-Left / Right move by a word")
+    func optionArrowsWordMotion() {
+        let sink = StringSink("alpha beta gamma")
+        let editor = handler(sink)
+        editor.cursorColumn = 16  // end
+        _ = editor.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(editor.cursorColumn == 11)  // start of "gamma"
+        _ = editor.handleKeyEvent(KeyEvent(key: .left, alt: true))
+        #expect(editor.cursorColumn == 6)  // start of "beta"
+        _ = editor.handleKeyEvent(KeyEvent(key: .right, alt: true))
+        #expect(editor.cursorColumn == 10)  // end of "beta"
+    }
+
+    @Test("Option-B / F move by a word (Emacs)")
+    func optionLettersWordMotion() {
+        let sink = StringSink("alpha beta")
+        let editor = handler(sink)
+        editor.cursorColumn = 10  // end
+        _ = editor.handleKeyEvent(alt("b"))
+        #expect(editor.cursorColumn == 6)  // start of "beta"
+        _ = editor.handleKeyEvent(alt("f"))
+        #expect(editor.cursorColumn == 10)  // end of "beta"
+    }
+
+    @Test("Option-Backspace deletes the word before the cursor")
+    func optionBackspaceDeletesWord() {
+        let sink = StringSink("alpha beta")
+        let editor = handler(sink)
+        editor.cursorColumn = 10
+        _ = editor.handleKeyEvent(KeyEvent(key: .backspace, alt: true))
+        #expect(sink.value == "alpha ")
+        #expect(editor.cursorColumn == 6)
+    }
+
+    @Test("Unhandled Ctrl chord is not consumed")
+    func unhandledCtrlPropagates() {
+        let sink = StringSink("abc")
+        let editor = handler(sink)
+        #expect(editor.handleKeyEvent(ctrl("g")) == false)
+        #expect(sink.value == "abc")  // and it did not insert 'g'
     }
 }

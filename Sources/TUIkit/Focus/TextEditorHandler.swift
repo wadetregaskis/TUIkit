@@ -31,6 +31,13 @@ final class TextEditorHandler: Focusable {
     var scrollLine = 0
     /// Left visible column — advanced to follow the cursor horizontally.
     var scrollColumn = 0
+    /// The visible row count, set by the core each render so Page Up / Page Down
+    /// (and Ctrl-V) can move the cursor by a screenful.
+    var viewportHeight = 1
+
+    /// The last text removed by a kill command (Ctrl-K), replayed by yank
+    /// (Ctrl-Y) — a single-slot kill ring, matching the macOS text system.
+    private var killRing = ""
 
     init(focusID: String, text: Binding<String>, canBeFocused: Bool = true) {
         self.focusID = focusID
@@ -66,52 +73,117 @@ final class TextEditorHandler: Focusable {
     // MARK: - Key handling
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // Ctrl-modified keys map to the macOS/Emacs text-editing bindings (the
+        // Cocoa `StandardKeyBinding.dict`). Ctrl+letter arrives as
+        // `.character(letter, ctrl: true)`; Ctrl-H / Ctrl-I / Ctrl-M are
+        // pre-parsed to Backspace / Tab / Enter and handled below.
+        if event.ctrl, case .character(let character) = event.key {
+            return handleControlCharacter(character)
+        }
+        // Option/Alt-modified keys map to word-wise motion and deletion.
+        if event.alt, handleAltKey(event) {
+            return true
+        }
+
+        return handleBaseKey(event)
+    }
+
+    // A flat key table; splitting it further would fragment the mapping
+    // without simplifying it. Block form keeps the doc comment adjacent to
+    // the declaration.
+    // swiftlint:disable cyclomatic_complexity
+    /// Handles the unmodified navigation and editing keys.
+    private func handleBaseKey(_ event: KeyEvent) -> Bool {
         switch event.key {
         case .character(let character):
-            guard !event.ctrl, !event.alt else { return false }
-            guard character.isLetter || character.isNumber || character.isPunctuation
-                || character.isSymbol || character.isWhitespace
-            else { return false }
+            // A ctrl chord never reaches here (dispatched above); an unbound alt
+            // chord must not type its letter.
+            guard !event.alt, isInsertable(character) else { return false }
             insert(String(character))
-            return true
         case .space:
             insert(" ")
-            return true
         case .enter:
             insertNewline()
-            return true
         case .backspace:
             deleteBackward()
-            return true
         case .delete:
             deleteForward()
-            return true
         case .left:
             moveLeft()
-            return true
         case .right:
             moveRight()
-            return true
         case .up:
             moveVertical(by: -1)
-            return true
         case .down:
             moveVertical(by: 1)
-            return true
         case .home:
-            cursorColumn = 0
-            desiredColumn = 0
-            return true
+            // Mac convention: Home/End move to the start/end of the whole field
+            // (the document), not the current line — Ctrl-A / Ctrl-E do lines.
+            moveToStartOfDocument()
         case .end:
-            cursorColumn = readLines()[cursorLine].count
-            desiredColumn = cursorColumn
-            return true
+            moveToEndOfDocument()
+        case .pageUp:
+            movePage(by: -1)
+        case .pageDown:
+            movePage(by: 1)
         case .paste(let string):
             insert(string)
-            return true
         default:
             return false
         }
+        return true
+    }
+    // swiftlint:enable cyclomatic_complexity
+
+    /// Whether a character is one the editor inserts literally.
+    private func isInsertable(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character.isPunctuation
+            || character.isSymbol || character.isWhitespace
+    }
+
+    /// Handles a Ctrl+letter chord (the Emacs-style Cocoa bindings). Returns
+    /// `false` for an unbound chord so it can propagate.
+    private func handleControlCharacter(_ character: Character) -> Bool {
+        switch character {
+        case "a": moveToStartOfLine()  // beginning of line
+        case "e": moveToEndOfLine()  // end of line
+        case "b": moveLeft()  // back one character
+        case "f": moveRight()  // forward one character
+        case "p": moveVertical(by: -1)  // previous line
+        case "n": moveVertical(by: 1)  // next line
+        case "d": deleteForward()  // delete forward
+        case "k": killToEndOfLine()  // kill to end of line
+        case "y": yank()  // yank the last kill
+        case "t": transpose()  // transpose characters
+        case "o": openLine()  // open a line after the cursor
+        case "v": movePage(by: 1)  // page down
+        default: return false
+        }
+        return true
+    }
+
+    /// Handles an Option/Alt chord: word-wise motion and deletion. Returns
+    /// `false` for an unbound chord so it can propagate.
+    private func handleAltKey(_ event: KeyEvent) -> Bool {
+        switch event.key {
+        case .left:
+            moveWordLeft()
+        case .right:
+            moveWordRight()
+        case .backspace:
+            deleteWordBackward()
+        case .delete:
+            deleteWordForward()
+        case .character(let character):
+            switch Character(character.lowercased()) {
+            case "b": moveWordLeft()
+            case "f": moveWordRight()
+            default: return false
+            }
+        default:
+            return false
+        }
+        return true
     }
 
     // MARK: - Editing
@@ -229,5 +301,165 @@ final class TextEditorHandler: Focusable {
         guard target >= 0, target < lines.count else { return }
         cursorLine = target
         cursorColumn = min(desiredColumn, lines[cursorLine].count)
+    }
+
+    /// Moves the cursor up/down a screenful (Page Up / Page Down, Ctrl-V).
+    private func movePage(by pages: Int) {
+        let lines = readLines()
+        let step = max(1, viewportHeight - 1)
+        let target = min(max(0, cursorLine + pages * step), lines.count - 1)
+        cursorLine = target
+        cursorColumn = min(desiredColumn, lines[cursorLine].count)
+    }
+
+    // MARK: - Line / document motion
+
+    private func moveToStartOfLine() {
+        cursorColumn = 0
+        desiredColumn = 0
+    }
+
+    private func moveToEndOfLine() {
+        cursorColumn = readLines()[cursorLine].count
+        desiredColumn = cursorColumn
+    }
+
+    private func moveToStartOfDocument() {
+        cursorLine = 0
+        cursorColumn = 0
+        desiredColumn = 0
+    }
+
+    private func moveToEndOfDocument() {
+        let lines = readLines()
+        cursorLine = lines.count - 1
+        cursorColumn = lines[cursorLine].count
+        desiredColumn = cursorColumn
+    }
+
+    // MARK: - Word motion
+
+    /// A "word" character for word-wise motion: letters and digits.
+    private func isWordCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
+    }
+
+    /// The column to the left of `column` at the previous word boundary: skip
+    /// any non-word run, then the word run.
+    private func wordBoundaryLeft(_ line: [Character], from column: Int) -> Int {
+        var col = column
+        while col > 0, !isWordCharacter(line[col - 1]) { col -= 1 }
+        while col > 0, isWordCharacter(line[col - 1]) { col -= 1 }
+        return col
+    }
+
+    /// The column to the right of `column` at the next word boundary: skip any
+    /// non-word run, then the word run.
+    private func wordBoundaryRight(_ line: [Character], from column: Int) -> Int {
+        var col = column
+        while col < line.count, !isWordCharacter(line[col]) { col += 1 }
+        while col < line.count, isWordCharacter(line[col]) { col += 1 }
+        return col
+    }
+
+    private func moveWordLeft() {
+        if cursorColumn == 0 {
+            moveLeft()  // cross to the end of the previous line
+            return
+        }
+        cursorColumn = wordBoundaryLeft(readLines()[cursorLine], from: cursorColumn)
+        desiredColumn = cursorColumn
+    }
+
+    private func moveWordRight() {
+        let line = readLines()[cursorLine]
+        if cursorColumn >= line.count {
+            moveRight()  // cross to the start of the next line
+            return
+        }
+        cursorColumn = wordBoundaryRight(line, from: cursorColumn)
+        desiredColumn = cursorColumn
+    }
+
+    private func deleteWordBackward() {
+        if cursorColumn == 0 {
+            deleteBackward()  // join with the previous line
+            return
+        }
+        var lines = readLines()
+        let target = wordBoundaryLeft(lines[cursorLine], from: cursorColumn)
+        lines[cursorLine].removeSubrange(target..<cursorColumn)
+        cursorColumn = target
+        writeLines(lines)
+        desiredColumn = cursorColumn
+    }
+
+    private func deleteWordForward() {
+        var lines = readLines()
+        if cursorColumn >= lines[cursorLine].count {
+            deleteForward()  // pull up the next line
+            return
+        }
+        let target = wordBoundaryRight(lines[cursorLine], from: cursorColumn)
+        lines[cursorLine].removeSubrange(cursorColumn..<target)
+        writeLines(lines)
+        desiredColumn = cursorColumn
+    }
+
+    // MARK: - Kill / yank / transpose / open
+
+    /// Ctrl-K: kills from the cursor to the end of the line into the kill ring;
+    /// at the end of a line it kills the newline (joining the next line).
+    private func killToEndOfLine() {
+        var lines = readLines()
+        let line = lines[cursorLine]
+        if cursorColumn < line.count {
+            killRing = String(line[cursorColumn...])
+            lines[cursorLine].removeSubrange(cursorColumn..<line.count)
+            writeLines(lines)
+        } else if cursorLine < lines.count - 1 {
+            killRing = "\n"
+            lines[cursorLine].append(contentsOf: lines[cursorLine + 1])
+            lines.remove(at: cursorLine + 1)
+            writeLines(lines)
+        }
+        desiredColumn = cursorColumn
+    }
+
+    /// Ctrl-Y: inserts the most recently killed text at the cursor.
+    private func yank() {
+        guard !killRing.isEmpty else { return }
+        insert(killRing)
+    }
+
+    /// Ctrl-T: transposes the two characters around the cursor and steps
+    /// forward; at the end of a line it transposes the last two characters.
+    private func transpose() {
+        var lines = readLines()
+        var line = lines[cursorLine]
+        guard line.count >= 2, cursorColumn > 0 else { return }
+        if cursorColumn >= line.count {
+            line.swapAt(line.count - 2, line.count - 1)
+            lines[cursorLine] = line
+            cursorColumn = line.count
+        } else {
+            line.swapAt(cursorColumn - 1, cursorColumn)
+            lines[cursorLine] = line
+            cursorColumn += 1
+        }
+        writeLines(lines)
+        desiredColumn = cursorColumn
+    }
+
+    /// Ctrl-O: splits the line at the cursor but leaves the cursor in place, so
+    /// the text after it opens onto a new line below.
+    private func openLine() {
+        var lines = readLines()
+        var line = lines[cursorLine]
+        let tail = Array(line[cursorColumn...])
+        line.removeSubrange(cursorColumn..<line.count)
+        lines[cursorLine] = line
+        lines.insert(tail, at: cursorLine + 1)
+        writeLines(lines)
     }
 }

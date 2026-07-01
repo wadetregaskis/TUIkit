@@ -9,17 +9,31 @@
 /// A control for editing multi-line text, mirroring SwiftUI's `TextEditor`.
 ///
 /// It fills the space it is given and edits the bound string in place. When
-/// focused it shows a block cursor; the usual editing keys apply:
+/// focused it shows a block cursor. The key bindings follow the macOS text
+/// system (Cocoa's `StandardKeyBinding.dict`), so the usual navigation,
+/// Emacs-style control chords, and word-wise Option chords all apply:
 ///
 /// | Key | Action |
 /// |-----|--------|
 /// | Any printable | Insert at the cursor |
 /// | Enter | Split the line (insert a newline) |
-/// | Backspace | Delete before the cursor (joins lines at column 0) |
-/// | Delete | Delete at the cursor (joins the next line at line end) |
+/// | Backspace / Delete | Delete before / at the cursor (join lines at edges) |
 /// | Left / Right | Move by a character, wrapping across lines |
 /// | Up / Down | Move by a line, keeping the column where possible |
-/// | Home / End | Start / end of the current line |
+/// | Home / End | Start / end of the whole field (the document) |
+/// | Page Up / Down | Move a screenful up / down |
+/// | Ctrl-A / Ctrl-E | Start / end of the current line |
+/// | Ctrl-B / Ctrl-F | Back / forward one character |
+/// | Ctrl-P / Ctrl-N | Previous / next line |
+/// | Ctrl-D | Delete forward |
+/// | Ctrl-K | Kill to end of line (yank with Ctrl-Y) |
+/// | Ctrl-Y | Yank the last kill |
+/// | Ctrl-T | Transpose the two characters around the cursor |
+/// | Ctrl-O | Open a new line after the cursor |
+/// | Ctrl-V | Page down |
+/// | Option-← / → | Move by a word |
+/// | Option-B / F | Move by a word (Emacs) |
+/// | Option-Backspace / Delete | Delete the word before / after the cursor |
 ///
 /// ```swift
 /// @State private var notes = ""
@@ -115,6 +129,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let handler = handlerBox.value
         handler.text = text
         handler.canBeFocused = !isDisabled
+        handler.viewportHeight = height
         handler.clampCursor()
 
         FocusRegistration.register(context: context, handler: handler)
@@ -174,7 +189,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     }
 
     /// Renders one visible row: the line clipped to `[scrollColumn, +width)`,
-    /// padded to `width`, with the cursor cell inverted when present.
+    /// padded to `width`, with the cursor cell drawn as a block caret when
+    /// present.
     private func styledRow(
         _ chars: [Character], scrollColumn: Int, width: Int,
         cursorColumn: Int?, palette: any Palette, isDisabled: Bool
@@ -194,8 +210,14 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             return ANSIRenderer.render(String(visible), with: resolved)
         }
 
+        // A block caret: draw the glyph under the cursor in the background
+        // colour on a foreground-coloured block. Setting the colours explicitly
+        // (rather than relying on SGR 7 reverse-video, which inverts the
+        // terminal's *default* colours and collapses to dark-on-dark on a
+        // mid-tone palette) keeps the caret visible on every theme.
         var cursorStyle = TextStyle()
-        cursorStyle.isInverted = true
+        cursorStyle.foregroundColor = palette.background
+        cursorStyle.backgroundColor = palette.foreground
         let before = String(visible[0..<cursorCell])
         let cursor = String(visible[cursorCell])
         let after = String(visible[(cursorCell + 1)...])
