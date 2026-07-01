@@ -93,6 +93,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "type a name, hex codepoint, or paste an emoji…",
             "page.emoji.ofCount": "of",
             "page.emoji.emojiCountSuffix": "emoji",
+            "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "SF Symbols render only on macOS, in a terminal whose font has them (SF Mono).",
         ],
         // MARK: - German
         "de": [
@@ -170,6 +172,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "Name, Hex-Codepunkt eingeben oder ein Emoji einfügen…",
             "page.emoji.ofCount": "von",
             "page.emoji.emojiCountSuffix": "Emoji",
+            "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "SF Symbols erscheinen nur unter macOS, in einem Terminal mit passender Schrift (SF Mono).",
         ],
         // MARK: - French
         "fr": [
@@ -247,6 +251,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "saisissez un nom, un point de code hexadécimal, ou collez un émoji…",
             "page.emoji.ofCount": "sur",
             "page.emoji.emojiCountSuffix": "émoji",
+            "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "Les SF Symbols ne s'affichent que sur macOS, dans un terminal doté de la police adéquate (SF Mono).",
         ],
         // MARK: - Italian
         "it": [
@@ -324,6 +330,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "digita un nome, un punto di codice esadecimale, o incolla un'emoji…",
             "page.emoji.ofCount": "di",
             "page.emoji.emojiCountSuffix": "emoji",
+            "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "Gli SF Symbols vengono mostrati solo su macOS, in un terminale con il font adatto (SF Mono).",
         ],
         // MARK: - Spanish
         "es": [
@@ -401,6 +409,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "escribe un nombre, un punto de código hexadecimal, o pega un emoji…",
             "page.emoji.ofCount": "de",
             "page.emoji.emojiCountSuffix": "emoji",
+            "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "Los SF Symbols solo se muestran en macOS, en un terminal con la fuente adecuada (SF Mono).",
         ],
         // MARK: - Simplified Chinese
         "zh": [
@@ -478,6 +488,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "输入名称、十六进制码位，或粘贴一个表情符号…",
             "page.emoji.ofCount": "/",
             "page.emoji.emojiCountSuffix": "个表情",
+            "page.emoji.sfSymbolsCountSuffix": "个 SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "SF Symbols 仅在 macOS 上、使用包含相应字形的字体（SF Mono）的终端中显示。",
         ],
         // MARK: - Japanese
         "ja": [
@@ -555,6 +567,8 @@ extension ExampleStrings {
             "page.emoji.filterPrompt": "名前、16進コードポイントを入力するか、絵文字を貼り付け…",
             "page.emoji.ofCount": "/",
             "page.emoji.emojiCountSuffix": "個の絵文字",
+            "page.emoji.sfSymbolsCountSuffix": "個の SF Symbols",
+            "page.emoji.sfSymbolsEmpty": "SF Symbols は macOS で、対応するフォント（SF Mono）を備えたターミナルでのみ表示されます。",
         ],
     ]
 }

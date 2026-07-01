@@ -26,11 +26,35 @@ import TUIkit
 struct EmojiPage: View {
     @State private var filter: String = ""
     @State private var selectedID: UInt32?
+    @State private var selectedSymbolID: String?
+
+    /// Below this terminal width the two tables stack instead of sitting side
+    /// by side. `terminalWidth` is stable across measure and render (published
+    /// once at the render root), so switching on it never oscillates — unlike
+    /// `ViewThatFits`, which can't tell these apart because both tables are
+    /// width-greedy and each measures to the probe width.
+    ///
+    /// Kept low because side by side works at any width (an `HStack` splits its
+    /// two greedy lists evenly), so it's preferable down to quite narrow
+    /// terminals; stacking is the last resort for the genuinely tiny.
+    @Environment(\.terminalWidth) private var terminalWidth
+    @Environment(\.terminalHeight) private var terminalHeight
+    private static let sideBySideMinWidth = 64
 
     // The corpus is small (~1.9k entries) and immutable, so building it
     // once at page load and filtering inline is fine — no need for a
     // separate model layer.
     private static let allEmoji: [EmojiEntry] = Self.buildCorpus()
+
+    // Every known SF Symbol (name + glyph). Empty off Apple platforms, where
+    // `SFSymbol` can't resolve anything — the table below then shows its
+    // placeholder. Built once, like the emoji corpus.
+    private static let allSymbols: [SymbolEntry] = SFSymbol.all.map { entry in
+        SymbolEntry(
+            name: entry.name,
+            glyph: entry.glyph,
+            codepoint: entry.glyph.unicodeScalars.first?.value ?? 0)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -65,15 +89,24 @@ struct EmojiPage: View {
                           prompt: Text(L("page.emoji.filterPrompt")))
             }
 
-            List("\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) \(L("page.emoji.emojiCountSuffix"))",
-                 selection: $selectedID)
-            {
-                ForEach(filteredEmoji) { entry in
-                    EmojiRow(entry: entry)
+            // Emoji on the left, SF Symbols on the right — both filtered by the
+            // one field above, each scrolled independently. Side by side when
+            // there is room, otherwise stacked.
+            if terminalWidth >= Self.sideBySideMinWidth {
+                HStack(alignment: .top, spacing: 2) {
+                    emojiTable
+                    symbolTable
+                }
+            } else {
+                // Two greedy lists stacked would let the first take all the
+                // height, so give each an explicit half-share of the space left
+                // below the fixed content.
+                let tableHeight = max(5, (terminalHeight - 24) / 2)
+                VStack(alignment: .leading, spacing: 1) {
+                    emojiTable.frame(height: tableHeight)
+                    symbolTable.frame(height: tableHeight)
                 }
             }
-
-            Spacer()
         }
         .padding(.horizontal, 1)
         // Not wrapped in a page ScrollView: the List below is the scrollable
@@ -83,6 +116,38 @@ struct EmojiPage: View {
             DemoAppHeader(L("page.emoji.title"),
                           subtitle: L("page.emoji.subtitle"))
         }
+    }
+
+    // MARK: - Tables
+
+    /// The emoji browse list — its own selection and scroll position.
+    private var emojiTable: some View {
+        List(
+            "\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) "
+                + L("page.emoji.emojiCountSuffix"),
+            selection: $selectedID
+        ) {
+            ForEach(filteredEmoji) { entry in
+                EmojiRow(entry: entry)
+            }
+        }
+    }
+
+    /// The SF Symbols browse list — its own selection and scroll position,
+    /// independent of the emoji list but filtered by the same field. Shows a
+    /// placeholder when empty (an unmatched filter, or a non-Apple platform
+    /// where no symbols resolve).
+    private var symbolTable: some View {
+        List(
+            "\(filteredSymbols.count) \(L("page.emoji.ofCount")) \(Self.allSymbols.count) "
+                + L("page.emoji.sfSymbolsCountSuffix"),
+            selection: $selectedSymbolID
+        ) {
+            ForEach(filteredSymbols) { entry in
+                SymbolRow(entry: entry)
+            }
+        }
+        .listEmptyPlaceholder(L("page.emoji.sfSymbolsEmpty"))
     }
 
     // MARK: - Filtering
@@ -118,6 +183,18 @@ struct EmojiPage: View {
         // matches "SMILING FACE WITH HEART-EYES" etc.
         let words = needle.uppercased().split(whereSeparator: { $0.isWhitespace })
         return Self.allEmoji.filter { entry in
+            words.allSatisfy { entry.name.contains($0) }
+        }
+    }
+
+    /// SF Symbols matching the same filter — by name, since symbols have no
+    /// standard Unicode name to key off. Splitting on whitespace and dots lets
+    /// "star", "star fill", and "star.fill" all narrow the list.
+    private var filteredSymbols: [SymbolEntry] {
+        let needle = filter.trimmingWhitespace().lowercased()
+        if needle.isEmpty { return Self.allSymbols }
+        let words = needle.split { $0.isWhitespace || $0 == "." }
+        return Self.allSymbols.filter { entry in
             words.allSatisfy { entry.name.contains($0) }
         }
     }
@@ -179,6 +256,24 @@ private struct EmojiRow: View {
     }
 }
 
+/// One row in the SF Symbols list: the glyph, its codepoint, and its name. The
+/// glyph is a Plane-16 Private-Use character — 2 cells wide with Terminal.app
+/// cursor-advance compensation applied — so a cleanly-aligned row is proof that
+/// TUIkit resolved the name and laid the symbol out correctly.
+private struct SymbolRow: View {
+    let entry: SymbolEntry
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(entry.glyph)
+            Text(entry.codepointLabel)
+                .foregroundStyle(.palette.foregroundSecondary)
+                .dim()
+            Text(entry.name)
+        }
+    }
+}
+
 // MARK: - Model
 
 private struct EmojiEntry: Identifiable, Equatable {
@@ -187,6 +282,17 @@ private struct EmojiEntry: Identifiable, Equatable {
     let name: String
 
     var id: UInt32 { codepoint }
+    var codepointLabel: String {
+        "U+" + String(codepoint, radix: 16, uppercase: true).leftPadded(to: 5, with: "0")
+    }
+}
+
+private struct SymbolEntry: Identifiable, Equatable {
+    let name: String
+    let glyph: String
+    let codepoint: UInt32
+
+    var id: String { name }
     var codepointLabel: String {
         "U+" + String(codepoint, radix: 16, uppercase: true).leftPadded(to: 5, with: "0")
     }
