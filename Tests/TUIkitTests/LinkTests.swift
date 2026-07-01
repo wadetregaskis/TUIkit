@@ -80,4 +80,39 @@ struct LinkTests {
         _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .enter))
         #expect(sink.url == url)
     }
+
+    // MARK: - Underline
+
+    /// Whether the raw output carries an underline SGR (code `4`, emitted first
+    /// in a run, so the escape starts with `[4`). The accent foreground is
+    /// `38;2;…`, so `[4` never appears spuriously.
+    private func isUnderlined(_ raw: String) -> Bool {
+        raw.contains("\u{1B}[4;") || raw.contains("\u{1B}[4m")
+    }
+
+    @Test("A view-builder-labelled link is underlined by default")
+    func viewBuilderLabelUnderlinedByDefault() {
+        let raw = renderToBuffer(
+            Link(destination: url) { Text("Docs") },
+            context: makeRenderContext(width: 20, height: 3)
+        ).lines.joined()
+        #expect(isUnderlined(raw), "a custom-label link underlines by default: \(raw.debugDescription)")
+    }
+
+    @Test("A string-titled link is underlined by default")
+    func stringLinkUnderlinedByDefault() {
+        let raw = renderToBuffer(
+            Link("Docs", destination: url), context: makeRenderContext(width: 20, height: 3)
+        ).lines.joined()
+        #expect(isUnderlined(raw))
+    }
+
+    @Test(".linkUnderline(false) removes the underline across the subtree")
+    func linkUnderlineOffRemovesUnderline() {
+        let raw = renderToBuffer(
+            Link("Docs", destination: url).linkUnderline(false),
+            context: makeRenderContext(width: 20, height: 3)
+        ).lines.joined()
+        #expect(!isUnderlined(raw), "no underline SGR when opted out: \(raw.debugDescription)")
+    }
 }
