@@ -162,14 +162,62 @@ func parsePairs(from csv: Data) -> [(name: String, codepoint: UInt32)] {
 
 // MARK: - Encode
 
-/// Emits the generated Swift source: a readable `name<space>HEXCODEPOINT` table
-/// as one multiline string literal.
+/// Wraps array elements to a readable column width. Every element carries a
+/// trailing comma (Swift allows a trailing comma on the last one), so a line
+/// break never drops a separator.
+func wrapElements(_ values: [String]) -> String {
+    var lines: [String] = []
+    var line = ""
+    for value in values {
+        let piece = "\(value),"
+        if line.isEmpty {
+            line = piece
+        } else if line.count + 1 + piece.count > 96 {
+            lines.append(line)
+            line = piece
+        } else {
+            line += " \(piece)"
+        }
+    }
+    if !line.isEmpty { lines.append(line) }
+    return lines.joined(separator: "\n")
+}
+
+/// Emits the generated Swift source in the "name blob + offsets" representation
+/// (benchmarked as the fastest to look up and compile of the correct options,
+/// with no `String` in storage). Three native compile-time literals:
+///   - `nameBlob`: a `StaticString` of every name, sorted ascending and
+///     newline-separated with NO trailing newline — greppable line by line.
+///   - `nameStarts`: `[UInt32]`, n+1 entries. Name `i` is the blob bytes
+///     `nameStarts[i] ..< nameStarts[i+1] - 1` (the `-1` drops the separating
+///     newline; the sentinel `nameStarts[n]` = blob length + 1 makes the last
+///     name resolve the same way).
+///   - `codepointOffsets`: `[UInt16]`, each `codepoint - 0x100000`.
 func emitSource(pairs: [(name: String, codepoint: UInt32)]) -> String {
-    // One line per symbol, at column zero (with the closing delimiter also at
-    // column zero) so no indentation creeps into the data.
-    let table = pairs
-        .map { "\($0.name) \(String($0.codepoint, radix: 16, uppercase: true))" }
-        .joined(separator: "\n")
+    // The representation relies on ASCII names (so raw-byte order equals Swift
+    // `String` order — what makes the binary search correct) and PUA codepoints
+    // that fit a UInt16 offset. Fail loudly at generation time if either breaks.
+    for pair in pairs {
+        precondition(pair.name.utf8.allSatisfy { $0 < 0x80 }, "non-ASCII name: \(pair.name)")
+        precondition(
+            pair.codepoint >= 0x10_0000 && pair.codepoint - 0x10_0000 <= 0xFFFF,
+            "codepoint outside the UInt16 PUA window: \(pair.name)")
+    }
+
+    let nameBlob = pairs.map(\.name).joined(separator: "\n")
+
+    var starts: [UInt32] = []
+    starts.reserveCapacity(pairs.count + 1)
+    var offset: UInt32 = 0
+    for pair in pairs {
+        starts.append(offset)
+        offset += UInt32(pair.name.utf8.count) + 1  // +1 for the newline separator
+    }
+    starts.append(offset)  // sentinel = blob length + 1
+
+    let offsets = pairs.map { UInt16($0.codepoint - 0x10_0000) }
+    let startsLiteral = wrapElements(starts.map { String($0) })
+    let offsetsLiteral = wrapElements(offsets.map { String($0) })
 
     return """
     //  🖥️ TUIKit — Terminal UI Kit for Swift
@@ -182,10 +230,10 @@ func emitSource(pairs: [(name: String, codepoint: UInt32)]) -> String {
     //
     //  Produced by `Tools/GenerateSFSymbols/generate.sh` from the SF Symbols
     //  app's authoritative name → codepoint table (see that tool for how and
-    //  why). \(pairs.count) symbols, sorted by name, one `name HEXCODEPOINT` line
-    //  each. `SFSymbol` parses this once into a sorted `[(name, Character)]` array
-    //  and binary-searches it. Gated to Apple platforms — SF Symbols never render
-    //  elsewhere — so no other platform carries the weight.
+    //  why). \(pairs.count) symbols, sorted by name. `SFSymbol` binary-searches
+    //  `nameBlob` directly through `nameStarts` — no String, no runtime parsing.
+    //  Gated to Apple platforms — SF Symbols never render elsewhere — so no other
+    //  platform carries the weight.
 
     // swiftlint:disable file_length
 
@@ -195,11 +243,24 @@ func emitSource(pairs: [(name: String, codepoint: UInt32)]) -> String {
         /// Number of symbols in the baked table.
         static let bakedCount = \(pairs.count)
 
-        /// The name → codepoint table: one `name HEXCODEPOINT` line per symbol,
-        /// sorted ascending by name. See `Tools/GenerateSFSymbols`.
-        static let bakedTable = \"\"\"
-    \(table)
+        /// Every name, sorted ascending, newline-separated (no trailing newline).
+        /// A `StaticString` — static bytes in the binary, never a `String`.
+        /// Greppable verbatim. Indexed via `nameStarts`.
+        static let nameBlob: StaticString = \"\"\"
+    \(nameBlob)
     \"\"\"
+
+        /// Byte offsets into `nameBlob`: name `i` is
+        /// `nameBlob[nameStarts[i] ..< nameStarts[i + 1] - 1]`. \(starts.count) entries (n + 1).
+        static let nameStarts: [UInt32] = [
+    \(startsLiteral)
+        ]
+
+        /// Codepoint of name `i` as `codepoint - 0x100000` (reconstruct with
+        /// `0x100000 + offset`). Aligned with `nameStarts`.
+        static let codepointOffsets: [UInt16] = [
+    \(offsetsLiteral)
+        ]
     }
 
     #endif

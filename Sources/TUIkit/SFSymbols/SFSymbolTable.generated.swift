@@ -8,10 +8,10 @@
 //
 //  Produced by `Tools/GenerateSFSymbols/generate.sh` from the SF Symbols
 //  app's authoritative name → codepoint table (see that tool for how and
-//  why). 8466 symbols, sorted by name, one `name HEXCODEPOINT` line
-//  each. `SFSymbol` parses this once into a sorted `[(name, Character)]` array
-//  and binary-searches it. Gated to Apple platforms — SF Symbols never render
-//  elsewhere — so no other platform carries the weight.
+//  why). 8466 symbols, sorted by name. `SFSymbol` binary-searches
+//  `nameBlob` directly through `nameStarts` — no String, no runtime parsing.
+//  Gated to Apple platforms — SF Symbols never render elsewhere — so no other
+//  platform carries the weight.
 
 // swiftlint:disable file_length
 
@@ -21,8476 +21,9702 @@ extension SFSymbol {
     /// Number of symbols in the baked table.
     static let bakedCount = 8466
 
-    /// The name → codepoint table: one `name HEXCODEPOINT` line per symbol,
-    /// sorted ascending by name. See `Tools/GenerateSFSymbols`.
-    static let bakedTable = """
-0.circle 100038
-0.circle.ar 101867
-0.circle.fill 100039
-0.circle.fill.ar 101868
-0.circle.fill.hi 102444
-0.circle.hi 102443
-0.square 1000C8
-0.square.ar 101869
-0.square.fill 1000C9
-0.square.fill.ar 10186A
-0.square.fill.hi 102446
-0.square.hi 102445
-00.circle 1004EB
-00.circle.ar 1022E9
-00.circle.fill 10050A
-00.circle.fill.ar 1022EA
-00.circle.fill.hi 102474
-00.circle.hi 102473
-00.square 100529
-00.square.ar 1022EB
-00.square.fill 100548
-00.square.fill.ar 1022EC
-00.square.fill.hi 102476
-00.square.hi 102475
-01.circle 1004EC
-01.circle.ar 1022ED
-01.circle.fill 10050B
-01.circle.fill.ar 1022EE
-01.circle.fill.hi 102478
-01.circle.hi 102477
-01.square 10052A
-01.square.ar 1022EF
-01.square.fill 100549
-01.square.fill.ar 1022F0
-01.square.fill.hi 10247A
-01.square.hi 102479
-02.circle 1004ED
-02.circle.ar 1022F1
-02.circle.fill 10050C
-02.circle.fill.ar 1022F2
-02.circle.fill.hi 102489
-02.circle.hi 102488
-02.square 10052B
-02.square.ar 1022F3
-02.square.fill 10054A
-02.square.fill.ar 1022F4
-02.square.fill.hi 10248B
-02.square.hi 10248A
-03.circle 1004EE
-03.circle.ar 1022F5
-03.circle.fill 10050D
-03.circle.fill.ar 1022F6
-03.circle.fill.hi 10248D
-03.circle.hi 10248C
-03.square 10052C
-03.square.ar 1022F7
-03.square.fill 10054B
-03.square.fill.ar 1022F8
-03.square.fill.hi 10248F
-03.square.hi 10248E
-04.circle 1004EF
-04.circle.ar 1022F9
-04.circle.fill 10050E
-04.circle.fill.ar 1022FA
-04.circle.fill.hi 102491
-04.circle.hi 102490
-04.square 10052D
-04.square.ar 1022FB
-04.square.fill 10054C
-04.square.fill.ar 1022FC
-04.square.fill.hi 102493
-04.square.hi 102492
-05.circle 1004F0
-05.circle.ar 1022FD
-05.circle.fill 10050F
-05.circle.fill.ar 1022FE
-05.circle.fill.hi 102495
-05.circle.hi 102494
-05.square 10052E
-05.square.ar 1022FF
-05.square.fill 10054D
-05.square.fill.ar 102300
-05.square.fill.hi 102497
-05.square.hi 102496
-06.circle 1004F1
-06.circle.ar 102301
-06.circle.fill 100510
-06.circle.fill.ar 102302
-06.circle.fill.hi 102499
-06.circle.hi 102498
-06.square 10052F
-06.square.ar 102303
-06.square.fill 10054E
-06.square.fill.ar 102304
-06.square.fill.hi 10249B
-06.square.hi 10249A
-07.circle 1004F2
-07.circle.ar 102305
-07.circle.fill 100511
-07.circle.fill.ar 102306
-07.circle.fill.hi 10249D
-07.circle.hi 10249C
-07.square 100530
-07.square.ar 102307
-07.square.fill 10054F
-07.square.fill.ar 102308
-07.square.fill.hi 10249F
-07.square.hi 10249E
-08.circle 1004F3
-08.circle.ar 102309
-08.circle.fill 100512
-08.circle.fill.ar 10230A
-08.circle.fill.hi 1024AF
-08.circle.hi 1024AE
-08.square 100531
-08.square.ar 10230B
-08.square.fill 100550
-08.square.fill.ar 10230C
-08.square.fill.hi 1024B1
-08.square.hi 1024B0
-09.circle 1004F4
-09.circle.ar 10230D
-09.circle.fill 100513
-09.circle.fill.ar 10230E
-09.circle.fill.hi 1024B7
-09.circle.hi 1024B6
-09.square 100532
-09.square.ar 10230F
-09.square.fill 100551
-09.square.fill.ar 102310
-09.square.fill.hi 1024B9
-09.square.hi 1024B8
-1.brakesignal 1017C4
-1.calendar 103326
-1.calendar.ar 1034A9
-1.calendar.hi 1034C8
-1.circle 10003A
-1.circle.ar 10186B
-1.circle.fill 10003B
-1.circle.fill.ar 10186C
-1.circle.fill.hi 102448
-1.circle.hi 102447
-1.lane 1017D0
-1.lane.ar 101890
-1.lane.hi 101C4C
-1.magnifyingglass 1002AE
-1.magnifyingglass.ar 100B52
-1.magnifyingglass.hi 10104A
-1.square 1000CA
-1.square.ar 10186D
-1.square.fill 1000CB
-1.square.fill.ar 10186E
-1.square.fill.hi 10244A
-1.square.hi 102449
-10.arrow.trianglehead.clockwise 100381
-10.arrow.trianglehead.clockwise.ar 100731
-10.arrow.trianglehead.clockwise.hi 1007A4
-10.arrow.trianglehead.counterclockwise 100382
-10.arrow.trianglehead.counterclockwise.ar 100732
-10.arrow.trianglehead.counterclockwise.hi 1007A5
-10.calendar 10332F
-10.calendar.ar 1034B2
-10.calendar.hi 1034D1
-10.circle 1004F5
-10.circle.ar 102311
-10.circle.fill 100514
-10.circle.fill.ar 102312
-10.circle.fill.hi 1024BB
-10.circle.hi 1024BA
-10.lane 1017D9
-10.lane.ar 101C49
-10.lane.hi 101C55
-10.square 100533
-10.square.ar 102313
-10.square.fill 100552
-10.square.fill.ar 102314
-10.square.fill.hi 1024BD
-10.square.hi 1024BC
-11.calendar 103330
-11.calendar.ar 1034B3
-11.calendar.hi 1034D2
-11.circle 1004F6
-11.circle.ar 102315
-11.circle.fill 100515
-11.circle.fill.ar 102316
-11.circle.fill.hi 1024BF
-11.circle.hi 1024BE
-11.lane 1017DA
-11.lane.ar 101C4A
-11.lane.hi 101C56
-11.square 100534
-11.square.ar 102317
-11.square.fill 100553
-11.square.fill.ar 102318
-11.square.fill.hi 1024C1
-11.square.hi 1024C0
-12.calendar 103331
-12.calendar.ar 1034B4
-12.calendar.hi 1034D3
-12.circle 1004F7
-12.circle.ar 102319
-12.circle.fill 100516
-12.circle.fill.ar 10231A
-12.circle.fill.hi 1024C3
-12.circle.hi 1024C2
-12.lane 1017DB
-12.lane.ar 101C4B
-12.lane.hi 101C57
-12.square 100535
-12.square.ar 10231B
-12.square.fill 100554
-12.square.fill.ar 10231C
-12.square.fill.hi 1024C5
-12.square.hi 1024C4
-13.calendar 103332
-13.calendar.ar 1034B5
-13.calendar.hi 1034D4
-13.circle 1004F8
-13.circle.ar 10231D
-13.circle.fill 100517
-13.circle.fill.ar 10231E
-13.circle.fill.hi 1024C7
-13.circle.hi 1024C6
-13.square 100536
-13.square.ar 10231F
-13.square.fill 100555
-13.square.fill.ar 102320
-13.square.fill.hi 1024C9
-13.square.hi 1024C8
-14.calendar 103333
-14.calendar.ar 1034B6
-14.calendar.hi 1034D5
-14.circle 1004F9
-14.circle.ar 102321
-14.circle.fill 100518
-14.circle.fill.ar 102322
-14.circle.fill.hi 1024CB
-14.circle.hi 1024CA
-14.square 100537
-14.square.ar 102323
-14.square.fill 100556
-14.square.fill.ar 102324
-14.square.fill.hi 1024CD
-14.square.hi 1024CC
-15.arrow.trianglehead.clockwise 100383
-15.arrow.trianglehead.clockwise.ar 100733
-15.arrow.trianglehead.clockwise.hi 1007A6
-15.arrow.trianglehead.counterclockwise 100384
-15.arrow.trianglehead.counterclockwise.ar 100734
-15.arrow.trianglehead.counterclockwise.hi 1007A7
-15.calendar 103334
-15.calendar.ar 1034B7
-15.calendar.hi 1034D6
-15.circle 1004FA
-15.circle.ar 102325
-15.circle.fill 100519
-15.circle.fill.ar 102326
-15.circle.fill.hi 1024CF
-15.circle.hi 1024CE
-15.square 100538
-15.square.ar 102327
-15.square.fill 100557
-15.square.fill.ar 102328
-15.square.fill.hi 1024D1
-15.square.hi 1024D0
-16.calendar 103335
-16.calendar.ar 1034B8
-16.calendar.hi 1034D7
-16.circle 1004FB
-16.circle.ar 102329
-16.circle.fill 10051A
-16.circle.fill.ar 10232A
-16.circle.fill.hi 1024D3
-16.circle.hi 1024D2
-16.square 100539
-16.square.ar 10232B
-16.square.fill 100558
-16.square.fill.ar 10232C
-16.square.fill.hi 1024D5
-16.square.hi 1024D4
-17.calendar 103336
-17.calendar.ar 1034B9
-17.calendar.hi 1034D8
-17.circle 1004FC
-17.circle.ar 10232D
-17.circle.fill 10051B
-17.circle.fill.ar 10232E
-17.circle.fill.hi 1024D7
-17.circle.hi 1024D6
-17.square 10053A
-17.square.ar 10232F
-17.square.fill 100559
-17.square.fill.ar 102330
-17.square.fill.hi 1024D9
-17.square.hi 1024D8
-18.calendar 103337
-18.calendar.ar 1034BA
-18.calendar.hi 1034D9
-18.circle 1004FD
-18.circle.ar 102331
-18.circle.fill 10051C
-18.circle.fill.ar 102332
-18.circle.fill.hi 1024DB
-18.circle.hi 1024DA
-18.square 10053B
-18.square.ar 102333
-18.square.fill 10055A
-18.square.fill.ar 102334
-18.square.fill.hi 1024DD
-18.square.hi 1024DC
-19.calendar 103338
-19.calendar.ar 1034BB
-19.calendar.hi 1034DA
-19.circle 1004FE
-19.circle.ar 102335
-19.circle.fill 10051D
-19.circle.fill.ar 102336
-19.circle.fill.hi 1024DF
-19.circle.hi 1024DE
-19.square 10053C
-19.square.ar 102337
-19.square.fill 10055B
-19.square.fill.ar 102338
-19.square.fill.hi 1024E1
-19.square.hi 1024E0
-2.brakesignal 1017C5
-2.calendar 103327
-2.calendar.ar 1034AA
-2.calendar.hi 1034C9
-2.circle 10003C
-2.circle.ar 10186F
-2.circle.fill 10003D
-2.circle.fill.ar 101870
-2.circle.fill.hi 10244C
-2.circle.hi 10244B
-2.lane 1017D1
-2.lane.ar 101891
-2.lane.hi 101C4D
-2.square 1000CC
-2.square.ar 101871
-2.square.fill 1000CD
-2.square.fill.ar 101872
-2.square.fill.hi 10244E
-2.square.hi 10244D
-20.calendar 103339
-20.calendar.ar 1034BC
-20.calendar.hi 1034DB
-20.circle 1004FF
-20.circle.ar 102339
-20.circle.fill 10051E
-20.circle.fill.ar 10233A
-20.circle.fill.hi 10242A
-20.circle.hi 102429
-20.square 10053D
-20.square.ar 10233B
-20.square.fill 10055C
-20.square.fill.ar 10233C
-20.square.fill.hi 10242C
-20.square.hi 10242B
-21.calendar 10333A
-21.calendar.ar 1034BD
-21.calendar.hi 1034DC
-21.circle 100500
-21.circle.ar 10233D
-21.circle.fill 10051F
-21.circle.fill.ar 10233E
-21.circle.fill.hi 102438
-21.circle.hi 102437
-21.square 10053E
-21.square.ar 10233F
-21.square.fill 10055D
-21.square.fill.ar 102340
-21.square.fill.hi 10243A
-21.square.hi 102439
-22.calendar 10333B
-22.calendar.ar 1034BE
-22.calendar.hi 1034DD
-22.circle 100501
-22.circle.ar 102341
-22.circle.fill 100520
-22.circle.fill.ar 102342
-22.circle.fill.hi 10243C
-22.circle.hi 10243B
-22.square 10053F
-22.square.ar 102343
-22.square.fill 10055E
-22.square.fill.ar 102344
-22.square.fill.hi 10243E
-22.square.hi 10243D
-23.calendar 10333C
-23.calendar.ar 1034BF
-23.calendar.hi 1034DE
-23.circle 100502
-23.circle.ar 102345
-23.circle.fill 100521
-23.circle.fill.ar 102346
-23.circle.fill.hi 1025A3
-23.circle.hi 1025A2
-23.square 100540
-23.square.ar 102347
-23.square.fill 10055F
-23.square.fill.ar 102348
-23.square.fill.hi 1025A5
-23.square.hi 1025A4
-24.calendar 10333D
-24.calendar.ar 1034C0
-24.calendar.hi 1034DF
-24.circle 100503
-24.circle.ar 102349
-24.circle.fill 100522
-24.circle.fill.ar 10234A
-24.circle.fill.hi 1025A7
-24.circle.hi 1025A6
-24.square 100541
-24.square.ar 10234B
-24.square.fill 100560
-24.square.fill.ar 10234C
-24.square.fill.hi 1025A9
-24.square.hi 1025A8
-25.calendar 10333E
-25.calendar.ar 1034C1
-25.calendar.hi 1034E0
-25.circle 100504
-25.circle.ar 10234D
-25.circle.fill 100523
-25.circle.fill.ar 10234E
-25.circle.fill.hi 1025AB
-25.circle.hi 1025AA
-25.square 100542
-25.square.ar 10234F
-25.square.fill 100561
-25.square.fill.ar 102350
-25.square.fill.hi 1025AD
-25.square.hi 1025AC
-26.calendar 10333F
-26.calendar.ar 1034C2
-26.calendar.hi 1034E1
-26.circle 100505
-26.circle.ar 102351
-26.circle.fill 100524
-26.circle.fill.ar 102352
-26.circle.fill.hi 1025AF
-26.circle.hi 1025AE
-26.square 100543
-26.square.ar 102353
-26.square.fill 100562
-26.square.fill.ar 102354
-26.square.fill.hi 1025B1
-26.square.hi 1025B0
-27.calendar 103340
-27.calendar.ar 1034C3
-27.calendar.hi 1034E2
-27.circle 100506
-27.circle.ar 102355
-27.circle.fill 100525
-27.circle.fill.ar 102356
-27.circle.fill.hi 1025B3
-27.circle.hi 1025B2
-27.square 100544
-27.square.ar 102357
-27.square.fill 100563
-27.square.fill.ar 102358
-27.square.fill.hi 1025B5
-27.square.hi 1025B4
-28.calendar 103341
-28.calendar.ar 1034C4
-28.calendar.hi 1034E3
-28.circle 100507
-28.circle.ar 102359
-28.circle.fill 100526
-28.circle.fill.ar 10235A
-28.circle.fill.hi 1025B7
-28.circle.hi 1025B6
-28.square 100545
-28.square.ar 10235B
-28.square.fill 100564
-28.square.fill.ar 10235C
-28.square.fill.hi 1025B9
-28.square.hi 1025B8
-29.calendar 103342
-29.calendar.ar 1034C5
-29.calendar.hi 1034E4
-29.circle 100508
-29.circle.ar 10235D
-29.circle.fill 100527
-29.circle.fill.ar 10235E
-29.circle.fill.hi 1025BB
-29.circle.hi 1025BA
-29.square 100546
-29.square.ar 10235F
-29.square.fill 100565
-29.square.fill.ar 102360
-29.square.fill.hi 1025BD
-29.square.hi 1025BC
-2h 10195A
-2h.circle 10195E
-2h.circle.fill 10195F
-3.calendar 103328
-3.calendar.ar 1034AB
-3.calendar.hi 1034CA
-3.circle 10003E
-3.circle.ar 101873
-3.circle.fill 10003F
-3.circle.fill.ar 101874
-3.circle.fill.hi 102450
-3.circle.hi 10244F
-3.lane 1017D2
-3.lane.ar 101892
-3.lane.hi 101C4E
-3.square 1000CE
-3.square.ar 101875
-3.square.fill 1000CF
-3.square.fill.ar 101876
-3.square.fill.hi 102452
-3.square.hi 102451
-30.arrow.trianglehead.clockwise 100385
-30.arrow.trianglehead.clockwise.ar 100735
-30.arrow.trianglehead.clockwise.hi 1007A8
-30.arrow.trianglehead.counterclockwise 100386
-30.arrow.trianglehead.counterclockwise.ar 100736
-30.arrow.trianglehead.counterclockwise.hi 1007A9
-30.calendar 103343
-30.calendar.ar 1034C6
-30.calendar.hi 1034E5
-30.circle 100509
-30.circle.ar 102361
-30.circle.fill 100528
-30.circle.fill.ar 102362
-30.circle.fill.hi 1025BF
-30.circle.hi 1025BE
-30.square 100547
-30.square.ar 102363
-30.square.fill 100566
-30.square.fill.ar 102364
-30.square.fill.hi 1025C1
-30.square.hi 1025C0
-31.calendar 103344
-31.calendar.ar 1034C7
-31.calendar.hi 1034E6
-31.circle 100620
-31.circle.ar 102365
-31.circle.fill 100621
-31.circle.fill.ar 102366
-31.circle.fill.hi 1025C3
-31.circle.hi 1025C2
-31.square 100622
-31.square.ar 102367
-31.square.fill 100623
-31.square.fill.ar 102368
-31.square.fill.hi 1025C5
-31.square.hi 1025C4
-32.circle 100697
-32.circle.ar 102369
-32.circle.fill 100698
-32.circle.fill.ar 10236A
-32.circle.fill.hi 1025C7
-32.circle.hi 1025C6
-32.square 1006BD
-32.square.ar 10236B
-32.square.fill 1006BE
-32.square.fill.ar 10236C
-32.square.fill.hi 1025C9
-32.square.hi 1025C8
-33.circle 100699
-33.circle.ar 10236D
-33.circle.fill 10069A
-33.circle.fill.ar 10236E
-33.circle.fill.hi 1025CB
-33.circle.hi 1025CA
-33.square 1006BF
-33.square.ar 10236F
-33.square.fill 1006C0
-33.square.fill.ar 102370
-33.square.fill.hi 1025CD
-33.square.hi 1025CC
-34.circle 10069B
-34.circle.ar 102371
-34.circle.fill 10069C
-34.circle.fill.ar 102372
-34.circle.fill.hi 1025CF
-34.circle.hi 1025CE
-34.square 1006C1
-34.square.ar 102373
-34.square.fill 1006C2
-34.square.fill.ar 102374
-34.square.fill.hi 1025D1
-34.square.hi 1025D0
-35.circle 10069D
-35.circle.ar 102375
-35.circle.fill 10069E
-35.circle.fill.ar 102376
-35.circle.fill.hi 1025D3
-35.circle.hi 1025D2
-35.square 1006C3
-35.square.ar 102377
-35.square.fill 1006C4
-35.square.fill.ar 102378
-35.square.fill.hi 1025D5
-35.square.hi 1025D4
-36.circle 10069F
-36.circle.ar 102379
-36.circle.fill 1006A0
-36.circle.fill.ar 10237A
-36.circle.fill.hi 1025D7
-36.circle.hi 1025D6
-36.square 1006C5
-36.square.ar 10237B
-36.square.fill 1006C6
-36.square.fill.ar 10237C
-36.square.fill.hi 1025D9
-36.square.hi 1025D8
-37.circle 1006A1
-37.circle.ar 10237D
-37.circle.fill 1006A2
-37.circle.fill.ar 10237E
-37.circle.fill.hi 1025DB
-37.circle.hi 1025DA
-37.square 1006C7
-37.square.ar 10237F
-37.square.fill 1006C8
-37.square.fill.ar 102380
-37.square.fill.hi 1025DD
-37.square.hi 1025DC
-38.circle 1006A3
-38.circle.ar 102381
-38.circle.fill 1006A4
-38.circle.fill.ar 102382
-38.circle.fill.hi 1025DF
-38.circle.hi 1025DE
-38.square 1006C9
-38.square.ar 102383
-38.square.fill 1006CA
-38.square.fill.ar 102384
-38.square.fill.hi 1025E1
-38.square.hi 1025E0
-39.circle 1006A5
-39.circle.ar 102385
-39.circle.fill 1006A6
-39.circle.fill.ar 102386
-39.circle.fill.hi 1025E3
-39.circle.hi 1025E2
-39.square 1006CB
-39.square.ar 102387
-39.square.fill 1006CC
-39.square.fill.ar 102388
-39.square.fill.hi 1025E5
-39.square.hi 1025E4
-4.alt.circle 100617
-4.alt.circle.fill 100618
-4.alt.square 100619
-4.alt.square.fill 10061A
-4.calendar 103329
-4.calendar.ar 1034AC
-4.calendar.hi 1034CB
-4.circle 100040
-4.circle.ar 101877
-4.circle.fill 100041
-4.circle.fill.ar 101878
-4.circle.fill.hi 102454
-4.circle.hi 102453
-4.lane 1017D3
-4.lane.ar 101893
-4.lane.hi 101C4F
-4.square 1000D0
-4.square.ar 101879
-4.square.fill 1000D1
-4.square.fill.ar 10187A
-4.square.fill.hi 102456
-4.square.hi 102455
-40.circle 1006A7
-40.circle.ar 102389
-40.circle.fill 1006A8
-40.circle.fill.ar 10238A
-40.circle.fill.hi 1025E7
-40.circle.hi 1025E6
-40.square 1006CD
-40.square.ar 10238B
-40.square.fill 1006CE
-40.square.fill.ar 10238C
-40.square.fill.hi 1025E9
-40.square.hi 1025E8
-41.circle 1006A9
-41.circle.ar 10238D
-41.circle.fill 1006AA
-41.circle.fill.ar 10238E
-41.circle.fill.hi 1025EB
-41.circle.hi 1025EA
-41.square 1006CF
-41.square.ar 10238F
-41.square.fill 1006D0
-41.square.fill.ar 102390
-41.square.fill.hi 1025ED
-41.square.hi 1025EC
-42.circle 1006AB
-42.circle.ar 102391
-42.circle.fill 1006AC
-42.circle.fill.ar 102392
-42.circle.fill.hi 1025EF
-42.circle.hi 1025EE
-42.square 1006D1
-42.square.ar 102393
-42.square.fill 1006D2
-42.square.fill.ar 102394
-42.square.fill.hi 1025F1
-42.square.hi 1025F0
-43.circle 1006AD
-43.circle.ar 102395
-43.circle.fill 1006AE
-43.circle.fill.ar 102396
-43.circle.fill.hi 1025F3
-43.circle.hi 1025F2
-43.square 1006D3
-43.square.ar 102397
-43.square.fill 1006D4
-43.square.fill.ar 102398
-43.square.fill.hi 1025F5
-43.square.hi 1025F4
-44.circle 1006AF
-44.circle.ar 102399
-44.circle.fill 1006B0
-44.circle.fill.ar 10239A
-44.circle.fill.hi 1025F7
-44.circle.hi 1025F6
-44.square 1006D5
-44.square.ar 10239B
-44.square.fill 1006D6
-44.square.fill.ar 10239C
-44.square.fill.hi 1025F9
-44.square.hi 1025F8
-45.arrow.trianglehead.clockwise 100387
-45.arrow.trianglehead.clockwise.ar 100737
-45.arrow.trianglehead.clockwise.hi 1007AA
-45.arrow.trianglehead.counterclockwise 100388
-45.arrow.trianglehead.counterclockwise.ar 100738
-45.arrow.trianglehead.counterclockwise.hi 1007AB
-45.circle 1006B1
-45.circle.ar 10239D
-45.circle.fill 1006B2
-45.circle.fill.ar 10239E
-45.circle.fill.hi 1025FB
-45.circle.hi 1025FA
-45.square 1006D7
-45.square.ar 10239F
-45.square.fill 1006D8
-45.square.fill.ar 1023A0
-45.square.fill.hi 1025FD
-45.square.hi 1025FC
-46.circle 1006B3
-46.circle.ar 1023A1
-46.circle.fill 1006B4
-46.circle.fill.ar 1023A2
-46.circle.fill.hi 1025FF
-46.circle.hi 1025FE
-46.square 1006D9
-46.square.ar 1023A3
-46.square.fill 1006DA
-46.square.fill.ar 1023A4
-46.square.fill.hi 102601
-46.square.hi 102600
-47.circle 1006B5
-47.circle.ar 1023A5
-47.circle.fill 1006B6
-47.circle.fill.ar 1023A6
-47.circle.fill.hi 102603
-47.circle.hi 102602
-47.square 1006DB
-47.square.ar 1023A7
-47.square.fill 1006DC
-47.square.fill.ar 1023A8
-47.square.fill.hi 102605
-47.square.hi 102604
-48.circle 1006B7
-48.circle.ar 1023A9
-48.circle.fill 1006B8
-48.circle.fill.ar 1023AA
-48.circle.fill.hi 102607
-48.circle.hi 102606
-48.square 1006DD
-48.square.ar 1023AB
-48.square.fill 1006DE
-48.square.fill.ar 1023AC
-48.square.fill.hi 102609
-48.square.hi 102608
-49.circle 1006B9
-49.circle.ar 1023AD
-49.circle.fill 1006BA
-49.circle.fill.ar 1023AE
-49.circle.fill.hi 10260B
-49.circle.hi 10260A
-49.square 1006DF
-49.square.ar 1023AF
-49.square.fill 1006E0
-49.square.fill.ar 1023B0
-49.square.fill.hi 10260D
-49.square.hi 10260C
-4a 10195D
-4a.circle 101964
-4a.circle.fill 101965
-4h 10195B
-4h.circle 101960
-4h.circle.fill 101961
-4k.tv 1009BD
-4k.tv.fill 1009BE
-4l 10195C
-4l.circle 101962
-4l.circle.fill 101963
-5.arrow.trianglehead.clockwise 100DB0
-5.arrow.trianglehead.clockwise.ar 100DB2
-5.arrow.trianglehead.clockwise.hi 100DB4
-5.arrow.trianglehead.counterclockwise 100DB1
-5.arrow.trianglehead.counterclockwise.ar 100DB3
-5.arrow.trianglehead.counterclockwise.hi 100DB5
-5.calendar 10332A
-5.calendar.ar 1034AD
-5.calendar.hi 1034CC
-5.circle 100042
-5.circle.ar 10187B
-5.circle.fill 100043
-5.circle.fill.ar 10187C
-5.circle.fill.hi 102458
-5.circle.hi 102457
-5.lane 1017D4
-5.lane.ar 101894
-5.lane.hi 101C50
-5.square 1000D2
-5.square.ar 10187D
-5.square.fill 1000D3
-5.square.fill.ar 10187E
-5.square.fill.hi 10245A
-5.square.hi 102459
-50.circle 1006BB
-50.circle.ar 1023B1
-50.circle.fill 1006BC
-50.circle.fill.ar 1023B2
-50.circle.fill.hi 10260F
-50.circle.hi 10260E
-50.square 1006E1
-50.square.ar 1023B3
-50.square.fill 1006E2
-50.square.fill.ar 1023B4
-50.square.fill.hi 102611
-50.square.hi 102610
-6.alt.circle 100471
-6.alt.circle.fill 100472
-6.alt.square 100475
-6.alt.square.fill 100476
-6.calendar 10332B
-6.calendar.ar 1034AE
-6.calendar.hi 1034CD
-6.circle 100044
-6.circle.ar 10187F
-6.circle.fill 100045
-6.circle.fill.ar 101880
-6.circle.fill.hi 10245C
-6.circle.hi 10245B
-6.lane 1017D5
-6.lane.ar 101895
-6.lane.hi 101C51
-6.square 1000D4
-6.square.ar 101881
-6.square.fill 1000D5
-6.square.fill.ar 101882
-6.square.fill.hi 10245E
-6.square.hi 10245D
-60.arrow.trianglehead.clockwise 100389
-60.arrow.trianglehead.clockwise.ar 100739
-60.arrow.trianglehead.clockwise.hi 1007AC
-60.arrow.trianglehead.counterclockwise 10038A
-60.arrow.trianglehead.counterclockwise.ar 10073A
-60.arrow.trianglehead.counterclockwise.hi 1007AD
-7.calendar 10332C
-7.calendar.ar 1034AF
-7.calendar.hi 1034CE
-7.circle 100046
-7.circle.ar 101883
-7.circle.fill 100047
-7.circle.fill.ar 101884
-7.circle.fill.hi 102460
-7.circle.hi 10245F
-7.lane 1017D6
-7.lane.ar 101896
-7.lane.hi 101C52
-7.square 1000D6
-7.square.ar 101885
-7.square.fill 1000D7
-7.square.fill.ar 101886
-7.square.fill.hi 102462
-7.square.hi 102461
-75.arrow.trianglehead.clockwise 100624
-75.arrow.trianglehead.clockwise.ar 10073B
-75.arrow.trianglehead.clockwise.hi 1007AE
-75.arrow.trianglehead.counterclockwise 100625
-75.arrow.trianglehead.counterclockwise.ar 10073C
-75.arrow.trianglehead.counterclockwise.hi 1007AF
-8.calendar 10332D
-8.calendar.ar 1034B0
-8.calendar.hi 1034CF
-8.circle 100048
-8.circle.ar 101887
-8.circle.fill 100049
-8.circle.fill.ar 101888
-8.circle.fill.hi 102464
-8.circle.hi 102463
-8.lane 1017D7
-8.lane.ar 101897
-8.lane.hi 101C53
-8.square 1000D8
-8.square.ar 101889
-8.square.fill 1000D9
-8.square.fill.ar 10188A
-8.square.fill.hi 102466
-8.square.hi 102465
-9.alt.circle 100473
-9.alt.circle.fill 100474
-9.alt.square 100477
-9.alt.square.fill 100478
-9.calendar 10332E
-9.calendar.ar 1034B1
-9.calendar.hi 1034D0
-9.circle 10004A
-9.circle.ar 10188B
-9.circle.fill 10004B
-9.circle.fill.ar 10188C
-9.circle.fill.hi 102468
-9.circle.hi 102467
-9.lane 1017D8
-9.lane.ar 101898
-9.lane.hi 101C54
-9.square 1000DA
-9.square.ar 10188D
-9.square.fill 1000DB
-9.square.fill.ar 10188E
-9.square.fill.hi 10246A
-9.square.hi 102469
-90.arrow.trianglehead.clockwise 100626
-90.arrow.trianglehead.clockwise.ar 10073D
-90.arrow.trianglehead.clockwise.hi 1007B0
-90.arrow.trianglehead.counterclockwise 100627
-90.arrow.trianglehead.counterclockwise.ar 10073E
-90.arrow.trianglehead.counterclockwise.hi 1007B1
-a.circle 100004
-a.circle.fill 100005
-a.square 100094
-a.square.fill 100095
-abs 1018B7
-abs.brakesignal 101034
-abs.brakesignal.slash 1017C6
-abs.circle 1018B8
-abs.circle.fill 1018B9
-accessibility 10057E
-accessibility.badge.arrow.up.right 100B93
-accessibility.fill 10057F
-air.car.side 102963
-air.car.side.fill 102964
-air.conditioner 103546
-air.conditioner.horizontal 1014ED
-air.conditioner.horizontal.fill 1014EE
-air.conditioner.slash 103547
-air.conditioner.vertical 1014EB
-air.conditioner.vertical.fill 1014EC
-air.convertible.side 102969
-air.convertible.side.fill 10296A
-air.pickup.side 102967
-air.pickup.side.fill 102968
-air.purifier 1014E5
-air.purifier.fill 1014E6
-air.suv.side 102965
-air.suv.side.fill 102966
-airplane 100453
-airplane.arrival 100DEF
-airplane.circle 1004B8
-airplane.circle.fill 1004B9
-airplane.cloud 10321C
-airplane.departure 100DF0
-airplane.landed 10321B
-airplane.path.dotted 1032C1
-airplane.ticket 100DF1
-airplane.ticket.fill 100DF2
-airplane.up.forward 103397
-airplane.up.forward.app 103398
-airplane.up.forward.app.fill 103399
-airplane.up.right 100E2F
-airplane.up.right.app 1032D1
-airplane.up.right.app.fill 1032D2
-airplaneseat 1032F0
-airplay.audio 100462
-airplay.audio.badge.exclamationmark 100C6B
-airplay.audio.circle 100FA7
-airplay.audio.circle.fill 100FA8
-airplay.video 100461
-airplay.video.badge.exclamationmark 100C6A
-airplay.video.circle 100F91
-airplay.video.circle.fill 100F92
-airpod.gen3.left 101123
-airpod.gen3.right 101122
-airpod.left 100C8C
-airpod.right 100C8B
-airpods 1007E5
-airpods.chargingcase 100E67
-airpods.chargingcase.fill 100E68
-airpods.chargingcase.wireless 100E69
-airpods.chargingcase.wireless.fill 100E6A
-airpods.gen3 101121
-airpods.gen3.chargingcase.wireless 101150
-airpods.gen3.chargingcase.wireless.fill 101151
-airpods.gen4 102B43
-airpods.gen4.chargingcase.wireless 102B46
-airpods.gen4.chargingcase.wireless.fill 102B47
-airpods.gen4.left 102B45
-airpods.gen4.right 102B44
-airpods.max 100EB9
-airpods.pro 100AB7
-airpods.pro.chargingcase.wireless 100E6B
-airpods.pro.chargingcase.wireless.fill 100E6C
-airpods.pro.chargingcase.wireless.radiowaves.left.and.right 101502
-airpods.pro.chargingcase.wireless.radiowaves.left.and.right.fill 101503
-airpods.pro.gen1 1036BE
-airpods.pro.gen1.chargingcase.wireless 1036CA
-airpods.pro.gen1.chargingcase.wireless.fill 1036CB
-airpods.pro.gen1.chargingcase.wireless.radiowaves.left.and.right 1036CC
-airpods.pro.gen1.chargingcase.wireless.radiowaves.left.and.right.fill 1036CD
-airpods.pro.gen1.left 1036C4
-airpods.pro.gen1.right 1036C0
-airpods.pro.gen3 103149
-airpods.pro.gen3.chargingcase.wireless 103155
-airpods.pro.gen3.chargingcase.wireless.fill 103156
-airpods.pro.gen3.chargingcase.wireless.radiowaves.left.and.right 1031D3
-airpods.pro.gen3.chargingcase.wireless.radiowaves.left.and.right.fill 1031D4
-airpods.pro.gen3.left 103148
-airpods.pro.gen3.right 103147
-airpods.pro.left 100C8E
-airpods.pro.right 100C8D
-airport.express 1009AF
-airport.extreme 10045D
-airport.extreme.tower 1009B0
-airtag 10113E
-airtag.fill 10113F
-airtag.radiowaves.forward 10113C
-airtag.radiowaves.forward.fill 10113D
-airtag.radiowaves.forward.fill.rtl 100D16
-airtag.radiowaves.forward.rtl 100D15
-alarm 10042D
-alarm.badge.minus 103783
-alarm.badge.minus.fill 103784
-alarm.badge.xmark 10377F
-alarm.badge.xmark.fill 103780
-alarm.fill 10042E
-alarm.slash 10377C
-alarm.slash.fill 10377D
-alarm.waves.left.and.right 1015C0
-alarm.waves.left.and.right.fill 1015C1
-align.horizontal.center 100A49
-align.horizontal.center.fill 100957
-align.horizontal.left 100A48
-align.horizontal.left.fill 100956
-align.horizontal.right 100A4A
-align.horizontal.right.fill 100958
-align.vertical.bottom 100A4D
-align.vertical.bottom.fill 10095B
-align.vertical.center 100A4C
-align.vertical.center.fill 10095A
-align.vertical.top 100A4B
-align.vertical.top.fill 100959
-allergens 100B2D
-allergens.fill 101486
-alt 100196
-alternatingcurrent 1011AD
-american.football 1015CB
-american.football.circle 1016BF
-american.football.circle.fill 1016C0
-american.football.fill 1015CC
-american.football.professional 1023B5
-american.football.professional.circle 1023B7
-american.football.professional.circle.fill 1023B8
-american.football.professional.fill 1023B6
-amplifier 1009F0
-angle 101461
-ant 10031A
-ant.circle 10031C
-ant.circle.fill 10031D
-ant.fill 10031B
-antenna.radiowaves.left.and.right 100580
-antenna.radiowaves.left.and.right.circle 100DC8
-antenna.radiowaves.left.and.right.circle.fill 100DC9
-antenna.radiowaves.left.and.right.slash 101152
-antenna.radiowaves.left.and.right.slash.circle 102ABB
-antenna.radiowaves.left.and.right.slash.circle.fill 102ABD
-app 10044B
-app.background.dotted 102DF8
-app.badge 10044F
-app.badge.checkmark 1010A0
-app.badge.checkmark.fill 1010A1
-app.badge.clock 102846
-app.badge.clock.fill 102847
-app.badge.fill 100450
-app.connected.to.app.below.fill 101018
-app.dashed 100FEB
-app.fill 10044C
-app.gift 100451
-app.gift.fill 100452
-app.grid 1033DE
-app.shadow 1033BA
-app.slash 1036B5
-app.slash.fill 1036B6
-app.specular 1033E1
-app.translucent 1033E2
-appclip 100B68
-append.page 100247
-append.page.fill 10098B
-append.page.fill.rtl 100B51
-append.page.rtl 100B50
-apple.books.pages 103072
-apple.books.pages.fill 103073
-apple.classical.pages 10306C
-apple.classical.pages.fill 10306D
-apple.haptics.and.exclamationmark.triangle 102AE5
-apple.haptics.and.music.note 10277E
-apple.haptics.and.music.note.slash 102780
-apple.homekit 100800
-apple.image.playground 102B95
-apple.image.playground.fill 102B96
-apple.intelligence 102BA2
-apple.intelligence.badge.xmark 10302B
-apple.logo 1008FA
-apple.meditate 101099
-apple.meditate.circle 1026D1
-apple.meditate.circle.fill 1026D2
-apple.meditate.square.stack 1017FE
-apple.meditate.square.stack.fill 1017FF
-apple.podcasts.pages 103070
-apple.podcasts.pages.fill 103071
-apple.terminal 100A7C
-apple.terminal.circle 102755
-apple.terminal.circle.fill 102756
-apple.terminal.fill 100A8F
-apple.terminal.on.rectangle 101E5B
-apple.terminal.on.rectangle.fill 101E5C
-apple.writing.tools 102DF4
-applepencil 100EAE
-applepencil.adapter.usb.c 101C12
-applepencil.adapter.usb.c.fill 101C13
-applepencil.and.scribble 101911
-applepencil.doubletap 102900
-applepencil.gen1 101C24
-applepencil.gen2 101C25
-applepencil.hover 101912
-applepencil.squeeze 1028FF
-applepencil.tip 101913
-applescript 10092D
-applescript.fill 10092E
-appletv 100A2B
-appletv.badge.checkmark 103280
-appletv.badge.checkmark.fill 103281
-appletv.badge.exclamationmark 101C3A
-appletv.badge.exclamationmark.fill 101C3B
-appletv.fill 100874
-appletvremote.gen1 100F29
-appletvremote.gen1.fill 100F2A
-appletvremote.gen2 100F2B
-appletvremote.gen2.fill 100F2C
-appletvremote.gen3 100769
-appletvremote.gen3.fill 10076A
-appletvremote.gen4 100F27
-appletvremote.gen4.fill 100F28
-applewatch 1007E4
-applewatch.and.arrow.forward 102105
-applewatch.and.arrow.forward.rtl 10210D
-applewatch.badge.checkmark 103284
-applewatch.badge.exclamationmark 103523
-applewatch.case.sizes 10283C
-applewatch.radiowaves.left.and.right 1008B7
-applewatch.side.right 100E0E
-applewatch.slash 100A36
-applewatch.watchface 100ACB
-apps.ipad 100B95
-apps.ipad.badge.checkmark 103364
-apps.ipad.badge.checkmark.rtl 1033A9
-apps.ipad.badge.exclamationmark 103760
-apps.ipad.badge.plus 100BD7
-apps.ipad.landscape 100B96
-apps.ipad.on.rectangle.portrait.dashed 102FEC
-apps.ipad.on.rectangle.portrait.dashed.rtl 102FEE
-apps.iphone 1007DE
-apps.iphone.badge.checkmark 103362
-apps.iphone.badge.checkmark.rtl 1033A7
-apps.iphone.badge.exclamationmark 10375E
-apps.iphone.badge.plus 100BD6
-apps.iphone.landscape 100B94
-apps.iphone.landscape.rtl 100BC5
-appwindow.swipe.rectangle 101EFB
-aqi.high 100D40
-aqi.low 100D3E
-aqi.medium 100D3F
-aqi.medium.gauge.open 10309C
-arcade.stick 102062
-arcade.stick.and.arrow.down 102068
-arcade.stick.and.arrow.left 102064
-arcade.stick.and.arrow.left.and.arrow.right.outward 102063
-arcade.stick.and.arrow.right 102065
-arcade.stick.and.arrow.up 102067
-arcade.stick.and.arrow.up.and.arrow.down 102066
-arcade.stick.console 102060
-arcade.stick.console.fill 102061
-archivebox 10022D
-archivebox.circle 10022F
-archivebox.circle.fill 100230
-archivebox.fill 10022E
-arkit 100638
-arkit.badge.xmark 101012
-arrow.2.squarepath 10014C
-arrow.3.trianglepath 10065B
-arrow.backward 100C0C
-arrow.backward.circle 100C0D
-arrow.backward.circle.dotted 1026A7
-arrow.backward.circle.fill 100C0E
-arrow.backward.square 100C0F
-arrow.backward.square.fill 100C10
-arrow.backward.to.line 10108A
-arrow.backward.to.line.circle 10108C
-arrow.backward.to.line.circle.fill 10108D
-arrow.backward.to.line.compact 10108B
-arrow.backward.to.line.square 102155
-arrow.backward.to.line.square.fill 102156
-arrow.clockwise 100148
-arrow.clockwise.circle 100681
-arrow.clockwise.circle.fill 100682
-arrow.clockwise.square 10215B
-arrow.clockwise.square.fill 10215C
-arrow.counterclockwise 100149
-arrow.counterclockwise.circle 100683
-arrow.counterclockwise.circle.fill 100684
-arrow.counterclockwise.square 10215F
-arrow.counterclockwise.square.fill 102160
-arrow.down 100129
-arrow.down.and.line.horizontal.and.arrow.up 10068D
-arrow.down.app 100BF4
-arrow.down.app.dashed 1027B9
-arrow.down.app.dashed.trianglebadge.exclamationmark 1027BA
-arrow.down.app.fill 100BF5
-arrow.down.applewatch 102118
-arrow.down.backward 100C43
-arrow.down.backward.and.arrow.up.forward 102122
-arrow.down.backward.and.arrow.up.forward.circle 102123
-arrow.down.backward.and.arrow.up.forward.circle.fill 102124
-arrow.down.backward.and.arrow.up.forward.rectangle 1020A5
-arrow.down.backward.and.arrow.up.forward.rectangle.fill 1020A6
-arrow.down.backward.and.arrow.up.forward.square 102145
-arrow.down.backward.and.arrow.up.forward.square.fill 102146
-arrow.down.backward.circle 100C44
-arrow.down.backward.circle.dotted 1026B0
-arrow.down.backward.circle.fill 100C45
-arrow.down.backward.square 100C46
-arrow.down.backward.square.fill 100C47
-arrow.down.backward.toptrailing.rectangle 101EFF
-arrow.down.backward.toptrailing.rectangle.fill 101F00
-arrow.down.circle 100078
-arrow.down.circle.badge.pause 1031D6
-arrow.down.circle.badge.pause.fill 1031D7
-arrow.down.circle.badge.xmark 1031DA
-arrow.down.circle.badge.xmark.fill 1031DB
-arrow.down.circle.dotted 101E5F
-arrow.down.circle.fill 100079
-arrow.down.document 10023D
-arrow.down.document.fill 10023E
-arrow.down.forward 100C48
-arrow.down.forward.and.arrow.up.backward 100C7B
-arrow.down.forward.and.arrow.up.backward.circle 100C7C
-arrow.down.forward.and.arrow.up.backward.circle.fill 100C7D
-arrow.down.forward.and.arrow.up.backward.rectangle 102B1E
-arrow.down.forward.and.arrow.up.backward.rectangle.fill 102B1F
-arrow.down.forward.and.arrow.up.backward.square 102149
-arrow.down.forward.and.arrow.up.backward.square.fill 10214A
-arrow.down.forward.circle 100C49
-arrow.down.forward.circle.dotted 1026F4
-arrow.down.forward.circle.fill 100C4A
-arrow.down.forward.square 100C4B
-arrow.down.forward.square.fill 100C4C
-arrow.down.forward.topleading.rectangle 101F0B
-arrow.down.forward.topleading.rectangle.fill 101F0C
-arrow.down.heart 100C97
-arrow.down.heart.fill 100C98
-arrow.down.left 100130
-arrow.down.left.and.arrow.up.right 10211D
-arrow.down.left.and.arrow.up.right.circle 10211E
-arrow.down.left.and.arrow.up.right.circle.fill 10211F
-arrow.down.left.and.arrow.up.right.rectangle 1020A3
-arrow.down.left.and.arrow.up.right.rectangle.fill 1020A4
-arrow.down.left.and.arrow.up.right.square 102143
-arrow.down.left.and.arrow.up.right.square.fill 102144
-arrow.down.left.arrow.up.right 101F67
-arrow.down.left.arrow.up.right.circle 101F68
-arrow.down.left.arrow.up.right.circle.fill 101F69
-arrow.down.left.arrow.up.right.square 101F6A
-arrow.down.left.arrow.up.right.square.fill 101F6B
-arrow.down.left.circle 100086
-arrow.down.left.circle.dotted 1026AF
-arrow.down.left.circle.fill 100087
-arrow.down.left.square 100116
-arrow.down.left.square.fill 100117
-arrow.down.left.topright.rectangle 101EFD
-arrow.down.left.topright.rectangle.fill 101EFE
-arrow.down.left.video 100351
-arrow.down.left.video.fill 100352
-arrow.down.message 10149E
-arrow.down.message.fill 10149F
-arrow.down.right 100131
-arrow.down.right.and.arrow.up.left 10014B
-arrow.down.right.and.arrow.up.left.circle 100ADE
-arrow.down.right.and.arrow.up.left.circle.fill 100ADF
-arrow.down.right.and.arrow.up.left.rectangle 102B1C
-arrow.down.right.and.arrow.up.left.rectangle.fill 102B1D
-arrow.down.right.and.arrow.up.left.square 102147
-arrow.down.right.and.arrow.up.left.square.fill 102148
-arrow.down.right.circle 100088
-arrow.down.right.circle.dotted 1026F3
-arrow.down.right.circle.fill 100089
-arrow.down.right.square 100118
-arrow.down.right.square.fill 100119
-arrow.down.right.topleft.rectangle 101F09
-arrow.down.right.topleft.rectangle.fill 101F0A
-arrow.down.square 100108
-arrow.down.square.fill 100109
-arrow.down.to.line 100140
-arrow.down.to.line.circle 1004C8
-arrow.down.to.line.circle.fill 1004C9
-arrow.down.to.line.compact 100144
-arrow.down.to.line.square 102151
-arrow.down.to.line.square.fill 102152
-arrow.forward 100C11
-arrow.forward.circle 100C12
-arrow.forward.circle.dotted 1026A9
-arrow.forward.circle.fill 100C13
-arrow.forward.folder 103029
-arrow.forward.folder.fill 10302A
-arrow.forward.folder.fill.rtl 103407
-arrow.forward.folder.rtl 103406
-arrow.forward.square 100C14
-arrow.forward.square.fill 100C15
-arrow.forward.to.line 10108E
-arrow.forward.to.line.circle 101090
-arrow.forward.to.line.circle.fill 101091
-arrow.forward.to.line.compact 10108F
-arrow.forward.to.line.square 102159
-arrow.forward.to.line.square.fill 10215A
-arrow.left 10012A
-arrow.left.and.line.vertical.and.arrow.right 10068B
-arrow.left.and.right 10013E
-arrow.left.and.right.circle 10047E
-arrow.left.and.right.circle.fill 10047F
-arrow.left.and.right.square 100480
-arrow.left.and.right.square.fill 100481
-arrow.left.and.right.text.vertical 1015AD
-arrow.left.arrow.right 10012D
-arrow.left.arrow.right.circle 100080
-arrow.left.arrow.right.circle.fill 100081
-arrow.left.arrow.right.square 100110
-arrow.left.arrow.right.square.fill 100111
-arrow.left.circle 10007A
-arrow.left.circle.dotted 1026A6
-arrow.left.circle.fill 10007B
-arrow.left.square 10010A
-arrow.left.square.fill 10010B
-arrow.left.to.line 100141
-arrow.left.to.line.circle 1004CA
-arrow.left.to.line.circle.fill 1004CB
-arrow.left.to.line.compact 100145
-arrow.left.to.line.square 102153
-arrow.left.to.line.square.fill 102154
-arrow.right 10012B
-arrow.right.and.line.vertical.and.arrow.left 10068C
-arrow.right.circle 10007C
-arrow.right.circle.dotted 1026A8
-arrow.right.circle.fill 10007D
-arrow.right.filled.filter.arrow.right 1029FF
-arrow.right.page.on.clipboard 100AF5
-arrow.right.square 10010C
-arrow.right.square.fill 10010D
-arrow.right.to.line 100142
-arrow.right.to.line.circle 1004CC
-arrow.right.to.line.circle.fill 1004CD
-arrow.right.to.line.compact 100146
-arrow.right.to.line.square 102157
-arrow.right.to.line.square.fill 102158
-arrow.trianglehead.2.clockwise 1028FC
-arrow.trianglehead.2.clockwise.rotate.90 1002AF
-arrow.trianglehead.2.clockwise.rotate.90.camera 100322
-arrow.trianglehead.2.clockwise.rotate.90.camera.fill 100323
-arrow.trianglehead.2.clockwise.rotate.90.circle 10058A
-arrow.trianglehead.2.clockwise.rotate.90.circle.fill 10058B
-arrow.trianglehead.2.clockwise.rotate.90.icloud 10218D
-arrow.trianglehead.2.clockwise.rotate.90.icloud.fill 10218E
-arrow.trianglehead.2.clockwise.rotate.90.page.on.clipboard 100AF7
-arrow.trianglehead.2.counterclockwise 1028FD
-arrow.trianglehead.2.counterclockwise.rotate.90 1028FE
-arrow.trianglehead.bottomleft.capsulepath.clockwise 100917
-arrow.trianglehead.branch 100660
-arrow.trianglehead.clockwise 10037F
-arrow.trianglehead.clockwise.heart 1009E1
-arrow.trianglehead.clockwise.heart.fill 1009E2
-arrow.trianglehead.clockwise.icloud 100677
-arrow.trianglehead.clockwise.icloud.fill 100678
-arrow.trianglehead.clockwise.rotate.90 102754
-arrow.trianglehead.counterclockwise 100380
-arrow.trianglehead.counterclockwise.icloud 100679
-arrow.trianglehead.counterclockwise.icloud.fill 10067A
-arrow.trianglehead.counterclockwise.rotate.90 101E60
-arrow.trianglehead.left.and.right.righttriangle.left.righttriangle.right 100792
-arrow.trianglehead.left.and.right.righttriangle.left.righttriangle.right.fill 100793
-arrow.trianglehead.merge 100584
-arrow.trianglehead.pull 100661
-arrow.trianglehead.rectanglepath 1008C1
-arrow.trianglehead.swap 100585
-arrow.trianglehead.topright.capsulepath.clockwise 100916
-arrow.trianglehead.turn.up.right 10065D
-arrow.trianglehead.turn.up.right.circle 1007F7
-arrow.trianglehead.turn.up.right.circle.fill 1007F8
-arrow.trianglehead.turn.up.right.diamond 10065E
-arrow.trianglehead.turn.up.right.diamond.fill 10065F
-arrow.trianglehead.up.and.down.righttriangle.up.righttriangle.down 1007E8
-arrow.trianglehead.up.and.down.righttriangle.up.righttriangle.down.fill 1007E9
-arrow.turn.down.left 100134
-arrow.turn.down.right 100135
-arrow.turn.left.down 100137
-arrow.turn.left.up 100136
-arrow.turn.right.down 100133
-arrow.turn.right.up 100132
-arrow.turn.up.forward.iphone 100B2B
-arrow.turn.up.forward.iphone.fill 100B2C
-arrow.turn.up.left 100138
-arrow.turn.up.right 100139
-arrow.up 100128
-arrow.up.and.down 100479
-arrow.up.and.down.and.arrow.left.and.right 1009D0
-arrow.up.and.down.and.sparkles 10148F
-arrow.up.and.down.circle 10047A
-arrow.up.and.down.circle.fill 10047B
-arrow.up.and.down.square 10047C
-arrow.up.and.down.square.fill 10047D
-arrow.up.and.down.text.horizontal 100D6C
-arrow.up.and.line.horizontal.and.arrow.down 10068E
-arrow.up.and.person.rectangle.portrait 100AA8
-arrow.up.and.person.rectangle.turn.left 100AAA
-arrow.up.and.person.rectangle.turn.right 100AA9
-arrow.up.arrow.down 10012C
-arrow.up.arrow.down.circle 10007E
-arrow.up.arrow.down.circle.fill 10007F
-arrow.up.arrow.down.square 10010E
-arrow.up.arrow.down.square.fill 10010F
-arrow.up.backward 100C39
-arrow.up.backward.and.arrow.down.forward 100C76
-arrow.up.backward.and.arrow.down.forward.circle 100C77
-arrow.up.backward.and.arrow.down.forward.circle.fill 100C78
-arrow.up.backward.and.arrow.down.forward.rectangle 1020A1
-arrow.up.backward.and.arrow.down.forward.rectangle.fill 1020A2
-arrow.up.backward.and.arrow.down.forward.square 102141
-arrow.up.backward.and.arrow.down.forward.square.fill 102142
-arrow.up.backward.bottomtrailing.rectangle 101F03
-arrow.up.backward.bottomtrailing.rectangle.fill 101F04
-arrow.up.backward.circle 100C3A
-arrow.up.backward.circle.dotted 1026AC
-arrow.up.backward.circle.fill 100C3B
-arrow.up.backward.square 100C3C
-arrow.up.backward.square.fill 100C3D
-arrow.up.bin 100235
-arrow.up.bin.fill 100236
-arrow.up.circle 100076
-arrow.up.circle.badge.clock 1013B3
-arrow.up.circle.dotted 1026AA
-arrow.up.circle.fill 100077
-arrow.up.document 10023B
-arrow.up.document.fill 10023C
-arrow.up.folder 103027
-arrow.up.folder.fill 103028
-arrow.up.forward 100C3E
-arrow.up.forward.and.arrow.down.backward 10212C
-arrow.up.forward.and.arrow.down.backward.circle 10212D
-arrow.up.forward.and.arrow.down.backward.circle.fill 10212E
-arrow.up.forward.and.arrow.down.backward.rectangle 102B22
-arrow.up.forward.and.arrow.down.backward.rectangle.fill 102B23
-arrow.up.forward.and.arrow.down.backward.square 10214D
-arrow.up.forward.and.arrow.down.backward.square.fill 10214E
-arrow.up.forward.app 100BB5
-arrow.up.forward.app.fill 100BB6
-arrow.up.forward.bottomleading.rectangle 101F07
-arrow.up.forward.bottomleading.rectangle.fill 101F08
-arrow.up.forward.circle 100C3F
-arrow.up.forward.circle.dotted 1026AE
-arrow.up.forward.circle.fill 100C40
-arrow.up.forward.square 100C41
-arrow.up.forward.square.fill 100C42
-arrow.up.heart 100C95
-arrow.up.heart.fill 100C96
-arrow.up.left 10012E
-arrow.up.left.and.arrow.down.right 10014A
-arrow.up.left.and.arrow.down.right.circle 1009DB
-arrow.up.left.and.arrow.down.right.circle.fill 1009DC
-arrow.up.left.and.arrow.down.right.rectangle 10209F
-arrow.up.left.and.arrow.down.right.rectangle.fill 1020A0
-arrow.up.left.and.arrow.down.right.square 10213F
-arrow.up.left.and.arrow.down.right.square.fill 102140
-arrow.up.left.and.down.right.and.arrow.up.right.and.down.left 100B11
-arrow.up.left.and.down.right.magnifyingglass 100969
-arrow.up.left.arrow.down.right 101F92
-arrow.up.left.arrow.down.right.circle 101F93
-arrow.up.left.arrow.down.right.circle.fill 101F94
-arrow.up.left.arrow.down.right.square 101F95
-arrow.up.left.arrow.down.right.square.fill 101F96
-arrow.up.left.bottomright.rectangle 101F01
-arrow.up.left.bottomright.rectangle.fill 101F02
-arrow.up.left.circle 100082
-arrow.up.left.circle.dotted 1026AB
-arrow.up.left.circle.fill 100083
-arrow.up.left.square 100112
-arrow.up.left.square.fill 100113
-arrow.up.message 100703
-arrow.up.message.fill 100704
-arrow.up.page.on.clipboard 100AF6
-arrow.up.right 10012F
-arrow.up.right.and.arrow.down.left 102127
-arrow.up.right.and.arrow.down.left.circle 102128
-arrow.up.right.and.arrow.down.left.circle.fill 102129
-arrow.up.right.and.arrow.down.left.rectangle 1008BF
-arrow.up.right.and.arrow.down.left.rectangle.fill 1008C0
-arrow.up.right.and.arrow.down.left.square 10214B
-arrow.up.right.and.arrow.down.left.square.fill 10214C
-arrow.up.right.bottomleft.rectangle 101F05
-arrow.up.right.bottomleft.rectangle.fill 101F06
-arrow.up.right.circle 100084
-arrow.up.right.circle.dotted 1026AD
-arrow.up.right.circle.fill 100085
-arrow.up.right.square 100114
-arrow.up.right.square.fill 100115
-arrow.up.right.video 10034F
-arrow.up.right.video.fill 100350
-arrow.up.square 100106
-arrow.up.square.fill 100107
-arrow.up.to.line 10013F
-arrow.up.to.line.circle 1004C6
-arrow.up.to.line.circle.fill 1004C7
-arrow.up.to.line.compact 100143
-arrow.up.to.line.square 10214F
-arrow.up.to.line.square.fill 102150
-arrow.up.trash 1018C8
-arrow.up.trash.fill 1018C9
-arrow.uturn.backward 100C4D
-arrow.uturn.backward.circle 100C4E
-arrow.uturn.backward.circle.badge.ellipsis 100C50
-arrow.uturn.backward.circle.fill 100C4F
-arrow.uturn.backward.square 100C51
-arrow.uturn.backward.square.fill 100C52
-arrow.uturn.down 10013B
-arrow.uturn.down.circle 10008C
-arrow.uturn.down.circle.fill 10008D
-arrow.uturn.down.square 10011C
-arrow.uturn.down.square.fill 10011D
-arrow.uturn.forward 100C53
-arrow.uturn.forward.circle 100C54
-arrow.uturn.forward.circle.fill 100C55
-arrow.uturn.forward.square 100C56
-arrow.uturn.forward.square.fill 100C57
-arrow.uturn.left 10013C
-arrow.uturn.left.circle 10008E
-arrow.uturn.left.circle.badge.ellipsis 1007B8
-arrow.uturn.left.circle.fill 10008F
-arrow.uturn.left.square 10011E
-arrow.uturn.left.square.fill 10011F
-arrow.uturn.right 10013D
-arrow.uturn.right.circle 100090
-arrow.uturn.right.circle.fill 100091
-arrow.uturn.right.square 100120
-arrow.uturn.right.square.fill 100121
-arrow.uturn.up 10013A
-arrow.uturn.up.circle 10008A
-arrow.uturn.up.circle.fill 10008B
-arrow.uturn.up.square 10011A
-arrow.uturn.up.square.fill 10011B
-arrowkeys 101FB0
-arrowkeys.down.filled 101FB3
-arrowkeys.fill 101FB1
-arrowkeys.left.filled 101FB4
-arrowkeys.right.filled 101FB5
-arrowkeys.up.filled 101FB2
-arrowshape.backward 101248
-arrowshape.backward.circle 101FA2
-arrowshape.backward.circle.fill 101FA3
-arrowshape.backward.fill 101249
-arrowshape.bounce.forward 100C28
-arrowshape.bounce.forward.fill 100C29
-arrowshape.bounce.right 100259
-arrowshape.bounce.right.fill 100491
-arrowshape.down 101FAC
-arrowshape.down.circle 101FAE
-arrowshape.down.circle.fill 101FAF
-arrowshape.down.fill 101FAD
-arrowshape.forward 101246
-arrowshape.forward.circle 101FA6
-arrowshape.forward.circle.fill 101FA7
-arrowshape.forward.fill 101247
-arrowshape.left 101244
-arrowshape.left.arrowshape.right 10127E
-arrowshape.left.arrowshape.right.fill 10127F
-arrowshape.left.circle 101FA0
-arrowshape.left.circle.fill 101FA1
-arrowshape.left.fill 101245
-arrowshape.right 101242
-arrowshape.right.circle 101FA4
-arrowshape.right.circle.fill 101FA5
-arrowshape.right.fill 101243
-arrowshape.turn.up.backward 100C1A
-arrowshape.turn.up.backward.2 100C22
-arrowshape.turn.up.backward.2.circle 100C24
-arrowshape.turn.up.backward.2.circle.fill 100C25
-arrowshape.turn.up.backward.2.fill 100C23
-arrowshape.turn.up.backward.badge.clock 1013B1
-arrowshape.turn.up.backward.badge.clock.fill 1015BE
-arrowshape.turn.up.backward.badge.clock.fill.rtl 1015BF
-arrowshape.turn.up.backward.badge.clock.rtl 1013B2
-arrowshape.turn.up.backward.circle 100C1C
-arrowshape.turn.up.backward.circle.fill 100C1D
-arrowshape.turn.up.backward.fill 100C1B
-arrowshape.turn.up.forward 100C1E
-arrowshape.turn.up.forward.circle 100C20
-arrowshape.turn.up.forward.circle.fill 100C21
-arrowshape.turn.up.forward.fill 100C1F
-arrowshape.turn.up.left 10024C
-arrowshape.turn.up.left.2 100254
-arrowshape.turn.up.left.2.circle 100256
-arrowshape.turn.up.left.2.circle.fill 100257
-arrowshape.turn.up.left.2.fill 100255
-arrowshape.turn.up.left.circle 10024E
-arrowshape.turn.up.left.circle.fill 10024F
-arrowshape.turn.up.left.fill 10024D
-arrowshape.turn.up.right 100250
-arrowshape.turn.up.right.circle 100252
-arrowshape.turn.up.right.circle.fill 100253
-arrowshape.turn.up.right.fill 100251
-arrowshape.up 101FA8
-arrowshape.up.circle 101FAA
-arrowshape.up.circle.fill 101FAB
-arrowshape.up.fill 101FA9
-arrowshape.zigzag.forward 100C26
-arrowshape.zigzag.forward.fill 100C27
-arrowshape.zigzag.right 100258
-arrowshape.zigzag.right.fill 100490
-arrowtriangle.backward 100C00
-arrowtriangle.backward.circle 100C02
-arrowtriangle.backward.circle.fill 100C03
-arrowtriangle.backward.fill 100C01
-arrowtriangle.backward.inset.filled.leadingthird.rectangle 1035DF
-arrowtriangle.backward.leadingside.rectangle 1036F0
-arrowtriangle.backward.square 100C04
-arrowtriangle.backward.square.fill 100C05
-arrowtriangle.down 1004C3
-arrowtriangle.down.2 1035C7
-arrowtriangle.down.2.fill 1035C8
-arrowtriangle.down.circle 100068
-arrowtriangle.down.circle.fill 100069
-arrowtriangle.down.fill 100125
-arrowtriangle.down.square 1000F8
-arrowtriangle.down.square.fill 1000F9
-arrowtriangle.forward 100C06
-arrowtriangle.forward.circle 100C08
-arrowtriangle.forward.circle.fill 100C09
-arrowtriangle.forward.fill 100C07
-arrowtriangle.forward.inset.filled.trailingthird.rectangle 1035DE
-arrowtriangle.forward.square 100C0A
-arrowtriangle.forward.square.fill 100C0B
-arrowtriangle.forward.trailingside.rectangle 1036F1
-arrowtriangle.left 1004C4
-arrowtriangle.left.and.line.vertical.and.arrowtriangle.right 100809
-arrowtriangle.left.and.line.vertical.and.arrowtriangle.right.fill 1007E6
-arrowtriangle.left.circle 10006A
-arrowtriangle.left.circle.fill 10006B
-arrowtriangle.left.fill 100126
-arrowtriangle.left.inset.filled.leftthird.rectangle 10370E
-arrowtriangle.left.leftside.rectangle 103708
-arrowtriangle.left.square 1000FA
-arrowtriangle.left.square.fill 1000FB
-arrowtriangle.right 1004C5
-arrowtriangle.right.and.line.vertical.and.arrowtriangle.left 10080A
-arrowtriangle.right.and.line.vertical.and.arrowtriangle.left.fill 1007E7
-arrowtriangle.right.circle 10006C
-arrowtriangle.right.circle.fill 10006D
-arrowtriangle.right.fill 100127
-arrowtriangle.right.inset.filled.rightthird.rectangle 10370F
-arrowtriangle.right.rightside.rectangle 103709
-arrowtriangle.right.square 1000FC
-arrowtriangle.right.square.fill 1000FD
-arrowtriangle.up 1004C2
-arrowtriangle.up.2 1035C5
-arrowtriangle.up.2.fill 1035C6
-arrowtriangle.up.arrowtriangle.down.window.left 10129D
-arrowtriangle.up.arrowtriangle.down.window.right 10125D
-arrowtriangle.up.circle 100066
-arrowtriangle.up.circle.fill 100067
-arrowtriangle.up.fill 100124
-arrowtriangle.up.square 1000F6
-arrowtriangle.up.square.fill 1000F7
-aspectratio 100796
-aspectratio.fill 10078F
-asterisk 100E13
-asterisk.circle 10056C
-asterisk.circle.fill 10056D
-at 100177
-at.badge.minus 100179
-at.badge.plus 100178
-at.circle 100890
-at.circle.fill 100891
-atom 100B1A
-audio.jack.mono 1026CD
-audio.jack.stereo 1026CB
-australian.football 1024B2
-australian.football.circle 1024B4
-australian.football.circle.fill 1024B5
-australian.football.fill 1024B3
-australiandollarsign 101F8D
-australiandollarsign.arrow.trianglehead.counterclockwise.rotate.90 102239
-australiandollarsign.building.classical 102549
-australiandollarsign.building.classical.fill 10254A
-australiandollarsign.circle 100BA0
-australiandollarsign.circle.fill 100BA1
-australiandollarsign.gauge.chart.lefthalf.righthalf 102A3C
-australiandollarsign.gauge.chart.leftthird.topthird.rightthird 102A66
-australiandollarsign.ring 102C0C
-australiandollarsign.ring.dashed 102BE2
-australiandollarsign.square 100BA2
-australiandollarsign.square.fill 100BA3
-australsign 101450
-australsign.arrow.trianglehead.counterclockwise.rotate.90 102223
-australsign.building.classical 10251D
-australsign.building.classical.fill 10251E
-australsign.circle 1005B9
-australsign.circle.fill 1005BA
-australsign.gauge.chart.lefthalf.righthalf 102A3B
-australsign.gauge.chart.leftthird.topthird.rightthird 102A65
-australsign.ring 102C0B
-australsign.ring.dashed 102BE1
-australsign.square 1005F9
-australsign.square.fill 1005FA
-automatic.brakesignal 1017C1
-automatic.headlight.high.beam 1018A7
-automatic.headlight.high.beam.fill 1018A8
-automatic.headlight.low.beam 1018A9
-automatic.headlight.low.beam.fill 1018AA
-autostartstop 101262
-autostartstop.slash 101263
-autostartstop.trianglebadge.exclamationmark 101280
-av.remote 1014FA
-av.remote.fill 1014FB
-axle.2 10189A
-axle.2.driveshaft.disengaged 101824
-axle.2.front.and.rear.engaged 101821
-axle.2.front.disengaged 101822
-axle.2.front.engaged 10181F
-axle.2.rear.disengaged 101823
-axle.2.rear.engaged 101820
-axle.2.rear.lock 101828
-b.circle 100006
-b.circle.fill 100007
-b.square 100096
-b.square.fill 100097
-backpack 1012F9
-backpack.circle 10177A
-backpack.circle.fill 10177B
-backpack.fill 1012FA
-backpack.sensor.tag.radiowaves.left.and.right 103037
-backpack.sensor.tag.radiowaves.left.and.right.fill 103038
-backward 100289
-backward.bubble 103753
-backward.bubble.fill 103754
-backward.bubble.fill.rtl 103756
-backward.bubble.rtl 103755
-backward.circle 100E83
-backward.circle.fill 100E84
-backward.end 10028D
-backward.end.alt 100291
-backward.end.alt.fill 100292
-backward.end.circle 1012EE
-backward.end.circle.fill 1012EF
-backward.end.fill 10028E
-backward.fill 10028A
-backward.frame 100A68
-backward.frame.fill 100A69
-badge.plus.radiowaves.forward 100C2E
-badge.plus.radiowaves.right 1002AA
-bag 100363
-bag.badge.minus 100367
-bag.badge.plus 100365
-bag.badge.questionmark 1016A2
-bag.badge.questionmark.ar 1016A4
-bag.circle 1004AB
-bag.circle.fill 1004AC
-bag.fill 100364
-bag.fill.badge.minus 100368
-bag.fill.badge.plus 100366
-bag.fill.badge.questionmark 1016A3
-bag.fill.badge.questionmark.ar 1016A5
-bahtsign 10145C
-bahtsign.arrow.trianglehead.counterclockwise.rotate.90 10222F
-bahtsign.building.classical 102535
-bahtsign.building.classical.fill 102536
-bahtsign.circle 1005D1
-bahtsign.circle.fill 1005D2
-bahtsign.gauge.chart.lefthalf.righthalf 102A3D
-bahtsign.gauge.chart.leftthird.topthird.rightthird 102A67
-bahtsign.ring 102C0D
-bahtsign.ring.dashed 102BE3
-bahtsign.square 100611
-bahtsign.square.fill 100612
-balloon 10150E
-balloon.2 1014F7
-balloon.2.fill 1014F8
-balloon.fill 10150F
-bandage 100393
-bandage.fill 100394
-banknote 100B7F
-banknote.fill 100B80
-barcode 100631
-barcode.viewfinder 1003BA
-barometer 100B27
-base.unit 102B4E
-baseball 100875
-baseball.circle 1016BB
-baseball.circle.fill 1016BC
-baseball.diamond.bases 101460
-baseball.diamond.bases.outs.indicator 102725
-baseball.fill 100876
-basket 10158A
-basket.fill 10158B
-basketball 1015C9
-basketball.circle 1016BD
-basketball.circle.fill 1016BE
-basketball.fill 1015CA
-bathtub 10143C
-bathtub.fill 10143D
-battery.0percent 1006EA
-battery.100percent 1006E8
-battery.100percent.bolt 10088B
-battery.100percent.bolt.rtl 100A23
-battery.100percent.circle 101054
-battery.100percent.circle.fill 101055
-battery.25percent 1006E9
-battery.50percent 100EB6
-battery.75percent 100EB8
-batteryblock 101837
-batteryblock.fill 101838
-batteryblock.slash 101835
-batteryblock.slash.fill 101836
-batteryblock.stack 102657
-batteryblock.stack.badge.snowflake 102619
-batteryblock.stack.badge.snowflake.fill 1026EF
-batteryblock.stack.fill 102658
-batteryblock.stack.trianglebadge.exclamationmark 10261A
-batteryblock.stack.trianglebadge.exclamationmark.fill 1026F1
-beach.umbrella 1012F8
-beach.umbrella.fill 1012FB
-beats.earphones 100E92
-beats.fitpro 10115E
-beats.fitpro.chargingcase 101161
-beats.fitpro.chargingcase.fill 101162
-beats.fitpro.left 10115F
-beats.fitpro.right 101160
-beats.headphones 100EAD
-beats.pill 1027CA
-beats.pill.fill 1027CB
-beats.powerbeats 100ED4
-beats.powerbeats.left 101C3C
-beats.powerbeats.pro 100E6D
-beats.powerbeats.pro.2 10279E
-beats.powerbeats.pro.2.chargingcase 1027A1
-beats.powerbeats.pro.2.chargingcase.fill 1027A2
-beats.powerbeats.pro.2.left 1027A0
-beats.powerbeats.pro.2.right 10279F
-beats.powerbeats.pro.chargingcase 100E70
-beats.powerbeats.pro.chargingcase.fill 100E71
-beats.powerbeats.pro.left 100E6F
-beats.powerbeats.pro.right 100E6E
-beats.powerbeats.right 100ED5
-beats.powerbeats3 100EAF
-beats.powerbeats3.left 101C3E
-beats.powerbeats3.right 101C3D
-beats.solobuds 1027CC
-beats.solobuds.chargingcase 1027CF
-beats.solobuds.chargingcase.fill 1027D0
-beats.solobuds.left 1027CE
-beats.solobuds.right 1027CD
-beats.studiobuds 100FA2
-beats.studiobuds.chargingcase 100FA5
-beats.studiobuds.chargingcase.fill 100FA6
-beats.studiobuds.left 100FA3
-beats.studiobuds.plus 101E73
-beats.studiobuds.plus.chargingcase 101E76
-beats.studiobuds.plus.chargingcase.fill 101E77
-beats.studiobuds.plus.left 101E74
-beats.studiobuds.plus.right 101E75
-beats.studiobuds.right 100FA4
-bed.double 100669
-bed.double.badge.checkmark 10334F
-bed.double.badge.checkmark.fill 103350
-bed.double.circle 10104F
-bed.double.circle.fill 101050
-bed.double.fill 10066A
-bell 1002D9
-bell.and.waves.left.and.right 101124
-bell.and.waves.left.and.right.fill 101120
-bell.badge 100756
-bell.badge.circle 100C37
-bell.badge.circle.fill 100C38
-bell.badge.fill 100757
-bell.badge.slash 102131
-bell.badge.slash.fill 102132
-bell.badge.slash.fill.rtl 102136
-bell.badge.slash.rtl 102135
-bell.badge.waveform 100EFF
-bell.badge.waveform.fill 100F00
-bell.badge.waveform.slash 10120D
-bell.badge.waveform.slash.fill 10120E
-bell.circle 1002DB
-bell.circle.fill 1002DC
-bell.fill 1002DA
-bell.slash 1002DD
-bell.slash.circle 1002DF
-bell.slash.circle.fill 1002E0
-bell.slash.fill 1002DE
-bell.square 100F37
-bell.square.fill 100F38
-beziercurve 100722
-bicycle 100865
-bicycle.circle 100C6C
-bicycle.circle.fill 100C6D
-bicycle.sensor.tag.radiowaves.left.and.right 103039
-bicycle.sensor.tag.radiowaves.left.and.right.fill 10303A
-binoculars 10080D
-binoculars.circle 1018D9
-binoculars.circle.fill 1018DA
-binoculars.fill 10080E
-bird 1015DF
-bird.circle 101F19
-bird.circle.fill 101F1A
-bird.fill 1015E0
-birthday.cake 1015A9
-birthday.cake.fill 1015AA
-bitcoinsign 10145E
-bitcoinsign.arrow.trianglehead.counterclockwise.rotate.90 102231
-bitcoinsign.building.classical 102539
-bitcoinsign.building.classical.fill 10253A
-bitcoinsign.circle 1005D5
-bitcoinsign.circle.fill 1005D6
-bitcoinsign.gauge.chart.lefthalf.righthalf 102A3E
-bitcoinsign.gauge.chart.leftthird.topthird.rightthird 102A68
-bitcoinsign.ring 102C0E
-bitcoinsign.ring.dashed 102BE4
-bitcoinsign.square 100615
-bitcoinsign.square.fill 100616
-blinds.horizontal.closed 101476
-blinds.horizontal.open 101475
-blinds.vertical.closed 101474
-blinds.vertical.open 101473
-blood.pressure.cuff 10351B
-blood.pressure.cuff.badge.gauge.with.needle 1034FB
-blood.pressure.cuff.badge.gauge.with.needle.fill 1034FC
-blood.pressure.cuff.fill 10351C
-bold 100153
-bold.italic.underline 100157
-bold.underline 100158
-bolt 1002E5
-bolt.badge.automatic 100633
-bolt.badge.automatic.fill 100634
-bolt.badge.checkmark 101E0F
-bolt.badge.checkmark.fill 101E11
-bolt.badge.clock 101413
-bolt.badge.clock.fill 101414
-bolt.badge.xmark 101E13
-bolt.badge.xmark.fill 101E15
-bolt.batteryblock 100AEE
-bolt.batteryblock.fill 100AEF
-bolt.brakesignal 101289
-bolt.car 10085E
-bolt.car.circle 101132
-bolt.car.circle.fill 101133
-bolt.car.fill 100743
-bolt.circle 1002E7
-bolt.circle.fill 1002E8
-bolt.fill 1002E6
-bolt.heart 1007BD
-bolt.heart.fill 1006E5
-bolt.horizontal 100497
-bolt.horizontal.circle 100499
-bolt.horizontal.circle.fill 10049A
-bolt.horizontal.fill 100498
-bolt.horizontal.icloud 10063F
-bolt.horizontal.icloud.fill 100640
-bolt.house 102DA0
-bolt.house.fill 102DA1
-bolt.ring.closed 101258
-bolt.shield 1010D7
-bolt.shield.fill 1010D8
-bolt.slash 1002E9
-bolt.slash.circle 1002EB
-bolt.slash.circle.fill 1002EC
-bolt.slash.fill 1002EA
-bolt.square 100F35
-bolt.square.fill 100F36
-bolt.trianglebadge.exclamationmark 101771
-bolt.trianglebadge.exclamationmark.fill 101772
-bonjour 100960
-book 10025A
-book.and.wrench 10197D
-book.and.wrench.fill 101C38
-book.badge.plus 10344F
-book.badge.plus.fill 103450
-book.circle 10025C
-book.circle.fill 10025D
-book.closed 10091E
-book.closed.circle 1011E3
-book.closed.circle.fill 1011E4
-book.closed.fill 10091F
-book.fill 10025B
-book.pages 10173E
-book.pages.fill 10173F
-bookmark 10025E
-bookmark.circle 100260
-bookmark.circle.fill 100261
-bookmark.fill 10025F
-bookmark.slash 1007CD
-bookmark.slash.fill 1007CE
-bookmark.square 100F39
-bookmark.square.fill 100F3A
-books.vertical 100B12
-books.vertical.circle 1011BC
-books.vertical.circle.fill 1011BD
-books.vertical.fill 100B13
-brain 100BD0
-brain.fill 102087
-brain.filled.head.profile 1020C8
-brain.head.profile 100BCF
-brain.head.profile.fill 102086
-brakesignal 100FBE
-brakesignal.dashed 101037
-brazilianrealsign 10145F
-brazilianrealsign.arrow.trianglehead.counterclockwise.rotate.90 102232
-brazilianrealsign.building.classical 10253B
-brazilianrealsign.building.classical.fill 10253C
-brazilianrealsign.circle 100BB0
-brazilianrealsign.circle.fill 100BB1
-brazilianrealsign.gauge.chart.lefthalf.righthalf 102A3F
-brazilianrealsign.gauge.chart.leftthird.topthird.rightthird 102A69
-brazilianrealsign.ring 102C0F
-brazilianrealsign.ring.dashed 102BE5
-brazilianrealsign.square 100BB2
-brazilianrealsign.square.fill 100BB3
-briefcase 10039C
-briefcase.circle 100DE1
-briefcase.circle.fill 100DE2
-briefcase.fill 10039D
-briefcase.sensor.tag.radiowaves.left.and.right 103031
-briefcase.sensor.tag.radiowaves.left.and.right.fill 103032
-bubble 102139
-bubble.and.pencil 1026E5
-bubble.and.pencil.rtl 1026E6
-bubble.circle 10213B
-bubble.circle.fill 10213C
-bubble.fill 10213A
-bubble.left 10032A
-bubble.left.and.bubble.right 1004A4
-bubble.left.and.bubble.right.fill 100632
-bubble.left.and.exclamationmark.bubble.right 1010D2
-bubble.left.and.exclamationmark.bubble.right.fill 1010D3
-bubble.left.and.heart.bubble.right 1037BD
-bubble.left.and.heart.bubble.right.fill 1037BE
-bubble.left.and.text.bubble.right 1020E7
-bubble.left.and.text.bubble.right.fill 1020E8
-bubble.left.and.text.bubble.right.fill.rtl 102114
-bubble.left.and.text.bubble.right.rtl 102113
-bubble.left.circle 1011D0
-bubble.left.circle.fill 1011D1
-bubble.left.fill 10032B
-bubble.middle.bottom 100338
-bubble.middle.bottom.fill 100339
-bubble.middle.top 10033C
-bubble.middle.top.fill 10033D
-bubble.right 100328
-bubble.right.circle 1011CE
-bubble.right.circle.fill 1011CF
-bubble.right.fill 100329
-bubbles.and.sparkles 101489
-bubbles.and.sparkles.fill 10148A
-building 100B85
-building.2 100752
-building.2.crop.circle 100754
-building.2.crop.circle.fill 100755
-building.2.fill 100753
-building.classical.columns 100928
-building.classical.columns.circle 1011C6
-building.classical.columns.fill 100929
-building.columns.circle.fill 1011C7
-building.fill 100B86
-burn 1004DC
-burst 100442
-burst.fill 10061E
-bus 100748
-bus.doubledecker 10071B
-bus.doubledecker.fill 10071C
-bus.fill 100749
-button.angledbottom.horizontal.left 101E05
-button.angledbottom.horizontal.left.fill 101E06
-button.angledbottom.horizontal.right 101E03
-button.angledbottom.horizontal.right.fill 101E04
-button.angledtop.vertical.left 101DEF
-button.angledtop.vertical.left.fill 101DF0
-button.angledtop.vertical.right 101DF1
-button.angledtop.vertical.right.fill 101DF2
-button.horizontal 101E1E
-button.horizontal.fill 101E1F
-button.horizontal.top 1035D1
-button.horizontal.top.fill 1035D2
-button.horizontal.top.press 10206B
-button.horizontal.top.press.fill 10206C
-button.programmable 1013F0
-button.programmable.square 1013E4
-button.programmable.square.fill 1013E5
-button.roundedbottom.horizontal 100A7A
-button.roundedbottom.horizontal.fill 100A7B
-button.roundedtop.horizontal 100A78
-button.roundedtop.horizontal.fill 100A79
-button.vertical.left 1035CF
-button.vertical.left.fill 1035D0
-button.vertical.left.press 102089
-button.vertical.left.press.fill 10208A
-button.vertical.right 1035CD
-button.vertical.right.fill 1035CE
-button.vertical.right.press 102069
-button.vertical.right.press.fill 10206A
-c.circle 100008
-c.circle.fill 100009
-c.square 100098
-c.square.fill 100099
-cabinet 10142E
-cabinet.fill 10142F
-cable.coaxial 101292
-cable.connector 100EA6
-cable.connector.horizontal 100D1E
-cable.connector.slash 1021E5
-cable.connector.video 102DD4
-cablecar 100DF6
-cablecar.fill 100DF7
-calendar 100249
-calendar.and.person 10255D
-calendar.badge 102B7F
-calendar.badge.checkmark 101EE7
-calendar.badge.checkmark.rtl 101EF1
-calendar.badge.clock 1009DE
-calendar.badge.clock.rtl 100B34
-calendar.badge.exclamationmark 100B9D
-calendar.badge.lock 103082
-calendar.badge.minus 10024B
-calendar.badge.plus 10024A
-calendar.circle 10048E
-calendar.circle.fill 10048F
-calendar.day 102B14
-calendar.day.timeline.leading 101043
-calendar.day.timeline.leading.circle 103304
-calendar.day.timeline.leading.circle.fill 103305
-calendar.day.timeline.left 100EE4
-calendar.day.timeline.left.circle 1032F6
-calendar.day.timeline.left.circle.fill 1032F7
-calendar.day.timeline.right 100EE3
-calendar.day.timeline.right.circle 1032F8
-calendar.day.timeline.right.circle.fill 1032F9
-calendar.day.timeline.trailing 101042
-calendar.day.timeline.trailing.circle 103306
-calendar.day.timeline.trailing.circle.fill 103307
-camera 10031E
-camera.aperture 100A3A
-camera.badge.clock 101925
-camera.badge.clock.fill 101926
-camera.badge.ellipsis 100897
-camera.badge.ellipsis.fill 100898
-camera.circle 100320
-camera.circle.fill 100321
-camera.fill 10031F
-camera.filters 1007D7
-camera.macro 101082
-camera.macro.circle 101083
-camera.macro.circle.fill 101084
-camera.macro.slash 1023DD
-camera.macro.slash.circle 1023DE
-camera.macro.slash.circle.fill 1023DF
-camera.metering.center.weighted 1008AA
-camera.metering.center.weighted.average 1007B2
-camera.metering.matrix 1008AB
-camera.metering.multispot 1008AC
-camera.metering.none 1008AD
-camera.metering.partial 1008AE
-camera.metering.spot 1008AF
-camera.metering.unknown 1008B0
-camera.metering.unknown.ar 100B56
-camera.on.rectangle 100741
-camera.on.rectangle.fill 100742
-camera.sensor.tag.radiowaves.left.and.right 10303B
-camera.sensor.tag.radiowaves.left.and.right.fill 10303C
-camera.shutter.button 100E7A
-camera.shutter.button.fill 100E7B
-camera.viewfinder 1003BC
-camera.viewfinder.badge.automatic 1035E7
-candybarphone 100AB3
-capslock 1001A1
-capslock.fill 1001A2
-capsule 100776
-capsule.bottomhalf.filled 100FF6
-capsule.fill 100777
-capsule.lefthalf.filled 100FF3
-capsule.on.capsule 10262F
-capsule.on.capsule.fill 102630
-capsule.on.rectangle 102631
-capsule.on.rectangle.fill 102632
-capsule.portrait 1009F6
-capsule.portrait.bottomhalf.filled 100FFA
-capsule.portrait.fill 1009F7
-capsule.portrait.lefthalf.filled 100FF7
-capsule.portrait.righthalf.filled 100FF8
-capsule.portrait.tophalf.filled 100FF9
-capsule.righthalf.filled 100FF4
-capsule.tophalf.filled 100FF5
-captions.bubble 100334
-captions.bubble.fill 100335
-car 100658
-car.2 100744
-car.2.fill 100745
-car.badge.gearshape 10292D
-car.badge.gearshape.fill 10292E
-car.card 1036FE
-car.card.fill 1036FF
-car.circle 100B6F
-car.circle.fill 100B70
-car.ferry 100E0C
-car.ferry.fill 100E0D
-car.fill 100659
-car.front.waves.down 102109
-car.front.waves.down.fill 10210A
-car.front.waves.left.and.right.and.up 10293B
-car.front.waves.left.and.right.and.up.fill 10293C
-car.front.waves.up 1018B1
-car.front.waves.up.fill 1018B2
-car.rear 100F5B
-car.rear.and.collision.road.lane 1018E9
-car.rear.and.collision.road.lane.slash 1018EA
-car.rear.and.tire.marks 100FC8
-car.rear.and.tire.marks.off 1022B9
-car.rear.and.tire.marks.slash 1018A6
-car.rear.fill 100F5C
-car.rear.hazardsign 102253
-car.rear.hazardsign.fill 102254
-car.rear.road.lane 10157F
-car.rear.road.lane.dashed 101578
-car.rear.road.lane.dashed.arrowtriangle.2.outward 10354A
-car.rear.road.lane.distance.1 1022BA
-car.rear.road.lane.distance.1.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle 1022BF
-car.rear.road.lane.distance.2 1022BB
-car.rear.road.lane.distance.2.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle 1022C0
-car.rear.road.lane.distance.3 1022BC
-car.rear.road.lane.distance.3.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle 1022C1
-car.rear.road.lane.distance.4 1022BD
-car.rear.road.lane.distance.4.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle 1022C2
-car.rear.road.lane.distance.5 1022BE
-car.rear.road.lane.distance.5.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle 1022C3
-car.rear.road.lane.off 1022CC
-car.rear.road.lane.wave.up 10293D
-car.rear.tilt.road.lanes.curved.right 102B31
-car.rear.waves.up 10159D
-car.rear.waves.up.fill 10159E
-car.side 1013B7
-car.side.air.circulate 10126C
-car.side.air.circulate.fill 10126D
-car.side.air.fresh 10126E
-car.side.air.fresh.fill 10126F
-car.side.and.exclamationmark 10126A
-car.side.and.exclamationmark.fill 101805
-car.side.arrow.left.and.right 102E7C
-car.side.arrow.left.and.right.fill 102E7D
-car.side.arrowtriangle.down 10180B
-car.side.arrowtriangle.down.fill 10180C
-car.side.arrowtriangle.up 101809
-car.side.arrowtriangle.up.arrowtriangle.down 101807
-car.side.arrowtriangle.up.arrowtriangle.down.fill 101808
-car.side.arrowtriangle.up.fill 10180A
-car.side.fill 1013B8
-car.side.front.open 101264
-car.side.front.open.crop 102792
-car.side.front.open.crop.fill 102793
-car.side.front.open.fill 101265
-car.side.hill.descent.control 1022A6
-car.side.hill.descent.control.fill 1022A7
-car.side.hill.down 10194E
-car.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle 102F1B
-car.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill 102F1C
-car.side.hill.down.fill 10194F
-car.side.hill.up 10190D
-car.side.hill.up.fill 10190E
-car.side.lock 1018F9
-car.side.lock.fill 1018FA
-car.side.lock.open 1018FB
-car.side.lock.open.fill 1018FC
-car.side.rear.and.collision.and.car.side.front 101D74
-car.side.rear.and.collision.and.car.side.front.and.arrow.forward 102EF3
-car.side.rear.and.collision.and.car.side.front.and.steeringwheel 102F1A
-car.side.rear.and.collision.and.car.side.front.slash 101D75
-car.side.rear.and.exclamationmark.and.car.side.front 101D78
-car.side.rear.and.exclamationmark.and.car.side.front.off 102401
-car.side.rear.and.wave.3.and.car.side.front 101D77
-car.side.rear.crop.trunk.partition 102B2C
-car.side.rear.crop.trunk.partition.fill 102B2D
-car.side.rear.open 101266
-car.side.rear.open.crop 102794
-car.side.rear.open.crop.fill 102795
-car.side.rear.open.fill 101267
-car.side.rear.tow.hitch 102917
-car.side.rear.tow.hitch.fill 102918
-car.side.roof.cargo.carrier 10229F
-car.side.roof.cargo.carrier.fill 1022A0
-car.side.roof.cargo.carrier.slash 102641
-car.side.roof.cargo.carrier.slash.fill 102643
-car.top.arrowtriangle.front.left 10209B
-car.top.arrowtriangle.front.left.fill 10209C
-car.top.arrowtriangle.front.right 10209D
-car.top.arrowtriangle.front.right.fill 10209E
-car.top.arrowtriangle.rear.left 102091
-car.top.arrowtriangle.rear.left.fill 102092
-car.top.arrowtriangle.rear.right 102093
-car.top.arrowtriangle.rear.right.fill 102094
-car.top.door.front.left.and.front.right.and.rear.left.and.rear.right.open 101010
-car.top.door.front.left.and.front.right.and.rear.left.and.rear.right.open.fill 101011
-car.top.door.front.left.and.front.right.and.rear.left.open 10185C
-car.top.door.front.left.and.front.right.and.rear.left.open.fill 10185D
-car.top.door.front.left.and.front.right.and.rear.right.open 10185E
-car.top.door.front.left.and.front.right.and.rear.right.open.fill 10185F
-car.top.door.front.left.and.front.right.open 101850
-car.top.door.front.left.and.front.right.open.fill 101851
-car.top.door.front.left.and.rear.left.and.rear.right.open 101860
-car.top.door.front.left.and.rear.left.and.rear.right.open.fill 101861
-car.top.door.front.left.and.rear.left.open 101854
-car.top.door.front.left.and.rear.left.open.fill 101855
-car.top.door.front.left.and.rear.right.open 101858
-car.top.door.front.left.and.rear.right.open.fill 101859
-car.top.door.front.left.open 100FC2
-car.top.door.front.left.open.fill 100FC3
-car.top.door.front.right.and.rear.left.and.rear.right.open 101862
-car.top.door.front.right.and.rear.left.and.rear.right.open.fill 101863
-car.top.door.front.right.and.rear.left.open 10185A
-car.top.door.front.right.and.rear.left.open.fill 10185B
-car.top.door.front.right.and.rear.right.open 101856
-car.top.door.front.right.and.rear.right.open.fill 101857
-car.top.door.front.right.open 10184A
-car.top.door.front.right.open.fill 10184B
-car.top.door.rear.left.and.rear.right.open 101852
-car.top.door.rear.left.and.rear.right.open.fill 101853
-car.top.door.rear.left.open 10184C
-car.top.door.rear.left.open.fill 10184D
-car.top.door.rear.right.open 10184E
-car.top.door.rear.right.open.fill 10184F
-car.top.door.sliding.left.open 101D79
-car.top.door.sliding.left.open.fill 101D7A
-car.top.door.sliding.right.open 101D7B
-car.top.door.sliding.right.open.fill 101D7C
-car.top.front.radiowaves.front.left.and.front.and.front.right 102A12
-car.top.front.radiowaves.front.left.and.front.and.front.right.fill 102A13
-car.top.lane.dashed.arrowtriangle.inward 10157E
-car.top.lane.dashed.arrowtriangle.inward.fill 101583
-car.top.lane.dashed.badge.steeringwheel 101584
-car.top.lane.dashed.badge.steeringwheel.fill 101585
-car.top.lane.dashed.departure.left 1018AF
-car.top.lane.dashed.departure.left.fill 1018B0
-car.top.lane.dashed.departure.left.slash 102EAF
-car.top.lane.dashed.departure.left.slash.fill 102EB1
-car.top.lane.dashed.departure.right 10157C
-car.top.lane.dashed.departure.right.fill 10157D
-car.top.lane.dashed.departure.right.slash 102EB3
-car.top.lane.dashed.departure.right.slash.fill 102EB5
-car.top.radiowaves.2.front.left.front.front.right 102D3E
-car.top.radiowaves.2.front.left.front.front.right.fill 102D3F
-car.top.radiowaves.2.rear.left.rear.rear.right 102D42
-car.top.radiowaves.2.rear.left.rear.rear.right.fill 102D43
-car.top.radiowaves.front 1015B5
-car.top.radiowaves.front.fill 1015B9
-car.top.radiowaves.rear 1015B6
-car.top.radiowaves.rear.fill 1015BA
-car.top.radiowaves.rear.left 1015B4
-car.top.radiowaves.rear.left.and.rear.right 1018A0
-car.top.radiowaves.rear.left.and.rear.right.fill 1018A1
-car.top.radiowaves.rear.left.car.top.front 10293E
-car.top.radiowaves.rear.left.car.top.front.fill 10293F
-car.top.radiowaves.rear.left.fill 1015B8
-car.top.radiowaves.rear.right 1015B3
-car.top.radiowaves.rear.right.badge.exclamationmark 1018A4
-car.top.radiowaves.rear.right.badge.exclamationmark.fill 1018A5
-car.top.radiowaves.rear.right.badge.xmark 1018A2
-car.top.radiowaves.rear.right.badge.xmark.fill 1018A3
-car.top.radiowaves.rear.right.car.top.front 102940
-car.top.radiowaves.rear.right.car.top.front.fill 102941
-car.top.radiowaves.rear.right.fill 1015B7
-car.top.rear.radiowaves.rear.left.and.rear.and.rear.right 102A14
-car.top.rear.radiowaves.rear.left.and.rear.and.rear.right.fill 102A15
-car.top.video.rear.left 102A0E
-car.top.video.rear.left.fill 102A0F
-car.top.video.rear.right 102A10
-car.top.video.rear.right.fill 102A11
-car.window.left 10129C
-car.window.left.badge.exclamationmark 1012A0
-car.window.left.badge.lock 103584
-car.window.left.badge.xmark 1012A3
-car.window.left.exclamationmark 10129E
-car.window.left.xmark 1012A1
-car.window.right 10125C
-car.window.right.badge.exclamationmark 10125F
-car.window.right.badge.lock 10354B
-car.window.right.badge.xmark 101261
-car.window.right.exclamationmark 10125E
-car.window.right.xmark 10129A
-carbon.dioxide.cloud 1014B8
-carbon.dioxide.cloud.fill 1014B9
-carbon.monoxide.cloud 1014B6
-carbon.monoxide.cloud.fill 1014B7
-carrot 10158E
-carrot.fill 10158F
-carseat.left 101994
-carseat.left.1 10159F
-carseat.left.1.fill 1015A0
-carseat.left.2 1015A1
-carseat.left.2.fill 1015A2
-carseat.left.3 1015A3
-carseat.left.3.fill 1015A4
-carseat.left.and.heat.waves 1012CD
-carseat.left.and.heat.waves.fill 1012CE
-carseat.left.backrest.up.and.down 10198C
-carseat.left.backrest.up.and.down.fill 10198D
-carseat.left.fan 1012D1
-carseat.left.fan.fill 1012D2
-carseat.left.fill 101995
-carseat.left.forward.and.backward 101988
-carseat.left.forward.and.backward.fill 101989
-carseat.left.massage 101D7D
-carseat.left.massage.fill 101D7E
-carseat.left.up.and.down 101990
-carseat.left.up.and.down.fill 101991
-carseat.right 101996
-carseat.right.1 1012D5
-carseat.right.1.fill 1012D6
-carseat.right.2 1012D7
-carseat.right.2.fill 1012D8
-carseat.right.3 1012D9
-carseat.right.3.fill 1012DA
-carseat.right.and.heat.waves 1012CF
-carseat.right.and.heat.waves.fill 1012D0
-carseat.right.backrest.up.and.down 10198E
-carseat.right.backrest.up.and.down.fill 10198F
-carseat.right.fan 1012D3
-carseat.right.fan.fill 1012D4
-carseat.right.fill 101997
-carseat.right.forward.and.backward 10198A
-carseat.right.forward.and.backward.fill 10198B
-carseat.right.massage 101D7F
-carseat.right.massage.fill 101D80
-carseat.right.up.and.down 101992
-carseat.right.up.and.down.fill 101993
-cart 100369
-cart.badge.clock 102C70
-cart.badge.clock.fill 102C72
-cart.badge.clock.fill.rtl 102C76
-cart.badge.clock.rtl 102C74
-cart.badge.minus 10036D
-cart.badge.plus 10036B
-cart.badge.questionmark 1016A6
-cart.badge.questionmark.ar 1016A8
-cart.badge.questionmark.rtl 1016AA
-cart.circle 1004AD
-cart.circle.fill 1004AE
-cart.fill 10036A
-cart.fill.badge.minus 10036E
-cart.fill.badge.plus 10036C
-cart.fill.badge.questionmark 1016A7
-cart.fill.badge.questionmark.ar 1016A9
-cart.fill.badge.questionmark.rtl 1016AB
-case 100BE1
-case.fill 100BE2
-cat 10207E
-cat.circle 102080
-cat.circle.fill 102081
-cat.fill 10207F
-cedisign 101455
-cedisign.arrow.trianglehead.counterclockwise.rotate.90 102228
-cedisign.building.classical 102527
-cedisign.building.classical.fill 102528
-cedisign.circle 1005C3
-cedisign.circle.fill 1005C4
-cedisign.gauge.chart.lefthalf.righthalf 102A40
-cedisign.gauge.chart.leftthird.topthird.rightthird 102A6A
-cedisign.ring 102C10
-cedisign.ring.dashed 102BE6
-cedisign.square 100603
-cedisign.square.fill 100604
-cellularbars 100B67
-cellularbars.circle 1032FA
-cellularbars.circle.fill 1032FB
-cellularbars.short.cellularbars 1036CF
-centsign 101440
-centsign.arrow.trianglehead.counterclockwise.rotate.90 102213
-centsign.building.classical 1024FD
-centsign.building.classical.fill 1024FE
-centsign.circle 100599
-centsign.circle.fill 10059A
-centsign.gauge.chart.lefthalf.righthalf 102A41
-centsign.gauge.chart.leftthird.topthird.rightthird 102A6B
-centsign.ring 102C11
-centsign.ring.dashed 102BE7
-centsign.square 1005D9
-centsign.square.fill 1005DA
-chair 101436
-chair.fill 101437
-chair.lounge 101434
-chair.lounge.fill 101435
-chandelier 101326
-chandelier.fill 1013D3
-character 10014F
-character.ar 100CBB
-character.bn 102CE3
-character.book.closed 100AD5
-character.book.closed.ar 1009C2
-character.book.closed.bn 10316C
-character.book.closed.fill 100AD6
-character.book.closed.fill.ar 1009C3
-character.book.closed.fill.bn 10316D
-character.book.closed.fill.gu 103173
-character.book.closed.fill.he 1009C5
-character.book.closed.fill.hi 100C89
-character.book.closed.fill.ja 100C85
-character.book.closed.fill.kn 103177
-character.book.closed.fill.ko 100C87
-character.book.closed.fill.ml 103179
-character.book.closed.fill.mni 10317B
-character.book.closed.fill.mr 103171
-character.book.closed.fill.or 10317D
-character.book.closed.fill.pa 103175
-character.book.closed.fill.sat 10317F
-character.book.closed.fill.si 103181
-character.book.closed.fill.ta 103183
-character.book.closed.fill.te 103185
-character.book.closed.fill.th 100C81
-character.book.closed.fill.zh 100C83
-character.book.closed.gu 103172
-character.book.closed.he 1009C4
-character.book.closed.hi 100C88
-character.book.closed.ja 100C84
-character.book.closed.kn 103176
-character.book.closed.ko 100C86
-character.book.closed.ml 103178
-character.book.closed.mni 10317A
-character.book.closed.mr 103170
-character.book.closed.or 10317C
-character.book.closed.pa 103174
-character.book.closed.sat 10317E
-character.book.closed.si 103180
-character.book.closed.ta 103182
-character.book.closed.te 103184
-character.book.closed.th 100C80
-character.book.closed.zh 100C82
-character.bubble 100330
-character.bubble.ar 100BBC
-character.bubble.bn 103186
-character.bubble.fill 100331
-character.bubble.fill.ar 100BBD
-character.bubble.fill.bn 103187
-character.bubble.fill.gu 10318D
-character.bubble.fill.he 100BBF
-character.bubble.fill.hi 100D98
-character.bubble.fill.ja 100D94
-character.bubble.fill.kn 103191
-character.bubble.fill.ko 100D96
-character.bubble.fill.ml 103193
-character.bubble.fill.mni 103195
-character.bubble.fill.mr 10318B
-character.bubble.fill.or 103197
-character.bubble.fill.pa 10318F
-character.bubble.fill.sat 103199
-character.bubble.fill.si 10319B
-character.bubble.fill.ta 10319D
-character.bubble.fill.te 10319F
-character.bubble.fill.th 100D90
-character.bubble.fill.zh 100D92
-character.bubble.gu 10318C
-character.bubble.he 100BBE
-character.bubble.hi 100D97
-character.bubble.ja 100D93
-character.bubble.kn 103190
-character.bubble.ko 100D95
-character.bubble.ml 103192
-character.bubble.mni 103194
-character.bubble.mr 10318A
-character.bubble.or 103196
-character.bubble.pa 10318E
-character.bubble.sat 103198
-character.bubble.si 10319A
-character.bubble.ta 10319C
-character.bubble.te 10319E
-character.bubble.th 100D8F
-character.bubble.zh 100D91
-character.circle 1023FD
-character.circle.ar 102402
-character.circle.bn 102D69
-character.circle.fill 1023FE
-character.circle.fill.ar 102403
-character.circle.fill.bn 102D6A
-character.circle.fill.gu 102D72
-character.circle.fill.he 102408
-character.circle.fill.hi 10241C
-character.circle.fill.ja 102414
-character.circle.fill.kn 102D7A
-character.circle.fill.ko 102418
-character.circle.fill.ml 102D7E
-character.circle.fill.mni 102D82
-character.circle.fill.mr 102D6E
-character.circle.fill.or 102D8C
-character.circle.fill.pa 102D76
-character.circle.fill.sat 102D90
-character.circle.fill.si 102D94
-character.circle.fill.ta 102D98
-character.circle.fill.te 102D9C
-character.circle.fill.th 10240C
-character.circle.fill.zh 102410
-character.circle.gu 102D71
-character.circle.he 102407
-character.circle.hi 10241B
-character.circle.ja 102413
-character.circle.kn 102D79
-character.circle.ko 102417
-character.circle.ml 102D7D
-character.circle.mni 102D81
-character.circle.mr 102D6D
-character.circle.or 102D8B
-character.circle.pa 102D75
-character.circle.sat 102D8F
-character.circle.si 102D93
-character.circle.ta 102D97
-character.circle.te 102D9B
-character.circle.th 10240B
-character.circle.zh 10240F
-character.cursor.ibeam 10016B
-character.cursor.ibeam.ar 100BC2
-character.cursor.ibeam.bn 102E85
-character.cursor.ibeam.gu 102E88
-character.cursor.ibeam.he 100BC3
-character.cursor.ibeam.hi 100CF1
-character.cursor.ibeam.ja 100CE5
-character.cursor.ibeam.kn 102E8A
-character.cursor.ibeam.ko 100CF0
-character.cursor.ibeam.ml 102E8B
-character.cursor.ibeam.mni 102E8C
-character.cursor.ibeam.mr 102E87
-character.cursor.ibeam.or 102E8D
-character.cursor.ibeam.pa 102E89
-character.cursor.ibeam.sat 102E8E
-character.cursor.ibeam.si 102E8F
-character.cursor.ibeam.ta 102E90
-character.cursor.ibeam.te 102E91
-character.cursor.ibeam.th 100CE3
-character.cursor.ibeam.zh 100CE4
-character.duployan 1014D6
-character.gu 102CE4
-character.he 100CBC
-character.hi 100CC2
-character.ja 100CC0
-character.kn 102CE6
-character.ko 100CC1
-character.magnify 10090D
-character.magnify.ar 101C2D
-character.magnify.bn 102F79
-character.magnify.gu 102F7C
-character.magnify.he 101C30
-character.magnify.hi 101E54
-character.magnify.ja 101E52
-character.magnify.kn 102F7E
-character.magnify.ko 101E53
-character.magnify.ml 102F7F
-character.magnify.mni 102F80
-character.magnify.mr 102F7B
-character.magnify.or 102F81
-character.magnify.pa 102F7D
-character.magnify.sat 102F82
-character.magnify.si 102F83
-character.magnify.ta 102F84
-character.magnify.te 102F85
-character.magnify.th 101C31
-character.magnify.zh 101E51
-character.ml 102CE7
-character.mni 102CE8
-character.mr 102D06
-character.or 102CE9
-character.pa 102CE5
-character.phonetic 1014D5
-character.sat 102CEA
-character.si 102CEB
-character.square 1023FF
-character.square.ar 102404
-character.square.bn 102D6B
-character.square.fill 102400
-character.square.fill.ar 102405
-character.square.fill.bn 102D6C
-character.square.fill.gu 102D74
-character.square.fill.he 10240A
-character.square.fill.hi 10241E
-character.square.fill.ja 102416
-character.square.fill.kn 102D7C
-character.square.fill.ko 10241A
-character.square.fill.ml 102D80
-character.square.fill.mni 102D84
-character.square.fill.mr 102D70
-character.square.fill.or 102D8E
-character.square.fill.pa 102D78
-character.square.fill.sat 102D92
-character.square.fill.si 102D96
-character.square.fill.ta 102D9A
-character.square.fill.te 102D9E
-character.square.fill.th 10240E
-character.square.fill.zh 102412
-character.square.gu 102D73
-character.square.he 102409
-character.square.hi 10241D
-character.square.ja 102415
-character.square.kn 102D7B
-character.square.ko 102419
-character.square.ml 102D7F
-character.square.mni 102D83
-character.square.mr 102D6F
-character.square.or 102D8D
-character.square.pa 102D77
-character.square.sat 102D91
-character.square.si 102D95
-character.square.ta 102D99
-character.square.te 102D9D
-character.square.th 10240D
-character.square.zh 102411
-character.sutton 1014D7
-character.ta 102CEC
-character.te 102CED
-character.text.justify 103157
-character.text.justify.ar 103158
-character.text.justify.bn 10315F
-character.text.justify.gu 103162
-character.text.justify.he 103159
-character.text.justify.hi 10315E
-character.text.justify.ja 10315C
-character.text.justify.kn 103164
-character.text.justify.ko 10315D
-character.text.justify.ml 103165
-character.text.justify.mni 103166
-character.text.justify.mr 103161
-character.text.justify.or 103167
-character.text.justify.pa 103163
-character.text.justify.sat 103168
-character.text.justify.si 103169
-character.text.justify.ta 10316A
-character.text.justify.te 10316B
-character.text.justify.th 10315A
-character.text.justify.zh 10315B
-character.textbox 100176
-character.textbox.ar 100BC0
-character.textbox.badge.sparkles 102EB9
-character.textbox.badge.sparkles.ar 102EBB
-character.textbox.badge.sparkles.bn 102FC9
-character.textbox.badge.sparkles.gu 102FCC
-character.textbox.badge.sparkles.he 102EBD
-character.textbox.badge.sparkles.hi 102EC7
-character.textbox.badge.sparkles.ja 102EC3
-character.textbox.badge.sparkles.kn 102FCE
-character.textbox.badge.sparkles.ko 102EC5
-character.textbox.badge.sparkles.ml 102FCF
-character.textbox.badge.sparkles.mni 102FD0
-character.textbox.badge.sparkles.mr 102FCB
-character.textbox.badge.sparkles.or 102FD1
-character.textbox.badge.sparkles.pa 102FCD
-character.textbox.badge.sparkles.sat 102FD2
-character.textbox.badge.sparkles.si 102FD3
-character.textbox.badge.sparkles.ta 102FD4
-character.textbox.badge.sparkles.te 102FD5
-character.textbox.badge.sparkles.th 102EBF
-character.textbox.badge.sparkles.zh 102EC1
-character.textbox.bn 102E92
-character.textbox.gu 102E95
-character.textbox.he 100BC1
-character.textbox.hi 100CF3
-character.textbox.ja 100CE8
-character.textbox.kn 102E97
-character.textbox.ko 100CF2
-character.textbox.ml 102E98
-character.textbox.mni 102E99
-character.textbox.mr 102E94
-character.textbox.or 102E9A
-character.textbox.pa 102E96
-character.textbox.sat 102E9B
-character.textbox.si 102E9C
-character.textbox.ta 102E9D
-character.textbox.te 102E9E
-character.textbox.th 100CE6
-character.textbox.zh 100CE7
-character.th 100CBD
-character.zh 100CBF
-characters.lowercase 102426
-characters.lowercase.el 102427
-characters.lowercase.ru 102428
-characters.uppercase 10094A
-characters.uppercase.el 100DC7
-characters.uppercase.ru 100DC6
-chart.bar 10043E
-chart.bar.fill 10043F
-chart.bar.horizontal.page 10095C
-chart.bar.horizontal.page.fill 10098C
-chart.bar.xaxis 1008C9
-chart.bar.xaxis.ascending 10218F
-chart.bar.xaxis.ascending.badge.clock 102190
-chart.bar.xaxis.ascending.badge.clock.rtl 10219C
-chart.bar.xaxis.descending 10348A
-chart.bar.yaxis 102BDE
-chart.dots.scatter 1018C3
-chart.line.downtrend.xyaxis 101633
-chart.line.downtrend.xyaxis.circle 101634
-chart.line.downtrend.xyaxis.circle.fill 101635
-chart.line.flattrend.xyaxis 101636
-chart.line.flattrend.xyaxis.circle 101637
-chart.line.flattrend.xyaxis.circle.fill 101638
-chart.line.text.clipboard 102BBA
-chart.line.text.clipboard.fill 102BBB
-chart.line.uptrend.xyaxis 100441
-chart.line.uptrend.xyaxis.circle 100D1A
-chart.line.uptrend.xyaxis.circle.fill 100D1B
-chart.pie 100440
-chart.pie.fill 10070B
-chart.xyaxis.line 1010A5
-checklist 100DFE
-checklist.checked 101655
-checklist.checked.rtl 101656
-checklist.rtl 100E7C
-checklist.unchecked 101660
-checkmark 100185
-checkmark.app 102FF2
-checkmark.app.fill 102FF3
-checkmark.applewatch 102117
-checkmark.arrow.trianglehead.clockwise 1031FD
-checkmark.arrow.trianglehead.counterclockwise 1018DB
-checkmark.bubble 100FCB
-checkmark.bubble.fill 100FCC
-checkmark.bubble.fill.rtl 101FD5
-checkmark.bubble.rtl 101FD4
-checkmark.circle 100062
-checkmark.circle.badge.airplane 1032C4
-checkmark.circle.badge.airplane.fill 1032C5
-checkmark.circle.badge.plus 103206
-checkmark.circle.badge.plus.fill 103207
-checkmark.circle.badge.questionmark 10171E
-checkmark.circle.badge.questionmark.ar 101720
-checkmark.circle.badge.questionmark.fill 10171F
-checkmark.circle.badge.questionmark.fill.ar 101721
-checkmark.circle.badge.xmark 101722
-checkmark.circle.badge.xmark.fill 101723
-checkmark.circle.dotted 103479
-checkmark.circle.fill 100063
-checkmark.circle.trianglebadge.exclamationmark 1010CE
-checkmark.circle.trianglebadge.exclamationmark.fill 1032C2
-checkmark.diamond 10105A
-checkmark.diamond.fill 10105B
-checkmark.icloud 100893
-checkmark.icloud.fill 100894
-checkmark.message 101415
-checkmark.message.fill 101416
-checkmark.rectangle 1003CB
-checkmark.rectangle.fill 1003CC
-checkmark.rectangle.portrait 10086E
-checkmark.rectangle.portrait.fill 10086F
-checkmark.rectangle.stack 1020BC
-checkmark.rectangle.stack.fill 1020BD
-checkmark.seal 1001FA
-checkmark.seal.fill 1001FB
-checkmark.seal.text.page 102C45
-checkmark.seal.text.page.fill 102C46
-checkmark.seal.text.page.fill.rtl 102C48
-checkmark.seal.text.page.rtl 102C47
-checkmark.shield 10079B
-checkmark.shield.fill 10079C
-checkmark.square 1000F2
-checkmark.square.fill 1000F3
-chevron.backward 100BF6
-chevron.backward.2 100C2A
-chevron.backward.chevron.backward.dotted 102A2B
-chevron.backward.circle 100BF7
-chevron.backward.circle.fill 100BF8
-chevron.backward.square 100BF9
-chevron.backward.square.fill 100BFA
-chevron.backward.to.line 101344
-chevron.compact.backward 10224F
-chevron.compact.down 100191
-chevron.compact.forward 102250
-chevron.compact.left 100192
-chevron.compact.left.chevron.compact.right 1029AC
-chevron.compact.right 100193
-chevron.compact.up 100190
-chevron.compact.up.chevron.compact.down 1029AB
-chevron.compact.up.chevron.compact.right.chevron.compact.down.chevron.compact.left 1029AD
-chevron.down 100188
-chevron.down.2 102A94
-chevron.down.circle 100070
-chevron.down.circle.fill 100071
-chevron.down.dotted.2 102A28
-chevron.down.forward.2 102A98
-chevron.down.forward.dotted.2 102A92
-chevron.down.right.2 102A97
-chevron.down.right.dotted.2 102A91
-chevron.down.square 100100
-chevron.down.square.fill 100101
-chevron.forward 100BFB
-chevron.forward.2 100C2B
-chevron.forward.circle 100BFC
-chevron.forward.circle.fill 100BFD
-chevron.forward.dotted.chevron.forward 102A2C
-chevron.forward.square 100BFE
-chevron.forward.square.fill 100BFF
-chevron.forward.to.line 101345
-chevron.left 100189
-chevron.left.2 10018B
-chevron.left.chevron.left.dotted 102A29
-chevron.left.chevron.right 1029A9
-chevron.left.circle 100072
-chevron.left.circle.fill 100073
-chevron.left.forwardslash.chevron.right 10065A
-chevron.left.square 100102
-chevron.left.square.fill 100103
-chevron.left.to.line 101342
-chevron.right 10018A
-chevron.right.2 10018C
-chevron.right.circle 100074
-chevron.right.circle.fill 100075
-chevron.right.dotted.chevron.right 102A2A
-chevron.right.square 100104
-chevron.right.square.fill 100105
-chevron.right.to.line 101343
-chevron.up 100187
-chevron.up.2 102A93
-chevron.up.chevron.down 10018F
-chevron.up.chevron.down.square 102752
-chevron.up.chevron.down.square.fill 102753
-chevron.up.chevron.right.chevron.down.chevron.left 1029AA
-chevron.up.circle 10006E
-chevron.up.circle.fill 10006F
-chevron.up.dotted.2 102A27
-chevron.up.forward.2 102A96
-chevron.up.forward.dotted.2 102A90
-chevron.up.right.2 102A95
-chevron.up.right.dotted.2 102A8F
-chevron.up.square 1000FE
-chevron.up.square.fill 1000FF
-chineseyuanrenminbisign 101E91
-chineseyuanrenminbisign.arrow.trianglehead.counterclockwise.rotate.90 102233
-chineseyuanrenminbisign.building.classical 10253D
-chineseyuanrenminbisign.building.classical.fill 10253E
-chineseyuanrenminbisign.circle 100BE3
-chineseyuanrenminbisign.circle.fill 100BE4
-chineseyuanrenminbisign.gauge.chart.lefthalf.righthalf 102A42
-chineseyuanrenminbisign.gauge.chart.leftthird.topthird.rightthird 102A6C
-chineseyuanrenminbisign.ring 102C12
-chineseyuanrenminbisign.ring.dashed 102BE8
-chineseyuanrenminbisign.square 100BE5
-chineseyuanrenminbisign.square.fill 100BE6
-circle 100000
-circle.and.line.horizontal 10080C
-circle.and.line.horizontal.fill 10078D
-circle.badge.checkmark 102002
-circle.badge.checkmark.fill 102003
-circle.badge.exclamationmark 102054
-circle.badge.exclamationmark.fill 102055
-circle.badge.minus 102044
-circle.badge.minus.fill 102045
-circle.badge.plus 102040
-circle.badge.plus.fill 102041
-circle.badge.questionmark 10204C
-circle.badge.questionmark.ar 102050
-circle.badge.questionmark.fill 10204D
-circle.badge.questionmark.fill.ar 102051
-circle.badge.xmark 102048
-circle.badge.xmark.fill 102049
-circle.bottomhalf.filled 100A96
-circle.bottomhalf.filled.inverse 101E70
-circle.bottomrighthalf.pattern.checkered 101E68
-circle.circle 100A01
-circle.circle.fill 100A02
-circle.dashed 1004DE
-circle.dashed.rectangle 10166A
-circle.dotted 101143
-circle.dotted.and.circle 101295
-circle.dotted.circle 101E67
-circle.dotted.circle.fill 101DDF
-circle.fill 100001
-circle.filled.ipad 1020FB
-circle.filled.ipad.fill 1020FC
-circle.filled.ipad.landscape 1020FD
-circle.filled.ipad.landscape.fill 1020FE
-circle.filled.iphone 1020EF
-circle.filled.iphone.fill 1020F0
-circle.filled.pattern.diagonalline.rectangle 10166F
-circle.grid.2x1 100E87
-circle.grid.2x1.fill 100E88
-circle.grid.2x1.left.filled 100E89
-circle.grid.2x1.right.filled 100E8A
-circle.grid.2x2 1007BE
-circle.grid.2x2.fill 1007BF
-circle.grid.2x2.topleft.checkmark.filled 102FEA
-circle.grid.3x3 1001F8
-circle.grid.3x3.circle 100EB2
-circle.grid.3x3.circle.fill 100EB3
-circle.grid.3x3.fill 1001F9
-circle.grid.cross 1009F8
-circle.grid.cross.down.filled 100A47
-circle.grid.cross.fill 1009F9
-circle.grid.cross.left.filled 100A44
-circle.grid.cross.right.filled 100A46
-circle.grid.cross.up.filled 100A45
-circle.hexagongrid 100662
-circle.hexagongrid.circle 100DD9
-circle.hexagongrid.circle.fill 100DDA
-circle.hexagongrid.fill 100663
-circle.hexagonpath 100B0E
-circle.hexagonpath.fill 100B0F
-circle.lefthalf.filled 100002
-circle.lefthalf.filled.inverse 101E6D
-circle.lefthalf.filled.righthalf.striped.horizontal 101E63
-circle.lefthalf.filled.righthalf.striped.horizontal.inverse 101E64
-circle.lefthalf.striped.horizontal 101E65
-circle.lefthalf.striped.horizontal.inverse 101E66
-circle.on.square 1033B7
-circle.on.square.intersection.dotted 1033C1
-circle.on.square.merge 1033B9
-circle.rectangle.dashed 10166B
-circle.rectangle.filled.pattern.diagonalline 10166D
-circle.righthalf.filled 100003
-circle.righthalf.filled.inverse 101E6E
-circle.slash 100EC3
-circle.slash.fill 100EC4
-circle.square 1009FA
-circle.square.fill 1009FB
-circle.tophalf.filled 100A97
-circle.tophalf.filled.inverse 101E6F
-circlebadge 1009D9
-circlebadge.2 100AF2
-circlebadge.2.fill 1008FD
-circlebadge.fill 10071E
-clear 100199
-clear.fill 10019A
-clipboard 1007F9
-clipboard.fill 1007FA
-clock 10042B
-clock.arrow.trianglehead.2.counterclockwise.rotate.90 100BDB
-clock.arrow.trianglehead.clockwise.rotate.90.path.dotted 1032D0
-clock.arrow.trianglehead.counterclockwise.rotate.90 1008D4
-clock.badge 10165C
-clock.badge.airplane 1032CC
-clock.badge.airplane.fill 1032CD
-clock.badge.checkmark 100E74
-clock.badge.checkmark.fill 100E75
-clock.badge.exclamationmark 100E76
-clock.badge.exclamationmark.fill 100E77
-clock.badge.fill 10165D
-clock.badge.questionmark 101731
-clock.badge.questionmark.ar 101733
-clock.badge.questionmark.fill 101732
-clock.badge.questionmark.fill.ar 101734
-clock.badge.xmark 101712
-clock.badge.xmark.fill 101713
-clock.circle 1011B8
-clock.circle.fill 1011B9
-clock.fill 10042C
-cloud 1001C2
-cloud.bolt 1001D2
-cloud.bolt.circle 1016DD
-cloud.bolt.circle.fill 1016DE
-cloud.bolt.fill 1001D3
-cloud.bolt.rain 1001DE
-cloud.bolt.rain.circle 1016DF
-cloud.bolt.rain.circle.fill 1016E0
-cloud.bolt.rain.fill 1001DF
-cloud.circle 1016CD
-cloud.circle.fill 1016CE
-cloud.drizzle 1001C4
-cloud.drizzle.circle 1016CF
-cloud.drizzle.circle.fill 1016D0
-cloud.drizzle.fill 1001C5
-cloud.fill 1001C3
-cloud.fog 1001CA
-cloud.fog.circle 1016D5
-cloud.fog.circle.fill 1016D6
-cloud.fog.fill 1001CB
-cloud.hail 1001CC
-cloud.hail.circle 1016D7
-cloud.hail.circle.fill 1016D8
-cloud.hail.fill 1001CD
-cloud.heavyrain 1001C8
-cloud.heavyrain.circle 1016D3
-cloud.heavyrain.circle.fill 1016D4
-cloud.heavyrain.fill 1001C9
-cloud.moon 1001DA
-cloud.moon.bolt 1001E0
-cloud.moon.bolt.circle 1016EB
-cloud.moon.bolt.circle.fill 1016EC
-cloud.moon.bolt.fill 1001E1
-cloud.moon.circle 1016E7
-cloud.moon.circle.fill 1016E8
-cloud.moon.fill 1001DB
-cloud.moon.rain 1001DC
-cloud.moon.rain.circle 1016E9
-cloud.moon.rain.circle.fill 1016EA
-cloud.moon.rain.fill 1001DD
-cloud.rain 1001C6
-cloud.rain.circle 1016D1
-cloud.rain.circle.fill 1016D2
-cloud.rain.fill 1001C7
-cloud.rainbow.crop 101DDE
-cloud.rainbow.crop.fill 101DE0
-cloud.sleet 1001D0
-cloud.sleet.circle 1016DB
-cloud.sleet.circle.fill 1016DC
-cloud.sleet.fill 1001D1
-cloud.snow 1001CE
-cloud.snow.circle 1016D9
-cloud.snow.circle.fill 1016DA
-cloud.snow.fill 1001CF
-cloud.sun 1001D4
-cloud.sun.bolt 1001D8
-cloud.sun.bolt.circle 1016E5
-cloud.sun.bolt.circle.fill 1016E6
-cloud.sun.bolt.fill 1001D9
-cloud.sun.circle 1016E1
-cloud.sun.circle.fill 1016E2
-cloud.sun.fill 1001D5
-cloud.sun.rain 1001D6
-cloud.sun.rain.circle 1016E3
-cloud.sun.rain.circle.fill 1016E4
-cloud.sun.rain.fill 1001D7
-coat 1023E3
-coat.circle 10304B
-coat.circle.fill 10304C
-coat.fill 1023E4
-coloncurrencysign 101454
-coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90 102227
-coloncurrencysign.building.classical 102525
-coloncurrencysign.building.classical.fill 102526
-coloncurrencysign.circle 1005C1
-coloncurrencysign.circle.fill 1005C2
-coloncurrencysign.gauge.chart.lefthalf.righthalf 102A43
-coloncurrencysign.gauge.chart.leftthird.topthird.rightthird 102A6D
-coloncurrencysign.ring 102C13
-coloncurrencysign.ring.dashed 102BE9
-coloncurrencysign.square 100601
-coloncurrencysign.square.fill 100602
-comb 100988
-comb.fill 100989
-command 100194
-command.circle 100A7F
-command.circle.fill 100A80
-command.square 100A81
-command.square.fill 100A82
-compass.drawing 101517
-computermouse 100EA3
-computermouse.fill 100EA4
-cone 100CC7
-cone.fill 100CC8
-contact.sensor 1014BA
-contact.sensor.fill 1014BB
-contextualmenu.and.pointer.arrow 100B48
-control 10018D
-convertible.side 102942
-convertible.side.air.circulate 102959
-convertible.side.air.circulate.fill 10295A
-convertible.side.air.fresh 10295B
-convertible.side.air.fresh.fill 10295C
-convertible.side.and.exclamationmark 102948
-convertible.side.and.exclamationmark.fill 102949
-convertible.side.arrow.left.and.right 102E80
-convertible.side.arrow.left.and.right.fill 102E81
-convertible.side.arrow.trianglehead.backward 102B28
-convertible.side.arrow.trianglehead.backward.fill 102B29
-convertible.side.arrow.trianglehead.forward 102B26
-convertible.side.arrow.trianglehead.forward.and.backward 102B2A
-convertible.side.arrow.trianglehead.forward.and.backward.fill 102B2B
-convertible.side.arrow.trianglehead.forward.fill 102B27
-convertible.side.arrowtriangle.down 10294F
-convertible.side.arrowtriangle.down.fill 102950
-convertible.side.arrowtriangle.up 10294D
-convertible.side.arrowtriangle.up.arrowtriangle.down 10294B
-convertible.side.arrowtriangle.up.arrowtriangle.down.fill 10294C
-convertible.side.arrowtriangle.up.fill 10294E
-convertible.side.fill 102943
-convertible.side.front.open 102944
-convertible.side.front.open.crop 102946
-convertible.side.front.open.crop.fill 102947
-convertible.side.front.open.fill 102945
-convertible.side.hill.descent.control 102986
-convertible.side.hill.descent.control.fill 102987
-convertible.side.hill.down 102984
-convertible.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle 102F27
-convertible.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill 102F28
-convertible.side.hill.down.fill 102985
-convertible.side.hill.up 102982
-convertible.side.hill.up.fill 102983
-convertible.side.lock 102951
-convertible.side.lock.fill 102952
-convertible.side.lock.open 102955
-convertible.side.lock.open.fill 102956
-cooktop 101560
-cooktop.fill 101561
-cpu 100AE5
-cpu.fill 1009D3
-creditcard 10036F
-creditcard.and.numbers 1010A8
-creditcard.arrow.trianglehead.2.clockwise.rotate.90 103529
-creditcard.circle 1004AF
-creditcard.circle.fill 1004B0
-creditcard.fill 100370
-creditcard.rewards 103215
-creditcard.rewards.fill 103216
-creditcard.trianglebadge.exclamationmark 10112D
-creditcard.trianglebadge.exclamationmark.fill 1018D0
-creditcard.viewfinder 101514
-cricket.ball 101701
-cricket.ball.circle 101703
-cricket.ball.circle.fill 101704
-cricket.ball.fill 101702
-crop 100373
-crop.rotate 100374
-cross 1008DC
-cross.case 100BD9
-cross.case.circle 10177E
-cross.case.circle.fill 10177F
-cross.case.fill 100BDA
-cross.circle 1008DE
-cross.circle.fill 1008DF
-cross.fill 1008DD
-cross.vial 100F18
-cross.vial.fill 100F19
-crown 100985
-crown.fill 100986
-cruzeirosign 101456
-cruzeirosign.arrow.trianglehead.counterclockwise.rotate.90 102229
-cruzeirosign.building.classical 102529
-cruzeirosign.building.classical.fill 10252A
-cruzeirosign.circle 1005C5
-cruzeirosign.circle.fill 1005C6
-cruzeirosign.gauge.chart.lefthalf.righthalf 102A44
-cruzeirosign.gauge.chart.leftthird.topthird.rightthird 102A6E
-cruzeirosign.ring 102C14
-cruzeirosign.ring.dashed 102BEA
-cruzeirosign.square 100605
-cruzeirosign.square.fill 100606
-cube 100418
-cube.circle 103153
-cube.circle.fill 103154
-cube.fill 100419
-cube.transparent 100B28
-cube.transparent.fill 100CF4
-cup.and.heat.waves 1022AC
-cup.and.heat.waves.fill 1022AD
-cup.and.saucer 100E18
-cup.and.saucer.fill 100E19
-curlybraces 100845
-curlybraces.square 100918
-curlybraces.square.fill 100919
-curtains.closed 101478
-curtains.open 101477
-cylinder 100CC3
-cylinder.fill 100CC4
-cylinder.split.1x2 100853
-cylinder.split.1x2.fill 100854
-d.circle 10000A
-d.circle.fill 10000B
-d.square 10009A
-d.square.fill 10009B
-danishkronesign 10192E
-danishkronesign.arrow.trianglehead.counterclockwise.rotate.90 102237
-danishkronesign.building.classical 102545
-danishkronesign.building.classical.fill 102546
-danishkronesign.circle 100BAC
-danishkronesign.circle.fill 100BAD
-danishkronesign.gauge.chart.lefthalf.righthalf 102A45
-danishkronesign.gauge.chart.leftthird.topthird.rightthird 102A6F
-danishkronesign.ring 102C15
-danishkronesign.ring.dashed 102BEB
-danishkronesign.square 100BAE
-danishkronesign.square.fill 100BAF
-decrease.indent 1002F6
-decrease.quotelevel 10077F
-degreesign.celsius 1029E4
-degreesign.fahrenheit 1029E3
-dehumidifier 1014E7
-dehumidifier.fill 1014E8
-delete.backward 101088
-delete.backward.fill 101089
-delete.forward 101092
-delete.forward.fill 101093
-delete.left 10019B
-delete.left.fill 10019C
-delete.right 100197
-delete.right.fill 100198
-deskclock 100851
-deskclock.fill 100852
-desktopcomputer 100657
-desktopcomputer.and.arrow.down 100DBE
-desktopcomputer.and.macbook 102913
-desktopcomputer.badge.checkmark 10325E
-desktopcomputer.badge.shield.checkmark 103286
-desktopcomputer.trianglebadge.exclamationmark 1010C3
-deskview 101663
-deskview.fill 101664
-dial.high 100A90
-dial.high.fill 100A91
-dial.low 10037A
-dial.low.fill 10037B
-dial.medium 1013B4
-dial.medium.fill 1013B5
-diamond 1007C8
-diamond.bottomhalf.filled 101006
-diamond.circle 1011E1
-diamond.circle.fill 1011E2
-diamond.fill 1007C9
-diamond.lefthalf.filled 101003
-diamond.righthalf.filled 101004
-diamond.tophalf.filled 101005
-dice 100EB4
-dice.fill 100EB5
-die.face.1 1009E3
-die.face.1.fill 1009E4
-die.face.2 1009E5
-die.face.2.fill 1009E6
-die.face.3 1009E7
-die.face.3.fill 1009E8
-die.face.4 1009E9
-die.face.4.fill 1009EA
-die.face.5 1009EB
-die.face.5.fill 1009EC
-die.face.6 1009ED
-die.face.6.fill 1009EE
-digitalcrown 1035C9
-digitalcrown.arrow.clockwise 100ED6
-digitalcrown.arrow.clockwise.fill 100ED7
-digitalcrown.arrow.counterclockwise 100ED8
-digitalcrown.arrow.counterclockwise.fill 100ED9
-digitalcrown.fill 1035CA
-digitalcrown.horizontal 1035CB
-digitalcrown.horizontal.arrow.clockwise 100EF1
-digitalcrown.horizontal.arrow.clockwise.fill 100EF2
-digitalcrown.horizontal.arrow.counterclockwise 100EF3
-digitalcrown.horizontal.arrow.counterclockwise.fill 100EF4
-digitalcrown.horizontal.fill 1035CC
-digitalcrown.horizontal.press 100D23
-digitalcrown.horizontal.press.fill 100D24
-digitalcrown.press 100D21
-digitalcrown.press.fill 100D22
-directcurrent 100BDD
-dishwasher 101422
-dishwasher.circle 101FD6
-dishwasher.circle.fill 101FD7
-dishwasher.fill 101423
-display 1008B9
-display.2 100A27
-display.and.arrow.down 100DBD
-display.and.screwdriver 103498
-display.trianglebadge.exclamationmark 100A26
-distribute.horizontal 102839
-distribute.horizontal.center 10160A
-distribute.horizontal.center.fill 10160B
-distribute.horizontal.fill 10283A
-distribute.horizontal.left 101608
-distribute.horizontal.left.fill 101609
-distribute.horizontal.right 10160C
-distribute.horizontal.right.fill 10160D
-distribute.vertical 102837
-distribute.vertical.bottom 101606
-distribute.vertical.bottom.fill 101607
-distribute.vertical.center 101604
-distribute.vertical.center.fill 101605
-distribute.vertical.fill 102838
-distribute.vertical.top 101602
-distribute.vertical.top.fill 101603
-divide 10017F
-divide.circle 100052
-divide.circle.fill 100053
-divide.square 1000E2
-divide.square.fill 1000E3
-dock.arrow.down.rectangle 1008FF
-dock.arrow.up.rectangle 1008FE
-dock.rectangle 1003DE
-document 100237
-document.badge.arrow.up 101661
-document.badge.arrow.up.fill 101662
-document.badge.clock 100AFE
-document.badge.clock.fill 100AFF
-document.badge.ellipsis 100A74
-document.badge.ellipsis.fill 100A75
-document.badge.gearshape 100A5A
-document.badge.gearshape.fill 100A5B
-document.badge.plus 1008D7
-document.badge.plus.fill 1008D8
-document.circle 100239
-document.circle.fill 10023A
-document.fill 100238
-document.on.clipboard 100243
-document.on.clipboard.fill 100244
-document.on.document 100241
-document.on.document.fill 100242
-document.on.trash 1018CA
-document.on.trash.fill 1018CB
-document.viewfinder 1003BE
-document.viewfinder.fill 100862
-dog 102006
-dog.circle 10203E
-dog.circle.fill 10203F
-dog.fill 102007
-dollarsign 1013A2
-dollarsign.arrow.trianglehead.counterclockwise.rotate.90 1013A3
-dollarsign.building.classical 1024F2
-dollarsign.building.classical.fill 1024F3
-dollarsign.circle 100597
-dollarsign.circle.fill 100598
-dollarsign.gauge.chart.lefthalf.righthalf 1029C8
-dollarsign.gauge.chart.leftthird.topthird.rightthird 1029C9
-dollarsign.ring 102B88
-dollarsign.ring.dashed 102B87
-dollarsign.square 1005D7
-dollarsign.square.fill 1005D8
-dongsign 101448
-dongsign.arrow.trianglehead.counterclockwise.rotate.90 10221B
-dongsign.building.classical 10250D
-dongsign.building.classical.fill 10250E
-dongsign.circle 1005A9
-dongsign.circle.fill 1005AA
-dongsign.gauge.chart.lefthalf.righthalf 102A46
-dongsign.gauge.chart.leftthird.topthird.rightthird 102A70
-dongsign.ring 102C16
-dongsign.ring.dashed 102BEC
-dongsign.square 1005E9
-dongsign.square.fill 1005EA
-door.french.closed 1013E7
-door.french.open 1013E6
-door.garage.closed 1013E1
-door.garage.closed.trianglebadge.exclamationmark 101621
-door.garage.double.bay.closed 1013ED
-door.garage.double.bay.closed.trianglebadge.exclamationmark 101623
-door.garage.double.bay.open 1013EC
-door.garage.double.bay.open.trianglebadge.exclamationmark 101622
-door.garage.open 1013E0
-door.garage.open.trianglebadge.exclamationmark 101620
-door.left.hand.closed 1013DD
-door.left.hand.open 1013DC
-door.right.hand.closed 1013E9
-door.right.hand.open 1013E8
-door.sliding.left.hand.closed 1013DF
-door.sliding.left.hand.open 1013DE
-door.sliding.right.hand.closed 1013EB
-door.sliding.right.hand.open 1013EA
-dot.arrowtriangles.up.right.down.left.circle 10076F
-dot.car.top.radiowaves.2.rear.left.rear.rear.right 102D46
-dot.car.top.radiowaves.2.rear.left.rear.rear.right.fill 102D47
-dot.circle.and.hand.point.up.left.fill 100EAA
-dot.circle.and.pointer.arrow 100ACD
-dot.circle.viewfinder 1011DE
-dot.crosshair 1031AE
-dot.radiowaves.forward 100C2D
-dot.radiowaves.left.and.right 100319
-dot.radiowaves.right 100592
-dot.radiowaves.up.forward 100F17
-dot.scope 1021CF
-dot.scope.display 1021CC
-dot.scope.laptopcomputer 101FCD
-dot.square 100574
-dot.square.fill 100575
-dot.squareshape 100AB5
-dot.squareshape.fill 100AB6
-dot.squareshape.split.2x2 100B8B
-dot.viewfinder 1011DD
-dots.and.line.vertical.and.pointer.arrow.rectangle 101462
-dpad 100A32
-dpad.down.filled 100A00
-dpad.fill 1009FC
-dpad.left.filled 1009FD
-dpad.right.filled 1009FF
-dpad.up.filled 1009FE
-drone 10259B
-drone.fill 10259C
-drop 100811
-drop.circle 1011CA
-drop.circle.fill 1011CB
-drop.degreesign 10162F
-drop.degreesign.fill 101630
-drop.degreesign.slash 101682
-drop.degreesign.slash.fill 101683
-drop.degreesign.slash.fill.rtl 101685
-drop.degreesign.slash.rtl 101684
-drop.fill 100812
-drop.halffull 101E61
-drop.keypad.rectangle 1014C0
-drop.keypad.rectangle.fill 1014C1
-drop.transmission 101908
-drop.triangle 100200
-drop.triangle.fill 100201
-dryer 101592
-dryer.circle 101FD2
-dryer.circle.fill 101FD3
-dryer.fill 101593
-duffle.bag 1020B1
-duffle.bag.fill 1020B2
-dumbbell 10158C
-dumbbell.fill 10158D
-e.circle 10000C
-e.circle.fill 10000D
-e.square 10009C
-e.square.fill 10009D
-ear 100723
-ear.badge.checkmark 1009BF
-ear.badge.waveform 100D63
-ear.fill 100787
-ear.trianglebadge.exclamationmark 1009C1
-earbud.left 10300D
-earbud.right 10300C
-earbuds 100E38
-earbuds.bone.conduction 10335D
-earbuds.bone.conduction.left 10335F
-earbuds.bone.conduction.right 10335E
-earbuds.case 100E65
-earbuds.case.fill 100E66
-earbuds.in.ear 103353
-earbuds.in.ear.left 103355
-earbuds.in.ear.right 103354
-earbuds.stemless 103346
-earbuds.stemless.left 103348
-earbuds.stemless.right 103347
-earpods 100826
-eject 1001A5
-eject.circle 1008A1
-eject.circle.fill 1008A2
-eject.fill 1001A6
-electronic.toll.collection 102F19
-electronic.toll.collection.rectangle 102E9F
-electronic.toll.collection.rectangle.fill 102EA6
-electronic.toll.collection.rectangle.slash 102EA0
-electronic.toll.collection.rectangle.slash.fill 102EA7
-electronic.toll.collection.rectangle.trianglebadge.exclamationmark 102EA2
-electronic.toll.collection.rectangle.trianglebadge.exclamationmark.fill 102EA9
-ellipsis 100360
-ellipsis.bubble 10057A
-ellipsis.bubble.fill 10057B
-ellipsis.calendar 1033DD
-ellipsis.circle 100361
-ellipsis.circle.badge 103217
-ellipsis.circle.badge.fill 103218
-ellipsis.circle.fill 100362
-ellipsis.curlybraces 1011F5
-ellipsis.message 101498
-ellipsis.message.fill 101499
-ellipsis.rectangle 100829
-ellipsis.rectangle.fill 10082A
-ellipsis.vertical.bubble 10105F
-ellipsis.vertical.bubble.fill 101060
-ellipsis.viewfinder 10188F
-engine.combustion 100FB0
-engine.combustion.badge.exclamationmark 1012A6
-engine.combustion.badge.exclamationmark.fill 1012A7
-engine.combustion.fill 100FB1
-engine.emission.and.drop.2.water.wave.below 102F35
-engine.emission.and.exclamationmark 10295F
-engine.emission.and.filter 1022CB
-entry.lever.keypad 1014B4
-entry.lever.keypad.fill 1014B5
-entry.lever.keypad.trianglebadge.exclamationmark 10164F
-entry.lever.keypad.trianglebadge.exclamationmark.fill 101650
-envelope 100355
-envelope.and.arrow.3.down 102EF4
-envelope.and.arrow.3.down.fill 102EF5
-envelope.and.arrow.trianglehead.branch 100997
-envelope.and.arrow.trianglehead.branch.fill 100998
-envelope.and.hand.raised 103378
-envelope.and.hand.raised.fill 103379
-envelope.badge 10035B
-envelope.badge.fill 10035C
-envelope.badge.minus 103235
-envelope.badge.minus.fill 103236
-envelope.badge.person.crop 101DFB
-envelope.badge.person.crop.fill 101DFD
-envelope.badge.plus 103233
-envelope.badge.plus.fill 103234
-envelope.badge.shield.half.filled 100AD9
-envelope.badge.shield.half.filled.fill 100ADA
-envelope.circle 100357
-envelope.circle.fill 100358
-envelope.fill 100356
-envelope.front 102661
-envelope.front.fill 102662
-envelope.front.fill.rtl 102783
-envelope.front.rtl 102782
-envelope.open 100359
-envelope.open.badge.clock 1013A7
-envelope.open.badge.clock.fill 10346D
-envelope.open.fill 10035A
-envelope.stack 1006EB
-envelope.stack.fill 1006EC
-environments 10201A
-environments.circle 10201C
-environments.circle.fill 10201D
-environments.fill 100B2E
-environments.slash 10205A
-environments.slash.circle 10201E
-environments.slash.circle.fill 10201F
-environments.slash.fill 101985
-equal 100180
-equal.circle 100054
-equal.circle.fill 100055
-equal.square 1000E4
-equal.square.fill 1000E5
-eraser 101740
-eraser.badge.xmark 103055
-eraser.badge.xmark.fill 103056
-eraser.fill 101741
-eraser.line.dashed 10169C
-eraser.line.dashed.fill 10169D
-eraser.slash 103059
-eraser.slash.fill 10305A
-eraser.trianglebadge.exclamationmark 103057
-eraser.trianglebadge.exclamationmark.fill 103058
-escape 1001A7
-esim 100CB5
-esim.fill 100CB6
-eurosign 101447
-eurosign.arrow.trianglehead.counterclockwise.rotate.90 10221A
-eurosign.building.classical 10250B
-eurosign.building.classical.fill 10250C
-eurosign.circle 1005A7
-eurosign.circle.fill 1005A8
-eurosign.gauge.chart.lefthalf.righthalf 102A47
-eurosign.gauge.chart.leftthird.topthird.rightthird 102A71
-eurosign.ring 102C17
-eurosign.ring.dashed 102BED
-eurosign.square 1005E7
-eurosign.square.fill 1005E8
-eurozonesign 101934
-eurozonesign.arrow.trianglehead.counterclockwise.rotate.90 102238
-eurozonesign.building.classical 102547
-eurozonesign.building.classical.fill 102548
-eurozonesign.circle 101935
-eurozonesign.circle.fill 101936
-eurozonesign.gauge.chart.lefthalf.righthalf 102A48
-eurozonesign.gauge.chart.leftthird.topthird.rightthird 102A72
-eurozonesign.ring 102C18
-eurozonesign.ring.dashed 102BEE
-eurozonesign.square 101937
-eurozonesign.square.fill 101938
-ev.charger 1012A8
-ev.charger.arrowtriangle.left 101C2A
-ev.charger.arrowtriangle.left.fill 101C2B
-ev.charger.arrowtriangle.right 101C32
-ev.charger.arrowtriangle.right.fill 101C33
-ev.charger.exclamationmark 101C36
-ev.charger.exclamationmark.fill 101C37
-ev.charger.fill 1012A9
-ev.charger.slash 101C26
-ev.charger.slash.fill 101C27
-ev.plug.ac.gb.t 101EB0
-ev.plug.ac.gb.t.fill 101EB1
-ev.plug.ac.type.1 101EAC
-ev.plug.ac.type.1.fill 101EAD
-ev.plug.ac.type.2 101EAE
-ev.plug.ac.type.2.fill 101EAF
-ev.plug.dc.ccs1 101EB2
-ev.plug.dc.ccs1.fill 101EB3
-ev.plug.dc.ccs2 101EB4
-ev.plug.dc.ccs2.fill 101EB5
-ev.plug.dc.chademo 101EB6
-ev.plug.dc.chademo.fill 101EB7
-ev.plug.dc.gb.t 101EB8
-ev.plug.dc.gb.t.fill 101EB9
-ev.plug.dc.nacs 101EBA
-ev.plug.dc.nacs.fill 101EBB
-exclamationmark 10014E
-exclamationmark.2 100892
-exclamationmark.3 1008F4
-exclamationmark.applewatch 100D44
-exclamationmark.arrow.trianglehead.2.clockwise.rotate.90 1008A4
-exclamationmark.arrow.trianglehead.counterclockwise.rotate.90 100C68
-exclamationmark.brakesignal 100FBF
-exclamationmark.bubble 10032C
-exclamationmark.bubble.circle 1011B6
-exclamationmark.bubble.circle.fill 1011B7
-exclamationmark.bubble.fill 10032D
-exclamationmark.circle 10005E
-exclamationmark.circle.fill 10005F
-exclamationmark.icloud 100311
-exclamationmark.icloud.fill 100312
-exclamationmark.lock 101665
-exclamationmark.lock.fill 101666
-exclamationmark.magnifyingglass 102202
-exclamationmark.message 102DE9
-exclamationmark.message.fill 102DEA
-exclamationmark.octagon 10062F
-exclamationmark.octagon.fill 100630
-exclamationmark.questionmark 101463
-exclamationmark.questionmark.ar 101464
-exclamationmark.shield 10079F
-exclamationmark.shield.fill 1007A0
-exclamationmark.square 1000EE
-exclamationmark.square.fill 1000EF
-exclamationmark.tirepressure 101013
-exclamationmark.transmission 100FC1
-exclamationmark.triangle 1001FE
-exclamationmark.triangle.fill 1001FF
-exclamationmark.triangle.text.page 102E5E
-exclamationmark.triangle.text.page.fill 102E5F
-exclamationmark.triangle.text.page.fill.rtl 102E61
-exclamationmark.triangle.text.page.rtl 102E60
-exclamationmark.viewfinder 103720
-exclamationmark.warninglight 10102E
-exclamationmark.warninglight.fill 10102F
-externaldrive 100902
-externaldrive.badge.checkmark 100A50
-externaldrive.badge.exclamationmark 101625
-externaldrive.badge.icloud 100AB9
-externaldrive.badge.minus 100A4F
-externaldrive.badge.person.crop 100A6C
-externaldrive.badge.plus 100A4E
-externaldrive.badge.questionmark 100B5F
-externaldrive.badge.questionmark.ar 100B61
-externaldrive.badge.timemachine 10091C
-externaldrive.badge.wifi 100A6E
-externaldrive.badge.xmark 100A51
-externaldrive.connected.to.line.below 100A24
-externaldrive.connected.to.line.below.fill 100A25
-externaldrive.fill 100903
-externaldrive.fill.badge.checkmark 100A54
-externaldrive.fill.badge.exclamationmark 101626
-externaldrive.fill.badge.icloud 100ABA
-externaldrive.fill.badge.minus 100A53
-externaldrive.fill.badge.person.crop 100A6D
-externaldrive.fill.badge.plus 100A52
-externaldrive.fill.badge.questionmark 100B60
-externaldrive.fill.badge.questionmark.ar 100B62
-externaldrive.fill.badge.timemachine 10091D
-externaldrive.fill.badge.wifi 100A6F
-externaldrive.fill.badge.xmark 100A55
-externaldrive.fill.trianglebadge.exclamationmark 101628
-externaldrive.trianglebadge.exclamationmark 101627
-eye 1002ED
-eye.circle 1006FF
-eye.circle.fill 100700
-eye.fill 1002EE
-eye.half.closed 102F41
-eye.half.closed.fill 102F42
-eye.slash 1002EF
-eye.slash.circle 100701
-eye.slash.circle.fill 100702
-eye.slash.fill 1002F0
-eye.square 100F47
-eye.square.fill 100F48
-eye.trianglebadge.exclamationmark 101094
-eye.trianglebadge.exclamationmark.fill 101095
-eyebrow 1009AD
-eyedropper 100397
-eyedropper.full 100399
-eyedropper.halffull 100398
-eyeglasses 100586
-eyeglasses.slash 102036
-eyes 1009A7
-eyes.inverse 100A2D
-f.circle 10000E
-f.circle.fill 10000F
-f.cursive 10016D
-f.cursive.circle 100767
-f.cursive.circle.fill 100768
-f.cursive.slash 10348C
-f.square 10009E
-f.square.fill 10009F
-face.dashed 100967
-face.dashed.fill 100A38
-face.smiling 1003B8
-face.smiling.inverse 10064C
-faceid 1003BD
-facemask 1010CC
-facemask.fill 1010CD
-fan 10104B
-fan.and.light.ceiling 10131C
-fan.and.light.ceiling.fill 1013BA
-fan.badge.arrow.up.and.down.and.arrow.left.and.right 10313B
-fan.badge.arrow.up.and.down.and.arrow.left.and.right.fill 10313C
-fan.badge.automatic 101C89
-fan.badge.automatic.fill 101C8A
-fan.ceiling 10131B
-fan.ceiling.fill 1013B9
-fan.circle 1030A2
-fan.circle.fill 1030A3
-fan.desk 101319
-fan.desk.fill 10149A
-fan.fill 10104C
-fan.floor 10131A
-fan.floor.fill 10149B
-fan.gauge.open 10309E
-fan.oscillation 101504
-fan.oscillation.fill 101505
-fan.slash 10175A
-fan.slash.fill 10175B
-faxmachine 100A8C
-faxmachine.fill 100A8D
-ferry 100E05
-ferry.fill 100E06
-fibrechannel 100962
-field.of.view.ultrawide 101FFC
-field.of.view.ultrawide.fill 101FFD
-field.of.view.wide 101FFE
-field.of.view.wide.fill 101FFF
-figure 10057D
-figure.2 100637
-figure.2.and.child.holdinghands 1015C7
-figure.2.arms.open 1015C6
-figure.2.ascending 10355B
-figure.2.circle 100E7D
-figure.2.circle.fill 100E7E
-figure.2.descending 10355C
-figure.2.left.holdinghands 102757
-figure.2.right.holdinghands 10273A
-figure.american.football 101490
-figure.american.football.circle 1026FD
-figure.american.football.circle.fill 1026FE
-figure.and.child.holdinghands 101601
-figure.archery 101491
-figure.archery.circle 1026FF
-figure.archery.circle.fill 102700
-figure.arms.open 1015C5
-figure.australian.football 101492
-figure.australian.football.circle 102701
-figure.australian.football.circle.fill 102702
-figure.badminton 101519
-figure.badminton.circle 102703
-figure.badminton.circle.fill 102704
-figure.barre 10130F
-figure.barre.circle 102705
-figure.barre.circle.fill 102706
-figure.baseball 10151A
-figure.baseball.circle 102707
-figure.baseball.circle.fill 102708
-figure.basketball 10151B
-figure.basketball.circle 102709
-figure.basketball.circle.fill 10270A
-figure.bowling 10151C
-figure.bowling.circle 10270B
-figure.bowling.circle.fill 10270C
-figure.boxing 10151D
-figure.boxing.circle 10270D
-figure.boxing.circle.fill 10270E
-figure.child 1018FD
-figure.child.and.lock 10197E
-figure.child.and.lock.fill 10197F
-figure.child.and.lock.open 101980
-figure.child.and.lock.open.fill 101981
-figure.child.circle 1018FE
-figure.child.circle.fill 1018FF
-figure.climbing 10151E
-figure.climbing.circle 10269D
-figure.climbing.circle.fill 10269E
-figure.cooldown 10151F
-figure.cooldown.circle 10270F
-figure.cooldown.circle.fill 102710
-figure.core.training 101310
-figure.core.training.circle 102683
-figure.core.training.circle.fill 102684
-figure.cricket 101520
-figure.cricket.circle 102711
-figure.cricket.circle.fill 102712
-figure.cross.training 101311
-figure.cross.training.circle 102713
-figure.cross.training.circle.fill 102714
-figure.curling 101522
-figure.curling.circle 102715
-figure.curling.circle.fill 102716
-figure.dance 101312
-figure.dance.circle 102717
-figure.dance.circle.fill 102718
-figure.disc.sports 101523
-figure.disc.sports.circle 102685
-figure.disc.sports.circle.fill 1026A5
-figure.elliptical 10130C
-figure.elliptical.circle 10271C
-figure.elliptical.circle.fill 10271D
-figure.equestrian.sports 101525
-figure.equestrian.sports.circle 10271E
-figure.equestrian.sports.circle.fill 10271F
-figure.fall 100D6E
-figure.fall.circle 100D6F
-figure.fall.circle.fill 100D70
-figure.fencing 101526
-figure.fencing.circle 102720
-figure.fencing.circle.fill 102721
-figure.field.hockey 1027A3
-figure.field.hockey.circle 1027A4
-figure.field.hockey.circle.fill 1027BF
-figure.fishing 101527
-figure.fishing.circle 1026A3
-figure.fishing.circle.fill 1026A4
-figure.flexibility 101551
-figure.flexibility.circle 10271A
-figure.flexibility.circle.fill 10271B
-figure.golf 101529
-figure.golf.circle 102728
-figure.golf.circle.fill 102729
-figure.gymnastics 10152A
-figure.gymnastics.circle 10272A
-figure.gymnastics.circle.fill 10272B
-figure.hand.cycling 10152B
-figure.hand.cycling.circle 10272C
-figure.hand.cycling.circle.fill 10272D
-figure.handball 10152C
-figure.handball.circle 1026C7
-figure.handball.circle.fill 1026C8
-figure.highintensity.intervaltraining 10130E
-figure.highintensity.intervaltraining.circle 10243F
-figure.highintensity.intervaltraining.circle.fill 102440
-figure.hiking 10152D
-figure.hiking.circle 10255F
-figure.hiking.circle.fill 102560
-figure.hockey 10152E
-figure.hockey.circle 102561
-figure.hockey.circle.fill 102562
-figure.hunting 10152F
-figure.hunting.circle 102563
-figure.hunting.circle.fill 102564
-figure.ice.hockey 1027C7
-figure.ice.hockey.circle 1027C8
-figure.ice.hockey.circle.fill 1027C9
-figure.ice.skating 1027C0
-figure.ice.skating.circle 1027C1
-figure.ice.skating.circle.fill 1027C2
-figure.indoor.cycle 10130A
-figure.indoor.cycle.circle 102565
-figure.indoor.cycle.circle.fill 102566
-figure.indoor.rowing 10130B
-figure.indoor.rowing.circle 102581
-figure.indoor.rowing.circle.fill 102582
-figure.indoor.soccer 10153F
-figure.indoor.soccer.circle 102589
-figure.indoor.soccer.circle.fill 10258A
-figure.jumprope 101530
-figure.jumprope.circle 10267D
-figure.jumprope.circle.fill 10267E
-figure.kickboxing 101531
-figure.kickboxing.circle 102567
-figure.kickboxing.circle.fill 102568
-figure.lacrosse 101532
-figure.lacrosse.circle 102569
-figure.lacrosse.circle.fill 10256A
-figure.martial.arts 101533
-figure.martial.arts.circle 10256B
-figure.martial.arts.circle.fill 10256C
-figure.mind.and.body 101534
-figure.mind.and.body.circle 10256D
-figure.mind.and.body.circle.fill 10256E
-figure.mixed.cardio 101535
-figure.mixed.cardio.circle 10256F
-figure.mixed.cardio.circle.fill 102570
-figure.open.water.swim 101307
-figure.open.water.swim.circle 102571
-figure.open.water.swim.circle.fill 102572
-figure.outdoor.cycle 101309
-figure.outdoor.cycle.circle 1026C9
-figure.outdoor.cycle.circle.fill 1026CA
-figure.outdoor.rowing 1027BC
-figure.outdoor.rowing.circle 1027BD
-figure.outdoor.rowing.circle.fill 1027BE
-figure.outdoor.soccer 1027C4
-figure.outdoor.soccer.circle 1027C5
-figure.outdoor.soccer.circle.fill 1027C6
-figure.pickleball 101537
-figure.pickleball.circle 102575
-figure.pickleball.circle.fill 102576
-figure.pilates 101313
-figure.pilates.circle 102577
-figure.pilates.circle.fill 102578
-figure.play 101538
-figure.play.circle 102579
-figure.play.circle.fill 10257A
-figure.pool.swim 101306
-figure.pool.swim.circle 10257B
-figure.pool.swim.circle.fill 10257C
-figure.racquetball 101539
-figure.racquetball.circle 10257D
-figure.racquetball.circle.fill 10257E
-figure.roll 101211
-figure.roll.circle 1026F9
-figure.roll.circle.fill 1026FA
-figure.roll.runningpace 101308
-figure.roll.runningpace.circle 1026FB
-figure.roll.runningpace.circle.fill 1026FC
-figure.rolling 10153A
-figure.rolling.circle 10257F
-figure.rolling.circle.fill 102580
-figure.rugby 10153B
-figure.rugby.circle 102583
-figure.rugby.circle.fill 102584
-figure.run 100433
-figure.run.circle 100434
-figure.run.circle.fill 100435
-figure.run.square.stack 1017FA
-figure.run.square.stack.fill 1017FB
-figure.run.treadmill 1026C5
-figure.run.treadmill.circle 1026F5
-figure.run.treadmill.circle.fill 1026F6
-figure.sailing 10153C
-figure.sailing.circle 10267B
-figure.sailing.circle.fill 10267C
-figure.seated.seatbelt 100FE6
-figure.seated.seatbelt.and.airbag.off 101282
-figure.seated.seatbelt.and.airbag.on 10179B
-figure.seated.seatbelt.left.drive.seats.1 1024AD
-figure.seated.seatbelt.left.drive.seats.1.1 1024AA
-figure.seated.seatbelt.left.drive.seats.1.1.fill 102483
-figure.seated.seatbelt.left.drive.seats.1.2 1024A9
-figure.seated.seatbelt.left.drive.seats.1.2.fill 102482
-figure.seated.seatbelt.left.drive.seats.1.fill 102486
-figure.seated.seatbelt.left.drive.seats.2 1024AC
-figure.seated.seatbelt.left.drive.seats.2.2 1024A8
-figure.seated.seatbelt.left.drive.seats.2.2.2 1024A4
-figure.seated.seatbelt.left.drive.seats.2.2.2.fill 10247E
-figure.seated.seatbelt.left.drive.seats.2.2.3 1024A5
-figure.seated.seatbelt.left.drive.seats.2.2.3.fill 1024A0
-figure.seated.seatbelt.left.drive.seats.2.2.fill 102481
-figure.seated.seatbelt.left.drive.seats.2.3 1024A7
-figure.seated.seatbelt.left.drive.seats.2.3.2 1024A3
-figure.seated.seatbelt.left.drive.seats.2.3.2.fill 10247D
-figure.seated.seatbelt.left.drive.seats.2.3.3 1024A2
-figure.seated.seatbelt.left.drive.seats.2.3.3.fill 10247C
-figure.seated.seatbelt.left.drive.seats.2.3.fill 102480
-figure.seated.seatbelt.left.drive.seats.2.fill 102485
-figure.seated.seatbelt.left.drive.seats.3 1024AB
-figure.seated.seatbelt.left.drive.seats.3.3 1024A6
-figure.seated.seatbelt.left.drive.seats.3.3.3 1024A1
-figure.seated.seatbelt.left.drive.seats.3.3.3.fill 10247B
-figure.seated.seatbelt.left.drive.seats.3.3.fill 10247F
-figure.seated.seatbelt.left.drive.seats.3.fill 102484
-figure.seated.side.left 101EBC
-figure.seated.side.left.air.distribution.indirect 103143
-figure.seated.side.left.air.distribution.lower 101076
-figure.seated.side.left.air.distribution.lower.angled.and.upper.angled 10313F
-figure.seated.side.left.air.distribution.middle 101075
-figure.seated.side.left.air.distribution.middle.and.lower 101078
-figure.seated.side.left.air.distribution.middle.and.lower.angled 101EC0
-figure.seated.side.left.air.distribution.upper 101077
-figure.seated.side.left.air.distribution.upper.and.middle.and.lower 102E1E
-figure.seated.side.left.air.distribution.upper.angled.and.dottedline.and.lower.angled 103141
-figure.seated.side.left.air.distribution.upper.angled.and.lower.angled 101EBF
-figure.seated.side.left.air.distribution.upper.angled.and.middle 101EBE
-figure.seated.side.left.air.distribution.upper.angled.and.middle.and.lower.angled 101EBD
-figure.seated.side.left.airbag.off 10128D
-figure.seated.side.left.airbag.off.2 10127B
-figure.seated.side.left.airbag.on 100FE7
-figure.seated.side.left.airbag.on.2 10179A
-figure.seated.side.left.automatic 101C8D
-figure.seated.side.left.fan 1027C3
-figure.seated.side.left.steeringwheel 101982
-figure.seated.side.left.windshield.front.and.heat.waves 101079
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.lower 101ED2
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.middle 101ED1
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.middle.and.lower 101ECD
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper 101ED0
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.lower 101ECF
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.middle 101ECE
-figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.middle.and.lower 101ECC
-figure.seated.side.right 1029CF
-figure.seated.side.right.air.distribution.indirect 103144
-figure.seated.side.right.air.distribution.lower 1029D1
-figure.seated.side.right.air.distribution.lower.angled.and.upper.angled 103140
-figure.seated.side.right.air.distribution.middle 1029D2
-figure.seated.side.right.air.distribution.middle.and.lower 1029D3
-figure.seated.side.right.air.distribution.middle.and.lower.angled 1029D7
-figure.seated.side.right.air.distribution.upper 1029D0
-figure.seated.side.right.air.distribution.upper.and.middle.and.lower 102E1F
-figure.seated.side.right.air.distribution.upper.angled.and.dottedline.and.lower.angled 103142
-figure.seated.side.right.air.distribution.upper.angled.and.lower.angled 1029D6
-figure.seated.side.right.air.distribution.upper.angled.and.middle 1029D5
-figure.seated.side.right.air.distribution.upper.angled.and.middle.and.lower.angled 1029D4
-figure.seated.side.right.airbag.off 1029CC
-figure.seated.side.right.airbag.off.2 1029CE
-figure.seated.side.right.airbag.on 1029CB
-figure.seated.side.right.airbag.on.2 1029CD
-figure.seated.side.right.automatic 1029E1
-figure.seated.side.right.child.lap 103310
-figure.seated.side.right.fan 1029E2
-figure.seated.side.right.steeringwheel 1029E0
-figure.seated.side.right.windshield.front.and.heat.waves 1029D8
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.lower 1029DE
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.middle 1029DF
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.middle.and.lower 1029DA
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper 1029DD
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.lower 1029DC
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.middle 1029DB
-figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.middle.and.lower 1029D9
-figure.skateboarding 10153D
-figure.skateboarding.circle 102585
-figure.skateboarding.circle.fill 102586
-figure.skiing.crosscountry 101521
-figure.skiing.crosscountry.circle 102681
-figure.skiing.crosscountry.circle.fill 102682
-figure.skiing.downhill 101524
-figure.skiing.downhill.circle 10267F
-figure.skiing.downhill.circle.fill 102680
-figure.snowboarding 10153E
-figure.snowboarding.circle 102587
-figure.snowboarding.circle.fill 102588
-figure.socialdance 101540
-figure.socialdance.circle 102679
-figure.socialdance.circle.fill 10267A
-figure.softball 101541
-figure.softball.circle 10258B
-figure.softball.circle.fill 10258C
-figure.squash 101542
-figure.squash.circle 10258D
-figure.squash.circle.fill 10258E
-figure.stair.stepper 10130D
-figure.stair.stepper.circle 10258F
-figure.stair.stepper.circle.fill 102590
-figure.stairs 101543
-figure.stairs.circle 102591
-figure.stairs.circle.fill 102592
-figure.stand 100CFE
-figure.stand.and.figure.teen 1036A4
-figure.stand.dress 102869
-figure.stand.dress.line.vertical.figure 101642
-figure.stand.line.dotted.figure.stand 100CFF
-figure.step.training 101544
-figure.step.training.circle 102593
-figure.step.training.circle.fill 102594
-figure.strengthtraining.functional 101528
-figure.strengthtraining.functional.circle 102726
-figure.strengthtraining.functional.circle.fill 102727
-figure.strengthtraining.traditional 101403
-figure.strengthtraining.traditional.circle 10273E
-figure.strengthtraining.traditional.circle.fill 10273F
-figure.surfing 101545
-figure.surfing.circle 102595
-figure.surfing.circle.fill 102596
-figure.table.tennis 101314
-figure.table.tennis.circle 102597
-figure.table.tennis.circle.fill 102598
-figure.taichi 101546
-figure.taichi.circle 102689
-figure.taichi.circle.fill 10268A
-figure.teen 1036A6
-figure.teen.and.lock 1036A7
-figure.teen.and.lock.fill 1036A8
-figure.teen.and.lock.open 1036AB
-figure.teen.and.lock.open.fill 1036AC
-figure.tennis 10148B
-figure.tennis.circle 10273C
-figure.tennis.circle.fill 10273D
-figure.track.and.field 101547
-figure.track.and.field.circle 102677
-figure.track.and.field.circle.fill 102678
-figure.volleyball 101548
-figure.volleyball.circle 102740
-figure.volleyball.circle.fill 102741
-figure.walk 100762
-figure.walk.arrival 1013DA
-figure.walk.circle 100763
-figure.walk.circle.fill 100764
-figure.walk.departure 1013DB
-figure.walk.diamond 100AA2
-figure.walk.diamond.fill 100AA3
-figure.walk.motion 101411
-figure.walk.motion.trianglebadge.exclamationmark 101DDA
-figure.walk.suitcase.rolling 1032F1
-figure.walk.suitcase.rolling.circle 1032F2
-figure.walk.suitcase.rolling.circle.fill 1032F3
-figure.walk.treadmill 1026C6
-figure.walk.treadmill.circle 1026F7
-figure.walk.treadmill.circle.fill 1026F8
-figure.walk.triangle 1014DA
-figure.walk.triangle.fill 1014DB
-figure.water.fitness 101549
-figure.water.fitness.circle 102675
-figure.water.fitness.circle.fill 102676
-figure.waterpolo 10154A
-figure.waterpolo.circle 102742
-figure.waterpolo.circle.fill 102743
-figure.wave 10077B
-figure.wave.circle 10077C
-figure.wave.circle.fill 10077D
-figure.wrestling 10154C
-figure.wrestling.circle 102744
-figure.wrestling.circle.fill 102745
-figure.yoga 10148C
-figure.yoga.circle 102746
-figure.yoga.circle.fill 102747
-filemenu.and.pointer.arrow 100BEA
-filemenu.and.pointer.arrow.rtl 100C63
-filemenu.and.selection 100C62
-film 1003B6
-film.circle 100E0A
-film.circle.fill 100E0B
-film.fill 1003B7
-film.stack 101496
-film.stack.fill 101497
-finder 10096F
-fire.extinguisher 102988
-fire.extinguisher.fill 102989
-fireplace 101438
-fireplace.fill 101439
-firewall 10167E
-firewall.fill 10167F
-fireworks 10205E
-fish 101590
-fish.circle 1017B1
-fish.circle.fill 1017B2
-fish.fill 101591
-flag 1002C9
-flag.2.crossed 100DB6
-flag.2.crossed.circle 101705
-flag.2.crossed.circle.fill 101706
-flag.2.crossed.fill 100DB7
-flag.and.flag.filled.crossed 10105C
-flag.badge.ellipsis 100914
-flag.badge.ellipsis.fill 100915
-flag.circle 1002CB
-flag.circle.fill 1002CC
-flag.fill 1002CA
-flag.filled.and.flag.crossed 100DB8
-flag.pattern.checkered 10164C
-flag.pattern.checkered.2.crossed 101714
-flag.pattern.checkered.circle 10177C
-flag.pattern.checkered.circle.fill 10177D
-flag.pattern.checkered.lc 102F0A
-flag.slash 1002CD
-flag.slash.circle 1002CF
-flag.slash.circle.fill 1002D0
-flag.slash.fill 1002CE
-flag.square 100F33
-flag.square.fill 100F34
-flame 10066C
-flame.circle 1011D2
-flame.circle.fill 1011D3
-flame.fill 10066D
-flame.gauge.open 10309D
-flashlight.off.circle 1020F1
-flashlight.off.circle.fill 1020F2
-flashlight.off.fill 10074C
-flashlight.on.circle 1020F3
-flashlight.on.circle.fill 1020F4
-flashlight.on.fill 10078B
-flashlight.slash 1020F5
-flashlight.slash.circle 1020F6
-flashlight.slash.circle.fill 1020F7
-flask 101C0D
-flask.fill 101C0E
-fleuron 1014EF
-fleuron.fill 1014D4
-flipphone 100AB4
-florinsign 101444
-florinsign.arrow.trianglehead.counterclockwise.rotate.90 102217
-florinsign.building.classical 102505
-florinsign.building.classical.fill 102506
-florinsign.circle 1005A1
-florinsign.circle.fill 1005A2
-florinsign.gauge.chart.lefthalf.righthalf 102A49
-florinsign.gauge.chart.leftthird.topthird.rightthird 102A73
-florinsign.ring 102C19
-florinsign.ring.dashed 102BEF
-florinsign.square 1005E1
-florinsign.square.fill 1005E2
-flowchart 100415
-flowchart.fill 100416
-fluid.batteryblock 102962
-fluid.brakesignal 10128C
-fluid.coolant 102B94
-fluid.transmission 101834
-fn 10094C
-folder 100215
-folder.badge.gearshape 1008CD
-folder.badge.minus 10021B
-folder.badge.person.crop 10021D
-folder.badge.plus 100219
-folder.badge.questionmark 1009C6
-folder.badge.questionmark.ar 100B53
-folder.circle 100217
-folder.circle.fill 100218
-folder.fill 100216
-folder.fill.badge.gearshape 1008CE
-folder.fill.badge.minus 10021C
-folder.fill.badge.person.crop 10021E
-folder.fill.badge.plus 10021A
-folder.fill.badge.questionmark 1009C7
-folder.fill.badge.questionmark.ar 100B54
-fork.knife 100E29
-fork.knife.circle 100E39
-fork.knife.circle.fill 100E3A
-formfitting.gamecontroller 102788
-formfitting.gamecontroller.fill 102789
-forward 10028B
-forward.circle 100E85
-forward.circle.fill 100E86
-forward.end 10028F
-forward.end.alt 100293
-forward.end.alt.fill 100294
-forward.end.circle 1012F0
-forward.end.circle.fill 1012F1
-forward.end.fill 100290
-forward.fill 10028C
-forward.frame 100A6A
-forward.frame.fill 100A6B
-fossil.shell 101554
-fossil.shell.fill 101555
-francsign 101443
-francsign.arrow.trianglehead.counterclockwise.rotate.90 102216
-francsign.building.classical 102503
-francsign.building.classical.fill 102504
-francsign.circle 10059F
-francsign.circle.fill 1005A0
-francsign.gauge.chart.lefthalf.righthalf 102A4A
-francsign.gauge.chart.leftthird.topthird.rightthird 102A74
-francsign.ring 102C1A
-francsign.ring.dashed 102BF0
-francsign.square 1005DF
-francsign.square.fill 1005E0
-frying.pan 101405
-frying.pan.fill 101406
-fuel.filter.water 102F0B
-fuelpump 100D5E
-fuelpump.and.filter 10296B
-fuelpump.arrowtriangle.left 10123E
-fuelpump.arrowtriangle.left.fill 10123F
-fuelpump.arrowtriangle.right 10123C
-fuelpump.arrowtriangle.right.fill 10123D
-fuelpump.circle 100D60
-fuelpump.circle.fill 100D61
-fuelpump.exclamationmark 101966
-fuelpump.exclamationmark.fill 101967
-fuelpump.fill 100D5F
-fuelpump.slash 101C1A
-fuelpump.slash.fill 101C1B
-fuelpump.thermometer 103139
-fuelpump.thermometer.fill 10313A
-function 10016E
-function.ar 102FC7
-fx 10016C
-g.circle 100010
-g.circle.fill 100011
-g.square 1000A0
-g.square.fill 1000A1
-gamecontroller 1006F8
-gamecontroller.circle 102748
-gamecontroller.circle.fill 102749
-gamecontroller.fill 1006F9
-gauge.chart.lefthalf.righthalf 10328A
-gauge.chart.leftthird.topthird.rightthird 10328B
-gauge.open 103084
-gauge.open.righthalf.dotted.with.needle.and.arrow.trianglehead.backward 102F11
-gauge.open.with.lines.needle.33percent 101ACF
-gauge.open.with.lines.needle.33percent.and.arrow.trianglehead.from.0percent.to.50percent 101290
-gauge.open.with.lines.needle.33percent.and.arrowtriangle 101270
-gauge.open.with.lines.needle.67percent.and.arrowtriangle 101597
-gauge.open.with.lines.needle.67percent.and.arrowtriangle.and.car 10159C
-gauge.open.with.lines.needle.84percent.exclamation 101598
-gauge.with.dots.needle.0percent 101419
-gauge.with.dots.needle.100percent 10141B
-gauge.with.dots.needle.33percent 101C09
-gauge.with.dots.needle.50percent 10141A
-gauge.with.dots.needle.67percent 10037E
-gauge.with.dots.needle.bottom.0percent 101417
-gauge.with.dots.needle.bottom.100percent 101418
-gauge.with.dots.needle.bottom.50percent 10037D
-gauge.with.dots.needle.bottom.50percent.badge.minus 1004E7
-gauge.with.dots.needle.bottom.50percent.badge.plus 1004D3
-gauge.with.needle 1015AB
-gauge.with.needle.fill 1015AC
-gear 10035F
-gear.badge 1014F9
-gear.badge.checkmark 101166
-gear.badge.questionmark 101168
-gear.badge.rtl 101749
-gear.badge.xmark 101167
-gear.circle 100EBA
-gear.circle.fill 100EBB
-gearshape 1008CB
-gearshape.2 10094E
-gearshape.2.fill 10094F
-gearshape.arrow.trianglehead.2.clockwise.rotate.90 101402
-gearshape.circle 100EBC
-gearshape.circle.fill 100EBD
-gearshape.fill 1008CC
-gearshift.layout.sixspeed 101E1D
-gift 100449
-gift.circle 1004C0
-gift.circle.fill 1004C1
-gift.fill 10044A
-giftcard 1009A0
-giftcard.fill 1009A1
-globe 1001AA
-globe.americas 100D71
-globe.americas.fill 100D72
-globe.and.person 103702
-globe.asia.australia 100D75
-globe.asia.australia.fill 100D76
-globe.badge.chevron.backward 10114D
-globe.badge.clock 10347A
-globe.badge.clock.fill 103507
-globe.central.south.asia 1011F2
-globe.central.south.asia.fill 1011F3
-globe.desk 101516
-globe.desk.fill 101553
-globe.europe.africa 100D73
-globe.europe.africa.fill 100D74
-globe.fill 103054
-glowplug 101031
-graduationcap 100AD3
-graduationcap.circle 1011BE
-graduationcap.circle.fill 1011BF
-graduationcap.fill 100AD4
-graph.2d 10321F
-graph.3d 103220
-greaterthan 100182
-greaterthan.circle 100056
-greaterthan.circle.fill 100057
-greaterthan.square 1000E8
-greaterthan.square.fill 1000E9
-greaterthanorequalto 102AB1
-greaterthanorequalto.circle 102ACB
-greaterthanorequalto.circle.fill 102ACC
-greaterthanorequalto.square 102ACD
-greaterthanorequalto.square.fill 102ACE
-greetingcard 100920
-greetingcard.fill 100921
-grid 1004D7
-grid.circle 1004D8
-grid.circle.fill 10061F
-guaranisign 101453
-guaranisign.arrow.trianglehead.counterclockwise.rotate.90 102226
-guaranisign.building.classical 102523
-guaranisign.building.classical.fill 102524
-guaranisign.circle 1005BF
-guaranisign.circle.fill 1005C0
-guaranisign.gauge.chart.lefthalf.righthalf 102A4B
-guaranisign.gauge.chart.leftthird.topthird.rightthird 102A75
-guaranisign.ring 102C1B
-guaranisign.ring.dashed 102BF1
-guaranisign.square 1005FF
-guaranisign.square.fill 100600
-guidepoint.horizontal 103409
-guidepoint.vertical 103575
-guidepoint.vertical.arrowtriangle.forward 1030B2
-guidepoint.vertical.numbers 1030B3
-guitars 10046D
-guitars.fill 1007D1
-gyroscope 100B17
-h.circle 100012
-h.circle.fill 100013
-h.square 1000A2
-h.square.fill 1000A3
-h.square.on.square 100B5C
-h.square.on.square.fill 100B5D
-hammer 100644
-hammer.circle 100DD4
-hammer.circle.fill 100DD5
-hammer.fill 100645
-hammer.slash 103718
-hammer.slash.fill 103719
-hand.draw 100593
-hand.draw.badge.ellipsis 102696
-hand.draw.badge.ellipsis.fill 102697
-hand.draw.fill 100594
-hand.palm.facing 102903
-hand.palm.facing.fill 102904
-hand.pinch 1017F1
-hand.pinch.fill 1017F2
-hand.point.down 10093B
-hand.point.down.fill 10093C
-hand.point.left 10067D
-hand.point.left.fill 10067E
-hand.point.right 10067F
-hand.point.right.fill 100680
-hand.point.up 100939
-hand.point.up.braille 100982
-hand.point.up.braille.badge.ellipsis 102806
-hand.point.up.braille.badge.ellipsis.fill 102807
-hand.point.up.braille.fill 100983
-hand.point.up.fill 10093A
-hand.point.up.left 100770
-hand.point.up.left.and.text 101F80
-hand.point.up.left.and.text.fill 101F81
-hand.point.up.left.fill 100771
-hand.raised 10027B
-hand.raised.app 10174C
-hand.raised.app.fill 10174D
-hand.raised.brakesignal 1017C2
-hand.raised.brakesignal.slash 1017C3
-hand.raised.circle 100DCA
-hand.raised.circle.fill 100DCB
-hand.raised.fill 10027C
-hand.raised.fingers.spread 1015E9
-hand.raised.fingers.spread.fill 1015EA
-hand.raised.palm.facing 102901
-hand.raised.palm.facing.fill 102902
-hand.raised.slash 10027D
-hand.raised.slash.fill 10027E
-hand.raised.square 100F53
-hand.raised.square.fill 100F54
-hand.raised.square.on.square 100D28
-hand.raised.square.on.square.fill 100D29
-hand.rays 102CA4
-hand.rays.fill 102CA5
-hand.tap 100B01
-hand.tap.fill 100B02
-hand.thumbsdown 100281
-hand.thumbsdown.circle 100DDF
-hand.thumbsdown.circle.fill 100DE0
-hand.thumbsdown.fill 100282
-hand.thumbsdown.filled.hand.thumbsup 103486
-hand.thumbsdown.hand.thumbsup 103484
-hand.thumbsdown.hand.thumbsup.fill 103485
-hand.thumbsdown.hand.thumbsup.filled 103487
-hand.thumbsdown.slash 102DA9
-hand.thumbsdown.slash.fill 102DAA
-hand.thumbsup 10027F
-hand.thumbsup.circle 100DDD
-hand.thumbsup.circle.fill 100DDE
-hand.thumbsup.fill 100280
-hand.thumbsup.slash 102DA5
-hand.thumbsup.slash.fill 102DA6
-hand.wave 1007F0
-hand.wave.fill 1007F1
-handbag 1017B8
-handbag.circle 101FDC
-handbag.circle.fill 101FDD
-handbag.fill 1017B9
-handbag.sensor.tag.radiowaves.left.and.right 10303D
-handbag.sensor.tag.radiowaves.left.and.right.fill 10303E
-hands.and.sparkles 100CAE
-hands.and.sparkles.fill 100CAF
-hands.clap 1007EE
-hands.clap.fill 1007EF
-hanger 100816
-hare 1004CE
-hare.circle 102038
-hare.circle.fill 102039
-hare.fill 1004CF
-hat.cap 1023E8
-hat.cap.fill 1023E9
-hat.widebrim 1023E6
-hat.widebrim.fill 1023E7
-hazardsign 101030
-hazardsign.fill 101563
-head.profile.vision.pro.remove 1017F9
-headlight.daytime 100FBA
-headlight.daytime.fill 100FBB
-headlight.fog 100FB6
-headlight.fog.fill 100FB7
-headlight.high.beam 100FB2
-headlight.high.beam.fill 100FB3
-headlight.low.beam 100FB4
-headlight.low.beam.fill 100FB5
-headphones 100448
-headphones.circle 1004BE
-headphones.circle.fill 1004BF
-headphones.dots 102E14
-headphones.over.ear 103345
-headphones.sensor.tag.radiowaves.left.and.right 10303F
-headphones.sensor.tag.radiowaves.left.and.right.fill 103040
-headphones.slash 102B02
-headset 1028F5
-headset.circle 1028F6
-headset.circle.fill 1028F7
-hearingdevice.and.signal.meter 10138F
-hearingdevice.and.signal.meter.fill 101390
-hearingdevice.ear 100A93
-hearingdevice.ear.fill 101257
-heart 1002B4
-heart.badge.bolt 1034EB
-heart.badge.bolt.fill 1034EC
-heart.badge.bolt.slash 1034EF
-heart.badge.bolt.slash.fill 1034F0
-heart.circle 1002B8
-heart.circle.fill 1002B9
-heart.fill 1002B5
-heart.gauge.open 1030A1
-heart.rectangle 1010EA
-heart.rectangle.fill 1010EB
-heart.slash 1002B6
-heart.slash.circle 1002BA
-heart.slash.circle.fill 1002BB
-heart.slash.fill 1002B7
-heart.square 100F31
-heart.square.fill 100F32
-heart.text.clipboard 102907
-heart.text.clipboard.fill 102908
-heart.text.square 100974
-heart.text.square.fill 100975
-heat.element.windshield 1017C9
-heat.waves 101C39
-heat.waves.and.fan 102B24
-heat.waves.circle 1030A4
-heat.waves.circle.fill 1030A5
-heat.waves.gauge.open 10309F
-heater.vertical 1014E9
-heater.vertical.fill 1014EA
-helm 10042A
-helmet 10278C
-helmet.fill 10278D
-hexagon 10075D
-hexagon.bottomhalf.filled 10103F
-hexagon.fill 10075E
-hexagon.lefthalf.filled 101009
-hexagon.righthalf.filled 10100A
-hexagon.tophalf.filled 10103E
-hifireceiver 1014AC
-hifireceiver.fill 1014AD
-hifispeaker 10074E
-hifispeaker.2 1007F5
-hifispeaker.2.badge.checkmark 103697
-hifispeaker.2.badge.checkmark.fill 103698
-hifispeaker.2.badge.checkmark.fill.rtl 10369C
-hifispeaker.2.badge.checkmark.rtl 10369B
-hifispeaker.2.badge.exclamationmark 10369F
-hifispeaker.2.badge.exclamationmark.fill 1036A0
-hifispeaker.2.badge.minus 102854
-hifispeaker.2.badge.minus.fill 102855
-hifispeaker.2.badge.plus 102852
-hifispeaker.2.badge.plus.fill 102853
-hifispeaker.2.fill 1007F6
-hifispeaker.and.appletv 100EFB
-hifispeaker.and.appletv.fill 100EFC
-hifispeaker.and.appletv.fill.rtl 101617
-hifispeaker.and.appletv.rtl 101616
-hifispeaker.and.homepod 100B8E
-hifispeaker.and.homepod.badge.checkmark 10367F
-hifispeaker.and.homepod.badge.checkmark.fill 103680
-hifispeaker.and.homepod.badge.checkmark.fill.rtl 103684
-hifispeaker.and.homepod.badge.checkmark.rtl 103683
-hifispeaker.and.homepod.badge.exclamationmark 103687
-hifispeaker.and.homepod.badge.exclamationmark.fill 103688
-hifispeaker.and.homepod.badge.minus 10284C
-hifispeaker.and.homepod.badge.minus.fill 10284D
-hifispeaker.and.homepod.badge.plus 10284A
-hifispeaker.and.homepod.badge.plus.fill 10284B
-hifispeaker.and.homepod.fill 1007F4
-hifispeaker.and.homepod.mini 100DED
-hifispeaker.and.homepod.mini.badge.checkmark 103673
-hifispeaker.and.homepod.mini.badge.checkmark.fill 103674
-hifispeaker.and.homepod.mini.badge.checkmark.fill.rtl 103678
-hifispeaker.and.homepod.mini.badge.checkmark.rtl 103677
-hifispeaker.and.homepod.mini.badge.exclamationmark 10367B
-hifispeaker.and.homepod.mini.badge.exclamationmark.fill 10367C
-hifispeaker.and.homepod.mini.badge.minus 10282F
-hifispeaker.and.homepod.mini.badge.minus.fill 102830
-hifispeaker.and.homepod.mini.badge.plus 10282D
-hifispeaker.and.homepod.mini.badge.plus.fill 10282E
-hifispeaker.and.homepod.mini.fill 100DEE
-hifispeaker.arrow.forward 102878
-hifispeaker.arrow.forward.fill 102879
-hifispeaker.badge.checkmark 10368B
-hifispeaker.badge.checkmark.fill 10368C
-hifispeaker.badge.checkmark.fill.rtl 103690
-hifispeaker.badge.checkmark.rtl 10368F
-hifispeaker.badge.exclamationmark 103693
-hifispeaker.badge.exclamationmark.fill 103694
-hifispeaker.badge.minus 10285C
-hifispeaker.badge.minus.fill 10285D
-hifispeaker.badge.plus 10285A
-hifispeaker.badge.plus.fill 10285B
-hifispeaker.fill 10074F
-highlighter 100987
-highlighter.badge.ellipsis 10349A
-hockey.puck 1016FD
-hockey.puck.circle 1016FF
-hockey.puck.circle.fill 101700
-hockey.puck.fill 1016FE
-hold.brakesignal 1012CC
-homepod 1007E2
-homepod.2 100B8D
-homepod.2.badge.checkmark 10364B
-homepod.2.badge.checkmark.fill 10364C
-homepod.2.badge.checkmark.fill.rtl 103650
-homepod.2.badge.checkmark.rtl 10364F
-homepod.2.badge.exclamationmark 103653
-homepod.2.badge.exclamationmark.fill 103654
-homepod.2.badge.minus 102840
-homepod.2.badge.minus.fill 102841
-homepod.2.badge.plus 10283E
-homepod.2.badge.plus.fill 10283F
-homepod.2.fill 1007F3
-homepod.and.appletv 100E8C
-homepod.and.appletv.fill 100E8D
-homepod.and.appletv.fill.rtl 101613
-homepod.and.appletv.rtl 101612
-homepod.and.homepod.mini 100DEB
-homepod.and.homepod.mini.badge.checkmark 103667
-homepod.and.homepod.mini.badge.checkmark.fill 103668
-homepod.and.homepod.mini.badge.checkmark.fill.rtl 10366C
-homepod.and.homepod.mini.badge.checkmark.rtl 10366B
-homepod.and.homepod.mini.badge.exclamationmark 10366F
-homepod.and.homepod.mini.badge.exclamationmark.fill 103670
-homepod.and.homepod.mini.badge.minus 102827
-homepod.and.homepod.mini.badge.minus.fill 102828
-homepod.and.homepod.mini.badge.plus 102825
-homepod.and.homepod.mini.badge.plus.fill 102826
-homepod.and.homepod.mini.fill 100DEC
-homepod.arrow.forward 1022DE
-homepod.arrow.forward.fill 1022DF
-homepod.badge.checkmark 103270
-homepod.badge.checkmark.fill 103271
-homepod.badge.checkmark.fill.rtl 103275
-homepod.badge.checkmark.rtl 103274
-homepod.badge.exclamationmark 103647
-homepod.badge.exclamationmark.fill 103648
-homepod.badge.minus 1022E5
-homepod.badge.minus.fill 1022E6
-homepod.badge.plus 1022E1
-homepod.badge.plus.fill 1022E2
-homepod.fill 1007E3
-homepod.mini 100DE7
-homepod.mini.2 100DE9
-homepod.mini.2.badge.checkmark 10365B
-homepod.mini.2.badge.checkmark.fill 10365C
-homepod.mini.2.badge.checkmark.fill.rtl 103660
-homepod.mini.2.badge.checkmark.rtl 10365F
-homepod.mini.2.badge.exclamationmark 103663
-homepod.mini.2.badge.exclamationmark.fill 103664
-homepod.mini.2.badge.minus 10281F
-homepod.mini.2.badge.minus.fill 102820
-homepod.mini.2.badge.plus 10281D
-homepod.mini.2.badge.plus.fill 10281E
-homepod.mini.2.fill 100DEA
-homepod.mini.and.appletv 100EF9
-homepod.mini.and.appletv.fill 100EFA
-homepod.mini.and.appletv.fill.rtl 101615
-homepod.mini.and.appletv.rtl 101614
-homepod.mini.arrow.forward 1022DB
-homepod.mini.arrow.forward.fill 1022DC
-homepod.mini.badge.checkmark 103278
-homepod.mini.badge.checkmark.fill 103279
-homepod.mini.badge.checkmark.fill.rtl 10327B
-homepod.mini.badge.checkmark.rtl 10327A
-homepod.mini.badge.exclamationmark 103657
-homepod.mini.badge.exclamationmark.fill 103658
-homepod.mini.badge.minus 1022D7
-homepod.mini.badge.minus.fill 1022D8
-homepod.mini.badge.plus 1022D3
-homepod.mini.badge.plus.fill 1022D4
-homepod.mini.fill 100DE8
-horn 101135
-horn.blast 101137
-horn.blast.fill 101138
-horn.fill 101136
-hourglass 100587
-hourglass.badge.eye 102736
-hourglass.badge.lock 1021D7
-hourglass.badge.plus 1008EC
-hourglass.bottomhalf.filled 100588
-hourglass.circle 1011DB
-hourglass.circle.fill 1011DC
-hourglass.tophalf.filled 100589
-house 10039E
-house.and.flag 101631
-house.and.flag.circle 101788
-house.and.flag.circle.fill 101789
-house.and.flag.fill 101632
-house.badge.exclamationmark 1029C4
-house.badge.exclamationmark.fill 1029C5
-house.badge.wifi 10261E
-house.badge.wifi.fill 10261F
-house.circle 100946
-house.circle.fill 100947
-house.fill 10039F
-house.lodge 10162D
-house.lodge.circle 101786
-house.lodge.circle.fill 101787
-house.lodge.fill 10162E
-house.slash 1028CA
-house.slash.fill 1028CB
-hryvniasign 101451
-hryvniasign.arrow.trianglehead.counterclockwise.rotate.90 102224
-hryvniasign.building.classical 10251F
-hryvniasign.building.classical.fill 102520
-hryvniasign.circle 1005BB
-hryvniasign.circle.fill 1005BC
-hryvniasign.gauge.chart.lefthalf.righthalf 102A4C
-hryvniasign.gauge.chart.leftthird.topthird.rightthird 102A76
-hryvniasign.ring 102C1C
-hryvniasign.ring.dashed 102BF2
-hryvniasign.square 1005FB
-hryvniasign.square.fill 1005FC
-humidifier 101618
-humidifier.and.droplets 101506
-humidifier.and.droplets.fill 101507
-humidifier.and.ellipsis 1034A6
-humidifier.and.ellipsis.fill 1034A7
-humidifier.fill 101619
-humidity 1010DA
-humidity.fill 1010DB
-hurricane 1001E9
-hurricane.circle 1016F7
-hurricane.circle.fill 1016F8
-hydrogen 102F05
-hydrogen.circle 102F06
-hydrogen.circle.fill 102F07
-hydrogen.square 102F08
-hydrogen.square.fill 102F09
-i.circle 100014
-i.circle.fill 100015
-i.square 1000A4
-i.square.fill 1000A5
-icloud 10030B
-icloud.and.arrow.down 100315
-icloud.and.arrow.down.fill 100316
-icloud.and.arrow.up 100317
-icloud.and.arrow.up.fill 100318
-icloud.circle 10030D
-icloud.circle.fill 10030E
-icloud.dashed 10068F
-icloud.fill 10030C
-icloud.slash 10030F
-icloud.slash.fill 100310
-icloud.square 100F51
-icloud.square.fill 100F52
-increase.indent 1002F5
-increase.quotelevel 100780
-indianrupeesign 101449
-indianrupeesign.arrow.trianglehead.counterclockwise.rotate.90 10221C
-indianrupeesign.building.classical 10250F
-indianrupeesign.building.classical.fill 102510
-indianrupeesign.circle 1005AB
-indianrupeesign.circle.fill 1005AC
-indianrupeesign.gauge.chart.lefthalf.righthalf 102A4D
-indianrupeesign.gauge.chart.leftthird.topthird.rightthird 102A77
-indianrupeesign.ring 102C1D
-indianrupeesign.ring.dashed 102BF3
-indianrupeesign.square 1005EB
-indianrupeesign.square.fill 1005EC
-infinity 100BE0
-infinity.circle 100D4F
-infinity.circle.fill 100D50
-info 100173
-info.app 103762
-info.app.fill 10376A
-info.bubble 101334
-info.bubble.fill 101335
-info.bubble.fill.rtl 102009
-info.bubble.rtl 102008
-info.circle 100174
-info.circle.fill 100175
-info.circle.text.page 102E5A
-info.circle.text.page.fill 102E5B
-info.circle.text.page.fill.rtl 102E5D
-info.circle.text.page.rtl 102E5C
-info.square 101287
-info.square.fill 101288
-info.triangle 102E69
-info.triangle.fill 102E6A
-info.windshield 1017CA
-inhaler 10279C
-inhaler.fill 10279D
-inset.filled.applewatch.case 100D2A
-inset.filled.bottomhalf.rectangle 100FAF
-inset.filled.bottomhalf.rectangle.portrait 100F7A
-inset.filled.bottomhalf.tophalf.rectangle 102BA1
-inset.filled.bottomleading.bottomtrailing.rectangle 103438
-inset.filled.bottomleading.rectangle 10106B
-inset.filled.bottomleading.rectangle.portrait 101073
-inset.filled.bottomleft.bottomright.rectangle 103437
-inset.filled.bottomleft.rectangle 100B75
-inset.filled.bottomleft.rectangle.portrait 100F83
-inset.filled.bottomright.rectangle 100B76
-inset.filled.bottomright.rectangle.portrait 100F82
-inset.filled.bottomthird.rectangle 100A28
-inset.filled.bottomthird.rectangle.portrait 100F7E
-inset.filled.bottomthird.square 1014A1
-inset.filled.bottomtrailing.rectangle 10106C
-inset.filled.bottomtrailing.rectangle.portrait 101074
-inset.filled.bubble 10379D
-inset.filled.capsule 100F9A
-inset.filled.capsule.portrait 100F9B
-inset.filled.center.rectangle 10095D
-inset.filled.center.rectangle.badge.plus 101214
-inset.filled.center.rectangle.portrait 100F7F
-inset.filled.circle 10075C
-inset.filled.circle.dashed 1009D2
-inset.filled.circle.slash 103425
-inset.filled.diamond 100F97
-inset.filled.leadinghalf.arrow.leading.rectangle 101065
-inset.filled.leadinghalf.arrowtriangle.backward.rectangle 103766
-inset.filled.leadinghalf.rectangle 101063
-inset.filled.leadinghalf.rectangle.portrait 10106D
-inset.filled.leadinghalf.toptrailing.bottomtrailing.rectangle 102A1C
-inset.filled.leadinghalf.trailinghalf.rectangle 102B13
-inset.filled.leadingthird.rectangle 101067
-inset.filled.leadingthird.rectangle.badge.xmark 10370A
-inset.filled.leadingthird.rectangle.portrait 10106F
-inset.filled.leadingthird.square 1014A4
-inset.filled.lefthalf.arrow.left.rectangle 10095E
-inset.filled.lefthalf.arrowtriangle.left.rectangle 103764
-inset.filled.lefthalf.rectangle 100934
-inset.filled.lefthalf.rectangle.portrait 100F84
-inset.filled.lefthalf.righthalf.rectangle 1029EC
-inset.filled.lefthalf.topright.bottomright.rectangle 1029EE
-inset.filled.leftthird.middlethird.rightthird.rectangle 1031D0
-inset.filled.leftthird.rectangle 100A31
-inset.filled.leftthird.rectangle.badge.xmark 1036F4
-inset.filled.leftthird.rectangle.portrait 100F7C
-inset.filled.leftthird.square 1014A2
-inset.filled.oval 100F9C
-inset.filled.oval.portrait 100F9D
-inset.filled.pano 1025A1
-inset.filled.rectangle 100933
-inset.filled.rectangle.and.person 101140
-inset.filled.rectangle.and.person.filled.circle 102E06
-inset.filled.rectangle.and.person.filled.circle.fill 102E07
-inset.filled.rectangle.and.person.slash 10359E
-inset.filled.rectangle.and.person.slash.rtl 1035A0
-inset.filled.rectangle.and.pointer.arrow 1021D5
-inset.filled.rectangle.badge.record 1020D5
-inset.filled.rectangle.on.rectangle 100DA3
-inset.filled.rectangle.portrait 100F78
-inset.filled.righthalf.arrow.right.rectangle 10095F
-inset.filled.righthalf.arrowtriangle.right.rectangle 103765
-inset.filled.righthalf.lefthalf.rectangle 102B11
-inset.filled.righthalf.rectangle 100935
-inset.filled.righthalf.rectangle.portrait 100F85
-inset.filled.rightthird.rectangle 100A29
-inset.filled.rightthird.rectangle.badge.xmark 1036F2
-inset.filled.rightthird.rectangle.portrait 100F7B
-inset.filled.rightthird.square 1014A3
-inset.filled.square 100F98
-inset.filled.square.dashed 1009D1
-inset.filled.square.dashed.micro 1036B4
-inset.filled.tophalf.bottomhalf.rectangle 1029ED
-inset.filled.tophalf.bottomleft.bottomright.rectangle 1029EF
-inset.filled.tophalf.rectangle 100FAE
-inset.filled.tophalf.rectangle.portrait 100F79
-inset.filled.topleading.bottomleading.trailinghalf.rectangle 102B10
-inset.filled.topleading.rectangle 101069
-inset.filled.topleading.rectangle.portrait 101071
-inset.filled.topleft.bottomleft.righthalf.rectangle 102B0F
-inset.filled.topleft.rectangle 100B73
-inset.filled.topleft.rectangle.portrait 100F80
-inset.filled.topleft.topright.bottomhalf.rectangle 102B17
-inset.filled.topleft.topright.bottomleft.bottomright.rectangle 1029F0
-inset.filled.topright.rectangle 100B74
-inset.filled.topright.rectangle.portrait 100F81
-inset.filled.topthird.middlethird.bottomthird.rectangle 103203
-inset.filled.topthird.rectangle 100D0A
-inset.filled.topthird.rectangle.portrait 100F7D
-inset.filled.topthird.square 1014A0
-inset.filled.toptrailing.rectangle 10106A
-inset.filled.toptrailing.rectangle.portrait 101072
-inset.filled.trailinghalf.arrow.trailing.rectangle 101066
-inset.filled.trailinghalf.arrowtriangle.forward.rectangle 103767
-inset.filled.trailinghalf.leadinghalf.rectangle 102B12
-inset.filled.trailinghalf.rectangle 101064
-inset.filled.trailinghalf.rectangle.portrait 10106E
-inset.filled.trailingthird.rectangle 101068
-inset.filled.trailingthird.rectangle.badge.xmark 10370C
-inset.filled.trailingthird.rectangle.portrait 101070
-inset.filled.trailingthird.square 1014A5
-inset.filled.triangle 100F99
-inset.filled.tv 100DD8
-inset.left.half.filled.square.dashed.micro 1036B2
-inset.left.half.square.dashed.micro 1036B1
-inset.square.dashed.micro 1036B3
-interface.window 1003DC
-interface.window.and.pointer.arrow 101778
-interface.window.and.pointer.arrow.rtl 1017ED
-interface.window.badge.plus 100943
-interface.window.dashed 1036D2
-interface.window.on.rectangle 10088C
-interface.window.on.rectangle.dashed 1036D3
-interface.window.on.rectangle.dashed.rtl 1036D6
-interface.window.on.rectangle.rtl 1009D4
-interface.window.stack 103477
-internaldrive 10097E
-internaldrive.fill 100A2A
-ipad 1007E0
-ipad.and.arrow.forward 100DC0
-ipad.badge.checkmark 103256
-ipad.badge.exclamationmark 102559
-ipad.badge.location 10277A
-ipad.badge.play 100D13
-ipad.case 101929
-ipad.case.and.iphone.case 10192A
-ipad.gen1 1007DF
-ipad.gen1.badge.exclamationmark 102551
-ipad.gen1.badge.location 102772
-ipad.gen1.badge.play 100D12
-ipad.gen1.crop.homebutton.circle 1033DF
-ipad.gen1.landscape 100953
-ipad.gen1.landscape.badge.exclamationmark 102553
-ipad.gen1.landscape.badge.location 102774
-ipad.gen1.landscape.badge.play 100D51
-ipad.gen1.landscape.slash 102C96
-ipad.gen1.sizes 1018F5
-ipad.gen1.slash 102C94
-ipad.gen2 1017E7
-ipad.gen2.badge.exclamationmark 102555
-ipad.gen2.badge.location 102776
-ipad.gen2.badge.play 1017E8
-ipad.gen2.landscape 1017E9
-ipad.gen2.landscape.badge.exclamationmark 102557
-ipad.gen2.landscape.badge.location 102778
-ipad.gen2.landscape.badge.play 1017EA
-ipad.gen2.landscape.slash 102C9A
-ipad.gen2.sizes 10324C
-ipad.gen2.slash 102C98
-ipad.landscape 100954
-ipad.landscape.and.applewatch 10350B
-ipad.landscape.and.iphone 10111F
-ipad.landscape.and.iphone.slash 1012DF
-ipad.landscape.and.ipod 10350D
-ipad.landscape.badge.exclamationmark 10255B
-ipad.landscape.badge.location 10277C
-ipad.landscape.badge.play 100D52
-ipad.rear.camera 101032
-ipad.sizes 1018F6
-iphone 1007DC
-iphone.and.arrow.forward.inward 100DBC
-iphone.and.arrow.forward.outward 1023BD
-iphone.and.arrow.left.and.arrow.right.inward 101C3F
-iphone.and.arrow.right.inward 1023F9
-iphone.and.arrow.right.outward 1023FB
-iphone.and.ipod 10350F
-iphone.and.vision.pro 103515
-iphone.app.switcher 102939
-iphone.badge.checkmark 103254
-iphone.badge.exclamationmark 10254F
-iphone.badge.location 102738
-iphone.badge.play 100D11
-iphone.case 101928
-iphone.circle 101129
-iphone.circle.fill 10112A
-iphone.crop.circle 102654
-iphone.dock.motorized.viewfinder 102209
-iphone.gen1 1007DD
-iphone.gen1.and.arrow.left 102628
-iphone.gen1.badge.exclamationmark 1024FB
-iphone.gen1.badge.location 102770
-iphone.gen1.badge.play 100436
-iphone.gen1.circle 101125
-iphone.gen1.circle.fill 101126
-iphone.gen1.crop.circle 102651
-iphone.gen1.crop.homebutton.circle 1030B4
-iphone.gen1.landscape 100D0E
-iphone.gen1.landscape.slash 102C92
-iphone.gen1.motion 102622
-iphone.gen1.radiowaves.left.and.right 100846
-iphone.gen1.radiowaves.left.and.right.circle 10115A
-iphone.gen1.radiowaves.left.and.right.circle.fill 10115B
-iphone.gen1.sizes 103248
-iphone.gen1.slash 100A34
-iphone.gen1.slash.circle 101127
-iphone.gen1.slash.circle.fill 101128
-iphone.gen2 1017DC
-iphone.gen2.and.arrow.left.and.arrow.right.inward 102629
-iphone.gen2.badge.exclamationmark 10254B
-iphone.gen2.badge.location 10276E
-iphone.gen2.badge.play 1017E6
-iphone.gen2.circle 1017DD
-iphone.gen2.circle.fill 1017DE
-iphone.gen2.crop.circle 102652
-iphone.gen2.landscape 1017DF
-iphone.gen2.landscape.slash 102C8E
-iphone.gen2.motion 102624
-iphone.gen2.radiowaves.left.and.right 1017E0
-iphone.gen2.radiowaves.left.and.right.circle 1017E1
-iphone.gen2.radiowaves.left.and.right.circle.fill 1017E2
-iphone.gen2.sizes 1018F3
-iphone.gen2.slash 1017E3
-iphone.gen2.slash.circle 1017E4
-iphone.gen2.slash.circle.fill 1017E5
-iphone.gen3 1012AE
-iphone.gen3.and.arrow.left.and.arrow.right.inward 10262A
-iphone.gen3.badge.exclamationmark 10254D
-iphone.gen3.badge.location 10276C
-iphone.gen3.badge.play 1012B8
-iphone.gen3.circle 1012AF
-iphone.gen3.circle.fill 1012B0
-iphone.gen3.crop.circle 102653
-iphone.gen3.landscape 1012B1
-iphone.gen3.landscape.slash 102C90
-iphone.gen3.motion 102626
-iphone.gen3.radiowaves.left.and.right 1012B2
-iphone.gen3.radiowaves.left.and.right.circle 1012B3
-iphone.gen3.radiowaves.left.and.right.circle.fill 1012B4
-iphone.gen3.sizes 10324A
-iphone.gen3.slash 1012B5
-iphone.gen3.slash.circle 1012B6
-iphone.gen3.slash.circle.fill 1012B7
-iphone.landscape 100D0F
-iphone.motion 102612
-iphone.pattern.diagonalline 102928
-iphone.pattern.diagonalline.on.rectangle.portrait.dashed 102FE5
-iphone.radiowaves.left.and.right 100847
-iphone.radiowaves.left.and.right.circle 10115C
-iphone.radiowaves.left.and.right.circle.fill 10115D
-iphone.rear.camera 100F96
-iphone.sizes 1018F4
-iphone.slash 100A35
-iphone.slash.circle 10112B
-iphone.slash.circle.fill 10112C
-iphone.smartbatterycase.gen1 100E90
-iphone.smartbatterycase.gen2 100E8F
-ipod 1008BA
-ipod.and.applewatch 103513
-ipod.and.vision.pro 103517
-ipod.shuffle.gen1 100AE8
-ipod.shuffle.gen2 100AE9
-ipod.shuffle.gen3 100AEA
-ipod.shuffle.gen4 100AEB
-ipod.touch 100AE7
-ipod.touch.landscape 100D10
-ipod.touch.slash 1010B2
-italic 100154
-ivfluid.bag 100F0D
-ivfluid.bag.fill 100F0E
-j.circle 100016
-j.circle.fill 100017
-j.square 1000A6
-j.square.fill 1000A7
-j.square.on.square 100B5A
-j.square.on.square.fill 100B5B
-jacket 1023EC
-jacket.circle 103049
-jacket.circle.fill 10304A
-jacket.fill 1023ED
-jacket.sensor.tag.radiowaves.left.and.right 103041
-jacket.sensor.tag.radiowaves.left.and.right.fill 103042
-k 10094B
-k.circle 100018
-k.circle.fill 100019
-k.square 1000A8
-k.square.fill 1000A9
-kashida.arabic 1020DC
-key 1007D5
-key.2.on.ring 1023EA
-key.2.on.ring.fill 1023EB
-key.car.radiowaves.forward 102B32
-key.car.radiowaves.forward.fill 102B33
-key.car.radiowaves.forward.fill.rtl 102B35
-key.car.radiowaves.forward.rtl 102B34
-key.car.side 102EF6
-key.car.side.fill 102EF7
-key.card 102B20
-key.card.fill 102B21
-key.circle 103047
-key.circle.fill 103048
-key.convertible.side 102EFA
-key.convertible.side.fill 102EFB
-key.fill 1007D6
-key.horizontal 101831
-key.horizontal.fill 101832
-key.icloud 100895
-key.icloud.fill 100896
-key.radiowaves.forward 10182F
-key.radiowaves.forward.fill 101830
-key.radiowaves.forward.slash 1021EE
-key.radiowaves.forward.slash.fill 1021F0
-key.sensor.tag.radiowaves.left.and.right 103033
-key.sensor.tag.radiowaves.left.and.right.fill 103034
-key.shield 1031DE
-key.shield.fill 1031DF
-key.slash 102166
-key.slash.fill 102167
-key.suv.side 102EF8
-key.suv.side.fill 102EF9
-key.truck.pickup.side 102EFC
-key.truck.pickup.side.fill 102EFD
-key.viewfinder 101395
-keyboard 1001F3
-keyboard.badge.ellipsis 100AD2
-keyboard.badge.ellipsis.fill 10168F
-keyboard.badge.eye 101515
-keyboard.badge.eye.fill 101690
-keyboard.chevron.compact.down 1004D6
-keyboard.chevron.compact.down.fill 101691
-keyboard.chevron.compact.left 1008ED
-keyboard.chevron.compact.left.fill 101692
-keyboard.fill 100E91
-keyboard.interface.window 10092F
-keyboard.onehanded.left 1007B9
-keyboard.onehanded.left.fill 101693
-keyboard.onehanded.right 1007BA
-keyboard.onehanded.right.fill 101694
-kipsign 10144D
-kipsign.arrow.trianglehead.counterclockwise.rotate.90 102220
-kipsign.building.classical 102517
-kipsign.building.classical.fill 102518
-kipsign.circle 1005B3
-kipsign.circle.fill 1005B4
-kipsign.gauge.chart.lefthalf.righthalf 102A4E
-kipsign.gauge.chart.leftthird.topthird.rightthird 102A78
-kipsign.ring 102C1E
-kipsign.ring.dashed 102BF4
-kipsign.square 1005F3
-kipsign.square.fill 1005F4
-kph 1018BD
-kph.circle 1018BE
-kph.circle.fill 1018BF
-l.button.roundedbottom.horizontal 100A07
-l.button.roundedbottom.horizontal.fill 100A08
-l.circle 10001A
-l.circle.fill 10001B
-l.joystick 100992
-l.joystick.fill 100AC1
-l.joystick.press.down 100994
-l.joystick.press.down.fill 100AC3
-l.joystick.tilt.down 100FDC
-l.joystick.tilt.down.fill 100FDD
-l.joystick.tilt.left 100FD6
-l.joystick.tilt.left.fill 100FD7
-l.joystick.tilt.right 100FD8
-l.joystick.tilt.right.fill 100FD9
-l.joystick.tilt.up 100FDA
-l.joystick.tilt.up.fill 100FDB
-l.square 1000AA
-l.square.fill 1000AB
-l1.button.roundedbottom.horizontal 100A09
-l1.button.roundedbottom.horizontal.fill 100A0A
-l1.circle 101E81
-l1.circle.fill 101E82
-l2.button.angledtop.vertical.left 101DF3
-l2.button.angledtop.vertical.left.fill 101DF4
-l2.button.roundedtop.horizontal 100A0B
-l2.button.roundedtop.horizontal.fill 100A0C
-l2.circle 101E85
-l2.circle.fill 101E86
-l3.button.angledbottom.horizontal.left 101E07
-l3.button.angledbottom.horizontal.left.fill 101E08
-l4.button.horizontal 101E20
-l4.button.horizontal.fill 101E21
-ladybug 100BD4
-ladybug.circle 101F1B
-ladybug.circle.fill 101F1C
-ladybug.fill 100BD5
-ladybug.slash 1027E6
-ladybug.slash.circle 1027EA
-ladybug.slash.circle.fill 1027EC
-ladybug.slash.fill 1027E8
-lamp.ceiling 101321
-lamp.ceiling.fill 1013BB
-lamp.ceiling.inverse 1014A8
-lamp.desk 1013B6
-lamp.desk.fill 10131E
-lamp.floor 1013BF
-lamp.floor.fill 101320
-lamp.table 1013C0
-lamp.table.fill 10131F
-lane 1017CF
-lanyardcard 100C35
-lanyardcard.fill 100C36
-laptopcomputer 1007DB
-laptopcomputer.and.arrow.down 100DBF
-laptopcomputer.badge.checkmark 103258
-laptopcomputer.display.clean 103722
-laptopcomputer.slash 1012AD
-laptopcomputer.trianglebadge.exclamationmark 1010C2
-larisign 10145D
-larisign.arrow.trianglehead.counterclockwise.rotate.90 102230
-larisign.building.classical 102537
-larisign.building.classical.fill 102538
-larisign.circle 1005D3
-larisign.circle.fill 1005D4
-larisign.gauge.chart.lefthalf.righthalf 102A4F
-larisign.gauge.chart.leftthird.topthird.rightthird 102A79
-larisign.ring 102C1F
-larisign.ring.dashed 102BF5
-larisign.square 100613
-larisign.square.fill 100614
-laser.burst 10205D
-lasso 1004E9
-lasso.badge.sparkles 1008F3
-latch.2.case 10089F
-latch.2.case.fill 1008A0
-laurel.leading 101298
-laurel.leading.laurel.trailing 102D9F
-laurel.trailing 101299
-lb.button.roundedbottom.horizontal 100A13
-lb.button.roundedbottom.horizontal.fill 100A14
-lb.circle 101E83
-lb.circle.fill 101E84
-leaf 100972
-leaf.arrow.trianglehead.clockwise 10065C
-leaf.circle 1010AC
-leaf.circle.fill 1010AD
-leaf.fill 100973
-left 1018E3
-left.circle 1018E4
-left.circle.fill 1018E5
-lessthan 100181
-lessthan.circle 100058
-lessthan.circle.fill 100059
-lessthan.square 1000E6
-lessthan.square.fill 1000E7
-lessthanorequalto 102AB0
-lessthanorequalto.circle 102AC7
-lessthanorequalto.circle.fill 102AC8
-lessthanorequalto.square 102AC9
-lessthanorequalto.square.fill 102ACA
-level 1007C2
-level.fill 1007C3
-licenseplate 101EAA
-licenseplate.fill 101EAB
-lifepreserver 100866
-lifepreserver.fill 100867
-light.beacon.max 1014B0
-light.beacon.max.fill 1014B1
-light.beacon.min 10172E
-light.beacon.min.fill 10172F
-light.cylindrical.ceiling 1013BC
-light.cylindrical.ceiling.fill 101324
-light.cylindrical.ceiling.inverse 1014AA
-light.max 1001EE
-light.min 1001ED
-light.overhead.left 1012CB
-light.overhead.left.fill 1018C7
-light.overhead.right 1012CA
-light.overhead.right.fill 1018C6
-light.panel 1013BD
-light.panel.fill 101323
-light.recessed 1013BE
-light.recessed.3 1013D8
-light.recessed.3.fill 1013D9
-light.recessed.3.inverse 1014AB
-light.recessed.fill 101322
-light.recessed.inverse 1014A9
-light.ribbon 10149C
-light.ribbon.fill 10149D
-light.strip.2 101325
-light.strip.2.fill 1013D2
-lightbulb 1006ED
-lightbulb.2 1014FC
-lightbulb.2.fill 1014FD
-lightbulb.circle 1011D6
-lightbulb.circle.fill 1011D7
-lightbulb.fill 1006EE
-lightbulb.led 1013A6
-lightbulb.led.fill 10131D
-lightbulb.led.wide 1013C1
-lightbulb.led.wide.fill 1013C2
-lightbulb.max 101DD8
-lightbulb.max.fill 101DD9
-lightbulb.min 101DD6
-lightbulb.min.badge.exclamationmark 101E44
-lightbulb.min.badge.exclamationmark.fill 101E45
-lightbulb.min.fill 101DD7
-lightbulb.slash 100783
-lightbulb.slash.fill 100784
-lightrail 100DFA
-lightrail.fill 100DFB
-lightspectrum.horizontal 101E69
-lightswitch.off 1013EF
-lightswitch.off.fill 1013FC
-lightswitch.off.square 101392
-lightswitch.off.square.fill 101328
-lightswitch.on 1013EE
-lightswitch.on.fill 1013FB
-lightswitch.on.square 101391
-lightswitch.on.square.fill 101327
-line.2.horizontal.decrease.circle 100635
-line.2.horizontal.decrease.circle.fill 100636
-line.3.crossed.swirl.circle 100ACE
-line.3.crossed.swirl.circle.fill 100ACF
-line.3.horizontal 100307
-line.3.horizontal.button.angledtop.vertical.right 101DF9
-line.3.horizontal.button.angledtop.vertical.right.fill 101DFA
-line.3.horizontal.circle 1009F1
-line.3.horizontal.circle.fill 1009F2
-line.3.horizontal.decrease 100713
-line.3.horizontal.decrease.circle 100308
-line.3.horizontal.decrease.circle.fill 100309
-line.diagonal 100AF0
-line.diagonal.trianglehead.up.right 100AF1
-line.diagonal.trianglehead.up.right.left.down 1033E0
-line.horizontal.star.fill.line.horizontal 10046E
-lines.measurement.horizontal 100C2C
-lines.measurement.horizontal.aligned.bottom 1032EE
-lines.measurement.vertical 102019
-lineweight 100268
-link 100263
-link.badge.plus 100955
-link.circle 1004A0
-link.circle.fill 1004A1
-link.icloud 10049E
-link.icloud.fill 10049F
-lirasign 10144F
-lirasign.arrow.trianglehead.counterclockwise.rotate.90 102222
-lirasign.building.classical 10251B
-lirasign.building.classical.fill 10251C
-lirasign.circle 1005B7
-lirasign.circle.fill 1005B8
-lirasign.gauge.chart.lefthalf.righthalf 102A50
-lirasign.gauge.chart.leftthird.topthird.rightthird 102A7A
-lirasign.ring 102C20
-lirasign.ring.dashed 102BF6
-lirasign.square 1005F7
-lirasign.square.fill 1005F8
-list.and.film 100B09
-list.bullet 1002F2
-list.bullet.badge.ellipsis 10349C
-list.bullet.below.rectangle 1002F7
-list.bullet.circle 100EE7
-list.bullet.circle.fill 100EE8
-list.bullet.clipboard 100F0F
-list.bullet.clipboard.fill 100F10
-list.bullet.indent 1002F3
-list.bullet.rectangle 100A73
-list.bullet.rectangle.fill 100EBF
-list.bullet.rectangle.portrait 100E72
-list.bullet.rectangle.portrait.fill 100E73
-list.clipboard 10155C
-list.clipboard.fill 10155D
-list.dash 1002F1
-list.dash.badge.ellipsis 10349E
-list.dash.header.rectangle 100E46
-list.dash.header.rectangle.fill 103229
-list.number 1002F4
-list.number.ar 100A22
-list.number.badge.ellipsis 1034A0
-list.number.badge.ellipsis.hi 1034A4
-list.number.badge.ellipsis.rtl 1034A2
-list.number.hi 10101E
-list.number.rtl 100641
-list.star 1008E9
-list.triangle 1008BD
-livephoto 100421
-livephoto.badge.automatic 100654
-livephoto.play 100423
-livephoto.slash 100422
-lizard 1015DB
-lizard.circle 101F35
-lizard.circle.fill 101F36
-lizard.fill 1015DC
-lm.button.horizontal 101E22
-lm.button.horizontal.fill 101E23
-location 1002D1
-location.app 102730
-location.app.fill 102731
-location.circle 1002D5
-location.circle.fill 1002D6
-location.fill 1002D2
-location.fill.viewfinder 100B84
-location.magnifyingglass 10121F
-location.north 1002D3
-location.north.circle 100DCC
-location.north.circle.fill 100DCD
-location.north.fill 1002D4
-location.north.line 1002D7
-location.north.line.fill 1002D8
-location.slash 10062C
-location.slash.circle 101647
-location.slash.circle.fill 101648
-location.slash.fill 10062D
-location.square 100F3B
-location.square.fill 100F3C
-location.viewfinder 100B83
-lock 1003A0
-lock.app.dashed 101C0F
-lock.applewatch 100D45
-lock.badge.checkmark 103370
-lock.badge.checkmark.fill 103371
-lock.badge.clock 102189
-lock.badge.clock.fill 10218A
-lock.badge.xmark 103374
-lock.badge.xmark.fill 103375
-lock.circle 1004B2
-lock.circle.dotted 10211C
-lock.circle.fill 1004B3
-lock.desktopcomputer 100F12
-lock.display 100F11
-lock.document 10088D
-lock.document.fill 10088E
-lock.fill 1003A1
-lock.heart 1032BF
-lock.heart.fill 1032C0
-lock.icloud 100675
-lock.icloud.fill 100676
-lock.ipad 100F15
-lock.iphone 100F14
-lock.laptopcomputer 100F13
-lock.open 1003A4
-lock.open.applewatch 100F21
-lock.open.desktopcomputer 100F1D
-lock.open.display 100F1C
-lock.open.fill 1003A5
-lock.open.ipad 100F20
-lock.open.iphone 100F1F
-lock.open.laptopcomputer 100F1E
-lock.open.rotation 10045A
-lock.open.trianglebadge.exclamationmark 101717
-lock.open.trianglebadge.exclamationmark.fill 101718
-lock.rectangle 100888
-lock.rectangle.dashed 10342D
-lock.rectangle.fill 100889
-lock.rectangle.on.rectangle 1008B3
-lock.rectangle.on.rectangle.dashed 102818
-lock.rectangle.on.rectangle.fill 1008B4
-lock.rectangle.stack 1008B1
-lock.rectangle.stack.fill 1008B2
-lock.rotation 100459
-lock.shield 100799
-lock.shield.fill 10079A
-lock.slash 1003A2
-lock.slash.fill 1003A3
-lock.square 1008B5
-lock.square.dashed 10351F
-lock.square.fill 1008B6
-lock.square.stack 10085C
-lock.square.stack.fill 10085D
-lock.trianglebadge.exclamationmark 10164D
-lock.trianglebadge.exclamationmark.fill 10164E
-long.text.page.and.pencil 102F71
-long.text.page.and.pencil.fill 102F74
-loupe 10090E
-lsb.button.angledbottom.horizontal.left 101E0B
-lsb.button.angledbottom.horizontal.left.fill 101E0C
-lt.button.roundedtop.horizontal 100A17
-lt.button.roundedtop.horizontal.fill 100A18
-lt.circle 101E87
-lt.circle.fill 101E88
-lungs 10099A
-lungs.fill 10099B
-m.circle 10001C
-m.circle.fill 10001D
-m.square 1000AC
-m.square.fill 1000AD
-m1.button.horizontal 101E24
-m1.button.horizontal.fill 101E25
-m2.button.horizontal 101E26
-m2.button.horizontal.fill 101E27
-m3.button.horizontal 101E28
-m3.button.horizontal.fill 101E29
-m4.button.horizontal 101E2A
-m4.button.horizontal.fill 101E2B
-macbook 1017EC
-macbook.and.applewatch 102B76
-macbook.and.ipad 10161E
-macbook.and.iphone 100B29
-macbook.and.ipod 103511
-macbook.and.vision.pro 101719
-macbook.badge.checkmark 10325A
-macbook.badge.exclamationmark 10351D
-macbook.badge.shield.checkmark 103288
-macbook.gen1 1017EB
-macbook.gen1.sizes 10324F
-macbook.gen2 101238
-macbook.gen2.sizes 103250
-macbook.sizes 10324E
-macbook.slash 102C8C
-macbook.trianglebadge.exclamationmark 10325B
-macmini 100AAF
-macmini.badge.checkmark 103268
-macmini.badge.checkmark.fill 103269
-macmini.fill 100AB0
-macmini.gen2 102DB7
-macmini.gen2.fill 102DB8
-macmini.gen3 102DB9
-macmini.gen3.fill 102DBA
-macpro.gen1 100AB2
-macpro.gen1.fill 100F22
-macpro.gen2 1009B1
-macpro.gen2.fill 1009AE
-macpro.gen3 100AB1
-macpro.gen3.badge.checkmark 103260
-macpro.gen3.badge.checkmark.fill 103261
-macpro.gen3.fill 100F23
-macpro.gen3.server 100A33
-macstudio 1013CD
-macstudio.badge.checkmark 103264
-macstudio.badge.checkmark.fill 103265
-macstudio.fill 1013CE
-magazine 1010BE
-magazine.fill 1010BF
-magicmouse 100EB0
-magicmouse.fill 100EB1
-magnifyingglass 1002AB
-magnifyingglass.circle 100492
-magnifyingglass.circle.fill 100493
-magsafe.batterypack 100E93
-magsafe.batterypack.fill 100E94
-mail 1008EA
-mail.and.text.magnifyingglass 1008BE
-mail.and.text.magnifyingglass.rtl 100B7C
-mail.fill 1008EB
-mail.stack 10035D
-mail.stack.fill 10035E
-malaysianringgitsign 1028EA
-malaysianringgitsign.arrow.trianglehead.counterclockwise.rotate.90 1028F1
-malaysianringgitsign.building.classical 1028EF
-malaysianringgitsign.building.classical.fill 1028F0
-malaysianringgitsign.circle 1028EB
-malaysianringgitsign.circle.fill 1028EC
-malaysianringgitsign.gauge.chart.lefthalf.righthalf 102A52
-malaysianringgitsign.gauge.chart.leftthird.topthird.rightthird 102A7C
-malaysianringgitsign.ring 102C22
-malaysianringgitsign.ring.dashed 102BF8
-malaysianringgitsign.square 1028ED
-malaysianringgitsign.square.fill 1028EE
-manatsign 10145A
-manatsign.arrow.trianglehead.counterclockwise.rotate.90 10222D
-manatsign.building.classical 102531
-manatsign.building.classical.fill 102532
-manatsign.circle 1005CD
-manatsign.circle.fill 1005CE
-manatsign.gauge.chart.lefthalf.righthalf 102A51
-manatsign.gauge.chart.leftthird.topthird.rightthird 102A7B
-manatsign.ring 102C21
-manatsign.ring.dashed 102BF7
-manatsign.square 10060D
-manatsign.square.fill 10060E
-map 10064A
-map.circle 100EEB
-map.circle.fill 100EEC
-map.fill 10064B
-mappin 1003AA
-mappin.and.ellipse 1003AB
-mappin.and.ellipse.circle 101F21
-mappin.and.ellipse.circle.fill 101F22
-mappin.circle 100707
-mappin.circle.fill 100708
-mappin.slash 100649
-mappin.slash.circle 1011EF
-mappin.slash.circle.fill 1011F0
-mappin.square 100F55
-mappin.square.fill 100F56
-matter.logo 100D17
-mecca 10296E
-medal 1013CB
-medal.fill 1013CC
-medal.star 102663
-medal.star.fill 102664
-mediastick 100EA5
-medical.thermometer 101487
-medical.thermometer.fill 101488
-megaphone 100B32
-megaphone.fill 100B33
-memories 100456
-memories.badge.checkmark 102DC3
-memories.badge.minus 100458
-memories.badge.plus 100457
-memories.badge.xmark 102DC1
-memories.slash 102E82
-memorychip 100AE6
-memorychip.fill 1009D6
-menubar.arrow.down.rectangle 100901
-menubar.arrow.up.rectangle 100900
-menubar.dock.rectangle 1008F0
-menubar.dock.rectangle.badge.record 1008D1
-menubar.rectangle 10098D
-menucard 100ED2
-menucard.fill 100ED3
-message 100324
-message.badge 1012EC
-message.badge.circle 1015D7
-message.badge.circle.fill 1015D8
-message.badge.circle.fill.rtl 101747
-message.badge.circle.rtl 101746
-message.badge.fill 1013CA
-message.badge.fill.rtl 101748
-message.badge.filled.fill 1012ED
-message.badge.filled.fill.rtl 101745
-message.badge.rtl 101744
-message.badge.waveform 100F01
-message.badge.waveform.fill 100F02
-message.circle 100326
-message.circle.fill 100327
-message.fill 100325
-metronome 10038C
-metronome.fill 100815
-microbe 101239
-microbe.circle 1016B6
-microbe.circle.fill 1016B7
-microbe.fill 101485
-microphone 1002B0
-microphone.and.signal.meter 101394
-microphone.and.signal.meter.fill 101393
-microphone.badge.ellipsis 10264D
-microphone.badge.ellipsis.fill 10264E
-microphone.badge.plus 100E81
-microphone.badge.plus.fill 100E82
-microphone.badge.xmark 101643
-microphone.badge.xmark.fill 101644
-microphone.circle 1004A9
-microphone.circle.fill 1004AA
-microphone.dynamic.on.stand 10046B
-microphone.dynamic.on.stand.circle 101051
-microphone.dynamic.on.stand.circle.fill 101052
-microphone.fill 1002B1
-microphone.slash 1002B2
-microphone.slash.circle 100EE9
-microphone.slash.circle.fill 100EEA
-microphone.slash.fill 1002B3
-microphone.square 100F3F
-microphone.square.fill 100F40
-microwave 101428
-microwave.fill 101429
-millsign 101458
-millsign.arrow.trianglehead.counterclockwise.rotate.90 10222B
-millsign.building.classical 10252D
-millsign.building.classical.fill 10252E
-millsign.circle 1005C9
-millsign.circle.fill 1005CA
-millsign.gauge.chart.lefthalf.righthalf 102A53
-millsign.gauge.chart.leftthird.topthird.rightthird 102A7D
-millsign.ring 102C23
-millsign.ring.dashed 102BF9
-millsign.square 100609
-millsign.square.fill 10060A
-minus 10017D
-minus.arrow.trianglehead.clockwise 1031FC
-minus.arrow.trianglehead.counterclockwise 100629
-minus.circle 10004E
-minus.circle.fill 10004F
-minus.diamond 100881
-minus.diamond.fill 100882
-minus.forwardslash.plus 10017B
-minus.magnifyingglass 1002AD
-minus.plus.and.fluid.batteryblock 101804
-minus.plus.batteryblock 100AEC
-minus.plus.batteryblock.exclamationmark 10183F
-minus.plus.batteryblock.exclamationmark.fill 101840
-minus.plus.batteryblock.fill 100AED
-minus.plus.batteryblock.slash 101839
-minus.plus.batteryblock.slash.fill 10183A
-minus.plus.batteryblock.stack 101841
-minus.plus.batteryblock.stack.arrowtriangle.left 102E78
-minus.plus.batteryblock.stack.arrowtriangle.left.fill 102E7A
-minus.plus.batteryblock.stack.arrowtriangle.right 102E74
-minus.plus.batteryblock.stack.arrowtriangle.right.and.arrowtriangle.left 102F15
-minus.plus.batteryblock.stack.arrowtriangle.right.and.arrowtriangle.left.fill 102F16
-minus.plus.batteryblock.stack.arrowtriangle.right.fill 102E76
-minus.plus.batteryblock.stack.exclamationmark 101843
-minus.plus.batteryblock.stack.exclamationmark.fill 101844
-minus.plus.batteryblock.stack.fill 101842
-minus.plus.lines.measurement.horizontal.aligned.bottom 1032EF
-minus.rectangle 1003C9
-minus.rectangle.fill 1003CA
-minus.rectangle.portrait 10086C
-minus.rectangle.portrait.fill 10086D
-minus.square 1000DE
-minus.square.fill 1000DF
-mirror.side.left 101271
-mirror.side.left.and.arrow.turn.down.right 101275
-mirror.side.left.and.heat.waves 101273
-mirror.side.right 101272
-mirror.side.right.and.arrow.turn.down.left 101276
-mirror.side.right.and.heat.waves 101274
-moon 1001B9
-moon.circle 1001BB
-moon.circle.fill 1001BC
-moon.dust 101DBD
-moon.dust.circle 101DBF
-moon.dust.circle.fill 101DC0
-moon.dust.fill 101DBE
-moon.fill 1001BA
-moon.haze 10146F
-moon.haze.circle 101737
-moon.haze.circle.fill 101738
-moon.haze.fill 101470
-moon.road.lanes 1028F8
-moon.stars 1001C0
-moon.stars.circle 1016CB
-moon.stars.circle.fill 1016CC
-moon.stars.fill 1001C1
-moon.zzz 1001BD
-moon.zzz.fill 1001BE
-moonphase.first.quarter 10084A
-moonphase.first.quarter.inverse 10140B
-moonphase.full.moon 10084C
-moonphase.full.moon.inverse 10140D
-moonphase.last.quarter 10084E
-moonphase.last.quarter.inverse 10140F
-moonphase.new.moon 100848
-moonphase.new.moon.inverse 101409
-moonphase.waning.crescent 10084F
-moonphase.waning.crescent.inverse 101410
-moonphase.waning.gibbous 10084D
-moonphase.waning.gibbous.inverse 10140E
-moonphase.waxing.crescent 100849
-moonphase.waxing.crescent.inverse 10140A
-moonphase.waxing.gibbous 10084B
-moonphase.waxing.gibbous.inverse 10140C
-moonrise 1020B3
-moonrise.circle 1020B5
-moonrise.circle.fill 1020B6
-moonrise.fill 1020B4
-moonset 1020B7
-moonset.circle 1020B9
-moonset.circle.fill 1020BA
-moonset.fill 1020B8
-moped 1023EE
-moped.fill 1023EF
-mosaic 100BEB
-mosaic.fill 100BEC
-motorcycle 1024F4
-motorcycle.fill 1024F5
-mount 1008CA
-mount.fill 1008A3
-mountain.2 1015DD
-mountain.2.circle 101792
-mountain.2.circle.fill 101793
-mountain.2.fill 1015DE
-mouth 1009A9
-mouth.fill 1009AA
-move.3d 100885
-movieclapper 100724
-movieclapper.fill 101DBA
-mph 1018BA
-mph.circle 1018BB
-mph.circle.fill 1018BC
-mug 1017B4
-mug.fill 1017B5
-multiply 10017E
-multiply.circle 100050
-multiply.circle.fill 100051
-multiply.square 1000E0
-multiply.square.fill 1000E1
-music.note 10046A
-music.note.arrow.trianglehead.clockwise 1030C2
-music.note.house 1004BC
-music.note.house.fill 1004BD
-music.note.list 10046C
-music.note.slash 103453
-music.note.square.stack 103439
-music.note.square.stack.fill 10343A
-music.note.tv 1003B5
-music.note.tv.fill 1004B7
-music.pages 10306E
-music.pages.fill 10306F
-music.quarternote.3 100AC0
-mustache 10097F
-mustache.fill 100980
-n.circle 10001E
-n.circle.fill 10001F
-n.square 1000AE
-n.square.fill 1000AF
-nairasign 101452
-nairasign.arrow.trianglehead.counterclockwise.rotate.90 102225
-nairasign.building.classical 102521
-nairasign.building.classical.fill 102522
-nairasign.circle 1005BD
-nairasign.circle.fill 1005BE
-nairasign.gauge.chart.lefthalf.righthalf 102A54
-nairasign.gauge.chart.leftthird.topthird.rightthird 102A7E
-nairasign.ring 102C24
-nairasign.ring.dashed 102BFA
-nairasign.square 1005FD
-nairasign.square.fill 1005FE
-network 100906
-network.badge.shield.half.filled 10114F
-network.slash 1018E1
-newspaper 100926
-newspaper.circle 1011B4
-newspaper.circle.fill 1011B5
-newspaper.fill 100945
-norwegiankronesign 10192C
-norwegiankronesign.arrow.trianglehead.counterclockwise.rotate.90 102235
-norwegiankronesign.building.classical 102541
-norwegiankronesign.building.classical.fill 102542
-norwegiankronesign.circle 100BA4
-norwegiankronesign.circle.fill 100BA5
-norwegiankronesign.gauge.chart.lefthalf.righthalf 102A55
-norwegiankronesign.gauge.chart.leftthird.topthird.rightthird 102A7F
-norwegiankronesign.ring 102C25
-norwegiankronesign.ring.dashed 102BFB
-norwegiankronesign.square 100BA6
-norwegiankronesign.square.fill 100BA7
-nose 100A2F
-nose.fill 100A30
-nosign 10037C
-nosign.app 10174A
-nosign.app.fill 10174B
-nosign.badge.clock 102F2B
-notequal 102AAF
-notequal.circle 102AC3
-notequal.circle.fill 102AC4
-notequal.square 102AC5
-notequal.square.fill 102AC6
-number.sign 100183
-number.sign.circle 10005A
-number.sign.circle.fill 10005B
-number.sign.square 1000EA
-number.sign.square.fill 1000EB
-numbers 100171
-numbers.ar 1007E1
-numbers.bn 10328E
-numbers.gu 103295
-numbers.hi 101220
-numbers.km 1032B0
-numbers.kn 1032A4
-numbers.ml 10329E
-numbers.mni 1032AA
-numbers.mr 103291
-numbers.my 1032AD
-numbers.or 1032A1
-numbers.pa 103298
-numbers.rectangle 1010B7
-numbers.rectangle.ar 1010B9
-numbers.rectangle.fill 1010B8
-numbers.rectangle.fill.ar 1010BA
-numbers.rectangle.fill.hi 101222
-numbers.rectangle.hi 101221
-numbers.sat 1032A7
-numbers.te 10329B
-numero.sign 1014D8
-o.circle 100020
-o.circle.fill 100021
-o.square 1000B0
-o.square.fill 1000B1
-oar.2.crossed 101536
-oar.2.crossed.circle 102573
-oar.2.crossed.circle.fill 102574
-octagon 1007CA
-octagon.bottomhalf.filled 10103D
-octagon.fill 1007CB
-octagon.lefthalf.filled 101007
-octagon.righthalf.filled 101008
-octagon.tophalf.filled 10103C
-oilcan 100FC4
-oilcan.and.thermometer 10278E
-oilcan.and.thermometer.fill 102790
-oilcan.fill 100FC5
-opticaldisc 1008B8
-opticaldisc.fill 101624
-opticaldiscdrive 100904
-opticaldiscdrive.fill 100905
-opticid 101899
-opticid.fill 1018C2
-option 100195
-oval 100C9E
-oval.bottomhalf.filled 100FFE
-oval.fill 100C9F
-oval.lefthalf.filled 100FFB
-oval.portrait 100CA0
-oval.portrait.bottomhalf.filled 101002
-oval.portrait.fill 100CA1
-oval.portrait.lefthalf.filled 100FFF
-oval.portrait.righthalf.filled 101000
-oval.portrait.tophalf.filled 101001
-oval.righthalf.filled 100FFC
-oval.tophalf.filled 100FFD
-oven 101424
-oven.fill 101425
-p.circle 100022
-p.circle.fill 100023
-p.square 1000B2
-p.square.fill 1000B3
-p1.button.horizontal 101E2C
-p1.button.horizontal.fill 101E2D
-p2.button.horizontal 101E2E
-p2.button.horizontal.fill 101E2F
-p3.button.horizontal 101E30
-p3.button.horizontal.fill 101E31
-p4.button.horizontal 101E32
-p4.button.horizontal.fill 101E33
-pad.header 1009F5
-paddleshifter.left 101E34
-paddleshifter.left.fill 101E35
-paddleshifter.right 101E36
-paddleshifter.right.fill 101E37
-paint.bucket.classic 100823
-paintbrush 100391
-paintbrush.fill 100392
-paintbrush.pointed 1008F6
-paintbrush.pointed.fill 1008F7
-paintbrush.slash 1036EC
-paintbrush.slash.fill 1036ED
-paintpalette 100765
-paintpalette.fill 100766
-pano 10040F
-pano.badge.play 101DFF
-pano.badge.play.fill 101E00
-pano.fill 100410
-paperclip 100262
-paperclip.badge.ellipsis 10088F
-paperclip.circle 100494
-paperclip.circle.fill 100495
-paperplane 10021F
-paperplane.circle 100221
-paperplane.circle.fill 100222
-paperplane.fill 100220
-paragraphsign 100486
-parentheses 100E0F
-parkinglight 100FBC
-parkinglight.fill 100FBD
-parkingsign 100D62
-parkingsign.brakesignal 100FC0
-parkingsign.brakesignal.slash 101250
-parkingsign.circle 100DC1
-parkingsign.circle.fill 100DC2
-parkingsign.radiowaves.down.right.off 1022B8
-parkingsign.radiowaves.left.and.right 1015B2
-parkingsign.radiowaves.left.and.right.slash 1022B3
-parkingsign.radiowaves.right.and.safetycone 101968
-parkingsign.square 102A08
-parkingsign.square.fill 102A09
-parkingsign.steeringwheel 101268
-party.popper 1014F5
-party.popper.fill 1014F6
-pause 100285
-pause.circle 100297
-pause.circle.fill 100298
-pause.fill 100286
-pause.rectangle 10029B
-pause.rectangle.fill 10029C
-pawprint 100F9E
-pawprint.circle 1010B0
-pawprint.circle.fill 1010B1
-pawprint.fill 100F9F
-pc 10097A
-peacesign 100E8E
-pedal.accelerator 101E17
-pedal.accelerator.fill 101E18
-pedal.brake 101E19
-pedal.brake.fill 101E1A
-pedal.clutch 101E1B
-pedal.clutch.fill 101E1C
-pedestrian.gate.closed 1014E1
-pedestrian.gate.closed.trianglebadge.exclamationmark 103551
-pedestrian.gate.open 1014E2
-pedestrian.gate.open.trianglebadge.exclamationmark 103550
-pencil 10020A
-pencil.and.list.clipboard 10154D
-pencil.and.list.clipboard.rtl 10155A
-pencil.and.outline 100210
-pencil.and.ruler 101586
-pencil.and.ruler.fill 101587
-pencil.and.scribble 100912
-pencil.circle 10020B
-pencil.circle.fill 10020C
-pencil.line 10169B
-pencil.slash 10020D
-pencil.tip 10048B
-pencil.tip.crop.circle 100265
-pencil.tip.crop.circle.badge.arrow.forward 1009DA
-pencil.tip.crop.circle.badge.arrow.forward.fill 101FF5
-pencil.tip.crop.circle.badge.minus 100267
-pencil.tip.crop.circle.badge.minus.fill 101FF3
-pencil.tip.crop.circle.badge.plus 100266
-pencil.tip.crop.circle.badge.plus.fill 101F9D
-pencil.tip.crop.circle.fill 101F9B
-pentagon 100DBA
-pentagon.bottomhalf.filled 10103B
-pentagon.fill 100DBB
-pentagon.lefthalf.filled 10100B
-pentagon.righthalf.filled 10100C
-pentagon.tophalf.filled 10103A
-percent 10063E
-percent.ar 100BC4
-person 100269
-person.2 10026B
-person.2.arrow.trianglehead.counterclockwise 101659
-person.2.badge 1028D1
-person.2.badge.fill 1028D2
-person.2.badge.gearshape 10165A
-person.2.badge.gearshape.fill 10165B
-person.2.badge.key 101DE9
-person.2.badge.key.fill 101DEB
-person.2.badge.minus 102AA1
-person.2.badge.minus.fill 102AA2
-person.2.badge.plus 102A9D
-person.2.badge.plus.fill 102A9E
-person.2.circle 100803
-person.2.circle.fill 100804
-person.2.crop.square.stack 1004E5
-person.2.crop.square.stack.fill 1004E6
-person.2.fill 10026C
-person.2.shield 103488
-person.2.shield.fill 103489
-person.2.slash 10175E
-person.2.slash.fill 10175F
-person.2.wave.2 100F8C
-person.2.wave.2.fill 100F8D
-person.3 10074A
-person.3.fill 10074B
-person.3.sequence 100EF7
-person.3.sequence.fill 100EF8
-person.and.arrow.left.and.arrow.right.outward 100ABC
-person.and.background.dotted 101641
-person.and.background.striped.horizontal 101803
-person.badge.checkmark 103778
-person.badge.checkmark.fill 103779
-person.badge.checkmark.seal 1036F6
-person.badge.checkmark.seal.fill 1036F7
-person.badge.clock 101156
-person.badge.clock.fill 101157
-person.badge.creditcard 103729
-person.badge.creditcard.fill 10372A
-person.badge.key 1013FA
-person.badge.key.fill 1013A8
-person.badge.location 102732
-person.badge.location.fill 102733
-person.badge.minus 100717
-person.badge.plus 100715
-person.badge.shield.checkmark 101653
-person.badge.shield.checkmark.fill 101654
-person.badge.shield.exclamationmark 1029FB
-person.badge.shield.exclamationmark.fill 1029FC
-person.bubble 10213D
-person.bubble.fill 10213E
-person.building.classical 103704
-person.building.classical.fill 103705
-person.bust 1015E1
-person.bust.circle 101F53
-person.bust.circle.fill 101F54
-person.bust.fill 1015E2
-person.checkmark.and.xmark 102EEB
-person.checkmark.and.xmark.rtl 102EED
-person.circle 1004E3
-person.circle.fill 1004E4
-person.crop.artframe 100FCF
-person.crop.circle 10026D
-person.crop.circle.badge 10109B
-person.crop.circle.badge.checkmark 100273
-person.crop.circle.badge.clock 101154
-person.crop.circle.badge.clock.fill 101155
-person.crop.circle.badge.ellipsis 103087
-person.crop.circle.badge.ellipsis.fill 103088
-person.crop.circle.badge.exclamationmark 100277
-person.crop.circle.badge.exclamationmark.fill 100278
-person.crop.circle.badge.fill 10109C
-person.crop.circle.badge.magnifyingglass 101E55
-person.crop.circle.badge.magnifyingglass.fill 101E56
-person.crop.circle.badge.minus 100271
-person.crop.circle.badge.moon 1010C8
-person.crop.circle.badge.moon.fill 1010C9
-person.crop.circle.badge.plus 10026F
-person.crop.circle.badge.questionmark 100B7D
-person.crop.circle.badge.questionmark.ar 100B81
-person.crop.circle.badge.questionmark.fill 100B7E
-person.crop.circle.badge.questionmark.fill.ar 100B82
-person.crop.circle.badge.xmark 100275
-person.crop.circle.dashed 1017AE
-person.crop.circle.dashed.circle 10216A
-person.crop.circle.dashed.circle.fill 1020FF
-person.crop.circle.fill 10026E
-person.crop.circle.fill.badge.checkmark 100274
-person.crop.circle.fill.badge.minus 100272
-person.crop.circle.fill.badge.plus 100270
-person.crop.circle.fill.badge.xmark 100276
-person.crop.rectangle 1003CF
-person.crop.rectangle.badge.plus 10159A
-person.crop.rectangle.badge.plus.fill 10159B
-person.crop.rectangle.fill 1003D0
-person.crop.rectangle.stack 1003FB
-person.crop.rectangle.stack.fill 1003FC
-person.crop.square 100279
-person.crop.square.badge.camera 10225A
-person.crop.square.badge.camera.fill 10225B
-person.crop.square.badge.video 10225C
-person.crop.square.badge.video.fill 10225D
-person.crop.square.fill 10027A
-person.crop.square.filled.and.at.rectangle 10098E
-person.crop.square.filled.and.at.rectangle.fill 100FD0
-person.crop.square.on.square.angled 1028C4
-person.crop.square.on.square.angled.fill 1028C5
-person.fill 10026A
-person.fill.and.arrow.left.and.arrow.right.outward 100ABD
-person.fill.badge.minus 100718
-person.fill.badge.plus 100716
-person.fill.checkmark 100BE7
-person.fill.checkmark.and.xmark 102EEC
-person.fill.checkmark.and.xmark.rtl 102EEE
-person.fill.checkmark.rtl 100C5E
-person.fill.questionmark 100BE9
-person.fill.questionmark.ar 100C60
-person.fill.questionmark.rtl 100D01
-person.fill.turn.down 100BD2
-person.fill.turn.left 100BD3
-person.fill.turn.right 100BD1
-person.fill.viewfinder 100C8F
-person.fill.xmark 100BE8
-person.fill.xmark.rtl 100C5F
-person.icloud 100673
-person.icloud.fill 100674
-person.line.dotted.person 101483
-person.line.dotted.person.fill 101484
-person.number.sign.rectangle 103700
-person.number.sign.rectangle.fill 103701
-person.slash 1018D4
-person.slash.fill 1018D5
-person.spatialaudio.3d.fill 10322E
-person.spatialaudio.fill 101028
-person.spatialaudio.stereo.3d.fill 10322D
-person.spatialaudio.stereo.fill 101027
-person.text.rectangle 100FD2
-person.text.rectangle.badge.clock 1036FA
-person.text.rectangle.badge.clock.fill 1036FB
-person.text.rectangle.fill 100FD3
-person.text.rectangle.trianglebadge.exclamationmark 103480
-person.text.rectangle.trianglebadge.exclamationmark.fill 103481
-person.wave.2 101147
-person.wave.2.fill 101148
-personalhotspot 100264
-personalhotspot.circle 101228
-personalhotspot.circle.fill 101229
-personalhotspot.slash 102BBF
-perspective 1004B1
-peruviansolessign 102A34
-peruviansolessign.arrow.trianglehead.counterclockwise.rotate.90 10296F
-peruviansolessign.building.classical 102A39
-peruviansolessign.building.classical.fill 102A3A
-peruviansolessign.circle 102A35
-peruviansolessign.circle.fill 102A36
-peruviansolessign.gauge.chart.lefthalf.righthalf 102A56
-peruviansolessign.gauge.chart.leftthird.topthird.rightthird 102A80
-peruviansolessign.ring 102C26
-peruviansolessign.ring.dashed 102BFC
-peruviansolessign.square 102A37
-peruviansolessign.square.fill 102A38
-pesetasign 10144B
-pesetasign.arrow.trianglehead.counterclockwise.rotate.90 10221E
-pesetasign.building.classical 102513
-pesetasign.building.classical.fill 102514
-pesetasign.circle 1005AF
-pesetasign.circle.fill 1005B0
-pesetasign.gauge.chart.lefthalf.righthalf 102A57
-pesetasign.gauge.chart.leftthird.topthird.rightthird 102A81
-pesetasign.ring 102C27
-pesetasign.ring.dashed 102BFD
-pesetasign.square 1005EF
-pesetasign.square.fill 1005F0
-pesosign 10144C
-pesosign.arrow.trianglehead.counterclockwise.rotate.90 10221F
-pesosign.building.classical 102515
-pesosign.building.classical.fill 102516
-pesosign.circle 1005B1
-pesosign.circle.fill 1005B2
-pesosign.gauge.chart.lefthalf.righthalf 102A58
-pesosign.gauge.chart.leftthird.topthird.rightthird 102A82
-pesosign.ring 102C28
-pesosign.ring.dashed 102BFE
-pesosign.square 1005F1
-pesosign.square.fill 1005F2
-pet.carrier 103311
-pet.carrier.circle 1033A4
-pet.carrier.circle.fill 1033A5
-pet.carrier.fill 103312
-phone 10033E
-phone.arrow.down.left 100342
-phone.arrow.down.left.fill 100343
-phone.arrow.right 100344
-phone.arrow.right.fill 100345
-phone.arrow.up.right 100340
-phone.arrow.up.right.circle 1013FD
-phone.arrow.up.right.circle.fill 1013FE
-phone.arrow.up.right.fill 100341
-phone.badge.checkmark 101657
-phone.badge.clock 1027B2
-phone.badge.clock.fill 1027B3
-phone.badge.plus 10058E
-phone.badge.waveform 100F03
-phone.badge.waveform.fill 100F04
-phone.bubble 100C6E
-phone.bubble.fill 100C6F
-phone.bubble.fill.rtl 101FD1
-phone.bubble.rtl 101FD0
-phone.circle 1004A5
-phone.circle.fill 1004A6
-phone.connection 100B1B
-phone.connection.fill 100B1C
-phone.down 100346
-phone.down.circle 1004A7
-phone.down.circle.fill 1004A8
-phone.down.fill 100347
-phone.down.waves.left.and.right 101085
-phone.fill 10033F
-phone.fill.badge.checkmark 101658
-phone.fill.badge.plus 10058F
-phone.pause 103093
-phone.pause.circle 103095
-phone.pause.circle.fill 103096
-phone.pause.fill 103094
-photo 1003C5
-photo.artframe 101036
-photo.artframe.circle 101F27
-photo.artframe.circle.fill 101F28
-photo.badge.arrow.down 1010F2
-photo.badge.arrow.down.fill 1010F3
-photo.badge.checkmark 101639
-photo.badge.checkmark.fill 10163A
-photo.badge.exclamationmark 102AA5
-photo.badge.exclamationmark.fill 102AA6
-photo.badge.magnifyingglass 102DD0
-photo.badge.magnifyingglass.fill 102DD1
-photo.badge.plus 1010CF
-photo.badge.plus.fill 1010D0
-photo.badge.questionmark 103770
-photo.badge.questionmark.fill 103771
-photo.badge.shield.exclamationmark 102F2D
-photo.badge.shield.exclamationmark.fill 102F37
-photo.circle 1010AE
-photo.circle.fill 1010AF
-photo.fill 1003C6
-photo.fill.on.rectangle.fill 1003EC
-photo.on.rectangle 1003EB
-photo.on.rectangle.angled 1008F5
-photo.on.rectangle.angled.fill 1028F3
-photo.slash 103774
-photo.slash.fill 103775
-photo.stack 1003EF
-photo.stack.fill 1003F0
-photo.trianglebadge.exclamationmark 102F2F
-photo.trianglebadge.exclamationmark.fill 102F38
-photo.tv 100D6A
-pi 102E6F
-pi.circle 102E70
-pi.circle.fill 102E71
-pi.square 102E72
-pi.square.fill 102E73
-pianokeys 10038F
-pianokeys.inverse 1007FD
-pill 1016AD
-pill.circle 1016AF
-pill.circle.fill 1016B0
-pill.fill 1016AE
-pills 100831
-pills.circle 1011C2
-pills.circle.fill 1011C3
-pills.fill 100832
-pin 1003A6
-pin.circle 1004B4
-pin.circle.fill 1004B5
-pin.fill 1003A7
-pin.slash 1003A8
-pin.slash.fill 1003A9
-pin.square 100F4B
-pin.square.fill 100F4C
-pip 100833
-pip.enter 100468
-pip.exit 100467
-pip.fill 100834
-pip.remove 100B72
-pip.swap 100B71
-pipe.and.drop 1014DD
-pipe.and.drop.fill 1014DE
-pizza.slice 100E14
-pizza.slice.fill 100E15
-pl.button.horizontal 103712
-pl.button.horizontal.fill 103713
-placeholdertext.fill 100BB7
-platter.2.filled.ipad 10104D
-platter.2.filled.ipad.landscape 10104E
-platter.2.filled.iphone 100FA9
-platter.2.filled.iphone.landscape 100FAA
-platter.bottom.applewatch.case 1010C7
-platter.filled.bottom.and.arrow.down.iphone 1012C2
-platter.filled.bottom.applewatch.case 1010C5
-platter.filled.bottom.iphone 1012C0
-platter.filled.top.and.arrow.up.iphone 1012C1
-platter.filled.top.applewatch.case 1010C4
-platter.filled.top.iphone 1012BF
-platter.top.applewatch.case 1010C6
-play 100283
-play.bubble 103757
-play.bubble.fill 103758
-play.bubble.fill.rtl 10375A
-play.bubble.rtl 103759
-play.circle 100295
-play.circle.fill 100296
-play.desktopcomputer 1013F3
-play.diamond 103124
-play.diamond.fill 103125
-play.display 1013F4
-play.fill 100284
-play.house 101E59
-play.house.fill 101E5A
-play.laptopcomputer 1013F5
-play.rectangle 100299
-play.rectangle.fill 10029A
-play.rectangle.on.rectangle 100FAC
-play.rectangle.on.rectangle.circle 1010C0
-play.rectangle.on.rectangle.circle.fill 1010C1
-play.rectangle.on.rectangle.fill 100FAD
-play.slash 100A85
-play.slash.fill 100A86
-play.square 100F4D
-play.square.fill 100F4E
-play.square.stack 1017FC
-play.square.stack.fill 1017FD
-play.tv 100D68
-play.tv.fill 100D69
-playpause 100287
-playpause.circle 10169E
-playpause.circle.fill 10169F
-playpause.fill 100288
-playstation.logo 100F88
-plus 10017C
-plus.app 10044D
-plus.app.fill 10044E
-plus.arrow.trianglehead.clockwise 100628
-plus.arrow.trianglehead.counterclockwise 1031FF
-plus.bubble 100336
-plus.bubble.fill 100337
-plus.capsule 103074
-plus.capsule.fill 103075
-plus.circle 10004C
-plus.circle.dashed 1027B6
-plus.circle.fill 10004D
-plus.diamond 10087F
-plus.diamond.fill 100880
-plus.forwardslash.minus 10017A
-plus.magnifyingglass 1002AC
-plus.message 100859
-plus.message.fill 10085A
-plus.minus.capsule 102EE5
-plus.minus.capsule.fill 102EE6
-plus.rectangle 1003C7
-plus.rectangle.fill 1003C8
-plus.rectangle.fill.on.rectangle.fill 1003EA
-plus.rectangle.on.folder 100930
-plus.rectangle.on.folder.fill 100931
-plus.rectangle.on.rectangle 1003E9
-plus.rectangle.portrait 10086A
-plus.rectangle.portrait.fill 10086B
-plus.square 1000DC
-plus.square.dashed 100D25
-plus.square.fill 1000DD
-plus.square.fill.on.square.fill 100408
-plus.square.on.square 100407
-plus.viewfinder 100944
-plusminus 1006FA
-plusminus.circle 100376
-plusminus.circle.fill 10061D
-point.3.connected.trianglepath.dotted 1011AC
-point.3.filled.connected.trianglepath.dotted 101165
-point.bottomleft.filled.forward.to.point.topright.scurvepath 101EF6
-point.bottomleft.forward.to.arrow.triangle.scurvepath 10291C
-point.bottomleft.forward.to.arrow.triangle.scurvepath.fill 10291D
-point.bottomleft.forward.to.arrow.triangle.uturn.scurvepath 101EF7
-point.bottomleft.forward.to.arrow.triangle.uturn.scurvepath.fill 101E39
-point.bottomleft.forward.to.point.topright.filled.scurvepath 101EF5
-point.bottomleft.forward.to.point.topright.scurvepath 101EF4
-point.bottomleft.forward.to.point.topright.scurvepath.fill 101E38
-point.forward.to.point.capsulepath 101EF8
-point.forward.to.point.capsulepath.fill 101E3A
-point.topleft.down.to.point.bottomright.curvepath 1008F1
-point.topleft.down.to.point.bottomright.curvepath.fill 100B31
-point.topleft.down.to.point.bottomright.filled.curvepath 100F94
-point.topleft.filled.down.to.point.bottomright.curvepath 100F95
-point.topright.arrow.triangle.backward.to.point.bottomleft.filled.scurvepath 10291B
-point.topright.arrow.triangle.backward.to.point.bottomleft.scurvepath 102919
-point.topright.arrow.triangle.backward.to.point.bottomleft.scurvepath.fill 10291A
-point.topright.filled.arrow.triangle.backward.to.point.bottomleft.scurvepath 10291E
-pointer.arrow 100ACC
-pointer.arrow.and.square.on.square.dashed 100B90
-pointer.arrow.click 100B46
-pointer.arrow.click.2 100B47
-pointer.arrow.click.badge.clock 100BB4
-pointer.arrow.ipad 10355D
-pointer.arrow.ipad.and.square.on.square.dashed 103565
-pointer.arrow.ipad.rays 103564
-pointer.arrow.ipad.slash 103560
-pointer.arrow.ipad.slash.square 103562
-pointer.arrow.ipad.slash.square.fill 103563
-pointer.arrow.ipad.square 10355E
-pointer.arrow.ipad.square.fill 10355F
-pointer.arrow.motionlines 1008E0
-pointer.arrow.motionlines.click 1008E1
-pointer.arrow.rays 1001F0
-pointer.arrow.slash 101DC1
-pointer.arrow.slash.square 101DC2
-pointer.arrow.slash.square.fill 101DC3
-pointer.arrow.square 100B45
-pointer.arrow.square.fill 101680
-polishzlotysign 10192F
-polishzlotysign.arrow.trianglehead.counterclockwise.rotate.90 102234
-polishzlotysign.building.classical 10253F
-polishzlotysign.building.classical.fill 102540
-polishzlotysign.circle 101930
-polishzlotysign.circle.fill 101931
-polishzlotysign.gauge.chart.lefthalf.righthalf 102A59
-polishzlotysign.gauge.chart.leftthird.topthird.rightthird 102A83
-polishzlotysign.ring 102C29
-polishzlotysign.ring.dashed 102BFF
-polishzlotysign.square 101932
-polishzlotysign.square.fill 101933
-popcorn 101407
-popcorn.circle 1016B1
-popcorn.circle.fill 1016B2
-popcorn.fill 101408
-power 1001A8
-power.circle 100DC3
-power.circle.fill 100DC4
-power.dotted 1001A9
-powercord 1018F7
-powercord.fill 1018F8
-powermeter 10269B
-poweroff 100965
-poweron 100964
-poweroutlet.strip 101332
-poweroutlet.strip.fill 1014DC
-poweroutlet.type.a 10133D
-poweroutlet.type.a.fill 101340
-poweroutlet.type.a.square 100F64
-poweroutlet.type.a.square.fill 101329
-poweroutlet.type.b 10133E
-poweroutlet.type.b.fill 101341
-poweroutlet.type.b.square 100F65
-poweroutlet.type.b.square.fill 10133C
-poweroutlet.type.c 101346
-poweroutlet.type.c.fill 101347
-poweroutlet.type.c.square 100F66
-poweroutlet.type.c.square.fill 10132B
-poweroutlet.type.d 101348
-poweroutlet.type.d.fill 101349
-poweroutlet.type.d.square 100F67
-poweroutlet.type.d.square.fill 10134A
-poweroutlet.type.e 10134B
-poweroutlet.type.e.fill 10134C
-poweroutlet.type.e.square 100F68
-poweroutlet.type.e.square.fill 10134D
-poweroutlet.type.f 10134E
-poweroutlet.type.f.fill 10134F
-poweroutlet.type.f.square 100F69
-poweroutlet.type.f.square.fill 101350
-poweroutlet.type.g 101351
-poweroutlet.type.g.fill 101352
-poweroutlet.type.g.square 100F6A
-poweroutlet.type.g.square.fill 10132F
-poweroutlet.type.h 101353
-poweroutlet.type.h.fill 101354
-poweroutlet.type.h.square 100F6B
-poweroutlet.type.h.square.fill 101355
-poweroutlet.type.i 101356
-poweroutlet.type.i.fill 101357
-poweroutlet.type.i.square 100F6C
-poweroutlet.type.i.square.fill 101358
-poweroutlet.type.j 101359
-poweroutlet.type.j.fill 10135A
-poweroutlet.type.j.square 100F6D
-poweroutlet.type.j.square.fill 101331
-poweroutlet.type.k 10135B
-poweroutlet.type.k.fill 10135C
-poweroutlet.type.k.square 100F6E
-poweroutlet.type.k.square.fill 10132E
-poweroutlet.type.l 10135D
-poweroutlet.type.l.fill 10135E
-poweroutlet.type.l.square 100F6F
-poweroutlet.type.l.square.fill 10135F
-poweroutlet.type.m 10132A
-poweroutlet.type.m.fill 10132C
-poweroutlet.type.m.square 10107B
-poweroutlet.type.m.square.fill 101333
-poweroutlet.type.n 10132D
-poweroutlet.type.n.fill 101330
-poweroutlet.type.n.square 10107C
-poweroutlet.type.n.square.fill 101360
-poweroutlet.type.o 101361
-poweroutlet.type.o.fill 101362
-poweroutlet.type.o.square 10107D
-poweroutlet.type.o.square.fill 101363
-powerplug 100877
-powerplug.fill 100878
-powerplug.portrait 102B39
-powerplug.portrait.fill 102B3A
-powersleep 100966
-pr.button.horizontal 103714
-pr.button.horizontal.fill 103715
-printer 10039A
-printer.dotmatrix 100A9E
-printer.dotmatrix.fill 100A9F
-printer.dotmatrix.filled.and.paper 100ABF
-printer.dotmatrix.filled.and.paper.inverse 101472
-printer.dotmatrix.inverse 102A23
-printer.fill 10039B
-printer.filled.and.paper 100ABE
-printer.filled.and.paper.inverse 101471
-printer.inverse 102A16
-progress.indicator 100D3D
-projective 10018E
-purchased 100690
-purchased.circle 100691
-purchased.circle.fill 100692
-puzzlepiece 10091A
-puzzlepiece.extension 10096D
-puzzlepiece.extension.fill 10096E
-puzzlepiece.fill 10091B
-pyramid 100CCB
-pyramid.fill 100CCC
-q.circle 100024
-q.circle.fill 100025
-q.square 1000B4
-q.square.fill 1000B5
-qrcode 100582
-qrcode.viewfinder 1003BB
-questionmark 10014D
-questionmark.app 100FE8
-questionmark.app.ar 10109D
-questionmark.app.dashed 100FEA
-questionmark.app.dashed.ar 10109F
-questionmark.app.fill 100FE9
-questionmark.app.fill.ar 10109E
-questionmark.ar 100A5D
-questionmark.bubble 101336
-questionmark.bubble.ar 10133A
-questionmark.bubble.fill 101337
-questionmark.bubble.fill.ar 10133B
-questionmark.circle 10005C
-questionmark.circle.ar 100A60
-questionmark.circle.dashed 1027B7
-questionmark.circle.dashed.ar 1027B8
-questionmark.circle.fill 10005D
-questionmark.circle.fill.ar 100A61
-questionmark.diamond 100122
-questionmark.diamond.ar 100A66
-questionmark.diamond.fill 100123
-questionmark.diamond.fill.ar 100A67
-questionmark.folder 100B14
-questionmark.folder.ar 100B4A
-questionmark.folder.fill 100B15
-questionmark.folder.fill.ar 100B4B
-questionmark.key.filled 101833
-questionmark.message 102DEB
-questionmark.message.ar 102DF6
-questionmark.message.fill 102DEC
-questionmark.message.fill.ar 102DF7
-questionmark.square 1000EC
-questionmark.square.ar 100A64
-questionmark.square.dashed 100B49
-questionmark.square.dashed.ar 100B57
-questionmark.square.fill 1000ED
-questionmark.square.fill.ar 100A65
-questionmark.text.page 1021F2
-questionmark.text.page.ar 1021F4
-questionmark.text.page.fill 1021F3
-questionmark.text.page.fill.ar 1021F5
-questionmark.text.page.fill.rtl 1021F7
-questionmark.text.page.rtl 1021F6
-questionmark.video 100353
-questionmark.video.ar 100642
-questionmark.video.fill 100354
-questionmark.video.fill.ar 100643
-quote.bubble 10032E
-quote.bubble.fill 10032F
-quote.bubble.fill.rtl 100B64
-quote.bubble.rtl 100B63
-quote.closing 101210
-quote.opening 10120F
-quotelevel 101596
-r.button.roundedbottom.horizontal 100A0D
-r.button.roundedbottom.horizontal.fill 100A0E
-r.circle 100026
-r.circle.fill 100027
-r.joystick 100993
-r.joystick.fill 100AC2
-r.joystick.press.down 100995
-r.joystick.press.down.fill 100AC4
-r.joystick.tilt.down 100FE4
-r.joystick.tilt.down.fill 100FE5
-r.joystick.tilt.left 100FDE
-r.joystick.tilt.left.fill 100FDF
-r.joystick.tilt.right 100FE0
-r.joystick.tilt.right.fill 100FE1
-r.joystick.tilt.up 100FE2
-r.joystick.tilt.up.fill 100FE3
-r.square 1000B6
-r.square.fill 1000B7
-r.square.on.square 100B58
-r.square.on.square.fill 100B59
-r1.button.roundedbottom.horizontal 100A0F
-r1.button.roundedbottom.horizontal.fill 100A10
-r1.circle 101E89
-r1.circle.fill 101E8A
-r2.button.angledtop.vertical.right 101DF5
-r2.button.angledtop.vertical.right.fill 101DF6
-r2.button.roundedtop.horizontal 100A11
-r2.button.roundedtop.horizontal.fill 100A12
-r2.circle 101E8D
-r2.circle.fill 101E8E
-r3.button.angledbottom.horizontal.right 101E09
-r3.button.angledbottom.horizontal.right.fill 101E0A
-r4.button.horizontal 101EA4
-r4.button.horizontal.fill 101EA5
-radicand.squareroot 1004EA
-radicand.squareroot.ar 103593
-radio 100A94
-radio.fill 100A95
-rainbow 100F2D
-rays 1001EF
-rb.button.roundedbottom.horizontal 100A15
-rb.button.roundedbottom.horizontal.fill 100A16
-rb.circle 101E8B
-rb.circle.fill 101E8C
-receipt 102DFC
-receipt.fill 102DFD
-record.circle 100899
-record.circle.fill 10089A
-recordingtape 10057C
-recordingtape.badge 103727
-recordingtape.circle 1012EA
-recordingtape.circle.fill 1012EB
-rectangle 1003C3
-rectangle.2.swap 101040
-rectangle.3.group 1001F4
-rectangle.3.group.bubble 100B04
-rectangle.3.group.bubble.fill 100B05
-rectangle.3.group.dashed 10344A
-rectangle.3.group.fill 100685
-rectangle.and.arrow.up.right.and.arrow.down.left 10066E
-rectangle.and.arrow.up.right.and.arrow.down.left.slash 10066F
-rectangle.and.hand.point.up.left 100AA4
-rectangle.and.hand.point.up.left.fill 100AA5
-rectangle.and.hand.point.up.left.filled 100AA7
-rectangle.and.paperclip 100496
-rectangle.and.pencil.and.ellipsis 10020F
-rectangle.and.pencil.and.ellipsis.rtl 100861
-rectangle.and.text.magnifyingglass 100B38
-rectangle.and.text.magnifyingglass.rtl 100B16
-rectangle.arrowtriangle.2.inward 100AFA
-rectangle.arrowtriangle.2.outward 100AF9
-rectangle.badge.checkmark 1003D5
-rectangle.badge.minus 1003D3
-rectangle.badge.person.crop 100D5A
-rectangle.badge.plus 1003D1
-rectangle.badge.sparkles 1035A6
-rectangle.badge.sparkles.fill 1035A7
-rectangle.badge.xmark 1003D7
-rectangle.bottomhalf.filled 100FF0
-rectangle.compress.vertical 100437
-rectangle.connected.to.line.below 100A72
-rectangle.dashed 100941
-rectangle.dashed.and.paperclip 10096A
-rectangle.dashed.badge.record 100942
-rectangle.expand.diagonal 102BA8
-rectangle.expand.vertical 100438
-rectangle.fill 1003C4
-rectangle.fill.badge.checkmark 1003D6
-rectangle.fill.badge.minus 1003D4
-rectangle.fill.badge.person.crop 100D5B
-rectangle.fill.badge.plus 1003D2
-rectangle.fill.badge.xmark 1003D8
-rectangle.fill.on.rectangle.angled.fill 100470
-rectangle.fill.on.rectangle.fill 1003E8
-rectangle.filled.and.hand.point.up.left 100AA6
-rectangle.grid.1x2 1004DB
-rectangle.grid.1x2.fill 100689
-rectangle.grid.1x3 10347C
-rectangle.grid.1x3.fill 10347D
-rectangle.grid.2x2 1006E6
-rectangle.grid.2x2.fill 1006E7
-rectangle.grid.3x1 102DAF
-rectangle.grid.3x1.fill 102DB0
-rectangle.grid.3x2 1001F6
-rectangle.grid.3x2.fill 100686
-rectangle.grid.3x3 102AD1
-rectangle.grid.3x3.fill 102AD2
-rectangle.landscape.rotate 101EEF
-rectangle.landscape.rotate.slash 103532
-rectangle.leadinghalf.filled 1012F6
-rectangle.lefthalf.filled 100936
-rectangle.on.rectangle 1003E7
-rectangle.on.rectangle.angled 10046F
-rectangle.on.rectangle.badge.gearshape 1021D3
-rectangle.on.rectangle.button.angledtop.vertical.left 101DF7
-rectangle.on.rectangle.button.angledtop.vertical.left.fill 101DF8
-rectangle.on.rectangle.circle 10093D
-rectangle.on.rectangle.circle.fill 10093E
-rectangle.on.rectangle.dashed 102817
-rectangle.on.rectangle.slash 100940
-rectangle.on.rectangle.slash.circle 100EEF
-rectangle.on.rectangle.slash.circle.fill 100EF0
-rectangle.on.rectangle.slash.fill 10093F
-rectangle.on.rectangle.square 100F4F
-rectangle.on.rectangle.square.fill 100F50
-rectangle.pattern.checkered 100AAB
-rectangle.portrait 1007CF
-rectangle.portrait.and.arrow.forward 1016A0
-rectangle.portrait.and.arrow.forward.fill 1016A1
-rectangle.portrait.and.arrow.right 100EF5
-rectangle.portrait.and.arrow.right.fill 100EF6
-rectangle.portrait.arrowtriangle.2.inward 100AFC
-rectangle.portrait.arrowtriangle.2.outward 100AFB
-rectangle.portrait.badge.plus 10194B
-rectangle.portrait.badge.plus.fill 10194C
-rectangle.portrait.bottomhalf.filled 100FF2
-rectangle.portrait.fill 1007D0
-rectangle.portrait.lefthalf.filled 100FEC
-rectangle.portrait.on.rectangle.portrait 100F70
-rectangle.portrait.on.rectangle.portrait.angled 101255
-rectangle.portrait.on.rectangle.portrait.angled.fill 101256
-rectangle.portrait.on.rectangle.portrait.fill 100F71
-rectangle.portrait.on.rectangle.portrait.slash 100F72
-rectangle.portrait.on.rectangle.portrait.slash.fill 100F73
-rectangle.portrait.righthalf.filled 100FED
-rectangle.portrait.rotate 101EEE
-rectangle.portrait.rotate.slash 103535
-rectangle.portrait.slash 100F86
-rectangle.portrait.slash.fill 100F87
-rectangle.portrait.split.2x1 100F74
-rectangle.portrait.split.2x1.fill 100F75
-rectangle.portrait.split.2x1.slash 100F76
-rectangle.portrait.split.2x1.slash.fill 100F77
-rectangle.portrait.tophalf.filled 100FF1
-rectangle.ratio.16.to.9 101F7E
-rectangle.ratio.16.to.9.fill 101F7F
-rectangle.ratio.3.to.4 101F78
-rectangle.ratio.3.to.4.fill 101F79
-rectangle.ratio.4.to.3 101F7A
-rectangle.ratio.4.to.3.fill 101F7B
-rectangle.ratio.9.to.16 101F7C
-rectangle.ratio.9.to.16.fill 101F7D
-rectangle.righthalf.filled 100937
-rectangle.slash 1008E4
-rectangle.slash.fill 1008E5
-rectangle.split.1x2 1009CA
-rectangle.split.1x2.fill 1009CB
-rectangle.split.2x1 1009C8
-rectangle.split.2x1.fill 1009C9
-rectangle.split.2x1.slash 100F8A
-rectangle.split.2x1.slash.fill 100F8B
-rectangle.split.2x2 1009CC
-rectangle.split.2x2.fill 1009CD
-rectangle.split.3x1 1003DF
-rectangle.split.3x1.fill 100578
-rectangle.split.3x3 1003E2
-rectangle.split.3x3.fill 10062E
-rectangle.stack 1003ED
-rectangle.stack.badge.minus 1003F3
-rectangle.stack.badge.person.crop 1003F9
-rectangle.stack.badge.person.crop.fill 1003FA
-rectangle.stack.badge.play 100F59
-rectangle.stack.badge.play.fill 100F5A
-rectangle.stack.badge.plus 1003F1
-rectangle.stack.fill 1003EE
-rectangle.stack.fill.badge.minus 1003F4
-rectangle.stack.fill.badge.plus 1003F2
-rectangle.stack.slash 103211
-rectangle.stack.slash.fill 103212
-rectangle.tophalf.filled 100FEF
-rectangle.trailinghalf.filled 1012F7
-refrigerator 10141E
-refrigerator.fill 10141F
-repeat 10029E
-repeat.1 10029F
-repeat.1.ar 101044
-repeat.1.circle 100D4D
-repeat.1.circle.ar 101045
-repeat.1.circle.fill 100D4E
-repeat.1.circle.fill.ar 101046
-repeat.1.circle.fill.hi 101049
-repeat.1.circle.hi 101048
-repeat.1.hi 101047
-repeat.badge.xmark 102EDB
-repeat.circle 100D4B
-repeat.circle.fill 100D4C
-restart 100BC6
-restart.circle 1008E8
-restart.circle.fill 100D9E
-retarder.brakesignal 1017C7
-retarder.brakesignal.and.exclamationmark 1017C8
-retarder.brakesignal.slash 1017CB
-return 100147
-return.left 101086
-return.right 101087
-rhombus 1002C0
-rhombus.fill 1002C1
-richtext.page 100245
-richtext.page.ar 100B4C
-richtext.page.fill 10098A
-richtext.page.fill.ar 100B4D
-richtext.page.fill.he 100B4F
-richtext.page.fill.hi 100DAD
-richtext.page.fill.ja 100DA9
-richtext.page.fill.ko 100DAB
-richtext.page.fill.th 100DA5
-richtext.page.fill.zh 100DA7
-richtext.page.he 100B4E
-richtext.page.hi 100DAC
-richtext.page.ja 100DA8
-richtext.page.ko 100DAA
-richtext.page.th 100DA4
-richtext.page.zh 100DA6
-right 1018E6
-right.circle 1018E7
-right.circle.fill 1018E8
-righttriangle 101E6B
-righttriangle.fill 101E6C
-righttriangle.split.diagonal 100378
-righttriangle.split.diagonal.fill 100379
-ring 10328D
-ring.dashed 10328C
-ring.light 1036A3
-rm.button.horizontal 101EA6
-rm.button.horizontal.fill 101EA7
-road.lane.arrowtriangle.2.inward 101576
-road.lane.arrowtriangle.2.outward 102F00
-road.lanes 101577
-road.lanes.curved.left 10157A
-road.lanes.curved.right 10157B
-robotic.vacuum 102A2D
-robotic.vacuum.and.arrowtriangle.up 102F33
-robotic.vacuum.and.arrowtriangle.up.fill 102F34
-robotic.vacuum.and.ellipsis 102F31
-robotic.vacuum.and.ellipsis.fill 102F32
-robotic.vacuum.fill 102A2E
-roller.shade.closed 10147A
-roller.shade.open 101479
-roman.shade.closed 10147C
-roman.shade.open 10147B
-rosette 1006EF
-rotate.3d 100887
-rotate.3d.circle 101C40
-rotate.3d.circle.fill 101C41
-rotate.3d.fill 101C42
-rotate.left 1003AE
-rotate.left.fill 1003AF
-rotate.right 1003B0
-rotate.right.fill 1003B1
-rsb.button.angledbottom.horizontal.right 101E0D
-rsb.button.angledbottom.horizontal.right.fill 101E0E
-rt.button.roundedtop.horizontal 100A19
-rt.button.roundedtop.horizontal.fill 100A1A
-rt.circle 101E8F
-rt.circle.fill 101E90
-rublesign 101446
-rublesign.arrow.trianglehead.counterclockwise.rotate.90 102219
-rublesign.building.classical 102509
-rublesign.building.classical.fill 10250A
-rublesign.circle 1005A5
-rublesign.circle.fill 1005A6
-rublesign.gauge.chart.lefthalf.righthalf 102A5A
-rublesign.gauge.chart.leftthird.topthird.rightthird 102A84
-rublesign.ring 102C2A
-rublesign.ring.dashed 102C00
-rublesign.square 1005E5
-rublesign.square.fill 1005E6
-rugbyball 1023B9
-rugbyball.circle 1023BB
-rugbyball.circle.fill 1023BC
-rugbyball.fill 1023BA
-ruler 1007C0
-ruler.fill 1007C1
-rupeesign 10145B
-rupeesign.arrow.trianglehead.counterclockwise.rotate.90 10222E
-rupeesign.building.classical 102533
-rupeesign.building.classical.fill 102534
-rupeesign.circle 1005CF
-rupeesign.circle.fill 1005D0
-rupeesign.gauge.chart.lefthalf.righthalf 102A5B
-rupeesign.gauge.chart.leftthird.topthird.rightthird 102A85
-rupeesign.ring 102C2B
-rupeesign.ring.dashed 102C01
-rupeesign.square 10060F
-rupeesign.square.fill 100610
-s.circle 100028
-s.circle.fill 100029
-s.square 1000B8
-s.square.fill 1000B9
-safari 1003AC
-safari.fill 1003AD
-sailboat 1012F4
-sailboat.circle 101798
-sailboat.circle.fill 101799
-sailboat.fill 1012F5
-scale.3d 100886
-scalemass 100B6D
-scalemass.fill 100B6E
-scanner 100A8A
-scanner.fill 100A8B
-scissors 100248
-scissors.badge.ellipsis 1007B7
-scissors.circle 1011D4
-scissors.circle.fill 1011D5
-scooter 10120C
-scope 100429
-scope.continuous 10371F
-screwdriver 100908
-screwdriver.fill 100909
-scribble 1004E8
-scribble.variable 100911
-scroll 10090F
-scroll.fill 100910
-sdcard 100A87
-sdcard.fill 100A88
-seal 1007C6
-seal.fill 1007C7
-selection.pin.in.out 100460
-sensor 101509
-sensor.fill 10150A
-sensor.radiowaves.left.and.right 1031B2
-sensor.radiowaves.left.and.right.fill 1031B3
-sensor.tag.radiowaves.forward 10105D
-sensor.tag.radiowaves.forward.fill 10105E
-server.rack 100AAC
-service.dog 1033A2
-service.dog.fill 1033A3
-shadow 100A21
-sharedwithyou 101141
-sharedwithyou.circle 1021C4
-sharedwithyou.circle.fill 102100
-sharedwithyou.slash 1011E6
-shareplay 1010D1
-shareplay.slash 100D14
-shazam.logo 101234
-shazam.logo.fill 101235
-shekelsign 101459
-shekelsign.arrow.trianglehead.counterclockwise.rotate.90 10222C
-shekelsign.building.classical 10252F
-shekelsign.building.classical.fill 102530
-shekelsign.circle 1005CB
-shekelsign.circle.fill 1005CC
-shekelsign.gauge.chart.lefthalf.righthalf 102A5C
-shekelsign.gauge.chart.leftthird.topthird.rightthird 102A86
-shekelsign.ring 102C2C
-shekelsign.ring.dashed 102C02
-shekelsign.square 10060B
-shekelsign.square.fill 10060C
-shield 100666
-shield.fill 100667
-shield.lefthalf.filled 100668
-shield.lefthalf.filled.badge.checkmark 101DE5
-shield.lefthalf.filled.slash 100C8A
-shield.lefthalf.filled.trianglebadge.exclamationmark 101DE7
-shield.pattern.checkered 100D54
-shield.righthalf.filled 100FEE
-shield.slash 1007A1
-shield.slash.fill 1007A2
-shift 10019D
-shift.fill 10019E
-shippingbox 10041A
-shippingbox.and.arrow.backward 1007C4
-shippingbox.and.arrow.backward.fill 1007C5
-shippingbox.circle 1011C8
-shippingbox.circle.fill 1011C9
-shippingbox.fill 10041B
-shoe 1018EF
-shoe.2 1018F1
-shoe.2.fill 1018F2
-shoe.arrow.trianglehead.up.and.down 103549
-shoe.arrow.trianglehead.up.and.down.fill 103554
-shoe.arrow.trianglehead.up.right 1018EB
-shoe.arrow.trianglehead.up.right.circle 1018EC
-shoe.arrow.trianglehead.up.right.circle.fill 1018ED
-shoe.arrow.trianglehead.up.right.fill 1018EE
-shoe.circle 101904
-shoe.circle.fill 101905
-shoe.fill 1018F0
-shoeprints.fill 101508
-shower 1014C2
-shower.fill 1014C3
-shower.handheld 1014CD
-shower.handheld.fill 1014CE
-shower.sidejet 1014C6
-shower.sidejet.fill 1014C7
-shuffle 10029D
-shuffle.circle 100D49
-shuffle.circle.fill 100D4A
-sidebar.leading 100C31
-sidebar.left 1003DA
-sidebar.right 1003DB
-sidebar.squares.leading 100C66
-sidebar.squares.left 100C64
-sidebar.squares.right 100C65
-sidebar.squares.trailing 100C67
-sidebar.trailing 100C32
-signature 100664
-signature.ar 100BB8
-signature.he 100BB9
-signature.ja 100DE6
-signature.th 100439
-signature.zh 100AFD
-signpost.and.arrowtriangle.up 101773
-signpost.and.arrowtriangle.up.circle 101790
-signpost.and.arrowtriangle.up.circle.fill 101791
-signpost.and.arrowtriangle.up.fill 101774
-signpost.left 100C2F
-signpost.left.circle 10178A
-signpost.left.circle.fill 10178B
-signpost.left.fill 100C30
-signpost.right 100BCC
-signpost.right.and.left 10176E
-signpost.right.and.left.circle 10178E
-signpost.right.and.left.circle.fill 10178F
-signpost.right.and.left.fill 10176D
-signpost.right.circle 10178C
-signpost.right.circle.fill 10178D
-signpost.right.fill 100BCD
-simcard 100805
-simcard.2 100879
-simcard.2.fill 10087A
-simcard.fill 100806
-singaporedollarsign 102A30
-singaporedollarsign.arrow.trianglehead.counterclockwise.rotate.90 102A31
-singaporedollarsign.building.classical 102A32
-singaporedollarsign.building.classical.fill 102A33
-singaporedollarsign.circle 10226E
-singaporedollarsign.circle.fill 10226F
-singaporedollarsign.gauge.chart.lefthalf.righthalf 102A5D
-singaporedollarsign.gauge.chart.leftthird.topthird.rightthird 102A87
-singaporedollarsign.ring 102C2D
-singaporedollarsign.ring.dashed 102C03
-singaporedollarsign.square 102270
-singaporedollarsign.square.fill 102271
-sink 10142A
-sink.fill 10142B
-siri 100ADB
-siri.gen1 1037A3
-siri.gen2 1037D1
-skateboard 1020A9
-skateboard.fill 1020AA
-skew 100375
-skis 1020AB
-skis.fill 1020AC
-slash.circle 100567
-slash.circle.fill 100568
-sleep 10071A
-sleep.circle 100D9F
-sleep.circle.fill 100DA0
-slider.horizontal.2.arrow.trianglehead.counterclockwise 10168C
-slider.horizontal.2.rectangle.and.arrow.trianglehead.2.clockwise.rotate.90 10114A
-slider.horizontal.2.square 101D64
-slider.horizontal.2.square.badge.arrow.down 10168B
-slider.horizontal.2.square.on.square 10168A
-slider.horizontal.3 100306
-slider.horizontal.below.circle.lefthalf.filled 103063
-slider.horizontal.below.circle.lefthalf.filled.inverse 103064
-slider.horizontal.below.circle.righthalf.filled 103065
-slider.horizontal.below.circle.righthalf.filled.inverse 103066
-slider.horizontal.below.rectangle 100417
-slider.horizontal.below.square.and.square.filled 101404
-slider.horizontal.below.square.filled.and.square 100C17
-slider.horizontal.below.sun.max 101FCC
-slider.horizontal.below.sun.min 10361C
-slider.vertical.3 1007F2
-slowmo 1001F1
-smallcircle.circle 10056A
-smallcircle.circle.fill 10056B
-smallcircle.filled.circle 100377
-smallcircle.filled.circle.fill 100569
-smartphone 10192B
-smoke 1001E2
-smoke.circle 1016ED
-smoke.circle.fill 1016EE
-smoke.fill 1001E3
-snowboard 1020AD
-snowboard.fill 1020AE
-snowflake 1001E5
-snowflake.circle 1011CC
-snowflake.circle.fill 1011CD
-snowflake.road.lane 101579
-snowflake.road.lane.dashed 101580
-snowflake.slash 101802
-soccerball 1009A5
-soccerball.circle 1016B8
-soccerball.circle.fill 1016B9
-soccerball.circle.fill.inverse 10173D
-soccerball.circle.inverse 1016BA
-soccerball.inverse 1015C8
-sofa 101432
-sofa.fill 101433
-sos 100725
-sos.circle 1017AA
-sos.circle.fill 1017AB
-space 10107A
-sparkle 100AF8
-sparkle.magnifyingglass 1011E5
-sparkle.text.clipboard 1034FF
-sparkle.text.clipboard.fill 103500
-sparkles 1001BF
-sparkles.2 103230
-sparkles.rectangle.stack 100CB3
-sparkles.rectangle.stack.fill 100CB4
-sparkles.square.filled.on.square 100C19
-sparkles.tv 10114B
-sparkles.tv.fill 10114C
-spatial.capture 102291
-spatial.capture.fill 102292
-spatial.capture.on.hexagon 102293
-spatial.capture.on.hexagon.fill 102294
-spatial.capture.slash 102A99
-spatial.capture.slash.fill 102A9A
-speaker 1002A0
-speaker.badge.exclamationmark 100F8F
-speaker.badge.exclamationmark.fill 100F90
-speaker.circle 100EC1
-speaker.circle.fill 100EC2
-speaker.fill 1002A1
-speaker.minus 10170C
-speaker.minus.fill 10170D
-speaker.plus 10170A
-speaker.plus.fill 10170B
-speaker.slash 1002A2
-speaker.slash.circle 100AE0
-speaker.slash.circle.fill 100AE1
-speaker.slash.circle.fill.rtl 100AE3
-speaker.slash.circle.rtl 100AE2
-speaker.slash.fill 1002A3
-speaker.slash.fill.rtl 10063A
-speaker.slash.rtl 100639
-speaker.square 100F45
-speaker.square.fill 100F46
-speaker.trianglebadge.exclamationmark 1032BA
-speaker.trianglebadge.exclamationmark.fill 1032BB
-speaker.wave.1 1002A4
-speaker.wave.1.arrowtriangles.up.right.down.left 10283B
-speaker.wave.1.fill 1002A5
-speaker.wave.2 1002A6
-speaker.wave.2.bubble 1015EE
-speaker.wave.2.bubble.fill 1015EF
-speaker.wave.2.bubble.fill.rtl 10165F
-speaker.wave.2.bubble.rtl 10165E
-speaker.wave.2.circle 100951
-speaker.wave.2.circle.fill 100952
-speaker.wave.2.fill 1002A7
-speaker.wave.3 1002A8
-speaker.wave.3.fill 1002A9
-speaker.zzz 10030A
-speaker.zzz.fill 10045E
-speaker.zzz.fill.rtl 100740
-speaker.zzz.rtl 10073F
-spigot 1014BE
-spigot.fill 1014BF
-spoon.serving 102EDD
-sportscourt 100750
-sportscourt.circle 101707
-sportscourt.circle.fill 101708
-sportscourt.fill 100751
-sprinkler 10150C
-sprinkler.and.droplets 1014BC
-sprinkler.and.droplets.fill 1014BD
-sprinkler.fill 10150D
-square 100092
-square.2.layers.3d 100BED
-square.2.layers.3d.bottom.filled 100BEF
-square.2.layers.3d.fill 101E3C
-square.2.layers.3d.top.filled 100BEE
-square.3.layers.3d 100BF0
-square.3.layers.3d.bottom.filled 100BF3
-square.3.layers.3d.down.backward 1012DC
-square.3.layers.3d.down.backward.slash.rtl 101304
-square.3.layers.3d.down.forward 1012DB
-square.3.layers.3d.down.forward.slash.rtl 101303
-square.3.layers.3d.down.left 10127C
-square.3.layers.3d.down.left.slash 1012FD
-square.3.layers.3d.down.right 10127D
-square.3.layers.3d.down.right.slash 1012FC
-square.3.layers.3d.middle.filled 100BF2
-square.3.layers.3d.slash 101305
-square.3.layers.3d.top.filled 100BF1
-square.and.arrow.down 100204
-square.and.arrow.down.badge.checkmark 102DE1
-square.and.arrow.down.badge.checkmark.fill 102DE2
-square.and.arrow.down.badge.clock 102C35
-square.and.arrow.down.badge.clock.fill 102C36
-square.and.arrow.down.badge.xmark 102DE5
-square.and.arrow.down.badge.xmark.fill 102DE6
-square.and.arrow.down.fill 100205
-square.and.arrow.down.on.square 100208
-square.and.arrow.down.on.square.fill 100209
-square.and.arrow.up 100202
-square.and.arrow.up.badge.checkmark 102F3D
-square.and.arrow.up.badge.checkmark.fill 102F3E
-square.and.arrow.up.badge.clock 1022CD
-square.and.arrow.up.badge.clock.fill 1022CF
-square.and.arrow.up.circle 101145
-square.and.arrow.up.circle.fill 101146
-square.and.arrow.up.fill 100203
-square.and.arrow.up.on.square 100206
-square.and.arrow.up.on.square.fill 100207
-square.and.arrow.up.trianglebadge.exclamationmark 10109A
-square.and.arrow.up.trianglebadge.exclamationmark.fill 1022D1
-square.and.at.rectangle 10098F
-square.and.at.rectangle.fill 100FD1
-square.and.line.vertical.and.square 100411
-square.and.line.vertical.and.square.filled 100414
-square.and.pencil 10020E
-square.and.pencil.circle 1015D9
-square.and.pencil.circle.fill 1015DA
-square.arrowtriangle.4.outward 100839
-square.badge.plus 101949
-square.badge.plus.fill 10194A
-square.bottomhalf.filled 100A9A
-square.circle 100A03
-square.circle.fill 100A04
-square.dashed 1004D4
-square.dashed.micro 103731
-square.dotted 101293
-square.fill 100093
-square.fill.and.line.vertical.and.square.fill 100412
-square.fill.on.circle.fill 10040A
-square.fill.on.square.fill 100406
-square.fill.text.grid.1x2 100B5E
-square.filled.and.line.vertical.and.square 100413
-square.filled.on.square 100ADD
-square.grid.2x2 1001F7
-square.grid.2x2.fill 100688
-square.grid.3x1.below.line.grid.1x2 1004D9
-square.grid.3x1.below.line.grid.1x2.fill 100932
-square.grid.3x1.folder.badge.plus 1008D5
-square.grid.3x1.folder.fill.badge.plus 1008D6
-square.grid.3x2 1001F5
-square.grid.3x2.fill 100687
-square.grid.3x3 1009B2
-square.grid.3x3.bottomleft.filled 1009BA
-square.grid.3x3.bottommiddle.filled 1009BB
-square.grid.3x3.bottomright.filled 1009BC
-square.grid.3x3.fill 1009B3
-square.grid.3x3.middle.filled 1009B8
-square.grid.3x3.middleleft.filled 1009B7
-square.grid.3x3.middleright.filled 1009B9
-square.grid.3x3.square 100AD0
-square.grid.3x3.square.badge.ellipsis 102804
-square.grid.3x3.topleft.filled 1009B4
-square.grid.3x3.topmiddle.filled 1009B5
-square.grid.3x3.topright.filled 1009B6
-square.grid.4x3.fill 1004DA
-square.lefthalf.filled 100693
-square.on.circle 100409
-square.on.square 100405
-square.on.square.badge.person.crop 101670
-square.on.square.badge.person.crop.fill 101671
-square.on.square.dashed 100BC7
-square.on.square.intersection.dashed 10113B
-square.on.square.squareshape.controlhandles 100A76
-square.resize 10205F
-square.resize.down 101EA0
-square.resize.up 101E9F
-square.righthalf.filled 100694
-square.slash 1008E6
-square.slash.fill 1008E7
-square.split.1x2 100570
-square.split.1x2.fill 100571
-square.split.2x1 1003E0
-square.split.2x1.fill 10061C
-square.split.2x2 10056E
-square.split.2x2.fill 10056F
-square.split.bottomrightquarter 1007FB
-square.split.bottomrightquarter.fill 1007FC
-square.split.diagonal 100857
-square.split.diagonal.2x2 100572
-square.split.diagonal.2x2.fill 100573
-square.split.diagonal.fill 100858
-square.stack 10040B
-square.stack.3d.down.forward 100C33
-square.stack.3d.down.forward.fill 100C34
-square.stack.3d.down.right 10041C
-square.stack.3d.down.right.fill 10041D
-square.stack.3d.forward.dottedline 100420
-square.stack.3d.forward.dottedline.fill 1009CF
-square.stack.3d.up 10041E
-square.stack.3d.up.badge.automatic 100650
-square.stack.3d.up.badge.automatic.fill 100651
-square.stack.3d.up.fill 10041F
-square.stack.3d.up.slash 100652
-square.stack.3d.up.slash.fill 100653
-square.stack.3d.up.trianglebadge.exclamationmark 102161
-square.stack.3d.up.trianglebadge.exclamationmark.fill 102162
-square.stack.fill 10040C
-square.text.square 100EE1
-square.text.square.fill 100EE2
-square.tophalf.filled 100A9B
-squareroot 102CAF
-squares.below.rectangle 1003E1
-squares.leading.rectangle 1016AC
-squares.leading.rectangle.fill 102185
-squareshape 1008EE
-squareshape.controlhandles.on.squareshape.controlhandles 100A77
-squareshape.dotted.squareshape 100A62
-squareshape.fill 1008EF
-squareshape.on.pattern.diagonalline 10379F
-squareshape.split.2x2 100B9E
-squareshape.split.2x2.dotted.inside 100B8C
-squareshape.split.2x2.dotted.inside.and.outside 1014D3
-squareshape.split.2x2.dotted.outside 102F3C
-squareshape.split.3x3 100B9F
-squareshape.squareshape.dotted 100AF4
-stairs 10154B
-star 1002C2
-star.bubble 1010AA
-star.bubble.fill 1010AB
-star.calendar 103763
-star.circle 1002C5
-star.circle.fill 1002C6
-star.fill 1002C3
-star.hexagon 102EB7
-star.hexagon.fill 102EB8
-star.leadinghalf.filled 1002C4
-star.rectangle 103591
-star.rectangle.fill 103592
-star.slash 1002C7
-star.slash.fill 1002C8
-star.square 100827
-star.square.fill 100828
-star.square.on.square 10168D
-star.square.on.square.fill 10168E
-staroflife 100446
-staroflife.circle 1004BA
-staroflife.circle.fill 1004BB
-staroflife.fill 100447
-staroflife.shield 1018D6
-staroflife.shield.fill 1018D7
-steeringwheel 1010A9
-steeringwheel.and.hands 1023D0
-steeringwheel.and.heat.waves 101259
-steeringwheel.and.key 1017BF
-steeringwheel.and.liquid.wave 10189F
-steeringwheel.arrow.trianglehead.counterclockwise.and.clockwise 102961
-steeringwheel.arrowtriangle.left 1015B0
-steeringwheel.arrowtriangle.right 1015B1
-steeringwheel.badge.exclamationmark 10125B
-steeringwheel.badge.lock 1017C0
-steeringwheel.circle 101FE2
-steeringwheel.circle.fill 101FE3
-steeringwheel.exclamationmark 10125A
-steeringwheel.road.lane 1015A5
-steeringwheel.road.lane.dashed 1015A6
-steeringwheel.slash 101849
-sterlingsign 101442
-sterlingsign.arrow.trianglehead.counterclockwise.rotate.90 102215
-sterlingsign.building.classical 102501
-sterlingsign.building.classical.fill 102502
-sterlingsign.circle 10059D
-sterlingsign.circle.fill 10059E
-sterlingsign.gauge.chart.lefthalf.righthalf 102A5E
-sterlingsign.gauge.chart.leftthird.topthird.rightthird 102A88
-sterlingsign.ring 102C2E
-sterlingsign.ring.dashed 102C04
-sterlingsign.square 1005DD
-sterlingsign.square.fill 1005DE
-stethoscope 10077E
-stethoscope.circle 1011C4
-stethoscope.circle.fill 1011C5
-stop 1006F6
-stop.circle 10072A
-stop.circle.fill 10072B
-stop.fill 1006F7
-stopwatch 10042F
-stopwatch.fill 100430
-storefront 101F47
-storefront.circle 101F49
-storefront.circle.fill 101F4A
-storefront.fill 101F48
-stove 101426
-stove.fill 101427
-strikethrough 100156
-strikethrough.double 10340B
-stroke.line.diagonal 10346A
-stroke.line.diagonal.slash 10346B
-stroller 101796
-stroller.fill 101797
-studentdesk 100454
-suit.club 100483
-suit.club.fill 1002BD
-suit.diamond 100484
-suit.diamond.fill 1002BF
-suit.heart 100482
-suit.heart.fill 1002BC
-suit.spade 100485
-suit.spade.fill 1002BE
-suitcase 100D89
-suitcase.cart 100D8B
-suitcase.cart.fill 100D8C
-suitcase.circle 103045
-suitcase.circle.fill 103046
-suitcase.fill 100D8A
-suitcase.rolling 1017AF
-suitcase.rolling.and.film 103308
-suitcase.rolling.and.film.circle 10330C
-suitcase.rolling.and.film.circle.fill 10330D
-suitcase.rolling.and.film.fill 103309
-suitcase.rolling.and.suitcase 1032D5
-suitcase.rolling.and.suitcase.circle 1032D7
-suitcase.rolling.and.suitcase.circle.fill 1032D8
-suitcase.rolling.and.suitcase.fill 1032D6
-suitcase.rolling.circle 1032D3
-suitcase.rolling.circle.fill 1032D4
-suitcase.rolling.fill 1017B0
-sum 10063D
-sum.ar 100C61
-sun.dust 1001B5
-sun.dust.circle 1016C7
-sun.dust.circle.fill 1016C8
-sun.dust.fill 1001B6
-sun.haze 1001B7
-sun.haze.circle 1016C9
-sun.haze.circle.fill 1016CA
-sun.haze.fill 1001B8
-sun.horizon 100EDE
-sun.horizon.circle 1016C5
-sun.horizon.circle.fill 1016C6
-sun.horizon.fill 100EDF
-sun.lefthalf.filled 102C62
-sun.max 1001AD
-sun.max.circle 100DCE
-sun.max.circle.fill 100DCF
-sun.max.fill 1001AE
-sun.max.trianglebadge.exclamationmark 10170E
-sun.max.trianglebadge.exclamationmark.fill 10170F
-sun.min 1001AB
-sun.min.fill 1001AC
-sun.rain 101DCC
-sun.rain.circle 101DCE
-sun.rain.circle.fill 101DCF
-sun.rain.fill 101DCD
-sun.righthalf.filled 102C63
-sun.snow 101DD0
-sun.snow.circle 101DD2
-sun.snow.circle.fill 101DD3
-sun.snow.fill 101DD1
-sunglasses 101EC8
-sunglasses.fill 101EC9
-sunrise 1001B1
-sunrise.circle 1016C1
-sunrise.circle.fill 1016C2
-sunrise.fill 1001B2
-sunset 1001B3
-sunset.circle 1016C3
-sunset.circle.fill 1016C4
-sunset.fill 1001B4
-surfboard 1020AF
-surfboard.fill 1020B0
-suspension.shock 1022AF
-suv.side 101800
-suv.side.air.circulate 101811
-suv.side.air.circulate.fill 101812
-suv.side.air.fresh 101813
-suv.side.air.fresh.fill 101814
-suv.side.and.exclamationmark 101815
-suv.side.and.exclamationmark.fill 101816
-suv.side.arrow.left.and.right 102E7E
-suv.side.arrow.left.and.right.fill 102E7F
-suv.side.arrowtriangle.down 10181D
-suv.side.arrowtriangle.down.fill 10181E
-suv.side.arrowtriangle.up 10181B
-suv.side.arrowtriangle.up.arrowtriangle.down 101819
-suv.side.arrowtriangle.up.arrowtriangle.down.fill 10181A
-suv.side.arrowtriangle.up.fill 10181C
-suv.side.fill 101801
-suv.side.front.open 10180D
-suv.side.front.open.crop 102796
-suv.side.front.open.crop.fill 102797
-suv.side.front.open.fill 10180E
-suv.side.hill.descent.control 1022A8
-suv.side.hill.descent.control.fill 1022A9
-suv.side.hill.down 101950
-suv.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle 102F1F
-suv.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill 102F20
-suv.side.hill.down.fill 101951
-suv.side.hill.up 10190F
-suv.side.hill.up.fill 101910
-suv.side.lock 101900
-suv.side.lock.fill 101901
-suv.side.lock.open 101902
-suv.side.lock.open.fill 101903
-suv.side.rear.open 10180F
-suv.side.rear.open.crop 102798
-suv.side.rear.open.crop.fill 102799
-suv.side.rear.open.fill 101810
-suv.side.roof.cargo.carrier 1022A2
-suv.side.roof.cargo.carrier.fill 1022A3
-suv.side.roof.cargo.carrier.slash 102645
-suv.side.roof.cargo.carrier.slash.fill 102647
-swatchpalette 101667
-swatchpalette.fill 101668
-swedishkronasign 10192D
-swedishkronasign.arrow.trianglehead.counterclockwise.rotate.90 102236
-swedishkronasign.building.classical 102543
-swedishkronasign.building.classical.fill 102544
-swedishkronasign.circle 100BA8
-swedishkronasign.circle.fill 100BA9
-swedishkronasign.gauge.chart.lefthalf.righthalf 102A5F
-swedishkronasign.gauge.chart.leftthird.topthird.rightthird 102A89
-swedishkronasign.ring 102C2F
-swedishkronasign.ring.dashed 102C05
-swedishkronasign.square 100BAA
-swedishkronasign.square.fill 100BAB
-swift 100ACA
-swiftdata 1015EB
-swirl.circle.righthalf.filled 101E62
-swirl.circle.righthalf.filled.inverse 101E6A
-switch.2 10070A
-switch.programmable 101573
-switch.programmable.fill 101600
-switch.programmable.square 101574
-switch.programmable.square.fill 101575
-syringe 100837
-syringe.fill 100838
-t.circle 10002A
-t.circle.fill 10002B
-t.square 1000BA
-t.square.fill 1000BB
-table.furniture 101430
-table.furniture.fill 101431
-tablecells 1003E3
-tablecells.badge.ellipsis 1003E5
-tablecells.fill 1003E4
-tablecells.fill.badge.ellipsis 1003E6
-tachometer 10269A
-tag 1002E1
-tag.circle 1002E3
-tag.circle.fill 1002E4
-tag.fill 1002E2
-tag.slash 1009AB
-tag.slash.fill 1009AC
-tag.square 100F41
-tag.square.fill 100F42
-taillight.fog 100FB8
-taillight.fog.fill 100FB9
-takeoutbag.and.cup.and.straw 100ED0
-takeoutbag.and.cup.and.straw.fill 100ED1
-target 10088A
-teddybear 100CAC
-teddybear.fill 100CAD
-teletype 100348
-teletype.answer 100670
-teletype.answer.circle 100D26
-teletype.answer.circle.fill 100D27
-teletype.circle 100705
-teletype.circle.fill 100706
-tengesign 10144A
-tengesign.arrow.trianglehead.counterclockwise.rotate.90 10221D
-tengesign.building.classical 102511
-tengesign.building.classical.fill 102512
-tengesign.circle 1005AD
-tengesign.circle.fill 1005AE
-tengesign.gauge.chart.lefthalf.righthalf 102A60
-tengesign.gauge.chart.leftthird.topthird.rightthird 102A8A
-tengesign.ring 102C30
-tengesign.ring.dashed 102C06
-tengesign.square 1005ED
-tengesign.square.fill 1005EE
-tennis.racket 1015CD
-tennis.racket.circle 101724
-tennis.racket.circle.fill 101725
-tennisball 101726
-tennisball.circle 101728
-tennisball.circle.fill 101729
-tennisball.fill 101727
-tent 1012E8
-tent.2 101510
-tent.2.circle 101784
-tent.2.circle.fill 101785
-tent.2.fill 101511
-tent.circle 101782
-tent.circle.fill 101783
-tent.fill 1012E9
-testtube.2 1010B6
-text.aligncenter 100301
-text.alignleft 100300
-text.alignright 100302
-text.and.command.interface.window 1008DA
-text.append 1002FE
-text.badge.checkmark 1002FA
-text.badge.checkmark.rtl 100A41
-text.badge.minus 1002F9
-text.badge.plus 1002F8
-text.badge.star 1002FC
-text.badge.xmark 1002FB
-text.below.folder 10342F
-text.below.folder.fill 103430
-text.below.photo 100CB1
-text.below.photo.fill 100CB2
-text.below.photo.fill.rtl 100D09
-text.below.photo.rtl 100D08
-text.book.closed 100AD7
-text.book.closed.fill 100AD8
-text.bubble 100332
-text.bubble.badge.clock 102C64
-text.bubble.badge.clock.fill 102C65
-text.bubble.badge.clock.fill.rtl 102C6A
-text.bubble.badge.clock.rtl 102C68
-text.bubble.fill 100333
-text.bubble.fill.rtl 100A3C
-text.bubble.rtl 100A3B
-text.document 10023F
-text.document.fill 100240
-text.insert 1002FD
-text.justify 100303
-text.justify.leading 101240
-text.justify.left 100304
-text.justify.right 100305
-text.justify.trailing 101241
-text.line.2.summary 102994
-text.line.2.summary.badge.xmark 10302D
-text.line.3.summary 10291F
-text.line.first.and.arrowtriangle.forward 10163F
-text.line.last.and.arrowtriangle.forward 101640
-text.line.magnify 102B01
-text.magnifyingglass 100B65
-text.magnifyingglass.rtl 100B66
-text.menu 10379C
-text.pad.header 1004D5
-text.pad.header.badge.clock 103011
-text.pad.header.badge.clock.rtl 103012
-text.pad.header.badge.plus 1008D9
-text.page 100246
-text.page.and.line.vertical.and.text.page 103725
-text.page.and.line.vertical.and.text.page.rtl 103726
-text.page.badge.magnifyingglass 100579
-text.page.fill 100968
-text.page.slash 102C51
-text.page.slash.fill 102C52
-text.page.slash.fill.rtl 102C56
-text.page.slash.rtl 102C55
-text.quote 1002FF
-text.quote.rtl 100B55
-text.rectangle 103435
-text.rectangle.fill 103436
-text.rectangle.page 100A7D
-text.rectangle.page.fill 100A7E
-text.redaction 1009CE
-text.square.filled 1031AD
-text.viewfinder 100E43
-text.word.spacing 100D6B
-textformat 100152
-textformat.alt 100151
-textformat.alt.ar 100CCE
-textformat.alt.bn 102F63
-textformat.alt.el 102442
-textformat.alt.gu 102F66
-textformat.alt.he 100CCF
-textformat.alt.hi 100CEB
-textformat.alt.ja 100CD2
-textformat.alt.kn 102F68
-textformat.alt.ko 100CEA
-textformat.alt.ml 102F69
-textformat.alt.mni 102F6A
-textformat.alt.mr 102F65
-textformat.alt.or 102F6B
-textformat.alt.pa 102F67
-textformat.alt.sat 102F6C
-textformat.alt.si 102F6D
-textformat.alt.ta 102F6E
-textformat.alt.te 102F6F
-textformat.alt.th 100CD0
-textformat.alt.zh 100CD1
-textformat.ar 100CF5
-textformat.bn 102F56
-textformat.characters 10016F
-textformat.characters.ar 1023F2
-textformat.characters.arrow.left.and.right 10242D
-textformat.characters.arrow.left.and.right.ar 102430
-textformat.characters.arrow.left.and.right.bn 102FA0
-textformat.characters.arrow.left.and.right.el 10242E
-textformat.characters.arrow.left.and.right.gu 102FA3
-textformat.characters.arrow.left.and.right.he 102431
-textformat.characters.arrow.left.and.right.hi 102436
-textformat.characters.arrow.left.and.right.ja 102434
-textformat.characters.arrow.left.and.right.kn 102FA5
-textformat.characters.arrow.left.and.right.ko 102435
-textformat.characters.arrow.left.and.right.ml 102FA6
-textformat.characters.arrow.left.and.right.mni 102FA7
-textformat.characters.arrow.left.and.right.mr 102FA2
-textformat.characters.arrow.left.and.right.or 102FA8
-textformat.characters.arrow.left.and.right.pa 102FA4
-textformat.characters.arrow.left.and.right.ru 10242F
-textformat.characters.arrow.left.and.right.sat 102FA9
-textformat.characters.arrow.left.and.right.si 102FAA
-textformat.characters.arrow.left.and.right.ta 102FAB
-textformat.characters.arrow.left.and.right.te 102FAC
-textformat.characters.arrow.left.and.right.th 102432
-textformat.characters.arrow.left.and.right.zh 102433
-textformat.characters.bn 102F86
-textformat.characters.dottedunderline 100170
-textformat.characters.dottedunderline.ar 10241F
-textformat.characters.dottedunderline.bn 102F93
-textformat.characters.dottedunderline.el 100DD3
-textformat.characters.dottedunderline.gu 102F96
-textformat.characters.dottedunderline.he 102420
-textformat.characters.dottedunderline.hi 102425
-textformat.characters.dottedunderline.ja 102423
-textformat.characters.dottedunderline.kn 102F98
-textformat.characters.dottedunderline.ko 102424
-textformat.characters.dottedunderline.ml 102F99
-textformat.characters.dottedunderline.mni 102F9A
-textformat.characters.dottedunderline.mr 102F95
-textformat.characters.dottedunderline.or 102F9B
-textformat.characters.dottedunderline.pa 102F97
-textformat.characters.dottedunderline.ru 100DD2
-textformat.characters.dottedunderline.sat 102F9C
-textformat.characters.dottedunderline.si 102F9D
-textformat.characters.dottedunderline.ta 102F9E
-textformat.characters.dottedunderline.te 102F9F
-textformat.characters.dottedunderline.th 102421
-textformat.characters.dottedunderline.zh 102422
-textformat.characters.el 100DD1
-textformat.characters.gu 102F89
-textformat.characters.he 1023F3
-textformat.characters.hi 1023F8
-textformat.characters.ja 1023F6
-textformat.characters.kn 102F8B
-textformat.characters.ko 1023F7
-textformat.characters.ml 102F8C
-textformat.characters.mni 102F8D
-textformat.characters.mr 102F88
-textformat.characters.or 102F8E
-textformat.characters.pa 102F8A
-textformat.characters.ru 100DD0
-textformat.characters.sat 102F8F
-textformat.characters.si 102F90
-textformat.characters.ta 102F91
-textformat.characters.te 102F92
-textformat.characters.th 1023F4
-textformat.characters.zh 1023F5
-textformat.el 102441
-textformat.gu 102F59
-textformat.he 100CF6
-textformat.hi 100CFB
-textformat.ja 100CF9
-textformat.kn 102F5B
-textformat.ko 100CFA
-textformat.ml 102F5C
-textformat.mni 102F5D
-textformat.mr 102F58
-textformat.numbers 1015BB
-textformat.numbers.ar 1015BC
-textformat.numbers.bn 1029F1
-textformat.numbers.gu 1029F2
-textformat.numbers.hi 1015BD
-textformat.numbers.km 101C29
-textformat.numbers.kn 1029F7
-textformat.numbers.ml 1029F5
-textformat.numbers.mni 1029F9
-textformat.numbers.mr 103294
-textformat.numbers.my 101C28
-textformat.numbers.or 1029F6
-textformat.numbers.pa 1029F3
-textformat.numbers.sat 1029F8
-textformat.numbers.te 1029F4
-textformat.or 102F5E
-textformat.pa 102F5A
-textformat.sat 102F5F
-textformat.si 102F60
-textformat.size 100150
-textformat.size.ar 100CD3
-textformat.size.bn 102CEE
-textformat.size.gu 102CEF
-textformat.size.he 100CD4
-textformat.size.hi 100CE9
-textformat.size.ja 100CD7
-textformat.size.kn 102CF1
-textformat.size.ko 100CD8
-textformat.size.larger 100D7F
-textformat.size.larger.ar 100D80
-textformat.size.larger.bn 102CC2
-textformat.size.larger.gu 102CC3
-textformat.size.larger.he 100D81
-textformat.size.larger.hi 100D86
-textformat.size.larger.ja 100D84
-textformat.size.larger.kn 102CC5
-textformat.size.larger.ko 100D85
-textformat.size.larger.ml 102CC6
-textformat.size.larger.mni 102CC7
-textformat.size.larger.mr 102D0C
-textformat.size.larger.or 102CC8
-textformat.size.larger.pa 102CC4
-textformat.size.larger.sat 102CC9
-textformat.size.larger.si 102CCA
-textformat.size.larger.ta 102CCB
-textformat.size.larger.te 102CCC
-textformat.size.larger.th 100D82
-textformat.size.larger.zh 100D83
-textformat.size.ml 102CF2
-textformat.size.mni 102CF3
-textformat.size.mr 102D0E
-textformat.size.or 102CF4
-textformat.size.pa 102CF0
-textformat.size.sat 102CF5
-textformat.size.si 102CF6
-textformat.size.smaller 100D77
-textformat.size.smaller.ar 100D78
-textformat.size.smaller.bn 102CCD
-textformat.size.smaller.gu 102CCE
-textformat.size.smaller.he 100D79
-textformat.size.smaller.hi 100D7E
-textformat.size.smaller.ja 100D7C
-textformat.size.smaller.kn 102CD0
-textformat.size.smaller.ko 100D7D
-textformat.size.smaller.ml 102CD1
-textformat.size.smaller.mni 102CD2
-textformat.size.smaller.mr 102D0A
-textformat.size.smaller.or 102CD3
-textformat.size.smaller.pa 102CCF
-textformat.size.smaller.sat 102CD4
-textformat.size.smaller.si 102CD5
-textformat.size.smaller.ta 102CD6
-textformat.size.smaller.te 102CD7
-textformat.size.smaller.th 100D7A
-textformat.size.smaller.zh 100D7B
-textformat.size.ta 102CF7
-textformat.size.te 102CF8
-textformat.size.th 100CD5
-textformat.size.zh 100CD6
-textformat.subscript 1004E1
-textformat.subscript.ar 100CDE
-textformat.subscript.bn 102FBA
-textformat.subscript.gu 102FBD
-textformat.subscript.he 100CDF
-textformat.subscript.hi 100CEF
-textformat.subscript.ja 100CE2
-textformat.subscript.kn 102FBF
-textformat.subscript.ko 100CEE
-textformat.subscript.ml 102FC0
-textformat.subscript.mni 102FC1
-textformat.subscript.mr 102FBC
-textformat.subscript.or 102FC2
-textformat.subscript.pa 102FBE
-textformat.subscript.sat 102FC3
-textformat.subscript.si 102FC4
-textformat.subscript.ta 102FC5
-textformat.subscript.te 102FC6
-textformat.subscript.th 100CE0
-textformat.subscript.zh 100CE1
-textformat.superscript 1004E2
-textformat.superscript.ar 100CD9
-textformat.superscript.bn 102FAD
-textformat.superscript.gu 102FB0
-textformat.superscript.he 100CDA
-textformat.superscript.hi 100CED
-textformat.superscript.ja 100CDD
-textformat.superscript.kn 102FB2
-textformat.superscript.ko 100CEC
-textformat.superscript.ml 102FB3
-textformat.superscript.mni 102FB4
-textformat.superscript.mr 102FAF
-textformat.superscript.or 102FB5
-textformat.superscript.pa 102FB1
-textformat.superscript.sat 102FB6
-textformat.superscript.si 102FB7
-textformat.superscript.ta 102FB8
-textformat.superscript.te 102FB9
-textformat.superscript.th 100CDB
-textformat.superscript.zh 100CDC
-textformat.ta 102F61
-textformat.te 102F62
-textformat.th 100CF7
-textformat.zh 100CF8
-theatermask.and.paintbrush 101518
-theatermask.and.paintbrush.fill 101552
-theatermasks 100EA7
-theatermasks.circle 1010BB
-theatermasks.circle.fill 1010BC
-theatermasks.fill 100EA8
-thermometer.and.ellipsis 1034A8
-thermometer.and.liquid.waves 101033
-thermometer.and.liquid.waves.snowflake 102614
-thermometer.and.liquid.waves.trianglebadge.exclamationmark 102616
-thermometer.brakesignal 101035
-thermometer.gauge.open 1030A0
-thermometer.high 1013C4
-thermometer.low 1013C3
-thermometer.medium 1001EC
-thermometer.medium.slash 1015C4
-thermometer.snowflake 1001EB
-thermometer.snowflake.circle 1016FB
-thermometer.snowflake.circle.fill 1016FC
-thermometer.sun 1001EA
-thermometer.sun.circle 1016F9
-thermometer.sun.circle.fill 1016FA
-thermometer.sun.fill 10099C
-thermometer.tirepressure 102FE9
-thermometer.transmission 101281
-thermometer.variable 102B2E
-thermometer.variable.and.figure 101DC9
-thermometer.variable.and.figure.circle 101DCA
-thermometer.variable.and.figure.circle.fill 101DCB
-thermometer.variable.badge.clock 10340D
-thermometer.variable.badge.play 10340E
-ticket 100A83
-ticket.circle 103559
-ticket.circle.fill 10355A
-ticket.fill 100A84
-timelapse 1001F2
-timeline.selection 1008C2
-timer 100431
-timer.circle 101645
-timer.circle.fill 101646
-timer.square 100B44
-tire 102970
-tire.badge.snowflake 102971
-tirepressure 1018B6
-togglepower 100963
-toilet 10143E
-toilet.circle 101780
-toilet.circle.fill 101781
-toilet.fill 10143F
-tornado 1001E7
-tornado.circle 1016F3
-tornado.circle.fill 1016F4
-tortoise 1004D0
-tortoise.circle 10203C
-tortoise.circle.fill 10203D
-tortoise.fill 1004D1
-torus 100D0C
-touchid 1007D2
-tow.hitch 10229B
-tow.hitch.exclamationmark 10229D
-tow.hitch.exclamationmark.fill 10229E
-tow.hitch.fill 10229C
-traction.control.tirepressure 1018B3
-traction.control.tirepressure.exclamationmark 1018B5
-traction.control.tirepressure.slash 1018B4
-train.side.front.car 100F2E
-train.side.middle.car 100F2F
-train.side.rear.car 100F30
-tram 100746
-tram.card 10301C
-tram.card.fill 10301D
-tram.circle 100C9B
-tram.circle.fill 100C9C
-tram.fill 100747
-tram.fill.tunnel 10071D
-translate 100B99
-transmission 1017CC
-trapezoid.and.line.horizontal 10085B
-trapezoid.and.line.horizontal.fill 100791
-trapezoid.and.line.vertical 100860
-trapezoid.and.line.vertical.fill 100790
-trash 100211
-trash.circle 100213
-trash.circle.fill 100214
-trash.fill 100212
-trash.slash 100727
-trash.slash.circle 100FCD
-trash.slash.circle.fill 100FCE
-trash.slash.fill 100728
-trash.slash.square 100FD4
-trash.slash.square.fill 100FD5
-trash.square 100F3D
-trash.square.fill 100F3E
-tray 100223
-tray.2 100229
-tray.2.fill 10022A
-tray.and.arrow.down 100227
-tray.and.arrow.down.fill 100228
-tray.and.arrow.up 100225
-tray.and.arrow.up.fill 100226
-tray.badge 1030EC
-tray.badge.fill 1030ED
-tray.circle 10048C
-tray.circle.fill 10048D
-tray.fill 100224
-tray.full 10022B
-tray.full.fill 10022C
-tree 10176F
-tree.circle 101794
-tree.circle.fill 101795
-tree.fill 101770
-triangle 1006E3
-triangle.bottomhalf.filled 101039
-triangle.circle 100A05
-triangle.circle.fill 100A06
-triangle.fill 1006E4
-triangle.lefthalf.filled 100695
-triangle.righthalf.filled 100696
-triangle.tophalf.filled 101038
-triangleshape 100970
-triangleshape.fill 100971
-trophy 10080F
-trophy.circle 101494
-trophy.circle.fill 101495
-trophy.fill 100810
-tropicalstorm 1001E8
-tropicalstorm.circle 1016F5
-tropicalstorm.circle.fill 1016F6
-truck.box 10107E
-truck.box.badge.clock 101080
-truck.box.badge.clock.fill 101081
-truck.box.badge.clock.fill.rtl 101466
-truck.box.badge.clock.rtl 101465
-truck.box.fill 10107F
-truck.pickup.side 101969
-truck.pickup.side.air.circulate 10196D
-truck.pickup.side.air.circulate.fill 10196E
-truck.pickup.side.air.fresh 10196F
-truck.pickup.side.air.fresh.fill 101970
-truck.pickup.side.and.exclamationmark 101971
-truck.pickup.side.and.exclamationmark.fill 101972
-truck.pickup.side.arrow.left.and.right 102EAB
-truck.pickup.side.arrow.left.and.right.fill 102EAC
-truck.pickup.side.arrowtriangle.down 101977
-truck.pickup.side.arrowtriangle.down.fill 101978
-truck.pickup.side.arrowtriangle.up 101975
-truck.pickup.side.arrowtriangle.up.arrowtriangle.down 101973
-truck.pickup.side.arrowtriangle.up.arrowtriangle.down.fill 101974
-truck.pickup.side.arrowtriangle.up.fill 101976
-truck.pickup.side.fill 10196A
-truck.pickup.side.front.open 10196B
-truck.pickup.side.front.open.crop 10279A
-truck.pickup.side.front.open.crop.fill 10279B
-truck.pickup.side.front.open.fill 10196C
-truck.pickup.side.hill.down 101986
-truck.pickup.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle 102F23
-truck.pickup.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill 102F24
-truck.pickup.side.hill.down.fill 101987
-truck.pickup.side.hill.up 101817
-truck.pickup.side.hill.up.fill 101818
-truck.pickup.side.lock 101979
-truck.pickup.side.lock.fill 10197A
-truck.pickup.side.lock.open 10197B
-truck.pickup.side.lock.open.fill 10197C
-truck.side.hill.descent.control 1022AA
-truck.side.hill.descent.control.fill 1022AB
-truck.side.roof.cargo.carrier 1022A4
-truck.side.roof.cargo.carrier.fill 1022A5
-truck.side.roof.cargo.carrier.slash 102649
-truck.side.roof.cargo.carrier.slash.fill 10264A
-tsa 102B91
-tsa.circle 102B9F
-tsa.circle.fill 102BA0
-tsa.slash 102B92
-tshirt 100FA0
-tshirt.circle 101F6C
-tshirt.circle.fill 101F6D
-tshirt.fill 100FA1
-tugriksign 101457
-tugriksign.arrow.trianglehead.counterclockwise.rotate.90 10222A
-tugriksign.building.classical 10252B
-tugriksign.building.classical.fill 10252C
-tugriksign.circle 1005C7
-tugriksign.circle.fill 1005C8
-tugriksign.gauge.chart.lefthalf.righthalf 102A61
-tugriksign.gauge.chart.leftthird.topthird.rightthird 102A8B
-tugriksign.ring 102C31
-tugriksign.ring.dashed 102C07
-tugriksign.square 100607
-tugriksign.square.fill 100608
-tuningfork 100390
-turkishlirasign 101445
-turkishlirasign.arrow.trianglehead.counterclockwise.rotate.90 102218
-turkishlirasign.building.classical 102507
-turkishlirasign.building.classical.fill 102508
-turkishlirasign.circle 1005A3
-turkishlirasign.circle.fill 1005A4
-turkishlirasign.gauge.chart.lefthalf.righthalf 102A62
-turkishlirasign.gauge.chart.leftthird.topthird.rightthird 102A8C
-turkishlirasign.ring 102C32
-turkishlirasign.ring.dashed 102C08
-turkishlirasign.square 1005E3
-turkishlirasign.square.fill 1005E4
-tv 1003B2
-tv.and.hifispeaker.fill 100AD1
-tv.and.mediabox 100CB0
-tv.and.mediabox.fill 101761
-tv.badge.wifi 102181
-tv.badge.wifi.fill 102182
-tv.circle 1003B3
-tv.circle.fill 1003B4
-tv.fill 1004B6
-tv.slash 1012DE
-tv.slash.fill 1018D8
-u.circle 10002C
-u.circle.fill 10002D
-u.square 1000BC
-u.square.fill 1000BD
-uiwindow.split.2x1 1003DD
-umbrella 100655
-umbrella.circle 10304D
-umbrella.circle.fill 10304E
-umbrella.fill 100656
-umbrella.gauge.open 10309B
-umbrella.percent 100E30
-umbrella.percent.ar 100E32
-umbrella.percent.fill 100E31
-umbrella.percent.fill.ar 100E33
-umbrella.sensor.tag.radiowaves.left.and.right 103043
-umbrella.sensor.tag.radiowaves.left.and.right.fill 103044
-underline 100155
-underline.double 10340A
-v.circle 10002E
-v.circle.fill 10002F
-v.square 1000BE
-v.square.fill 1000BF
-vent.airflow.diffused 1036D8
-vent.airflow.focused 1036D9
-vent.airflow.manual 1036DB
-vent.airflow.oscillating 1036DA
-vent.heat.waves.upward 103145
-vial.viewfinder 10166E
-video 100349
-video.badge.checkmark 100BBA
-video.badge.ellipsis 1010CA
-video.badge.plus 10072E
-video.badge.waveform 100F05
-video.badge.waveform.fill 100F06
-video.bubble 100C70
-video.bubble.fill 100C71
-video.bubble.fill.rtl 10219B
-video.bubble.rtl 10219A
-video.circle 10034B
-video.circle.fill 10034C
-video.doorbell 1014DF
-video.doorbell.fill 1014E0
-video.fill 10034A
-video.fill.badge.checkmark 100BBB
-video.fill.badge.ellipsis 1010CB
-video.fill.badge.plus 10072F
-video.slash 10034D
-video.slash.circle 101F84
-video.slash.circle.fill 101F85
-video.slash.fill 10034E
-video.square 100F49
-video.square.fill 100F4A
-videoprojector 1014AE
-videoprojector.fill 1014AF
-view.2d 100159
-view.3d 10016A
-viewfinder 1003B9
-viewfinder.circle 1003BF
-viewfinder.circle.fill 1003C0
-viewfinder.rectangular 101E7F
-viewfinder.trianglebadge.exclamationmark 1018D3
-vision.pro 101396
-vision.pro.and.arrow.forward 101CD4
-vision.pro.and.arrow.forward.fill 101CD5
-vision.pro.badge.checkmark 10326C
-vision.pro.badge.checkmark.fill 10326D
-vision.pro.badge.exclamationmark 101DC7
-vision.pro.badge.exclamationmark.fill 101DC8
-vision.pro.badge.play 101F3F
-vision.pro.badge.play.fill 101F40
-vision.pro.circle 10217F
-vision.pro.circle.fill 102180
-vision.pro.fill 101398
-vision.pro.slash 101F43
-vision.pro.slash.circle 10219E
-vision.pro.slash.circle.fill 10219F
-vision.pro.slash.fill 101F44
-vision.pro.trianglebadge.exclamationmark 1024EE
-vision.pro.trianglebadge.exclamationmark.fill 1024EF
-voiceover 100B7B
-volleyball 10172A
-volleyball.circle 10172C
-volleyball.circle.fill 10172D
-volleyball.fill 10172B
-w.circle 100030
-w.circle.fill 100031
-w.square 1000C0
-w.square.fill 1000C1
-wake 100A92
-wake.circle 100DA1
-wake.circle.fill 100DA2
-wallet.bifold 1023F0
-wallet.bifold.fill 1023F1
-wallet.pass 1007FE
-wallet.pass.fill 1007FF
-wallet.sensor.tag.radiowaves.left.and.right 103035
-wallet.sensor.tag.radiowaves.left.and.right.fill 103036
-wand.and.outline 102E0A
-wand.and.outline.inverse 102E0B
-wand.and.rays 100371
-wand.and.rays.inverse 100372
-wand.and.sparkles 10070D
-wand.and.sparkles.inverse 10070E
-warninglight 10102C
-warninglight.fill 10102D
-washer 101420
-washer.circle 101FCE
-washer.circle.fill 101FCF
-washer.fill 101421
-watch.analog 1017BA
-watchface.applewatch.case 100E97
-water.waves 101384
-water.waves.and.arrow.trianglehead.down 101386
-water.waves.and.arrow.trianglehead.down.trianglebadge.exclamationmark 101730
-water.waves.and.arrow.trianglehead.up 101385
-water.waves.slash 1015C3
-waterbottle 101ECA
-waterbottle.fill 101ECB
-wave.3.backward 100C58
-wave.3.backward.circle 100C59
-wave.3.backward.circle.fill 100C5A
-wave.3.down 10266A
-wave.3.down.car.side 102A00
-wave.3.down.car.side.fill 102A01
-wave.3.down.circle 10266B
-wave.3.down.circle.fill 10266C
-wave.3.down.convertible.side 102A06
-wave.3.down.convertible.side.fill 102A07
-wave.3.down.pickup.side 102A04
-wave.3.down.pickup.side.fill 102A05
-wave.3.down.suv.side 102A02
-wave.3.down.suv.side.fill 102A03
-wave.3.forward 100C5B
-wave.3.forward.circle 100C5C
-wave.3.forward.circle.fill 100C5D
-wave.3.left 100671
-wave.3.left.circle 100B77
-wave.3.left.circle.fill 100B78
-wave.3.right 100672
-wave.3.right.circle 100B79
-wave.3.right.circle.fill 100B7A
-wave.3.up 102667
-wave.3.up.circle 102668
-wave.3.up.circle.fill 102669
-waveform 10066B
-waveform.and.person 1020D3
-waveform.badge.checkmark 102DDD
-waveform.badge.exclamationmark 100EFD
-waveform.badge.magnifyingglass 100EFE
-waveform.badge.microphone 1010E8
-waveform.badge.minus 100E37
-waveform.badge.plus 100E36
-waveform.badge.xmark 102DDE
-waveform.circle 100788
-waveform.circle.fill 100789
-waveform.low 1032B8
-waveform.mid 1032B9
-waveform.path 100443
-waveform.path.badge.minus 100445
-waveform.path.badge.plus 100444
-waveform.path.ecg 10071F
-waveform.path.ecg.magnifyingglass 102D4A
-waveform.path.ecg.rectangle 1007EA
-waveform.path.ecg.rectangle.fill 1007EB
-waveform.path.ecg.text 102DDA
-waveform.path.ecg.text.clipboard 102D4B
-waveform.path.ecg.text.clipboard.fill 102D4C
-waveform.path.ecg.text.clipboard.fill.rtl 102D4E
-waveform.path.ecg.text.clipboard.rtl 102D4D
-waveform.path.ecg.text.page 100CFC
-waveform.path.ecg.text.page.fill 100CFD
-waveform.path.ecg.text.page.fill.rtl 100D07
-waveform.path.ecg.text.page.rtl 100D06
-waveform.path.ecg.text.rtl 102DDB
-waveform.slash 1013CF
-web.camera 1014B2
-web.camera.fill 1014B3
-wheelchair 1023E5
-widget.extralarge 102212
-widget.extralarge.badge.plus 1027F4
-widget.large 10262E
-widget.large.badge.plus 1027F2
-widget.medium 10262D
-widget.medium.badge.plus 1027F0
-widget.small 10262C
-widget.small.badge.plus 1027EE
-wifi 100647
-wifi.badge.lock 103537
-wifi.circle 100DD6
-wifi.circle.fill 100DD7
-wifi.exclamationmark 100665
-wifi.exclamationmark.circle 102101
-wifi.exclamationmark.circle.fill 102102
-wifi.router 1014E3
-wifi.router.fill 1014E4
-wifi.slash 100648
-wifi.square 100F57
-wifi.square.fill 100F58
-wind 1001E4
-wind.circle 1016EF
-wind.circle.fill 1016F0
-wind.snow 1001E6
-wind.snow.circle 1016F1
-wind.snow.circle.fill 1016F2
-window.awning 10147D
-window.awning.closed 10147E
-window.casement 10147F
-window.casement.closed 101480
-window.ceiling 101481
-window.ceiling.closed 101482
-window.horizontal 10146D
-window.horizontal.closed 10146E
-window.shade.closed 1013E3
-window.shade.open 1013E2
-window.vertical.closed 10146C
-window.vertical.open 10146B
-windshield.front.and.fluid.and.spray 1017BC
-windshield.front.and.heat.waves 10101F
-windshield.front.and.spray 101015
-windshield.front.and.wiper 101014
-windshield.front.and.wiper.and.drop 101017
-windshield.front.and.wiper.and.spray 1017BB
-windshield.front.and.wiper.exclamationmark 10124D
-windshield.front.and.wiper.intermittent 101016
-windshield.rear.and.fluid.and.spray 1017BE
-windshield.rear.and.heat.waves 101024
-windshield.rear.and.spray 101021
-windshield.rear.and.wiper 101020
-windshield.rear.and.wiper.and.drop 101023
-windshield.rear.and.wiper.and.spray 1017BD
-windshield.rear.and.wiper.exclamationmark 101251
-windshield.rear.and.wiper.intermittent 101022
-wineglass 1013A4
-wineglass.fill 1013A5
-wonsign 10144E
-wonsign.arrow.trianglehead.counterclockwise.rotate.90 102221
-wonsign.building.classical 102519
-wonsign.building.classical.fill 10251A
-wonsign.circle 1005B5
-wonsign.circle.fill 1005B6
-wonsign.gauge.chart.lefthalf.righthalf 102A64
-wonsign.gauge.chart.leftthird.topthird.rightthird 102A8E
-wonsign.ring 102C34
-wonsign.ring.dashed 102C0A
-wonsign.square 1005F5
-wonsign.square.fill 1005F6
-wrench.adjustable 100395
-wrench.adjustable.fill 100396
-wrench.and.screwdriver 10090A
-wrench.and.screwdriver.fill 10090B
-wrongwaysign 101566
-wrongwaysign.fill 101567
-x.circle 100032
-x.circle.fill 100033
-x.square 1000C2
-x.square.fill 1000C3
-xbox.logo 100F89
-xmark 100184
-xmark.app 100EBE
-xmark.app.fill 100EC0
-xmark.bin 100231
-xmark.bin.circle 100233
-xmark.bin.circle.fill 100234
-xmark.bin.fill 100232
-xmark.circle 100060
-xmark.circle.badge.airplane 1032C8
-xmark.circle.badge.airplane.fill 1032C9
-xmark.circle.fill 100061
-xmark.diamond 100883
-xmark.diamond.fill 100884
-xmark.icloud 100313
-xmark.icloud.fill 100314
-xmark.interface.window 1036D5
-xmark.octagon 100489
-xmark.octagon.fill 10048A
-xmark.rectangle 1003CD
-xmark.rectangle.fill 1003CE
-xmark.rectangle.portrait 100870
-xmark.rectangle.portrait.fill 100871
-xmark.seal 1001FC
-xmark.seal.fill 1001FD
-xmark.shield 10079D
-xmark.shield.fill 10079E
-xmark.square 1000F0
-xmark.square.fill 1000F1
-xmark.triangle.circle.square 102BB0
-xmark.triangle.circle.square.fill 102BB1
-xmark.viewfinder 103721
-xserve 1009D8
-xserve.raid 101EC7
-y.circle 100034
-y.circle.fill 100035
-y.square 1000C4
-y.square.fill 1000C5
-yensign 101441
-yensign.arrow.trianglehead.counterclockwise.rotate.90 102214
-yensign.building.classical 1024FF
-yensign.building.classical.fill 102500
-yensign.circle 10059B
-yensign.circle.fill 10059C
-yensign.gauge.chart.lefthalf.righthalf 102A63
-yensign.gauge.chart.leftthird.topthird.rightthird 102A8D
-yensign.ring 102C33
-yensign.ring.dashed 102C09
-yensign.square 1005DB
-yensign.square.fill 1005DC
-yieldsign 101564
-yieldsign.fill 101565
-z.circle 100036
-z.circle.fill 100037
-z.square 1000C6
-z.square.fill 1000C7
-zipper.page 100927
-zl.button.roundedtop.horizontal 100A1B
-zl.button.roundedtop.horizontal.fill 100A1C
-zr.button.roundedtop.horizontal 100A1D
-zr.button.roundedtop.horizontal.fill 100A1E
-zzz 100583
+    /// Every name, sorted ascending, newline-separated (no trailing newline).
+    /// A `StaticString` — static bytes in the binary, never a `String`.
+    /// Greppable verbatim. Indexed via `nameStarts`.
+    static let nameBlob: StaticString = """
+0.circle
+0.circle.ar
+0.circle.fill
+0.circle.fill.ar
+0.circle.fill.hi
+0.circle.hi
+0.square
+0.square.ar
+0.square.fill
+0.square.fill.ar
+0.square.fill.hi
+0.square.hi
+00.circle
+00.circle.ar
+00.circle.fill
+00.circle.fill.ar
+00.circle.fill.hi
+00.circle.hi
+00.square
+00.square.ar
+00.square.fill
+00.square.fill.ar
+00.square.fill.hi
+00.square.hi
+01.circle
+01.circle.ar
+01.circle.fill
+01.circle.fill.ar
+01.circle.fill.hi
+01.circle.hi
+01.square
+01.square.ar
+01.square.fill
+01.square.fill.ar
+01.square.fill.hi
+01.square.hi
+02.circle
+02.circle.ar
+02.circle.fill
+02.circle.fill.ar
+02.circle.fill.hi
+02.circle.hi
+02.square
+02.square.ar
+02.square.fill
+02.square.fill.ar
+02.square.fill.hi
+02.square.hi
+03.circle
+03.circle.ar
+03.circle.fill
+03.circle.fill.ar
+03.circle.fill.hi
+03.circle.hi
+03.square
+03.square.ar
+03.square.fill
+03.square.fill.ar
+03.square.fill.hi
+03.square.hi
+04.circle
+04.circle.ar
+04.circle.fill
+04.circle.fill.ar
+04.circle.fill.hi
+04.circle.hi
+04.square
+04.square.ar
+04.square.fill
+04.square.fill.ar
+04.square.fill.hi
+04.square.hi
+05.circle
+05.circle.ar
+05.circle.fill
+05.circle.fill.ar
+05.circle.fill.hi
+05.circle.hi
+05.square
+05.square.ar
+05.square.fill
+05.square.fill.ar
+05.square.fill.hi
+05.square.hi
+06.circle
+06.circle.ar
+06.circle.fill
+06.circle.fill.ar
+06.circle.fill.hi
+06.circle.hi
+06.square
+06.square.ar
+06.square.fill
+06.square.fill.ar
+06.square.fill.hi
+06.square.hi
+07.circle
+07.circle.ar
+07.circle.fill
+07.circle.fill.ar
+07.circle.fill.hi
+07.circle.hi
+07.square
+07.square.ar
+07.square.fill
+07.square.fill.ar
+07.square.fill.hi
+07.square.hi
+08.circle
+08.circle.ar
+08.circle.fill
+08.circle.fill.ar
+08.circle.fill.hi
+08.circle.hi
+08.square
+08.square.ar
+08.square.fill
+08.square.fill.ar
+08.square.fill.hi
+08.square.hi
+09.circle
+09.circle.ar
+09.circle.fill
+09.circle.fill.ar
+09.circle.fill.hi
+09.circle.hi
+09.square
+09.square.ar
+09.square.fill
+09.square.fill.ar
+09.square.fill.hi
+09.square.hi
+1.brakesignal
+1.calendar
+1.calendar.ar
+1.calendar.hi
+1.circle
+1.circle.ar
+1.circle.fill
+1.circle.fill.ar
+1.circle.fill.hi
+1.circle.hi
+1.lane
+1.lane.ar
+1.lane.hi
+1.magnifyingglass
+1.magnifyingglass.ar
+1.magnifyingglass.hi
+1.square
+1.square.ar
+1.square.fill
+1.square.fill.ar
+1.square.fill.hi
+1.square.hi
+10.arrow.trianglehead.clockwise
+10.arrow.trianglehead.clockwise.ar
+10.arrow.trianglehead.clockwise.hi
+10.arrow.trianglehead.counterclockwise
+10.arrow.trianglehead.counterclockwise.ar
+10.arrow.trianglehead.counterclockwise.hi
+10.calendar
+10.calendar.ar
+10.calendar.hi
+10.circle
+10.circle.ar
+10.circle.fill
+10.circle.fill.ar
+10.circle.fill.hi
+10.circle.hi
+10.lane
+10.lane.ar
+10.lane.hi
+10.square
+10.square.ar
+10.square.fill
+10.square.fill.ar
+10.square.fill.hi
+10.square.hi
+11.calendar
+11.calendar.ar
+11.calendar.hi
+11.circle
+11.circle.ar
+11.circle.fill
+11.circle.fill.ar
+11.circle.fill.hi
+11.circle.hi
+11.lane
+11.lane.ar
+11.lane.hi
+11.square
+11.square.ar
+11.square.fill
+11.square.fill.ar
+11.square.fill.hi
+11.square.hi
+12.calendar
+12.calendar.ar
+12.calendar.hi
+12.circle
+12.circle.ar
+12.circle.fill
+12.circle.fill.ar
+12.circle.fill.hi
+12.circle.hi
+12.lane
+12.lane.ar
+12.lane.hi
+12.square
+12.square.ar
+12.square.fill
+12.square.fill.ar
+12.square.fill.hi
+12.square.hi
+13.calendar
+13.calendar.ar
+13.calendar.hi
+13.circle
+13.circle.ar
+13.circle.fill
+13.circle.fill.ar
+13.circle.fill.hi
+13.circle.hi
+13.square
+13.square.ar
+13.square.fill
+13.square.fill.ar
+13.square.fill.hi
+13.square.hi
+14.calendar
+14.calendar.ar
+14.calendar.hi
+14.circle
+14.circle.ar
+14.circle.fill
+14.circle.fill.ar
+14.circle.fill.hi
+14.circle.hi
+14.square
+14.square.ar
+14.square.fill
+14.square.fill.ar
+14.square.fill.hi
+14.square.hi
+15.arrow.trianglehead.clockwise
+15.arrow.trianglehead.clockwise.ar
+15.arrow.trianglehead.clockwise.hi
+15.arrow.trianglehead.counterclockwise
+15.arrow.trianglehead.counterclockwise.ar
+15.arrow.trianglehead.counterclockwise.hi
+15.calendar
+15.calendar.ar
+15.calendar.hi
+15.circle
+15.circle.ar
+15.circle.fill
+15.circle.fill.ar
+15.circle.fill.hi
+15.circle.hi
+15.square
+15.square.ar
+15.square.fill
+15.square.fill.ar
+15.square.fill.hi
+15.square.hi
+16.calendar
+16.calendar.ar
+16.calendar.hi
+16.circle
+16.circle.ar
+16.circle.fill
+16.circle.fill.ar
+16.circle.fill.hi
+16.circle.hi
+16.square
+16.square.ar
+16.square.fill
+16.square.fill.ar
+16.square.fill.hi
+16.square.hi
+17.calendar
+17.calendar.ar
+17.calendar.hi
+17.circle
+17.circle.ar
+17.circle.fill
+17.circle.fill.ar
+17.circle.fill.hi
+17.circle.hi
+17.square
+17.square.ar
+17.square.fill
+17.square.fill.ar
+17.square.fill.hi
+17.square.hi
+18.calendar
+18.calendar.ar
+18.calendar.hi
+18.circle
+18.circle.ar
+18.circle.fill
+18.circle.fill.ar
+18.circle.fill.hi
+18.circle.hi
+18.square
+18.square.ar
+18.square.fill
+18.square.fill.ar
+18.square.fill.hi
+18.square.hi
+19.calendar
+19.calendar.ar
+19.calendar.hi
+19.circle
+19.circle.ar
+19.circle.fill
+19.circle.fill.ar
+19.circle.fill.hi
+19.circle.hi
+19.square
+19.square.ar
+19.square.fill
+19.square.fill.ar
+19.square.fill.hi
+19.square.hi
+2.brakesignal
+2.calendar
+2.calendar.ar
+2.calendar.hi
+2.circle
+2.circle.ar
+2.circle.fill
+2.circle.fill.ar
+2.circle.fill.hi
+2.circle.hi
+2.lane
+2.lane.ar
+2.lane.hi
+2.square
+2.square.ar
+2.square.fill
+2.square.fill.ar
+2.square.fill.hi
+2.square.hi
+20.calendar
+20.calendar.ar
+20.calendar.hi
+20.circle
+20.circle.ar
+20.circle.fill
+20.circle.fill.ar
+20.circle.fill.hi
+20.circle.hi
+20.square
+20.square.ar
+20.square.fill
+20.square.fill.ar
+20.square.fill.hi
+20.square.hi
+21.calendar
+21.calendar.ar
+21.calendar.hi
+21.circle
+21.circle.ar
+21.circle.fill
+21.circle.fill.ar
+21.circle.fill.hi
+21.circle.hi
+21.square
+21.square.ar
+21.square.fill
+21.square.fill.ar
+21.square.fill.hi
+21.square.hi
+22.calendar
+22.calendar.ar
+22.calendar.hi
+22.circle
+22.circle.ar
+22.circle.fill
+22.circle.fill.ar
+22.circle.fill.hi
+22.circle.hi
+22.square
+22.square.ar
+22.square.fill
+22.square.fill.ar
+22.square.fill.hi
+22.square.hi
+23.calendar
+23.calendar.ar
+23.calendar.hi
+23.circle
+23.circle.ar
+23.circle.fill
+23.circle.fill.ar
+23.circle.fill.hi
+23.circle.hi
+23.square
+23.square.ar
+23.square.fill
+23.square.fill.ar
+23.square.fill.hi
+23.square.hi
+24.calendar
+24.calendar.ar
+24.calendar.hi
+24.circle
+24.circle.ar
+24.circle.fill
+24.circle.fill.ar
+24.circle.fill.hi
+24.circle.hi
+24.square
+24.square.ar
+24.square.fill
+24.square.fill.ar
+24.square.fill.hi
+24.square.hi
+25.calendar
+25.calendar.ar
+25.calendar.hi
+25.circle
+25.circle.ar
+25.circle.fill
+25.circle.fill.ar
+25.circle.fill.hi
+25.circle.hi
+25.square
+25.square.ar
+25.square.fill
+25.square.fill.ar
+25.square.fill.hi
+25.square.hi
+26.calendar
+26.calendar.ar
+26.calendar.hi
+26.circle
+26.circle.ar
+26.circle.fill
+26.circle.fill.ar
+26.circle.fill.hi
+26.circle.hi
+26.square
+26.square.ar
+26.square.fill
+26.square.fill.ar
+26.square.fill.hi
+26.square.hi
+27.calendar
+27.calendar.ar
+27.calendar.hi
+27.circle
+27.circle.ar
+27.circle.fill
+27.circle.fill.ar
+27.circle.fill.hi
+27.circle.hi
+27.square
+27.square.ar
+27.square.fill
+27.square.fill.ar
+27.square.fill.hi
+27.square.hi
+28.calendar
+28.calendar.ar
+28.calendar.hi
+28.circle
+28.circle.ar
+28.circle.fill
+28.circle.fill.ar
+28.circle.fill.hi
+28.circle.hi
+28.square
+28.square.ar
+28.square.fill
+28.square.fill.ar
+28.square.fill.hi
+28.square.hi
+29.calendar
+29.calendar.ar
+29.calendar.hi
+29.circle
+29.circle.ar
+29.circle.fill
+29.circle.fill.ar
+29.circle.fill.hi
+29.circle.hi
+29.square
+29.square.ar
+29.square.fill
+29.square.fill.ar
+29.square.fill.hi
+29.square.hi
+2h
+2h.circle
+2h.circle.fill
+3.calendar
+3.calendar.ar
+3.calendar.hi
+3.circle
+3.circle.ar
+3.circle.fill
+3.circle.fill.ar
+3.circle.fill.hi
+3.circle.hi
+3.lane
+3.lane.ar
+3.lane.hi
+3.square
+3.square.ar
+3.square.fill
+3.square.fill.ar
+3.square.fill.hi
+3.square.hi
+30.arrow.trianglehead.clockwise
+30.arrow.trianglehead.clockwise.ar
+30.arrow.trianglehead.clockwise.hi
+30.arrow.trianglehead.counterclockwise
+30.arrow.trianglehead.counterclockwise.ar
+30.arrow.trianglehead.counterclockwise.hi
+30.calendar
+30.calendar.ar
+30.calendar.hi
+30.circle
+30.circle.ar
+30.circle.fill
+30.circle.fill.ar
+30.circle.fill.hi
+30.circle.hi
+30.square
+30.square.ar
+30.square.fill
+30.square.fill.ar
+30.square.fill.hi
+30.square.hi
+31.calendar
+31.calendar.ar
+31.calendar.hi
+31.circle
+31.circle.ar
+31.circle.fill
+31.circle.fill.ar
+31.circle.fill.hi
+31.circle.hi
+31.square
+31.square.ar
+31.square.fill
+31.square.fill.ar
+31.square.fill.hi
+31.square.hi
+32.circle
+32.circle.ar
+32.circle.fill
+32.circle.fill.ar
+32.circle.fill.hi
+32.circle.hi
+32.square
+32.square.ar
+32.square.fill
+32.square.fill.ar
+32.square.fill.hi
+32.square.hi
+33.circle
+33.circle.ar
+33.circle.fill
+33.circle.fill.ar
+33.circle.fill.hi
+33.circle.hi
+33.square
+33.square.ar
+33.square.fill
+33.square.fill.ar
+33.square.fill.hi
+33.square.hi
+34.circle
+34.circle.ar
+34.circle.fill
+34.circle.fill.ar
+34.circle.fill.hi
+34.circle.hi
+34.square
+34.square.ar
+34.square.fill
+34.square.fill.ar
+34.square.fill.hi
+34.square.hi
+35.circle
+35.circle.ar
+35.circle.fill
+35.circle.fill.ar
+35.circle.fill.hi
+35.circle.hi
+35.square
+35.square.ar
+35.square.fill
+35.square.fill.ar
+35.square.fill.hi
+35.square.hi
+36.circle
+36.circle.ar
+36.circle.fill
+36.circle.fill.ar
+36.circle.fill.hi
+36.circle.hi
+36.square
+36.square.ar
+36.square.fill
+36.square.fill.ar
+36.square.fill.hi
+36.square.hi
+37.circle
+37.circle.ar
+37.circle.fill
+37.circle.fill.ar
+37.circle.fill.hi
+37.circle.hi
+37.square
+37.square.ar
+37.square.fill
+37.square.fill.ar
+37.square.fill.hi
+37.square.hi
+38.circle
+38.circle.ar
+38.circle.fill
+38.circle.fill.ar
+38.circle.fill.hi
+38.circle.hi
+38.square
+38.square.ar
+38.square.fill
+38.square.fill.ar
+38.square.fill.hi
+38.square.hi
+39.circle
+39.circle.ar
+39.circle.fill
+39.circle.fill.ar
+39.circle.fill.hi
+39.circle.hi
+39.square
+39.square.ar
+39.square.fill
+39.square.fill.ar
+39.square.fill.hi
+39.square.hi
+4.alt.circle
+4.alt.circle.fill
+4.alt.square
+4.alt.square.fill
+4.calendar
+4.calendar.ar
+4.calendar.hi
+4.circle
+4.circle.ar
+4.circle.fill
+4.circle.fill.ar
+4.circle.fill.hi
+4.circle.hi
+4.lane
+4.lane.ar
+4.lane.hi
+4.square
+4.square.ar
+4.square.fill
+4.square.fill.ar
+4.square.fill.hi
+4.square.hi
+40.circle
+40.circle.ar
+40.circle.fill
+40.circle.fill.ar
+40.circle.fill.hi
+40.circle.hi
+40.square
+40.square.ar
+40.square.fill
+40.square.fill.ar
+40.square.fill.hi
+40.square.hi
+41.circle
+41.circle.ar
+41.circle.fill
+41.circle.fill.ar
+41.circle.fill.hi
+41.circle.hi
+41.square
+41.square.ar
+41.square.fill
+41.square.fill.ar
+41.square.fill.hi
+41.square.hi
+42.circle
+42.circle.ar
+42.circle.fill
+42.circle.fill.ar
+42.circle.fill.hi
+42.circle.hi
+42.square
+42.square.ar
+42.square.fill
+42.square.fill.ar
+42.square.fill.hi
+42.square.hi
+43.circle
+43.circle.ar
+43.circle.fill
+43.circle.fill.ar
+43.circle.fill.hi
+43.circle.hi
+43.square
+43.square.ar
+43.square.fill
+43.square.fill.ar
+43.square.fill.hi
+43.square.hi
+44.circle
+44.circle.ar
+44.circle.fill
+44.circle.fill.ar
+44.circle.fill.hi
+44.circle.hi
+44.square
+44.square.ar
+44.square.fill
+44.square.fill.ar
+44.square.fill.hi
+44.square.hi
+45.arrow.trianglehead.clockwise
+45.arrow.trianglehead.clockwise.ar
+45.arrow.trianglehead.clockwise.hi
+45.arrow.trianglehead.counterclockwise
+45.arrow.trianglehead.counterclockwise.ar
+45.arrow.trianglehead.counterclockwise.hi
+45.circle
+45.circle.ar
+45.circle.fill
+45.circle.fill.ar
+45.circle.fill.hi
+45.circle.hi
+45.square
+45.square.ar
+45.square.fill
+45.square.fill.ar
+45.square.fill.hi
+45.square.hi
+46.circle
+46.circle.ar
+46.circle.fill
+46.circle.fill.ar
+46.circle.fill.hi
+46.circle.hi
+46.square
+46.square.ar
+46.square.fill
+46.square.fill.ar
+46.square.fill.hi
+46.square.hi
+47.circle
+47.circle.ar
+47.circle.fill
+47.circle.fill.ar
+47.circle.fill.hi
+47.circle.hi
+47.square
+47.square.ar
+47.square.fill
+47.square.fill.ar
+47.square.fill.hi
+47.square.hi
+48.circle
+48.circle.ar
+48.circle.fill
+48.circle.fill.ar
+48.circle.fill.hi
+48.circle.hi
+48.square
+48.square.ar
+48.square.fill
+48.square.fill.ar
+48.square.fill.hi
+48.square.hi
+49.circle
+49.circle.ar
+49.circle.fill
+49.circle.fill.ar
+49.circle.fill.hi
+49.circle.hi
+49.square
+49.square.ar
+49.square.fill
+49.square.fill.ar
+49.square.fill.hi
+49.square.hi
+4a
+4a.circle
+4a.circle.fill
+4h
+4h.circle
+4h.circle.fill
+4k.tv
+4k.tv.fill
+4l
+4l.circle
+4l.circle.fill
+5.arrow.trianglehead.clockwise
+5.arrow.trianglehead.clockwise.ar
+5.arrow.trianglehead.clockwise.hi
+5.arrow.trianglehead.counterclockwise
+5.arrow.trianglehead.counterclockwise.ar
+5.arrow.trianglehead.counterclockwise.hi
+5.calendar
+5.calendar.ar
+5.calendar.hi
+5.circle
+5.circle.ar
+5.circle.fill
+5.circle.fill.ar
+5.circle.fill.hi
+5.circle.hi
+5.lane
+5.lane.ar
+5.lane.hi
+5.square
+5.square.ar
+5.square.fill
+5.square.fill.ar
+5.square.fill.hi
+5.square.hi
+50.circle
+50.circle.ar
+50.circle.fill
+50.circle.fill.ar
+50.circle.fill.hi
+50.circle.hi
+50.square
+50.square.ar
+50.square.fill
+50.square.fill.ar
+50.square.fill.hi
+50.square.hi
+6.alt.circle
+6.alt.circle.fill
+6.alt.square
+6.alt.square.fill
+6.calendar
+6.calendar.ar
+6.calendar.hi
+6.circle
+6.circle.ar
+6.circle.fill
+6.circle.fill.ar
+6.circle.fill.hi
+6.circle.hi
+6.lane
+6.lane.ar
+6.lane.hi
+6.square
+6.square.ar
+6.square.fill
+6.square.fill.ar
+6.square.fill.hi
+6.square.hi
+60.arrow.trianglehead.clockwise
+60.arrow.trianglehead.clockwise.ar
+60.arrow.trianglehead.clockwise.hi
+60.arrow.trianglehead.counterclockwise
+60.arrow.trianglehead.counterclockwise.ar
+60.arrow.trianglehead.counterclockwise.hi
+7.calendar
+7.calendar.ar
+7.calendar.hi
+7.circle
+7.circle.ar
+7.circle.fill
+7.circle.fill.ar
+7.circle.fill.hi
+7.circle.hi
+7.lane
+7.lane.ar
+7.lane.hi
+7.square
+7.square.ar
+7.square.fill
+7.square.fill.ar
+7.square.fill.hi
+7.square.hi
+75.arrow.trianglehead.clockwise
+75.arrow.trianglehead.clockwise.ar
+75.arrow.trianglehead.clockwise.hi
+75.arrow.trianglehead.counterclockwise
+75.arrow.trianglehead.counterclockwise.ar
+75.arrow.trianglehead.counterclockwise.hi
+8.calendar
+8.calendar.ar
+8.calendar.hi
+8.circle
+8.circle.ar
+8.circle.fill
+8.circle.fill.ar
+8.circle.fill.hi
+8.circle.hi
+8.lane
+8.lane.ar
+8.lane.hi
+8.square
+8.square.ar
+8.square.fill
+8.square.fill.ar
+8.square.fill.hi
+8.square.hi
+9.alt.circle
+9.alt.circle.fill
+9.alt.square
+9.alt.square.fill
+9.calendar
+9.calendar.ar
+9.calendar.hi
+9.circle
+9.circle.ar
+9.circle.fill
+9.circle.fill.ar
+9.circle.fill.hi
+9.circle.hi
+9.lane
+9.lane.ar
+9.lane.hi
+9.square
+9.square.ar
+9.square.fill
+9.square.fill.ar
+9.square.fill.hi
+9.square.hi
+90.arrow.trianglehead.clockwise
+90.arrow.trianglehead.clockwise.ar
+90.arrow.trianglehead.clockwise.hi
+90.arrow.trianglehead.counterclockwise
+90.arrow.trianglehead.counterclockwise.ar
+90.arrow.trianglehead.counterclockwise.hi
+a.circle
+a.circle.fill
+a.square
+a.square.fill
+abs
+abs.brakesignal
+abs.brakesignal.slash
+abs.circle
+abs.circle.fill
+accessibility
+accessibility.badge.arrow.up.right
+accessibility.fill
+air.car.side
+air.car.side.fill
+air.conditioner
+air.conditioner.horizontal
+air.conditioner.horizontal.fill
+air.conditioner.slash
+air.conditioner.vertical
+air.conditioner.vertical.fill
+air.convertible.side
+air.convertible.side.fill
+air.pickup.side
+air.pickup.side.fill
+air.purifier
+air.purifier.fill
+air.suv.side
+air.suv.side.fill
+airplane
+airplane.arrival
+airplane.circle
+airplane.circle.fill
+airplane.cloud
+airplane.departure
+airplane.landed
+airplane.path.dotted
+airplane.ticket
+airplane.ticket.fill
+airplane.up.forward
+airplane.up.forward.app
+airplane.up.forward.app.fill
+airplane.up.right
+airplane.up.right.app
+airplane.up.right.app.fill
+airplaneseat
+airplay.audio
+airplay.audio.badge.exclamationmark
+airplay.audio.circle
+airplay.audio.circle.fill
+airplay.video
+airplay.video.badge.exclamationmark
+airplay.video.circle
+airplay.video.circle.fill
+airpod.gen3.left
+airpod.gen3.right
+airpod.left
+airpod.right
+airpods
+airpods.chargingcase
+airpods.chargingcase.fill
+airpods.chargingcase.wireless
+airpods.chargingcase.wireless.fill
+airpods.gen3
+airpods.gen3.chargingcase.wireless
+airpods.gen3.chargingcase.wireless.fill
+airpods.gen4
+airpods.gen4.chargingcase.wireless
+airpods.gen4.chargingcase.wireless.fill
+airpods.gen4.left
+airpods.gen4.right
+airpods.max
+airpods.pro
+airpods.pro.chargingcase.wireless
+airpods.pro.chargingcase.wireless.fill
+airpods.pro.chargingcase.wireless.radiowaves.left.and.right
+airpods.pro.chargingcase.wireless.radiowaves.left.and.right.fill
+airpods.pro.gen1
+airpods.pro.gen1.chargingcase.wireless
+airpods.pro.gen1.chargingcase.wireless.fill
+airpods.pro.gen1.chargingcase.wireless.radiowaves.left.and.right
+airpods.pro.gen1.chargingcase.wireless.radiowaves.left.and.right.fill
+airpods.pro.gen1.left
+airpods.pro.gen1.right
+airpods.pro.gen3
+airpods.pro.gen3.chargingcase.wireless
+airpods.pro.gen3.chargingcase.wireless.fill
+airpods.pro.gen3.chargingcase.wireless.radiowaves.left.and.right
+airpods.pro.gen3.chargingcase.wireless.radiowaves.left.and.right.fill
+airpods.pro.gen3.left
+airpods.pro.gen3.right
+airpods.pro.left
+airpods.pro.right
+airport.express
+airport.extreme
+airport.extreme.tower
+airtag
+airtag.fill
+airtag.radiowaves.forward
+airtag.radiowaves.forward.fill
+airtag.radiowaves.forward.fill.rtl
+airtag.radiowaves.forward.rtl
+alarm
+alarm.badge.minus
+alarm.badge.minus.fill
+alarm.badge.xmark
+alarm.badge.xmark.fill
+alarm.fill
+alarm.slash
+alarm.slash.fill
+alarm.waves.left.and.right
+alarm.waves.left.and.right.fill
+align.horizontal.center
+align.horizontal.center.fill
+align.horizontal.left
+align.horizontal.left.fill
+align.horizontal.right
+align.horizontal.right.fill
+align.vertical.bottom
+align.vertical.bottom.fill
+align.vertical.center
+align.vertical.center.fill
+align.vertical.top
+align.vertical.top.fill
+allergens
+allergens.fill
+alt
+alternatingcurrent
+american.football
+american.football.circle
+american.football.circle.fill
+american.football.fill
+american.football.professional
+american.football.professional.circle
+american.football.professional.circle.fill
+american.football.professional.fill
+amplifier
+angle
+ant
+ant.circle
+ant.circle.fill
+ant.fill
+antenna.radiowaves.left.and.right
+antenna.radiowaves.left.and.right.circle
+antenna.radiowaves.left.and.right.circle.fill
+antenna.radiowaves.left.and.right.slash
+antenna.radiowaves.left.and.right.slash.circle
+antenna.radiowaves.left.and.right.slash.circle.fill
+app
+app.background.dotted
+app.badge
+app.badge.checkmark
+app.badge.checkmark.fill
+app.badge.clock
+app.badge.clock.fill
+app.badge.fill
+app.connected.to.app.below.fill
+app.dashed
+app.fill
+app.gift
+app.gift.fill
+app.grid
+app.shadow
+app.slash
+app.slash.fill
+app.specular
+app.translucent
+appclip
+append.page
+append.page.fill
+append.page.fill.rtl
+append.page.rtl
+apple.books.pages
+apple.books.pages.fill
+apple.classical.pages
+apple.classical.pages.fill
+apple.haptics.and.exclamationmark.triangle
+apple.haptics.and.music.note
+apple.haptics.and.music.note.slash
+apple.homekit
+apple.image.playground
+apple.image.playground.fill
+apple.intelligence
+apple.intelligence.badge.xmark
+apple.logo
+apple.meditate
+apple.meditate.circle
+apple.meditate.circle.fill
+apple.meditate.square.stack
+apple.meditate.square.stack.fill
+apple.podcasts.pages
+apple.podcasts.pages.fill
+apple.terminal
+apple.terminal.circle
+apple.terminal.circle.fill
+apple.terminal.fill
+apple.terminal.on.rectangle
+apple.terminal.on.rectangle.fill
+apple.writing.tools
+applepencil
+applepencil.adapter.usb.c
+applepencil.adapter.usb.c.fill
+applepencil.and.scribble
+applepencil.doubletap
+applepencil.gen1
+applepencil.gen2
+applepencil.hover
+applepencil.squeeze
+applepencil.tip
+applescript
+applescript.fill
+appletv
+appletv.badge.checkmark
+appletv.badge.checkmark.fill
+appletv.badge.exclamationmark
+appletv.badge.exclamationmark.fill
+appletv.fill
+appletvremote.gen1
+appletvremote.gen1.fill
+appletvremote.gen2
+appletvremote.gen2.fill
+appletvremote.gen3
+appletvremote.gen3.fill
+appletvremote.gen4
+appletvremote.gen4.fill
+applewatch
+applewatch.and.arrow.forward
+applewatch.and.arrow.forward.rtl
+applewatch.badge.checkmark
+applewatch.badge.exclamationmark
+applewatch.case.sizes
+applewatch.radiowaves.left.and.right
+applewatch.side.right
+applewatch.slash
+applewatch.watchface
+apps.ipad
+apps.ipad.badge.checkmark
+apps.ipad.badge.checkmark.rtl
+apps.ipad.badge.exclamationmark
+apps.ipad.badge.plus
+apps.ipad.landscape
+apps.ipad.on.rectangle.portrait.dashed
+apps.ipad.on.rectangle.portrait.dashed.rtl
+apps.iphone
+apps.iphone.badge.checkmark
+apps.iphone.badge.checkmark.rtl
+apps.iphone.badge.exclamationmark
+apps.iphone.badge.plus
+apps.iphone.landscape
+apps.iphone.landscape.rtl
+appwindow.swipe.rectangle
+aqi.high
+aqi.low
+aqi.medium
+aqi.medium.gauge.open
+arcade.stick
+arcade.stick.and.arrow.down
+arcade.stick.and.arrow.left
+arcade.stick.and.arrow.left.and.arrow.right.outward
+arcade.stick.and.arrow.right
+arcade.stick.and.arrow.up
+arcade.stick.and.arrow.up.and.arrow.down
+arcade.stick.console
+arcade.stick.console.fill
+archivebox
+archivebox.circle
+archivebox.circle.fill
+archivebox.fill
+arkit
+arkit.badge.xmark
+arrow.2.squarepath
+arrow.3.trianglepath
+arrow.backward
+arrow.backward.circle
+arrow.backward.circle.dotted
+arrow.backward.circle.fill
+arrow.backward.square
+arrow.backward.square.fill
+arrow.backward.to.line
+arrow.backward.to.line.circle
+arrow.backward.to.line.circle.fill
+arrow.backward.to.line.compact
+arrow.backward.to.line.square
+arrow.backward.to.line.square.fill
+arrow.clockwise
+arrow.clockwise.circle
+arrow.clockwise.circle.fill
+arrow.clockwise.square
+arrow.clockwise.square.fill
+arrow.counterclockwise
+arrow.counterclockwise.circle
+arrow.counterclockwise.circle.fill
+arrow.counterclockwise.square
+arrow.counterclockwise.square.fill
+arrow.down
+arrow.down.and.line.horizontal.and.arrow.up
+arrow.down.app
+arrow.down.app.dashed
+arrow.down.app.dashed.trianglebadge.exclamationmark
+arrow.down.app.fill
+arrow.down.applewatch
+arrow.down.backward
+arrow.down.backward.and.arrow.up.forward
+arrow.down.backward.and.arrow.up.forward.circle
+arrow.down.backward.and.arrow.up.forward.circle.fill
+arrow.down.backward.and.arrow.up.forward.rectangle
+arrow.down.backward.and.arrow.up.forward.rectangle.fill
+arrow.down.backward.and.arrow.up.forward.square
+arrow.down.backward.and.arrow.up.forward.square.fill
+arrow.down.backward.circle
+arrow.down.backward.circle.dotted
+arrow.down.backward.circle.fill
+arrow.down.backward.square
+arrow.down.backward.square.fill
+arrow.down.backward.toptrailing.rectangle
+arrow.down.backward.toptrailing.rectangle.fill
+arrow.down.circle
+arrow.down.circle.badge.pause
+arrow.down.circle.badge.pause.fill
+arrow.down.circle.badge.xmark
+arrow.down.circle.badge.xmark.fill
+arrow.down.circle.dotted
+arrow.down.circle.fill
+arrow.down.document
+arrow.down.document.fill
+arrow.down.forward
+arrow.down.forward.and.arrow.up.backward
+arrow.down.forward.and.arrow.up.backward.circle
+arrow.down.forward.and.arrow.up.backward.circle.fill
+arrow.down.forward.and.arrow.up.backward.rectangle
+arrow.down.forward.and.arrow.up.backward.rectangle.fill
+arrow.down.forward.and.arrow.up.backward.square
+arrow.down.forward.and.arrow.up.backward.square.fill
+arrow.down.forward.circle
+arrow.down.forward.circle.dotted
+arrow.down.forward.circle.fill
+arrow.down.forward.square
+arrow.down.forward.square.fill
+arrow.down.forward.topleading.rectangle
+arrow.down.forward.topleading.rectangle.fill
+arrow.down.heart
+arrow.down.heart.fill
+arrow.down.left
+arrow.down.left.and.arrow.up.right
+arrow.down.left.and.arrow.up.right.circle
+arrow.down.left.and.arrow.up.right.circle.fill
+arrow.down.left.and.arrow.up.right.rectangle
+arrow.down.left.and.arrow.up.right.rectangle.fill
+arrow.down.left.and.arrow.up.right.square
+arrow.down.left.and.arrow.up.right.square.fill
+arrow.down.left.arrow.up.right
+arrow.down.left.arrow.up.right.circle
+arrow.down.left.arrow.up.right.circle.fill
+arrow.down.left.arrow.up.right.square
+arrow.down.left.arrow.up.right.square.fill
+arrow.down.left.circle
+arrow.down.left.circle.dotted
+arrow.down.left.circle.fill
+arrow.down.left.square
+arrow.down.left.square.fill
+arrow.down.left.topright.rectangle
+arrow.down.left.topright.rectangle.fill
+arrow.down.left.video
+arrow.down.left.video.fill
+arrow.down.message
+arrow.down.message.fill
+arrow.down.right
+arrow.down.right.and.arrow.up.left
+arrow.down.right.and.arrow.up.left.circle
+arrow.down.right.and.arrow.up.left.circle.fill
+arrow.down.right.and.arrow.up.left.rectangle
+arrow.down.right.and.arrow.up.left.rectangle.fill
+arrow.down.right.and.arrow.up.left.square
+arrow.down.right.and.arrow.up.left.square.fill
+arrow.down.right.circle
+arrow.down.right.circle.dotted
+arrow.down.right.circle.fill
+arrow.down.right.square
+arrow.down.right.square.fill
+arrow.down.right.topleft.rectangle
+arrow.down.right.topleft.rectangle.fill
+arrow.down.square
+arrow.down.square.fill
+arrow.down.to.line
+arrow.down.to.line.circle
+arrow.down.to.line.circle.fill
+arrow.down.to.line.compact
+arrow.down.to.line.square
+arrow.down.to.line.square.fill
+arrow.forward
+arrow.forward.circle
+arrow.forward.circle.dotted
+arrow.forward.circle.fill
+arrow.forward.folder
+arrow.forward.folder.fill
+arrow.forward.folder.fill.rtl
+arrow.forward.folder.rtl
+arrow.forward.square
+arrow.forward.square.fill
+arrow.forward.to.line
+arrow.forward.to.line.circle
+arrow.forward.to.line.circle.fill
+arrow.forward.to.line.compact
+arrow.forward.to.line.square
+arrow.forward.to.line.square.fill
+arrow.left
+arrow.left.and.line.vertical.and.arrow.right
+arrow.left.and.right
+arrow.left.and.right.circle
+arrow.left.and.right.circle.fill
+arrow.left.and.right.square
+arrow.left.and.right.square.fill
+arrow.left.and.right.text.vertical
+arrow.left.arrow.right
+arrow.left.arrow.right.circle
+arrow.left.arrow.right.circle.fill
+arrow.left.arrow.right.square
+arrow.left.arrow.right.square.fill
+arrow.left.circle
+arrow.left.circle.dotted
+arrow.left.circle.fill
+arrow.left.square
+arrow.left.square.fill
+arrow.left.to.line
+arrow.left.to.line.circle
+arrow.left.to.line.circle.fill
+arrow.left.to.line.compact
+arrow.left.to.line.square
+arrow.left.to.line.square.fill
+arrow.right
+arrow.right.and.line.vertical.and.arrow.left
+arrow.right.circle
+arrow.right.circle.dotted
+arrow.right.circle.fill
+arrow.right.filled.filter.arrow.right
+arrow.right.page.on.clipboard
+arrow.right.square
+arrow.right.square.fill
+arrow.right.to.line
+arrow.right.to.line.circle
+arrow.right.to.line.circle.fill
+arrow.right.to.line.compact
+arrow.right.to.line.square
+arrow.right.to.line.square.fill
+arrow.trianglehead.2.clockwise
+arrow.trianglehead.2.clockwise.rotate.90
+arrow.trianglehead.2.clockwise.rotate.90.camera
+arrow.trianglehead.2.clockwise.rotate.90.camera.fill
+arrow.trianglehead.2.clockwise.rotate.90.circle
+arrow.trianglehead.2.clockwise.rotate.90.circle.fill
+arrow.trianglehead.2.clockwise.rotate.90.icloud
+arrow.trianglehead.2.clockwise.rotate.90.icloud.fill
+arrow.trianglehead.2.clockwise.rotate.90.page.on.clipboard
+arrow.trianglehead.2.counterclockwise
+arrow.trianglehead.2.counterclockwise.rotate.90
+arrow.trianglehead.bottomleft.capsulepath.clockwise
+arrow.trianglehead.branch
+arrow.trianglehead.clockwise
+arrow.trianglehead.clockwise.heart
+arrow.trianglehead.clockwise.heart.fill
+arrow.trianglehead.clockwise.icloud
+arrow.trianglehead.clockwise.icloud.fill
+arrow.trianglehead.clockwise.rotate.90
+arrow.trianglehead.counterclockwise
+arrow.trianglehead.counterclockwise.icloud
+arrow.trianglehead.counterclockwise.icloud.fill
+arrow.trianglehead.counterclockwise.rotate.90
+arrow.trianglehead.left.and.right.righttriangle.left.righttriangle.right
+arrow.trianglehead.left.and.right.righttriangle.left.righttriangle.right.fill
+arrow.trianglehead.merge
+arrow.trianglehead.pull
+arrow.trianglehead.rectanglepath
+arrow.trianglehead.swap
+arrow.trianglehead.topright.capsulepath.clockwise
+arrow.trianglehead.turn.up.right
+arrow.trianglehead.turn.up.right.circle
+arrow.trianglehead.turn.up.right.circle.fill
+arrow.trianglehead.turn.up.right.diamond
+arrow.trianglehead.turn.up.right.diamond.fill
+arrow.trianglehead.up.and.down.righttriangle.up.righttriangle.down
+arrow.trianglehead.up.and.down.righttriangle.up.righttriangle.down.fill
+arrow.turn.down.left
+arrow.turn.down.right
+arrow.turn.left.down
+arrow.turn.left.up
+arrow.turn.right.down
+arrow.turn.right.up
+arrow.turn.up.forward.iphone
+arrow.turn.up.forward.iphone.fill
+arrow.turn.up.left
+arrow.turn.up.right
+arrow.up
+arrow.up.and.down
+arrow.up.and.down.and.arrow.left.and.right
+arrow.up.and.down.and.sparkles
+arrow.up.and.down.circle
+arrow.up.and.down.circle.fill
+arrow.up.and.down.square
+arrow.up.and.down.square.fill
+arrow.up.and.down.text.horizontal
+arrow.up.and.line.horizontal.and.arrow.down
+arrow.up.and.person.rectangle.portrait
+arrow.up.and.person.rectangle.turn.left
+arrow.up.and.person.rectangle.turn.right
+arrow.up.arrow.down
+arrow.up.arrow.down.circle
+arrow.up.arrow.down.circle.fill
+arrow.up.arrow.down.square
+arrow.up.arrow.down.square.fill
+arrow.up.backward
+arrow.up.backward.and.arrow.down.forward
+arrow.up.backward.and.arrow.down.forward.circle
+arrow.up.backward.and.arrow.down.forward.circle.fill
+arrow.up.backward.and.arrow.down.forward.rectangle
+arrow.up.backward.and.arrow.down.forward.rectangle.fill
+arrow.up.backward.and.arrow.down.forward.square
+arrow.up.backward.and.arrow.down.forward.square.fill
+arrow.up.backward.bottomtrailing.rectangle
+arrow.up.backward.bottomtrailing.rectangle.fill
+arrow.up.backward.circle
+arrow.up.backward.circle.dotted
+arrow.up.backward.circle.fill
+arrow.up.backward.square
+arrow.up.backward.square.fill
+arrow.up.bin
+arrow.up.bin.fill
+arrow.up.circle
+arrow.up.circle.badge.clock
+arrow.up.circle.dotted
+arrow.up.circle.fill
+arrow.up.document
+arrow.up.document.fill
+arrow.up.folder
+arrow.up.folder.fill
+arrow.up.forward
+arrow.up.forward.and.arrow.down.backward
+arrow.up.forward.and.arrow.down.backward.circle
+arrow.up.forward.and.arrow.down.backward.circle.fill
+arrow.up.forward.and.arrow.down.backward.rectangle
+arrow.up.forward.and.arrow.down.backward.rectangle.fill
+arrow.up.forward.and.arrow.down.backward.square
+arrow.up.forward.and.arrow.down.backward.square.fill
+arrow.up.forward.app
+arrow.up.forward.app.fill
+arrow.up.forward.bottomleading.rectangle
+arrow.up.forward.bottomleading.rectangle.fill
+arrow.up.forward.circle
+arrow.up.forward.circle.dotted
+arrow.up.forward.circle.fill
+arrow.up.forward.square
+arrow.up.forward.square.fill
+arrow.up.heart
+arrow.up.heart.fill
+arrow.up.left
+arrow.up.left.and.arrow.down.right
+arrow.up.left.and.arrow.down.right.circle
+arrow.up.left.and.arrow.down.right.circle.fill
+arrow.up.left.and.arrow.down.right.rectangle
+arrow.up.left.and.arrow.down.right.rectangle.fill
+arrow.up.left.and.arrow.down.right.square
+arrow.up.left.and.arrow.down.right.square.fill
+arrow.up.left.and.down.right.and.arrow.up.right.and.down.left
+arrow.up.left.and.down.right.magnifyingglass
+arrow.up.left.arrow.down.right
+arrow.up.left.arrow.down.right.circle
+arrow.up.left.arrow.down.right.circle.fill
+arrow.up.left.arrow.down.right.square
+arrow.up.left.arrow.down.right.square.fill
+arrow.up.left.bottomright.rectangle
+arrow.up.left.bottomright.rectangle.fill
+arrow.up.left.circle
+arrow.up.left.circle.dotted
+arrow.up.left.circle.fill
+arrow.up.left.square
+arrow.up.left.square.fill
+arrow.up.message
+arrow.up.message.fill
+arrow.up.page.on.clipboard
+arrow.up.right
+arrow.up.right.and.arrow.down.left
+arrow.up.right.and.arrow.down.left.circle
+arrow.up.right.and.arrow.down.left.circle.fill
+arrow.up.right.and.arrow.down.left.rectangle
+arrow.up.right.and.arrow.down.left.rectangle.fill
+arrow.up.right.and.arrow.down.left.square
+arrow.up.right.and.arrow.down.left.square.fill
+arrow.up.right.bottomleft.rectangle
+arrow.up.right.bottomleft.rectangle.fill
+arrow.up.right.circle
+arrow.up.right.circle.dotted
+arrow.up.right.circle.fill
+arrow.up.right.square
+arrow.up.right.square.fill
+arrow.up.right.video
+arrow.up.right.video.fill
+arrow.up.square
+arrow.up.square.fill
+arrow.up.to.line
+arrow.up.to.line.circle
+arrow.up.to.line.circle.fill
+arrow.up.to.line.compact
+arrow.up.to.line.square
+arrow.up.to.line.square.fill
+arrow.up.trash
+arrow.up.trash.fill
+arrow.uturn.backward
+arrow.uturn.backward.circle
+arrow.uturn.backward.circle.badge.ellipsis
+arrow.uturn.backward.circle.fill
+arrow.uturn.backward.square
+arrow.uturn.backward.square.fill
+arrow.uturn.down
+arrow.uturn.down.circle
+arrow.uturn.down.circle.fill
+arrow.uturn.down.square
+arrow.uturn.down.square.fill
+arrow.uturn.forward
+arrow.uturn.forward.circle
+arrow.uturn.forward.circle.fill
+arrow.uturn.forward.square
+arrow.uturn.forward.square.fill
+arrow.uturn.left
+arrow.uturn.left.circle
+arrow.uturn.left.circle.badge.ellipsis
+arrow.uturn.left.circle.fill
+arrow.uturn.left.square
+arrow.uturn.left.square.fill
+arrow.uturn.right
+arrow.uturn.right.circle
+arrow.uturn.right.circle.fill
+arrow.uturn.right.square
+arrow.uturn.right.square.fill
+arrow.uturn.up
+arrow.uturn.up.circle
+arrow.uturn.up.circle.fill
+arrow.uturn.up.square
+arrow.uturn.up.square.fill
+arrowkeys
+arrowkeys.down.filled
+arrowkeys.fill
+arrowkeys.left.filled
+arrowkeys.right.filled
+arrowkeys.up.filled
+arrowshape.backward
+arrowshape.backward.circle
+arrowshape.backward.circle.fill
+arrowshape.backward.fill
+arrowshape.bounce.forward
+arrowshape.bounce.forward.fill
+arrowshape.bounce.right
+arrowshape.bounce.right.fill
+arrowshape.down
+arrowshape.down.circle
+arrowshape.down.circle.fill
+arrowshape.down.fill
+arrowshape.forward
+arrowshape.forward.circle
+arrowshape.forward.circle.fill
+arrowshape.forward.fill
+arrowshape.left
+arrowshape.left.arrowshape.right
+arrowshape.left.arrowshape.right.fill
+arrowshape.left.circle
+arrowshape.left.circle.fill
+arrowshape.left.fill
+arrowshape.right
+arrowshape.right.circle
+arrowshape.right.circle.fill
+arrowshape.right.fill
+arrowshape.turn.up.backward
+arrowshape.turn.up.backward.2
+arrowshape.turn.up.backward.2.circle
+arrowshape.turn.up.backward.2.circle.fill
+arrowshape.turn.up.backward.2.fill
+arrowshape.turn.up.backward.badge.clock
+arrowshape.turn.up.backward.badge.clock.fill
+arrowshape.turn.up.backward.badge.clock.fill.rtl
+arrowshape.turn.up.backward.badge.clock.rtl
+arrowshape.turn.up.backward.circle
+arrowshape.turn.up.backward.circle.fill
+arrowshape.turn.up.backward.fill
+arrowshape.turn.up.forward
+arrowshape.turn.up.forward.circle
+arrowshape.turn.up.forward.circle.fill
+arrowshape.turn.up.forward.fill
+arrowshape.turn.up.left
+arrowshape.turn.up.left.2
+arrowshape.turn.up.left.2.circle
+arrowshape.turn.up.left.2.circle.fill
+arrowshape.turn.up.left.2.fill
+arrowshape.turn.up.left.circle
+arrowshape.turn.up.left.circle.fill
+arrowshape.turn.up.left.fill
+arrowshape.turn.up.right
+arrowshape.turn.up.right.circle
+arrowshape.turn.up.right.circle.fill
+arrowshape.turn.up.right.fill
+arrowshape.up
+arrowshape.up.circle
+arrowshape.up.circle.fill
+arrowshape.up.fill
+arrowshape.zigzag.forward
+arrowshape.zigzag.forward.fill
+arrowshape.zigzag.right
+arrowshape.zigzag.right.fill
+arrowtriangle.backward
+arrowtriangle.backward.circle
+arrowtriangle.backward.circle.fill
+arrowtriangle.backward.fill
+arrowtriangle.backward.inset.filled.leadingthird.rectangle
+arrowtriangle.backward.leadingside.rectangle
+arrowtriangle.backward.square
+arrowtriangle.backward.square.fill
+arrowtriangle.down
+arrowtriangle.down.2
+arrowtriangle.down.2.fill
+arrowtriangle.down.circle
+arrowtriangle.down.circle.fill
+arrowtriangle.down.fill
+arrowtriangle.down.square
+arrowtriangle.down.square.fill
+arrowtriangle.forward
+arrowtriangle.forward.circle
+arrowtriangle.forward.circle.fill
+arrowtriangle.forward.fill
+arrowtriangle.forward.inset.filled.trailingthird.rectangle
+arrowtriangle.forward.square
+arrowtriangle.forward.square.fill
+arrowtriangle.forward.trailingside.rectangle
+arrowtriangle.left
+arrowtriangle.left.and.line.vertical.and.arrowtriangle.right
+arrowtriangle.left.and.line.vertical.and.arrowtriangle.right.fill
+arrowtriangle.left.circle
+arrowtriangle.left.circle.fill
+arrowtriangle.left.fill
+arrowtriangle.left.inset.filled.leftthird.rectangle
+arrowtriangle.left.leftside.rectangle
+arrowtriangle.left.square
+arrowtriangle.left.square.fill
+arrowtriangle.right
+arrowtriangle.right.and.line.vertical.and.arrowtriangle.left
+arrowtriangle.right.and.line.vertical.and.arrowtriangle.left.fill
+arrowtriangle.right.circle
+arrowtriangle.right.circle.fill
+arrowtriangle.right.fill
+arrowtriangle.right.inset.filled.rightthird.rectangle
+arrowtriangle.right.rightside.rectangle
+arrowtriangle.right.square
+arrowtriangle.right.square.fill
+arrowtriangle.up
+arrowtriangle.up.2
+arrowtriangle.up.2.fill
+arrowtriangle.up.arrowtriangle.down.window.left
+arrowtriangle.up.arrowtriangle.down.window.right
+arrowtriangle.up.circle
+arrowtriangle.up.circle.fill
+arrowtriangle.up.fill
+arrowtriangle.up.square
+arrowtriangle.up.square.fill
+aspectratio
+aspectratio.fill
+asterisk
+asterisk.circle
+asterisk.circle.fill
+at
+at.badge.minus
+at.badge.plus
+at.circle
+at.circle.fill
+atom
+audio.jack.mono
+audio.jack.stereo
+australian.football
+australian.football.circle
+australian.football.circle.fill
+australian.football.fill
+australiandollarsign
+australiandollarsign.arrow.trianglehead.counterclockwise.rotate.90
+australiandollarsign.building.classical
+australiandollarsign.building.classical.fill
+australiandollarsign.circle
+australiandollarsign.circle.fill
+australiandollarsign.gauge.chart.lefthalf.righthalf
+australiandollarsign.gauge.chart.leftthird.topthird.rightthird
+australiandollarsign.ring
+australiandollarsign.ring.dashed
+australiandollarsign.square
+australiandollarsign.square.fill
+australsign
+australsign.arrow.trianglehead.counterclockwise.rotate.90
+australsign.building.classical
+australsign.building.classical.fill
+australsign.circle
+australsign.circle.fill
+australsign.gauge.chart.lefthalf.righthalf
+australsign.gauge.chart.leftthird.topthird.rightthird
+australsign.ring
+australsign.ring.dashed
+australsign.square
+australsign.square.fill
+automatic.brakesignal
+automatic.headlight.high.beam
+automatic.headlight.high.beam.fill
+automatic.headlight.low.beam
+automatic.headlight.low.beam.fill
+autostartstop
+autostartstop.slash
+autostartstop.trianglebadge.exclamationmark
+av.remote
+av.remote.fill
+axle.2
+axle.2.driveshaft.disengaged
+axle.2.front.and.rear.engaged
+axle.2.front.disengaged
+axle.2.front.engaged
+axle.2.rear.disengaged
+axle.2.rear.engaged
+axle.2.rear.lock
+b.circle
+b.circle.fill
+b.square
+b.square.fill
+backpack
+backpack.circle
+backpack.circle.fill
+backpack.fill
+backpack.sensor.tag.radiowaves.left.and.right
+backpack.sensor.tag.radiowaves.left.and.right.fill
+backward
+backward.bubble
+backward.bubble.fill
+backward.bubble.fill.rtl
+backward.bubble.rtl
+backward.circle
+backward.circle.fill
+backward.end
+backward.end.alt
+backward.end.alt.fill
+backward.end.circle
+backward.end.circle.fill
+backward.end.fill
+backward.fill
+backward.frame
+backward.frame.fill
+badge.plus.radiowaves.forward
+badge.plus.radiowaves.right
+bag
+bag.badge.minus
+bag.badge.plus
+bag.badge.questionmark
+bag.badge.questionmark.ar
+bag.circle
+bag.circle.fill
+bag.fill
+bag.fill.badge.minus
+bag.fill.badge.plus
+bag.fill.badge.questionmark
+bag.fill.badge.questionmark.ar
+bahtsign
+bahtsign.arrow.trianglehead.counterclockwise.rotate.90
+bahtsign.building.classical
+bahtsign.building.classical.fill
+bahtsign.circle
+bahtsign.circle.fill
+bahtsign.gauge.chart.lefthalf.righthalf
+bahtsign.gauge.chart.leftthird.topthird.rightthird
+bahtsign.ring
+bahtsign.ring.dashed
+bahtsign.square
+bahtsign.square.fill
+balloon
+balloon.2
+balloon.2.fill
+balloon.fill
+bandage
+bandage.fill
+banknote
+banknote.fill
+barcode
+barcode.viewfinder
+barometer
+base.unit
+baseball
+baseball.circle
+baseball.circle.fill
+baseball.diamond.bases
+baseball.diamond.bases.outs.indicator
+baseball.fill
+basket
+basket.fill
+basketball
+basketball.circle
+basketball.circle.fill
+basketball.fill
+bathtub
+bathtub.fill
+battery.0percent
+battery.100percent
+battery.100percent.bolt
+battery.100percent.bolt.rtl
+battery.100percent.circle
+battery.100percent.circle.fill
+battery.25percent
+battery.50percent
+battery.75percent
+batteryblock
+batteryblock.fill
+batteryblock.slash
+batteryblock.slash.fill
+batteryblock.stack
+batteryblock.stack.badge.snowflake
+batteryblock.stack.badge.snowflake.fill
+batteryblock.stack.fill
+batteryblock.stack.trianglebadge.exclamationmark
+batteryblock.stack.trianglebadge.exclamationmark.fill
+beach.umbrella
+beach.umbrella.fill
+beats.earphones
+beats.fitpro
+beats.fitpro.chargingcase
+beats.fitpro.chargingcase.fill
+beats.fitpro.left
+beats.fitpro.right
+beats.headphones
+beats.pill
+beats.pill.fill
+beats.powerbeats
+beats.powerbeats.left
+beats.powerbeats.pro
+beats.powerbeats.pro.2
+beats.powerbeats.pro.2.chargingcase
+beats.powerbeats.pro.2.chargingcase.fill
+beats.powerbeats.pro.2.left
+beats.powerbeats.pro.2.right
+beats.powerbeats.pro.chargingcase
+beats.powerbeats.pro.chargingcase.fill
+beats.powerbeats.pro.left
+beats.powerbeats.pro.right
+beats.powerbeats.right
+beats.powerbeats3
+beats.powerbeats3.left
+beats.powerbeats3.right
+beats.solobuds
+beats.solobuds.chargingcase
+beats.solobuds.chargingcase.fill
+beats.solobuds.left
+beats.solobuds.right
+beats.studiobuds
+beats.studiobuds.chargingcase
+beats.studiobuds.chargingcase.fill
+beats.studiobuds.left
+beats.studiobuds.plus
+beats.studiobuds.plus.chargingcase
+beats.studiobuds.plus.chargingcase.fill
+beats.studiobuds.plus.left
+beats.studiobuds.plus.right
+beats.studiobuds.right
+bed.double
+bed.double.badge.checkmark
+bed.double.badge.checkmark.fill
+bed.double.circle
+bed.double.circle.fill
+bed.double.fill
+bell
+bell.and.waves.left.and.right
+bell.and.waves.left.and.right.fill
+bell.badge
+bell.badge.circle
+bell.badge.circle.fill
+bell.badge.fill
+bell.badge.slash
+bell.badge.slash.fill
+bell.badge.slash.fill.rtl
+bell.badge.slash.rtl
+bell.badge.waveform
+bell.badge.waveform.fill
+bell.badge.waveform.slash
+bell.badge.waveform.slash.fill
+bell.circle
+bell.circle.fill
+bell.fill
+bell.slash
+bell.slash.circle
+bell.slash.circle.fill
+bell.slash.fill
+bell.square
+bell.square.fill
+beziercurve
+bicycle
+bicycle.circle
+bicycle.circle.fill
+bicycle.sensor.tag.radiowaves.left.and.right
+bicycle.sensor.tag.radiowaves.left.and.right.fill
+binoculars
+binoculars.circle
+binoculars.circle.fill
+binoculars.fill
+bird
+bird.circle
+bird.circle.fill
+bird.fill
+birthday.cake
+birthday.cake.fill
+bitcoinsign
+bitcoinsign.arrow.trianglehead.counterclockwise.rotate.90
+bitcoinsign.building.classical
+bitcoinsign.building.classical.fill
+bitcoinsign.circle
+bitcoinsign.circle.fill
+bitcoinsign.gauge.chart.lefthalf.righthalf
+bitcoinsign.gauge.chart.leftthird.topthird.rightthird
+bitcoinsign.ring
+bitcoinsign.ring.dashed
+bitcoinsign.square
+bitcoinsign.square.fill
+blinds.horizontal.closed
+blinds.horizontal.open
+blinds.vertical.closed
+blinds.vertical.open
+blood.pressure.cuff
+blood.pressure.cuff.badge.gauge.with.needle
+blood.pressure.cuff.badge.gauge.with.needle.fill
+blood.pressure.cuff.fill
+bold
+bold.italic.underline
+bold.underline
+bolt
+bolt.badge.automatic
+bolt.badge.automatic.fill
+bolt.badge.checkmark
+bolt.badge.checkmark.fill
+bolt.badge.clock
+bolt.badge.clock.fill
+bolt.badge.xmark
+bolt.badge.xmark.fill
+bolt.batteryblock
+bolt.batteryblock.fill
+bolt.brakesignal
+bolt.car
+bolt.car.circle
+bolt.car.circle.fill
+bolt.car.fill
+bolt.circle
+bolt.circle.fill
+bolt.fill
+bolt.heart
+bolt.heart.fill
+bolt.horizontal
+bolt.horizontal.circle
+bolt.horizontal.circle.fill
+bolt.horizontal.fill
+bolt.horizontal.icloud
+bolt.horizontal.icloud.fill
+bolt.house
+bolt.house.fill
+bolt.ring.closed
+bolt.shield
+bolt.shield.fill
+bolt.slash
+bolt.slash.circle
+bolt.slash.circle.fill
+bolt.slash.fill
+bolt.square
+bolt.square.fill
+bolt.trianglebadge.exclamationmark
+bolt.trianglebadge.exclamationmark.fill
+bonjour
+book
+book.and.wrench
+book.and.wrench.fill
+book.badge.plus
+book.badge.plus.fill
+book.circle
+book.circle.fill
+book.closed
+book.closed.circle
+book.closed.circle.fill
+book.closed.fill
+book.fill
+book.pages
+book.pages.fill
+bookmark
+bookmark.circle
+bookmark.circle.fill
+bookmark.fill
+bookmark.slash
+bookmark.slash.fill
+bookmark.square
+bookmark.square.fill
+books.vertical
+books.vertical.circle
+books.vertical.circle.fill
+books.vertical.fill
+brain
+brain.fill
+brain.filled.head.profile
+brain.head.profile
+brain.head.profile.fill
+brakesignal
+brakesignal.dashed
+brazilianrealsign
+brazilianrealsign.arrow.trianglehead.counterclockwise.rotate.90
+brazilianrealsign.building.classical
+brazilianrealsign.building.classical.fill
+brazilianrealsign.circle
+brazilianrealsign.circle.fill
+brazilianrealsign.gauge.chart.lefthalf.righthalf
+brazilianrealsign.gauge.chart.leftthird.topthird.rightthird
+brazilianrealsign.ring
+brazilianrealsign.ring.dashed
+brazilianrealsign.square
+brazilianrealsign.square.fill
+briefcase
+briefcase.circle
+briefcase.circle.fill
+briefcase.fill
+briefcase.sensor.tag.radiowaves.left.and.right
+briefcase.sensor.tag.radiowaves.left.and.right.fill
+bubble
+bubble.and.pencil
+bubble.and.pencil.rtl
+bubble.circle
+bubble.circle.fill
+bubble.fill
+bubble.left
+bubble.left.and.bubble.right
+bubble.left.and.bubble.right.fill
+bubble.left.and.exclamationmark.bubble.right
+bubble.left.and.exclamationmark.bubble.right.fill
+bubble.left.and.heart.bubble.right
+bubble.left.and.heart.bubble.right.fill
+bubble.left.and.text.bubble.right
+bubble.left.and.text.bubble.right.fill
+bubble.left.and.text.bubble.right.fill.rtl
+bubble.left.and.text.bubble.right.rtl
+bubble.left.circle
+bubble.left.circle.fill
+bubble.left.fill
+bubble.middle.bottom
+bubble.middle.bottom.fill
+bubble.middle.top
+bubble.middle.top.fill
+bubble.right
+bubble.right.circle
+bubble.right.circle.fill
+bubble.right.fill
+bubbles.and.sparkles
+bubbles.and.sparkles.fill
+building
+building.2
+building.2.crop.circle
+building.2.crop.circle.fill
+building.2.fill
+building.classical.columns
+building.classical.columns.circle
+building.classical.columns.fill
+building.columns.circle.fill
+building.fill
+burn
+burst
+burst.fill
+bus
+bus.doubledecker
+bus.doubledecker.fill
+bus.fill
+button.angledbottom.horizontal.left
+button.angledbottom.horizontal.left.fill
+button.angledbottom.horizontal.right
+button.angledbottom.horizontal.right.fill
+button.angledtop.vertical.left
+button.angledtop.vertical.left.fill
+button.angledtop.vertical.right
+button.angledtop.vertical.right.fill
+button.horizontal
+button.horizontal.fill
+button.horizontal.top
+button.horizontal.top.fill
+button.horizontal.top.press
+button.horizontal.top.press.fill
+button.programmable
+button.programmable.square
+button.programmable.square.fill
+button.roundedbottom.horizontal
+button.roundedbottom.horizontal.fill
+button.roundedtop.horizontal
+button.roundedtop.horizontal.fill
+button.vertical.left
+button.vertical.left.fill
+button.vertical.left.press
+button.vertical.left.press.fill
+button.vertical.right
+button.vertical.right.fill
+button.vertical.right.press
+button.vertical.right.press.fill
+c.circle
+c.circle.fill
+c.square
+c.square.fill
+cabinet
+cabinet.fill
+cable.coaxial
+cable.connector
+cable.connector.horizontal
+cable.connector.slash
+cable.connector.video
+cablecar
+cablecar.fill
+calendar
+calendar.and.person
+calendar.badge
+calendar.badge.checkmark
+calendar.badge.checkmark.rtl
+calendar.badge.clock
+calendar.badge.clock.rtl
+calendar.badge.exclamationmark
+calendar.badge.lock
+calendar.badge.minus
+calendar.badge.plus
+calendar.circle
+calendar.circle.fill
+calendar.day
+calendar.day.timeline.leading
+calendar.day.timeline.leading.circle
+calendar.day.timeline.leading.circle.fill
+calendar.day.timeline.left
+calendar.day.timeline.left.circle
+calendar.day.timeline.left.circle.fill
+calendar.day.timeline.right
+calendar.day.timeline.right.circle
+calendar.day.timeline.right.circle.fill
+calendar.day.timeline.trailing
+calendar.day.timeline.trailing.circle
+calendar.day.timeline.trailing.circle.fill
+camera
+camera.aperture
+camera.badge.clock
+camera.badge.clock.fill
+camera.badge.ellipsis
+camera.badge.ellipsis.fill
+camera.circle
+camera.circle.fill
+camera.fill
+camera.filters
+camera.macro
+camera.macro.circle
+camera.macro.circle.fill
+camera.macro.slash
+camera.macro.slash.circle
+camera.macro.slash.circle.fill
+camera.metering.center.weighted
+camera.metering.center.weighted.average
+camera.metering.matrix
+camera.metering.multispot
+camera.metering.none
+camera.metering.partial
+camera.metering.spot
+camera.metering.unknown
+camera.metering.unknown.ar
+camera.on.rectangle
+camera.on.rectangle.fill
+camera.sensor.tag.radiowaves.left.and.right
+camera.sensor.tag.radiowaves.left.and.right.fill
+camera.shutter.button
+camera.shutter.button.fill
+camera.viewfinder
+camera.viewfinder.badge.automatic
+candybarphone
+capslock
+capslock.fill
+capsule
+capsule.bottomhalf.filled
+capsule.fill
+capsule.lefthalf.filled
+capsule.on.capsule
+capsule.on.capsule.fill
+capsule.on.rectangle
+capsule.on.rectangle.fill
+capsule.portrait
+capsule.portrait.bottomhalf.filled
+capsule.portrait.fill
+capsule.portrait.lefthalf.filled
+capsule.portrait.righthalf.filled
+capsule.portrait.tophalf.filled
+capsule.righthalf.filled
+capsule.tophalf.filled
+captions.bubble
+captions.bubble.fill
+car
+car.2
+car.2.fill
+car.badge.gearshape
+car.badge.gearshape.fill
+car.card
+car.card.fill
+car.circle
+car.circle.fill
+car.ferry
+car.ferry.fill
+car.fill
+car.front.waves.down
+car.front.waves.down.fill
+car.front.waves.left.and.right.and.up
+car.front.waves.left.and.right.and.up.fill
+car.front.waves.up
+car.front.waves.up.fill
+car.rear
+car.rear.and.collision.road.lane
+car.rear.and.collision.road.lane.slash
+car.rear.and.tire.marks
+car.rear.and.tire.marks.off
+car.rear.and.tire.marks.slash
+car.rear.fill
+car.rear.hazardsign
+car.rear.hazardsign.fill
+car.rear.road.lane
+car.rear.road.lane.dashed
+car.rear.road.lane.dashed.arrowtriangle.2.outward
+car.rear.road.lane.distance.1
+car.rear.road.lane.distance.1.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle
+car.rear.road.lane.distance.2
+car.rear.road.lane.distance.2.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle
+car.rear.road.lane.distance.3
+car.rear.road.lane.distance.3.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle
+car.rear.road.lane.distance.4
+car.rear.road.lane.distance.4.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle
+car.rear.road.lane.distance.5
+car.rear.road.lane.distance.5.and.gauge.open.with.lines.needle.67percent.and.arrowtriangle
+car.rear.road.lane.off
+car.rear.road.lane.wave.up
+car.rear.tilt.road.lanes.curved.right
+car.rear.waves.up
+car.rear.waves.up.fill
+car.side
+car.side.air.circulate
+car.side.air.circulate.fill
+car.side.air.fresh
+car.side.air.fresh.fill
+car.side.and.exclamationmark
+car.side.and.exclamationmark.fill
+car.side.arrow.left.and.right
+car.side.arrow.left.and.right.fill
+car.side.arrowtriangle.down
+car.side.arrowtriangle.down.fill
+car.side.arrowtriangle.up
+car.side.arrowtriangle.up.arrowtriangle.down
+car.side.arrowtriangle.up.arrowtriangle.down.fill
+car.side.arrowtriangle.up.fill
+car.side.fill
+car.side.front.open
+car.side.front.open.crop
+car.side.front.open.crop.fill
+car.side.front.open.fill
+car.side.hill.descent.control
+car.side.hill.descent.control.fill
+car.side.hill.down
+car.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle
+car.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill
+car.side.hill.down.fill
+car.side.hill.up
+car.side.hill.up.fill
+car.side.lock
+car.side.lock.fill
+car.side.lock.open
+car.side.lock.open.fill
+car.side.rear.and.collision.and.car.side.front
+car.side.rear.and.collision.and.car.side.front.and.arrow.forward
+car.side.rear.and.collision.and.car.side.front.and.steeringwheel
+car.side.rear.and.collision.and.car.side.front.slash
+car.side.rear.and.exclamationmark.and.car.side.front
+car.side.rear.and.exclamationmark.and.car.side.front.off
+car.side.rear.and.wave.3.and.car.side.front
+car.side.rear.crop.trunk.partition
+car.side.rear.crop.trunk.partition.fill
+car.side.rear.open
+car.side.rear.open.crop
+car.side.rear.open.crop.fill
+car.side.rear.open.fill
+car.side.rear.tow.hitch
+car.side.rear.tow.hitch.fill
+car.side.roof.cargo.carrier
+car.side.roof.cargo.carrier.fill
+car.side.roof.cargo.carrier.slash
+car.side.roof.cargo.carrier.slash.fill
+car.top.arrowtriangle.front.left
+car.top.arrowtriangle.front.left.fill
+car.top.arrowtriangle.front.right
+car.top.arrowtriangle.front.right.fill
+car.top.arrowtriangle.rear.left
+car.top.arrowtriangle.rear.left.fill
+car.top.arrowtriangle.rear.right
+car.top.arrowtriangle.rear.right.fill
+car.top.door.front.left.and.front.right.and.rear.left.and.rear.right.open
+car.top.door.front.left.and.front.right.and.rear.left.and.rear.right.open.fill
+car.top.door.front.left.and.front.right.and.rear.left.open
+car.top.door.front.left.and.front.right.and.rear.left.open.fill
+car.top.door.front.left.and.front.right.and.rear.right.open
+car.top.door.front.left.and.front.right.and.rear.right.open.fill
+car.top.door.front.left.and.front.right.open
+car.top.door.front.left.and.front.right.open.fill
+car.top.door.front.left.and.rear.left.and.rear.right.open
+car.top.door.front.left.and.rear.left.and.rear.right.open.fill
+car.top.door.front.left.and.rear.left.open
+car.top.door.front.left.and.rear.left.open.fill
+car.top.door.front.left.and.rear.right.open
+car.top.door.front.left.and.rear.right.open.fill
+car.top.door.front.left.open
+car.top.door.front.left.open.fill
+car.top.door.front.right.and.rear.left.and.rear.right.open
+car.top.door.front.right.and.rear.left.and.rear.right.open.fill
+car.top.door.front.right.and.rear.left.open
+car.top.door.front.right.and.rear.left.open.fill
+car.top.door.front.right.and.rear.right.open
+car.top.door.front.right.and.rear.right.open.fill
+car.top.door.front.right.open
+car.top.door.front.right.open.fill
+car.top.door.rear.left.and.rear.right.open
+car.top.door.rear.left.and.rear.right.open.fill
+car.top.door.rear.left.open
+car.top.door.rear.left.open.fill
+car.top.door.rear.right.open
+car.top.door.rear.right.open.fill
+car.top.door.sliding.left.open
+car.top.door.sliding.left.open.fill
+car.top.door.sliding.right.open
+car.top.door.sliding.right.open.fill
+car.top.front.radiowaves.front.left.and.front.and.front.right
+car.top.front.radiowaves.front.left.and.front.and.front.right.fill
+car.top.lane.dashed.arrowtriangle.inward
+car.top.lane.dashed.arrowtriangle.inward.fill
+car.top.lane.dashed.badge.steeringwheel
+car.top.lane.dashed.badge.steeringwheel.fill
+car.top.lane.dashed.departure.left
+car.top.lane.dashed.departure.left.fill
+car.top.lane.dashed.departure.left.slash
+car.top.lane.dashed.departure.left.slash.fill
+car.top.lane.dashed.departure.right
+car.top.lane.dashed.departure.right.fill
+car.top.lane.dashed.departure.right.slash
+car.top.lane.dashed.departure.right.slash.fill
+car.top.radiowaves.2.front.left.front.front.right
+car.top.radiowaves.2.front.left.front.front.right.fill
+car.top.radiowaves.2.rear.left.rear.rear.right
+car.top.radiowaves.2.rear.left.rear.rear.right.fill
+car.top.radiowaves.front
+car.top.radiowaves.front.fill
+car.top.radiowaves.rear
+car.top.radiowaves.rear.fill
+car.top.radiowaves.rear.left
+car.top.radiowaves.rear.left.and.rear.right
+car.top.radiowaves.rear.left.and.rear.right.fill
+car.top.radiowaves.rear.left.car.top.front
+car.top.radiowaves.rear.left.car.top.front.fill
+car.top.radiowaves.rear.left.fill
+car.top.radiowaves.rear.right
+car.top.radiowaves.rear.right.badge.exclamationmark
+car.top.radiowaves.rear.right.badge.exclamationmark.fill
+car.top.radiowaves.rear.right.badge.xmark
+car.top.radiowaves.rear.right.badge.xmark.fill
+car.top.radiowaves.rear.right.car.top.front
+car.top.radiowaves.rear.right.car.top.front.fill
+car.top.radiowaves.rear.right.fill
+car.top.rear.radiowaves.rear.left.and.rear.and.rear.right
+car.top.rear.radiowaves.rear.left.and.rear.and.rear.right.fill
+car.top.video.rear.left
+car.top.video.rear.left.fill
+car.top.video.rear.right
+car.top.video.rear.right.fill
+car.window.left
+car.window.left.badge.exclamationmark
+car.window.left.badge.lock
+car.window.left.badge.xmark
+car.window.left.exclamationmark
+car.window.left.xmark
+car.window.right
+car.window.right.badge.exclamationmark
+car.window.right.badge.lock
+car.window.right.badge.xmark
+car.window.right.exclamationmark
+car.window.right.xmark
+carbon.dioxide.cloud
+carbon.dioxide.cloud.fill
+carbon.monoxide.cloud
+carbon.monoxide.cloud.fill
+carrot
+carrot.fill
+carseat.left
+carseat.left.1
+carseat.left.1.fill
+carseat.left.2
+carseat.left.2.fill
+carseat.left.3
+carseat.left.3.fill
+carseat.left.and.heat.waves
+carseat.left.and.heat.waves.fill
+carseat.left.backrest.up.and.down
+carseat.left.backrest.up.and.down.fill
+carseat.left.fan
+carseat.left.fan.fill
+carseat.left.fill
+carseat.left.forward.and.backward
+carseat.left.forward.and.backward.fill
+carseat.left.massage
+carseat.left.massage.fill
+carseat.left.up.and.down
+carseat.left.up.and.down.fill
+carseat.right
+carseat.right.1
+carseat.right.1.fill
+carseat.right.2
+carseat.right.2.fill
+carseat.right.3
+carseat.right.3.fill
+carseat.right.and.heat.waves
+carseat.right.and.heat.waves.fill
+carseat.right.backrest.up.and.down
+carseat.right.backrest.up.and.down.fill
+carseat.right.fan
+carseat.right.fan.fill
+carseat.right.fill
+carseat.right.forward.and.backward
+carseat.right.forward.and.backward.fill
+carseat.right.massage
+carseat.right.massage.fill
+carseat.right.up.and.down
+carseat.right.up.and.down.fill
+cart
+cart.badge.clock
+cart.badge.clock.fill
+cart.badge.clock.fill.rtl
+cart.badge.clock.rtl
+cart.badge.minus
+cart.badge.plus
+cart.badge.questionmark
+cart.badge.questionmark.ar
+cart.badge.questionmark.rtl
+cart.circle
+cart.circle.fill
+cart.fill
+cart.fill.badge.minus
+cart.fill.badge.plus
+cart.fill.badge.questionmark
+cart.fill.badge.questionmark.ar
+cart.fill.badge.questionmark.rtl
+case
+case.fill
+cat
+cat.circle
+cat.circle.fill
+cat.fill
+cedisign
+cedisign.arrow.trianglehead.counterclockwise.rotate.90
+cedisign.building.classical
+cedisign.building.classical.fill
+cedisign.circle
+cedisign.circle.fill
+cedisign.gauge.chart.lefthalf.righthalf
+cedisign.gauge.chart.leftthird.topthird.rightthird
+cedisign.ring
+cedisign.ring.dashed
+cedisign.square
+cedisign.square.fill
+cellularbars
+cellularbars.circle
+cellularbars.circle.fill
+cellularbars.short.cellularbars
+centsign
+centsign.arrow.trianglehead.counterclockwise.rotate.90
+centsign.building.classical
+centsign.building.classical.fill
+centsign.circle
+centsign.circle.fill
+centsign.gauge.chart.lefthalf.righthalf
+centsign.gauge.chart.leftthird.topthird.rightthird
+centsign.ring
+centsign.ring.dashed
+centsign.square
+centsign.square.fill
+chair
+chair.fill
+chair.lounge
+chair.lounge.fill
+chandelier
+chandelier.fill
+character
+character.ar
+character.bn
+character.book.closed
+character.book.closed.ar
+character.book.closed.bn
+character.book.closed.fill
+character.book.closed.fill.ar
+character.book.closed.fill.bn
+character.book.closed.fill.gu
+character.book.closed.fill.he
+character.book.closed.fill.hi
+character.book.closed.fill.ja
+character.book.closed.fill.kn
+character.book.closed.fill.ko
+character.book.closed.fill.ml
+character.book.closed.fill.mni
+character.book.closed.fill.mr
+character.book.closed.fill.or
+character.book.closed.fill.pa
+character.book.closed.fill.sat
+character.book.closed.fill.si
+character.book.closed.fill.ta
+character.book.closed.fill.te
+character.book.closed.fill.th
+character.book.closed.fill.zh
+character.book.closed.gu
+character.book.closed.he
+character.book.closed.hi
+character.book.closed.ja
+character.book.closed.kn
+character.book.closed.ko
+character.book.closed.ml
+character.book.closed.mni
+character.book.closed.mr
+character.book.closed.or
+character.book.closed.pa
+character.book.closed.sat
+character.book.closed.si
+character.book.closed.ta
+character.book.closed.te
+character.book.closed.th
+character.book.closed.zh
+character.bubble
+character.bubble.ar
+character.bubble.bn
+character.bubble.fill
+character.bubble.fill.ar
+character.bubble.fill.bn
+character.bubble.fill.gu
+character.bubble.fill.he
+character.bubble.fill.hi
+character.bubble.fill.ja
+character.bubble.fill.kn
+character.bubble.fill.ko
+character.bubble.fill.ml
+character.bubble.fill.mni
+character.bubble.fill.mr
+character.bubble.fill.or
+character.bubble.fill.pa
+character.bubble.fill.sat
+character.bubble.fill.si
+character.bubble.fill.ta
+character.bubble.fill.te
+character.bubble.fill.th
+character.bubble.fill.zh
+character.bubble.gu
+character.bubble.he
+character.bubble.hi
+character.bubble.ja
+character.bubble.kn
+character.bubble.ko
+character.bubble.ml
+character.bubble.mni
+character.bubble.mr
+character.bubble.or
+character.bubble.pa
+character.bubble.sat
+character.bubble.si
+character.bubble.ta
+character.bubble.te
+character.bubble.th
+character.bubble.zh
+character.circle
+character.circle.ar
+character.circle.bn
+character.circle.fill
+character.circle.fill.ar
+character.circle.fill.bn
+character.circle.fill.gu
+character.circle.fill.he
+character.circle.fill.hi
+character.circle.fill.ja
+character.circle.fill.kn
+character.circle.fill.ko
+character.circle.fill.ml
+character.circle.fill.mni
+character.circle.fill.mr
+character.circle.fill.or
+character.circle.fill.pa
+character.circle.fill.sat
+character.circle.fill.si
+character.circle.fill.ta
+character.circle.fill.te
+character.circle.fill.th
+character.circle.fill.zh
+character.circle.gu
+character.circle.he
+character.circle.hi
+character.circle.ja
+character.circle.kn
+character.circle.ko
+character.circle.ml
+character.circle.mni
+character.circle.mr
+character.circle.or
+character.circle.pa
+character.circle.sat
+character.circle.si
+character.circle.ta
+character.circle.te
+character.circle.th
+character.circle.zh
+character.cursor.ibeam
+character.cursor.ibeam.ar
+character.cursor.ibeam.bn
+character.cursor.ibeam.gu
+character.cursor.ibeam.he
+character.cursor.ibeam.hi
+character.cursor.ibeam.ja
+character.cursor.ibeam.kn
+character.cursor.ibeam.ko
+character.cursor.ibeam.ml
+character.cursor.ibeam.mni
+character.cursor.ibeam.mr
+character.cursor.ibeam.or
+character.cursor.ibeam.pa
+character.cursor.ibeam.sat
+character.cursor.ibeam.si
+character.cursor.ibeam.ta
+character.cursor.ibeam.te
+character.cursor.ibeam.th
+character.cursor.ibeam.zh
+character.duployan
+character.gu
+character.he
+character.hi
+character.ja
+character.kn
+character.ko
+character.magnify
+character.magnify.ar
+character.magnify.bn
+character.magnify.gu
+character.magnify.he
+character.magnify.hi
+character.magnify.ja
+character.magnify.kn
+character.magnify.ko
+character.magnify.ml
+character.magnify.mni
+character.magnify.mr
+character.magnify.or
+character.magnify.pa
+character.magnify.sat
+character.magnify.si
+character.magnify.ta
+character.magnify.te
+character.magnify.th
+character.magnify.zh
+character.ml
+character.mni
+character.mr
+character.or
+character.pa
+character.phonetic
+character.sat
+character.si
+character.square
+character.square.ar
+character.square.bn
+character.square.fill
+character.square.fill.ar
+character.square.fill.bn
+character.square.fill.gu
+character.square.fill.he
+character.square.fill.hi
+character.square.fill.ja
+character.square.fill.kn
+character.square.fill.ko
+character.square.fill.ml
+character.square.fill.mni
+character.square.fill.mr
+character.square.fill.or
+character.square.fill.pa
+character.square.fill.sat
+character.square.fill.si
+character.square.fill.ta
+character.square.fill.te
+character.square.fill.th
+character.square.fill.zh
+character.square.gu
+character.square.he
+character.square.hi
+character.square.ja
+character.square.kn
+character.square.ko
+character.square.ml
+character.square.mni
+character.square.mr
+character.square.or
+character.square.pa
+character.square.sat
+character.square.si
+character.square.ta
+character.square.te
+character.square.th
+character.square.zh
+character.sutton
+character.ta
+character.te
+character.text.justify
+character.text.justify.ar
+character.text.justify.bn
+character.text.justify.gu
+character.text.justify.he
+character.text.justify.hi
+character.text.justify.ja
+character.text.justify.kn
+character.text.justify.ko
+character.text.justify.ml
+character.text.justify.mni
+character.text.justify.mr
+character.text.justify.or
+character.text.justify.pa
+character.text.justify.sat
+character.text.justify.si
+character.text.justify.ta
+character.text.justify.te
+character.text.justify.th
+character.text.justify.zh
+character.textbox
+character.textbox.ar
+character.textbox.badge.sparkles
+character.textbox.badge.sparkles.ar
+character.textbox.badge.sparkles.bn
+character.textbox.badge.sparkles.gu
+character.textbox.badge.sparkles.he
+character.textbox.badge.sparkles.hi
+character.textbox.badge.sparkles.ja
+character.textbox.badge.sparkles.kn
+character.textbox.badge.sparkles.ko
+character.textbox.badge.sparkles.ml
+character.textbox.badge.sparkles.mni
+character.textbox.badge.sparkles.mr
+character.textbox.badge.sparkles.or
+character.textbox.badge.sparkles.pa
+character.textbox.badge.sparkles.sat
+character.textbox.badge.sparkles.si
+character.textbox.badge.sparkles.ta
+character.textbox.badge.sparkles.te
+character.textbox.badge.sparkles.th
+character.textbox.badge.sparkles.zh
+character.textbox.bn
+character.textbox.gu
+character.textbox.he
+character.textbox.hi
+character.textbox.ja
+character.textbox.kn
+character.textbox.ko
+character.textbox.ml
+character.textbox.mni
+character.textbox.mr
+character.textbox.or
+character.textbox.pa
+character.textbox.sat
+character.textbox.si
+character.textbox.ta
+character.textbox.te
+character.textbox.th
+character.textbox.zh
+character.th
+character.zh
+characters.lowercase
+characters.lowercase.el
+characters.lowercase.ru
+characters.uppercase
+characters.uppercase.el
+characters.uppercase.ru
+chart.bar
+chart.bar.fill
+chart.bar.horizontal.page
+chart.bar.horizontal.page.fill
+chart.bar.xaxis
+chart.bar.xaxis.ascending
+chart.bar.xaxis.ascending.badge.clock
+chart.bar.xaxis.ascending.badge.clock.rtl
+chart.bar.xaxis.descending
+chart.bar.yaxis
+chart.dots.scatter
+chart.line.downtrend.xyaxis
+chart.line.downtrend.xyaxis.circle
+chart.line.downtrend.xyaxis.circle.fill
+chart.line.flattrend.xyaxis
+chart.line.flattrend.xyaxis.circle
+chart.line.flattrend.xyaxis.circle.fill
+chart.line.text.clipboard
+chart.line.text.clipboard.fill
+chart.line.uptrend.xyaxis
+chart.line.uptrend.xyaxis.circle
+chart.line.uptrend.xyaxis.circle.fill
+chart.pie
+chart.pie.fill
+chart.xyaxis.line
+checklist
+checklist.checked
+checklist.checked.rtl
+checklist.rtl
+checklist.unchecked
+checkmark
+checkmark.app
+checkmark.app.fill
+checkmark.applewatch
+checkmark.arrow.trianglehead.clockwise
+checkmark.arrow.trianglehead.counterclockwise
+checkmark.bubble
+checkmark.bubble.fill
+checkmark.bubble.fill.rtl
+checkmark.bubble.rtl
+checkmark.circle
+checkmark.circle.badge.airplane
+checkmark.circle.badge.airplane.fill
+checkmark.circle.badge.plus
+checkmark.circle.badge.plus.fill
+checkmark.circle.badge.questionmark
+checkmark.circle.badge.questionmark.ar
+checkmark.circle.badge.questionmark.fill
+checkmark.circle.badge.questionmark.fill.ar
+checkmark.circle.badge.xmark
+checkmark.circle.badge.xmark.fill
+checkmark.circle.dotted
+checkmark.circle.fill
+checkmark.circle.trianglebadge.exclamationmark
+checkmark.circle.trianglebadge.exclamationmark.fill
+checkmark.diamond
+checkmark.diamond.fill
+checkmark.icloud
+checkmark.icloud.fill
+checkmark.message
+checkmark.message.fill
+checkmark.rectangle
+checkmark.rectangle.fill
+checkmark.rectangle.portrait
+checkmark.rectangle.portrait.fill
+checkmark.rectangle.stack
+checkmark.rectangle.stack.fill
+checkmark.seal
+checkmark.seal.fill
+checkmark.seal.text.page
+checkmark.seal.text.page.fill
+checkmark.seal.text.page.fill.rtl
+checkmark.seal.text.page.rtl
+checkmark.shield
+checkmark.shield.fill
+checkmark.square
+checkmark.square.fill
+chevron.backward
+chevron.backward.2
+chevron.backward.chevron.backward.dotted
+chevron.backward.circle
+chevron.backward.circle.fill
+chevron.backward.square
+chevron.backward.square.fill
+chevron.backward.to.line
+chevron.compact.backward
+chevron.compact.down
+chevron.compact.forward
+chevron.compact.left
+chevron.compact.left.chevron.compact.right
+chevron.compact.right
+chevron.compact.up
+chevron.compact.up.chevron.compact.down
+chevron.compact.up.chevron.compact.right.chevron.compact.down.chevron.compact.left
+chevron.down
+chevron.down.2
+chevron.down.circle
+chevron.down.circle.fill
+chevron.down.dotted.2
+chevron.down.forward.2
+chevron.down.forward.dotted.2
+chevron.down.right.2
+chevron.down.right.dotted.2
+chevron.down.square
+chevron.down.square.fill
+chevron.forward
+chevron.forward.2
+chevron.forward.circle
+chevron.forward.circle.fill
+chevron.forward.dotted.chevron.forward
+chevron.forward.square
+chevron.forward.square.fill
+chevron.forward.to.line
+chevron.left
+chevron.left.2
+chevron.left.chevron.left.dotted
+chevron.left.chevron.right
+chevron.left.circle
+chevron.left.circle.fill
+chevron.left.forwardslash.chevron.right
+chevron.left.square
+chevron.left.square.fill
+chevron.left.to.line
+chevron.right
+chevron.right.2
+chevron.right.circle
+chevron.right.circle.fill
+chevron.right.dotted.chevron.right
+chevron.right.square
+chevron.right.square.fill
+chevron.right.to.line
+chevron.up
+chevron.up.2
+chevron.up.chevron.down
+chevron.up.chevron.down.square
+chevron.up.chevron.down.square.fill
+chevron.up.chevron.right.chevron.down.chevron.left
+chevron.up.circle
+chevron.up.circle.fill
+chevron.up.dotted.2
+chevron.up.forward.2
+chevron.up.forward.dotted.2
+chevron.up.right.2
+chevron.up.right.dotted.2
+chevron.up.square
+chevron.up.square.fill
+chineseyuanrenminbisign
+chineseyuanrenminbisign.arrow.trianglehead.counterclockwise.rotate.90
+chineseyuanrenminbisign.building.classical
+chineseyuanrenminbisign.building.classical.fill
+chineseyuanrenminbisign.circle
+chineseyuanrenminbisign.circle.fill
+chineseyuanrenminbisign.gauge.chart.lefthalf.righthalf
+chineseyuanrenminbisign.gauge.chart.leftthird.topthird.rightthird
+chineseyuanrenminbisign.ring
+chineseyuanrenminbisign.ring.dashed
+chineseyuanrenminbisign.square
+chineseyuanrenminbisign.square.fill
+circle
+circle.and.line.horizontal
+circle.and.line.horizontal.fill
+circle.badge.checkmark
+circle.badge.checkmark.fill
+circle.badge.exclamationmark
+circle.badge.exclamationmark.fill
+circle.badge.minus
+circle.badge.minus.fill
+circle.badge.plus
+circle.badge.plus.fill
+circle.badge.questionmark
+circle.badge.questionmark.ar
+circle.badge.questionmark.fill
+circle.badge.questionmark.fill.ar
+circle.badge.xmark
+circle.badge.xmark.fill
+circle.bottomhalf.filled
+circle.bottomhalf.filled.inverse
+circle.bottomrighthalf.pattern.checkered
+circle.circle
+circle.circle.fill
+circle.dashed
+circle.dashed.rectangle
+circle.dotted
+circle.dotted.and.circle
+circle.dotted.circle
+circle.dotted.circle.fill
+circle.fill
+circle.filled.ipad
+circle.filled.ipad.fill
+circle.filled.ipad.landscape
+circle.filled.ipad.landscape.fill
+circle.filled.iphone
+circle.filled.iphone.fill
+circle.filled.pattern.diagonalline.rectangle
+circle.grid.2x1
+circle.grid.2x1.fill
+circle.grid.2x1.left.filled
+circle.grid.2x1.right.filled
+circle.grid.2x2
+circle.grid.2x2.fill
+circle.grid.2x2.topleft.checkmark.filled
+circle.grid.3x3
+circle.grid.3x3.circle
+circle.grid.3x3.circle.fill
+circle.grid.3x3.fill
+circle.grid.cross
+circle.grid.cross.down.filled
+circle.grid.cross.fill
+circle.grid.cross.left.filled
+circle.grid.cross.right.filled
+circle.grid.cross.up.filled
+circle.hexagongrid
+circle.hexagongrid.circle
+circle.hexagongrid.circle.fill
+circle.hexagongrid.fill
+circle.hexagonpath
+circle.hexagonpath.fill
+circle.lefthalf.filled
+circle.lefthalf.filled.inverse
+circle.lefthalf.filled.righthalf.striped.horizontal
+circle.lefthalf.filled.righthalf.striped.horizontal.inverse
+circle.lefthalf.striped.horizontal
+circle.lefthalf.striped.horizontal.inverse
+circle.on.square
+circle.on.square.intersection.dotted
+circle.on.square.merge
+circle.rectangle.dashed
+circle.rectangle.filled.pattern.diagonalline
+circle.righthalf.filled
+circle.righthalf.filled.inverse
+circle.slash
+circle.slash.fill
+circle.square
+circle.square.fill
+circle.tophalf.filled
+circle.tophalf.filled.inverse
+circlebadge
+circlebadge.2
+circlebadge.2.fill
+circlebadge.fill
+clear
+clear.fill
+clipboard
+clipboard.fill
+clock
+clock.arrow.trianglehead.2.counterclockwise.rotate.90
+clock.arrow.trianglehead.clockwise.rotate.90.path.dotted
+clock.arrow.trianglehead.counterclockwise.rotate.90
+clock.badge
+clock.badge.airplane
+clock.badge.airplane.fill
+clock.badge.checkmark
+clock.badge.checkmark.fill
+clock.badge.exclamationmark
+clock.badge.exclamationmark.fill
+clock.badge.fill
+clock.badge.questionmark
+clock.badge.questionmark.ar
+clock.badge.questionmark.fill
+clock.badge.questionmark.fill.ar
+clock.badge.xmark
+clock.badge.xmark.fill
+clock.circle
+clock.circle.fill
+clock.fill
+cloud
+cloud.bolt
+cloud.bolt.circle
+cloud.bolt.circle.fill
+cloud.bolt.fill
+cloud.bolt.rain
+cloud.bolt.rain.circle
+cloud.bolt.rain.circle.fill
+cloud.bolt.rain.fill
+cloud.circle
+cloud.circle.fill
+cloud.drizzle
+cloud.drizzle.circle
+cloud.drizzle.circle.fill
+cloud.drizzle.fill
+cloud.fill
+cloud.fog
+cloud.fog.circle
+cloud.fog.circle.fill
+cloud.fog.fill
+cloud.hail
+cloud.hail.circle
+cloud.hail.circle.fill
+cloud.hail.fill
+cloud.heavyrain
+cloud.heavyrain.circle
+cloud.heavyrain.circle.fill
+cloud.heavyrain.fill
+cloud.moon
+cloud.moon.bolt
+cloud.moon.bolt.circle
+cloud.moon.bolt.circle.fill
+cloud.moon.bolt.fill
+cloud.moon.circle
+cloud.moon.circle.fill
+cloud.moon.fill
+cloud.moon.rain
+cloud.moon.rain.circle
+cloud.moon.rain.circle.fill
+cloud.moon.rain.fill
+cloud.rain
+cloud.rain.circle
+cloud.rain.circle.fill
+cloud.rain.fill
+cloud.rainbow.crop
+cloud.rainbow.crop.fill
+cloud.sleet
+cloud.sleet.circle
+cloud.sleet.circle.fill
+cloud.sleet.fill
+cloud.snow
+cloud.snow.circle
+cloud.snow.circle.fill
+cloud.snow.fill
+cloud.sun
+cloud.sun.bolt
+cloud.sun.bolt.circle
+cloud.sun.bolt.circle.fill
+cloud.sun.bolt.fill
+cloud.sun.circle
+cloud.sun.circle.fill
+cloud.sun.fill
+cloud.sun.rain
+cloud.sun.rain.circle
+cloud.sun.rain.circle.fill
+cloud.sun.rain.fill
+coat
+coat.circle
+coat.circle.fill
+coat.fill
+coloncurrencysign
+coloncurrencysign.arrow.trianglehead.counterclockwise.rotate.90
+coloncurrencysign.building.classical
+coloncurrencysign.building.classical.fill
+coloncurrencysign.circle
+coloncurrencysign.circle.fill
+coloncurrencysign.gauge.chart.lefthalf.righthalf
+coloncurrencysign.gauge.chart.leftthird.topthird.rightthird
+coloncurrencysign.ring
+coloncurrencysign.ring.dashed
+coloncurrencysign.square
+coloncurrencysign.square.fill
+comb
+comb.fill
+command
+command.circle
+command.circle.fill
+command.square
+command.square.fill
+compass.drawing
+computermouse
+computermouse.fill
+cone
+cone.fill
+contact.sensor
+contact.sensor.fill
+contextualmenu.and.pointer.arrow
+control
+convertible.side
+convertible.side.air.circulate
+convertible.side.air.circulate.fill
+convertible.side.air.fresh
+convertible.side.air.fresh.fill
+convertible.side.and.exclamationmark
+convertible.side.and.exclamationmark.fill
+convertible.side.arrow.left.and.right
+convertible.side.arrow.left.and.right.fill
+convertible.side.arrow.trianglehead.backward
+convertible.side.arrow.trianglehead.backward.fill
+convertible.side.arrow.trianglehead.forward
+convertible.side.arrow.trianglehead.forward.and.backward
+convertible.side.arrow.trianglehead.forward.and.backward.fill
+convertible.side.arrow.trianglehead.forward.fill
+convertible.side.arrowtriangle.down
+convertible.side.arrowtriangle.down.fill
+convertible.side.arrowtriangle.up
+convertible.side.arrowtriangle.up.arrowtriangle.down
+convertible.side.arrowtriangle.up.arrowtriangle.down.fill
+convertible.side.arrowtriangle.up.fill
+convertible.side.fill
+convertible.side.front.open
+convertible.side.front.open.crop
+convertible.side.front.open.crop.fill
+convertible.side.front.open.fill
+convertible.side.hill.descent.control
+convertible.side.hill.descent.control.fill
+convertible.side.hill.down
+convertible.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle
+convertible.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill
+convertible.side.hill.down.fill
+convertible.side.hill.up
+convertible.side.hill.up.fill
+convertible.side.lock
+convertible.side.lock.fill
+convertible.side.lock.open
+convertible.side.lock.open.fill
+cooktop
+cooktop.fill
+cpu
+cpu.fill
+creditcard
+creditcard.and.numbers
+creditcard.arrow.trianglehead.2.clockwise.rotate.90
+creditcard.circle
+creditcard.circle.fill
+creditcard.fill
+creditcard.rewards
+creditcard.rewards.fill
+creditcard.trianglebadge.exclamationmark
+creditcard.trianglebadge.exclamationmark.fill
+creditcard.viewfinder
+cricket.ball
+cricket.ball.circle
+cricket.ball.circle.fill
+cricket.ball.fill
+crop
+crop.rotate
+cross
+cross.case
+cross.case.circle
+cross.case.circle.fill
+cross.case.fill
+cross.circle
+cross.circle.fill
+cross.fill
+cross.vial
+cross.vial.fill
+crown
+crown.fill
+cruzeirosign
+cruzeirosign.arrow.trianglehead.counterclockwise.rotate.90
+cruzeirosign.building.classical
+cruzeirosign.building.classical.fill
+cruzeirosign.circle
+cruzeirosign.circle.fill
+cruzeirosign.gauge.chart.lefthalf.righthalf
+cruzeirosign.gauge.chart.leftthird.topthird.rightthird
+cruzeirosign.ring
+cruzeirosign.ring.dashed
+cruzeirosign.square
+cruzeirosign.square.fill
+cube
+cube.circle
+cube.circle.fill
+cube.fill
+cube.transparent
+cube.transparent.fill
+cup.and.heat.waves
+cup.and.heat.waves.fill
+cup.and.saucer
+cup.and.saucer.fill
+curlybraces
+curlybraces.square
+curlybraces.square.fill
+curtains.closed
+curtains.open
+cylinder
+cylinder.fill
+cylinder.split.1x2
+cylinder.split.1x2.fill
+d.circle
+d.circle.fill
+d.square
+d.square.fill
+danishkronesign
+danishkronesign.arrow.trianglehead.counterclockwise.rotate.90
+danishkronesign.building.classical
+danishkronesign.building.classical.fill
+danishkronesign.circle
+danishkronesign.circle.fill
+danishkronesign.gauge.chart.lefthalf.righthalf
+danishkronesign.gauge.chart.leftthird.topthird.rightthird
+danishkronesign.ring
+danishkronesign.ring.dashed
+danishkronesign.square
+danishkronesign.square.fill
+decrease.indent
+decrease.quotelevel
+degreesign.celsius
+degreesign.fahrenheit
+dehumidifier
+dehumidifier.fill
+delete.backward
+delete.backward.fill
+delete.forward
+delete.forward.fill
+delete.left
+delete.left.fill
+delete.right
+delete.right.fill
+deskclock
+deskclock.fill
+desktopcomputer
+desktopcomputer.and.arrow.down
+desktopcomputer.and.macbook
+desktopcomputer.badge.checkmark
+desktopcomputer.badge.shield.checkmark
+desktopcomputer.trianglebadge.exclamationmark
+deskview
+deskview.fill
+dial.high
+dial.high.fill
+dial.low
+dial.low.fill
+dial.medium
+dial.medium.fill
+diamond
+diamond.bottomhalf.filled
+diamond.circle
+diamond.circle.fill
+diamond.fill
+diamond.lefthalf.filled
+diamond.righthalf.filled
+diamond.tophalf.filled
+dice
+dice.fill
+die.face.1
+die.face.1.fill
+die.face.2
+die.face.2.fill
+die.face.3
+die.face.3.fill
+die.face.4
+die.face.4.fill
+die.face.5
+die.face.5.fill
+die.face.6
+die.face.6.fill
+digitalcrown
+digitalcrown.arrow.clockwise
+digitalcrown.arrow.clockwise.fill
+digitalcrown.arrow.counterclockwise
+digitalcrown.arrow.counterclockwise.fill
+digitalcrown.fill
+digitalcrown.horizontal
+digitalcrown.horizontal.arrow.clockwise
+digitalcrown.horizontal.arrow.clockwise.fill
+digitalcrown.horizontal.arrow.counterclockwise
+digitalcrown.horizontal.arrow.counterclockwise.fill
+digitalcrown.horizontal.fill
+digitalcrown.horizontal.press
+digitalcrown.horizontal.press.fill
+digitalcrown.press
+digitalcrown.press.fill
+directcurrent
+dishwasher
+dishwasher.circle
+dishwasher.circle.fill
+dishwasher.fill
+display
+display.2
+display.and.arrow.down
+display.and.screwdriver
+display.trianglebadge.exclamationmark
+distribute.horizontal
+distribute.horizontal.center
+distribute.horizontal.center.fill
+distribute.horizontal.fill
+distribute.horizontal.left
+distribute.horizontal.left.fill
+distribute.horizontal.right
+distribute.horizontal.right.fill
+distribute.vertical
+distribute.vertical.bottom
+distribute.vertical.bottom.fill
+distribute.vertical.center
+distribute.vertical.center.fill
+distribute.vertical.fill
+distribute.vertical.top
+distribute.vertical.top.fill
+divide
+divide.circle
+divide.circle.fill
+divide.square
+divide.square.fill
+dock.arrow.down.rectangle
+dock.arrow.up.rectangle
+dock.rectangle
+document
+document.badge.arrow.up
+document.badge.arrow.up.fill
+document.badge.clock
+document.badge.clock.fill
+document.badge.ellipsis
+document.badge.ellipsis.fill
+document.badge.gearshape
+document.badge.gearshape.fill
+document.badge.plus
+document.badge.plus.fill
+document.circle
+document.circle.fill
+document.fill
+document.on.clipboard
+document.on.clipboard.fill
+document.on.document
+document.on.document.fill
+document.on.trash
+document.on.trash.fill
+document.viewfinder
+document.viewfinder.fill
+dog
+dog.circle
+dog.circle.fill
+dog.fill
+dollarsign
+dollarsign.arrow.trianglehead.counterclockwise.rotate.90
+dollarsign.building.classical
+dollarsign.building.classical.fill
+dollarsign.circle
+dollarsign.circle.fill
+dollarsign.gauge.chart.lefthalf.righthalf
+dollarsign.gauge.chart.leftthird.topthird.rightthird
+dollarsign.ring
+dollarsign.ring.dashed
+dollarsign.square
+dollarsign.square.fill
+dongsign
+dongsign.arrow.trianglehead.counterclockwise.rotate.90
+dongsign.building.classical
+dongsign.building.classical.fill
+dongsign.circle
+dongsign.circle.fill
+dongsign.gauge.chart.lefthalf.righthalf
+dongsign.gauge.chart.leftthird.topthird.rightthird
+dongsign.ring
+dongsign.ring.dashed
+dongsign.square
+dongsign.square.fill
+door.french.closed
+door.french.open
+door.garage.closed
+door.garage.closed.trianglebadge.exclamationmark
+door.garage.double.bay.closed
+door.garage.double.bay.closed.trianglebadge.exclamationmark
+door.garage.double.bay.open
+door.garage.double.bay.open.trianglebadge.exclamationmark
+door.garage.open
+door.garage.open.trianglebadge.exclamationmark
+door.left.hand.closed
+door.left.hand.open
+door.right.hand.closed
+door.right.hand.open
+door.sliding.left.hand.closed
+door.sliding.left.hand.open
+door.sliding.right.hand.closed
+door.sliding.right.hand.open
+dot.arrowtriangles.up.right.down.left.circle
+dot.car.top.radiowaves.2.rear.left.rear.rear.right
+dot.car.top.radiowaves.2.rear.left.rear.rear.right.fill
+dot.circle.and.hand.point.up.left.fill
+dot.circle.and.pointer.arrow
+dot.circle.viewfinder
+dot.crosshair
+dot.radiowaves.forward
+dot.radiowaves.left.and.right
+dot.radiowaves.right
+dot.radiowaves.up.forward
+dot.scope
+dot.scope.display
+dot.scope.laptopcomputer
+dot.square
+dot.square.fill
+dot.squareshape
+dot.squareshape.fill
+dot.squareshape.split.2x2
+dot.viewfinder
+dots.and.line.vertical.and.pointer.arrow.rectangle
+dpad
+dpad.down.filled
+dpad.fill
+dpad.left.filled
+dpad.right.filled
+dpad.up.filled
+drone
+drone.fill
+drop
+drop.circle
+drop.circle.fill
+drop.degreesign
+drop.degreesign.fill
+drop.degreesign.slash
+drop.degreesign.slash.fill
+drop.degreesign.slash.fill.rtl
+drop.degreesign.slash.rtl
+drop.fill
+drop.halffull
+drop.keypad.rectangle
+drop.keypad.rectangle.fill
+drop.transmission
+drop.triangle
+drop.triangle.fill
+dryer
+dryer.circle
+dryer.circle.fill
+dryer.fill
+duffle.bag
+duffle.bag.fill
+dumbbell
+dumbbell.fill
+e.circle
+e.circle.fill
+e.square
+e.square.fill
+ear
+ear.badge.checkmark
+ear.badge.waveform
+ear.fill
+ear.trianglebadge.exclamationmark
+earbud.left
+earbud.right
+earbuds
+earbuds.bone.conduction
+earbuds.bone.conduction.left
+earbuds.bone.conduction.right
+earbuds.case
+earbuds.case.fill
+earbuds.in.ear
+earbuds.in.ear.left
+earbuds.in.ear.right
+earbuds.stemless
+earbuds.stemless.left
+earbuds.stemless.right
+earpods
+eject
+eject.circle
+eject.circle.fill
+eject.fill
+electronic.toll.collection
+electronic.toll.collection.rectangle
+electronic.toll.collection.rectangle.fill
+electronic.toll.collection.rectangle.slash
+electronic.toll.collection.rectangle.slash.fill
+electronic.toll.collection.rectangle.trianglebadge.exclamationmark
+electronic.toll.collection.rectangle.trianglebadge.exclamationmark.fill
+ellipsis
+ellipsis.bubble
+ellipsis.bubble.fill
+ellipsis.calendar
+ellipsis.circle
+ellipsis.circle.badge
+ellipsis.circle.badge.fill
+ellipsis.circle.fill
+ellipsis.curlybraces
+ellipsis.message
+ellipsis.message.fill
+ellipsis.rectangle
+ellipsis.rectangle.fill
+ellipsis.vertical.bubble
+ellipsis.vertical.bubble.fill
+ellipsis.viewfinder
+engine.combustion
+engine.combustion.badge.exclamationmark
+engine.combustion.badge.exclamationmark.fill
+engine.combustion.fill
+engine.emission.and.drop.2.water.wave.below
+engine.emission.and.exclamationmark
+engine.emission.and.filter
+entry.lever.keypad
+entry.lever.keypad.fill
+entry.lever.keypad.trianglebadge.exclamationmark
+entry.lever.keypad.trianglebadge.exclamationmark.fill
+envelope
+envelope.and.arrow.3.down
+envelope.and.arrow.3.down.fill
+envelope.and.arrow.trianglehead.branch
+envelope.and.arrow.trianglehead.branch.fill
+envelope.and.hand.raised
+envelope.and.hand.raised.fill
+envelope.badge
+envelope.badge.fill
+envelope.badge.minus
+envelope.badge.minus.fill
+envelope.badge.person.crop
+envelope.badge.person.crop.fill
+envelope.badge.plus
+envelope.badge.plus.fill
+envelope.badge.shield.half.filled
+envelope.badge.shield.half.filled.fill
+envelope.circle
+envelope.circle.fill
+envelope.fill
+envelope.front
+envelope.front.fill
+envelope.front.fill.rtl
+envelope.front.rtl
+envelope.open
+envelope.open.badge.clock
+envelope.open.badge.clock.fill
+envelope.open.fill
+envelope.stack
+envelope.stack.fill
+environments
+environments.circle
+environments.circle.fill
+environments.fill
+environments.slash
+environments.slash.circle
+environments.slash.circle.fill
+environments.slash.fill
+equal
+equal.circle
+equal.circle.fill
+equal.square
+equal.square.fill
+eraser
+eraser.badge.xmark
+eraser.badge.xmark.fill
+eraser.fill
+eraser.line.dashed
+eraser.line.dashed.fill
+eraser.slash
+eraser.slash.fill
+eraser.trianglebadge.exclamationmark
+eraser.trianglebadge.exclamationmark.fill
+escape
+esim
+esim.fill
+eurosign
+eurosign.arrow.trianglehead.counterclockwise.rotate.90
+eurosign.building.classical
+eurosign.building.classical.fill
+eurosign.circle
+eurosign.circle.fill
+eurosign.gauge.chart.lefthalf.righthalf
+eurosign.gauge.chart.leftthird.topthird.rightthird
+eurosign.ring
+eurosign.ring.dashed
+eurosign.square
+eurosign.square.fill
+eurozonesign
+eurozonesign.arrow.trianglehead.counterclockwise.rotate.90
+eurozonesign.building.classical
+eurozonesign.building.classical.fill
+eurozonesign.circle
+eurozonesign.circle.fill
+eurozonesign.gauge.chart.lefthalf.righthalf
+eurozonesign.gauge.chart.leftthird.topthird.rightthird
+eurozonesign.ring
+eurozonesign.ring.dashed
+eurozonesign.square
+eurozonesign.square.fill
+ev.charger
+ev.charger.arrowtriangle.left
+ev.charger.arrowtriangle.left.fill
+ev.charger.arrowtriangle.right
+ev.charger.arrowtriangle.right.fill
+ev.charger.exclamationmark
+ev.charger.exclamationmark.fill
+ev.charger.fill
+ev.charger.slash
+ev.charger.slash.fill
+ev.plug.ac.gb.t
+ev.plug.ac.gb.t.fill
+ev.plug.ac.type.1
+ev.plug.ac.type.1.fill
+ev.plug.ac.type.2
+ev.plug.ac.type.2.fill
+ev.plug.dc.ccs1
+ev.plug.dc.ccs1.fill
+ev.plug.dc.ccs2
+ev.plug.dc.ccs2.fill
+ev.plug.dc.chademo
+ev.plug.dc.chademo.fill
+ev.plug.dc.gb.t
+ev.plug.dc.gb.t.fill
+ev.plug.dc.nacs
+ev.plug.dc.nacs.fill
+exclamationmark
+exclamationmark.2
+exclamationmark.3
+exclamationmark.applewatch
+exclamationmark.arrow.trianglehead.2.clockwise.rotate.90
+exclamationmark.arrow.trianglehead.counterclockwise.rotate.90
+exclamationmark.brakesignal
+exclamationmark.bubble
+exclamationmark.bubble.circle
+exclamationmark.bubble.circle.fill
+exclamationmark.bubble.fill
+exclamationmark.circle
+exclamationmark.circle.fill
+exclamationmark.icloud
+exclamationmark.icloud.fill
+exclamationmark.lock
+exclamationmark.lock.fill
+exclamationmark.magnifyingglass
+exclamationmark.message
+exclamationmark.message.fill
+exclamationmark.octagon
+exclamationmark.octagon.fill
+exclamationmark.questionmark
+exclamationmark.questionmark.ar
+exclamationmark.shield
+exclamationmark.shield.fill
+exclamationmark.square
+exclamationmark.square.fill
+exclamationmark.tirepressure
+exclamationmark.transmission
+exclamationmark.triangle
+exclamationmark.triangle.fill
+exclamationmark.triangle.text.page
+exclamationmark.triangle.text.page.fill
+exclamationmark.triangle.text.page.fill.rtl
+exclamationmark.triangle.text.page.rtl
+exclamationmark.viewfinder
+exclamationmark.warninglight
+exclamationmark.warninglight.fill
+externaldrive
+externaldrive.badge.checkmark
+externaldrive.badge.exclamationmark
+externaldrive.badge.icloud
+externaldrive.badge.minus
+externaldrive.badge.person.crop
+externaldrive.badge.plus
+externaldrive.badge.questionmark
+externaldrive.badge.questionmark.ar
+externaldrive.badge.timemachine
+externaldrive.badge.wifi
+externaldrive.badge.xmark
+externaldrive.connected.to.line.below
+externaldrive.connected.to.line.below.fill
+externaldrive.fill
+externaldrive.fill.badge.checkmark
+externaldrive.fill.badge.exclamationmark
+externaldrive.fill.badge.icloud
+externaldrive.fill.badge.minus
+externaldrive.fill.badge.person.crop
+externaldrive.fill.badge.plus
+externaldrive.fill.badge.questionmark
+externaldrive.fill.badge.questionmark.ar
+externaldrive.fill.badge.timemachine
+externaldrive.fill.badge.wifi
+externaldrive.fill.badge.xmark
+externaldrive.fill.trianglebadge.exclamationmark
+externaldrive.trianglebadge.exclamationmark
+eye
+eye.circle
+eye.circle.fill
+eye.fill
+eye.half.closed
+eye.half.closed.fill
+eye.slash
+eye.slash.circle
+eye.slash.circle.fill
+eye.slash.fill
+eye.square
+eye.square.fill
+eye.trianglebadge.exclamationmark
+eye.trianglebadge.exclamationmark.fill
+eyebrow
+eyedropper
+eyedropper.full
+eyedropper.halffull
+eyeglasses
+eyeglasses.slash
+eyes
+eyes.inverse
+f.circle
+f.circle.fill
+f.cursive
+f.cursive.circle
+f.cursive.circle.fill
+f.cursive.slash
+f.square
+f.square.fill
+face.dashed
+face.dashed.fill
+face.smiling
+face.smiling.inverse
+faceid
+facemask
+facemask.fill
+fan
+fan.and.light.ceiling
+fan.and.light.ceiling.fill
+fan.badge.arrow.up.and.down.and.arrow.left.and.right
+fan.badge.arrow.up.and.down.and.arrow.left.and.right.fill
+fan.badge.automatic
+fan.badge.automatic.fill
+fan.ceiling
+fan.ceiling.fill
+fan.circle
+fan.circle.fill
+fan.desk
+fan.desk.fill
+fan.fill
+fan.floor
+fan.floor.fill
+fan.gauge.open
+fan.oscillation
+fan.oscillation.fill
+fan.slash
+fan.slash.fill
+faxmachine
+faxmachine.fill
+ferry
+ferry.fill
+fibrechannel
+field.of.view.ultrawide
+field.of.view.ultrawide.fill
+field.of.view.wide
+field.of.view.wide.fill
+figure
+figure.2
+figure.2.and.child.holdinghands
+figure.2.arms.open
+figure.2.ascending
+figure.2.circle
+figure.2.circle.fill
+figure.2.descending
+figure.2.left.holdinghands
+figure.2.right.holdinghands
+figure.american.football
+figure.american.football.circle
+figure.american.football.circle.fill
+figure.and.child.holdinghands
+figure.archery
+figure.archery.circle
+figure.archery.circle.fill
+figure.arms.open
+figure.australian.football
+figure.australian.football.circle
+figure.australian.football.circle.fill
+figure.badminton
+figure.badminton.circle
+figure.badminton.circle.fill
+figure.barre
+figure.barre.circle
+figure.barre.circle.fill
+figure.baseball
+figure.baseball.circle
+figure.baseball.circle.fill
+figure.basketball
+figure.basketball.circle
+figure.basketball.circle.fill
+figure.bowling
+figure.bowling.circle
+figure.bowling.circle.fill
+figure.boxing
+figure.boxing.circle
+figure.boxing.circle.fill
+figure.child
+figure.child.and.lock
+figure.child.and.lock.fill
+figure.child.and.lock.open
+figure.child.and.lock.open.fill
+figure.child.circle
+figure.child.circle.fill
+figure.climbing
+figure.climbing.circle
+figure.climbing.circle.fill
+figure.cooldown
+figure.cooldown.circle
+figure.cooldown.circle.fill
+figure.core.training
+figure.core.training.circle
+figure.core.training.circle.fill
+figure.cricket
+figure.cricket.circle
+figure.cricket.circle.fill
+figure.cross.training
+figure.cross.training.circle
+figure.cross.training.circle.fill
+figure.curling
+figure.curling.circle
+figure.curling.circle.fill
+figure.dance
+figure.dance.circle
+figure.dance.circle.fill
+figure.disc.sports
+figure.disc.sports.circle
+figure.disc.sports.circle.fill
+figure.elliptical
+figure.elliptical.circle
+figure.elliptical.circle.fill
+figure.equestrian.sports
+figure.equestrian.sports.circle
+figure.equestrian.sports.circle.fill
+figure.fall
+figure.fall.circle
+figure.fall.circle.fill
+figure.fencing
+figure.fencing.circle
+figure.fencing.circle.fill
+figure.field.hockey
+figure.field.hockey.circle
+figure.field.hockey.circle.fill
+figure.fishing
+figure.fishing.circle
+figure.fishing.circle.fill
+figure.flexibility
+figure.flexibility.circle
+figure.flexibility.circle.fill
+figure.golf
+figure.golf.circle
+figure.golf.circle.fill
+figure.gymnastics
+figure.gymnastics.circle
+figure.gymnastics.circle.fill
+figure.hand.cycling
+figure.hand.cycling.circle
+figure.hand.cycling.circle.fill
+figure.handball
+figure.handball.circle
+figure.handball.circle.fill
+figure.highintensity.intervaltraining
+figure.highintensity.intervaltraining.circle
+figure.highintensity.intervaltraining.circle.fill
+figure.hiking
+figure.hiking.circle
+figure.hiking.circle.fill
+figure.hockey
+figure.hockey.circle
+figure.hockey.circle.fill
+figure.hunting
+figure.hunting.circle
+figure.hunting.circle.fill
+figure.ice.hockey
+figure.ice.hockey.circle
+figure.ice.hockey.circle.fill
+figure.ice.skating
+figure.ice.skating.circle
+figure.ice.skating.circle.fill
+figure.indoor.cycle
+figure.indoor.cycle.circle
+figure.indoor.cycle.circle.fill
+figure.indoor.rowing
+figure.indoor.rowing.circle
+figure.indoor.rowing.circle.fill
+figure.indoor.soccer
+figure.indoor.soccer.circle
+figure.indoor.soccer.circle.fill
+figure.jumprope
+figure.jumprope.circle
+figure.jumprope.circle.fill
+figure.kickboxing
+figure.kickboxing.circle
+figure.kickboxing.circle.fill
+figure.lacrosse
+figure.lacrosse.circle
+figure.lacrosse.circle.fill
+figure.martial.arts
+figure.martial.arts.circle
+figure.martial.arts.circle.fill
+figure.mind.and.body
+figure.mind.and.body.circle
+figure.mind.and.body.circle.fill
+figure.mixed.cardio
+figure.mixed.cardio.circle
+figure.mixed.cardio.circle.fill
+figure.open.water.swim
+figure.open.water.swim.circle
+figure.open.water.swim.circle.fill
+figure.outdoor.cycle
+figure.outdoor.cycle.circle
+figure.outdoor.cycle.circle.fill
+figure.outdoor.rowing
+figure.outdoor.rowing.circle
+figure.outdoor.rowing.circle.fill
+figure.outdoor.soccer
+figure.outdoor.soccer.circle
+figure.outdoor.soccer.circle.fill
+figure.pickleball
+figure.pickleball.circle
+figure.pickleball.circle.fill
+figure.pilates
+figure.pilates.circle
+figure.pilates.circle.fill
+figure.play
+figure.play.circle
+figure.play.circle.fill
+figure.pool.swim
+figure.pool.swim.circle
+figure.pool.swim.circle.fill
+figure.racquetball
+figure.racquetball.circle
+figure.racquetball.circle.fill
+figure.roll
+figure.roll.circle
+figure.roll.circle.fill
+figure.roll.runningpace
+figure.roll.runningpace.circle
+figure.roll.runningpace.circle.fill
+figure.rolling
+figure.rolling.circle
+figure.rolling.circle.fill
+figure.rugby
+figure.rugby.circle
+figure.rugby.circle.fill
+figure.run
+figure.run.circle
+figure.run.circle.fill
+figure.run.square.stack
+figure.run.square.stack.fill
+figure.run.treadmill
+figure.run.treadmill.circle
+figure.run.treadmill.circle.fill
+figure.sailing
+figure.sailing.circle
+figure.sailing.circle.fill
+figure.seated.seatbelt
+figure.seated.seatbelt.and.airbag.off
+figure.seated.seatbelt.and.airbag.on
+figure.seated.seatbelt.left.drive.seats.1
+figure.seated.seatbelt.left.drive.seats.1.1
+figure.seated.seatbelt.left.drive.seats.1.1.fill
+figure.seated.seatbelt.left.drive.seats.1.2
+figure.seated.seatbelt.left.drive.seats.1.2.fill
+figure.seated.seatbelt.left.drive.seats.1.fill
+figure.seated.seatbelt.left.drive.seats.2
+figure.seated.seatbelt.left.drive.seats.2.2
+figure.seated.seatbelt.left.drive.seats.2.2.2
+figure.seated.seatbelt.left.drive.seats.2.2.2.fill
+figure.seated.seatbelt.left.drive.seats.2.2.3
+figure.seated.seatbelt.left.drive.seats.2.2.3.fill
+figure.seated.seatbelt.left.drive.seats.2.2.fill
+figure.seated.seatbelt.left.drive.seats.2.3
+figure.seated.seatbelt.left.drive.seats.2.3.2
+figure.seated.seatbelt.left.drive.seats.2.3.2.fill
+figure.seated.seatbelt.left.drive.seats.2.3.3
+figure.seated.seatbelt.left.drive.seats.2.3.3.fill
+figure.seated.seatbelt.left.drive.seats.2.3.fill
+figure.seated.seatbelt.left.drive.seats.2.fill
+figure.seated.seatbelt.left.drive.seats.3
+figure.seated.seatbelt.left.drive.seats.3.3
+figure.seated.seatbelt.left.drive.seats.3.3.3
+figure.seated.seatbelt.left.drive.seats.3.3.3.fill
+figure.seated.seatbelt.left.drive.seats.3.3.fill
+figure.seated.seatbelt.left.drive.seats.3.fill
+figure.seated.side.left
+figure.seated.side.left.air.distribution.indirect
+figure.seated.side.left.air.distribution.lower
+figure.seated.side.left.air.distribution.lower.angled.and.upper.angled
+figure.seated.side.left.air.distribution.middle
+figure.seated.side.left.air.distribution.middle.and.lower
+figure.seated.side.left.air.distribution.middle.and.lower.angled
+figure.seated.side.left.air.distribution.upper
+figure.seated.side.left.air.distribution.upper.and.middle.and.lower
+figure.seated.side.left.air.distribution.upper.angled.and.dottedline.and.lower.angled
+figure.seated.side.left.air.distribution.upper.angled.and.lower.angled
+figure.seated.side.left.air.distribution.upper.angled.and.middle
+figure.seated.side.left.air.distribution.upper.angled.and.middle.and.lower.angled
+figure.seated.side.left.airbag.off
+figure.seated.side.left.airbag.off.2
+figure.seated.side.left.airbag.on
+figure.seated.side.left.airbag.on.2
+figure.seated.side.left.automatic
+figure.seated.side.left.fan
+figure.seated.side.left.steeringwheel
+figure.seated.side.left.windshield.front.and.heat.waves
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.lower
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.middle
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.middle.and.lower
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.lower
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.middle
+figure.seated.side.left.windshield.front.and.heat.waves.air.distribution.upper.and.middle.and.lower
+figure.seated.side.right
+figure.seated.side.right.air.distribution.indirect
+figure.seated.side.right.air.distribution.lower
+figure.seated.side.right.air.distribution.lower.angled.and.upper.angled
+figure.seated.side.right.air.distribution.middle
+figure.seated.side.right.air.distribution.middle.and.lower
+figure.seated.side.right.air.distribution.middle.and.lower.angled
+figure.seated.side.right.air.distribution.upper
+figure.seated.side.right.air.distribution.upper.and.middle.and.lower
+figure.seated.side.right.air.distribution.upper.angled.and.dottedline.and.lower.angled
+figure.seated.side.right.air.distribution.upper.angled.and.lower.angled
+figure.seated.side.right.air.distribution.upper.angled.and.middle
+figure.seated.side.right.air.distribution.upper.angled.and.middle.and.lower.angled
+figure.seated.side.right.airbag.off
+figure.seated.side.right.airbag.off.2
+figure.seated.side.right.airbag.on
+figure.seated.side.right.airbag.on.2
+figure.seated.side.right.automatic
+figure.seated.side.right.child.lap
+figure.seated.side.right.fan
+figure.seated.side.right.steeringwheel
+figure.seated.side.right.windshield.front.and.heat.waves
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.lower
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.middle
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.middle.and.lower
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.lower
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.middle
+figure.seated.side.right.windshield.front.and.heat.waves.air.distribution.upper.and.middle.and.lower
+figure.skateboarding
+figure.skateboarding.circle
+figure.skateboarding.circle.fill
+figure.skiing.crosscountry
+figure.skiing.crosscountry.circle
+figure.skiing.crosscountry.circle.fill
+figure.skiing.downhill
+figure.skiing.downhill.circle
+figure.skiing.downhill.circle.fill
+figure.snowboarding
+figure.snowboarding.circle
+figure.snowboarding.circle.fill
+figure.socialdance
+figure.socialdance.circle
+figure.socialdance.circle.fill
+figure.softball
+figure.softball.circle
+figure.softball.circle.fill
+figure.squash
+figure.squash.circle
+figure.squash.circle.fill
+figure.stair.stepper
+figure.stair.stepper.circle
+figure.stair.stepper.circle.fill
+figure.stairs
+figure.stairs.circle
+figure.stairs.circle.fill
+figure.stand
+figure.stand.and.figure.teen
+figure.stand.dress
+figure.stand.dress.line.vertical.figure
+figure.stand.line.dotted.figure.stand
+figure.step.training
+figure.step.training.circle
+figure.step.training.circle.fill
+figure.strengthtraining.functional
+figure.strengthtraining.functional.circle
+figure.strengthtraining.functional.circle.fill
+figure.strengthtraining.traditional
+figure.strengthtraining.traditional.circle
+figure.strengthtraining.traditional.circle.fill
+figure.surfing
+figure.surfing.circle
+figure.surfing.circle.fill
+figure.table.tennis
+figure.table.tennis.circle
+figure.table.tennis.circle.fill
+figure.taichi
+figure.taichi.circle
+figure.taichi.circle.fill
+figure.teen
+figure.teen.and.lock
+figure.teen.and.lock.fill
+figure.teen.and.lock.open
+figure.teen.and.lock.open.fill
+figure.tennis
+figure.tennis.circle
+figure.tennis.circle.fill
+figure.track.and.field
+figure.track.and.field.circle
+figure.track.and.field.circle.fill
+figure.volleyball
+figure.volleyball.circle
+figure.volleyball.circle.fill
+figure.walk
+figure.walk.arrival
+figure.walk.circle
+figure.walk.circle.fill
+figure.walk.departure
+figure.walk.diamond
+figure.walk.diamond.fill
+figure.walk.motion
+figure.walk.motion.trianglebadge.exclamationmark
+figure.walk.suitcase.rolling
+figure.walk.suitcase.rolling.circle
+figure.walk.suitcase.rolling.circle.fill
+figure.walk.treadmill
+figure.walk.treadmill.circle
+figure.walk.treadmill.circle.fill
+figure.walk.triangle
+figure.walk.triangle.fill
+figure.water.fitness
+figure.water.fitness.circle
+figure.water.fitness.circle.fill
+figure.waterpolo
+figure.waterpolo.circle
+figure.waterpolo.circle.fill
+figure.wave
+figure.wave.circle
+figure.wave.circle.fill
+figure.wrestling
+figure.wrestling.circle
+figure.wrestling.circle.fill
+figure.yoga
+figure.yoga.circle
+figure.yoga.circle.fill
+filemenu.and.pointer.arrow
+filemenu.and.pointer.arrow.rtl
+filemenu.and.selection
+film
+film.circle
+film.circle.fill
+film.fill
+film.stack
+film.stack.fill
+finder
+fire.extinguisher
+fire.extinguisher.fill
+fireplace
+fireplace.fill
+firewall
+firewall.fill
+fireworks
+fish
+fish.circle
+fish.circle.fill
+fish.fill
+flag
+flag.2.crossed
+flag.2.crossed.circle
+flag.2.crossed.circle.fill
+flag.2.crossed.fill
+flag.and.flag.filled.crossed
+flag.badge.ellipsis
+flag.badge.ellipsis.fill
+flag.circle
+flag.circle.fill
+flag.fill
+flag.filled.and.flag.crossed
+flag.pattern.checkered
+flag.pattern.checkered.2.crossed
+flag.pattern.checkered.circle
+flag.pattern.checkered.circle.fill
+flag.pattern.checkered.lc
+flag.slash
+flag.slash.circle
+flag.slash.circle.fill
+flag.slash.fill
+flag.square
+flag.square.fill
+flame
+flame.circle
+flame.circle.fill
+flame.fill
+flame.gauge.open
+flashlight.off.circle
+flashlight.off.circle.fill
+flashlight.off.fill
+flashlight.on.circle
+flashlight.on.circle.fill
+flashlight.on.fill
+flashlight.slash
+flashlight.slash.circle
+flashlight.slash.circle.fill
+flask
+flask.fill
+fleuron
+fleuron.fill
+flipphone
+florinsign
+florinsign.arrow.trianglehead.counterclockwise.rotate.90
+florinsign.building.classical
+florinsign.building.classical.fill
+florinsign.circle
+florinsign.circle.fill
+florinsign.gauge.chart.lefthalf.righthalf
+florinsign.gauge.chart.leftthird.topthird.rightthird
+florinsign.ring
+florinsign.ring.dashed
+florinsign.square
+florinsign.square.fill
+flowchart
+flowchart.fill
+fluid.batteryblock
+fluid.brakesignal
+fluid.coolant
+fluid.transmission
+fn
+folder
+folder.badge.gearshape
+folder.badge.minus
+folder.badge.person.crop
+folder.badge.plus
+folder.badge.questionmark
+folder.badge.questionmark.ar
+folder.circle
+folder.circle.fill
+folder.fill
+folder.fill.badge.gearshape
+folder.fill.badge.minus
+folder.fill.badge.person.crop
+folder.fill.badge.plus
+folder.fill.badge.questionmark
+folder.fill.badge.questionmark.ar
+fork.knife
+fork.knife.circle
+fork.knife.circle.fill
+formfitting.gamecontroller
+formfitting.gamecontroller.fill
+forward
+forward.circle
+forward.circle.fill
+forward.end
+forward.end.alt
+forward.end.alt.fill
+forward.end.circle
+forward.end.circle.fill
+forward.end.fill
+forward.fill
+forward.frame
+forward.frame.fill
+fossil.shell
+fossil.shell.fill
+francsign
+francsign.arrow.trianglehead.counterclockwise.rotate.90
+francsign.building.classical
+francsign.building.classical.fill
+francsign.circle
+francsign.circle.fill
+francsign.gauge.chart.lefthalf.righthalf
+francsign.gauge.chart.leftthird.topthird.rightthird
+francsign.ring
+francsign.ring.dashed
+francsign.square
+francsign.square.fill
+frying.pan
+frying.pan.fill
+fuel.filter.water
+fuelpump
+fuelpump.and.filter
+fuelpump.arrowtriangle.left
+fuelpump.arrowtriangle.left.fill
+fuelpump.arrowtriangle.right
+fuelpump.arrowtriangle.right.fill
+fuelpump.circle
+fuelpump.circle.fill
+fuelpump.exclamationmark
+fuelpump.exclamationmark.fill
+fuelpump.fill
+fuelpump.slash
+fuelpump.slash.fill
+fuelpump.thermometer
+fuelpump.thermometer.fill
+function
+function.ar
+fx
+g.circle
+g.circle.fill
+g.square
+g.square.fill
+gamecontroller
+gamecontroller.circle
+gamecontroller.circle.fill
+gamecontroller.fill
+gauge.chart.lefthalf.righthalf
+gauge.chart.leftthird.topthird.rightthird
+gauge.open
+gauge.open.righthalf.dotted.with.needle.and.arrow.trianglehead.backward
+gauge.open.with.lines.needle.33percent
+gauge.open.with.lines.needle.33percent.and.arrow.trianglehead.from.0percent.to.50percent
+gauge.open.with.lines.needle.33percent.and.arrowtriangle
+gauge.open.with.lines.needle.67percent.and.arrowtriangle
+gauge.open.with.lines.needle.67percent.and.arrowtriangle.and.car
+gauge.open.with.lines.needle.84percent.exclamation
+gauge.with.dots.needle.0percent
+gauge.with.dots.needle.100percent
+gauge.with.dots.needle.33percent
+gauge.with.dots.needle.50percent
+gauge.with.dots.needle.67percent
+gauge.with.dots.needle.bottom.0percent
+gauge.with.dots.needle.bottom.100percent
+gauge.with.dots.needle.bottom.50percent
+gauge.with.dots.needle.bottom.50percent.badge.minus
+gauge.with.dots.needle.bottom.50percent.badge.plus
+gauge.with.needle
+gauge.with.needle.fill
+gear
+gear.badge
+gear.badge.checkmark
+gear.badge.questionmark
+gear.badge.rtl
+gear.badge.xmark
+gear.circle
+gear.circle.fill
+gearshape
+gearshape.2
+gearshape.2.fill
+gearshape.arrow.trianglehead.2.clockwise.rotate.90
+gearshape.circle
+gearshape.circle.fill
+gearshape.fill
+gearshift.layout.sixspeed
+gift
+gift.circle
+gift.circle.fill
+gift.fill
+giftcard
+giftcard.fill
+globe
+globe.americas
+globe.americas.fill
+globe.and.person
+globe.asia.australia
+globe.asia.australia.fill
+globe.badge.chevron.backward
+globe.badge.clock
+globe.badge.clock.fill
+globe.central.south.asia
+globe.central.south.asia.fill
+globe.desk
+globe.desk.fill
+globe.europe.africa
+globe.europe.africa.fill
+globe.fill
+glowplug
+graduationcap
+graduationcap.circle
+graduationcap.circle.fill
+graduationcap.fill
+graph.2d
+graph.3d
+greaterthan
+greaterthan.circle
+greaterthan.circle.fill
+greaterthan.square
+greaterthan.square.fill
+greaterthanorequalto
+greaterthanorequalto.circle
+greaterthanorequalto.circle.fill
+greaterthanorequalto.square
+greaterthanorequalto.square.fill
+greetingcard
+greetingcard.fill
+grid
+grid.circle
+grid.circle.fill
+guaranisign
+guaranisign.arrow.trianglehead.counterclockwise.rotate.90
+guaranisign.building.classical
+guaranisign.building.classical.fill
+guaranisign.circle
+guaranisign.circle.fill
+guaranisign.gauge.chart.lefthalf.righthalf
+guaranisign.gauge.chart.leftthird.topthird.rightthird
+guaranisign.ring
+guaranisign.ring.dashed
+guaranisign.square
+guaranisign.square.fill
+guidepoint.horizontal
+guidepoint.vertical
+guidepoint.vertical.arrowtriangle.forward
+guidepoint.vertical.numbers
+guitars
+guitars.fill
+gyroscope
+h.circle
+h.circle.fill
+h.square
+h.square.fill
+h.square.on.square
+h.square.on.square.fill
+hammer
+hammer.circle
+hammer.circle.fill
+hammer.fill
+hammer.slash
+hammer.slash.fill
+hand.draw
+hand.draw.badge.ellipsis
+hand.draw.badge.ellipsis.fill
+hand.draw.fill
+hand.palm.facing
+hand.palm.facing.fill
+hand.pinch
+hand.pinch.fill
+hand.point.down
+hand.point.down.fill
+hand.point.left
+hand.point.left.fill
+hand.point.right
+hand.point.right.fill
+hand.point.up
+hand.point.up.braille
+hand.point.up.braille.badge.ellipsis
+hand.point.up.braille.badge.ellipsis.fill
+hand.point.up.braille.fill
+hand.point.up.fill
+hand.point.up.left
+hand.point.up.left.and.text
+hand.point.up.left.and.text.fill
+hand.point.up.left.fill
+hand.raised
+hand.raised.app
+hand.raised.app.fill
+hand.raised.brakesignal
+hand.raised.brakesignal.slash
+hand.raised.circle
+hand.raised.circle.fill
+hand.raised.fill
+hand.raised.fingers.spread
+hand.raised.fingers.spread.fill
+hand.raised.palm.facing
+hand.raised.palm.facing.fill
+hand.raised.slash
+hand.raised.slash.fill
+hand.raised.square
+hand.raised.square.fill
+hand.raised.square.on.square
+hand.raised.square.on.square.fill
+hand.rays
+hand.rays.fill
+hand.tap
+hand.tap.fill
+hand.thumbsdown
+hand.thumbsdown.circle
+hand.thumbsdown.circle.fill
+hand.thumbsdown.fill
+hand.thumbsdown.filled.hand.thumbsup
+hand.thumbsdown.hand.thumbsup
+hand.thumbsdown.hand.thumbsup.fill
+hand.thumbsdown.hand.thumbsup.filled
+hand.thumbsdown.slash
+hand.thumbsdown.slash.fill
+hand.thumbsup
+hand.thumbsup.circle
+hand.thumbsup.circle.fill
+hand.thumbsup.fill
+hand.thumbsup.slash
+hand.thumbsup.slash.fill
+hand.wave
+hand.wave.fill
+handbag
+handbag.circle
+handbag.circle.fill
+handbag.fill
+handbag.sensor.tag.radiowaves.left.and.right
+handbag.sensor.tag.radiowaves.left.and.right.fill
+hands.and.sparkles
+hands.and.sparkles.fill
+hands.clap
+hands.clap.fill
+hanger
+hare
+hare.circle
+hare.circle.fill
+hare.fill
+hat.cap
+hat.cap.fill
+hat.widebrim
+hat.widebrim.fill
+hazardsign
+hazardsign.fill
+head.profile.vision.pro.remove
+headlight.daytime
+headlight.daytime.fill
+headlight.fog
+headlight.fog.fill
+headlight.high.beam
+headlight.high.beam.fill
+headlight.low.beam
+headlight.low.beam.fill
+headphones
+headphones.circle
+headphones.circle.fill
+headphones.dots
+headphones.over.ear
+headphones.sensor.tag.radiowaves.left.and.right
+headphones.sensor.tag.radiowaves.left.and.right.fill
+headphones.slash
+headset
+headset.circle
+headset.circle.fill
+hearingdevice.and.signal.meter
+hearingdevice.and.signal.meter.fill
+hearingdevice.ear
+hearingdevice.ear.fill
+heart
+heart.badge.bolt
+heart.badge.bolt.fill
+heart.badge.bolt.slash
+heart.badge.bolt.slash.fill
+heart.circle
+heart.circle.fill
+heart.fill
+heart.gauge.open
+heart.rectangle
+heart.rectangle.fill
+heart.slash
+heart.slash.circle
+heart.slash.circle.fill
+heart.slash.fill
+heart.square
+heart.square.fill
+heart.text.clipboard
+heart.text.clipboard.fill
+heart.text.square
+heart.text.square.fill
+heat.element.windshield
+heat.waves
+heat.waves.and.fan
+heat.waves.circle
+heat.waves.circle.fill
+heat.waves.gauge.open
+heater.vertical
+heater.vertical.fill
+helm
+helmet
+helmet.fill
+hexagon
+hexagon.bottomhalf.filled
+hexagon.fill
+hexagon.lefthalf.filled
+hexagon.righthalf.filled
+hexagon.tophalf.filled
+hifireceiver
+hifireceiver.fill
+hifispeaker
+hifispeaker.2
+hifispeaker.2.badge.checkmark
+hifispeaker.2.badge.checkmark.fill
+hifispeaker.2.badge.checkmark.fill.rtl
+hifispeaker.2.badge.checkmark.rtl
+hifispeaker.2.badge.exclamationmark
+hifispeaker.2.badge.exclamationmark.fill
+hifispeaker.2.badge.minus
+hifispeaker.2.badge.minus.fill
+hifispeaker.2.badge.plus
+hifispeaker.2.badge.plus.fill
+hifispeaker.2.fill
+hifispeaker.and.appletv
+hifispeaker.and.appletv.fill
+hifispeaker.and.appletv.fill.rtl
+hifispeaker.and.appletv.rtl
+hifispeaker.and.homepod
+hifispeaker.and.homepod.badge.checkmark
+hifispeaker.and.homepod.badge.checkmark.fill
+hifispeaker.and.homepod.badge.checkmark.fill.rtl
+hifispeaker.and.homepod.badge.checkmark.rtl
+hifispeaker.and.homepod.badge.exclamationmark
+hifispeaker.and.homepod.badge.exclamationmark.fill
+hifispeaker.and.homepod.badge.minus
+hifispeaker.and.homepod.badge.minus.fill
+hifispeaker.and.homepod.badge.plus
+hifispeaker.and.homepod.badge.plus.fill
+hifispeaker.and.homepod.fill
+hifispeaker.and.homepod.mini
+hifispeaker.and.homepod.mini.badge.checkmark
+hifispeaker.and.homepod.mini.badge.checkmark.fill
+hifispeaker.and.homepod.mini.badge.checkmark.fill.rtl
+hifispeaker.and.homepod.mini.badge.checkmark.rtl
+hifispeaker.and.homepod.mini.badge.exclamationmark
+hifispeaker.and.homepod.mini.badge.exclamationmark.fill
+hifispeaker.and.homepod.mini.badge.minus
+hifispeaker.and.homepod.mini.badge.minus.fill
+hifispeaker.and.homepod.mini.badge.plus
+hifispeaker.and.homepod.mini.badge.plus.fill
+hifispeaker.and.homepod.mini.fill
+hifispeaker.arrow.forward
+hifispeaker.arrow.forward.fill
+hifispeaker.badge.checkmark
+hifispeaker.badge.checkmark.fill
+hifispeaker.badge.checkmark.fill.rtl
+hifispeaker.badge.checkmark.rtl
+hifispeaker.badge.exclamationmark
+hifispeaker.badge.exclamationmark.fill
+hifispeaker.badge.minus
+hifispeaker.badge.minus.fill
+hifispeaker.badge.plus
+hifispeaker.badge.plus.fill
+hifispeaker.fill
+highlighter
+highlighter.badge.ellipsis
+hockey.puck
+hockey.puck.circle
+hockey.puck.circle.fill
+hockey.puck.fill
+hold.brakesignal
+homepod
+homepod.2
+homepod.2.badge.checkmark
+homepod.2.badge.checkmark.fill
+homepod.2.badge.checkmark.fill.rtl
+homepod.2.badge.checkmark.rtl
+homepod.2.badge.exclamationmark
+homepod.2.badge.exclamationmark.fill
+homepod.2.badge.minus
+homepod.2.badge.minus.fill
+homepod.2.badge.plus
+homepod.2.badge.plus.fill
+homepod.2.fill
+homepod.and.appletv
+homepod.and.appletv.fill
+homepod.and.appletv.fill.rtl
+homepod.and.appletv.rtl
+homepod.and.homepod.mini
+homepod.and.homepod.mini.badge.checkmark
+homepod.and.homepod.mini.badge.checkmark.fill
+homepod.and.homepod.mini.badge.checkmark.fill.rtl
+homepod.and.homepod.mini.badge.checkmark.rtl
+homepod.and.homepod.mini.badge.exclamationmark
+homepod.and.homepod.mini.badge.exclamationmark.fill
+homepod.and.homepod.mini.badge.minus
+homepod.and.homepod.mini.badge.minus.fill
+homepod.and.homepod.mini.badge.plus
+homepod.and.homepod.mini.badge.plus.fill
+homepod.and.homepod.mini.fill
+homepod.arrow.forward
+homepod.arrow.forward.fill
+homepod.badge.checkmark
+homepod.badge.checkmark.fill
+homepod.badge.checkmark.fill.rtl
+homepod.badge.checkmark.rtl
+homepod.badge.exclamationmark
+homepod.badge.exclamationmark.fill
+homepod.badge.minus
+homepod.badge.minus.fill
+homepod.badge.plus
+homepod.badge.plus.fill
+homepod.fill
+homepod.mini
+homepod.mini.2
+homepod.mini.2.badge.checkmark
+homepod.mini.2.badge.checkmark.fill
+homepod.mini.2.badge.checkmark.fill.rtl
+homepod.mini.2.badge.checkmark.rtl
+homepod.mini.2.badge.exclamationmark
+homepod.mini.2.badge.exclamationmark.fill
+homepod.mini.2.badge.minus
+homepod.mini.2.badge.minus.fill
+homepod.mini.2.badge.plus
+homepod.mini.2.badge.plus.fill
+homepod.mini.2.fill
+homepod.mini.and.appletv
+homepod.mini.and.appletv.fill
+homepod.mini.and.appletv.fill.rtl
+homepod.mini.and.appletv.rtl
+homepod.mini.arrow.forward
+homepod.mini.arrow.forward.fill
+homepod.mini.badge.checkmark
+homepod.mini.badge.checkmark.fill
+homepod.mini.badge.checkmark.fill.rtl
+homepod.mini.badge.checkmark.rtl
+homepod.mini.badge.exclamationmark
+homepod.mini.badge.exclamationmark.fill
+homepod.mini.badge.minus
+homepod.mini.badge.minus.fill
+homepod.mini.badge.plus
+homepod.mini.badge.plus.fill
+homepod.mini.fill
+horn
+horn.blast
+horn.blast.fill
+horn.fill
+hourglass
+hourglass.badge.eye
+hourglass.badge.lock
+hourglass.badge.plus
+hourglass.bottomhalf.filled
+hourglass.circle
+hourglass.circle.fill
+hourglass.tophalf.filled
+house
+house.and.flag
+house.and.flag.circle
+house.and.flag.circle.fill
+house.and.flag.fill
+house.badge.exclamationmark
+house.badge.exclamationmark.fill
+house.badge.wifi
+house.badge.wifi.fill
+house.circle
+house.circle.fill
+house.fill
+house.lodge
+house.lodge.circle
+house.lodge.circle.fill
+house.lodge.fill
+house.slash
+house.slash.fill
+hryvniasign
+hryvniasign.arrow.trianglehead.counterclockwise.rotate.90
+hryvniasign.building.classical
+hryvniasign.building.classical.fill
+hryvniasign.circle
+hryvniasign.circle.fill
+hryvniasign.gauge.chart.lefthalf.righthalf
+hryvniasign.gauge.chart.leftthird.topthird.rightthird
+hryvniasign.ring
+hryvniasign.ring.dashed
+hryvniasign.square
+hryvniasign.square.fill
+humidifier
+humidifier.and.droplets
+humidifier.and.droplets.fill
+humidifier.and.ellipsis
+humidifier.and.ellipsis.fill
+humidifier.fill
+humidity
+humidity.fill
+hurricane
+hurricane.circle
+hurricane.circle.fill
+hydrogen
+hydrogen.circle
+hydrogen.circle.fill
+hydrogen.square
+hydrogen.square.fill
+i.circle
+i.circle.fill
+i.square
+i.square.fill
+icloud
+icloud.and.arrow.down
+icloud.and.arrow.down.fill
+icloud.and.arrow.up
+icloud.and.arrow.up.fill
+icloud.circle
+icloud.circle.fill
+icloud.dashed
+icloud.fill
+icloud.slash
+icloud.slash.fill
+icloud.square
+icloud.square.fill
+increase.indent
+increase.quotelevel
+indianrupeesign
+indianrupeesign.arrow.trianglehead.counterclockwise.rotate.90
+indianrupeesign.building.classical
+indianrupeesign.building.classical.fill
+indianrupeesign.circle
+indianrupeesign.circle.fill
+indianrupeesign.gauge.chart.lefthalf.righthalf
+indianrupeesign.gauge.chart.leftthird.topthird.rightthird
+indianrupeesign.ring
+indianrupeesign.ring.dashed
+indianrupeesign.square
+indianrupeesign.square.fill
+infinity
+infinity.circle
+infinity.circle.fill
+info
+info.app
+info.app.fill
+info.bubble
+info.bubble.fill
+info.bubble.fill.rtl
+info.bubble.rtl
+info.circle
+info.circle.fill
+info.circle.text.page
+info.circle.text.page.fill
+info.circle.text.page.fill.rtl
+info.circle.text.page.rtl
+info.square
+info.square.fill
+info.triangle
+info.triangle.fill
+info.windshield
+inhaler
+inhaler.fill
+inset.filled.applewatch.case
+inset.filled.bottomhalf.rectangle
+inset.filled.bottomhalf.rectangle.portrait
+inset.filled.bottomhalf.tophalf.rectangle
+inset.filled.bottomleading.bottomtrailing.rectangle
+inset.filled.bottomleading.rectangle
+inset.filled.bottomleading.rectangle.portrait
+inset.filled.bottomleft.bottomright.rectangle
+inset.filled.bottomleft.rectangle
+inset.filled.bottomleft.rectangle.portrait
+inset.filled.bottomright.rectangle
+inset.filled.bottomright.rectangle.portrait
+inset.filled.bottomthird.rectangle
+inset.filled.bottomthird.rectangle.portrait
+inset.filled.bottomthird.square
+inset.filled.bottomtrailing.rectangle
+inset.filled.bottomtrailing.rectangle.portrait
+inset.filled.bubble
+inset.filled.capsule
+inset.filled.capsule.portrait
+inset.filled.center.rectangle
+inset.filled.center.rectangle.badge.plus
+inset.filled.center.rectangle.portrait
+inset.filled.circle
+inset.filled.circle.dashed
+inset.filled.circle.slash
+inset.filled.diamond
+inset.filled.leadinghalf.arrow.leading.rectangle
+inset.filled.leadinghalf.arrowtriangle.backward.rectangle
+inset.filled.leadinghalf.rectangle
+inset.filled.leadinghalf.rectangle.portrait
+inset.filled.leadinghalf.toptrailing.bottomtrailing.rectangle
+inset.filled.leadinghalf.trailinghalf.rectangle
+inset.filled.leadingthird.rectangle
+inset.filled.leadingthird.rectangle.badge.xmark
+inset.filled.leadingthird.rectangle.portrait
+inset.filled.leadingthird.square
+inset.filled.lefthalf.arrow.left.rectangle
+inset.filled.lefthalf.arrowtriangle.left.rectangle
+inset.filled.lefthalf.rectangle
+inset.filled.lefthalf.rectangle.portrait
+inset.filled.lefthalf.righthalf.rectangle
+inset.filled.lefthalf.topright.bottomright.rectangle
+inset.filled.leftthird.middlethird.rightthird.rectangle
+inset.filled.leftthird.rectangle
+inset.filled.leftthird.rectangle.badge.xmark
+inset.filled.leftthird.rectangle.portrait
+inset.filled.leftthird.square
+inset.filled.oval
+inset.filled.oval.portrait
+inset.filled.pano
+inset.filled.rectangle
+inset.filled.rectangle.and.person
+inset.filled.rectangle.and.person.filled.circle
+inset.filled.rectangle.and.person.filled.circle.fill
+inset.filled.rectangle.and.person.slash
+inset.filled.rectangle.and.person.slash.rtl
+inset.filled.rectangle.and.pointer.arrow
+inset.filled.rectangle.badge.record
+inset.filled.rectangle.on.rectangle
+inset.filled.rectangle.portrait
+inset.filled.righthalf.arrow.right.rectangle
+inset.filled.righthalf.arrowtriangle.right.rectangle
+inset.filled.righthalf.lefthalf.rectangle
+inset.filled.righthalf.rectangle
+inset.filled.righthalf.rectangle.portrait
+inset.filled.rightthird.rectangle
+inset.filled.rightthird.rectangle.badge.xmark
+inset.filled.rightthird.rectangle.portrait
+inset.filled.rightthird.square
+inset.filled.square
+inset.filled.square.dashed
+inset.filled.square.dashed.micro
+inset.filled.tophalf.bottomhalf.rectangle
+inset.filled.tophalf.bottomleft.bottomright.rectangle
+inset.filled.tophalf.rectangle
+inset.filled.tophalf.rectangle.portrait
+inset.filled.topleading.bottomleading.trailinghalf.rectangle
+inset.filled.topleading.rectangle
+inset.filled.topleading.rectangle.portrait
+inset.filled.topleft.bottomleft.righthalf.rectangle
+inset.filled.topleft.rectangle
+inset.filled.topleft.rectangle.portrait
+inset.filled.topleft.topright.bottomhalf.rectangle
+inset.filled.topleft.topright.bottomleft.bottomright.rectangle
+inset.filled.topright.rectangle
+inset.filled.topright.rectangle.portrait
+inset.filled.topthird.middlethird.bottomthird.rectangle
+inset.filled.topthird.rectangle
+inset.filled.topthird.rectangle.portrait
+inset.filled.topthird.square
+inset.filled.toptrailing.rectangle
+inset.filled.toptrailing.rectangle.portrait
+inset.filled.trailinghalf.arrow.trailing.rectangle
+inset.filled.trailinghalf.arrowtriangle.forward.rectangle
+inset.filled.trailinghalf.leadinghalf.rectangle
+inset.filled.trailinghalf.rectangle
+inset.filled.trailinghalf.rectangle.portrait
+inset.filled.trailingthird.rectangle
+inset.filled.trailingthird.rectangle.badge.xmark
+inset.filled.trailingthird.rectangle.portrait
+inset.filled.trailingthird.square
+inset.filled.triangle
+inset.filled.tv
+inset.left.half.filled.square.dashed.micro
+inset.left.half.square.dashed.micro
+inset.square.dashed.micro
+interface.window
+interface.window.and.pointer.arrow
+interface.window.and.pointer.arrow.rtl
+interface.window.badge.plus
+interface.window.dashed
+interface.window.on.rectangle
+interface.window.on.rectangle.dashed
+interface.window.on.rectangle.dashed.rtl
+interface.window.on.rectangle.rtl
+interface.window.stack
+internaldrive
+internaldrive.fill
+ipad
+ipad.and.arrow.forward
+ipad.badge.checkmark
+ipad.badge.exclamationmark
+ipad.badge.location
+ipad.badge.play
+ipad.case
+ipad.case.and.iphone.case
+ipad.gen1
+ipad.gen1.badge.exclamationmark
+ipad.gen1.badge.location
+ipad.gen1.badge.play
+ipad.gen1.crop.homebutton.circle
+ipad.gen1.landscape
+ipad.gen1.landscape.badge.exclamationmark
+ipad.gen1.landscape.badge.location
+ipad.gen1.landscape.badge.play
+ipad.gen1.landscape.slash
+ipad.gen1.sizes
+ipad.gen1.slash
+ipad.gen2
+ipad.gen2.badge.exclamationmark
+ipad.gen2.badge.location
+ipad.gen2.badge.play
+ipad.gen2.landscape
+ipad.gen2.landscape.badge.exclamationmark
+ipad.gen2.landscape.badge.location
+ipad.gen2.landscape.badge.play
+ipad.gen2.landscape.slash
+ipad.gen2.sizes
+ipad.gen2.slash
+ipad.landscape
+ipad.landscape.and.applewatch
+ipad.landscape.and.iphone
+ipad.landscape.and.iphone.slash
+ipad.landscape.and.ipod
+ipad.landscape.badge.exclamationmark
+ipad.landscape.badge.location
+ipad.landscape.badge.play
+ipad.rear.camera
+ipad.sizes
+iphone
+iphone.and.arrow.forward.inward
+iphone.and.arrow.forward.outward
+iphone.and.arrow.left.and.arrow.right.inward
+iphone.and.arrow.right.inward
+iphone.and.arrow.right.outward
+iphone.and.ipod
+iphone.and.vision.pro
+iphone.app.switcher
+iphone.badge.checkmark
+iphone.badge.exclamationmark
+iphone.badge.location
+iphone.badge.play
+iphone.case
+iphone.circle
+iphone.circle.fill
+iphone.crop.circle
+iphone.dock.motorized.viewfinder
+iphone.gen1
+iphone.gen1.and.arrow.left
+iphone.gen1.badge.exclamationmark
+iphone.gen1.badge.location
+iphone.gen1.badge.play
+iphone.gen1.circle
+iphone.gen1.circle.fill
+iphone.gen1.crop.circle
+iphone.gen1.crop.homebutton.circle
+iphone.gen1.landscape
+iphone.gen1.landscape.slash
+iphone.gen1.motion
+iphone.gen1.radiowaves.left.and.right
+iphone.gen1.radiowaves.left.and.right.circle
+iphone.gen1.radiowaves.left.and.right.circle.fill
+iphone.gen1.sizes
+iphone.gen1.slash
+iphone.gen1.slash.circle
+iphone.gen1.slash.circle.fill
+iphone.gen2
+iphone.gen2.and.arrow.left.and.arrow.right.inward
+iphone.gen2.badge.exclamationmark
+iphone.gen2.badge.location
+iphone.gen2.badge.play
+iphone.gen2.circle
+iphone.gen2.circle.fill
+iphone.gen2.crop.circle
+iphone.gen2.landscape
+iphone.gen2.landscape.slash
+iphone.gen2.motion
+iphone.gen2.radiowaves.left.and.right
+iphone.gen2.radiowaves.left.and.right.circle
+iphone.gen2.radiowaves.left.and.right.circle.fill
+iphone.gen2.sizes
+iphone.gen2.slash
+iphone.gen2.slash.circle
+iphone.gen2.slash.circle.fill
+iphone.gen3
+iphone.gen3.and.arrow.left.and.arrow.right.inward
+iphone.gen3.badge.exclamationmark
+iphone.gen3.badge.location
+iphone.gen3.badge.play
+iphone.gen3.circle
+iphone.gen3.circle.fill
+iphone.gen3.crop.circle
+iphone.gen3.landscape
+iphone.gen3.landscape.slash
+iphone.gen3.motion
+iphone.gen3.radiowaves.left.and.right
+iphone.gen3.radiowaves.left.and.right.circle
+iphone.gen3.radiowaves.left.and.right.circle.fill
+iphone.gen3.sizes
+iphone.gen3.slash
+iphone.gen3.slash.circle
+iphone.gen3.slash.circle.fill
+iphone.landscape
+iphone.motion
+iphone.pattern.diagonalline
+iphone.pattern.diagonalline.on.rectangle.portrait.dashed
+iphone.radiowaves.left.and.right
+iphone.radiowaves.left.and.right.circle
+iphone.radiowaves.left.and.right.circle.fill
+iphone.rear.camera
+iphone.sizes
+iphone.slash
+iphone.slash.circle
+iphone.slash.circle.fill
+iphone.smartbatterycase.gen1
+iphone.smartbatterycase.gen2
+ipod
+ipod.and.applewatch
+ipod.and.vision.pro
+ipod.shuffle.gen1
+ipod.shuffle.gen2
+ipod.shuffle.gen3
+ipod.shuffle.gen4
+ipod.touch
+ipod.touch.landscape
+ipod.touch.slash
+italic
+ivfluid.bag
+ivfluid.bag.fill
+j.circle
+j.circle.fill
+j.square
+j.square.fill
+j.square.on.square
+j.square.on.square.fill
+jacket
+jacket.circle
+jacket.circle.fill
+jacket.fill
+jacket.sensor.tag.radiowaves.left.and.right
+jacket.sensor.tag.radiowaves.left.and.right.fill
+k
+k.circle
+k.circle.fill
+k.square
+k.square.fill
+kashida.arabic
+key
+key.2.on.ring
+key.2.on.ring.fill
+key.car.radiowaves.forward
+key.car.radiowaves.forward.fill
+key.car.radiowaves.forward.fill.rtl
+key.car.radiowaves.forward.rtl
+key.car.side
+key.car.side.fill
+key.card
+key.card.fill
+key.circle
+key.circle.fill
+key.convertible.side
+key.convertible.side.fill
+key.fill
+key.horizontal
+key.horizontal.fill
+key.icloud
+key.icloud.fill
+key.radiowaves.forward
+key.radiowaves.forward.fill
+key.radiowaves.forward.slash
+key.radiowaves.forward.slash.fill
+key.sensor.tag.radiowaves.left.and.right
+key.sensor.tag.radiowaves.left.and.right.fill
+key.shield
+key.shield.fill
+key.slash
+key.slash.fill
+key.suv.side
+key.suv.side.fill
+key.truck.pickup.side
+key.truck.pickup.side.fill
+key.viewfinder
+keyboard
+keyboard.badge.ellipsis
+keyboard.badge.ellipsis.fill
+keyboard.badge.eye
+keyboard.badge.eye.fill
+keyboard.chevron.compact.down
+keyboard.chevron.compact.down.fill
+keyboard.chevron.compact.left
+keyboard.chevron.compact.left.fill
+keyboard.fill
+keyboard.interface.window
+keyboard.onehanded.left
+keyboard.onehanded.left.fill
+keyboard.onehanded.right
+keyboard.onehanded.right.fill
+kipsign
+kipsign.arrow.trianglehead.counterclockwise.rotate.90
+kipsign.building.classical
+kipsign.building.classical.fill
+kipsign.circle
+kipsign.circle.fill
+kipsign.gauge.chart.lefthalf.righthalf
+kipsign.gauge.chart.leftthird.topthird.rightthird
+kipsign.ring
+kipsign.ring.dashed
+kipsign.square
+kipsign.square.fill
+kph
+kph.circle
+kph.circle.fill
+l.button.roundedbottom.horizontal
+l.button.roundedbottom.horizontal.fill
+l.circle
+l.circle.fill
+l.joystick
+l.joystick.fill
+l.joystick.press.down
+l.joystick.press.down.fill
+l.joystick.tilt.down
+l.joystick.tilt.down.fill
+l.joystick.tilt.left
+l.joystick.tilt.left.fill
+l.joystick.tilt.right
+l.joystick.tilt.right.fill
+l.joystick.tilt.up
+l.joystick.tilt.up.fill
+l.square
+l.square.fill
+l1.button.roundedbottom.horizontal
+l1.button.roundedbottom.horizontal.fill
+l1.circle
+l1.circle.fill
+l2.button.angledtop.vertical.left
+l2.button.angledtop.vertical.left.fill
+l2.button.roundedtop.horizontal
+l2.button.roundedtop.horizontal.fill
+l2.circle
+l2.circle.fill
+l3.button.angledbottom.horizontal.left
+l3.button.angledbottom.horizontal.left.fill
+l4.button.horizontal
+l4.button.horizontal.fill
+ladybug
+ladybug.circle
+ladybug.circle.fill
+ladybug.fill
+ladybug.slash
+ladybug.slash.circle
+ladybug.slash.circle.fill
+ladybug.slash.fill
+lamp.ceiling
+lamp.ceiling.fill
+lamp.ceiling.inverse
+lamp.desk
+lamp.desk.fill
+lamp.floor
+lamp.floor.fill
+lamp.table
+lamp.table.fill
+lane
+lanyardcard
+lanyardcard.fill
+laptopcomputer
+laptopcomputer.and.arrow.down
+laptopcomputer.badge.checkmark
+laptopcomputer.display.clean
+laptopcomputer.slash
+laptopcomputer.trianglebadge.exclamationmark
+larisign
+larisign.arrow.trianglehead.counterclockwise.rotate.90
+larisign.building.classical
+larisign.building.classical.fill
+larisign.circle
+larisign.circle.fill
+larisign.gauge.chart.lefthalf.righthalf
+larisign.gauge.chart.leftthird.topthird.rightthird
+larisign.ring
+larisign.ring.dashed
+larisign.square
+larisign.square.fill
+laser.burst
+lasso
+lasso.badge.sparkles
+latch.2.case
+latch.2.case.fill
+laurel.leading
+laurel.leading.laurel.trailing
+laurel.trailing
+lb.button.roundedbottom.horizontal
+lb.button.roundedbottom.horizontal.fill
+lb.circle
+lb.circle.fill
+leaf
+leaf.arrow.trianglehead.clockwise
+leaf.circle
+leaf.circle.fill
+leaf.fill
+left
+left.circle
+left.circle.fill
+lessthan
+lessthan.circle
+lessthan.circle.fill
+lessthan.square
+lessthan.square.fill
+lessthanorequalto
+lessthanorequalto.circle
+lessthanorequalto.circle.fill
+lessthanorequalto.square
+lessthanorequalto.square.fill
+level
+level.fill
+licenseplate
+licenseplate.fill
+lifepreserver
+lifepreserver.fill
+light.beacon.max
+light.beacon.max.fill
+light.beacon.min
+light.beacon.min.fill
+light.cylindrical.ceiling
+light.cylindrical.ceiling.fill
+light.cylindrical.ceiling.inverse
+light.max
+light.min
+light.overhead.left
+light.overhead.left.fill
+light.overhead.right
+light.overhead.right.fill
+light.panel
+light.panel.fill
+light.recessed
+light.recessed.3
+light.recessed.3.fill
+light.recessed.3.inverse
+light.recessed.fill
+light.recessed.inverse
+light.ribbon
+light.ribbon.fill
+light.strip.2
+light.strip.2.fill
+lightbulb
+lightbulb.2
+lightbulb.2.fill
+lightbulb.circle
+lightbulb.circle.fill
+lightbulb.fill
+lightbulb.led
+lightbulb.led.fill
+lightbulb.led.wide
+lightbulb.led.wide.fill
+lightbulb.max
+lightbulb.max.fill
+lightbulb.min
+lightbulb.min.badge.exclamationmark
+lightbulb.min.badge.exclamationmark.fill
+lightbulb.min.fill
+lightbulb.slash
+lightbulb.slash.fill
+lightrail
+lightrail.fill
+lightspectrum.horizontal
+lightswitch.off
+lightswitch.off.fill
+lightswitch.off.square
+lightswitch.off.square.fill
+lightswitch.on
+lightswitch.on.fill
+lightswitch.on.square
+lightswitch.on.square.fill
+line.2.horizontal.decrease.circle
+line.2.horizontal.decrease.circle.fill
+line.3.crossed.swirl.circle
+line.3.crossed.swirl.circle.fill
+line.3.horizontal
+line.3.horizontal.button.angledtop.vertical.right
+line.3.horizontal.button.angledtop.vertical.right.fill
+line.3.horizontal.circle
+line.3.horizontal.circle.fill
+line.3.horizontal.decrease
+line.3.horizontal.decrease.circle
+line.3.horizontal.decrease.circle.fill
+line.diagonal
+line.diagonal.trianglehead.up.right
+line.diagonal.trianglehead.up.right.left.down
+line.horizontal.star.fill.line.horizontal
+lines.measurement.horizontal
+lines.measurement.horizontal.aligned.bottom
+lines.measurement.vertical
+lineweight
+link
+link.badge.plus
+link.circle
+link.circle.fill
+link.icloud
+link.icloud.fill
+lirasign
+lirasign.arrow.trianglehead.counterclockwise.rotate.90
+lirasign.building.classical
+lirasign.building.classical.fill
+lirasign.circle
+lirasign.circle.fill
+lirasign.gauge.chart.lefthalf.righthalf
+lirasign.gauge.chart.leftthird.topthird.rightthird
+lirasign.ring
+lirasign.ring.dashed
+lirasign.square
+lirasign.square.fill
+list.and.film
+list.bullet
+list.bullet.badge.ellipsis
+list.bullet.below.rectangle
+list.bullet.circle
+list.bullet.circle.fill
+list.bullet.clipboard
+list.bullet.clipboard.fill
+list.bullet.indent
+list.bullet.rectangle
+list.bullet.rectangle.fill
+list.bullet.rectangle.portrait
+list.bullet.rectangle.portrait.fill
+list.clipboard
+list.clipboard.fill
+list.dash
+list.dash.badge.ellipsis
+list.dash.header.rectangle
+list.dash.header.rectangle.fill
+list.number
+list.number.ar
+list.number.badge.ellipsis
+list.number.badge.ellipsis.hi
+list.number.badge.ellipsis.rtl
+list.number.hi
+list.number.rtl
+list.star
+list.triangle
+livephoto
+livephoto.badge.automatic
+livephoto.play
+livephoto.slash
+lizard
+lizard.circle
+lizard.circle.fill
+lizard.fill
+lm.button.horizontal
+lm.button.horizontal.fill
+location
+location.app
+location.app.fill
+location.circle
+location.circle.fill
+location.fill
+location.fill.viewfinder
+location.magnifyingglass
+location.north
+location.north.circle
+location.north.circle.fill
+location.north.fill
+location.north.line
+location.north.line.fill
+location.slash
+location.slash.circle
+location.slash.circle.fill
+location.slash.fill
+location.square
+location.square.fill
+location.viewfinder
+lock
+lock.app.dashed
+lock.applewatch
+lock.badge.checkmark
+lock.badge.checkmark.fill
+lock.badge.clock
+lock.badge.clock.fill
+lock.badge.xmark
+lock.badge.xmark.fill
+lock.circle
+lock.circle.dotted
+lock.circle.fill
+lock.desktopcomputer
+lock.display
+lock.document
+lock.document.fill
+lock.fill
+lock.heart
+lock.heart.fill
+lock.icloud
+lock.icloud.fill
+lock.ipad
+lock.iphone
+lock.laptopcomputer
+lock.open
+lock.open.applewatch
+lock.open.desktopcomputer
+lock.open.display
+lock.open.fill
+lock.open.ipad
+lock.open.iphone
+lock.open.laptopcomputer
+lock.open.rotation
+lock.open.trianglebadge.exclamationmark
+lock.open.trianglebadge.exclamationmark.fill
+lock.rectangle
+lock.rectangle.dashed
+lock.rectangle.fill
+lock.rectangle.on.rectangle
+lock.rectangle.on.rectangle.dashed
+lock.rectangle.on.rectangle.fill
+lock.rectangle.stack
+lock.rectangle.stack.fill
+lock.rotation
+lock.shield
+lock.shield.fill
+lock.slash
+lock.slash.fill
+lock.square
+lock.square.dashed
+lock.square.fill
+lock.square.stack
+lock.square.stack.fill
+lock.trianglebadge.exclamationmark
+lock.trianglebadge.exclamationmark.fill
+long.text.page.and.pencil
+long.text.page.and.pencil.fill
+loupe
+lsb.button.angledbottom.horizontal.left
+lsb.button.angledbottom.horizontal.left.fill
+lt.button.roundedtop.horizontal
+lt.button.roundedtop.horizontal.fill
+lt.circle
+lt.circle.fill
+lungs
+lungs.fill
+m.circle
+m.circle.fill
+m.square
+m.square.fill
+m1.button.horizontal
+m1.button.horizontal.fill
+m2.button.horizontal
+m2.button.horizontal.fill
+m3.button.horizontal
+m3.button.horizontal.fill
+m4.button.horizontal
+m4.button.horizontal.fill
+macbook
+macbook.and.applewatch
+macbook.and.ipad
+macbook.and.iphone
+macbook.and.ipod
+macbook.and.vision.pro
+macbook.badge.checkmark
+macbook.badge.exclamationmark
+macbook.badge.shield.checkmark
+macbook.gen1
+macbook.gen1.sizes
+macbook.gen2
+macbook.gen2.sizes
+macbook.sizes
+macbook.slash
+macbook.trianglebadge.exclamationmark
+macmini
+macmini.badge.checkmark
+macmini.badge.checkmark.fill
+macmini.fill
+macmini.gen2
+macmini.gen2.fill
+macmini.gen3
+macmini.gen3.fill
+macpro.gen1
+macpro.gen1.fill
+macpro.gen2
+macpro.gen2.fill
+macpro.gen3
+macpro.gen3.badge.checkmark
+macpro.gen3.badge.checkmark.fill
+macpro.gen3.fill
+macpro.gen3.server
+macstudio
+macstudio.badge.checkmark
+macstudio.badge.checkmark.fill
+macstudio.fill
+magazine
+magazine.fill
+magicmouse
+magicmouse.fill
+magnifyingglass
+magnifyingglass.circle
+magnifyingglass.circle.fill
+magsafe.batterypack
+magsafe.batterypack.fill
+mail
+mail.and.text.magnifyingglass
+mail.and.text.magnifyingglass.rtl
+mail.fill
+mail.stack
+mail.stack.fill
+malaysianringgitsign
+malaysianringgitsign.arrow.trianglehead.counterclockwise.rotate.90
+malaysianringgitsign.building.classical
+malaysianringgitsign.building.classical.fill
+malaysianringgitsign.circle
+malaysianringgitsign.circle.fill
+malaysianringgitsign.gauge.chart.lefthalf.righthalf
+malaysianringgitsign.gauge.chart.leftthird.topthird.rightthird
+malaysianringgitsign.ring
+malaysianringgitsign.ring.dashed
+malaysianringgitsign.square
+malaysianringgitsign.square.fill
+manatsign
+manatsign.arrow.trianglehead.counterclockwise.rotate.90
+manatsign.building.classical
+manatsign.building.classical.fill
+manatsign.circle
+manatsign.circle.fill
+manatsign.gauge.chart.lefthalf.righthalf
+manatsign.gauge.chart.leftthird.topthird.rightthird
+manatsign.ring
+manatsign.ring.dashed
+manatsign.square
+manatsign.square.fill
+map
+map.circle
+map.circle.fill
+map.fill
+mappin
+mappin.and.ellipse
+mappin.and.ellipse.circle
+mappin.and.ellipse.circle.fill
+mappin.circle
+mappin.circle.fill
+mappin.slash
+mappin.slash.circle
+mappin.slash.circle.fill
+mappin.square
+mappin.square.fill
+matter.logo
+mecca
+medal
+medal.fill
+medal.star
+medal.star.fill
+mediastick
+medical.thermometer
+medical.thermometer.fill
+megaphone
+megaphone.fill
+memories
+memories.badge.checkmark
+memories.badge.minus
+memories.badge.plus
+memories.badge.xmark
+memories.slash
+memorychip
+memorychip.fill
+menubar.arrow.down.rectangle
+menubar.arrow.up.rectangle
+menubar.dock.rectangle
+menubar.dock.rectangle.badge.record
+menubar.rectangle
+menucard
+menucard.fill
+message
+message.badge
+message.badge.circle
+message.badge.circle.fill
+message.badge.circle.fill.rtl
+message.badge.circle.rtl
+message.badge.fill
+message.badge.fill.rtl
+message.badge.filled.fill
+message.badge.filled.fill.rtl
+message.badge.rtl
+message.badge.waveform
+message.badge.waveform.fill
+message.circle
+message.circle.fill
+message.fill
+metronome
+metronome.fill
+microbe
+microbe.circle
+microbe.circle.fill
+microbe.fill
+microphone
+microphone.and.signal.meter
+microphone.and.signal.meter.fill
+microphone.badge.ellipsis
+microphone.badge.ellipsis.fill
+microphone.badge.plus
+microphone.badge.plus.fill
+microphone.badge.xmark
+microphone.badge.xmark.fill
+microphone.circle
+microphone.circle.fill
+microphone.dynamic.on.stand
+microphone.dynamic.on.stand.circle
+microphone.dynamic.on.stand.circle.fill
+microphone.fill
+microphone.slash
+microphone.slash.circle
+microphone.slash.circle.fill
+microphone.slash.fill
+microphone.square
+microphone.square.fill
+microwave
+microwave.fill
+millsign
+millsign.arrow.trianglehead.counterclockwise.rotate.90
+millsign.building.classical
+millsign.building.classical.fill
+millsign.circle
+millsign.circle.fill
+millsign.gauge.chart.lefthalf.righthalf
+millsign.gauge.chart.leftthird.topthird.rightthird
+millsign.ring
+millsign.ring.dashed
+millsign.square
+millsign.square.fill
+minus
+minus.arrow.trianglehead.clockwise
+minus.arrow.trianglehead.counterclockwise
+minus.circle
+minus.circle.fill
+minus.diamond
+minus.diamond.fill
+minus.forwardslash.plus
+minus.magnifyingglass
+minus.plus.and.fluid.batteryblock
+minus.plus.batteryblock
+minus.plus.batteryblock.exclamationmark
+minus.plus.batteryblock.exclamationmark.fill
+minus.plus.batteryblock.fill
+minus.plus.batteryblock.slash
+minus.plus.batteryblock.slash.fill
+minus.plus.batteryblock.stack
+minus.plus.batteryblock.stack.arrowtriangle.left
+minus.plus.batteryblock.stack.arrowtriangle.left.fill
+minus.plus.batteryblock.stack.arrowtriangle.right
+minus.plus.batteryblock.stack.arrowtriangle.right.and.arrowtriangle.left
+minus.plus.batteryblock.stack.arrowtriangle.right.and.arrowtriangle.left.fill
+minus.plus.batteryblock.stack.arrowtriangle.right.fill
+minus.plus.batteryblock.stack.exclamationmark
+minus.plus.batteryblock.stack.exclamationmark.fill
+minus.plus.batteryblock.stack.fill
+minus.plus.lines.measurement.horizontal.aligned.bottom
+minus.rectangle
+minus.rectangle.fill
+minus.rectangle.portrait
+minus.rectangle.portrait.fill
+minus.square
+minus.square.fill
+mirror.side.left
+mirror.side.left.and.arrow.turn.down.right
+mirror.side.left.and.heat.waves
+mirror.side.right
+mirror.side.right.and.arrow.turn.down.left
+mirror.side.right.and.heat.waves
+moon
+moon.circle
+moon.circle.fill
+moon.dust
+moon.dust.circle
+moon.dust.circle.fill
+moon.dust.fill
+moon.fill
+moon.haze
+moon.haze.circle
+moon.haze.circle.fill
+moon.haze.fill
+moon.road.lanes
+moon.stars
+moon.stars.circle
+moon.stars.circle.fill
+moon.stars.fill
+moon.zzz
+moon.zzz.fill
+moonphase.first.quarter
+moonphase.first.quarter.inverse
+moonphase.full.moon
+moonphase.full.moon.inverse
+moonphase.last.quarter
+moonphase.last.quarter.inverse
+moonphase.new.moon
+moonphase.new.moon.inverse
+moonphase.waning.crescent
+moonphase.waning.crescent.inverse
+moonphase.waning.gibbous
+moonphase.waning.gibbous.inverse
+moonphase.waxing.crescent
+moonphase.waxing.crescent.inverse
+moonphase.waxing.gibbous
+moonphase.waxing.gibbous.inverse
+moonrise
+moonrise.circle
+moonrise.circle.fill
+moonrise.fill
+moonset
+moonset.circle
+moonset.circle.fill
+moonset.fill
+moped
+moped.fill
+mosaic
+mosaic.fill
+motorcycle
+motorcycle.fill
+mount
+mount.fill
+mountain.2
+mountain.2.circle
+mountain.2.circle.fill
+mountain.2.fill
+mouth
+mouth.fill
+move.3d
+movieclapper
+movieclapper.fill
+mph
+mph.circle
+mph.circle.fill
+mug
+mug.fill
+multiply
+multiply.circle
+multiply.circle.fill
+multiply.square
+multiply.square.fill
+music.note
+music.note.arrow.trianglehead.clockwise
+music.note.house
+music.note.house.fill
+music.note.list
+music.note.slash
+music.note.square.stack
+music.note.square.stack.fill
+music.note.tv
+music.note.tv.fill
+music.pages
+music.pages.fill
+music.quarternote.3
+mustache
+mustache.fill
+n.circle
+n.circle.fill
+n.square
+n.square.fill
+nairasign
+nairasign.arrow.trianglehead.counterclockwise.rotate.90
+nairasign.building.classical
+nairasign.building.classical.fill
+nairasign.circle
+nairasign.circle.fill
+nairasign.gauge.chart.lefthalf.righthalf
+nairasign.gauge.chart.leftthird.topthird.rightthird
+nairasign.ring
+nairasign.ring.dashed
+nairasign.square
+nairasign.square.fill
+network
+network.badge.shield.half.filled
+network.slash
+newspaper
+newspaper.circle
+newspaper.circle.fill
+newspaper.fill
+norwegiankronesign
+norwegiankronesign.arrow.trianglehead.counterclockwise.rotate.90
+norwegiankronesign.building.classical
+norwegiankronesign.building.classical.fill
+norwegiankronesign.circle
+norwegiankronesign.circle.fill
+norwegiankronesign.gauge.chart.lefthalf.righthalf
+norwegiankronesign.gauge.chart.leftthird.topthird.rightthird
+norwegiankronesign.ring
+norwegiankronesign.ring.dashed
+norwegiankronesign.square
+norwegiankronesign.square.fill
+nose
+nose.fill
+nosign
+nosign.app
+nosign.app.fill
+nosign.badge.clock
+notequal
+notequal.circle
+notequal.circle.fill
+notequal.square
+notequal.square.fill
+number.sign
+number.sign.circle
+number.sign.circle.fill
+number.sign.square
+number.sign.square.fill
+numbers
+numbers.ar
+numbers.bn
+numbers.gu
+numbers.hi
+numbers.km
+numbers.kn
+numbers.ml
+numbers.mni
+numbers.mr
+numbers.my
+numbers.or
+numbers.pa
+numbers.rectangle
+numbers.rectangle.ar
+numbers.rectangle.fill
+numbers.rectangle.fill.ar
+numbers.rectangle.fill.hi
+numbers.rectangle.hi
+numbers.sat
+numbers.te
+numero.sign
+o.circle
+o.circle.fill
+o.square
+o.square.fill
+oar.2.crossed
+oar.2.crossed.circle
+oar.2.crossed.circle.fill
+octagon
+octagon.bottomhalf.filled
+octagon.fill
+octagon.lefthalf.filled
+octagon.righthalf.filled
+octagon.tophalf.filled
+oilcan
+oilcan.and.thermometer
+oilcan.and.thermometer.fill
+oilcan.fill
+opticaldisc
+opticaldisc.fill
+opticaldiscdrive
+opticaldiscdrive.fill
+opticid
+opticid.fill
+option
+oval
+oval.bottomhalf.filled
+oval.fill
+oval.lefthalf.filled
+oval.portrait
+oval.portrait.bottomhalf.filled
+oval.portrait.fill
+oval.portrait.lefthalf.filled
+oval.portrait.righthalf.filled
+oval.portrait.tophalf.filled
+oval.righthalf.filled
+oval.tophalf.filled
+oven
+oven.fill
+p.circle
+p.circle.fill
+p.square
+p.square.fill
+p1.button.horizontal
+p1.button.horizontal.fill
+p2.button.horizontal
+p2.button.horizontal.fill
+p3.button.horizontal
+p3.button.horizontal.fill
+p4.button.horizontal
+p4.button.horizontal.fill
+pad.header
+paddleshifter.left
+paddleshifter.left.fill
+paddleshifter.right
+paddleshifter.right.fill
+paint.bucket.classic
+paintbrush
+paintbrush.fill
+paintbrush.pointed
+paintbrush.pointed.fill
+paintbrush.slash
+paintbrush.slash.fill
+paintpalette
+paintpalette.fill
+pano
+pano.badge.play
+pano.badge.play.fill
+pano.fill
+paperclip
+paperclip.badge.ellipsis
+paperclip.circle
+paperclip.circle.fill
+paperplane
+paperplane.circle
+paperplane.circle.fill
+paperplane.fill
+paragraphsign
+parentheses
+parkinglight
+parkinglight.fill
+parkingsign
+parkingsign.brakesignal
+parkingsign.brakesignal.slash
+parkingsign.circle
+parkingsign.circle.fill
+parkingsign.radiowaves.down.right.off
+parkingsign.radiowaves.left.and.right
+parkingsign.radiowaves.left.and.right.slash
+parkingsign.radiowaves.right.and.safetycone
+parkingsign.square
+parkingsign.square.fill
+parkingsign.steeringwheel
+party.popper
+party.popper.fill
+pause
+pause.circle
+pause.circle.fill
+pause.fill
+pause.rectangle
+pause.rectangle.fill
+pawprint
+pawprint.circle
+pawprint.circle.fill
+pawprint.fill
+pc
+peacesign
+pedal.accelerator
+pedal.accelerator.fill
+pedal.brake
+pedal.brake.fill
+pedal.clutch
+pedal.clutch.fill
+pedestrian.gate.closed
+pedestrian.gate.closed.trianglebadge.exclamationmark
+pedestrian.gate.open
+pedestrian.gate.open.trianglebadge.exclamationmark
+pencil
+pencil.and.list.clipboard
+pencil.and.list.clipboard.rtl
+pencil.and.outline
+pencil.and.ruler
+pencil.and.ruler.fill
+pencil.and.scribble
+pencil.circle
+pencil.circle.fill
+pencil.line
+pencil.slash
+pencil.tip
+pencil.tip.crop.circle
+pencil.tip.crop.circle.badge.arrow.forward
+pencil.tip.crop.circle.badge.arrow.forward.fill
+pencil.tip.crop.circle.badge.minus
+pencil.tip.crop.circle.badge.minus.fill
+pencil.tip.crop.circle.badge.plus
+pencil.tip.crop.circle.badge.plus.fill
+pencil.tip.crop.circle.fill
+pentagon
+pentagon.bottomhalf.filled
+pentagon.fill
+pentagon.lefthalf.filled
+pentagon.righthalf.filled
+pentagon.tophalf.filled
+percent
+percent.ar
+person
+person.2
+person.2.arrow.trianglehead.counterclockwise
+person.2.badge
+person.2.badge.fill
+person.2.badge.gearshape
+person.2.badge.gearshape.fill
+person.2.badge.key
+person.2.badge.key.fill
+person.2.badge.minus
+person.2.badge.minus.fill
+person.2.badge.plus
+person.2.badge.plus.fill
+person.2.circle
+person.2.circle.fill
+person.2.crop.square.stack
+person.2.crop.square.stack.fill
+person.2.fill
+person.2.shield
+person.2.shield.fill
+person.2.slash
+person.2.slash.fill
+person.2.wave.2
+person.2.wave.2.fill
+person.3
+person.3.fill
+person.3.sequence
+person.3.sequence.fill
+person.and.arrow.left.and.arrow.right.outward
+person.and.background.dotted
+person.and.background.striped.horizontal
+person.badge.checkmark
+person.badge.checkmark.fill
+person.badge.checkmark.seal
+person.badge.checkmark.seal.fill
+person.badge.clock
+person.badge.clock.fill
+person.badge.creditcard
+person.badge.creditcard.fill
+person.badge.key
+person.badge.key.fill
+person.badge.location
+person.badge.location.fill
+person.badge.minus
+person.badge.plus
+person.badge.shield.checkmark
+person.badge.shield.checkmark.fill
+person.badge.shield.exclamationmark
+person.badge.shield.exclamationmark.fill
+person.bubble
+person.bubble.fill
+person.building.classical
+person.building.classical.fill
+person.bust
+person.bust.circle
+person.bust.circle.fill
+person.bust.fill
+person.checkmark.and.xmark
+person.checkmark.and.xmark.rtl
+person.circle
+person.circle.fill
+person.crop.artframe
+person.crop.circle
+person.crop.circle.badge
+person.crop.circle.badge.checkmark
+person.crop.circle.badge.clock
+person.crop.circle.badge.clock.fill
+person.crop.circle.badge.ellipsis
+person.crop.circle.badge.ellipsis.fill
+person.crop.circle.badge.exclamationmark
+person.crop.circle.badge.exclamationmark.fill
+person.crop.circle.badge.fill
+person.crop.circle.badge.magnifyingglass
+person.crop.circle.badge.magnifyingglass.fill
+person.crop.circle.badge.minus
+person.crop.circle.badge.moon
+person.crop.circle.badge.moon.fill
+person.crop.circle.badge.plus
+person.crop.circle.badge.questionmark
+person.crop.circle.badge.questionmark.ar
+person.crop.circle.badge.questionmark.fill
+person.crop.circle.badge.questionmark.fill.ar
+person.crop.circle.badge.xmark
+person.crop.circle.dashed
+person.crop.circle.dashed.circle
+person.crop.circle.dashed.circle.fill
+person.crop.circle.fill
+person.crop.circle.fill.badge.checkmark
+person.crop.circle.fill.badge.minus
+person.crop.circle.fill.badge.plus
+person.crop.circle.fill.badge.xmark
+person.crop.rectangle
+person.crop.rectangle.badge.plus
+person.crop.rectangle.badge.plus.fill
+person.crop.rectangle.fill
+person.crop.rectangle.stack
+person.crop.rectangle.stack.fill
+person.crop.square
+person.crop.square.badge.camera
+person.crop.square.badge.camera.fill
+person.crop.square.badge.video
+person.crop.square.badge.video.fill
+person.crop.square.fill
+person.crop.square.filled.and.at.rectangle
+person.crop.square.filled.and.at.rectangle.fill
+person.crop.square.on.square.angled
+person.crop.square.on.square.angled.fill
+person.fill
+person.fill.and.arrow.left.and.arrow.right.outward
+person.fill.badge.minus
+person.fill.badge.plus
+person.fill.checkmark
+person.fill.checkmark.and.xmark
+person.fill.checkmark.and.xmark.rtl
+person.fill.checkmark.rtl
+person.fill.questionmark
+person.fill.questionmark.ar
+person.fill.questionmark.rtl
+person.fill.turn.down
+person.fill.turn.left
+person.fill.turn.right
+person.fill.viewfinder
+person.fill.xmark
+person.fill.xmark.rtl
+person.icloud
+person.icloud.fill
+person.line.dotted.person
+person.line.dotted.person.fill
+person.number.sign.rectangle
+person.number.sign.rectangle.fill
+person.slash
+person.slash.fill
+person.spatialaudio.3d.fill
+person.spatialaudio.fill
+person.spatialaudio.stereo.3d.fill
+person.spatialaudio.stereo.fill
+person.text.rectangle
+person.text.rectangle.badge.clock
+person.text.rectangle.badge.clock.fill
+person.text.rectangle.fill
+person.text.rectangle.trianglebadge.exclamationmark
+person.text.rectangle.trianglebadge.exclamationmark.fill
+person.wave.2
+person.wave.2.fill
+personalhotspot
+personalhotspot.circle
+personalhotspot.circle.fill
+personalhotspot.slash
+perspective
+peruviansolessign
+peruviansolessign.arrow.trianglehead.counterclockwise.rotate.90
+peruviansolessign.building.classical
+peruviansolessign.building.classical.fill
+peruviansolessign.circle
+peruviansolessign.circle.fill
+peruviansolessign.gauge.chart.lefthalf.righthalf
+peruviansolessign.gauge.chart.leftthird.topthird.rightthird
+peruviansolessign.ring
+peruviansolessign.ring.dashed
+peruviansolessign.square
+peruviansolessign.square.fill
+pesetasign
+pesetasign.arrow.trianglehead.counterclockwise.rotate.90
+pesetasign.building.classical
+pesetasign.building.classical.fill
+pesetasign.circle
+pesetasign.circle.fill
+pesetasign.gauge.chart.lefthalf.righthalf
+pesetasign.gauge.chart.leftthird.topthird.rightthird
+pesetasign.ring
+pesetasign.ring.dashed
+pesetasign.square
+pesetasign.square.fill
+pesosign
+pesosign.arrow.trianglehead.counterclockwise.rotate.90
+pesosign.building.classical
+pesosign.building.classical.fill
+pesosign.circle
+pesosign.circle.fill
+pesosign.gauge.chart.lefthalf.righthalf
+pesosign.gauge.chart.leftthird.topthird.rightthird
+pesosign.ring
+pesosign.ring.dashed
+pesosign.square
+pesosign.square.fill
+pet.carrier
+pet.carrier.circle
+pet.carrier.circle.fill
+pet.carrier.fill
+phone
+phone.arrow.down.left
+phone.arrow.down.left.fill
+phone.arrow.right
+phone.arrow.right.fill
+phone.arrow.up.right
+phone.arrow.up.right.circle
+phone.arrow.up.right.circle.fill
+phone.arrow.up.right.fill
+phone.badge.checkmark
+phone.badge.clock
+phone.badge.clock.fill
+phone.badge.plus
+phone.badge.waveform
+phone.badge.waveform.fill
+phone.bubble
+phone.bubble.fill
+phone.bubble.fill.rtl
+phone.bubble.rtl
+phone.circle
+phone.circle.fill
+phone.connection
+phone.connection.fill
+phone.down
+phone.down.circle
+phone.down.circle.fill
+phone.down.fill
+phone.down.waves.left.and.right
+phone.fill
+phone.fill.badge.checkmark
+phone.fill.badge.plus
+phone.pause
+phone.pause.circle
+phone.pause.circle.fill
+phone.pause.fill
+photo
+photo.artframe
+photo.artframe.circle
+photo.artframe.circle.fill
+photo.badge.arrow.down
+photo.badge.arrow.down.fill
+photo.badge.checkmark
+photo.badge.checkmark.fill
+photo.badge.exclamationmark
+photo.badge.exclamationmark.fill
+photo.badge.magnifyingglass
+photo.badge.magnifyingglass.fill
+photo.badge.plus
+photo.badge.plus.fill
+photo.badge.questionmark
+photo.badge.questionmark.fill
+photo.badge.shield.exclamationmark
+photo.badge.shield.exclamationmark.fill
+photo.circle
+photo.circle.fill
+photo.fill
+photo.fill.on.rectangle.fill
+photo.on.rectangle
+photo.on.rectangle.angled
+photo.on.rectangle.angled.fill
+photo.slash
+photo.slash.fill
+photo.stack
+photo.stack.fill
+photo.trianglebadge.exclamationmark
+photo.trianglebadge.exclamationmark.fill
+photo.tv
+pi
+pi.circle
+pi.circle.fill
+pi.square
+pi.square.fill
+pianokeys
+pianokeys.inverse
+pill
+pill.circle
+pill.circle.fill
+pill.fill
+pills
+pills.circle
+pills.circle.fill
+pills.fill
+pin
+pin.circle
+pin.circle.fill
+pin.fill
+pin.slash
+pin.slash.fill
+pin.square
+pin.square.fill
+pip
+pip.enter
+pip.exit
+pip.fill
+pip.remove
+pip.swap
+pipe.and.drop
+pipe.and.drop.fill
+pizza.slice
+pizza.slice.fill
+pl.button.horizontal
+pl.button.horizontal.fill
+placeholdertext.fill
+platter.2.filled.ipad
+platter.2.filled.ipad.landscape
+platter.2.filled.iphone
+platter.2.filled.iphone.landscape
+platter.bottom.applewatch.case
+platter.filled.bottom.and.arrow.down.iphone
+platter.filled.bottom.applewatch.case
+platter.filled.bottom.iphone
+platter.filled.top.and.arrow.up.iphone
+platter.filled.top.applewatch.case
+platter.filled.top.iphone
+platter.top.applewatch.case
+play
+play.bubble
+play.bubble.fill
+play.bubble.fill.rtl
+play.bubble.rtl
+play.circle
+play.circle.fill
+play.desktopcomputer
+play.diamond
+play.diamond.fill
+play.display
+play.fill
+play.house
+play.house.fill
+play.laptopcomputer
+play.rectangle
+play.rectangle.fill
+play.rectangle.on.rectangle
+play.rectangle.on.rectangle.circle
+play.rectangle.on.rectangle.circle.fill
+play.rectangle.on.rectangle.fill
+play.slash
+play.slash.fill
+play.square
+play.square.fill
+play.square.stack
+play.square.stack.fill
+play.tv
+play.tv.fill
+playpause
+playpause.circle
+playpause.circle.fill
+playpause.fill
+playstation.logo
+plus
+plus.app
+plus.app.fill
+plus.arrow.trianglehead.clockwise
+plus.arrow.trianglehead.counterclockwise
+plus.bubble
+plus.bubble.fill
+plus.capsule
+plus.capsule.fill
+plus.circle
+plus.circle.dashed
+plus.circle.fill
+plus.diamond
+plus.diamond.fill
+plus.forwardslash.minus
+plus.magnifyingglass
+plus.message
+plus.message.fill
+plus.minus.capsule
+plus.minus.capsule.fill
+plus.rectangle
+plus.rectangle.fill
+plus.rectangle.fill.on.rectangle.fill
+plus.rectangle.on.folder
+plus.rectangle.on.folder.fill
+plus.rectangle.on.rectangle
+plus.rectangle.portrait
+plus.rectangle.portrait.fill
+plus.square
+plus.square.dashed
+plus.square.fill
+plus.square.fill.on.square.fill
+plus.square.on.square
+plus.viewfinder
+plusminus
+plusminus.circle
+plusminus.circle.fill
+point.3.connected.trianglepath.dotted
+point.3.filled.connected.trianglepath.dotted
+point.bottomleft.filled.forward.to.point.topright.scurvepath
+point.bottomleft.forward.to.arrow.triangle.scurvepath
+point.bottomleft.forward.to.arrow.triangle.scurvepath.fill
+point.bottomleft.forward.to.arrow.triangle.uturn.scurvepath
+point.bottomleft.forward.to.arrow.triangle.uturn.scurvepath.fill
+point.bottomleft.forward.to.point.topright.filled.scurvepath
+point.bottomleft.forward.to.point.topright.scurvepath
+point.bottomleft.forward.to.point.topright.scurvepath.fill
+point.forward.to.point.capsulepath
+point.forward.to.point.capsulepath.fill
+point.topleft.down.to.point.bottomright.curvepath
+point.topleft.down.to.point.bottomright.curvepath.fill
+point.topleft.down.to.point.bottomright.filled.curvepath
+point.topleft.filled.down.to.point.bottomright.curvepath
+point.topright.arrow.triangle.backward.to.point.bottomleft.filled.scurvepath
+point.topright.arrow.triangle.backward.to.point.bottomleft.scurvepath
+point.topright.arrow.triangle.backward.to.point.bottomleft.scurvepath.fill
+point.topright.filled.arrow.triangle.backward.to.point.bottomleft.scurvepath
+pointer.arrow
+pointer.arrow.and.square.on.square.dashed
+pointer.arrow.click
+pointer.arrow.click.2
+pointer.arrow.click.badge.clock
+pointer.arrow.ipad
+pointer.arrow.ipad.and.square.on.square.dashed
+pointer.arrow.ipad.rays
+pointer.arrow.ipad.slash
+pointer.arrow.ipad.slash.square
+pointer.arrow.ipad.slash.square.fill
+pointer.arrow.ipad.square
+pointer.arrow.ipad.square.fill
+pointer.arrow.motionlines
+pointer.arrow.motionlines.click
+pointer.arrow.rays
+pointer.arrow.slash
+pointer.arrow.slash.square
+pointer.arrow.slash.square.fill
+pointer.arrow.square
+pointer.arrow.square.fill
+polishzlotysign
+polishzlotysign.arrow.trianglehead.counterclockwise.rotate.90
+polishzlotysign.building.classical
+polishzlotysign.building.classical.fill
+polishzlotysign.circle
+polishzlotysign.circle.fill
+polishzlotysign.gauge.chart.lefthalf.righthalf
+polishzlotysign.gauge.chart.leftthird.topthird.rightthird
+polishzlotysign.ring
+polishzlotysign.ring.dashed
+polishzlotysign.square
+polishzlotysign.square.fill
+popcorn
+popcorn.circle
+popcorn.circle.fill
+popcorn.fill
+power
+power.circle
+power.circle.fill
+power.dotted
+powercord
+powercord.fill
+powermeter
+poweroff
+poweron
+poweroutlet.strip
+poweroutlet.strip.fill
+poweroutlet.type.a
+poweroutlet.type.a.fill
+poweroutlet.type.a.square
+poweroutlet.type.a.square.fill
+poweroutlet.type.b
+poweroutlet.type.b.fill
+poweroutlet.type.b.square
+poweroutlet.type.b.square.fill
+poweroutlet.type.c
+poweroutlet.type.c.fill
+poweroutlet.type.c.square
+poweroutlet.type.c.square.fill
+poweroutlet.type.d
+poweroutlet.type.d.fill
+poweroutlet.type.d.square
+poweroutlet.type.d.square.fill
+poweroutlet.type.e
+poweroutlet.type.e.fill
+poweroutlet.type.e.square
+poweroutlet.type.e.square.fill
+poweroutlet.type.f
+poweroutlet.type.f.fill
+poweroutlet.type.f.square
+poweroutlet.type.f.square.fill
+poweroutlet.type.g
+poweroutlet.type.g.fill
+poweroutlet.type.g.square
+poweroutlet.type.g.square.fill
+poweroutlet.type.h
+poweroutlet.type.h.fill
+poweroutlet.type.h.square
+poweroutlet.type.h.square.fill
+poweroutlet.type.i
+poweroutlet.type.i.fill
+poweroutlet.type.i.square
+poweroutlet.type.i.square.fill
+poweroutlet.type.j
+poweroutlet.type.j.fill
+poweroutlet.type.j.square
+poweroutlet.type.j.square.fill
+poweroutlet.type.k
+poweroutlet.type.k.fill
+poweroutlet.type.k.square
+poweroutlet.type.k.square.fill
+poweroutlet.type.l
+poweroutlet.type.l.fill
+poweroutlet.type.l.square
+poweroutlet.type.l.square.fill
+poweroutlet.type.m
+poweroutlet.type.m.fill
+poweroutlet.type.m.square
+poweroutlet.type.m.square.fill
+poweroutlet.type.n
+poweroutlet.type.n.fill
+poweroutlet.type.n.square
+poweroutlet.type.n.square.fill
+poweroutlet.type.o
+poweroutlet.type.o.fill
+poweroutlet.type.o.square
+poweroutlet.type.o.square.fill
+powerplug
+powerplug.fill
+powerplug.portrait
+powerplug.portrait.fill
+powersleep
+pr.button.horizontal
+pr.button.horizontal.fill
+printer
+printer.dotmatrix
+printer.dotmatrix.fill
+printer.dotmatrix.filled.and.paper
+printer.dotmatrix.filled.and.paper.inverse
+printer.dotmatrix.inverse
+printer.fill
+printer.filled.and.paper
+printer.filled.and.paper.inverse
+printer.inverse
+progress.indicator
+projective
+purchased
+purchased.circle
+purchased.circle.fill
+puzzlepiece
+puzzlepiece.extension
+puzzlepiece.extension.fill
+puzzlepiece.fill
+pyramid
+pyramid.fill
+q.circle
+q.circle.fill
+q.square
+q.square.fill
+qrcode
+qrcode.viewfinder
+questionmark
+questionmark.app
+questionmark.app.ar
+questionmark.app.dashed
+questionmark.app.dashed.ar
+questionmark.app.fill
+questionmark.app.fill.ar
+questionmark.ar
+questionmark.bubble
+questionmark.bubble.ar
+questionmark.bubble.fill
+questionmark.bubble.fill.ar
+questionmark.circle
+questionmark.circle.ar
+questionmark.circle.dashed
+questionmark.circle.dashed.ar
+questionmark.circle.fill
+questionmark.circle.fill.ar
+questionmark.diamond
+questionmark.diamond.ar
+questionmark.diamond.fill
+questionmark.diamond.fill.ar
+questionmark.folder
+questionmark.folder.ar
+questionmark.folder.fill
+questionmark.folder.fill.ar
+questionmark.key.filled
+questionmark.message
+questionmark.message.ar
+questionmark.message.fill
+questionmark.message.fill.ar
+questionmark.square
+questionmark.square.ar
+questionmark.square.dashed
+questionmark.square.dashed.ar
+questionmark.square.fill
+questionmark.square.fill.ar
+questionmark.text.page
+questionmark.text.page.ar
+questionmark.text.page.fill
+questionmark.text.page.fill.ar
+questionmark.text.page.fill.rtl
+questionmark.text.page.rtl
+questionmark.video
+questionmark.video.ar
+questionmark.video.fill
+questionmark.video.fill.ar
+quote.bubble
+quote.bubble.fill
+quote.bubble.fill.rtl
+quote.bubble.rtl
+quote.closing
+quote.opening
+quotelevel
+r.button.roundedbottom.horizontal
+r.button.roundedbottom.horizontal.fill
+r.circle
+r.circle.fill
+r.joystick
+r.joystick.fill
+r.joystick.press.down
+r.joystick.press.down.fill
+r.joystick.tilt.down
+r.joystick.tilt.down.fill
+r.joystick.tilt.left
+r.joystick.tilt.left.fill
+r.joystick.tilt.right
+r.joystick.tilt.right.fill
+r.joystick.tilt.up
+r.joystick.tilt.up.fill
+r.square
+r.square.fill
+r.square.on.square
+r.square.on.square.fill
+r1.button.roundedbottom.horizontal
+r1.button.roundedbottom.horizontal.fill
+r1.circle
+r1.circle.fill
+r2.button.angledtop.vertical.right
+r2.button.angledtop.vertical.right.fill
+r2.button.roundedtop.horizontal
+r2.button.roundedtop.horizontal.fill
+r2.circle
+r2.circle.fill
+r3.button.angledbottom.horizontal.right
+r3.button.angledbottom.horizontal.right.fill
+r4.button.horizontal
+r4.button.horizontal.fill
+radicand.squareroot
+radicand.squareroot.ar
+radio
+radio.fill
+rainbow
+rays
+rb.button.roundedbottom.horizontal
+rb.button.roundedbottom.horizontal.fill
+rb.circle
+rb.circle.fill
+receipt
+receipt.fill
+record.circle
+record.circle.fill
+recordingtape
+recordingtape.badge
+recordingtape.circle
+recordingtape.circle.fill
+rectangle
+rectangle.2.swap
+rectangle.3.group
+rectangle.3.group.bubble
+rectangle.3.group.bubble.fill
+rectangle.3.group.dashed
+rectangle.3.group.fill
+rectangle.and.arrow.up.right.and.arrow.down.left
+rectangle.and.arrow.up.right.and.arrow.down.left.slash
+rectangle.and.hand.point.up.left
+rectangle.and.hand.point.up.left.fill
+rectangle.and.hand.point.up.left.filled
+rectangle.and.paperclip
+rectangle.and.pencil.and.ellipsis
+rectangle.and.pencil.and.ellipsis.rtl
+rectangle.and.text.magnifyingglass
+rectangle.and.text.magnifyingglass.rtl
+rectangle.arrowtriangle.2.inward
+rectangle.arrowtriangle.2.outward
+rectangle.badge.checkmark
+rectangle.badge.minus
+rectangle.badge.person.crop
+rectangle.badge.plus
+rectangle.badge.sparkles
+rectangle.badge.sparkles.fill
+rectangle.badge.xmark
+rectangle.bottomhalf.filled
+rectangle.compress.vertical
+rectangle.connected.to.line.below
+rectangle.dashed
+rectangle.dashed.and.paperclip
+rectangle.dashed.badge.record
+rectangle.expand.diagonal
+rectangle.expand.vertical
+rectangle.fill
+rectangle.fill.badge.checkmark
+rectangle.fill.badge.minus
+rectangle.fill.badge.person.crop
+rectangle.fill.badge.plus
+rectangle.fill.badge.xmark
+rectangle.fill.on.rectangle.angled.fill
+rectangle.fill.on.rectangle.fill
+rectangle.filled.and.hand.point.up.left
+rectangle.grid.1x2
+rectangle.grid.1x2.fill
+rectangle.grid.1x3
+rectangle.grid.1x3.fill
+rectangle.grid.2x2
+rectangle.grid.2x2.fill
+rectangle.grid.3x1
+rectangle.grid.3x1.fill
+rectangle.grid.3x2
+rectangle.grid.3x2.fill
+rectangle.grid.3x3
+rectangle.grid.3x3.fill
+rectangle.landscape.rotate
+rectangle.landscape.rotate.slash
+rectangle.leadinghalf.filled
+rectangle.lefthalf.filled
+rectangle.on.rectangle
+rectangle.on.rectangle.angled
+rectangle.on.rectangle.badge.gearshape
+rectangle.on.rectangle.button.angledtop.vertical.left
+rectangle.on.rectangle.button.angledtop.vertical.left.fill
+rectangle.on.rectangle.circle
+rectangle.on.rectangle.circle.fill
+rectangle.on.rectangle.dashed
+rectangle.on.rectangle.slash
+rectangle.on.rectangle.slash.circle
+rectangle.on.rectangle.slash.circle.fill
+rectangle.on.rectangle.slash.fill
+rectangle.on.rectangle.square
+rectangle.on.rectangle.square.fill
+rectangle.pattern.checkered
+rectangle.portrait
+rectangle.portrait.and.arrow.forward
+rectangle.portrait.and.arrow.forward.fill
+rectangle.portrait.and.arrow.right
+rectangle.portrait.and.arrow.right.fill
+rectangle.portrait.arrowtriangle.2.inward
+rectangle.portrait.arrowtriangle.2.outward
+rectangle.portrait.badge.plus
+rectangle.portrait.badge.plus.fill
+rectangle.portrait.bottomhalf.filled
+rectangle.portrait.fill
+rectangle.portrait.lefthalf.filled
+rectangle.portrait.on.rectangle.portrait
+rectangle.portrait.on.rectangle.portrait.angled
+rectangle.portrait.on.rectangle.portrait.angled.fill
+rectangle.portrait.on.rectangle.portrait.fill
+rectangle.portrait.on.rectangle.portrait.slash
+rectangle.portrait.on.rectangle.portrait.slash.fill
+rectangle.portrait.righthalf.filled
+rectangle.portrait.rotate
+rectangle.portrait.rotate.slash
+rectangle.portrait.slash
+rectangle.portrait.slash.fill
+rectangle.portrait.split.2x1
+rectangle.portrait.split.2x1.fill
+rectangle.portrait.split.2x1.slash
+rectangle.portrait.split.2x1.slash.fill
+rectangle.portrait.tophalf.filled
+rectangle.ratio.16.to.9
+rectangle.ratio.16.to.9.fill
+rectangle.ratio.3.to.4
+rectangle.ratio.3.to.4.fill
+rectangle.ratio.4.to.3
+rectangle.ratio.4.to.3.fill
+rectangle.ratio.9.to.16
+rectangle.ratio.9.to.16.fill
+rectangle.righthalf.filled
+rectangle.slash
+rectangle.slash.fill
+rectangle.split.1x2
+rectangle.split.1x2.fill
+rectangle.split.2x1
+rectangle.split.2x1.fill
+rectangle.split.2x1.slash
+rectangle.split.2x1.slash.fill
+rectangle.split.2x2
+rectangle.split.2x2.fill
+rectangle.split.3x1
+rectangle.split.3x1.fill
+rectangle.split.3x3
+rectangle.split.3x3.fill
+rectangle.stack
+rectangle.stack.badge.minus
+rectangle.stack.badge.person.crop
+rectangle.stack.badge.person.crop.fill
+rectangle.stack.badge.play
+rectangle.stack.badge.play.fill
+rectangle.stack.badge.plus
+rectangle.stack.fill
+rectangle.stack.fill.badge.minus
+rectangle.stack.fill.badge.plus
+rectangle.stack.slash
+rectangle.stack.slash.fill
+rectangle.tophalf.filled
+rectangle.trailinghalf.filled
+refrigerator
+refrigerator.fill
+repeat
+repeat.1
+repeat.1.ar
+repeat.1.circle
+repeat.1.circle.ar
+repeat.1.circle.fill
+repeat.1.circle.fill.ar
+repeat.1.circle.fill.hi
+repeat.1.circle.hi
+repeat.1.hi
+repeat.badge.xmark
+repeat.circle
+repeat.circle.fill
+restart
+restart.circle
+restart.circle.fill
+retarder.brakesignal
+retarder.brakesignal.and.exclamationmark
+retarder.brakesignal.slash
+return
+return.left
+return.right
+rhombus
+rhombus.fill
+richtext.page
+richtext.page.ar
+richtext.page.fill
+richtext.page.fill.ar
+richtext.page.fill.he
+richtext.page.fill.hi
+richtext.page.fill.ja
+richtext.page.fill.ko
+richtext.page.fill.th
+richtext.page.fill.zh
+richtext.page.he
+richtext.page.hi
+richtext.page.ja
+richtext.page.ko
+richtext.page.th
+richtext.page.zh
+right
+right.circle
+right.circle.fill
+righttriangle
+righttriangle.fill
+righttriangle.split.diagonal
+righttriangle.split.diagonal.fill
+ring
+ring.dashed
+ring.light
+rm.button.horizontal
+rm.button.horizontal.fill
+road.lane.arrowtriangle.2.inward
+road.lane.arrowtriangle.2.outward
+road.lanes
+road.lanes.curved.left
+road.lanes.curved.right
+robotic.vacuum
+robotic.vacuum.and.arrowtriangle.up
+robotic.vacuum.and.arrowtriangle.up.fill
+robotic.vacuum.and.ellipsis
+robotic.vacuum.and.ellipsis.fill
+robotic.vacuum.fill
+roller.shade.closed
+roller.shade.open
+roman.shade.closed
+roman.shade.open
+rosette
+rotate.3d
+rotate.3d.circle
+rotate.3d.circle.fill
+rotate.3d.fill
+rotate.left
+rotate.left.fill
+rotate.right
+rotate.right.fill
+rsb.button.angledbottom.horizontal.right
+rsb.button.angledbottom.horizontal.right.fill
+rt.button.roundedtop.horizontal
+rt.button.roundedtop.horizontal.fill
+rt.circle
+rt.circle.fill
+rublesign
+rublesign.arrow.trianglehead.counterclockwise.rotate.90
+rublesign.building.classical
+rublesign.building.classical.fill
+rublesign.circle
+rublesign.circle.fill
+rublesign.gauge.chart.lefthalf.righthalf
+rublesign.gauge.chart.leftthird.topthird.rightthird
+rublesign.ring
+rublesign.ring.dashed
+rublesign.square
+rublesign.square.fill
+rugbyball
+rugbyball.circle
+rugbyball.circle.fill
+rugbyball.fill
+ruler
+ruler.fill
+rupeesign
+rupeesign.arrow.trianglehead.counterclockwise.rotate.90
+rupeesign.building.classical
+rupeesign.building.classical.fill
+rupeesign.circle
+rupeesign.circle.fill
+rupeesign.gauge.chart.lefthalf.righthalf
+rupeesign.gauge.chart.leftthird.topthird.rightthird
+rupeesign.ring
+rupeesign.ring.dashed
+rupeesign.square
+rupeesign.square.fill
+s.circle
+s.circle.fill
+s.square
+s.square.fill
+safari
+safari.fill
+sailboat
+sailboat.circle
+sailboat.circle.fill
+sailboat.fill
+scale.3d
+scalemass
+scalemass.fill
+scanner
+scanner.fill
+scissors
+scissors.badge.ellipsis
+scissors.circle
+scissors.circle.fill
+scooter
+scope
+scope.continuous
+screwdriver
+screwdriver.fill
+scribble
+scribble.variable
+scroll
+scroll.fill
+sdcard
+sdcard.fill
+seal
+seal.fill
+selection.pin.in.out
+sensor
+sensor.fill
+sensor.radiowaves.left.and.right
+sensor.radiowaves.left.and.right.fill
+sensor.tag.radiowaves.forward
+sensor.tag.radiowaves.forward.fill
+server.rack
+service.dog
+service.dog.fill
+shadow
+sharedwithyou
+sharedwithyou.circle
+sharedwithyou.circle.fill
+sharedwithyou.slash
+shareplay
+shareplay.slash
+shazam.logo
+shazam.logo.fill
+shekelsign
+shekelsign.arrow.trianglehead.counterclockwise.rotate.90
+shekelsign.building.classical
+shekelsign.building.classical.fill
+shekelsign.circle
+shekelsign.circle.fill
+shekelsign.gauge.chart.lefthalf.righthalf
+shekelsign.gauge.chart.leftthird.topthird.rightthird
+shekelsign.ring
+shekelsign.ring.dashed
+shekelsign.square
+shekelsign.square.fill
+shield
+shield.fill
+shield.lefthalf.filled
+shield.lefthalf.filled.badge.checkmark
+shield.lefthalf.filled.slash
+shield.lefthalf.filled.trianglebadge.exclamationmark
+shield.pattern.checkered
+shield.righthalf.filled
+shield.slash
+shield.slash.fill
+shift
+shift.fill
+shippingbox
+shippingbox.and.arrow.backward
+shippingbox.and.arrow.backward.fill
+shippingbox.circle
+shippingbox.circle.fill
+shippingbox.fill
+shoe
+shoe.2
+shoe.2.fill
+shoe.arrow.trianglehead.up.and.down
+shoe.arrow.trianglehead.up.and.down.fill
+shoe.arrow.trianglehead.up.right
+shoe.arrow.trianglehead.up.right.circle
+shoe.arrow.trianglehead.up.right.circle.fill
+shoe.arrow.trianglehead.up.right.fill
+shoe.circle
+shoe.circle.fill
+shoe.fill
+shoeprints.fill
+shower
+shower.fill
+shower.handheld
+shower.handheld.fill
+shower.sidejet
+shower.sidejet.fill
+shuffle
+shuffle.circle
+shuffle.circle.fill
+sidebar.leading
+sidebar.left
+sidebar.right
+sidebar.squares.leading
+sidebar.squares.left
+sidebar.squares.right
+sidebar.squares.trailing
+sidebar.trailing
+signature
+signature.ar
+signature.he
+signature.ja
+signature.th
+signature.zh
+signpost.and.arrowtriangle.up
+signpost.and.arrowtriangle.up.circle
+signpost.and.arrowtriangle.up.circle.fill
+signpost.and.arrowtriangle.up.fill
+signpost.left
+signpost.left.circle
+signpost.left.circle.fill
+signpost.left.fill
+signpost.right
+signpost.right.and.left
+signpost.right.and.left.circle
+signpost.right.and.left.circle.fill
+signpost.right.and.left.fill
+signpost.right.circle
+signpost.right.circle.fill
+signpost.right.fill
+simcard
+simcard.2
+simcard.2.fill
+simcard.fill
+singaporedollarsign
+singaporedollarsign.arrow.trianglehead.counterclockwise.rotate.90
+singaporedollarsign.building.classical
+singaporedollarsign.building.classical.fill
+singaporedollarsign.circle
+singaporedollarsign.circle.fill
+singaporedollarsign.gauge.chart.lefthalf.righthalf
+singaporedollarsign.gauge.chart.leftthird.topthird.rightthird
+singaporedollarsign.ring
+singaporedollarsign.ring.dashed
+singaporedollarsign.square
+singaporedollarsign.square.fill
+sink
+sink.fill
+siri
+siri.gen1
+siri.gen2
+skateboard
+skateboard.fill
+skew
+skis
+skis.fill
+slash.circle
+slash.circle.fill
+sleep
+sleep.circle
+sleep.circle.fill
+slider.horizontal.2.arrow.trianglehead.counterclockwise
+slider.horizontal.2.rectangle.and.arrow.trianglehead.2.clockwise.rotate.90
+slider.horizontal.2.square
+slider.horizontal.2.square.badge.arrow.down
+slider.horizontal.2.square.on.square
+slider.horizontal.3
+slider.horizontal.below.circle.lefthalf.filled
+slider.horizontal.below.circle.lefthalf.filled.inverse
+slider.horizontal.below.circle.righthalf.filled
+slider.horizontal.below.circle.righthalf.filled.inverse
+slider.horizontal.below.rectangle
+slider.horizontal.below.square.and.square.filled
+slider.horizontal.below.square.filled.and.square
+slider.horizontal.below.sun.max
+slider.horizontal.below.sun.min
+slider.vertical.3
+slowmo
+smallcircle.circle
+smallcircle.circle.fill
+smallcircle.filled.circle
+smallcircle.filled.circle.fill
+smartphone
+smoke
+smoke.circle
+smoke.circle.fill
+smoke.fill
+snowboard
+snowboard.fill
+snowflake
+snowflake.circle
+snowflake.circle.fill
+snowflake.road.lane
+snowflake.road.lane.dashed
+snowflake.slash
+soccerball
+soccerball.circle
+soccerball.circle.fill
+soccerball.circle.fill.inverse
+soccerball.circle.inverse
+soccerball.inverse
+sofa
+sofa.fill
+sos
+sos.circle
+sos.circle.fill
+space
+sparkle
+sparkle.magnifyingglass
+sparkle.text.clipboard
+sparkle.text.clipboard.fill
+sparkles
+sparkles.2
+sparkles.rectangle.stack
+sparkles.rectangle.stack.fill
+sparkles.square.filled.on.square
+sparkles.tv
+sparkles.tv.fill
+spatial.capture
+spatial.capture.fill
+spatial.capture.on.hexagon
+spatial.capture.on.hexagon.fill
+spatial.capture.slash
+spatial.capture.slash.fill
+speaker
+speaker.badge.exclamationmark
+speaker.badge.exclamationmark.fill
+speaker.circle
+speaker.circle.fill
+speaker.fill
+speaker.minus
+speaker.minus.fill
+speaker.plus
+speaker.plus.fill
+speaker.slash
+speaker.slash.circle
+speaker.slash.circle.fill
+speaker.slash.circle.fill.rtl
+speaker.slash.circle.rtl
+speaker.slash.fill
+speaker.slash.fill.rtl
+speaker.slash.rtl
+speaker.square
+speaker.square.fill
+speaker.trianglebadge.exclamationmark
+speaker.trianglebadge.exclamationmark.fill
+speaker.wave.1
+speaker.wave.1.arrowtriangles.up.right.down.left
+speaker.wave.1.fill
+speaker.wave.2
+speaker.wave.2.bubble
+speaker.wave.2.bubble.fill
+speaker.wave.2.bubble.fill.rtl
+speaker.wave.2.bubble.rtl
+speaker.wave.2.circle
+speaker.wave.2.circle.fill
+speaker.wave.2.fill
+speaker.wave.3
+speaker.wave.3.fill
+speaker.zzz
+speaker.zzz.fill
+speaker.zzz.fill.rtl
+speaker.zzz.rtl
+spigot
+spigot.fill
+spoon.serving
+sportscourt
+sportscourt.circle
+sportscourt.circle.fill
+sportscourt.fill
+sprinkler
+sprinkler.and.droplets
+sprinkler.and.droplets.fill
+sprinkler.fill
+square
+square.2.layers.3d
+square.2.layers.3d.bottom.filled
+square.2.layers.3d.fill
+square.2.layers.3d.top.filled
+square.3.layers.3d
+square.3.layers.3d.bottom.filled
+square.3.layers.3d.down.backward
+square.3.layers.3d.down.backward.slash.rtl
+square.3.layers.3d.down.forward
+square.3.layers.3d.down.forward.slash.rtl
+square.3.layers.3d.down.left
+square.3.layers.3d.down.left.slash
+square.3.layers.3d.down.right
+square.3.layers.3d.down.right.slash
+square.3.layers.3d.middle.filled
+square.3.layers.3d.slash
+square.3.layers.3d.top.filled
+square.and.arrow.down
+square.and.arrow.down.badge.checkmark
+square.and.arrow.down.badge.checkmark.fill
+square.and.arrow.down.badge.clock
+square.and.arrow.down.badge.clock.fill
+square.and.arrow.down.badge.xmark
+square.and.arrow.down.badge.xmark.fill
+square.and.arrow.down.fill
+square.and.arrow.down.on.square
+square.and.arrow.down.on.square.fill
+square.and.arrow.up
+square.and.arrow.up.badge.checkmark
+square.and.arrow.up.badge.checkmark.fill
+square.and.arrow.up.badge.clock
+square.and.arrow.up.badge.clock.fill
+square.and.arrow.up.circle
+square.and.arrow.up.circle.fill
+square.and.arrow.up.fill
+square.and.arrow.up.on.square
+square.and.arrow.up.on.square.fill
+square.and.arrow.up.trianglebadge.exclamationmark
+square.and.arrow.up.trianglebadge.exclamationmark.fill
+square.and.at.rectangle
+square.and.at.rectangle.fill
+square.and.line.vertical.and.square
+square.and.line.vertical.and.square.filled
+square.and.pencil
+square.and.pencil.circle
+square.and.pencil.circle.fill
+square.arrowtriangle.4.outward
+square.badge.plus
+square.badge.plus.fill
+square.bottomhalf.filled
+square.circle
+square.circle.fill
+square.dashed
+square.dashed.micro
+square.dotted
+square.fill
+square.fill.and.line.vertical.and.square.fill
+square.fill.on.circle.fill
+square.fill.on.square.fill
+square.fill.text.grid.1x2
+square.filled.and.line.vertical.and.square
+square.filled.on.square
+square.grid.2x2
+square.grid.2x2.fill
+square.grid.3x1.below.line.grid.1x2
+square.grid.3x1.below.line.grid.1x2.fill
+square.grid.3x1.folder.badge.plus
+square.grid.3x1.folder.fill.badge.plus
+square.grid.3x2
+square.grid.3x2.fill
+square.grid.3x3
+square.grid.3x3.bottomleft.filled
+square.grid.3x3.bottommiddle.filled
+square.grid.3x3.bottomright.filled
+square.grid.3x3.fill
+square.grid.3x3.middle.filled
+square.grid.3x3.middleleft.filled
+square.grid.3x3.middleright.filled
+square.grid.3x3.square
+square.grid.3x3.square.badge.ellipsis
+square.grid.3x3.topleft.filled
+square.grid.3x3.topmiddle.filled
+square.grid.3x3.topright.filled
+square.grid.4x3.fill
+square.lefthalf.filled
+square.on.circle
+square.on.square
+square.on.square.badge.person.crop
+square.on.square.badge.person.crop.fill
+square.on.square.dashed
+square.on.square.intersection.dashed
+square.on.square.squareshape.controlhandles
+square.resize
+square.resize.down
+square.resize.up
+square.righthalf.filled
+square.slash
+square.slash.fill
+square.split.1x2
+square.split.1x2.fill
+square.split.2x1
+square.split.2x1.fill
+square.split.2x2
+square.split.2x2.fill
+square.split.bottomrightquarter
+square.split.bottomrightquarter.fill
+square.split.diagonal
+square.split.diagonal.2x2
+square.split.diagonal.2x2.fill
+square.split.diagonal.fill
+square.stack
+square.stack.3d.down.forward
+square.stack.3d.down.forward.fill
+square.stack.3d.down.right
+square.stack.3d.down.right.fill
+square.stack.3d.forward.dottedline
+square.stack.3d.forward.dottedline.fill
+square.stack.3d.up
+square.stack.3d.up.badge.automatic
+square.stack.3d.up.badge.automatic.fill
+square.stack.3d.up.fill
+square.stack.3d.up.slash
+square.stack.3d.up.slash.fill
+square.stack.3d.up.trianglebadge.exclamationmark
+square.stack.3d.up.trianglebadge.exclamationmark.fill
+square.stack.fill
+square.text.square
+square.text.square.fill
+square.tophalf.filled
+squareroot
+squares.below.rectangle
+squares.leading.rectangle
+squares.leading.rectangle.fill
+squareshape
+squareshape.controlhandles.on.squareshape.controlhandles
+squareshape.dotted.squareshape
+squareshape.fill
+squareshape.on.pattern.diagonalline
+squareshape.split.2x2
+squareshape.split.2x2.dotted.inside
+squareshape.split.2x2.dotted.inside.and.outside
+squareshape.split.2x2.dotted.outside
+squareshape.split.3x3
+squareshape.squareshape.dotted
+stairs
+star
+star.bubble
+star.bubble.fill
+star.calendar
+star.circle
+star.circle.fill
+star.fill
+star.hexagon
+star.hexagon.fill
+star.leadinghalf.filled
+star.rectangle
+star.rectangle.fill
+star.slash
+star.slash.fill
+star.square
+star.square.fill
+star.square.on.square
+star.square.on.square.fill
+staroflife
+staroflife.circle
+staroflife.circle.fill
+staroflife.fill
+staroflife.shield
+staroflife.shield.fill
+steeringwheel
+steeringwheel.and.hands
+steeringwheel.and.heat.waves
+steeringwheel.and.key
+steeringwheel.and.liquid.wave
+steeringwheel.arrow.trianglehead.counterclockwise.and.clockwise
+steeringwheel.arrowtriangle.left
+steeringwheel.arrowtriangle.right
+steeringwheel.badge.exclamationmark
+steeringwheel.badge.lock
+steeringwheel.circle
+steeringwheel.circle.fill
+steeringwheel.exclamationmark
+steeringwheel.road.lane
+steeringwheel.road.lane.dashed
+steeringwheel.slash
+sterlingsign
+sterlingsign.arrow.trianglehead.counterclockwise.rotate.90
+sterlingsign.building.classical
+sterlingsign.building.classical.fill
+sterlingsign.circle
+sterlingsign.circle.fill
+sterlingsign.gauge.chart.lefthalf.righthalf
+sterlingsign.gauge.chart.leftthird.topthird.rightthird
+sterlingsign.ring
+sterlingsign.ring.dashed
+sterlingsign.square
+sterlingsign.square.fill
+stethoscope
+stethoscope.circle
+stethoscope.circle.fill
+stop
+stop.circle
+stop.circle.fill
+stop.fill
+stopwatch
+stopwatch.fill
+storefront
+storefront.circle
+storefront.circle.fill
+storefront.fill
+stove
+stove.fill
+strikethrough
+strikethrough.double
+stroke.line.diagonal
+stroke.line.diagonal.slash
+stroller
+stroller.fill
+studentdesk
+suit.club
+suit.club.fill
+suit.diamond
+suit.diamond.fill
+suit.heart
+suit.heart.fill
+suit.spade
+suit.spade.fill
+suitcase
+suitcase.cart
+suitcase.cart.fill
+suitcase.circle
+suitcase.circle.fill
+suitcase.fill
+suitcase.rolling
+suitcase.rolling.and.film
+suitcase.rolling.and.film.circle
+suitcase.rolling.and.film.circle.fill
+suitcase.rolling.and.film.fill
+suitcase.rolling.and.suitcase
+suitcase.rolling.and.suitcase.circle
+suitcase.rolling.and.suitcase.circle.fill
+suitcase.rolling.and.suitcase.fill
+suitcase.rolling.circle
+suitcase.rolling.circle.fill
+suitcase.rolling.fill
+sum
+sum.ar
+sun.dust
+sun.dust.circle
+sun.dust.circle.fill
+sun.dust.fill
+sun.haze
+sun.haze.circle
+sun.haze.circle.fill
+sun.haze.fill
+sun.horizon
+sun.horizon.circle
+sun.horizon.circle.fill
+sun.horizon.fill
+sun.lefthalf.filled
+sun.max
+sun.max.circle
+sun.max.circle.fill
+sun.max.fill
+sun.max.trianglebadge.exclamationmark
+sun.max.trianglebadge.exclamationmark.fill
+sun.min
+sun.min.fill
+sun.rain
+sun.rain.circle
+sun.rain.circle.fill
+sun.rain.fill
+sun.righthalf.filled
+sun.snow
+sun.snow.circle
+sun.snow.circle.fill
+sun.snow.fill
+sunglasses
+sunglasses.fill
+sunrise
+sunrise.circle
+sunrise.circle.fill
+sunrise.fill
+sunset
+sunset.circle
+sunset.circle.fill
+sunset.fill
+surfboard
+surfboard.fill
+suspension.shock
+suv.side
+suv.side.air.circulate
+suv.side.air.circulate.fill
+suv.side.air.fresh
+suv.side.air.fresh.fill
+suv.side.and.exclamationmark
+suv.side.and.exclamationmark.fill
+suv.side.arrow.left.and.right
+suv.side.arrow.left.and.right.fill
+suv.side.arrowtriangle.down
+suv.side.arrowtriangle.down.fill
+suv.side.arrowtriangle.up
+suv.side.arrowtriangle.up.arrowtriangle.down
+suv.side.arrowtriangle.up.arrowtriangle.down.fill
+suv.side.arrowtriangle.up.fill
+suv.side.fill
+suv.side.front.open
+suv.side.front.open.crop
+suv.side.front.open.crop.fill
+suv.side.front.open.fill
+suv.side.hill.descent.control
+suv.side.hill.descent.control.fill
+suv.side.hill.down
+suv.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle
+suv.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill
+suv.side.hill.down.fill
+suv.side.hill.up
+suv.side.hill.up.fill
+suv.side.lock
+suv.side.lock.fill
+suv.side.lock.open
+suv.side.lock.open.fill
+suv.side.rear.open
+suv.side.rear.open.crop
+suv.side.rear.open.crop.fill
+suv.side.rear.open.fill
+suv.side.roof.cargo.carrier
+suv.side.roof.cargo.carrier.fill
+suv.side.roof.cargo.carrier.slash
+suv.side.roof.cargo.carrier.slash.fill
+swatchpalette
+swatchpalette.fill
+swedishkronasign
+swedishkronasign.arrow.trianglehead.counterclockwise.rotate.90
+swedishkronasign.building.classical
+swedishkronasign.building.classical.fill
+swedishkronasign.circle
+swedishkronasign.circle.fill
+swedishkronasign.gauge.chart.lefthalf.righthalf
+swedishkronasign.gauge.chart.leftthird.topthird.rightthird
+swedishkronasign.ring
+swedishkronasign.ring.dashed
+swedishkronasign.square
+swedishkronasign.square.fill
+swift
+swiftdata
+swirl.circle.righthalf.filled
+swirl.circle.righthalf.filled.inverse
+switch.2
+switch.programmable
+switch.programmable.fill
+switch.programmable.square
+switch.programmable.square.fill
+syringe
+syringe.fill
+t.circle
+t.circle.fill
+t.square
+t.square.fill
+table.furniture
+table.furniture.fill
+tablecells
+tablecells.badge.ellipsis
+tablecells.fill
+tablecells.fill.badge.ellipsis
+tachometer
+tag
+tag.circle
+tag.circle.fill
+tag.fill
+tag.slash
+tag.slash.fill
+tag.square
+tag.square.fill
+taillight.fog
+taillight.fog.fill
+takeoutbag.and.cup.and.straw
+takeoutbag.and.cup.and.straw.fill
+target
+teddybear
+teddybear.fill
+teletype
+teletype.answer
+teletype.answer.circle
+teletype.answer.circle.fill
+teletype.circle
+teletype.circle.fill
+tengesign
+tengesign.arrow.trianglehead.counterclockwise.rotate.90
+tengesign.building.classical
+tengesign.building.classical.fill
+tengesign.circle
+tengesign.circle.fill
+tengesign.gauge.chart.lefthalf.righthalf
+tengesign.gauge.chart.leftthird.topthird.rightthird
+tengesign.ring
+tengesign.ring.dashed
+tengesign.square
+tengesign.square.fill
+tennis.racket
+tennis.racket.circle
+tennis.racket.circle.fill
+tennisball
+tennisball.circle
+tennisball.circle.fill
+tennisball.fill
+tent
+tent.2
+tent.2.circle
+tent.2.circle.fill
+tent.2.fill
+tent.circle
+tent.circle.fill
+tent.fill
+testtube.2
+text.aligncenter
+text.alignleft
+text.alignright
+text.and.command.interface.window
+text.append
+text.badge.checkmark
+text.badge.checkmark.rtl
+text.badge.minus
+text.badge.plus
+text.badge.star
+text.badge.xmark
+text.below.folder
+text.below.folder.fill
+text.below.photo
+text.below.photo.fill
+text.below.photo.fill.rtl
+text.below.photo.rtl
+text.book.closed
+text.book.closed.fill
+text.bubble
+text.bubble.badge.clock
+text.bubble.badge.clock.fill
+text.bubble.badge.clock.fill.rtl
+text.bubble.badge.clock.rtl
+text.bubble.fill
+text.bubble.fill.rtl
+text.bubble.rtl
+text.document
+text.document.fill
+text.insert
+text.justify
+text.justify.leading
+text.justify.left
+text.justify.right
+text.justify.trailing
+text.line.2.summary
+text.line.2.summary.badge.xmark
+text.line.3.summary
+text.line.first.and.arrowtriangle.forward
+text.line.last.and.arrowtriangle.forward
+text.line.magnify
+text.magnifyingglass
+text.magnifyingglass.rtl
+text.menu
+text.pad.header
+text.pad.header.badge.clock
+text.pad.header.badge.clock.rtl
+text.pad.header.badge.plus
+text.page
+text.page.and.line.vertical.and.text.page
+text.page.and.line.vertical.and.text.page.rtl
+text.page.badge.magnifyingglass
+text.page.fill
+text.page.slash
+text.page.slash.fill
+text.page.slash.fill.rtl
+text.page.slash.rtl
+text.quote
+text.quote.rtl
+text.rectangle
+text.rectangle.fill
+text.rectangle.page
+text.rectangle.page.fill
+text.redaction
+text.square.filled
+text.viewfinder
+text.word.spacing
+textformat
+textformat.alt
+textformat.alt.ar
+textformat.alt.bn
+textformat.alt.el
+textformat.alt.gu
+textformat.alt.he
+textformat.alt.hi
+textformat.alt.ja
+textformat.alt.kn
+textformat.alt.ko
+textformat.alt.ml
+textformat.alt.mni
+textformat.alt.mr
+textformat.alt.or
+textformat.alt.pa
+textformat.alt.sat
+textformat.alt.si
+textformat.alt.ta
+textformat.alt.te
+textformat.alt.th
+textformat.alt.zh
+textformat.ar
+textformat.bn
+textformat.characters
+textformat.characters.ar
+textformat.characters.arrow.left.and.right
+textformat.characters.arrow.left.and.right.ar
+textformat.characters.arrow.left.and.right.bn
+textformat.characters.arrow.left.and.right.el
+textformat.characters.arrow.left.and.right.gu
+textformat.characters.arrow.left.and.right.he
+textformat.characters.arrow.left.and.right.hi
+textformat.characters.arrow.left.and.right.ja
+textformat.characters.arrow.left.and.right.kn
+textformat.characters.arrow.left.and.right.ko
+textformat.characters.arrow.left.and.right.ml
+textformat.characters.arrow.left.and.right.mni
+textformat.characters.arrow.left.and.right.mr
+textformat.characters.arrow.left.and.right.or
+textformat.characters.arrow.left.and.right.pa
+textformat.characters.arrow.left.and.right.ru
+textformat.characters.arrow.left.and.right.sat
+textformat.characters.arrow.left.and.right.si
+textformat.characters.arrow.left.and.right.ta
+textformat.characters.arrow.left.and.right.te
+textformat.characters.arrow.left.and.right.th
+textformat.characters.arrow.left.and.right.zh
+textformat.characters.bn
+textformat.characters.dottedunderline
+textformat.characters.dottedunderline.ar
+textformat.characters.dottedunderline.bn
+textformat.characters.dottedunderline.el
+textformat.characters.dottedunderline.gu
+textformat.characters.dottedunderline.he
+textformat.characters.dottedunderline.hi
+textformat.characters.dottedunderline.ja
+textformat.characters.dottedunderline.kn
+textformat.characters.dottedunderline.ko
+textformat.characters.dottedunderline.ml
+textformat.characters.dottedunderline.mni
+textformat.characters.dottedunderline.mr
+textformat.characters.dottedunderline.or
+textformat.characters.dottedunderline.pa
+textformat.characters.dottedunderline.ru
+textformat.characters.dottedunderline.sat
+textformat.characters.dottedunderline.si
+textformat.characters.dottedunderline.ta
+textformat.characters.dottedunderline.te
+textformat.characters.dottedunderline.th
+textformat.characters.dottedunderline.zh
+textformat.characters.el
+textformat.characters.gu
+textformat.characters.he
+textformat.characters.hi
+textformat.characters.ja
+textformat.characters.kn
+textformat.characters.ko
+textformat.characters.ml
+textformat.characters.mni
+textformat.characters.mr
+textformat.characters.or
+textformat.characters.pa
+textformat.characters.ru
+textformat.characters.sat
+textformat.characters.si
+textformat.characters.ta
+textformat.characters.te
+textformat.characters.th
+textformat.characters.zh
+textformat.el
+textformat.gu
+textformat.he
+textformat.hi
+textformat.ja
+textformat.kn
+textformat.ko
+textformat.ml
+textformat.mni
+textformat.mr
+textformat.numbers
+textformat.numbers.ar
+textformat.numbers.bn
+textformat.numbers.gu
+textformat.numbers.hi
+textformat.numbers.km
+textformat.numbers.kn
+textformat.numbers.ml
+textformat.numbers.mni
+textformat.numbers.mr
+textformat.numbers.my
+textformat.numbers.or
+textformat.numbers.pa
+textformat.numbers.sat
+textformat.numbers.te
+textformat.or
+textformat.pa
+textformat.sat
+textformat.si
+textformat.size
+textformat.size.ar
+textformat.size.bn
+textformat.size.gu
+textformat.size.he
+textformat.size.hi
+textformat.size.ja
+textformat.size.kn
+textformat.size.ko
+textformat.size.larger
+textformat.size.larger.ar
+textformat.size.larger.bn
+textformat.size.larger.gu
+textformat.size.larger.he
+textformat.size.larger.hi
+textformat.size.larger.ja
+textformat.size.larger.kn
+textformat.size.larger.ko
+textformat.size.larger.ml
+textformat.size.larger.mni
+textformat.size.larger.mr
+textformat.size.larger.or
+textformat.size.larger.pa
+textformat.size.larger.sat
+textformat.size.larger.si
+textformat.size.larger.ta
+textformat.size.larger.te
+textformat.size.larger.th
+textformat.size.larger.zh
+textformat.size.ml
+textformat.size.mni
+textformat.size.mr
+textformat.size.or
+textformat.size.pa
+textformat.size.sat
+textformat.size.si
+textformat.size.smaller
+textformat.size.smaller.ar
+textformat.size.smaller.bn
+textformat.size.smaller.gu
+textformat.size.smaller.he
+textformat.size.smaller.hi
+textformat.size.smaller.ja
+textformat.size.smaller.kn
+textformat.size.smaller.ko
+textformat.size.smaller.ml
+textformat.size.smaller.mni
+textformat.size.smaller.mr
+textformat.size.smaller.or
+textformat.size.smaller.pa
+textformat.size.smaller.sat
+textformat.size.smaller.si
+textformat.size.smaller.ta
+textformat.size.smaller.te
+textformat.size.smaller.th
+textformat.size.smaller.zh
+textformat.size.ta
+textformat.size.te
+textformat.size.th
+textformat.size.zh
+textformat.subscript
+textformat.subscript.ar
+textformat.subscript.bn
+textformat.subscript.gu
+textformat.subscript.he
+textformat.subscript.hi
+textformat.subscript.ja
+textformat.subscript.kn
+textformat.subscript.ko
+textformat.subscript.ml
+textformat.subscript.mni
+textformat.subscript.mr
+textformat.subscript.or
+textformat.subscript.pa
+textformat.subscript.sat
+textformat.subscript.si
+textformat.subscript.ta
+textformat.subscript.te
+textformat.subscript.th
+textformat.subscript.zh
+textformat.superscript
+textformat.superscript.ar
+textformat.superscript.bn
+textformat.superscript.gu
+textformat.superscript.he
+textformat.superscript.hi
+textformat.superscript.ja
+textformat.superscript.kn
+textformat.superscript.ko
+textformat.superscript.ml
+textformat.superscript.mni
+textformat.superscript.mr
+textformat.superscript.or
+textformat.superscript.pa
+textformat.superscript.sat
+textformat.superscript.si
+textformat.superscript.ta
+textformat.superscript.te
+textformat.superscript.th
+textformat.superscript.zh
+textformat.ta
+textformat.te
+textformat.th
+textformat.zh
+theatermask.and.paintbrush
+theatermask.and.paintbrush.fill
+theatermasks
+theatermasks.circle
+theatermasks.circle.fill
+theatermasks.fill
+thermometer.and.ellipsis
+thermometer.and.liquid.waves
+thermometer.and.liquid.waves.snowflake
+thermometer.and.liquid.waves.trianglebadge.exclamationmark
+thermometer.brakesignal
+thermometer.gauge.open
+thermometer.high
+thermometer.low
+thermometer.medium
+thermometer.medium.slash
+thermometer.snowflake
+thermometer.snowflake.circle
+thermometer.snowflake.circle.fill
+thermometer.sun
+thermometer.sun.circle
+thermometer.sun.circle.fill
+thermometer.sun.fill
+thermometer.tirepressure
+thermometer.transmission
+thermometer.variable
+thermometer.variable.and.figure
+thermometer.variable.and.figure.circle
+thermometer.variable.and.figure.circle.fill
+thermometer.variable.badge.clock
+thermometer.variable.badge.play
+ticket
+ticket.circle
+ticket.circle.fill
+ticket.fill
+timelapse
+timeline.selection
+timer
+timer.circle
+timer.circle.fill
+timer.square
+tire
+tire.badge.snowflake
+tirepressure
+togglepower
+toilet
+toilet.circle
+toilet.circle.fill
+toilet.fill
+tornado
+tornado.circle
+tornado.circle.fill
+tortoise
+tortoise.circle
+tortoise.circle.fill
+tortoise.fill
+torus
+touchid
+tow.hitch
+tow.hitch.exclamationmark
+tow.hitch.exclamationmark.fill
+tow.hitch.fill
+traction.control.tirepressure
+traction.control.tirepressure.exclamationmark
+traction.control.tirepressure.slash
+train.side.front.car
+train.side.middle.car
+train.side.rear.car
+tram
+tram.card
+tram.card.fill
+tram.circle
+tram.circle.fill
+tram.fill
+tram.fill.tunnel
+translate
+transmission
+trapezoid.and.line.horizontal
+trapezoid.and.line.horizontal.fill
+trapezoid.and.line.vertical
+trapezoid.and.line.vertical.fill
+trash
+trash.circle
+trash.circle.fill
+trash.fill
+trash.slash
+trash.slash.circle
+trash.slash.circle.fill
+trash.slash.fill
+trash.slash.square
+trash.slash.square.fill
+trash.square
+trash.square.fill
+tray
+tray.2
+tray.2.fill
+tray.and.arrow.down
+tray.and.arrow.down.fill
+tray.and.arrow.up
+tray.and.arrow.up.fill
+tray.badge
+tray.badge.fill
+tray.circle
+tray.circle.fill
+tray.fill
+tray.full
+tray.full.fill
+tree
+tree.circle
+tree.circle.fill
+tree.fill
+triangle
+triangle.bottomhalf.filled
+triangle.circle
+triangle.circle.fill
+triangle.fill
+triangle.lefthalf.filled
+triangle.righthalf.filled
+triangle.tophalf.filled
+triangleshape
+triangleshape.fill
+trophy
+trophy.circle
+trophy.circle.fill
+trophy.fill
+tropicalstorm
+tropicalstorm.circle
+tropicalstorm.circle.fill
+truck.box
+truck.box.badge.clock
+truck.box.badge.clock.fill
+truck.box.badge.clock.fill.rtl
+truck.box.badge.clock.rtl
+truck.box.fill
+truck.pickup.side
+truck.pickup.side.air.circulate
+truck.pickup.side.air.circulate.fill
+truck.pickup.side.air.fresh
+truck.pickup.side.air.fresh.fill
+truck.pickup.side.and.exclamationmark
+truck.pickup.side.and.exclamationmark.fill
+truck.pickup.side.arrow.left.and.right
+truck.pickup.side.arrow.left.and.right.fill
+truck.pickup.side.arrowtriangle.down
+truck.pickup.side.arrowtriangle.down.fill
+truck.pickup.side.arrowtriangle.up
+truck.pickup.side.arrowtriangle.up.arrowtriangle.down
+truck.pickup.side.arrowtriangle.up.arrowtriangle.down.fill
+truck.pickup.side.arrowtriangle.up.fill
+truck.pickup.side.fill
+truck.pickup.side.front.open
+truck.pickup.side.front.open.crop
+truck.pickup.side.front.open.crop.fill
+truck.pickup.side.front.open.fill
+truck.pickup.side.hill.down
+truck.pickup.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle
+truck.pickup.side.hill.down.and.gauge.open.with.lines.needle.25percent.and.arrowtriangle.fill
+truck.pickup.side.hill.down.fill
+truck.pickup.side.hill.up
+truck.pickup.side.hill.up.fill
+truck.pickup.side.lock
+truck.pickup.side.lock.fill
+truck.pickup.side.lock.open
+truck.pickup.side.lock.open.fill
+truck.side.hill.descent.control
+truck.side.hill.descent.control.fill
+truck.side.roof.cargo.carrier
+truck.side.roof.cargo.carrier.fill
+truck.side.roof.cargo.carrier.slash
+truck.side.roof.cargo.carrier.slash.fill
+tsa
+tsa.circle
+tsa.circle.fill
+tsa.slash
+tshirt
+tshirt.circle
+tshirt.circle.fill
+tshirt.fill
+tugriksign
+tugriksign.arrow.trianglehead.counterclockwise.rotate.90
+tugriksign.building.classical
+tugriksign.building.classical.fill
+tugriksign.circle
+tugriksign.circle.fill
+tugriksign.gauge.chart.lefthalf.righthalf
+tugriksign.gauge.chart.leftthird.topthird.rightthird
+tugriksign.ring
+tugriksign.ring.dashed
+tugriksign.square
+tugriksign.square.fill
+tuningfork
+turkishlirasign
+turkishlirasign.arrow.trianglehead.counterclockwise.rotate.90
+turkishlirasign.building.classical
+turkishlirasign.building.classical.fill
+turkishlirasign.circle
+turkishlirasign.circle.fill
+turkishlirasign.gauge.chart.lefthalf.righthalf
+turkishlirasign.gauge.chart.leftthird.topthird.rightthird
+turkishlirasign.ring
+turkishlirasign.ring.dashed
+turkishlirasign.square
+turkishlirasign.square.fill
+tv
+tv.and.hifispeaker.fill
+tv.and.mediabox
+tv.and.mediabox.fill
+tv.badge.wifi
+tv.badge.wifi.fill
+tv.circle
+tv.circle.fill
+tv.fill
+tv.slash
+tv.slash.fill
+u.circle
+u.circle.fill
+u.square
+u.square.fill
+uiwindow.split.2x1
+umbrella
+umbrella.circle
+umbrella.circle.fill
+umbrella.fill
+umbrella.gauge.open
+umbrella.percent
+umbrella.percent.ar
+umbrella.percent.fill
+umbrella.percent.fill.ar
+umbrella.sensor.tag.radiowaves.left.and.right
+umbrella.sensor.tag.radiowaves.left.and.right.fill
+underline
+underline.double
+v.circle
+v.circle.fill
+v.square
+v.square.fill
+vent.airflow.diffused
+vent.airflow.focused
+vent.airflow.manual
+vent.airflow.oscillating
+vent.heat.waves.upward
+vial.viewfinder
+video
+video.badge.checkmark
+video.badge.ellipsis
+video.badge.plus
+video.badge.waveform
+video.badge.waveform.fill
+video.bubble
+video.bubble.fill
+video.bubble.fill.rtl
+video.bubble.rtl
+video.circle
+video.circle.fill
+video.doorbell
+video.doorbell.fill
+video.fill
+video.fill.badge.checkmark
+video.fill.badge.ellipsis
+video.fill.badge.plus
+video.slash
+video.slash.circle
+video.slash.circle.fill
+video.slash.fill
+video.square
+video.square.fill
+videoprojector
+videoprojector.fill
+view.2d
+view.3d
+viewfinder
+viewfinder.circle
+viewfinder.circle.fill
+viewfinder.rectangular
+viewfinder.trianglebadge.exclamationmark
+vision.pro
+vision.pro.and.arrow.forward
+vision.pro.and.arrow.forward.fill
+vision.pro.badge.checkmark
+vision.pro.badge.checkmark.fill
+vision.pro.badge.exclamationmark
+vision.pro.badge.exclamationmark.fill
+vision.pro.badge.play
+vision.pro.badge.play.fill
+vision.pro.circle
+vision.pro.circle.fill
+vision.pro.fill
+vision.pro.slash
+vision.pro.slash.circle
+vision.pro.slash.circle.fill
+vision.pro.slash.fill
+vision.pro.trianglebadge.exclamationmark
+vision.pro.trianglebadge.exclamationmark.fill
+voiceover
+volleyball
+volleyball.circle
+volleyball.circle.fill
+volleyball.fill
+w.circle
+w.circle.fill
+w.square
+w.square.fill
+wake
+wake.circle
+wake.circle.fill
+wallet.bifold
+wallet.bifold.fill
+wallet.pass
+wallet.pass.fill
+wallet.sensor.tag.radiowaves.left.and.right
+wallet.sensor.tag.radiowaves.left.and.right.fill
+wand.and.outline
+wand.and.outline.inverse
+wand.and.rays
+wand.and.rays.inverse
+wand.and.sparkles
+wand.and.sparkles.inverse
+warninglight
+warninglight.fill
+washer
+washer.circle
+washer.circle.fill
+washer.fill
+watch.analog
+watchface.applewatch.case
+water.waves
+water.waves.and.arrow.trianglehead.down
+water.waves.and.arrow.trianglehead.down.trianglebadge.exclamationmark
+water.waves.and.arrow.trianglehead.up
+water.waves.slash
+waterbottle
+waterbottle.fill
+wave.3.backward
+wave.3.backward.circle
+wave.3.backward.circle.fill
+wave.3.down
+wave.3.down.car.side
+wave.3.down.car.side.fill
+wave.3.down.circle
+wave.3.down.circle.fill
+wave.3.down.convertible.side
+wave.3.down.convertible.side.fill
+wave.3.down.pickup.side
+wave.3.down.pickup.side.fill
+wave.3.down.suv.side
+wave.3.down.suv.side.fill
+wave.3.forward
+wave.3.forward.circle
+wave.3.forward.circle.fill
+wave.3.left
+wave.3.left.circle
+wave.3.left.circle.fill
+wave.3.right
+wave.3.right.circle
+wave.3.right.circle.fill
+wave.3.up
+wave.3.up.circle
+wave.3.up.circle.fill
+waveform
+waveform.and.person
+waveform.badge.checkmark
+waveform.badge.exclamationmark
+waveform.badge.magnifyingglass
+waveform.badge.microphone
+waveform.badge.minus
+waveform.badge.plus
+waveform.badge.xmark
+waveform.circle
+waveform.circle.fill
+waveform.low
+waveform.mid
+waveform.path
+waveform.path.badge.minus
+waveform.path.badge.plus
+waveform.path.ecg
+waveform.path.ecg.magnifyingglass
+waveform.path.ecg.rectangle
+waveform.path.ecg.rectangle.fill
+waveform.path.ecg.text
+waveform.path.ecg.text.clipboard
+waveform.path.ecg.text.clipboard.fill
+waveform.path.ecg.text.clipboard.fill.rtl
+waveform.path.ecg.text.clipboard.rtl
+waveform.path.ecg.text.page
+waveform.path.ecg.text.page.fill
+waveform.path.ecg.text.page.fill.rtl
+waveform.path.ecg.text.page.rtl
+waveform.path.ecg.text.rtl
+waveform.slash
+web.camera
+web.camera.fill
+wheelchair
+widget.extralarge
+widget.extralarge.badge.plus
+widget.large
+widget.large.badge.plus
+widget.medium
+widget.medium.badge.plus
+widget.small
+widget.small.badge.plus
+wifi
+wifi.badge.lock
+wifi.circle
+wifi.circle.fill
+wifi.exclamationmark
+wifi.exclamationmark.circle
+wifi.exclamationmark.circle.fill
+wifi.router
+wifi.router.fill
+wifi.slash
+wifi.square
+wifi.square.fill
+wind
+wind.circle
+wind.circle.fill
+wind.snow
+wind.snow.circle
+wind.snow.circle.fill
+window.awning
+window.awning.closed
+window.casement
+window.casement.closed
+window.ceiling
+window.ceiling.closed
+window.horizontal
+window.horizontal.closed
+window.shade.closed
+window.shade.open
+window.vertical.closed
+window.vertical.open
+windshield.front.and.fluid.and.spray
+windshield.front.and.heat.waves
+windshield.front.and.spray
+windshield.front.and.wiper
+windshield.front.and.wiper.and.drop
+windshield.front.and.wiper.and.spray
+windshield.front.and.wiper.exclamationmark
+windshield.front.and.wiper.intermittent
+windshield.rear.and.fluid.and.spray
+windshield.rear.and.heat.waves
+windshield.rear.and.spray
+windshield.rear.and.wiper
+windshield.rear.and.wiper.and.drop
+windshield.rear.and.wiper.and.spray
+windshield.rear.and.wiper.exclamationmark
+windshield.rear.and.wiper.intermittent
+wineglass
+wineglass.fill
+wonsign
+wonsign.arrow.trianglehead.counterclockwise.rotate.90
+wonsign.building.classical
+wonsign.building.classical.fill
+wonsign.circle
+wonsign.circle.fill
+wonsign.gauge.chart.lefthalf.righthalf
+wonsign.gauge.chart.leftthird.topthird.rightthird
+wonsign.ring
+wonsign.ring.dashed
+wonsign.square
+wonsign.square.fill
+wrench.adjustable
+wrench.adjustable.fill
+wrench.and.screwdriver
+wrench.and.screwdriver.fill
+wrongwaysign
+wrongwaysign.fill
+x.circle
+x.circle.fill
+x.square
+x.square.fill
+xbox.logo
+xmark
+xmark.app
+xmark.app.fill
+xmark.bin
+xmark.bin.circle
+xmark.bin.circle.fill
+xmark.bin.fill
+xmark.circle
+xmark.circle.badge.airplane
+xmark.circle.badge.airplane.fill
+xmark.circle.fill
+xmark.diamond
+xmark.diamond.fill
+xmark.icloud
+xmark.icloud.fill
+xmark.interface.window
+xmark.octagon
+xmark.octagon.fill
+xmark.rectangle
+xmark.rectangle.fill
+xmark.rectangle.portrait
+xmark.rectangle.portrait.fill
+xmark.seal
+xmark.seal.fill
+xmark.shield
+xmark.shield.fill
+xmark.square
+xmark.square.fill
+xmark.triangle.circle.square
+xmark.triangle.circle.square.fill
+xmark.viewfinder
+xserve
+xserve.raid
+y.circle
+y.circle.fill
+y.square
+y.square.fill
+yensign
+yensign.arrow.trianglehead.counterclockwise.rotate.90
+yensign.building.classical
+yensign.building.classical.fill
+yensign.circle
+yensign.circle.fill
+yensign.gauge.chart.lefthalf.righthalf
+yensign.gauge.chart.leftthird.topthird.rightthird
+yensign.ring
+yensign.ring.dashed
+yensign.square
+yensign.square.fill
+yieldsign
+yieldsign.fill
+z.circle
+z.circle.fill
+z.square
+z.square.fill
+zipper.page
+zl.button.roundedtop.horizontal
+zl.button.roundedtop.horizontal.fill
+zr.button.roundedtop.horizontal
+zr.button.roundedtop.horizontal.fill
+zzz
 """
+
+    /// Byte offsets into `nameBlob`: name `i` is
+    /// `nameBlob[nameStarts[i] ..< nameStarts[i + 1] - 1]`. 8467 entries (n + 1).
+    static let nameStarts: [UInt32] = [
+0, 9, 21, 35, 52, 69, 81, 90, 102, 116, 133, 150, 162, 172, 185, 200, 218, 236, 249, 259, 272,
+287, 305, 323, 336, 346, 359, 374, 392, 410, 423, 433, 446, 461, 479, 497, 510, 520, 533, 548,
+566, 584, 597, 607, 620, 635, 653, 671, 684, 694, 707, 722, 740, 758, 771, 781, 794, 809, 827,
+845, 858, 868, 881, 896, 914, 932, 945, 955, 968, 983, 1001, 1019, 1032, 1042, 1055, 1070, 1088,
+1106, 1119, 1129, 1142, 1157, 1175, 1193, 1206, 1216, 1229, 1244, 1262, 1280, 1293, 1303, 1316,
+1331, 1349, 1367, 1380, 1390, 1403, 1418, 1436, 1454, 1467, 1477, 1490, 1505, 1523, 1541, 1554,
+1564, 1577, 1592, 1610, 1628, 1641, 1651, 1664, 1679, 1697, 1715, 1728, 1738, 1751, 1766, 1784,
+1802, 1815, 1825, 1838, 1853, 1871, 1889, 1902, 1916, 1927, 1941, 1955, 1964, 1976, 1990, 2007,
+2024, 2036, 2043, 2053, 2063, 2081, 2102, 2123, 2132, 2144, 2158, 2175, 2192, 2204, 2236, 2271,
+2306, 2345, 2387, 2429, 2441, 2456, 2471, 2481, 2494, 2509, 2527, 2545, 2558, 2566, 2577, 2588,
+2598, 2611, 2626, 2644, 2662, 2675, 2687, 2702, 2717, 2727, 2740, 2755, 2773, 2791, 2804, 2812,
+2823, 2834, 2844, 2857, 2872, 2890, 2908, 2921, 2933, 2948, 2963, 2973, 2986, 3001, 3019, 3037,
+3050, 3058, 3069, 3080, 3090, 3103, 3118, 3136, 3154, 3167, 3179, 3194, 3209, 3219, 3232, 3247,
+3265, 3283, 3296, 3306, 3319, 3334, 3352, 3370, 3383, 3395, 3410, 3425, 3435, 3448, 3463, 3481,
+3499, 3512, 3522, 3535, 3550, 3568, 3586, 3599, 3631, 3666, 3701, 3740, 3782, 3824, 3836, 3851,
+3866, 3876, 3889, 3904, 3922, 3940, 3953, 3963, 3976, 3991, 4009, 4027, 4040, 4052, 4067, 4082,
+4092, 4105, 4120, 4138, 4156, 4169, 4179, 4192, 4207, 4225, 4243, 4256, 4268, 4283, 4298, 4308,
+4321, 4336, 4354, 4372, 4385, 4395, 4408, 4423, 4441, 4459, 4472, 4484, 4499, 4514, 4524, 4537,
+4552, 4570, 4588, 4601, 4611, 4624, 4639, 4657, 4675, 4688, 4700, 4715, 4730, 4740, 4753, 4768,
+4786, 4804, 4817, 4827, 4840, 4855, 4873, 4891, 4904, 4918, 4929, 4943, 4957, 4966, 4978, 4992,
+5009, 5026, 5038, 5045, 5055, 5065, 5074, 5086, 5100, 5117, 5134, 5146, 5158, 5173, 5188, 5198,
+5211, 5226, 5244, 5262, 5275, 5285, 5298, 5313, 5331, 5349, 5362, 5374, 5389, 5404, 5414, 5427,
+5442, 5460, 5478, 5491, 5501, 5514, 5529, 5547, 5565, 5578, 5590, 5605, 5620, 5630, 5643, 5658,
+5676, 5694, 5707, 5717, 5730, 5745, 5763, 5781, 5794, 5806, 5821, 5836, 5846, 5859, 5874, 5892,
+5910, 5923, 5933, 5946, 5961, 5979, 5997, 6010, 6022, 6037, 6052, 6062, 6075, 6090, 6108, 6126,
+6139, 6149, 6162, 6177, 6195, 6213, 6226, 6238, 6253, 6268, 6278, 6291, 6306, 6324, 6342, 6355,
+6365, 6378, 6393, 6411, 6429, 6442, 6454, 6469, 6484, 6494, 6507, 6522, 6540, 6558, 6571, 6581,
+6594, 6609, 6627, 6645, 6658, 6670, 6685, 6700, 6710, 6723, 6738, 6756, 6774, 6787, 6797, 6810,
+6825, 6843, 6861, 6874, 6886, 6901, 6916, 6926, 6939, 6954, 6972, 6990, 7003, 7013, 7026, 7041,
+7059, 7077, 7090, 7102, 7117, 7132, 7142, 7155, 7170, 7188, 7206, 7219, 7229, 7242, 7257, 7275,
+7293, 7306, 7309, 7319, 7334, 7345, 7359, 7373, 7382, 7394, 7408, 7425, 7442, 7454, 7461, 7471,
+7481, 7490, 7502, 7516, 7533, 7550, 7562, 7594, 7629, 7664, 7703, 7745, 7787, 7799, 7814, 7829,
+7839, 7852, 7867, 7885, 7903, 7916, 7926, 7939, 7954, 7972, 7990, 8003, 8015, 8030, 8045, 8055,
+8068, 8083, 8101, 8119, 8132, 8142, 8155, 8170, 8188, 8206, 8219, 8229, 8242, 8257, 8275, 8293,
+8306, 8316, 8329, 8344, 8362, 8380, 8393, 8403, 8416, 8431, 8449, 8467, 8480, 8490, 8503, 8518,
+8536, 8554, 8567, 8577, 8590, 8605, 8623, 8641, 8654, 8664, 8677, 8692, 8710, 8728, 8741, 8751,
+8764, 8779, 8797, 8815, 8828, 8838, 8851, 8866, 8884, 8902, 8915, 8925, 8938, 8953, 8971, 8989,
+9002, 9012, 9025, 9040, 9058, 9076, 9089, 9099, 9112, 9127, 9145, 9163, 9176, 9186, 9199, 9214,
+9232, 9250, 9263, 9273, 9286, 9301, 9319, 9337, 9350, 9360, 9373, 9388, 9406, 9424, 9437, 9447,
+9460, 9475, 9493, 9511, 9524, 9534, 9547, 9562, 9580, 9598, 9611, 9624, 9642, 9655, 9673, 9684,
+9698, 9712, 9721, 9733, 9747, 9764, 9781, 9793, 9800, 9810, 9820, 9829, 9841, 9855, 9872, 9889,
+9901, 9911, 9924, 9939, 9957, 9975, 9988, 9998, 10011, 10026, 10044, 10062, 10075, 10085, 10098,
+10113, 10131, 10149, 10162, 10172, 10185, 10200, 10218, 10236, 10249, 10259, 10272, 10287,
+10305, 10323, 10336, 10346, 10359, 10374, 10392, 10410, 10423, 10433, 10446, 10461, 10479,
+10497, 10510, 10520, 10533, 10548, 10566, 10584, 10597, 10607, 10620, 10635, 10653, 10671,
+10684, 10694, 10707, 10722, 10740, 10758, 10771, 10803, 10838, 10873, 10912, 10954, 10996,
+11006, 11019, 11034, 11052, 11070, 11083, 11093, 11106, 11121, 11139, 11157, 11170, 11180,
+11193, 11208, 11226, 11244, 11257, 11267, 11280, 11295, 11313, 11331, 11344, 11354, 11367,
+11382, 11400, 11418, 11431, 11441, 11454, 11469, 11487, 11505, 11518, 11528, 11541, 11556,
+11574, 11592, 11605, 11615, 11628, 11643, 11661, 11679, 11692, 11702, 11715, 11730, 11748,
+11766, 11779, 11789, 11802, 11817, 11835, 11853, 11866, 11869, 11879, 11894, 11897, 11907,
+11922, 11928, 11939, 11942, 11952, 11967, 11998, 12032, 12066, 12104, 12145, 12186, 12197,
+12211, 12225, 12234, 12246, 12260, 12277, 12294, 12306, 12313, 12323, 12333, 12342, 12354,
+12368, 12385, 12402, 12414, 12424, 12437, 12452, 12470, 12488, 12501, 12511, 12524, 12539,
+12557, 12575, 12588, 12601, 12619, 12632, 12650, 12661, 12675, 12689, 12698, 12710, 12724,
+12741, 12758, 12770, 12777, 12787, 12797, 12806, 12818, 12832, 12849, 12866, 12878, 12910,
+12945, 12980, 13019, 13061, 13103, 13114, 13128, 13142, 13151, 13163, 13177, 13194, 13211,
+13223, 13230, 13240, 13250, 13259, 13271, 13285, 13302, 13319, 13331, 13363, 13398, 13433,
+13472, 13514, 13556, 13567, 13581, 13595, 13604, 13616, 13630, 13647, 13664, 13676, 13683,
+13693, 13703, 13712, 13724, 13738, 13755, 13772, 13784, 13797, 13815, 13828, 13846, 13857,
+13871, 13885, 13894, 13906, 13920, 13937, 13954, 13966, 13973, 13983, 13993, 14002, 14014,
+14028, 14045, 14062, 14074, 14106, 14141, 14176, 14215, 14257, 14299, 14308, 14322, 14331,
+14345, 14349, 14365, 14387, 14398, 14414, 14428, 14463, 14482, 14495, 14513, 14529, 14556,
+14588, 14610, 14635, 14665, 14686, 14712, 14728, 14749, 14762, 14780, 14793, 14811, 14820,
+14837, 14853, 14874, 14889, 14908, 14924, 14945, 14961, 14982, 15002, 15026, 15055, 15073,
+15095, 15122, 15135, 15149, 15185, 15206, 15232, 15246, 15282, 15303, 15329, 15346, 15364,
+15376, 15389, 15397, 15418, 15444, 15474, 15509, 15522, 15557, 15597, 15610, 15645, 15685,
+15703, 15722, 15734, 15746, 15780, 15819, 15879, 15944, 15961, 16000, 16044, 16109, 16179,
+16201, 16224, 16241, 16280, 16324, 16389, 16459, 16481, 16504, 16521, 16539, 16555, 16571,
+16593, 16600, 16612, 16638, 16669, 16704, 16734, 16740, 16758, 16781, 16799, 16822, 16833,
+16845, 16862, 16889, 16921, 16945, 16974, 16996, 17023, 17046, 17074, 17096, 17123, 17145,
+17172, 17191, 17215, 17225, 17240, 17244, 17263, 17281, 17306, 17336, 17359, 17390, 17428,
+17471, 17507, 17517, 17523, 17527, 17538, 17554, 17563, 17597, 17638, 17684, 17724, 17771,
+17823, 17827, 17849, 17859, 17879, 17904, 17920, 17941, 17956, 17988, 17999, 18008, 18017,
+18031, 18040, 18051, 18061, 18076, 18089, 18105, 18113, 18125, 18142, 18163, 18179, 18197,
+18220, 18242, 18269, 18312, 18341, 18376, 18390, 18413, 18441, 18460, 18491, 18502, 18517,
+18539, 18566, 18594, 18627, 18648, 18674, 18689, 18711, 18738, 18758, 18786, 18819, 18839,
+18851, 18877, 18908, 18933, 18955, 18972, 18989, 19007, 19027, 19043, 19055, 19072, 19080,
+19104, 19133, 19163, 19198, 19211, 19230, 19254, 19273, 19297, 19316, 19340, 19359, 19383,
+19394, 19423, 19456, 19483, 19516, 19538, 19575, 19597, 19614, 19635, 19645, 19671, 19701,
+19733, 19754, 19774, 19813, 19856, 19868, 19896, 19928, 19962, 19985, 20007, 20033, 20059,
+20068, 20076, 20087, 20109, 20122, 20150, 20178, 20230, 20259, 20285, 20326, 20347, 20373,
+20384, 20402, 20425, 20441, 20447, 20465, 20484, 20505, 20520, 20542, 20571, 20598, 20620,
+20647, 20670, 20700, 20735, 20766, 20796, 20831, 20847, 20870, 20898, 20921, 20949, 20972,
+21002, 21037, 21067, 21102, 21113, 21157, 21172, 21194, 21246, 21266, 21288, 21308, 21349,
+21397, 21450, 21501, 21557, 21605, 21658, 21685, 21719, 21751, 21778, 21810, 21852, 21899,
+21917, 21947, 21982, 22012, 22047, 22072, 22095, 22115, 22140, 22159, 22200, 22248, 22301,
+22352, 22408, 22456, 22509, 22535, 22568, 22599, 22625, 22656, 22696, 22741, 22758, 22780,
+22796, 22831, 22873, 22920, 22965, 23015, 23057, 23104, 23135, 23173, 23216, 23254, 23297,
+23320, 23350, 23378, 23401, 23429, 23464, 23504, 23526, 23553, 23572, 23596, 23613, 23648,
+23690, 23737, 23782, 23832, 23874, 23921, 23945, 23976, 24005, 24029, 24058, 24093, 24133,
+24151, 24174, 24193, 24219, 24250, 24277, 24303, 24334, 24348, 24369, 24397, 24423, 24444,
+24470, 24500, 24525, 24546, 24572, 24594, 24623, 24657, 24687, 24716, 24750, 24761, 24806,
+24827, 24855, 24888, 24916, 24949, 24984, 25007, 25037, 25072, 25102, 25137, 25155, 25180,
+25203, 25221, 25244, 25263, 25289, 25320, 25347, 25373, 25404, 25416, 25461, 25480, 25506,
+25530, 25568, 25598, 25617, 25641, 25661, 25688, 25720, 25748, 25775, 25807, 25838, 25879,
+25927, 25980, 26028, 26081, 26129, 26182, 26241, 26279, 26327, 26379, 26405, 26434, 26469,
+26509, 26545, 26586, 26625, 26661, 26704, 26752, 26798, 26871, 26949, 26974, 26998, 27031,
+27055, 27105, 27138, 27178, 27223, 27264, 27310, 27377, 27449, 27470, 27492, 27513, 27532,
+27554, 27574, 27603, 27637, 27656, 27676, 27685, 27703, 27746, 27777, 27802, 27832, 27857,
+27887, 27921, 27965, 28004, 28044, 28085, 28105, 28132, 28164, 28191, 28223, 28241, 28282,
+28330, 28383, 28434, 28490, 28538, 28591, 28634, 28682, 28707, 28739, 28769, 28794, 28824,
+28837, 28855, 28871, 28899, 28922, 28943, 28961, 28984, 29000, 29021, 29038, 29079, 29127,
+29180, 29231, 29287, 29335, 29388, 29409, 29435, 29476, 29522, 29546, 29577, 29606, 29630,
+29659, 29674, 29694, 29708, 29743, 29785, 29832, 29877, 29927, 29969, 30016, 30078, 30123,
+30154, 30192, 30235, 30273, 30316, 30352, 30393, 30414, 30442, 30468, 30489, 30515, 30532,
+30554, 30581, 30596, 30631, 30673, 30720, 30765, 30815, 30857, 30904, 30940, 30981, 31003,
+31032, 31059, 31081, 31108, 31129, 31155, 31171, 31192, 31209, 31233, 31262, 31287, 31311,
+31340, 31355, 31375, 31396, 31424, 31467, 31500, 31528, 31561, 31578, 31602, 31631, 31655,
+31684, 31704, 31731, 31763, 31790, 31822, 31839, 31863, 31902, 31931, 31955, 31984, 32002,
+32027, 32057, 32082, 32112, 32127, 32149, 32176, 32198, 32225, 32235, 32257, 32272, 32294,
+32317, 32337, 32357, 32384, 32416, 32441, 32467, 32498, 32522, 32551, 32567, 32590, 32618,
+32639, 32658, 32684, 32715, 32739, 32755, 32788, 32826, 32849, 32877, 32898, 32915, 32939,
+32968, 32990, 33018, 33048, 33085, 33127, 33162, 33202, 33247, 33296, 33340, 33375, 33415,
+33448, 33475, 33509, 33548, 33580, 33604, 33630, 33663, 33701, 33732, 33763, 33799, 33828,
+33853, 33885, 33922, 33952, 33966, 33987, 34013, 34032, 34058, 34089, 34113, 34142, 34165,
+34195, 34230, 34258, 34317, 34362, 34392, 34427, 34446, 34467, 34493, 34519, 34550, 34574,
+34600, 34631, 34653, 34682, 34716, 34743, 34802, 34831, 34865, 34910, 34929, 34990, 35056,
+35082, 35113, 35137, 35189, 35227, 35253, 35284, 35304, 35365, 35431, 35458, 35490, 35515,
+35569, 35609, 35636, 35668, 35685, 35704, 35728, 35776, 35825, 35849, 35878, 35900, 35924,
+35953, 35965, 35982, 35991, 36007, 36028, 36031, 36046, 36060, 36070, 36085, 36090, 36106,
+36124, 36144, 36171, 36203, 36228, 36249, 36316, 36356, 36401, 36429, 36462, 36514, 36577,
+36603, 36636, 36664, 36697, 36709, 36767, 36798, 36834, 36853, 36877, 36920, 36974, 36991,
+37015, 37034, 37058, 37080, 37110, 37145, 37174, 37208, 37222, 37242, 37286, 37296, 37311,
+37318, 37347, 37377, 37401, 37422, 37445, 37465, 37482, 37491, 37505, 37514, 37528, 37537,
+37553, 37574, 37588, 37634, 37685, 37694, 37710, 37731, 37756, 37776, 37792, 37813, 37826,
+37843, 37865, 37885, 37910, 37928, 37942, 37957, 37977, 38007, 38035, 38039, 38055, 38070,
+38093, 38119, 38130, 38146, 38155, 38176, 38196, 38224, 38255, 38264, 38319, 38347, 38380,
+38396, 38417, 38457, 38508, 38522, 38543, 38559, 38580, 38588, 38598, 38613, 38626, 38634,
+38647, 38656, 38670, 38678, 38697, 38707, 38717, 38726, 38742, 38763, 38786, 38824, 38838,
+38845, 38857, 38868, 38886, 38909, 38925, 38933, 38946, 38963, 38982, 39006, 39034, 39060,
+39091, 39109, 39127, 39145, 39158, 39176, 39195, 39219, 39238, 39273, 39313, 39337, 39386,
+39440, 39455, 39475, 39491, 39504, 39530, 39561, 39579, 39598, 39615, 39626, 39642, 39659,
+39681, 39702, 39725, 39761, 39802, 39830, 39859, 39893, 39932, 39958, 39985, 40008, 40026,
+40049, 40073, 40088, 40116, 40149, 40169, 40190, 40207, 40237, 40272, 40294, 40316, 40351,
+40391, 40418, 40446, 40469, 40480, 40507, 40539, 40557, 40580, 40596, 40601, 40631, 40666,
+40677, 40695, 40718, 40734, 40751, 40773, 40799, 40820, 40840, 40865, 40891, 40922, 40934,
+40951, 40961, 40972, 40990, 41013, 41029, 41041, 41058, 41070, 41078, 41093, 41113, 41158,
+41208, 41219, 41237, 41260, 41276, 41281, 41293, 41310, 41320, 41334, 41353, 41365, 41423,
+41454, 41490, 41509, 41533, 41576, 41630, 41647, 41671, 41690, 41714, 41739, 41762, 41785,
+41806, 41826, 41870, 41919, 41944, 41949, 41971, 41986, 41991, 42012, 42038, 42059, 42085,
+42102, 42124, 42141, 42163, 42181, 42204, 42221, 42230, 42246, 42267, 42281, 42293, 42310,
+42320, 42331, 42347, 42363, 42386, 42414, 42435, 42458, 42486, 42497, 42513, 42530, 42542,
+42559, 42570, 42588, 42611, 42627, 42639, 42656, 42691, 42731, 42739, 42744, 42760, 42781,
+42797, 42818, 42830, 42847, 42859, 42878, 42902, 42919, 42929, 42940, 42956, 42965, 42981,
+43002, 43016, 43031, 43051, 43067, 43088, 43103, 43125, 43152, 43172, 43178, 43189, 43215,
+43234, 43258, 43270, 43289, 43307, 43371, 43408, 43450, 43475, 43505, 43554, 43614, 43637,
+43667, 43692, 43722, 43732, 43749, 43771, 43786, 43833, 43885, 43892, 43910, 43932, 43946,
+43965, 43977, 43989, 44018, 44052, 44097, 44147, 44182, 44222, 44256, 44295, 44338, 44376,
+44395, 44419, 44436, 44457, 44483, 44501, 44524, 44537, 44557, 44582, 44600, 44621, 44647,
+44656, 44667, 44690, 44718, 44734, 44761, 44795, 44827, 44856, 44870, 44875, 44881, 44892,
+44896, 44913, 44935, 44944, 44980, 45021, 45058, 45100, 45131, 45167, 45199, 45236, 45254,
+45277, 45299, 45326, 45354, 45387, 45407, 45434, 45466, 45498, 45535, 45564, 45598, 45619,
+45645, 45672, 45704, 45726, 45753, 45781, 45814, 45823, 45837, 45846, 45860, 45868, 45881,
+45895, 45911, 45938, 45960, 45982, 45991, 46005, 46014, 46034, 46049, 46074, 46103, 46124,
+46149, 46180, 46200, 46221, 46241, 46257, 46278, 46291, 46321, 46358, 46400, 46427, 46461,
+46500, 46528, 46563, 46603, 46634, 46672, 46715, 46722, 46738, 46757, 46781, 46803, 46830,
+46844, 46863, 46875, 46890, 46903, 46923, 46948, 46967, 46993, 47024, 47056, 47096, 47119,
+47145, 47166, 47190, 47211, 47235, 47262, 47282, 47307, 47351, 47400, 47422, 47449, 47467,
+47501, 47515, 47524, 47538, 47546, 47572, 47585, 47609, 47628, 47652, 47673, 47699, 47716,
+47751, 47773, 47806, 47840, 47872, 47897, 47920, 47936, 47957, 47961, 47967, 47978, 47998,
+48023, 48032, 48046, 48057, 48073, 48083, 48098, 48107, 48128, 48154, 48192, 48235, 48254,
+48278, 48287, 48320, 48359, 48383, 48411, 48441, 48455, 48475, 48500, 48519, 48545, 48595,
+48625, 48716, 48746, 48837, 48867, 48958, 48988, 49079, 49109, 49200, 49223, 49250, 49288,
+49306, 49329, 49338, 49361, 49389, 49408, 49432, 49461, 49495, 49525, 49560, 49588, 49621,
+49647, 49692, 49742, 49773, 49787, 49807, 49832, 49862, 49887, 49917, 49952, 49971, 50051,
+50136, 50160, 50177, 50199, 50213, 50232, 50251, 50275, 50322, 50387, 50452, 50505, 50558,
+50615, 50659, 50694, 50734, 50753, 50777, 50806, 50830, 50854, 50883, 50911, 50944, 50978,
+51017, 51050, 51088, 51122, 51161, 51193, 51230, 51263, 51301, 51375, 51454, 51513, 51577,
+51637, 51702, 51747, 51797, 51855, 51918, 51961, 52009, 52053, 52102, 52131, 52165, 52224,
+52288, 52332, 52381, 52426, 52476, 52506, 52541, 52584, 52632, 52660, 52693, 52722, 52756,
+52787, 52823, 52855, 52892, 52954, 53021, 53062, 53108, 53148, 53193, 53228, 53268, 53309,
+53355, 53391, 53432, 53474, 53521, 53571, 53626, 53673, 53725, 53750, 53780, 53804, 53833,
+53862, 53906, 53955, 53998, 54046, 54080, 54110, 54162, 54219, 54261, 54308, 54352, 54401,
+54436, 54494, 54557, 54581, 54610, 54635, 54665, 54681, 54719, 54746, 54774, 54806, 54828,
+54845, 54884, 54912, 54941, 54974, 54997, 55018, 55044, 55066, 55093, 55100, 55112, 55125,
+55140, 55160, 55175, 55195, 55210, 55230, 55258, 55291, 55325, 55364, 55381, 55403, 55421,
+55455, 55494, 55515, 55541, 55566, 55596, 55610, 55626, 55647, 55663, 55684, 55700, 55721,
+55750, 55784, 55819, 55859, 55877, 55900, 55919, 55954, 55994, 56016, 56043, 56069, 56100,
+56105, 56122, 56144, 56170, 56191, 56208, 56224, 56248, 56275, 56303, 56315, 56332, 56342,
+56364, 56385, 56414, 56446, 56479, 56484, 56494, 56498, 56509, 56525, 56534, 56543, 56598,
+56626, 56659, 56675, 56696, 56736, 56787, 56801, 56822, 56838, 56859, 56872, 56892, 56917,
+56949, 56958, 57013, 57041, 57074, 57090, 57111, 57151, 57202, 57216, 57237, 57253, 57274,
+57280, 57291, 57304, 57322, 57333, 57349, 57359, 57372, 57385, 57407, 57432, 57457, 57484,
+57514, 57544, 57574, 57604, 57634, 57664, 57694, 57724, 57754, 57785, 57815, 57845, 57875,
+57906, 57936, 57966, 57996, 58026, 58056, 58081, 58106, 58131, 58156, 58181, 58206, 58231,
+58257, 58282, 58307, 58332, 58358, 58383, 58408, 58433, 58458, 58483, 58500, 58520, 58540,
+58562, 58587, 58612, 58637, 58662, 58687, 58712, 58737, 58762, 58787, 58813, 58838, 58863,
+58888, 58914, 58939, 58964, 58989, 59014, 59039, 59059, 59079, 59099, 59119, 59139, 59159,
+59179, 59200, 59220, 59240, 59260, 59281, 59301, 59321, 59341, 59361, 59381, 59398, 59418,
+59438, 59460, 59485, 59510, 59535, 59560, 59585, 59610, 59635, 59660, 59685, 59711, 59736,
+59761, 59786, 59812, 59837, 59862, 59887, 59912, 59937, 59957, 59977, 59997, 60017, 60037,
+60057, 60077, 60098, 60118, 60138, 60158, 60179, 60199, 60219, 60239, 60259, 60279, 60302,
+60328, 60354, 60380, 60406, 60432, 60458, 60484, 60510, 60536, 60563, 60589, 60615, 60641,
+60668, 60694, 60720, 60746, 60772, 60798, 60817, 60830, 60843, 60856, 60869, 60882, 60895,
+60913, 60934, 60955, 60976, 60997, 61018, 61039, 61060, 61081, 61102, 61124, 61145, 61166,
+61187, 61209, 61230, 61251, 61272, 61293, 61314, 61327, 61341, 61354, 61367, 61380, 61399,
+61413, 61426, 61443, 61463, 61483, 61505, 61530, 61555, 61580, 61605, 61630, 61655, 61680,
+61705, 61730, 61756, 61781, 61806, 61831, 61857, 61882, 61907, 61932, 61957, 61982, 62002,
+62022, 62042, 62062, 62082, 62102, 62122, 62143, 62163, 62183, 62203, 62224, 62244, 62264,
+62284, 62304, 62324, 62341, 62354, 62367, 62390, 62416, 62442, 62468, 62494, 62520, 62546,
+62572, 62598, 62624, 62651, 62677, 62703, 62729, 62756, 62782, 62808, 62834, 62860, 62886,
+62904, 62925, 62958, 62994, 63030, 63066, 63102, 63138, 63174, 63210, 63246, 63282, 63319,
+63355, 63391, 63427, 63464, 63500, 63536, 63572, 63608, 63644, 63665, 63686, 63707, 63728,
+63749, 63770, 63791, 63812, 63834, 63855, 63876, 63897, 63919, 63940, 63961, 63982, 64003,
+64024, 64037, 64050, 64071, 64095, 64119, 64140, 64164, 64188, 64198, 64213, 64239, 64270,
+64286, 64312, 64350, 64392, 64419, 64435, 64454, 64482, 64517, 64557, 64585, 64620, 64660,
+64686, 64717, 64743, 64776, 64814, 64824, 64839, 64857, 64867, 64885, 64907, 64921, 64941,
+64951, 64965, 64984, 65005, 65044, 65090, 65107, 65129, 65155, 65176, 65193, 65225, 65262,
+65290, 65323, 65359, 65398, 65439, 65483, 65512, 65546, 65570, 65592, 65639, 65691, 65709,
+65732, 65749, 65771, 65789, 65812, 65832, 65857, 65886, 65920, 65946, 65977, 65992, 66012,
+66037, 66067, 66101, 66130, 66147, 66169, 66186, 66208, 66225, 66244, 66285, 66309, 66338,
+66362, 66391, 66416, 66441, 66462, 66486, 66507, 66550, 66572, 66591, 66631, 66714, 66727,
+66742, 66762, 66787, 66809, 66832, 66862, 66883, 66911, 66931, 66956, 66972, 66990, 67013,
+67041, 67080, 67103, 67131, 67155, 67168, 67183, 67216, 67243, 67263, 67288, 67328, 67348,
+67373, 67394, 67408, 67424, 67445, 67471, 67506, 67527, 67553, 67575, 67586, 67599, 67623,
+67654, 67690, 67741, 67759, 67782, 67802, 67823, 67851, 67870, 67896, 67914, 67937, 67961,
+68031, 68074, 68122, 68153, 68189, 68244, 68310, 68339, 68375, 68406, 68442, 68449, 68476,
+68508, 68531, 68559, 68588, 68622, 68641, 68665, 68683, 68706, 68732, 68761, 68792, 68826,
+68845, 68869, 68894, 68927, 68968, 68982, 69001, 69015, 69039, 69053, 69078, 69099, 69125,
+69137, 69156, 69180, 69209, 69243, 69264, 69290, 69335, 69351, 69372, 69400, 69429, 69445,
+69466, 69507, 69523, 69546, 69574, 69595, 69613, 69643, 69666, 69696, 69727, 69755, 69774,
+69800, 69831, 69855, 69874, 69898, 69921, 69952, 70004, 70064, 70099, 70142, 70159, 70196,
+70219, 70243, 70288, 70312, 70344, 70357, 70375, 70389, 70408, 70430, 70460, 70472, 70486,
+70505, 70522, 70528, 70539, 70549, 70564, 70570, 70624, 70681, 70733, 70745, 70766, 70792,
+70814, 70841, 70869, 70902, 70919, 70944, 70972, 71002, 71035, 71053, 71076, 71089, 71107,
+71118, 71124, 71135, 71153, 71176, 71192, 71208, 71231, 71259, 71280, 71293, 71311, 71325,
+71346, 71372, 71391, 71402, 71412, 71429, 71451, 71466, 71477, 71495, 71518, 71534, 71550,
+71573, 71601, 71622, 71633, 71649, 71672, 71700, 71721, 71739, 71762, 71778, 71794, 71817,
+71845, 71866, 71877, 71895, 71918, 71934, 71953, 71977, 71989, 72008, 72032, 72049, 72060,
+72078, 72101, 72117, 72127, 72142, 72164, 72191, 72211, 72228, 72250, 72265, 72280, 72302,
+72329, 72349, 72354, 72366, 72383, 72393, 72411, 72475, 72512, 72554, 72579, 72609, 72658,
+72718, 72741, 72771, 72796, 72826, 72831, 72841, 72849, 72864, 72884, 72899, 72919, 72935,
+72949, 72968, 72973, 72983, 72998, 73018, 73051, 73059, 73076, 73107, 73143, 73170, 73202,
+73239, 73281, 73319, 73362, 73407, 73457, 73501, 73558, 73620, 73669, 73705, 73746, 73780,
+73833, 73891, 73930, 73952, 73980, 74013, 74051, 74084, 74122, 74165, 74192, 74280, 74373,
+74405, 74430, 74460, 74482, 74509, 74536, 74568, 74576, 74589, 74593, 74602, 74613, 74636,
+74688, 74706, 74729, 74745, 74764, 74788, 74829, 74875, 74897, 74910, 74930, 74955, 74973,
+74978, 74990, 74996, 75007, 75025, 75048, 75064, 75077, 75095, 75106, 75117, 75133, 75139,
+75150, 75163, 75222, 75254, 75291, 75311, 75336, 75380, 75435, 75453, 75478, 75498, 75523,
+75528, 75540, 75557, 75567, 75584, 75606, 75625, 75649, 75664, 75684, 75696, 75715, 75739,
+75755, 75769, 75778, 75792, 75811, 75835, 75844, 75858, 75867, 75881, 75897, 75959, 75994,
+76034, 76057, 76085, 76132, 76190, 76211, 76239, 76262, 76290, 76306, 76326, 76345, 76367,
+76380, 76398, 76414, 76435, 76450, 76470, 76482, 76499, 76512, 76530, 76540, 76555, 76571,
+76602, 76630, 76662, 76701, 76747, 76756, 76770, 76780, 76795, 76804, 76818, 76830, 76847,
+76855, 76881, 76896, 76916, 76929, 76953, 76978, 77001, 77006, 77016, 77027, 77043, 77054,
+77070, 77081, 77097, 77108, 77124, 77135, 77151, 77162, 77178, 77191, 77220, 77254, 77290,
+77331, 77349, 77373, 77413, 77458, 77505, 77557, 77586, 77616, 77651, 77670, 77694, 77708,
+77719, 77737, 77760, 77776, 77784, 77794, 77817, 77841, 77879, 77901, 77930, 77964, 77991,
+78018, 78050, 78078, 78111, 78131, 78158, 78190, 78217, 78249, 78274, 78298, 78327, 78334,
+78348, 78367, 78381, 78400, 78426, 78450, 78465, 78474, 78498, 78527, 78548, 78574, 78598,
+78627, 78652, 78682, 78702, 78727, 78743, 78764, 78778, 78800, 78827, 78848, 78874, 78892,
+78915, 78935, 78960, 78964, 78975, 78991, 79000, 79011, 79068, 79098, 79133, 79151, 79174,
+79216, 79269, 79285, 79308, 79326, 79349, 79358, 79413, 79441, 79474, 79490, 79511, 79551,
+79602, 79616, 79637, 79653, 79674, 79693, 79710, 79729, 79778, 79808, 79868, 79896, 79954,
+79971, 80018, 80040, 80060, 80083, 80104, 80134, 80162, 80193, 80222, 80267, 80318, 80374,
+80413, 80442, 80464, 80478, 80501, 80531, 80552, 80578, 80588, 80606, 80631, 80642, 80658,
+80674, 80695, 80721, 80736, 80787, 80792, 80809, 80819, 80836, 80854, 80869, 80875, 80886,
+80891, 80903, 80920, 80936, 80957, 80979, 81006, 81037, 81063, 81073, 81087, 81109, 81136,
+81154, 81168, 81187, 81193, 81206, 81224, 81235, 81246, 81262, 81271, 81285, 81294, 81308,
+81317, 81331, 81335, 81355, 81374, 81383, 81417, 81429, 81442, 81450, 81474, 81503, 81533,
+81546, 81564, 81579, 81599, 81620, 81637, 81659, 81682, 81690, 81696, 81709, 81727, 81738,
+81765, 81802, 81844, 81887, 81935, 82002, 82074, 82083, 82099, 82120, 82138, 82154, 82176,
+82203, 82224, 82245, 82262, 82284, 82303, 82327, 82352, 82382, 82402, 82420, 82460, 82505,
+82528, 82572, 82608, 82635, 82654, 82678, 82727, 82781, 82790, 82816, 82847, 82886, 82930,
+82955, 82985, 83000, 83020, 83041, 83067, 83094, 83126, 83146, 83171, 83205, 83244, 83260,
+83281, 83295, 83310, 83330, 83354, 83373, 83387, 83413, 83444, 83463, 83478, 83498, 83511,
+83531, 83556, 83574, 83593, 83619, 83650, 83674, 83680, 83693, 83711, 83724, 83742, 83749,
+83768, 83792, 83804, 83823, 83847, 83860, 83878, 83915, 83957, 83964, 83969, 83979, 83988,
+84043, 84071, 84104, 84120, 84141, 84181, 84232, 84246, 84267, 84283, 84304, 84317, 84376,
+84408, 84445, 84465, 84490, 84534, 84589, 84607, 84632, 84652, 84677, 84688, 84718, 84753,
+84784, 84820, 84847, 84879, 84895, 84912, 84934, 84950, 84971, 84989, 85012, 85030, 85053,
+85069, 85090, 85106, 85127, 85146, 85170, 85186, 85207, 85223, 85244, 85260, 85278, 85296,
+85323, 85380, 85442, 85470, 85493, 85523, 85558, 85586, 85609, 85637, 85660, 85688, 85709,
+85735, 85767, 85791, 85820, 85844, 85873, 85902, 85934, 85957, 85985, 86008, 86036, 86065,
+86094, 86119, 86149, 86184, 86224, 86268, 86307, 86334, 86363, 86397, 86411, 86441, 86477,
+86504, 86530, 86562, 86587, 86620, 86656, 86688, 86713, 86739, 86777, 86820, 86839, 86874,
+86915, 86947, 86978, 87015, 87045, 87083, 87124, 87161, 87191, 87222, 87271, 87315, 87319,
+87330, 87346, 87355, 87371, 87392, 87402, 87419, 87441, 87456, 87467, 87483, 87517, 87556,
+87564, 87575, 87591, 87611, 87622, 87639, 87644, 87657, 87666, 87680, 87690, 87707, 87729,
+87745, 87754, 87768, 87780, 87797, 87810, 87831, 87838, 87847, 87861, 87865, 87887, 87914,
+87967, 88025, 88045, 88070, 88082, 88099, 88110, 88126, 88135, 88149, 88158, 88168, 88183,
+88198, 88214, 88235, 88245, 88260, 88271, 88287, 88293, 88304, 88317, 88341, 88370, 88389,
+88413, 88420, 88429, 88461, 88480, 88499, 88515, 88536, 88556, 88583, 88611, 88636, 88668,
+88705, 88735, 88750, 88772, 88799, 88816, 88843, 88877, 88916, 88933, 88957, 88986, 88999,
+89019, 89044, 89060, 89083, 89111, 89129, 89154, 89184, 89199, 89221, 89248, 89262, 89283,
+89309, 89322, 89344, 89371, 89398, 89430, 89450, 89475, 89491, 89514, 89542, 89558, 89581,
+89609, 89630, 89658, 89691, 89706, 89728, 89755, 89777, 89806, 89840, 89855, 89877, 89904,
+89917, 89937, 89962, 89981, 90007, 90038, 90056, 90081, 90111, 90136, 90168, 90205, 90217,
+90236, 90260, 90275, 90297, 90324, 90344, 90371, 90403, 90418, 90440, 90467, 90486, 90512,
+90543, 90555, 90574, 90598, 90616, 90641, 90671, 90691, 90718, 90750, 90766, 90789, 90817,
+90855, 90900, 90950, 90964, 90985, 91011, 91025, 91046, 91072, 91087, 91109, 91136, 91154,
+91179, 91209, 91228, 91254, 91285, 91305, 91332, 91364, 91385, 91413, 91446, 91467, 91495,
+91528, 91544, 91567, 91595, 91613, 91638, 91668, 91684, 91707, 91735, 91755, 91782, 91814,
+91835, 91863, 91896, 91916, 91943, 91975, 91998, 92028, 92063, 92084, 92112, 92145, 92167,
+92196, 92230, 92252, 92281, 92315, 92333, 92358, 92388, 92403, 92425, 92452, 92464, 92483,
+92507, 92524, 92548, 92577, 92596, 92622, 92653, 92665, 92684, 92708, 92732, 92763, 92799,
+92814, 92836, 92863, 92876, 92896, 92921, 92932, 92950, 92973, 92997, 93026, 93047, 93075,
+93108, 93123, 93145, 93172, 93195, 93233, 93270, 93312, 93356, 93405, 93449, 93498, 93545,
+93587, 93631, 93677, 93728, 93774, 93825, 93874, 93918, 93964, 94015, 94061, 94112, 94161,
+94208, 94250, 94294, 94340, 94391, 94440, 94487, 94511, 94561, 94608, 94679, 94727, 94785,
+94850, 94897, 94965, 95051, 95122, 95187, 95269, 95304, 95341, 95375, 95411, 95445, 95473,
+95511, 95567, 95646, 95726, 95816, 95895, 95984, 96074, 96174, 96199, 96250, 96298, 96370,
+96419, 96478, 96544, 96592, 96661, 96748, 96820, 96886, 96969, 97005, 97043, 97078, 97115,
+97150, 97185, 97214, 97253, 97310, 97390, 97471, 97562, 97642, 97732, 97823, 97924, 97945,
+97973, 98006, 98033, 98067, 98106, 98129, 98159, 98194, 98214, 98241, 98273, 98292, 98318,
+98349, 98365, 98388, 98416, 98430, 98451, 98477, 98498, 98526, 98559, 98573, 98594, 98620,
+98633, 98662, 98681, 98721, 98759, 98780, 98808, 98841, 98876, 98918, 98965, 99001, 99044,
+99092, 99107, 99129, 99156, 99176, 99203, 99235, 99249, 99270, 99296, 99308, 99329, 99355,
+99381, 99412, 99426, 99447, 99473, 99496, 99526, 99561, 99579, 99604, 99634, 99646, 99666,
+99685, 99709, 99731, 99751, 99776, 99795, 99844, 99873, 99909, 99950, 99972, 100001, 100035,
+100056, 100082, 100103, 100131, 100164, 100181, 100205, 100234, 100246, 100265, 100289, 100306,
+100330, 100359, 100371, 100390, 100414, 100441, 100472, 100495, 100500, 100512, 100529, 100539,
+100550, 100566, 100573, 100591, 100614, 100624, 100639, 100648, 100662, 100672, 100677, 100689,
+100706, 100716, 100721, 100736, 100758, 100785, 100805, 100834, 100854, 100879, 100891, 100908,
+100918, 100947, 100970, 101003, 101033, 101068, 101094, 101105, 101123, 101146, 101162, 101174,
+101191, 101197, 101210, 101228, 101239, 101256, 101278, 101305, 101325, 101346, 101372, 101391,
+101408, 101432, 101461, 101467, 101478, 101486, 101499, 101509, 101520, 101577, 101607, 101642,
+101660, 101683, 101725, 101778, 101794, 101817, 101835, 101858, 101868, 101883, 101902, 101920,
+101934, 101953, 101956, 101963, 101986, 102005, 102030, 102048, 102074, 102103, 102117, 102136,
+102148, 102176, 102200, 102230, 102253, 102284, 102318, 102329, 102347, 102370, 102397, 102429,
+102437, 102452, 102472, 102484, 102500, 102521, 102540, 102564, 102581, 102594, 102608, 102627,
+102640, 102658, 102668, 102724, 102753, 102787, 102804, 102826, 102867, 102919, 102934, 102956,
+102973, 102995, 103006, 103022, 103040, 103049, 103069, 103097, 103130, 103159, 103193, 103209,
+103230, 103255, 103285, 103299, 103314, 103334, 103355, 103381, 103390, 103402, 103405, 103414,
+103428, 103437, 103451, 103466, 103488, 103515, 103535, 103566, 103608, 103619, 103691, 103730,
+103819, 103876, 103933, 103998, 104049, 104081, 104115, 104148, 104181, 104214, 104253, 104294,
+104334, 104386, 104437, 104455, 104478, 104483, 104494, 104515, 104539, 104554, 104571, 104583,
+104600, 104610, 104622, 104639, 104690, 104707, 104729, 104744, 104770, 104775, 104787, 104804,
+104814, 104823, 104837, 104843, 104858, 104878, 104895, 104916, 104942, 104971, 104989, 105012,
+105037, 105067, 105078, 105094, 105114, 105139, 105150, 105159, 105173, 105194, 105220, 105239,
+105248, 105257, 105269, 105288, 105312, 105331, 105355, 105376, 105404, 105437, 105465, 105498,
+105511, 105529, 105534, 105546, 105563, 105575, 105633, 105664, 105700, 105719, 105743, 105786,
+105840, 105857, 105881, 105900, 105924, 105946, 105966, 106008, 106036, 106044, 106057, 106067,
+106076, 106090, 106099, 106113, 106132, 106156, 106163, 106177, 106196, 106208, 106221, 106239,
+106249, 106274, 106304, 106319, 106336, 106358, 106369, 106385, 106401, 106422, 106438, 106459,
+106476, 106498, 106512, 106534, 106571, 106613, 106640, 106659, 106678, 106706, 106739, 106763,
+106775, 106791, 106812, 106836, 106866, 106885, 106909, 106926, 106953, 106985, 107009, 107038,
+107056, 107079, 107098, 107122, 107151, 107185, 107195, 107210, 107219, 107233, 107249, 107272,
+107300, 107321, 107358, 107388, 107423, 107460, 107482, 107509, 107523, 107544, 107570, 107589,
+107609, 107634, 107644, 107659, 107667, 107682, 107702, 107715, 107760, 107810, 107829, 107853,
+107864, 107880, 107887, 107892, 107904, 107921, 107931, 107939, 107952, 107965, 107983, 107994,
+108010, 108041, 108059, 108082, 108096, 108115, 108135, 108160, 108179, 108203, 108214, 108232,
+108255, 108271, 108291, 108339, 108392, 108409, 108417, 108432, 108452, 108483, 108519, 108537,
+108560, 108566, 108583, 108605, 108628, 108656, 108669, 108687, 108698, 108715, 108731, 108752,
+108764, 108783, 108807, 108824, 108837, 108855, 108876, 108902, 108920, 108943, 108967, 108978,
+108997, 109015, 109038, 109060, 109076, 109097, 109102, 109109, 109121, 109129, 109155, 109168,
+109192, 109217, 109240, 109253, 109271, 109283, 109297, 109327, 109362, 109401, 109435, 109471,
+109512, 109538, 109569, 109594, 109624, 109643, 109667, 109696, 109729, 109757, 109781, 109821,
+109866, 109915, 109959, 110005, 110056, 110092, 110133, 110168, 110208, 110237, 110266, 110311,
+110361, 110415, 110464, 110515, 110571, 110612, 110658, 110698, 110743, 110777, 110803, 110834,
+110862, 110895, 110932, 110964, 110998, 111037, 111061, 111090, 111113, 111141, 111158, 111170,
+111197, 111209, 111228, 111252, 111269, 111286, 111294, 111304, 111330, 111361, 111396, 111426,
+111458, 111495, 111517, 111544, 111565, 111591, 111606, 111626, 111651, 111680, 111704, 111729,
+111770, 111816, 111866, 111911, 111958, 112010, 112047, 112089, 112125, 112166, 112196, 112218,
+112245, 112269, 112298, 112331, 112359, 112389, 112424, 112444, 112469, 112488, 112512, 112525,
+112538, 112553, 112584, 112620, 112660, 112695, 112732, 112774, 112801, 112833, 112859, 112890,
+112910, 112935, 112965, 112999, 113028, 113055, 113087, 113116, 113150, 113188, 113221, 113256,
+113296, 113321, 113351, 113375, 113404, 113422, 113427, 113438, 113454, 113464, 113474, 113494,
+113515, 113536, 113564, 113581, 113603, 113628, 113634, 113649, 113671, 113698, 113718, 113746,
+113779, 113796, 113818, 113831, 113849, 113860, 113872, 113891, 113915, 113932, 113944, 113961,
+113973, 114031, 114062, 114098, 114117, 114141, 114184, 114238, 114255, 114279, 114298, 114322,
+114333, 114357, 114386, 114410, 114439, 114455, 114464, 114478, 114488, 114505, 114527, 114536,
+114552, 114573, 114589, 114610, 114619, 114633, 114642, 114656, 114663, 114685, 114712, 114732,
+114757, 114771, 114790, 114804, 114816, 114829, 114847, 114861, 114880, 114896, 114916, 114932,
+114994, 115029, 115069, 115092, 115120, 115167, 115225, 115246, 115274, 115297, 115325, 115334,
+115350, 115371, 115376, 115385, 115399, 115411, 115428, 115449, 115465, 115477, 115494, 115516,
+115543, 115574, 115600, 115612, 115629, 115643, 115662, 115678, 115686, 115699, 115728, 115762,
+115805, 115847, 115899, 115936, 115982, 116028, 116062, 116105, 116140, 116184, 116219, 116263,
+116295, 116333, 116380, 116400, 116421, 116451, 116481, 116522, 116561, 116581, 116608, 116634,
+116655, 116704, 116762, 116797, 116841, 116903, 116951, 116987, 117035, 117080, 117113, 117156,
+117207, 117239, 117280, 117322, 117375, 117431, 117464, 117509, 117551, 117581, 117599, 117626,
+117644, 117667, 117701, 117749, 117802, 117842, 117886, 117927, 117963, 117999, 118031, 118076,
+118129, 118171, 118204, 118246, 118280, 118326, 118369, 118400, 118420, 118447, 118480, 118522,
+118576, 118607, 118647, 118708, 118742, 118785, 118837, 118868, 118908, 118959, 119022, 119054,
+119095, 119151, 119183, 119224, 119253, 119288, 119332, 119383, 119441, 119489, 119525, 119570,
+119607, 119656, 119702, 119736, 119758, 119774, 119817, 119853, 119879, 119896, 119931, 119970,
+119998, 120022, 120052, 120089, 120130, 120164, 120187, 120201, 120220, 120225, 120248, 120269,
+120296, 120316, 120332, 120342, 120368, 120378, 120410, 120435, 120456, 120489, 120509, 120551,
+120586, 120617, 120643, 120659, 120675, 120685, 120717, 120742, 120763, 120783, 120825, 120860,
+120891, 120917, 120933, 120949, 120964, 120994, 121020, 121052, 121076, 121113, 121143, 121169,
+121186, 121197, 121204, 121236, 121269, 121314, 121344, 121375, 121391, 121413, 121433, 121456,
+121485, 121507, 121525, 121537, 121551, 121570, 121589, 121622, 121634, 121661, 121695, 121722,
+121745, 121764, 121788, 121812, 121847, 121869, 121897, 121916, 121954, 121999, 122049, 122067,
+122085, 122110, 122140, 122152, 122202, 122236, 122263, 122286, 122305, 122329, 122353, 122375,
+122403, 122422, 122460, 122505, 122555, 122573, 122591, 122616, 122646, 122658, 122708, 122742,
+122769, 122792, 122811, 122835, 122859, 122881, 122909, 122928, 122966, 123011, 123061, 123079,
+123097, 123122, 123152, 123169, 123183, 123211, 123268, 123301, 123341, 123386, 123405, 123418,
+123431, 123451, 123476, 123505, 123534, 123539, 123559, 123579, 123597, 123615, 123633, 123651,
+123662, 123683, 123700, 123707, 123719, 123736, 123745, 123759, 123768, 123782, 123801, 123825,
+123832, 123846, 123865, 123877, 123921, 123970, 123972, 123981, 123995, 124004, 124018, 124033,
+124037, 124051, 124070, 124097, 124129, 124165, 124196, 124209, 124227, 124236, 124250, 124261,
+124277, 124298, 124324, 124333, 124348, 124368, 124379, 124395, 124418, 124446, 124475, 124509,
+124550, 124596, 124607, 124623, 124633, 124648, 124661, 124679, 124701, 124728, 124743, 124752,
+124776, 124805, 124824, 124848, 124878, 124913, 124943, 124978, 124992, 125018, 125042, 125071,
+125096, 125126, 125134, 125188, 125215, 125247, 125262, 125282, 125321, 125371, 125384, 125404,
+125419, 125439, 125443, 125454, 125470, 125504, 125543, 125552, 125566, 125577, 125593, 125615,
+125642, 125663, 125689, 125710, 125736, 125758, 125785, 125804, 125828, 125837, 125851, 125886,
+125926, 125936, 125951, 125985, 126024, 126056, 126093, 126103, 126118, 126157, 126201, 126222,
+126248, 126256, 126271, 126291, 126304, 126318, 126339, 126365, 126384, 126397, 126415, 126436,
+126446, 126461, 126472, 126488, 126499, 126515, 126520, 126532, 126549, 126564, 126594, 126625,
+126654, 126675, 126720, 126729, 126784, 126812, 126845, 126861, 126882, 126922, 126973, 126987,
+127008, 127024, 127045, 127057, 127063, 127084, 127097, 127115, 127130, 127161, 127177, 127212,
+127252, 127262, 127277, 127282, 127316, 127328, 127345, 127355, 127360, 127372, 127389, 127398,
+127414, 127435, 127451, 127472, 127490, 127515, 127545, 127570, 127600, 127606, 127617, 127630,
+127648, 127662, 127681, 127698, 127720, 127737, 127759, 127785, 127816, 127850, 127860, 127870,
+127890, 127915, 127936, 127962, 127974, 127991, 128006, 128023, 128045, 128070, 128090, 128113,
+128126, 128144, 128158, 128177, 128187, 128199, 128216, 128233, 128255, 128270, 128284, 128303,
+128322, 128346, 128360, 128379, 128393, 128429, 128470, 128489, 128505, 128526, 128536, 128551,
+128576, 128592, 128613, 128636, 128664, 128679, 128699, 128721, 128748, 128782, 128821, 128849,
+128882, 128900, 128950, 129005, 129030, 129060, 129087, 129121, 129160, 129174, 129210, 129256,
+129298, 129327, 129371, 129398, 129409, 129414, 129430, 129442, 129459, 129471, 129488, 129497,
+129552, 129580, 129613, 129629, 129650, 129690, 129741, 129755, 129776, 129792, 129813, 129827,
+129839, 129866, 129894, 129913, 129937, 129959, 129986, 130005, 130027, 130054, 130085, 130121,
+130136, 130156, 130166, 130191, 130218, 130250, 130262, 130277, 130304, 130334, 130365, 130380,
+130396, 130406, 130420, 130430, 130456, 130471, 130487, 130494, 130508, 130527, 130539, 130560,
+130586, 130595, 130608, 130626, 130642, 130663, 130677, 130702, 130727, 130742, 130764, 130791,
+130811, 130831, 130856, 130871, 130893, 130920, 130940, 130956, 130977, 130997, 131002, 131018,
+131034, 131055, 131081, 131098, 131120, 131137, 131159, 131171, 131190, 131207, 131228, 131241,
+131255, 131274, 131284, 131295, 131311, 131323, 131340, 131350, 131362, 131382, 131392, 131413,
+131439, 131457, 131472, 131487, 131504, 131529, 131548, 131588, 131633, 131648, 131670, 131690,
+131718, 131753, 131786, 131807, 131833, 131847, 131859, 131876, 131887, 131903, 131915, 131934,
+131951, 131969, 131992, 132027, 132067, 132093, 132124, 132130, 132170, 132215, 132247, 132284,
+132294, 132309, 132315, 132326, 132335, 132349, 132358, 132372, 132393, 132419, 132440, 132466,
+132487, 132513, 132534, 132560, 132568, 132591, 132608, 132627, 132644, 132667, 132691, 132721,
+132752, 132765, 132784, 132797, 132816, 132830, 132844, 132882, 132890, 132914, 132943, 132956,
+132969, 132987, 133000, 133018, 133030, 133047, 133059, 133076, 133088, 133116, 133149, 133166,
+133185, 133195, 133221, 133252, 133267, 133276, 133290, 133301, 133317, 133333, 133356, 133384,
+133404, 133429, 133434, 133464, 133498, 133508, 133519, 133535, 133556, 133623, 133663, 133708,
+133736, 133769, 133821, 133884, 133910, 133943, 133971, 134004, 134014, 134070, 134099, 134133,
+134150, 134172, 134213, 134265, 134280, 134302, 134319, 134341, 134345, 134356, 134372, 134381,
+134388, 134407, 134433, 134464, 134478, 134497, 134510, 134530, 134555, 134569, 134588, 134600,
+134606, 134612, 134623, 134634, 134650, 134661, 134681, 134706, 134716, 134731, 134740, 134765,
+134786, 134806, 134827, 134842, 134853, 134869, 134898, 134925, 134948, 134984, 135002, 135011,
+135025, 135033, 135047, 135068, 135094, 135124, 135149, 135168, 135191, 135217, 135247, 135265,
+135288, 135316, 135331, 135351, 135364, 135374, 135389, 135397, 135412, 135432, 135445, 135456,
+135484, 135517, 135543, 135574, 135596, 135623, 135646, 135674, 135692, 135715, 135743, 135778,
+135818, 135834, 135851, 135875, 135904, 135926, 135944, 135967, 135977, 135992, 136001, 136056,
+136084, 136117, 136133, 136154, 136194, 136245, 136259, 136280, 136296, 136317, 136323, 136358,
+136400, 136413, 136431, 136445, 136464, 136488, 136510, 136544, 136568, 136608, 136653, 136682,
+136712, 136747, 136777, 136826, 136880, 136930, 137003, 137081, 137136, 137182, 137233, 137268,
+137323, 137339, 137360, 137385, 137415, 137428, 137446, 137463, 137506, 137538, 137556, 137599,
+137632, 137637, 137649, 137666, 137676, 137693, 137715, 137730, 137740, 137750, 137767, 137789,
+137804, 137820, 137831, 137849, 137872, 137888, 137897, 137911, 137935, 137967, 137987, 138015,
+138038, 138069, 138088, 138115, 138141, 138175, 138200, 138233, 138259, 138293, 138318, 138351,
+138360, 138376, 138397, 138411, 138419, 138434, 138454, 138467, 138473, 138484, 138491, 138503,
+138514, 138530, 138536, 138547, 138558, 138576, 138599, 138615, 138621, 138632, 138640, 138653,
+138671, 138675, 138686, 138702, 138706, 138715, 138724, 138740, 138761, 138777, 138798, 138809,
+138849, 138866, 138888, 138904, 138921, 138945, 138974, 138988, 139007, 139019, 139036, 139056,
+139065, 139079, 139088, 139102, 139111, 139125, 139135, 139191, 139220, 139254, 139271, 139293,
+139334, 139386, 139401, 139423, 139440, 139462, 139470, 139503, 139517, 139527, 139544, 139566,
+139581, 139600, 139665, 139703, 139746, 139772, 139803, 139853, 139914, 139938, 139969, 139995,
+140026, 140031, 140041, 140048, 140059, 140075, 140094, 140103, 140119, 140140, 140156, 140177,
+140189, 140208, 140232, 140251, 140275, 140283, 140294, 140305, 140316, 140327, 140338, 140349,
+140360, 140372, 140383, 140394, 140405, 140416, 140434, 140455, 140478, 140504, 140530, 140551,
+140563, 140574, 140586, 140595, 140609, 140618, 140632, 140646, 140667, 140693, 140701, 140727,
+140740, 140764, 140789, 140812, 140819, 140842, 140870, 140882, 140894, 140911, 140928, 140950,
+140958, 140971, 140978, 140983, 141006, 141016, 141037, 141051, 141083, 141102, 141132, 141163,
+141192, 141214, 141234, 141239, 141249, 141258, 141272, 141281, 141295, 141316, 141342, 141363,
+141389, 141410, 141436, 141457, 141483, 141494, 141513, 141537, 141557, 141582, 141603, 141614,
+141630, 141649, 141673, 141690, 141712, 141725, 141743, 141748, 141764, 141785, 141795, 141805,
+141830, 141847, 141869, 141880, 141898, 141921, 141937, 141951, 141963, 141976, 141994, 142006,
+142030, 142060, 142079, 142103, 142141, 142179, 142223, 142267, 142286, 142310, 142336, 142349,
+142367, 142373, 142386, 142404, 142415, 142431, 142452, 142461, 142477, 142498, 142512, 142515,
+142525, 142543, 142566, 142578, 142595, 142608, 142626, 142649, 142702, 142723, 142774, 142781,
+142807, 142837, 142856, 142873, 142895, 142915, 142929, 142948, 142960, 142973, 142984, 143007,
+143050, 143098, 143133, 143173, 143207, 143246, 143274, 143283, 143310, 143324, 143349, 143375,
+143399, 143407, 143418, 143425, 143434, 143479, 143494, 143514, 143539, 143569, 143588, 143612,
+143633, 143659, 143679, 143704, 143720, 143741, 143768, 143800, 143814, 143830, 143851, 143866,
+143886, 143902, 143923, 143932, 143946, 143964, 143987, 144033, 144062, 144103, 144126, 144154,
+144182, 144215, 144234, 144258, 144282, 144311, 144328, 144350, 144372, 144399, 144418, 144436,
+144466, 144501, 144537, 144578, 144592, 144611, 144637, 144668, 144680, 144699, 144723, 144740,
+144767, 144798, 144812, 144831, 144852, 144871, 144896, 144931, 144962, 144998, 145032, 145071,
+145112, 145158, 145188, 145229, 145275, 145306, 145336, 145371, 145401, 145439, 145480, 145523,
+145569, 145600, 145626, 145659, 145697, 145721, 145761, 145797, 145832, 145868, 145890, 145923,
+145961, 145988, 146016, 146049, 146068, 146100, 146137, 146168, 146204, 146228, 146271, 146319,
+146355, 146396, 146408, 146459, 146483, 146506, 146528, 146560, 146596, 146622, 146647, 146675,
+146704, 146726, 146748, 146771, 146794, 146812, 146834, 146848, 146867, 146893, 146924, 146953,
+146987, 147000, 147018, 147046, 147071, 147106, 147138, 147160, 147194, 147233, 147260, 147312,
+147369, 147383, 147402, 147418, 147441, 147469, 147491, 147503, 147521, 147585, 147622, 147664,
+147689, 147719, 147768, 147828, 147851, 147881, 147906, 147936, 147947, 148004, 148034, 148069,
+148087, 148110, 148152, 148205, 148221, 148244, 148262, 148285, 148294, 148349, 148377, 148410,
+148426, 148447, 148487, 148538, 148552, 148573, 148589, 148610, 148622, 148641, 148665, 148682,
+148688, 148710, 148737, 148755, 148778, 148799, 148827, 148860, 148886, 148908, 148926, 148949,
+148966, 148987, 149013, 149026, 149044, 149066, 149083, 149096, 149114, 149131, 149153, 149164,
+149182, 149205, 149221, 149253, 149264, 149291, 149313, 149325, 149344, 149368, 149385, 149391,
+149406, 149428, 149455, 149478, 149506, 149528, 149555, 149583, 149616, 149644, 149677, 149694,
+149716, 149741, 149771, 149806, 149846, 149859, 149877, 149888, 149917, 149936, 149962, 149993,
+150005, 150022, 150034, 150051, 150087, 150128, 150137, 150140, 150150, 150165, 150175, 150190,
+150200, 150218, 150223, 150235, 150252, 150262, 150268, 150281, 150299, 150310, 150314, 150325,
+150341, 150350, 150360, 150375, 150386, 150402, 150406, 150416, 150425, 150434, 150445, 150454,
+150468, 150487, 150499, 150516, 150537, 150563, 150584, 150606, 150638, 150662, 150696, 150727,
+150771, 150809, 150838, 150877, 150912, 150938, 150966, 150971, 150983, 151000, 151021, 151037,
+151049, 151066, 151087, 151100, 151118, 151131, 151141, 151152, 151168, 151188, 151203, 151223,
+151251, 151286, 151326, 151359, 151370, 151386, 151398, 151415, 151433, 151456, 151464, 151477,
+151487, 151504, 151526, 151541, 151558, 151563, 151572, 151586, 151620, 151661, 151673, 151690,
+151703, 151721, 151733, 151752, 151769, 151782, 151800, 151824, 151845, 151858, 151876, 151895,
+151919, 151934, 151954, 151992, 152017, 152047, 152075, 152099, 152128, 152140, 152159, 152176,
+152208, 152230, 152246, 152256, 152273, 152295, 152333, 152378, 152439, 152493, 152552, 152612,
+152677, 152738, 152792, 152851, 152886, 152926, 152976, 153031, 153088, 153145, 153222, 153292,
+153367, 153444, 153458, 153500, 153520, 153542, 153574, 153593, 153640, 153664, 153689, 153721,
+153758, 153784, 153815, 153841, 153873, 153892, 153912, 153939, 153971, 153992, 154018, 154034,
+154096, 154131, 154171, 154194, 154222, 154269, 154327, 154348, 154376, 154399, 154427, 154435,
+154450, 154470, 154483, 154489, 154502, 154520, 154533, 154543, 154558, 154569, 154578, 154586,
+154604, 154627, 154646, 154670, 154696, 154727, 154746, 154770, 154796, 154827, 154846, 154870,
+154896, 154927, 154946, 154970, 154996, 155027, 155046, 155070, 155096, 155127, 155146, 155170,
+155196, 155227, 155246, 155270, 155296, 155327, 155346, 155370, 155396, 155427, 155446, 155470,
+155496, 155527, 155546, 155570, 155596, 155627, 155646, 155670, 155696, 155727, 155746, 155770,
+155796, 155827, 155846, 155870, 155896, 155927, 155946, 155970, 155996, 156027, 156046, 156070,
+156096, 156127, 156137, 156152, 156171, 156195, 156206, 156227, 156253, 156261, 156279, 156302,
+156337, 156380, 156406, 156419, 156444, 156477, 156493, 156512, 156523, 156533, 156550, 156572,
+156584, 156606, 156633, 156650, 156658, 156671, 156680, 156694, 156703, 156717, 156724, 156742,
+156755, 156772, 156792, 156816, 156843, 156865, 156890, 156906, 156926, 156949, 156974, 157002,
+157022, 157045, 157072, 157102, 157127, 157155, 157176, 157200, 157226, 157255, 157275, 157298,
+157323, 157351, 157375, 157396, 157420, 157446, 157475, 157495, 157518, 157545, 157575, 157600,
+157628, 157651, 157677, 157705, 157736, 157768, 157795, 157814, 157836, 157860, 157887, 157900,
+157918, 157940, 157957, 157971, 157985, 157996, 158030, 158069, 158078, 158092, 158103, 158119,
+158141, 158168, 158189, 158215, 158236, 158262, 158284, 158311, 158330, 158354, 158363, 158377,
+158396, 158420, 158455, 158495, 158505, 158520, 158555, 158595, 158627, 158664, 158674, 158689,
+158729, 158774, 158795, 158821, 158841, 158864, 158870, 158881, 158889, 158894, 158929, 158969,
+158979, 158994, 159002, 159015, 159029, 159048, 159062, 159082, 159103, 159129, 159139, 159156,
+159174, 159199, 159229, 159254, 159277, 159326, 159381, 159414, 159452, 159492, 159516, 159550,
+159588, 159623, 159662, 159695, 159729, 159755, 159777, 159805, 159826, 159851, 159881, 159903,
+159931, 159959, 159993, 160010, 160041, 160071, 160097, 160123, 160138, 160169, 160196, 160229,
+160255, 160282, 160322, 160355, 160395, 160414, 160438, 160457, 160481, 160500, 160524, 160543,
+160567, 160586, 160610, 160629, 160653, 160680, 160713, 160742, 160768, 160791, 160821, 160860,
+160914, 160973, 161003, 161038, 161068, 161097, 161133, 161174, 161208, 161238, 161273, 161301,
+161320, 161357, 161399, 161434, 161474, 161516, 161559, 161589, 161624, 161661, 161685, 161720,
+161761, 161809, 161862, 161908, 161955, 162007, 162043, 162069, 162101, 162126, 162156, 162185,
+162219, 162254, 162294, 162328, 162352, 162381, 162404, 162432, 162455, 162483, 162507, 162536,
+162563, 162579, 162600, 162620, 162645, 162665, 162690, 162716, 162747, 162767, 162792, 162812,
+162837, 162857, 162882, 162898, 162926, 162960, 162999, 163026, 163058, 163085, 163106, 163139,
+163171, 163193, 163220, 163245, 163275, 163288, 163306, 163313, 163322, 163334, 163350, 163369,
+163390, 163414, 163438, 163457, 163469, 163488, 163502, 163521, 163529, 163544, 163564, 163585,
+163626, 163653, 163660, 163672, 163685, 163693, 163706, 163720, 163737, 163756, 163778, 163800,
+163822, 163844, 163866, 163888, 163910, 163927, 163944, 163961, 163978, 163995, 164012, 164018,
+164031, 164049, 164063, 164082, 164111, 164145, 164150, 164162, 164173, 164194, 164220, 164253,
+164287, 164298, 164321, 164345, 164360, 164396, 164437, 164465, 164498, 164518, 164538, 164556,
+164575, 164592, 164600, 164610, 164627, 164649, 164664, 164676, 164693, 164706, 164724, 164765,
+164811, 164843, 164880, 164890, 164905, 164915, 164971, 165000, 165034, 165051, 165073, 165114,
+165166, 165181, 165203, 165220, 165242, 165252, 165269, 165291, 165306, 165312, 165323, 165333,
+165389, 165418, 165452, 165469, 165491, 165532, 165584, 165599, 165621, 165638, 165660, 165669,
+165683, 165692, 165706, 165713, 165725, 165734, 165750, 165771, 165785, 165794, 165804, 165819,
+165827, 165840, 165849, 165873, 165889, 165910, 165918, 165924, 165941, 165953, 165970, 165979,
+165997, 166004, 166016, 166023, 166035, 166040, 166050, 166071, 166078, 166090, 166123, 166161,
+166191, 166226, 166238, 166250, 166267, 166274, 166288, 166309, 166335, 166355, 166365, 166381,
+166393, 166410, 166421, 166478, 166508, 166543, 166561, 166584, 166626, 166679, 166695, 166718,
+166736, 166759, 166766, 166778, 166801, 166840, 166869, 166922, 166947, 166971, 166984, 167002,
+167008, 167019, 167031, 167062, 167098, 167117, 167141, 167158, 167163, 167170, 167182, 167218,
+167259, 167292, 167332, 167377, 167415, 167427, 167444, 167454, 167470, 167477, 167489, 167505,
+167526, 167541, 167561, 167569, 167584, 167604, 167620, 167633, 167647, 167671, 167692, 167714,
+167739, 167756, 167766, 167779, 167792, 167805, 167818, 167831, 167861, 167898, 167940, 167975,
+167989, 168010, 168036, 168055, 168070, 168094, 168125, 168161, 168190, 168212, 168239, 168259,
+168267, 168277, 168292, 168305, 168325, 168391, 168430, 168474, 168501, 168533, 168584, 168646,
+168671, 168703, 168730, 168762, 168767, 168777, 168782, 168792, 168802, 168813, 168829, 168834,
+168839, 168849, 168862, 168880, 168886, 168899, 168917, 168973, 169048, 169075, 169119, 169156,
+169176, 169223, 169278, 169326, 169382, 169416, 169465, 169514, 169546, 169578, 169596, 169603,
+169622, 169646, 169672, 169703, 169714, 169720, 169733, 169751, 169762, 169772, 169787, 169797,
+169814, 169836, 169856, 169883, 169899, 169910, 169928, 169951, 169982, 170008, 170027, 170032,
+170042, 170046, 170057, 170073, 170079, 170087, 170111, 170134, 170162, 170171, 170182, 170207,
+170237, 170270, 170282, 170299, 170315, 170336, 170363, 170395, 170417, 170444, 170452, 170482,
+170517, 170532, 170552, 170565, 170579, 170598, 170611, 170629, 170643, 170664, 170690, 170720,
+170745, 170764, 170787, 170805, 170820, 170840, 170878, 170921, 170936, 170985, 171005, 171020,
+171042, 171069, 171100, 171126, 171148, 171175, 171195, 171210, 171230, 171242, 171259, 171280,
+171296, 171303, 171315, 171329, 171341, 171360, 171384, 171401, 171411, 171434, 171462, 171477,
+171484, 171503, 171536, 171560, 171590, 171609, 171642, 171675, 171718, 171750, 171792, 171821,
+171856, 171886, 171922, 171955, 171980, 172010, 172032, 172070, 172113, 172147, 172186, 172220,
+172259, 172286, 172318, 172355, 172375, 172411, 172452, 172484, 172521, 172548, 172580, 172605,
+172635, 172670, 172720, 172775, 172799, 172828, 172864, 172907, 172925, 172950, 172980, 173011,
+173029, 173052, 173077, 173091, 173110, 173124, 173144, 173158, 173170, 173216, 173243, 173270,
+173296, 173339, 173363, 173379, 173400, 173436, 173477, 173511, 173550, 173566, 173587, 173603,
+173637, 173673, 173708, 173729, 173759, 173793, 173828, 173851, 173889, 173920, 173953, 173985,
+174006, 174029, 174046, 174063, 174098, 174138, 174162, 174199, 174243, 174257, 174276, 174293,
+174317, 174330, 174348, 174365, 174387, 174404, 174426, 174443, 174465, 174497, 174534, 174556,
+174582, 174613, 174640, 174653, 174682, 174716, 174743, 174775, 174810, 174850, 174869, 174904,
+174944, 174968, 174993, 175023, 175072, 175126, 175144, 175163, 175187, 175209, 175220, 175244,
+175270, 175301, 175313, 175370, 175401, 175418, 175454, 175476, 175512, 175560, 175597, 175619,
+175650, 175657, 175662, 175674, 175691, 175705, 175717, 175734, 175744, 175757, 175775, 175799,
+175814, 175834, 175845, 175861, 175873, 175890, 175912, 175939, 175950, 175968, 175991, 176007,
+176025, 176048, 176062, 176086, 176115, 176137, 176167, 176231, 176264, 176298, 176334, 176359,
+176380, 176406, 176436, 176460, 176491, 176511, 176524, 176583, 176615, 176652, 176672, 176697,
+176741, 176796, 176814, 176839, 176859, 176884, 176896, 176915, 176939, 176944, 176956, 176973,
+176983, 176993, 177008, 177019, 177037, 177060, 177076, 177082, 177093, 177107, 177128, 177149,
+177176, 177185, 177199, 177211, 177221, 177236, 177249, 177267, 177278, 177294, 177305, 177321,
+177330, 177344, 177363, 177379, 177400, 177414, 177431, 177457, 177490, 177528, 177559, 177589,
+177626, 177668, 177703, 177727, 177756, 177778, 177782, 177789, 177798, 177814, 177835, 177849,
+177858, 177874, 177895, 177909, 177921, 177940, 177964, 177981, 178001, 178009, 178024, 178044,
+178057, 178095, 178138, 178146, 178159, 178168, 178184, 178205, 178219, 178240, 178249, 178265,
+178286, 178300, 178311, 178327, 178335, 178350, 178370, 178383, 178390, 178404, 178423, 178435,
+178445, 178460, 178477, 178486, 178509, 178537, 178556, 178580, 178609, 178643, 178673, 178708,
+178736, 178769, 178795, 178840, 178890, 178921, 178935, 178955, 178980, 179010, 179035, 179065,
+179100, 179119, 179199, 179284, 179308, 179325, 179347, 179361, 179380, 179399, 179423, 179442,
+179466, 179495, 179519, 179547, 179580, 179614, 179653, 179667, 179686, 179703, 179766, 179802,
+179843, 179867, 179896, 179944, 180003, 180025, 180054, 180078, 180107, 180113, 180123, 180153,
+180191, 180200, 180220, 180245, 180272, 180304, 180312, 180325, 180334, 180348, 180357, 180371,
+180387, 180408, 180419, 180445, 180461, 180492, 180503, 180507, 180518, 180534, 180543, 180553,
+180568, 180579, 180595, 180609, 180628, 180657, 180691, 180698, 180708, 180723, 180732, 180748,
+180771, 180799, 180815, 180836, 180846, 180902, 180931, 180965, 180982, 181004, 181045, 181097,
+181112, 181134, 181151, 181173, 181187, 181208, 181234, 181245, 181263, 181286, 181302, 181307,
+181314, 181328, 181347, 181359, 181371, 181388, 181398, 181409, 181426, 181441, 181457, 181491,
+181503, 181524, 181549, 181566, 181582, 181598, 181615, 181633, 181656, 181673, 181695, 181721,
+181742, 181759, 181781, 181793, 181817, 181846, 181879, 181907, 181924, 181945, 181961, 181975,
+181994, 182006, 182019, 182040, 182058, 182077, 182099, 182119, 182151, 182171, 182213, 182254,
+182272, 182293, 182318, 182328, 182344, 182372, 182404, 182431, 182441, 182483, 182529, 182561,
+182576, 182592, 182613, 182638, 182658, 182669, 182684, 182699, 182719, 182739, 182764, 182779,
+182798, 182814, 182832, 182843, 182858, 182876, 182894, 182912, 182930, 182948, 182966, 182984,
+183002, 183020, 183038, 183057, 183075, 183093, 183111, 183130, 183148, 183166, 183184, 183202,
+183220, 183234, 183248, 183270, 183295, 183338, 183384, 183430, 183476, 183522, 183568, 183614,
+183660, 183706, 183752, 183798, 183845, 183891, 183937, 183983, 184029, 184076, 184122, 184168,
+184214, 184260, 184306, 184331, 184369, 184410, 184451, 184492, 184533, 184574, 184615, 184656,
+184697, 184738, 184779, 184821, 184862, 184903, 184944, 184985, 185027, 185068, 185109, 185150,
+185191, 185232, 185257, 185282, 185307, 185332, 185357, 185382, 185407, 185432, 185458, 185483,
+185508, 185533, 185558, 185584, 185609, 185634, 185659, 185684, 185709, 185723, 185737, 185751,
+185765, 185779, 185793, 185807, 185821, 185836, 185850, 185869, 185891, 185913, 185935, 185957,
+185979, 186001, 186023, 186046, 186068, 186090, 186112, 186134, 186157, 186179, 186193, 186207,
+186222, 186236, 186252, 186271, 186290, 186309, 186328, 186347, 186366, 186385, 186404, 186427,
+186453, 186479, 186505, 186531, 186557, 186583, 186609, 186635, 186661, 186688, 186714, 186740,
+186766, 186793, 186819, 186845, 186871, 186897, 186923, 186942, 186962, 186981, 187000, 187019,
+187039, 187058, 187082, 187109, 187136, 187163, 187190, 187217, 187244, 187271, 187298, 187325,
+187353, 187380, 187407, 187434, 187462, 187489, 187516, 187543, 187570, 187597, 187616, 187635,
+187654, 187673, 187694, 187718, 187742, 187766, 187790, 187814, 187838, 187862, 187886, 187910,
+187935, 187959, 187983, 188007, 188032, 188056, 188080, 188104, 188128, 188152, 188175, 188201,
+188227, 188253, 188279, 188305, 188331, 188357, 188383, 188409, 188436, 188462, 188488, 188514,
+188541, 188567, 188593, 188619, 188645, 188671, 188685, 188699, 188713, 188727, 188754, 188786,
+188799, 188819, 188844, 188862, 188887, 188916, 188955, 189014, 189038, 189061, 189078, 189094,
+189113, 189138, 189160, 189189, 189223, 189239, 189262, 189290, 189311, 189336, 189361, 189382,
+189414, 189453, 189497, 189530, 189562, 189569, 189583, 189602, 189614, 189624, 189643, 189649,
+189662, 189680, 189693, 189698, 189719, 189732, 189744, 189751, 189765, 189784, 189796, 189804,
+189819, 189839, 189848, 189864, 189885, 189899, 189905, 189913, 189923, 189949, 189980, 189995,
+190025, 190071, 190107, 190128, 190150, 190170, 190175, 190185, 190200, 190212, 190229, 190239,
+190256, 190266, 190279, 190309, 190344, 190372, 190405, 190411, 190424, 190442, 190453, 190465,
+190484, 190508, 190525, 190544, 190568, 190581, 190599, 190604, 190611, 190623, 190643, 190668,
+190686, 190709, 190720, 190736, 190748, 190765, 190775, 190785, 190800, 190805, 190817, 190834,
+190844, 190853, 190880, 190896, 190917, 190931, 190956, 190982, 191006, 191020, 191039, 191046,
+191060, 191079, 191091, 191105, 191126, 191152, 191162, 191184, 191211, 191242, 191268, 191283,
+191301, 191333, 191370, 191398, 191431, 191469, 191512, 191551, 191595, 191632, 191674, 191709,
+191763, 191822, 191862, 191885, 191914, 191948, 191987, 192021, 192049, 192138, 192232, 192265,
+192291, 192322, 192345, 192373, 192401, 192434, 192466, 192503, 192533, 192568, 192604, 192645,
+192649, 192660, 192676, 192686, 192693, 192707, 192726, 192738, 192749, 192806, 192836, 192871,
+192889, 192912, 192954, 193007, 193023, 193046, 193064, 193087, 193098, 193114, 193176, 193211,
+193251, 193274, 193302, 193349, 193407, 193428, 193456, 193479, 193507, 193510, 193534, 193550,
+193571, 193585, 193604, 193614, 193629, 193637, 193646, 193660, 193669, 193683, 193692, 193706,
+193725, 193734, 193750, 193771, 193785, 193805, 193822, 193842, 193864, 193889, 193935, 193986,
+193996, 194013, 194022, 194036, 194045, 194059, 194081, 194102, 194122, 194147, 194170, 194186,
+194192, 194214, 194235, 194252, 194273, 194299, 194312, 194330, 194352, 194369, 194382, 194400,
+194415, 194435, 194446, 194473, 194499, 194521, 194533, 194552, 194576, 194593, 194606, 194624,
+194639, 194659, 194667, 194675, 194686, 194704, 194727, 194750, 194791, 194802, 194831, 194865,
+194892, 194924, 194957, 194995, 195017, 195044, 195062, 195085, 195101, 195118, 195142, 195171,
+195193, 195234, 195280, 195290, 195301, 195319, 195342, 195358, 195367, 195381, 195390, 195404,
+195409, 195421, 195438, 195452, 195471, 195483, 195500, 195544, 195593, 195610, 195635, 195649,
+195671, 195689, 195715, 195728, 195746, 195753, 195767, 195786, 195798, 195811, 195837, 195849,
+195889, 195959, 195997, 196015, 196027, 196044, 196060, 196083, 196111, 196123, 196144, 196170,
+196189, 196213, 196242, 196276, 196300, 196329, 196350, 196376, 196391, 196413, 196440, 196452,
+196471, 196495, 196508, 196528, 196553, 196563, 196580, 196602, 196611, 196631, 196656, 196687,
+196718, 196744, 196765, 196785, 196806, 196822, 196843, 196856, 196869, 196883, 196909, 196934,
+196952, 196986, 197014, 197047, 197070, 197103, 197141, 197183, 197220, 197248, 197281, 197318,
+197350, 197377, 197392, 197403, 197419, 197430, 197448, 197477, 197490, 197514, 197528, 197553,
+197566, 197590, 197595, 197611, 197623, 197640, 197661, 197689, 197722, 197734, 197751, 197762,
+197774, 197791, 197796, 197808, 197825, 197835, 197852, 197874, 197888, 197909, 197925, 197948,
+197963, 197985, 198003, 198028, 198048, 198066, 198089, 198110, 198147, 198179, 198206, 198233,
+198269, 198306, 198349, 198389, 198425, 198456, 198482, 198508, 198543, 198579, 198621, 198660,
+198670, 198685, 198693, 198747, 198774, 198806, 198821, 198841, 198880, 198930, 198943, 198963,
+198978, 198998, 199016, 199039, 199062, 199090, 199103, 199121, 199130, 199144, 199153, 199167,
+199177, 199183, 199193, 199208, 199218, 199235, 199257, 199272, 199285, 199313, 199346, 199364,
+199378, 199397, 199410, 199428, 199451, 199465, 199484, 199500, 199521, 199546, 199576, 199587,
+199603, 199616, 199634, 199647, 199665, 199694, 199728, 199745, 199752, 199764, 199773, 199787,
+199796, 199810, 199818, 199872, 199899, 199931, 199946, 199966, 200005, 200055, 200068, 200088,
+200103, 200123, 200133, 200148, 200157, 200171, 200180, 200194, 200206, 200238, 200275, 200307,
+200344, 200348,
+    ]
+
+    /// Codepoint of name `i` as `codepoint - 0x100000` (reconstruct with
+    /// `0x100000 + offset`). Aligned with `nameStarts`.
+    static let codepointOffsets: [UInt16] = [
+56, 6247, 57, 6248, 9284, 9283, 200, 6249, 201, 6250, 9286, 9285, 1259, 8937, 1290, 8938, 9332,
+9331, 1321, 8939, 1352, 8940, 9334, 9333, 1260, 8941, 1291, 8942, 9336, 9335, 1322, 8943, 1353,
+8944, 9338, 9337, 1261, 8945, 1292, 8946, 9353, 9352, 1323, 8947, 1354, 8948, 9355, 9354, 1262,
+8949, 1293, 8950, 9357, 9356, 1324, 8951, 1355, 8952, 9359, 9358, 1263, 8953, 1294, 8954, 9361,
+9360, 1325, 8955, 1356, 8956, 9363, 9362, 1264, 8957, 1295, 8958, 9365, 9364, 1326, 8959, 1357,
+8960, 9367, 9366, 1265, 8961, 1296, 8962, 9369, 9368, 1327, 8963, 1358, 8964, 9371, 9370, 1266,
+8965, 1297, 8966, 9373, 9372, 1328, 8967, 1359, 8968, 9375, 9374, 1267, 8969, 1298, 8970, 9391,
+9390, 1329, 8971, 1360, 8972, 9393, 9392, 1268, 8973, 1299, 8974, 9399, 9398, 1330, 8975, 1361,
+8976, 9401, 9400, 6084, 13094, 13481, 13512, 58, 6251, 59, 6252, 9288, 9287, 6096, 6288, 7244,
+686, 2898, 4170, 202, 6253, 203, 6254, 9290, 9289, 897, 1841, 1956, 898, 1842, 1957, 13103,
+13490, 13521, 1269, 8977, 1300, 8978, 9403, 9402, 6105, 7241, 7253, 1331, 8979, 1362, 8980,
+9405, 9404, 13104, 13491, 13522, 1270, 8981, 1301, 8982, 9407, 9406, 6106, 7242, 7254, 1332,
+8983, 1363, 8984, 9409, 9408, 13105, 13492, 13523, 1271, 8985, 1302, 8986, 9411, 9410, 6107,
+7243, 7255, 1333, 8987, 1364, 8988, 9413, 9412, 13106, 13493, 13524, 1272, 8989, 1303, 8990,
+9415, 9414, 1334, 8991, 1365, 8992, 9417, 9416, 13107, 13494, 13525, 1273, 8993, 1304, 8994,
+9419, 9418, 1335, 8995, 1366, 8996, 9421, 9420, 899, 1843, 1958, 900, 1844, 1959, 13108, 13495,
+13526, 1274, 8997, 1305, 8998, 9423, 9422, 1336, 8999, 1367, 9000, 9425, 9424, 13109, 13496,
+13527, 1275, 9001, 1306, 9002, 9427, 9426, 1337, 9003, 1368, 9004, 9429, 9428, 13110, 13497,
+13528, 1276, 9005, 1307, 9006, 9431, 9430, 1338, 9007, 1369, 9008, 9433, 9432, 13111, 13498,
+13529, 1277, 9009, 1308, 9010, 9435, 9434, 1339, 9011, 1370, 9012, 9437, 9436, 13112, 13499,
+13530, 1278, 9013, 1309, 9014, 9439, 9438, 1340, 9015, 1371, 9016, 9441, 9440, 6085, 13095,
+13482, 13513, 60, 6255, 61, 6256, 9292, 9291, 6097, 6289, 7245, 204, 6257, 205, 6258, 9294,
+9293, 13113, 13500, 13531, 1279, 9017, 1310, 9018, 9258, 9257, 1341, 9019, 1372, 9020, 9260,
+9259, 13114, 13501, 13532, 1280, 9021, 1311, 9022, 9272, 9271, 1342, 9023, 1373, 9024, 9274,
+9273, 13115, 13502, 13533, 1281, 9025, 1312, 9026, 9276, 9275, 1343, 9027, 1374, 9028, 9278,
+9277, 13116, 13503, 13534, 1282, 9029, 1313, 9030, 9635, 9634, 1344, 9031, 1375, 9032, 9637,
+9636, 13117, 13504, 13535, 1283, 9033, 1314, 9034, 9639, 9638, 1345, 9035, 1376, 9036, 9641,
+9640, 13118, 13505, 13536, 1284, 9037, 1315, 9038, 9643, 9642, 1346, 9039, 1377, 9040, 9645,
+9644, 13119, 13506, 13537, 1285, 9041, 1316, 9042, 9647, 9646, 1347, 9043, 1378, 9044, 9649,
+9648, 13120, 13507, 13538, 1286, 9045, 1317, 9046, 9651, 9650, 1348, 9047, 1379, 9048, 9653,
+9652, 13121, 13508, 13539, 1287, 9049, 1318, 9050, 9655, 9654, 1349, 9051, 1380, 9052, 9657,
+9656, 13122, 13509, 13540, 1288, 9053, 1319, 9054, 9659, 9658, 1350, 9055, 1381, 9056, 9661,
+9660, 6490, 6494, 6495, 13096, 13483, 13514, 62, 6259, 63, 6260, 9296, 9295, 6098, 6290, 7246,
+206, 6261, 207, 6262, 9298, 9297, 901, 1845, 1960, 902, 1846, 1961, 13123, 13510, 13541, 1289,
+9057, 1320, 9058, 9663, 9662, 1351, 9059, 1382, 9060, 9665, 9664, 13124, 13511, 13542, 1568,
+9061, 1569, 9062, 9667, 9666, 1570, 9063, 1571, 9064, 9669, 9668, 1687, 9065, 1688, 9066, 9671,
+9670, 1725, 9067, 1726, 9068, 9673, 9672, 1689, 9069, 1690, 9070, 9675, 9674, 1727, 9071, 1728,
+9072, 9677, 9676, 1691, 9073, 1692, 9074, 9679, 9678, 1729, 9075, 1730, 9076, 9681, 9680, 1693,
+9077, 1694, 9078, 9683, 9682, 1731, 9079, 1732, 9080, 9685, 9684, 1695, 9081, 1696, 9082, 9687,
+9686, 1733, 9083, 1734, 9084, 9689, 9688, 1697, 9085, 1698, 9086, 9691, 9690, 1735, 9087, 1736,
+9088, 9693, 9692, 1699, 9089, 1700, 9090, 9695, 9694, 1737, 9091, 1738, 9092, 9697, 9696, 1701,
+9093, 1702, 9094, 9699, 9698, 1739, 9095, 1740, 9096, 9701, 9700, 1559, 1560, 1561, 1562, 13097,
+13484, 13515, 64, 6263, 65, 6264, 9300, 9299, 6099, 6291, 7247, 208, 6265, 209, 6266, 9302,
+9301, 1703, 9097, 1704, 9098, 9703, 9702, 1741, 9099, 1742, 9100, 9705, 9704, 1705, 9101, 1706,
+9102, 9707, 9706, 1743, 9103, 1744, 9104, 9709, 9708, 1707, 9105, 1708, 9106, 9711, 9710, 1745,
+9107, 1746, 9108, 9713, 9712, 1709, 9109, 1710, 9110, 9715, 9714, 1747, 9111, 1748, 9112, 9717,
+9716, 1711, 9113, 1712, 9114, 9719, 9718, 1749, 9115, 1750, 9116, 9721, 9720, 903, 1847, 1962,
+904, 1848, 1963, 1713, 9117, 1714, 9118, 9723, 9722, 1751, 9119, 1752, 9120, 9725, 9724, 1715,
+9121, 1716, 9122, 9727, 9726, 1753, 9123, 1754, 9124, 9729, 9728, 1717, 9125, 1718, 9126, 9731,
+9730, 1755, 9127, 1756, 9128, 9733, 9732, 1719, 9129, 1720, 9130, 9735, 9734, 1757, 9131, 1758,
+9132, 9737, 9736, 1721, 9133, 1722, 9134, 9739, 9738, 1759, 9135, 1760, 9136, 9741, 9740, 6493,
+6500, 6501, 6491, 6496, 6497, 2493, 2494, 6492, 6498, 6499, 3504, 3506, 3508, 3505, 3507, 3509,
+13098, 13485, 13516, 66, 6267, 67, 6268, 9304, 9303, 6100, 6292, 7248, 210, 6269, 211, 6270,
+9306, 9305, 1723, 9137, 1724, 9138, 9743, 9742, 1761, 9139, 1762, 9140, 9745, 9744, 1137, 1138,
+1141, 1142, 13099, 13486, 13517, 68, 6271, 69, 6272, 9308, 9307, 6101, 6293, 7249, 212, 6273,
+213, 6274, 9310, 9309, 905, 1849, 1964, 906, 1850, 1965, 13100, 13487, 13518, 70, 6275, 71,
+6276, 9312, 9311, 6102, 6294, 7250, 214, 6277, 215, 6278, 9314, 9313, 1572, 1851, 1966, 1573,
+1852, 1967, 13101, 13488, 13519, 72, 6279, 73, 6280, 9316, 9315, 6103, 6295, 7251, 216, 6281,
+217, 6282, 9318, 9317, 1139, 1140, 1143, 1144, 13102, 13489, 13520, 74, 6283, 75, 6284, 9320,
+9319, 6104, 6296, 7252, 218, 6285, 219, 6286, 9322, 9321, 1574, 1853, 1968, 1575, 1854, 1969, 4,
+5, 148, 149, 6327, 4148, 6086, 6328, 6329, 1406, 2963, 1407, 10595, 10596, 13638, 5357, 5358,
+13639, 5355, 5356, 10601, 10602, 10599, 10600, 5349, 5350, 10597, 10598, 1107, 3567, 1208, 1209,
+12828, 3568, 12827, 12993, 3569, 3570, 13207, 13208, 13209, 3631, 13009, 13010, 13040, 1122,
+3179, 4007, 4008, 1121, 3178, 3985, 3986, 4387, 4386, 3212, 3211, 2021, 3687, 3688, 3689, 3690,
+4385, 4432, 4433, 11075, 11078, 11079, 11077, 11076, 3769, 2743, 3691, 3692, 5378, 5379, 14014,
+14026, 14027, 14028, 14029, 14020, 14016, 12617, 12629, 12630, 12755, 12756, 12616, 12615, 3214,
+3213, 2479, 1117, 2480, 4414, 4415, 4412, 4413, 3350, 3349, 1069, 14211, 14212, 14207, 14208,
+1070, 14204, 14205, 5568, 5569, 2633, 2391, 2632, 2390, 2634, 2392, 2637, 2395, 2636, 2394,
+2635, 2393, 2861, 5254, 406, 4525, 5579, 5823, 5824, 5580, 9141, 9143, 9144, 9142, 2544, 5217,
+794, 796, 797, 795, 1408, 3528, 3529, 4434, 10939, 10941, 1099, 11768, 1103, 4256, 4257, 10310,
+10311, 1104, 4120, 4075, 1100, 1105, 1106, 13278, 13242, 14005, 14006, 13281, 13282, 2920, 583,
+2443, 2897, 2896, 12402, 12403, 12396, 12397, 10981, 10110, 10112, 2048, 11157, 11158, 11170,
+12331, 2298, 4249, 9937, 9938, 6142, 6143, 12400, 12401, 2684, 10069, 10070, 2703, 7771, 7772,
+11764, 3758, 7186, 7187, 6417, 10496, 7204, 7205, 6418, 10495, 6419, 2349, 2350, 2603, 12928,
+12929, 7226, 7227, 2164, 3881, 3882, 3883, 3884, 1897, 1898, 3879, 3880, 2020, 8453, 8461,
+12932, 13603, 10300, 2231, 3598, 2614, 2763, 2965, 13156, 13225, 14176, 3031, 2966, 12268,
+12270, 2014, 13154, 13223, 14174, 3030, 2964, 3013, 7931, 3392, 3390, 3391, 12444, 8290, 8296,
+8292, 8291, 8293, 8295, 8294, 8288, 8289, 557, 559, 560, 558, 1592, 4114, 332, 1627, 3084, 3085,
+9895, 3086, 3087, 3088, 4234, 4236, 4237, 4235, 8533, 8534, 328, 1665, 1666, 8539, 8540, 329,
+1667, 1668, 8543, 8544, 297, 1677, 3060, 10169, 10170, 3061, 8472, 3139, 8482, 8483, 8484, 8357,
+8358, 8517, 8518, 3140, 9904, 3141, 3142, 3143, 7935, 7936, 120, 12758, 12759, 12762, 12763,
+7775, 121, 573, 574, 3144, 3195, 3196, 3197, 11038, 11039, 8521, 8522, 3145, 9972, 3146, 3147,
+3148, 7947, 7948, 3223, 3224, 304, 8477, 8478, 8479, 8355, 8356, 8515, 8516, 8039, 8040, 8041,
+8042, 8043, 134, 9903, 135, 278, 279, 7933, 7934, 849, 850, 5278, 5279, 305, 331, 2782, 2783,
+11036, 11037, 8519, 8520, 136, 9971, 137, 280, 281, 7945, 7946, 264, 265, 320, 1224, 1225, 324,
+8529, 8530, 3089, 3090, 9897, 3091, 12329, 12330, 13319, 13318, 3092, 3093, 4238, 4240, 4241,
+4239, 8537, 8538, 298, 1675, 318, 1150, 1151, 1152, 1153, 5549, 301, 128, 129, 272, 273, 122,
+9894, 123, 266, 267, 321, 1226, 1227, 325, 8531, 8532, 299, 1676, 124, 9896, 125, 10751, 2805,
+268, 269, 322, 1228, 1229, 326, 8535, 8536, 10492, 687, 802, 803, 1418, 1419, 8589, 8590, 2807,
+10493, 10494, 2327, 1632, 895, 2529, 2530, 1655, 1656, 10068, 896, 1657, 1658, 7776, 1938, 1939,
+1412, 1633, 2241, 1413, 2326, 1629, 2039, 2040, 1630, 1631, 2024, 2025, 308, 309, 311, 310, 307,
+306, 2859, 2860, 312, 313, 296, 1145, 2512, 5263, 1146, 1147, 1148, 1149, 3436, 1678, 2728,
+2730, 2729, 300, 126, 127, 270, 271, 3129, 3190, 3191, 3192, 8353, 8354, 8513, 8514, 7939, 7940,
+3130, 9900, 3131, 3132, 3133, 565, 566, 118, 5043, 9898, 119, 571, 572, 12327, 12328, 3134,
+8492, 8493, 8494, 11042, 11043, 8525, 8526, 2997, 2998, 7943, 7944, 3135, 9902, 3136, 3137,
+3138, 3221, 3222, 302, 330, 2523, 2524, 8351, 8352, 8511, 8512, 2833, 2409, 8082, 8083, 8084,
+8085, 8086, 7937, 7938, 130, 9899, 131, 274, 275, 1795, 1796, 2806, 303, 8487, 8488, 8489, 2239,
+2240, 8523, 8524, 7941, 7942, 132, 9901, 133, 276, 277, 847, 848, 262, 263, 319, 1222, 1223,
+323, 8527, 8528, 6344, 6345, 3149, 3150, 3152, 3151, 3153, 3154, 315, 140, 141, 284, 285, 3155,
+3156, 3157, 3158, 3159, 316, 142, 1976, 143, 286, 287, 317, 144, 145, 288, 289, 314, 138, 139,
+282, 283, 8112, 8115, 8113, 8116, 8117, 8114, 4680, 8098, 8099, 4681, 3112, 3113, 601, 1169,
+8108, 8110, 8111, 8109, 4678, 8102, 8103, 4679, 4676, 4734, 4735, 8096, 8097, 4677, 4674, 8100,
+8101, 4675, 3098, 3106, 3108, 3109, 3107, 5041, 5566, 5567, 5042, 3100, 3101, 3099, 3102, 3104,
+3105, 3103, 588, 596, 598, 599, 597, 590, 591, 589, 592, 594, 595, 593, 8104, 8106, 8107, 8105,
+3110, 3111, 600, 1168, 3072, 3074, 3075, 3073, 13791, 14064, 3076, 3077, 1219, 13767, 13768,
+104, 105, 293, 248, 249, 3078, 3080, 3081, 3079, 13790, 3082, 3083, 14065, 1220, 2057, 2022,
+106, 107, 294, 14094, 14088, 250, 251, 1221, 2058, 2023, 108, 109, 295, 14095, 14089, 252, 253,
+1218, 13765, 13766, 4765, 4701, 102, 103, 292, 246, 247, 1942, 1935, 3603, 1388, 1389, 375, 377,
+376, 2192, 2193, 2842, 9933, 9931, 9394, 9396, 9397, 9395, 8077, 8761, 9545, 9546, 2976, 2977,
+10812, 10854, 11276, 11234, 2978, 2979, 5200, 8739, 9501, 9502, 1465, 1466, 10811, 10853, 11275,
+11233, 1529, 1530, 6081, 6311, 6312, 6313, 6314, 4706, 4707, 4736, 5370, 5371, 6298, 6180, 6177,
+6178, 6175, 6179, 6176, 6184, 6, 7, 150, 151, 4857, 6010, 6011, 4858, 12343, 12344, 649, 14163,
+14164, 14166, 14165, 3715, 3716, 653, 657, 658, 4846, 4847, 654, 650, 2664, 2665, 3118, 682,
+867, 871, 869, 5794, 5796, 1195, 1196, 868, 872, 870, 5795, 5797, 5212, 8751, 9525, 9526, 1489,
+1490, 10813, 10855, 11277, 11235, 1553, 1554, 5390, 5367, 5368, 5391, 915, 916, 2943, 2944,
+1585, 954, 2855, 11086, 2165, 5819, 5820, 5216, 10021, 2166, 5514, 5515, 5577, 5821, 5822, 5578,
+5180, 5181, 1770, 1768, 2187, 2595, 4180, 4181, 1769, 3766, 3768, 6199, 6200, 6197, 6198, 9815,
+9753, 9967, 9816, 9754, 9969, 4856, 4859, 3730, 4446, 4449, 4450, 4447, 4448, 3757, 10186,
+10187, 3796, 7228, 3693, 10142, 10145, 10146, 10144, 10143, 3696, 3697, 3695, 3694, 3797, 3759,
+7230, 7229, 10188, 10191, 10192, 10190, 10189, 4002, 4005, 4006, 4003, 7795, 7798, 7799, 7796,
+7797, 4004, 1641, 13135, 13136, 4175, 4176, 1642, 729, 4388, 4384, 1878, 3127, 3128, 1879, 8497,
+8498, 8502, 8501, 3839, 3840, 4621, 4622, 731, 732, 730, 733, 735, 736, 734, 3895, 3896, 1826,
+2149, 3180, 3181, 12345, 12346, 2061, 6361, 6362, 2062, 5599, 7961, 7962, 5600, 5545, 5546,
+5214, 8753, 9529, 9530, 1493, 1494, 10814, 10856, 11278, 11236, 1557, 1558, 5238, 5237, 5236,
+5235, 13595, 13563, 13564, 13596, 339, 343, 344, 741, 1587, 1588, 7695, 7697, 5139, 5140, 7699,
+7701, 2798, 2799, 4745, 2142, 4402, 4403, 1859, 743, 744, 742, 1981, 1765, 1175, 1177, 1178,
+1176, 1599, 1600, 11680, 11681, 4696, 4311, 4312, 745, 747, 748, 746, 3893, 3894, 6001, 6002,
+2400, 602, 6525, 7224, 13391, 13392, 604, 605, 2334, 4579, 4580, 2335, 603, 5950, 5951, 606,
+608, 609, 607, 1997, 1998, 3897, 3898, 2834, 4540, 4541, 2835, 3024, 8327, 8392, 3023, 8326,
+4030, 4151, 5215, 8754, 9531, 9532, 2992, 2993, 10815, 10857, 11279, 11237, 2994, 2995, 924,
+3553, 3554, 925, 12337, 12338, 8505, 9957, 9958, 8507, 8508, 8506, 810, 1188, 1586, 4306, 4307,
+14269, 14270, 8423, 8424, 8468, 8467, 4560, 4561, 811, 824, 825, 828, 829, 808, 4558, 4559, 809,
+5257, 5258, 2949, 1874, 1876, 1877, 1875, 2344, 4550, 2345, 4551, 2950, 1244, 1090, 1566, 1864,
+1819, 1820, 1865, 7685, 7686, 7683, 7684, 7663, 7664, 7665, 7666, 7710, 7711, 13777, 13778,
+8299, 8300, 5104, 5092, 5093, 2682, 2683, 2680, 2681, 13775, 13776, 8329, 8330, 13773, 13774,
+8297, 8298, 8, 9, 152, 153, 5166, 5167, 4754, 3750, 3358, 8677, 11732, 3574, 3575, 585, 9565,
+11135, 7911, 7921, 2526, 2868, 2973, 12418, 587, 586, 1166, 1167, 11028, 4163, 13060, 13061,
+3812, 13046, 13047, 3811, 13048, 13049, 4162, 13062, 13063, 798, 2618, 6437, 6438, 2199, 2200,
+800, 801, 799, 2007, 4226, 4227, 4228, 9181, 9182, 9183, 2218, 1970, 2219, 2220, 2221, 2222,
+2223, 2224, 2902, 1857, 1858, 12347, 12348, 3706, 3707, 956, 13799, 2739, 417, 418, 1910, 4086,
+1911, 4083, 9775, 9776, 9777, 9778, 2550, 4090, 2551, 4087, 4088, 4089, 4084, 4085, 820, 821,
+1624, 1860, 1861, 10541, 10542, 14078, 14079, 2927, 2928, 3596, 3597, 1625, 8457, 8458, 10555,
+10556, 6321, 6322, 3931, 6377, 6378, 4040, 8889, 6310, 3932, 8787, 8788, 5503, 5496, 13642,
+8890, 8895, 8891, 8896, 8892, 8897, 8893, 8898, 8894, 8899, 8908, 10557, 11057, 5533, 5534,
+5047, 4716, 4717, 4718, 4719, 4714, 6149, 11900, 11901, 6155, 6156, 6153, 6151, 6152, 6154,
+5048, 4708, 10130, 10131, 4709, 8870, 8871, 6478, 12059, 12060, 6479, 6413, 6414, 6393, 6394,
+6395, 6396, 7540, 12019, 12058, 7541, 7544, 9217, 7543, 11052, 11053, 4710, 10132, 10133, 4711,
+10519, 10520, 8863, 8864, 9793, 9795, 8347, 8348, 8349, 8350, 8337, 8338, 8339, 8340, 4112,
+4113, 6236, 6237, 6238, 6239, 6224, 6225, 6240, 6241, 6228, 6229, 6232, 6233, 4034, 4035, 6242,
+6243, 6234, 6235, 6230, 6231, 6218, 6219, 6226, 6227, 6220, 6221, 6222, 6223, 7545, 7546, 7547,
+7548, 10770, 10771, 5502, 5507, 5508, 5509, 6319, 6320, 11951, 11953, 5500, 5501, 11955, 11957,
+11582, 11583, 11586, 11587, 5557, 5561, 5558, 5562, 5556, 6304, 6305, 10558, 10559, 5560, 5555,
+6308, 6309, 6306, 6307, 10560, 10561, 5559, 10772, 10773, 10766, 10767, 10768, 10769, 4764,
+4768, 13700, 4771, 4766, 4769, 4700, 4703, 13643, 4705, 4702, 4762, 5304, 5305, 5302, 5303,
+5518, 5519, 6548, 5535, 5536, 5537, 5538, 5539, 5540, 4813, 4814, 6540, 6541, 4817, 4818, 6549,
+6536, 6537, 7549, 7550, 6544, 6545, 6550, 4821, 4822, 4823, 4824, 4825, 4826, 4815, 4816, 6542,
+6543, 4819, 4820, 6551, 6538, 6539, 7551, 7552, 6546, 6547, 873, 11376, 11378, 11382, 11380,
+877, 875, 5798, 5800, 5802, 1197, 1198, 874, 878, 876, 5799, 5801, 5803, 3041, 3042, 8318, 8320,
+8321, 8319, 5205, 8744, 9511, 9512, 1475, 1476, 10816, 10858, 11280, 11238, 1539, 1540, 2919,
+13050, 13051, 14031, 5184, 8723, 9469, 9470, 1433, 1434, 10817, 10859, 11281, 11239, 1497, 1498,
+5174, 5175, 5172, 5173, 4902, 5075, 335, 3259, 11491, 2773, 2498, 12652, 2774, 2499, 12653,
+12659, 2501, 3209, 3205, 12663, 3207, 12665, 12667, 12657, 12669, 12661, 12671, 12673, 12675,
+12677, 3201, 3203, 12658, 2500, 3208, 3204, 12662, 3206, 12664, 12666, 12656, 12668, 12660,
+12670, 12672, 12674, 12676, 3200, 3202, 816, 3004, 12678, 817, 3005, 12679, 12685, 3007, 3480,
+3476, 12689, 3478, 12691, 12693, 12683, 12695, 12687, 12697, 12699, 12701, 12703, 3472, 3474,
+12684, 3006, 3479, 3475, 12688, 3477, 12690, 12692, 12682, 12694, 12686, 12696, 12698, 12700,
+12702, 3471, 3473, 9213, 9218, 11625, 9214, 9219, 11626, 11634, 9224, 9244, 9236, 11642, 9240,
+11646, 11650, 11630, 11660, 11638, 11664, 11668, 11672, 11676, 9228, 9232, 11633, 9223, 9243,
+9235, 11641, 9239, 11645, 11649, 11629, 11659, 11637, 11663, 11667, 11671, 11675, 9227, 9231,
+363, 3010, 11909, 11912, 3011, 3313, 3301, 11914, 3312, 11915, 11916, 11911, 11917, 11913,
+11918, 11919, 11920, 11921, 3299, 3300, 5334, 11492, 3260, 3266, 3264, 11494, 3265, 2317, 7213,
+12153, 12156, 7216, 7764, 7762, 12158, 7763, 12159, 12160, 12155, 12161, 12157, 12162, 12163,
+12164, 12165, 7217, 7761, 11495, 11496, 11526, 11497, 11493, 5333, 11498, 11499, 9215, 9220,
+11627, 9216, 9221, 11628, 11636, 9226, 9246, 9238, 11644, 9242, 11648, 11652, 11632, 11662,
+11640, 11666, 11670, 11674, 11678, 9230, 9234, 11635, 9225, 9245, 9237, 11643, 9241, 11647,
+11651, 11631, 11661, 11639, 11665, 11669, 11673, 11677, 9229, 9233, 5335, 11500, 11501, 12631,
+12632, 12639, 12642, 12633, 12638, 12636, 12644, 12637, 12645, 12646, 12641, 12647, 12643,
+12648, 12649, 12650, 12651, 12634, 12635, 374, 3008, 11961, 11963, 12233, 12236, 11965, 11975,
+11971, 12238, 11973, 12239, 12240, 12235, 12241, 12237, 12242, 12243, 12244, 12245, 11967,
+11969, 11922, 11925, 3009, 3315, 3304, 11927, 3314, 11928, 11929, 11924, 11930, 11926, 11931,
+11932, 11933, 11934, 3302, 3303, 3261, 3263, 9254, 9255, 9256, 2378, 3527, 3526, 1086, 1087,
+2396, 2444, 2249, 8591, 8592, 8604, 13450, 11230, 6339, 5683, 5684, 5685, 5686, 5687, 5688,
+11194, 11195, 1089, 3354, 3355, 1088, 1803, 4261, 3582, 5717, 5718, 3708, 5728, 389, 12274,
+12275, 8471, 12797, 6363, 4043, 4044, 8149, 8148, 98, 12996, 12997, 12806, 12807, 5918, 5920,
+5919, 5921, 5922, 5923, 13433, 99, 4302, 12994, 4186, 4187, 2195, 2196, 5141, 5142, 971, 972,
+2158, 2159, 8380, 8381, 506, 507, 11333, 11334, 11336, 11335, 1947, 1948, 242, 243, 3062, 3114,
+10795, 3063, 3064, 3065, 3066, 4932, 8783, 401, 8784, 402, 10668, 403, 400, 10667, 10669, 392,
+10900, 112, 113, 10792, 10904, 10898, 10903, 10897, 256, 257, 3067, 3115, 3068, 3069, 10796,
+3070, 3071, 4933, 393, 395, 10793, 10665, 114, 115, 1626, 258, 259, 4930, 394, 396, 116, 117,
+10794, 260, 261, 4931, 391, 10899, 399, 10066, 10067, 10666, 110, 111, 10791, 10902, 10896,
+10901, 10895, 254, 255, 7825, 8755, 9533, 9534, 3043, 3044, 10818, 10860, 11282, 11240, 3045,
+3046, 0, 2060, 1933, 8194, 8195, 8276, 8277, 8260, 8261, 8256, 8257, 8268, 8272, 8269, 8273,
+8264, 8265, 2710, 7792, 7784, 2561, 2562, 1246, 5738, 4419, 4757, 7783, 7647, 1, 8443, 8444,
+8445, 8446, 8431, 8432, 5743, 3719, 3720, 3721, 3722, 1982, 1983, 12266, 504, 3762, 3763, 505,
+2552, 2631, 2553, 2628, 2630, 2629, 1634, 3545, 3546, 1635, 2830, 2831, 2, 7789, 7779, 7780,
+7781, 7782, 13239, 13249, 13241, 5739, 5741, 3, 7790, 3779, 3780, 2554, 2555, 2711, 7791, 2521,
+2802, 2301, 1822, 409, 410, 2041, 2042, 1067, 3035, 13008, 2260, 5724, 13004, 13005, 3700, 3701,
+3702, 3703, 5725, 5937, 5939, 5938, 5940, 5906, 5907, 4536, 4537, 1068, 450, 466, 5853, 5854,
+467, 478, 5855, 5856, 479, 5837, 5838, 452, 5839, 5840, 453, 451, 458, 5845, 5846, 459, 460,
+5847, 5848, 461, 456, 5843, 5844, 457, 474, 480, 5867, 5868, 481, 5863, 5864, 475, 476, 5865,
+5866, 477, 454, 5841, 5842, 455, 7646, 7648, 464, 5851, 5852, 465, 462, 5849, 5850, 463, 468,
+472, 5861, 5862, 473, 5857, 5858, 469, 470, 5859, 5860, 471, 9187, 12363, 12364, 9188, 5204,
+8743, 9509, 9510, 1473, 1474, 10819, 10861, 11283, 11241, 1537, 1538, 2440, 2441, 404, 2687,
+2688, 2689, 2690, 5399, 3747, 3748, 3271, 3272, 5306, 5307, 2888, 397, 10562, 10585, 10586,
+10587, 10588, 10568, 10569, 11904, 11905, 11048, 11049, 11046, 11050, 11051, 11047, 10575,
+10576, 10573, 10571, 10572, 10574, 10563, 10564, 10566, 10567, 10565, 10630, 10631, 10628,
+12071, 12072, 10629, 10626, 10627, 10577, 10578, 10581, 10582, 5472, 5473, 2789, 2515, 879,
+4264, 13609, 1199, 1200, 880, 12821, 12822, 4397, 6352, 5396, 5889, 5891, 5892, 5890, 883, 884,
+2268, 3033, 6014, 6015, 3034, 2270, 2271, 2269, 3864, 3865, 2437, 2438, 5206, 8745, 9513, 9514,
+1477, 1478, 10820, 10862, 11284, 11242, 1541, 1542, 1048, 12627, 12628, 1049, 2856, 3316, 8876,
+8877, 3608, 3609, 2117, 2328, 2329, 5240, 5239, 3267, 3268, 2131, 2132, 10, 11, 154, 155, 6446,
+8759, 9541, 9542, 2988, 2989, 10821, 10863, 11285, 11243, 2990, 2991, 758, 1919, 10724, 10723,
+5351, 5352, 4232, 4233, 4242, 4243, 411, 412, 407, 408, 2129, 2130, 1623, 3518, 10515, 12894,
+12934, 4291, 5731, 5732, 2704, 2705, 890, 891, 5044, 5045, 1992, 4102, 4577, 4578, 1993, 4099,
+4100, 4101, 3764, 3765, 2531, 2532, 2533, 2534, 2535, 2536, 2537, 2538, 2539, 2540, 2541, 2542,
+13769, 3798, 3799, 3800, 3801, 13770, 13771, 3825, 3826, 3827, 3828, 13772, 3363, 3364, 3361,
+3362, 3037, 5154, 8150, 8151, 5155, 2233, 2599, 3517, 13464, 2598, 10297, 5642, 5643, 10298,
+5640, 5641, 5644, 5645, 10295, 5638, 5639, 5636, 5637, 10296, 5634, 5635, 383, 82, 83, 226, 227,
+2303, 2302, 990, 567, 5729, 5730, 2814, 2815, 2676, 2677, 2650, 2651, 2263, 2264, 569, 570, 568,
+579, 580, 577, 578, 6346, 6347, 958, 2146, 8198, 8254, 8255, 8199, 5026, 5027, 9458, 9459, 1431,
+1432, 10696, 10697, 11144, 11143, 1495, 1496, 5192, 8731, 9485, 9486, 1449, 1450, 10822, 10864,
+11286, 11244, 1513, 1514, 5095, 5094, 5089, 5665, 5101, 5667, 5100, 5666, 5088, 5664, 5085,
+5084, 5097, 5096, 5087, 5086, 5099, 5098, 1903, 11590, 11591, 3754, 2765, 4574, 12718, 3117,
+793, 1426, 3863, 8655, 8652, 8141, 1396, 1397, 2741, 2742, 2955, 4573, 5218, 2610, 2560, 2556,
+2557, 2559, 2558, 9627, 9628, 2065, 4554, 4555, 5679, 5680, 5762, 5763, 5765, 5764, 2066, 7777,
+5312, 5313, 6408, 512, 513, 5522, 8146, 8147, 5523, 8369, 8370, 5516, 5517, 12, 13, 156, 157,
+1827, 2495, 3427, 1927, 2497, 12301, 12300, 3640, 13149, 13151, 13150, 3685, 3686, 13139, 13141,
+13140, 13126, 13128, 13127, 2086, 421, 2209, 2210, 422, 12057, 11935, 11942, 11936, 11943,
+11938, 11945, 864, 1402, 1403, 13277, 865, 12823, 12824, 866, 4597, 5272, 5273, 2089, 2090,
+4191, 4192, 6287, 4016, 4774, 4775, 4017, 12085, 10591, 8907, 5300, 5301, 5711, 5712, 853,
+12020, 12021, 2455, 2456, 13176, 13177, 859, 860, 12853, 12854, 7675, 7677, 12851, 12852, 2777,
+2778, 855, 856, 854, 9825, 9826, 10115, 10114, 857, 5031, 13421, 858, 1771, 1772, 8218, 8220,
+8221, 2862, 8282, 8222, 8223, 6533, 384, 84, 85, 228, 229, 5952, 12373, 12374, 5953, 5788, 5789,
+12377, 12378, 12375, 12376, 423, 3253, 3254, 5191, 8730, 9483, 9484, 1447, 1448, 10823, 10865,
+11287, 11245, 1511, 1512, 6452, 8760, 9543, 9544, 6453, 6454, 10824, 10866, 11288, 11246, 6455,
+6456, 4776, 7210, 7211, 7218, 7219, 7222, 7223, 4777, 7206, 7207, 7856, 7857, 7852, 7853, 7854,
+7855, 7858, 7859, 7860, 7861, 7862, 7863, 7864, 7865, 7866, 7867, 334, 2194, 2292, 3396, 2212,
+3176, 4031, 812, 4534, 4535, 813, 94, 95, 785, 786, 5733, 5734, 8706, 11753, 11754, 1583, 1584,
+5219, 5220, 1951, 1952, 238, 239, 4115, 4033, 510, 511, 11870, 11871, 11873, 11872, 14112, 4142,
+4143, 2306, 2640, 5669, 2745, 2639, 2668, 2638, 2911, 2913, 2332, 2670, 2641, 2596, 2597, 2307,
+2644, 5670, 2746, 2643, 2669, 2642, 2912, 2914, 2333, 2671, 2645, 5672, 5671, 749, 1791, 1792,
+750, 12097, 12098, 751, 1793, 1794, 752, 3911, 3912, 4244, 4245, 2477, 919, 921, 920, 1414,
+8246, 2471, 2605, 14, 15, 365, 1895, 1896, 13452, 158, 159, 2407, 2616, 952, 1612, 957, 4300,
+4301, 4171, 4892, 5050, 12603, 12604, 7305, 7306, 4891, 5049, 12450, 12451, 4889, 5274, 4172,
+4890, 5275, 12446, 5380, 5381, 5978, 5979, 2700, 2701, 3589, 3590, 2402, 8188, 8189, 8190, 8191,
+1405, 1591, 5575, 5574, 13659, 3709, 3710, 13660, 10071, 10042, 5264, 9981, 9982, 5633, 5265,
+9983, 9984, 5573, 5266, 9985, 9986, 5401, 9987, 9988, 4879, 9989, 9990, 5402, 9991, 9992, 5403,
+9993, 9994, 5404, 9995, 9996, 5405, 9997, 9998, 6397, 6526, 6527, 6528, 6529, 6398, 6399, 5406,
+9885, 9886, 5407, 9999, 10000, 4880, 9859, 9860, 5408, 10001, 10002, 4881, 10003, 10004, 5410,
+10005, 10006, 4882, 10007, 10008, 5411, 9861, 9893, 4876, 10012, 10013, 5413, 10014, 10015,
+3438, 3439, 3440, 5414, 10016, 10017, 10147, 10148, 10175, 5415, 9891, 9892, 5457, 10010, 10011,
+5417, 10024, 10025, 5418, 10026, 10027, 5419, 10028, 10029, 5420, 9927, 9928, 4878, 9279, 9280,
+5421, 9567, 9568, 5422, 9569, 9570, 5423, 9571, 9572, 10183, 10184, 10185, 10176, 10177, 10178,
+4874, 9573, 9574, 4875, 9601, 9602, 5439, 9609, 9610, 5424, 9853, 9854, 5425, 9575, 9576, 5426,
+9577, 9578, 5427, 9579, 9580, 5428, 9581, 9582, 5429, 9583, 9584, 4871, 9585, 9586, 4873, 9929,
+9930, 10172, 10173, 10174, 10180, 10181, 10182, 5431, 9589, 9590, 4883, 9591, 9592, 5432, 9593,
+9594, 4870, 9595, 9596, 5433, 9597, 9598, 4625, 9977, 9978, 4872, 9979, 9980, 5434, 9599, 9600,
+5435, 9603, 9604, 1075, 1076, 1077, 6138, 6139, 9925, 9973, 9974, 5436, 9851, 9852, 4070, 4738,
+6043, 9389, 9386, 9347, 9385, 9346, 9350, 9388, 9384, 9380, 9342, 9381, 9376, 9345, 9383, 9379,
+9341, 9378, 9340, 9344, 9349, 9387, 9382, 9377, 9339, 9343, 9348, 7868, 12611, 4214, 12607,
+4213, 4216, 7872, 4215, 11806, 12609, 7871, 7870, 7869, 4749, 4731, 4071, 6042, 7309, 10179,
+6530, 4217, 7890, 7889, 7885, 7888, 7887, 7886, 7884, 10703, 12612, 10705, 12608, 10706, 10707,
+10711, 10704, 11807, 12610, 10710, 10709, 10708, 10700, 10702, 10699, 10701, 10721, 13072,
+10722, 10720, 10712, 10718, 10719, 10714, 10717, 10716, 10715, 10713, 5437, 9605, 9606, 5409,
+9857, 9858, 5412, 9855, 9856, 5438, 9607, 9608, 5440, 9849, 9850, 5441, 9611, 9612, 5442, 9613,
+9614, 4877, 9615, 9616, 5443, 9617, 9618, 3326, 13988, 10345, 5698, 3327, 5444, 9619, 9620,
+5416, 10022, 10023, 5123, 10046, 10047, 5445, 9621, 9622, 4884, 9623, 9624, 5446, 9865, 9866,
+13990, 13991, 13992, 13995, 13996, 5259, 10044, 10045, 5447, 9847, 9848, 5448, 10048, 10049,
+1890, 5082, 1891, 1892, 5083, 2722, 2723, 5137, 7642, 13041, 13042, 13043, 9926, 9975, 9976,
+5338, 5339, 5449, 9845, 9846, 5450, 10050, 10051, 1915, 1916, 1917, 5452, 10052, 10053, 5260,
+10054, 10055, 3050, 3171, 3170, 950, 3594, 3595, 951, 5270, 5271, 2415, 10632, 10633, 5176,
+5177, 5758, 5759, 8286, 5520, 6065, 6066, 5521, 713, 3510, 5893, 5894, 3511, 4188, 2324, 2325,
+715, 716, 714, 3512, 5708, 5908, 6012, 6013, 12042, 717, 719, 720, 718, 3891, 3892, 1644, 4562,
+4563, 1645, 12445, 8433, 8434, 1868, 8435, 8436, 1931, 8437, 8438, 8439, 7181, 7182, 5359, 5332,
+2740, 5188, 8727, 9477, 9478, 1441, 1442, 10825, 10867, 11289, 11247, 1505, 1506, 1045, 1046,
+10594, 4748, 11156, 6196, 2380, 533, 2253, 539, 541, 537, 2502, 2899, 535, 536, 534, 2254, 540,
+542, 538, 2503, 2900, 3625, 3641, 3642, 10120, 10121, 651, 3717, 3718, 655, 659, 660, 4848,
+4849, 656, 652, 2666, 2667, 5460, 5461, 5187, 8726, 9475, 9476, 1439, 1440, 10826, 10868, 11290,
+11248, 1503, 1504, 5125, 5126, 12043, 3422, 10603, 4670, 4671, 4668, 4669, 3424, 3425, 6502,
+6503, 3423, 7194, 7195, 12601, 12602, 366, 12231, 364, 16, 17, 160, 161, 1784, 10056, 10057,
+1785, 12938, 12939, 12420, 12049, 6863, 4752, 4720, 5527, 5532, 5528, 5145, 5147, 7177, 5146,
+894, 5143, 5144, 893, 1255, 1235, 5547, 5548, 863, 5369, 4454, 4456, 5961, 4455, 3770, 3771,
+2251, 2382, 2383, 5122, 3772, 3773, 2252, 7709, 1097, 1216, 1217, 1098, 2464, 2465, 426, 3441,
+3442, 14082, 3445, 3446, 4429, 13434, 13575, 4594, 4595, 5398, 5459, 3443, 3444, 12372, 4145,
+2771, 4542, 4543, 2772, 12831, 12832, 386, 86, 87, 232, 233, 10929, 10955, 10956, 10957, 10958,
+2336, 2337, 1239, 1240, 1567, 5203, 8742, 9507, 9508, 1471, 1472, 10827, 10869, 11291, 11249,
+1535, 1536, 13321, 13685, 12466, 12467, 1133, 2001, 2839, 18, 19, 162, 163, 2908, 2909, 1604,
+3540, 3541, 1605, 14104, 14105, 1427, 9878, 9879, 1428, 10499, 10500, 6129, 6130, 2363, 2364,
+1661, 1662, 1663, 1664, 2361, 2434, 10246, 10247, 2435, 2362, 1904, 8064, 8065, 1905, 635, 5964,
+5965, 6082, 6083, 3530, 3531, 636, 5609, 5610, 10497, 10498, 637, 638, 3923, 3924, 3368, 3369,
+11428, 11429, 2817, 2818, 641, 3551, 3552, 642, 13446, 13444, 13445, 13447, 11689, 11690, 639,
+3549, 3550, 640, 11685, 11686, 2032, 2033, 6072, 8156, 8157, 6073, 12349, 12350, 3246, 3247,
+2030, 2031, 2070, 1230, 8248, 8249, 1231, 9192, 9193, 9190, 9191, 4144, 5475, 6137, 4026, 4027,
+4022, 4023, 4018, 4019, 4020, 4021, 1096, 1214, 1215, 11796, 13125, 12351, 12352, 11010, 10485,
+10486, 10487, 5007, 5008, 2707, 4695, 692, 13547, 13548, 13551, 13552, 696, 697, 693, 12449,
+4330, 4331, 694, 698, 699, 695, 3889, 3890, 10503, 10504, 2420, 2421, 6089, 7225, 11044, 12452,
+12453, 12447, 5353, 5354, 1066, 10124, 10125, 1885, 4159, 1886, 4105, 4106, 4158, 5292, 5293,
+1870, 2037, 13975, 13976, 13980, 13979, 13983, 13984, 10324, 10325, 10322, 10323, 2038, 3835,
+3836, 5655, 5654, 2958, 13951, 13952, 13956, 13955, 13959, 13960, 10316, 10317, 10314, 10315,
+2036, 3565, 13939, 13940, 13944, 13943, 13947, 13948, 10287, 10288, 10285, 10286, 3566, 10360,
+10361, 13963, 13964, 13968, 13967, 13971, 13972, 10332, 10333, 10330, 10331, 1871, 2439, 13466,
+5885, 5887, 5888, 5886, 4812, 2018, 2957, 13899, 13900, 13904, 13903, 13907, 13908, 10304,
+10305, 10302, 10303, 2035, 3724, 3725, 5651, 5650, 3563, 13927, 13928, 13932, 13931, 13935,
+13936, 10279, 10280, 10277, 10278, 3564, 8926, 8927, 12912, 12913, 12917, 12916, 13895, 13896,
+8933, 8934, 8929, 8930, 2019, 3559, 3561, 13915, 13916, 13920, 13919, 13923, 13924, 10271,
+10272, 10269, 10270, 3562, 3833, 3834, 5653, 5652, 8923, 8924, 12920, 12921, 12923, 12922,
+13911, 13912, 8919, 8920, 8915, 8916, 3560, 4405, 4407, 4408, 4406, 1415, 10038, 8663, 2284,
+1416, 4571, 4572, 1417, 926, 5681, 6024, 6025, 5682, 10692, 10693, 9758, 9759, 2374, 2375, 927,
+5677, 6022, 6023, 5678, 10442, 10443, 5201, 8740, 9503, 9504, 1467, 1468, 10828, 10870, 11292,
+11250, 1531, 1532, 5656, 5382, 5383, 13478, 13479, 5657, 4314, 4315, 489, 5879, 5880, 12037,
+12038, 12039, 12040, 12041, 20, 21, 164, 165, 779, 789, 790, 791, 792, 781, 782, 1679, 780, 783,
+784, 3921, 3922, 757, 1920, 5193, 8732, 9487, 9488, 1451, 1452, 10829, 10871, 11293, 11251,
+1515, 1516, 3040, 3407, 3408, 371, 14178, 14186, 4916, 4917, 8201, 8200, 372, 373, 11866, 11867,
+11869, 11868, 4743, 4744, 11881, 11882, 6090, 10140, 10141, 3370, 4015, 3962, 11169, 13368,
+4203, 4211, 13367, 2933, 3971, 2934, 3970, 2600, 3966, 5281, 4204, 4212, 14237, 3994, 3995,
+2397, 4628, 3967, 1884, 2514, 13349, 3991, 4197, 14182, 4195, 4205, 10780, 11027, 4199, 14090,
+4207, 5284, 2398, 14180, 2356, 3972, 10732, 10734, 12752, 2609, 14068, 3964, 5282, 3996, 3997,
+9633, 2355, 4416, 11782, 11783, 13726, 13728, 8661, 8405, 3491, 3960, 2399, 14181, 11025, 2357,
+3973, 2601, 14066, 3963, 5283, 3992, 2513, 14004, 10733, 10735, 4014, 3961, 11024, 4201, 4209,
+11023, 2931, 3968, 11031, 10736, 2932, 3969, 12803, 3338, 3965, 5280, 4202, 4210, 4198, 14183,
+11026, 4196, 4206, 4200, 14092, 4208, 5285, 3993, 3544, 14002, 14001, 14003, 988, 6008, 6125,
+2371, 14034, 2188, 14035, 14038, 2516, 13431, 2430, 2602, 2016, 3520, 12886, 9561, 10106, 3347,
+6441, 6442, 2015, 9553, 10098, 3346, 13279, 2387, 9555, 10100, 3409, 11414, 6389, 11412, 6119,
+9557, 10102, 6120, 6121, 9559, 10104, 6122, 11418, 12876, 11416, 2388, 13579, 4383, 4831, 13581,
+9563, 10108, 3410, 4146, 6390, 2012, 3516, 9149, 7231, 9209, 9211, 13583, 13589, 10553, 12884,
+9551, 10040, 3345, 6440, 4393, 4394, 9812, 8713, 2013, 9768, 9467, 10096, 1078, 4389, 4390,
+9809, 12468, 3342, 11410, 9762, 2118, 4442, 4443, 12872, 2612, 4391, 4392, 6108, 9769, 9547,
+10094, 6118, 6109, 6110, 9810, 6111, 11406, 9764, 6112, 6113, 6114, 6387, 6115, 6116, 6117,
+4782, 9770, 9549, 10092, 4792, 4783, 4784, 9811, 4785, 11408, 9766, 4786, 4787, 4788, 12874,
+4789, 4790, 4791, 3343, 9746, 10536, 12261, 2119, 4444, 4445, 3990, 6388, 2613, 4395, 4396,
+3728, 3727, 2234, 13587, 13591, 2792, 2793, 2794, 2795, 2791, 3344, 4274, 340, 3853, 3854, 22,
+23, 166, 167, 2906, 2907, 9196, 12361, 12362, 9197, 12353, 12354, 2379, 24, 25, 168, 169, 8412,
+2005, 9194, 9195, 11058, 11059, 11061, 11060, 12022, 12023, 11040, 11041, 12359, 12360, 12026,
+12027, 2006, 6193, 6194, 2197, 2198, 6191, 6192, 8686, 8688, 12339, 12340, 12766, 12767, 8550,
+8551, 12024, 12025, 12028, 12029, 5013, 499, 2770, 5775, 5397, 5776, 1238, 5777, 2285, 5778,
+3729, 2351, 1977, 5779, 1978, 5780, 5197, 8736, 9495, 9496, 1459, 1460, 10830, 10872, 11294,
+11252, 1523, 1524, 6333, 6334, 6335, 2567, 2568, 26, 27, 2450, 2753, 2452, 2755, 4060, 4061,
+4054, 4055, 4056, 4057, 4058, 4059, 170, 171, 2569, 2570, 7809, 7810, 7667, 7668, 2571, 2572,
+7813, 7814, 7687, 7688, 7712, 7713, 3028, 7963, 7964, 3029, 10214, 10218, 10220, 10216, 4897,
+5051, 5288, 5046, 4894, 5055, 4896, 5056, 4895, 6095, 3125, 3126, 2011, 3519, 12888, 14114,
+4781, 4290, 5213, 8752, 9527, 9528, 1491, 1492, 10831, 10873, 11295, 11253, 1555, 1556, 8285,
+1257, 2291, 2207, 2208, 4760, 11679, 4761, 2579, 2580, 7811, 7812, 2418, 1628, 4268, 4269, 2419,
+6371, 6372, 6373, 385, 88, 89, 230, 231, 10928, 10951, 10952, 10953, 10954, 1986, 1987, 7850,
+7851, 2150, 2151, 5296, 5297, 5934, 5935, 5052, 4900, 5290, 494, 493, 4811, 6343, 4810, 6342,
+5053, 4899, 5054, 5080, 5081, 5291, 4898, 5289, 5276, 5277, 4901, 5074, 1773, 5372, 5373, 4566,
+4567, 1774, 5030, 4893, 5057, 5058, 7640, 7641, 7638, 7748, 7749, 7639, 1923, 1924, 3578, 3579,
+7785, 5103, 5116, 5010, 4904, 5102, 5115, 5009, 4903, 1589, 1590, 2766, 2767, 775, 7673, 7674,
+2545, 2546, 1811, 776, 777, 2800, 2801, 13280, 1134, 3116, 13038, 8217, 616, 611, 2389, 1184,
+1185, 1182, 1183, 5199, 8738, 9499, 9500, 1463, 1464, 10832, 10874, 11296, 11254, 1527, 1528,
+2825, 754, 13468, 759, 3815, 3816, 3855, 3856, 755, 2675, 3775, 3698, 3699, 5468, 5469, 753,
+13470, 3654, 12841, 756, 2594, 13472, 13476, 13474, 4126, 1601, 2281, 2237, 1057, 1620, 1059,
+1058, 5595, 7989, 7990, 5596, 7714, 7715, 721, 10032, 10033, 725, 726, 722, 2948, 4639, 723,
+3532, 3533, 724, 727, 728, 1580, 5703, 5704, 1581, 3899, 3900, 2947, 928, 7183, 3397, 13168,
+13169, 8585, 8586, 13172, 13173, 1202, 8476, 1203, 3858, 3857, 2189, 2190, 929, 12991, 12992,
+1653, 1654, 3861, 3860, 3859, 932, 3873, 3869, 3868, 933, 3872, 3871, 3870, 1114, 5911, 5912,
+2184, 13357, 2185, 2227, 10264, 2228, 2225, 2226, 1113, 1945, 1946, 930, 931, 2229, 13599, 2230,
+2140, 2141, 5709, 5710, 12145, 12148, 2318, 7691, 7692, 2583, 2584, 7815, 7816, 2458, 2459, 28,
+29, 172, 173, 7716, 7717, 7718, 7719, 7720, 7721, 7722, 7723, 6124, 11126, 5662, 2857, 13585,
+5913, 12890, 13597, 12936, 6123, 12879, 4664, 12880, 12878, 11404, 12891, 2735, 12904, 12905,
+2736, 11703, 11704, 11705, 11706, 2738, 3874, 2481, 2478, 2737, 12896, 12897, 3875, 2611, 5069,
+12900, 12901, 5070, 4286, 4287, 3760, 3761, 683, 1170, 1171, 3731, 3732, 2282, 2238, 2940, 2283,
+861, 862, 10474, 10481, 10479, 10480, 10475, 10476, 10834, 10876, 11298, 11256, 10477, 10478,
+5210, 8749, 9521, 9522, 1485, 1486, 10833, 10875, 11297, 11255, 1549, 1550, 1610, 3819, 3820,
+1611, 938, 939, 7969, 7970, 1799, 1800, 1609, 4591, 4592, 3925, 3926, 3351, 10606, 5067, 5068,
+9827, 9828, 3749, 5255, 5256, 2866, 2867, 1110, 11715, 1112, 1111, 11713, 11906, 2790, 2518,
+2305, 2304, 2288, 2257, 2445, 3794, 3795, 804, 4844, 5591, 5592, 5959, 5958, 5066, 5960, 4845,
+5957, 5956, 3841, 3842, 806, 807, 805, 908, 2069, 4665, 5814, 5815, 5253, 688, 5012, 5011, 9805,
+9806, 3713, 3714, 5699, 5700, 1193, 1194, 1131, 4177, 4178, 689, 690, 3817, 3818, 691, 3903,
+3904, 5160, 5161, 5208, 8747, 9517, 9518, 1481, 1482, 10835, 10877, 11299, 11257, 1545, 1546,
+381, 12796, 1577, 78, 79, 2177, 2178, 379, 685, 6148, 2796, 6207, 6208, 2797, 6201, 6202, 6209,
+11896, 11898, 11892, 12053, 12054, 11894, 6211, 6212, 6210, 13039, 969, 970, 2156, 2157, 222,
+223, 4721, 4725, 4723, 4722, 4726, 4724, 441, 443, 444, 7613, 7615, 7616, 7614, 442, 5231, 5943,
+5944, 5232, 10488, 448, 5835, 5836, 449, 445, 446, 2122, 5131, 2124, 5133, 2126, 5135, 2120,
+5129, 2127, 5136, 2125, 5134, 2121, 5130, 2123, 5132, 8371, 8373, 8374, 8372, 8375, 8377, 8378,
+8376, 9198, 9199, 3051, 3052, 9460, 9461, 2250, 2211, 5597, 6034, 6035, 5598, 2473, 2474, 2181,
+1828, 7610, 6330, 6331, 6332, 6068, 6069, 382, 80, 81, 224, 225, 1130, 12482, 1212, 1213, 1132,
+13395, 13369, 13370, 949, 1207, 12398, 12399, 2752, 2431, 2432, 30, 31, 174, 175, 5202, 8741,
+9505, 9506, 1469, 1470, 10836, 10878, 11300, 11258, 1533, 1534, 2310, 4431, 6369, 2342, 4532,
+4533, 2373, 6444, 8757, 9537, 9538, 2980, 2981, 10837, 10879, 11301, 11259, 2982, 2983, 2607,
+2608, 892, 5962, 5963, 12075, 10927, 10947, 10948, 10949, 10950, 387, 90, 91, 234, 235, 369,
+2017, 12942, 12949, 4640, 12976, 12964, 12958, 12970, 12945, 12973, 12961, 12952, 4279, 4281,
+4280, 4282, 4642, 4641, 12967, 12955, 5336, 32, 33, 176, 177, 5430, 9587, 9588, 1994, 4157,
+1995, 4103, 4104, 4156, 4036, 10126, 10128, 4037, 2232, 5668, 2308, 2309, 6297, 6338, 405, 3230,
+4094, 3231, 4091, 3232, 4098, 3233, 4095, 4096, 4097, 4092, 4093, 5156, 5157, 34, 35, 178, 179,
+7724, 7725, 7726, 7727, 7728, 7729, 7730, 7731, 2549, 7732, 7733, 7734, 7735, 2083, 913, 914,
+2294, 2295, 14060, 14061, 1893, 1894, 1039, 7679, 7680, 1040, 610, 2191, 1172, 1173, 543, 545,
+546, 544, 1158, 3599, 4028, 4029, 3426, 4032, 4688, 3521, 3522, 8888, 5554, 8883, 6504, 10760,
+10761, 4712, 5365, 5366, 645, 663, 664, 646, 667, 668, 3998, 4272, 4273, 3999, 2426, 3726, 7703,
+7704, 7705, 7706, 7707, 7708, 5345, 13649, 5346, 13648, 522, 5453, 5466, 528, 5510, 5511, 2322,
+523, 524, 5787, 525, 1163, 613, 2522, 8181, 615, 8179, 614, 8093, 8091, 3514, 4155, 3515, 4107,
+4108, 4154, 1598, 3012, 617, 619, 5721, 10449, 10450, 5722, 5723, 7657, 7659, 10913, 10914,
+10909, 10910, 2051, 2052, 1253, 1254, 620, 13448, 13449, 5982, 5983, 3980, 3981, 1866, 1867,
+3831, 3832, 2748, 5697, 6147, 14200, 14201, 14070, 14071, 4438, 4439, 14121, 14122, 5114, 5032,
+10034, 10035, 1815, 1813, 5715, 5716, 10747, 10748, 8509, 8510, 14084, 14085, 5601, 8019, 8020,
+5602, 12011, 12013, 1251, 1252, 4047, 621, 4251, 627, 4436, 4437, 12423, 12424, 631, 632, 4252,
+7765, 7766, 625, 4296, 4297, 623, 2941, 2945, 2942, 2946, 629, 6062, 8554, 8447, 622, 628, 626,
+624, 630, 975, 5530, 5531, 976, 1019, 1020, 633, 8794, 8795, 8796, 8797, 634, 2446, 4048, 10436,
+10437, 618, 2749, 1816, 1814, 3047, 12012, 12014, 3166, 3049, 3168, 3329, 3026, 3027, 3025,
+3215, 3048, 3167, 1651, 1652, 5251, 5252, 14080, 14081, 6356, 6357, 12846, 4136, 12845, 4135,
+4050, 14074, 14075, 4051, 13440, 13441, 4423, 4424, 612, 4648, 4649, 11199, 1201, 10804, 10607,
+10809, 10810, 10805, 10806, 10838, 10880, 11302, 11260, 10807, 10808, 5195, 8734, 9491, 9492,
+1455, 1456, 10839, 10881, 11303, 11261, 1519, 1520, 5196, 8735, 9493, 9494, 1457, 1458, 10840,
+10882, 11304, 11262, 1521, 1522, 13073, 13220, 13221, 13074, 830, 834, 835, 836, 837, 832, 5117,
+5118, 833, 5719, 10162, 10163, 1422, 3843, 3844, 3182, 3183, 8145, 8144, 1189, 1190, 2843, 2844,
+838, 1191, 1192, 839, 4229, 831, 5720, 1423, 12435, 12437, 12438, 12436, 965, 4150, 7975, 7976,
+4338, 4339, 5689, 5690, 10917, 10918, 11728, 11729, 4303, 4304, 14192, 14193, 12077, 12087,
+4270, 4271, 966, 1004, 1003, 2293, 10483, 14196, 14197, 1007, 1008, 12079, 12088, 3434, 11887,
+11888, 11889, 11890, 11891, 911, 2045, 5805, 5807, 5808, 5806, 2097, 4546, 4547, 2098, 934,
+1204, 1205, 935, 936, 937, 3915, 3916, 2099, 1128, 1127, 2100, 2930, 2929, 5341, 5342, 3604,
+3605, 14098, 14099, 2999, 4173, 4174, 4009, 4010, 4295, 4802, 4293, 4800, 4801, 4292, 4799,
+4294, 643, 14167, 14168, 14170, 14169, 661, 662, 5107, 12580, 12581, 5108, 644, 7769, 7770,
+5109, 665, 666, 4012, 4288, 4289, 4013, 2693, 2694, 3917, 3918, 6140, 6141, 3432, 3433, 647,
+5790, 5791, 648, 3976, 380, 1101, 1102, 1576, 12799, 822, 823, 12404, 12405, 76, 10166, 77,
+2175, 2176, 378, 684, 2137, 2138, 12005, 12006, 967, 968, 1002, 2352, 2353, 1001, 2154, 2155,
+220, 3365, 221, 1032, 1031, 2372, 1786, 886, 1565, 4524, 4453, 7926, 10524, 10525, 7927, 7737,
+7925, 7924, 7736, 7928, 7738, 2289, 2865, 3988, 3989, 10523, 10521, 10522, 10526, 2764, 2960,
+2886, 2887, 2996, 13661, 13669, 13668, 13664, 13666, 13667, 13662, 13663, 2272, 2273, 496, 7617,
+7618, 7619, 2885, 5760, 6447, 8756, 9535, 9536, 6448, 6449, 10841, 10883, 11305, 11263, 6450,
+6451, 5127, 5809, 5810, 5128, 424, 3523, 3524, 425, 6391, 6392, 9883, 2405, 2404, 4914, 5340,
+4925, 4928, 3940, 4905, 4926, 4929, 3941, 4924, 4934, 4935, 3942, 4907, 4936, 4937, 3943, 4938,
+4939, 4940, 3944, 4941, 4942, 4943, 3945, 4944, 4945, 4946, 3946, 4911, 4947, 4948, 3947, 4949,
+4950, 4951, 3948, 4952, 4953, 4954, 3949, 4913, 4955, 4956, 3950, 4910, 4957, 4958, 3951, 4959,
+4906, 4908, 4219, 4915, 4909, 4912, 4220, 4960, 4961, 4962, 4221, 4963, 2167, 2168, 11065,
+11066, 2406, 14100, 14101, 922, 2718, 2719, 2751, 5234, 10787, 923, 2750, 5233, 10774, 3389,
+398, 1680, 1681, 1682, 2330, 2413, 2414, 2331, 3275, 3276, 36, 37, 180, 181, 1410, 955, 333,
+4072, 4253, 4074, 4255, 4073, 4254, 2653, 4918, 4922, 4919, 4923, 92, 2656, 10167, 10168, 93,
+2657, 290, 2662, 291, 2663, 2836, 2890, 2837, 2891, 6195, 11755, 11766, 11756, 11767, 236, 2660,
+2889, 2903, 237, 2661, 8690, 8692, 8691, 8693, 8695, 8694, 851, 1602, 852, 1603, 814, 815, 2916,
+2915, 4624, 4623, 5526, 2573, 2574, 38, 39, 2451, 2754, 2453, 2756, 4068, 4069, 4062, 4063,
+4064, 4065, 4066, 4067, 182, 183, 2904, 2905, 2575, 2576, 7817, 7818, 7669, 7670, 2577, 2578,
+7821, 7822, 7689, 7690, 7844, 7845, 1258, 13715, 2708, 2709, 3885, 495, 2581, 2582, 7819, 7820,
+11772, 11773, 2201, 2202, 1404, 14119, 4842, 4843, 963, 4160, 500, 2820, 2821, 13386, 1669,
+1646, 1647, 2724, 2725, 2727, 1174, 527, 2145, 2872, 2838, 2810, 2809, 981, 979, 3418, 977,
+13734, 13735, 983, 4080, 1079, 2674, 2369, 2410, 2370, 11176, 1080, 964, 982, 980, 3419, 978,
+984, 1136, 1000, 2726, 1243, 1673, 13436, 13437, 1766, 1767, 11695, 11696, 502, 1670, 10961,
+10962, 7919, 13618, 4854, 2358, 999, 1135, 8659, 7671, 7672, 2365, 2366, 10263, 2368, 3823,
+3824, 2367, 3919, 3920, 2731, 1999, 5792, 5793, 3829, 3830, 2812, 2811, 6475, 6476, 4082, 2000,
+4076, 3952, 4693, 4694, 3953, 3954, 3955, 4077, 7918, 13621, 3974, 3975, 3956, 3957, 3958, 3959,
+4081, 8062, 8063, 8056, 8057, 8058, 8059, 8060, 8061, 2359, 2276, 2277, 2506, 2507, 2504, 2505,
+3978, 3979, 2508, 2509, 991, 1400, 994, 1582, 1005, 1011, 1017, 1018, 3929, 3930, 1009, 1006,
+1012, 1010, 12817, 12818, 4079, 4855, 5150, 5151, 670, 671, 4164, 3405, 4165, 3406, 4166, 4169,
+4168, 4167, 11995, 3403, 3404, 3014, 2280, 3486, 6087, 6088, 6091, 327, 4230, 4231, 704, 705,
+581, 2892, 2442, 2893, 2895, 3501, 3497, 3499, 3493, 3495, 2894, 3500, 3496, 3498, 3492, 3494,
+6374, 6375, 6376, 7787, 7788, 888, 889, 12941, 12940, 13987, 7846, 7847, 5494, 12032, 5495,
+5498, 5499, 10797, 12083, 12084, 12081, 12082, 10798, 5242, 5241, 5244, 5243, 1775, 2183, 7232,
+7233, 7234, 942, 943, 944, 945, 7693, 7694, 2585, 2586, 7823, 7824, 5190, 8729, 9481, 9482,
+1445, 1446, 10842, 10884, 11306, 11264, 1509, 1510, 9145, 9147, 9148, 9146, 1984, 1985, 5211,
+8750, 9523, 9524, 1487, 1488, 10843, 10885, 11307, 11265, 1551, 1552, 40, 41, 184, 185, 940,
+941, 4852, 6040, 6041, 4853, 2182, 2925, 2926, 2698, 2699, 584, 1975, 4564, 4565, 4620, 1065,
+14111, 2312, 2313, 1256, 2321, 2319, 2320, 2695, 2696, 1990, 1991, 1120, 5385, 5386, 12722,
+12723, 4189, 4190, 2732, 13218, 13219, 2593, 4417, 8644, 8448, 4582, 4305, 3348, 4660, 4661,
+5209, 8748, 9519, 9520, 1483, 1484, 10844, 10886, 11308, 11266, 1547, 1548, 1638, 1639, 1640,
+7653, 3210, 7655, 3412, 4078, 1953, 1954, 413, 414, 1050, 1988, 1989, 4552, 4553, 1051, 6383,
+6385, 6386, 13641, 13652, 6379, 6380, 6381, 6382, 6404, 6405, 6384, 5384, 5314, 5315, 5325,
+5326, 5318, 5319, 669, 3401, 3402, 3121, 986, 987, 3174, 3172, 3173, 3175, 3122, 1636, 3000,
+3001, 3558, 1081, 2813, 6003, 6032, 6033, 6004, 3119, 6026, 6027, 3120, 3020, 5998, 6030, 6031,
+5997, 6028, 6029, 3021, 2053, 2169, 2170, 2054, 10800, 10801, 10802, 10803, 8814, 8815, 10845,
+10887, 11309, 11267, 8816, 8817, 5162, 5163, 2779, 14243, 14289, 8361, 8362, 885, 8363, 8364,
+1383, 1384, 1818, 3487, 3488, 5772, 4426, 7524, 5771, 5770, 774, 12387, 12388, 12389, 12390,
+1047, 5124, 3095, 8140, 13852, 2034, 497, 1386, 1387, 887, 1385, 6443, 482, 5869, 5870, 483,
+8365, 8366, 485, 4556, 4557, 5497, 5504, 6146, 2469, 5816, 5817, 5949, 5818, 5576, 5170, 5171,
+1829, 6058, 6059, 4218, 2808, 4581, 13567, 13568, 447, 12848, 3251, 3252, 3097, 4427, 4428,
+8849, 8850, 8851, 8852, 10905, 10906, 672, 3983, 3984, 3777, 3778, 673, 5900, 5901, 5898, 5899,
+674, 2784, 2785, 2787, 2786, 675, 1594, 1593, 3909, 3910, 12986, 12987, 676, 10299, 677, 678,
+5614, 5615, 5727, 5726, 2385, 2386, 679, 680, 681, 778, 1118, 1856, 1855, 5310, 5311, 11997,
+1872, 5895, 5896, 1873, 5388, 5308, 5309, 5389, 146, 3053, 3055, 7740, 3054, 3056, 3059, 4828,
+4868, 4827, 4867, 4732, 4861, 4733, 4860, 3058, 4869, 3057, 516, 11745, 11746, 11317, 11318,
+11749, 11750, 517, 520, 521, 514, 12093, 12094, 8909, 8911, 4421, 4422, 515, 518, 519, 4250,
+8913, 2447, 4049, 1041, 1044, 526, 5593, 5594, 2105, 6473, 6474, 2714, 2563, 2564, 1236, 14129,
+4755, 147, 1042, 1034, 1030, 2910, 1043, 2781, 503, 1672, 1241, 2354, 2261, 2262, 501, 1671,
+2482, 2490, 2491, 2492, 2483, 2488, 2487, 2489, 2768, 10244, 2484, 2485, 2486, 1242, 1683, 1033,
+1029, 5744, 5745, 3015, 4411, 2678, 8287, 7840, 7839, 1684, 2278, 2279, 1392, 1393, 992, 1564,
+1390, 1391, 2043, 2044, 2135, 1394, 1395, 2136, 1035, 3123, 3124, 1052, 1053, 1056, 2511, 1054,
+1616, 1617, 1055, 1618, 1619, 8545, 8546, 1036, 3809, 3810, 2715, 11439, 993, 5804, 8581, 2286,
+2679, 2658, 2287, 14239, 2974, 2956, 5331, 12092, 2975, 2804, 5451, 706, 4266, 4267, 14179, 709,
+710, 707, 11959, 11960, 708, 13713, 13714, 711, 712, 2087, 2088, 5773, 5774, 1094, 1210, 1211,
+1095, 6358, 6359, 4265, 9168, 4697, 6079, 6303, 10593, 5552, 5553, 4699, 6080, 8162, 8163, 4698,
+5541, 5542, 6217, 5186, 8725, 9473, 9474, 1437, 1438, 10846, 10888, 11310, 11268, 1501, 1502,
+1918, 4548, 4549, 1782, 1834, 1835, 1783, 1071, 1072, 8007, 8009, 8010, 8008, 5158, 5159, 342,
+13323, 13418, 13419, 6038, 6039, 1108, 1155, 701, 1156, 703, 1154, 700, 1157, 702, 3465, 3467,
+3468, 12357, 12358, 3466, 6063, 13064, 13068, 13069, 13065, 13013, 13015, 13016, 13014, 13011,
+13012, 6064, 1597, 3169, 437, 5831, 5832, 438, 439, 5833, 5834, 440, 3806, 5829, 5830, 3807,
+11362, 429, 3534, 3535, 430, 5902, 5903, 427, 428, 7628, 7630, 7631, 7629, 11363, 7632, 7634,
+7635, 7633, 7880, 7881, 433, 5825, 5826, 434, 435, 5827, 5828, 436, 8367, 8368, 8879, 6144,
+6161, 6162, 6163, 6164, 6165, 6166, 11902, 11903, 6173, 6174, 6171, 6169, 6170, 6172, 6145,
+6157, 10134, 10135, 6158, 8872, 8873, 6480, 12063, 12064, 6481, 6415, 6416, 6400, 6401, 6402,
+6403, 6159, 10136, 10137, 6160, 8866, 8867, 9797, 9799, 5735, 5736, 6445, 8758, 9539, 9540,
+2984, 2985, 10847, 10889, 11311, 11269, 2986, 2987, 2762, 5611, 7778, 7786, 1802, 5491, 5632,
+5492, 5493, 2103, 2104, 42, 43, 186, 187, 5168, 5169, 995, 997, 996, 998, 9882, 737, 739, 740,
+738, 2475, 2476, 3905, 3906, 4024, 4025, 3792, 3793, 2186, 3244, 3245, 840, 1648, 3366, 3367,
+1797, 1798, 5194, 8733, 9489, 9490, 1453, 1454, 10848, 10890, 11312, 11270, 1517, 1518, 5581,
+5924, 5925, 5926, 5928, 5929, 5927, 4840, 5392, 6020, 6021, 5393, 6018, 6019, 4841, 4278, 769,
+768, 770, 2266, 766, 762, 2625, 761, 760, 764, 763, 13359, 13360, 3249, 3250, 3337, 3336, 2775,
+2776, 818, 11364, 11365, 11370, 11368, 819, 2620, 2619, 575, 576, 765, 771, 4672, 772, 773,
+4673, 10644, 12333, 10527, 5695, 5696, 11009, 2917, 2918, 14236, 1237, 12305, 12306, 2265, 582,
+14117, 14118, 1401, 2408, 11345, 11346, 11350, 11349, 767, 2901, 13365, 13366, 2685, 2686, 2510,
+12717, 3651, 3435, 338, 337, 3278, 12131, 9282, 12134, 3279, 3307, 3282, 12136, 3306, 12137,
+12138, 12133, 12139, 12135, 12140, 12141, 12142, 12143, 3280, 3281, 3317, 12118, 367, 9202,
+9261, 9264, 12192, 9262, 12195, 9265, 9270, 9268, 12197, 9269, 12198, 12199, 12194, 12200,
+12196, 9263, 12201, 12202, 12203, 12204, 9266, 9267, 12166, 368, 9247, 12179, 3539, 12182, 9248,
+9253, 9251, 12184, 9252, 12185, 12186, 12181, 12187, 12183, 3538, 12188, 12189, 12190, 12191,
+9249, 9250, 3537, 12169, 9203, 9208, 9206, 12171, 9207, 12172, 12173, 12168, 12174, 12170, 3536,
+12175, 12176, 12177, 12178, 9204, 9205, 9281, 12121, 3318, 3323, 3321, 12123, 3322, 12124,
+12125, 12120, 5563, 5564, 10737, 10738, 5565, 7209, 10743, 10741, 10745, 12948, 7208, 10742,
+10739, 10744, 10740, 12126, 12122, 12127, 12128, 336, 3283, 11502, 11503, 3284, 3305, 3287,
+11505, 3288, 3455, 3456, 11458, 11459, 3457, 3462, 3460, 11461, 3461, 11462, 11463, 11532,
+11464, 11460, 11465, 11466, 11467, 11468, 3458, 3459, 11506, 11507, 11534, 11508, 11504, 11509,
+11510, 3447, 3448, 11469, 11470, 3449, 3454, 3452, 11472, 3453, 11473, 11474, 11530, 11475,
+11471, 11476, 11477, 11478, 11479, 3450, 3451, 11511, 11512, 3285, 3286, 1249, 3294, 12218,
+12221, 3295, 3311, 3298, 12223, 3310, 12224, 12225, 12220, 12226, 12222, 12227, 12228, 12229,
+12230, 3296, 3297, 1250, 3289, 12205, 12208, 3290, 3309, 3293, 12210, 3308, 12211, 12212, 12207,
+12213, 12209, 12214, 12215, 12216, 12217, 3291, 3292, 12129, 12130, 3319, 3320, 5400, 5458,
+3751, 4283, 4284, 3752, 13480, 4147, 9748, 9750, 4149, 12448, 5060, 5059, 492, 5572, 491, 5883,
+5884, 490, 5881, 5882, 2460, 12265, 4737, 11054, 7625, 7626, 7627, 13325, 13326, 2691, 13657,
+13658, 2692, 498, 2242, 1073, 5701, 5702, 2884, 10608, 10609, 6326, 2403, 5182, 6016, 6017,
+5183, 487, 5875, 5876, 1232, 8252, 8253, 1233, 3340, 2002, 8859, 8861, 8862, 8860, 6323, 6325,
+6324, 3886, 3887, 3888, 1862, 12316, 12317, 3227, 3228, 1863, 1821, 2969, 6092, 2139, 1937,
+2144, 1936, 529, 531, 532, 530, 1831, 4045, 4046, 1832, 4052, 4053, 3901, 3902, 547, 553, 554,
+551, 552, 549, 550, 12524, 12525, 1164, 1165, 548, 555, 556, 5999, 6036, 6037, 6000, 1763, 4153,
+2565, 2566, 1764, 1685, 1686, 4152, 2416, 2417, 2063, 5268, 5269, 2064, 488, 5877, 5878, 4222,
+4224, 4225, 5222, 5221, 4223, 6505, 6509, 6510, 6511, 6512, 6513, 6514, 11947, 11948, 6519,
+6520, 6517, 6515, 6516, 6518, 6506, 6507, 10138, 10139, 6508, 6534, 12067, 12068, 6535, 6167,
+6168, 6521, 6522, 6523, 6524, 8874, 8875, 8868, 8869, 9801, 9802, 11153, 11167, 11168, 11154,
+4000, 8044, 8045, 4001, 5207, 8746, 9515, 9516, 1479, 1480, 10849, 10891, 11313, 11271, 1543,
+1544, 912, 5189, 8728, 9479, 9480, 1443, 1444, 10850, 10892, 11314, 11272, 1507, 1508, 946,
+2769, 3248, 5985, 8577, 8578, 947, 948, 1206, 4830, 6360, 44, 45, 188, 189, 989, 1621, 12365,
+12366, 1622, 12443, 3632, 3634, 3633, 3635, 12355, 12356, 341, 13322, 46, 47, 190, 191, 14040,
+14041, 14043, 14042, 12613, 5742, 841, 3002, 4298, 1838, 3845, 3846, 3184, 3185, 8603, 8602,
+843, 844, 5343, 5344, 842, 3003, 4299, 1839, 845, 8068, 8069, 846, 3913, 3914, 5294, 5295, 345,
+362, 953, 959, 960, 7807, 6355, 5014, 7380, 7381, 12908, 12909, 7623, 7624, 7999, 8000, 8575,
+8576, 5016, 8003, 8606, 8607, 8004, 9454, 9455, 2939, 5930, 5932, 5933, 5931, 48, 49, 192, 193,
+2706, 3489, 3490, 9200, 9201, 2046, 2047, 12341, 12342, 11786, 11787, 881, 882, 1805, 1806,
+4140, 4141, 5152, 8142, 8143, 5153, 6074, 3735, 4996, 4998, 5936, 4997, 5571, 7882, 7883, 3160,
+3161, 3162, 9834, 10752, 10753, 9835, 9836, 10758, 10759, 10756, 10757, 10754, 10755, 3163,
+3164, 3165, 1649, 2935, 2936, 1650, 2937, 2938, 9831, 9832, 9833, 1643, 8403, 11741, 3837, 3838,
+4328, 3639, 3638, 11742, 1928, 1929, 12984, 12985, 1091, 1093, 1092, 1823, 11594, 2026, 2027,
+11738, 11595, 11596, 11598, 11597, 3324, 3325, 3335, 3334, 11739, 5071, 5298, 5299, 9189, 8722,
+10228, 9774, 10226, 9773, 10224, 9772, 10222, 1607, 13623, 3542, 3543, 1637, 8449, 8450, 5347,
+5348, 1608, 3927, 3928, 484, 5871, 5872, 486, 5873, 5874, 5245, 5246, 5247, 5248, 5249, 5250,
+5229, 5230, 5091, 5090, 5228, 5227, 6076, 4127, 4117, 4116, 4119, 6075, 4685, 4118, 6078, 4132,
+4129, 4128, 4131, 6077, 4689, 4130, 5028, 5029, 5198, 8737, 9497, 9498, 1461, 1462, 10852,
+10894, 11316, 11274, 1525, 1526, 917, 918, 2314, 2315, 5478, 5479, 50, 51, 194, 195, 3977, 388,
+3774, 3776, 561, 563, 564, 562, 96, 13000, 13001, 97, 2179, 2180, 787, 788, 14037, 1161, 1162,
+973, 974, 2160, 2161, 508, 509, 1949, 1950, 240, 241, 11184, 11185, 14113, 2520, 7879, 52, 53,
+196, 197, 5185, 8724, 9471, 9472, 1435, 1436, 10851, 10893, 11315, 11273, 1499, 1500, 5476,
+5477, 54, 55, 198, 199, 2343, 2587, 2588, 2589, 2590, 1411,
+    ]
 }
 
 #endif

@@ -55,21 +55,8 @@ public enum SFSymbol {
     /// - Parameter name: The SF Symbol name, e.g. `"star.fill"`.
     public static func glyph(named name: String) -> String? {
         #if canImport(AppKit)
-        // Binary-search the name-sorted table.
-        var low = 0
-        var high = table.count
-        while low < high {
-            let mid = low + (high - low) / 2
-            if table[mid].name < name {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        if low < table.count, table[low].name == name {
-            return String(table[low].glyph)
-        }
-        return nil
+        guard let scalar = scalar(forName: name) else { return nil }
+        return String(scalar)
         #else
         return nil
         #endif
@@ -77,9 +64,10 @@ public enum SFSymbol {
 
     /// Every known symbol, sorted by name. Empty on non-Apple platforms.
     ///
-    /// The table is large (several thousand entries) and decoded lazily on
-    /// first access; this is intended for tooling and browsers (such as the
-    /// example app's symbol explorer), not per-frame use.
+    /// The names are materialised into `String`s lazily on first access — the
+    /// only place this type builds a `String` (``glyph(named:)`` never does).
+    /// Intended for tooling and browsers (such as the example app's symbol
+    /// explorer), not per-frame use.
     public static var all: [Entry] {
         #if canImport(AppKit)
         return entries
@@ -89,28 +77,78 @@ public enum SFSymbol {
     }
 
     #if canImport(AppKit)
-    /// The name → glyph table, parsed once on first use from the generated
-    /// `bakedTable` (one `name<space>HEXCODEPOINT` line per symbol). Sorted
-    /// ascending by name — as the generator emits it — so ``glyph(named:)`` can
-    /// binary-search it directly, no dictionary to build.
-    private static let table: [(name: String, glyph: Character)] = {
-        var result: [(name: String, glyph: Character)] = []
+    /// The Plane-16 Private Use Area base every codepoint offset is measured from.
+    private static let puaBase: UInt32 = 0x10_0000
+
+    /// The glyph scalar for `name`, or `nil`. Binary-searches the baked
+    /// `nameBlob` comparing raw UTF-8 bytes — for the ASCII symbol names that is
+    /// identical to Swift `String` ordering, so the search touches no `String`
+    /// and, on the common path, allocates nothing.
+    static func scalar(forName name: String) -> Unicode.Scalar? {
+        // Fast path: a native Swift string exposes contiguous UTF-8 storage.
+        let found: Unicode.Scalar?? = name.utf8.withContiguousStorageIfAvailable { searchBlob($0) }
+        if let found { return found }
+        // Rare fallback (e.g. a bridged NSString): copy the query bytes once.
+        return Array(name.utf8).withUnsafeBufferPointer { searchBlob($0) }
+    }
+
+    /// Lower-bound binary search of `nameBlob` for `query`'s bytes.
+    private static func searchBlob(_ query: UnsafeBufferPointer<UInt8>) -> Unicode.Scalar? {
+        nameBlob.withUTF8Buffer { blob in
+            var low = 0
+            var high = bakedCount
+            while low < high {
+                let mid = low + (high - low) / 2
+                if compare(blob, name: mid, to: query) < 0 {
+                    low = mid + 1
+                } else {
+                    high = mid
+                }
+            }
+            guard low < bakedCount, compare(blob, name: low, to: query) == 0 else { return nil }
+            return Unicode.Scalar(puaBase + UInt32(codepointOffsets[low]))
+        }
+    }
+
+    /// Unsigned byte-lexicographic comparison of baked name `index` against
+    /// `query`: negative if the name sorts before the query, `0` if equal. This
+    /// equals Swift `String` ordering because every name is ASCII.
+    private static func compare(
+        _ blob: UnsafeBufferPointer<UInt8>, name index: Int, to query: UnsafeBufferPointer<UInt8>
+    ) -> Int {
+        let start = Int(nameStarts[index])
+        let end = Int(nameStarts[index + 1]) - 1  // drop the separating newline
+        let nameLength = end - start
+        let common = min(nameLength, query.count)
+        var offset = 0
+        while offset < common {
+            let lhs = blob[start + offset]
+            let rhs = query[offset]
+            if lhs != rhs { return lhs < rhs ? -1 : 1 }
+            offset += 1
+        }
+        if nameLength == query.count { return 0 }
+        return nameLength < query.count ? -1 : 1
+    }
+
+    /// Public-facing entries (name + glyph). Built once, on first access to
+    /// ``all`` — the only place a name becomes a `String`.
+    private static let entries: [Entry] = {
+        var result: [Entry] = []
         result.reserveCapacity(bakedCount)
-        for line in bakedTable.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let space = line.firstIndex(of: " ") else { continue }
-            let name = String(line[..<space])
-            guard
-                let value = UInt32(line[line.index(after: space)...], radix: 16),
-                let scalar = Unicode.Scalar(value)
-            else { continue }
-            result.append((name, Character(scalar)))
+        nameBlob.withUTF8Buffer { blob in
+            for index in 0..<bakedCount {
+                let start = Int(nameStarts[index])
+                let length = Int(nameStarts[index + 1]) - 1 - start
+                let name = String(unsafeUninitializedCapacity: length) { buffer in
+                    for offset in 0..<length { buffer[offset] = blob[start + offset] }
+                    return length
+                }
+                let scalar = Unicode.Scalar(puaBase + UInt32(codepointOffsets[index]))!
+                result.append(Entry(name: name, glyph: String(scalar)))
+            }
         }
         return result
     }()
-
-    /// Public-facing entries (name + glyph string), sorted by name.
-    private static let entries: [Entry] = table.map {
-        Entry(name: $0.name, glyph: String($0.glyph))
-    }
     #endif
 }
