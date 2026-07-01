@@ -52,9 +52,9 @@ struct MainMenuPage: View {
     private var sfSymbolsSubtitle: String {
         let examples = ["swift", "apple.terminal", "command"]
             .compactMap { SFSymbol.glyph(named: $0) }
-            .joined(separator: " ")
+            .joined()
         let caveat = L("feature.sfSymbols.macOSOnly")
-        return examples.isEmpty ? caveat : "\(examples)  \(caveat)"
+        return examples.isEmpty ? caveat : "\(examples) \(caveat)"
     }
 
     var body: some View {
