@@ -130,6 +130,16 @@ extension Character {
         if (0x20000...0x2FA1F).contains(scalarValue) { return 2 }  // CJK unified extensions B-F, compatibility supplement
         if (0x30000...0x3134F).contains(scalarValue) { return 2 }  // CJK unified extension G
 
+        // SF Symbols occupy the Plane-16 Private Use Area (U+100000…U+10FFFD).
+        // A terminal whose font carries the glyphs — Terminal.app with SF Mono,
+        // the only context in which these render at all (see ``SFSymbol``) —
+        // paints each one 2 cells wide, but advances the cursor by only 1; the
+        // under-advance is handled in ``terminalAppCursorAdvance`` and worked
+        // around by ``withTerminalAppCursorCompensation``. These codepoints are
+        // only emitted by the Apple-gated symbol resolver (or pasted literally),
+        // so on a terminal without the glyphs they simply never appear.
+        if (0x100000...0x10FFFD).contains(scalarValue) { return 2 }  // Plane-16 PUA — SF Symbols (SF Mono: 2 cells)
+
         return 1
     }
 }
@@ -167,6 +177,17 @@ extension Character {
         // fix; this only corrects the cursor accounting so the layout aligns.)
         if scalars.count == 1, let only = scalars.first,
             (0x1F1E6...0x1F1FF).contains(only.value)
+        {
+            return 1
+        }
+
+        // SF Symbols occupy the Plane-16 Private Use Area (U+100000…U+10FFFD).
+        // Terminal.app (SF Mono) paints the glyph 2 cells wide — see
+        // ``terminalWidth`` — but advances the cursor by only 1, the same
+        // under-advance as a VS-16 pictographic emoji, so
+        // ``withTerminalAppCursorCompensation`` injects a CUF(1) after it.
+        if scalars.count == 1, let only = scalars.first,
+            (0x100000...0x10FFFD).contains(only.value)
         {
             return 1
         }
