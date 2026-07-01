@@ -732,13 +732,15 @@ final class _PickerMenuHandler: Focusable {
             }
         } else {
             switch event.key {
-            case .enter, .space, .down:
+            case .enter, .space:
+                // Only Enter/Space (or a click) open the drop-down — matching
+                // SwiftUI. Arrow keys must fall through to focus navigation.
                 highlightedIndex = itemValues.firstIndex(of: selection.wrappedValue) ?? 0
                 isOpen = true
                 scrollFollowPending = true
                 return true
             default:
-                // Closed: let Tab and arrows drive focus navigation.
+                // Closed: let Tab and the arrow keys drive focus navigation.
                 return false
             }
         }

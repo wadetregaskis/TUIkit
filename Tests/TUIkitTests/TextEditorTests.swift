@@ -278,6 +278,20 @@ struct TextEditorTests {
         #expect(editor.cursorColumn == 10)  // end of "beta"
     }
 
+    @Test("Option-Tab inserts a literal tab (plain Tab moves focus)")
+    func optionTabInsertsTab() {
+        let sink = StringSink("ab")
+        let editor = handler(sink)
+        editor.cursorColumn = 1
+        // Plain Tab is not handled here (the focus system consumes it).
+        #expect(editor.handleKeyEvent(KeyEvent(key: .tab)) == false)
+        #expect(sink.value == "ab")
+        // Option-Tab types a literal tab.
+        #expect(editor.handleKeyEvent(KeyEvent(key: .tab, alt: true)) == true)
+        #expect(sink.value == "a\tb")
+        #expect(editor.cursorColumn == 2)
+    }
+
     @Test("Option-Backspace deletes the word before the cursor")
     func optionBackspaceDeletesWord() {
         let sink = StringSink("alpha beta")

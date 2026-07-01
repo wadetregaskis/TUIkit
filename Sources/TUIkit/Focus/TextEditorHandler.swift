@@ -166,6 +166,10 @@ final class TextEditorHandler: Focusable {
     /// `false` for an unbound chord so it can propagate.
     private func handleAltKey(_ event: KeyEvent) -> Bool {
         switch event.key {
+        case .tab:
+            // Plain Tab moves focus; Option-Tab types a literal tab, since a
+            // multi-line editor legitimately needs tab characters.
+            insert("\t")
         case .left:
             moveWordLeft()
         case .right:

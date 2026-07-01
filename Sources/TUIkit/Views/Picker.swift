@@ -105,11 +105,12 @@ struct _PickerEntry<SelectionValue: Hashable> {
 ///
 /// ## Keyboard
 ///
-/// The picker is focusable with Tab. For a menu picker, Enter, Space, or
-/// Down opens the drop-down; the arrow keys move the highlight; Enter or
-/// Space commits the highlighted option; Escape closes without changing the
-/// selection. For an inline picker, the arrow keys move between options and
-/// Enter or Space selects.
+/// The picker is focusable with Tab. For a menu picker, Enter or Space opens
+/// the drop-down (the arrow keys move focus between controls, matching
+/// SwiftUI, rather than opening it); once open, the arrow keys move the
+/// highlight, Enter or Space commits the highlighted option, and Escape closes
+/// without changing the selection. For an inline picker, the arrow keys move
+/// between options and Enter or Space selects.
 public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View {
     /// A binding to the selected value.
     let selection: Binding<SelectionValue>

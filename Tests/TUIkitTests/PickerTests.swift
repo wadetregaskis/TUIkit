@@ -389,14 +389,26 @@ struct PickerMenuHandlerTests {
         )
     }
 
-    @Test("A closed picker opens on the Down key")
-    func opensOnDown() {
+    @Test("A closed picker does NOT open on the Down key (Down moves focus)")
+    func downDoesNotOpen() {
         let handler = makeHandler(selected: "a")
         #expect(handler.isOpen == false)
 
+        // Down on a closed picker must not be consumed, so focus can move on.
         let consumed = handler.handleKeyEvent(KeyEvent(key: .down))
-        #expect(consumed == true)
+        #expect(consumed == false)
+        #expect(handler.isOpen == false)
+    }
+
+    @Test("A closed picker opens on Enter or Space")
+    func opensOnEnterOrSpace() {
+        let handler = makeHandler(selected: "a")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == true)
         #expect(handler.isOpen == true)
+
+        let handler2 = makeHandler(selected: "a")
+        #expect(handler2.handleKeyEvent(KeyEvent(key: .space)) == true)
+        #expect(handler2.isOpen == true)
     }
 
     @Test("A closed picker lets Tab propagate for focus navigation")
@@ -410,7 +422,7 @@ struct PickerMenuHandlerTests {
     @Test("Arrow keys move the highlight while open")
     func arrowsMoveHighlight() {
         let handler = makeHandler(selected: "a")
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open at index 0
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))  // open at index 0
         #expect(handler.highlightedIndex == 0)
 
         _ = handler.handleKeyEvent(KeyEvent(key: .down))
@@ -429,7 +441,7 @@ struct PickerMenuHandlerTests {
         var committed: AnyHashable?
         let handler = makeHandler(selected: "a", onChange: { committed = $0 })
 
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))  // open
         _ = handler.handleKeyEvent(KeyEvent(key: .down))  // highlight "b"
         let consumed = handler.handleKeyEvent(KeyEvent(key: .enter))
 
@@ -443,7 +455,7 @@ struct PickerMenuHandlerTests {
         var committed: AnyHashable?
         let handler = makeHandler(selected: "a", onChange: { committed = $0 })
 
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))  // open
         _ = handler.handleKeyEvent(KeyEvent(key: .down))  // highlight "b"
         let consumed = handler.handleKeyEvent(KeyEvent(key: .escape))
 
@@ -455,7 +467,7 @@ struct PickerMenuHandlerTests {
     @Test("Losing focus closes an open drop-down")
     func focusLossCloses() {
         let handler = makeHandler(selected: "a")
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))
         #expect(handler.isOpen == true)
 
         handler.onFocusLost()
