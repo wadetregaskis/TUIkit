@@ -50,6 +50,14 @@ public enum TrackStyle: Sendable, Equatable {
     /// from ``ProgressView``'s solid block bar and ``Gauge``'s shaded meter.
     case knob
 
+    /// A plain line with a marker at the value and NO fill — `─────●─────`.
+    ///
+    /// Uses `─` on BOTH sides of the position and `●` as the accent marker.
+    /// Unlike ``dot``/``knob`` (which fill up to the marker), this only marks
+    /// the position — used by the non-capacity `Gauge` accessory style, which
+    /// shows *where* the value sits rather than a filled range.
+    case marker
+
     /// Shade characters for a softer, textured look.
     ///
     /// Uses `▓` (dark shade) for filled and `░` (light shade) for empty.

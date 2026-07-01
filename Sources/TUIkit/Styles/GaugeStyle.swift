@@ -23,10 +23,16 @@
 /// | Style | Terminal rendering |
 /// |-------|--------------------|
 /// | ``automatic`` / ``linearCapacity`` | A full horizontal bar with bound labels — a shaded meter |
-/// | ``accessoryLinear`` | A slim line with a marker at the value |
-/// | ``accessoryLinearCapacity`` | A slim, sub-cell-precise capacity bar |
-/// | ``accessoryCircular`` | A compact pie dial (`○◔◑◕●`) beside the value |
-/// | ``accessoryCircularCapacity`` | A compact pie dial with the value leading |
+/// | ``accessoryLinear`` | A plain line with a marker at the value (`─────●─────`) — position only, no fill |
+/// | ``accessoryLinearCapacity`` | A slim, sub-cell-precise bar filled from the minimum to the value |
+/// | ``accessoryCircular`` | A ring dial with a marker at the value's position on the ring |
+/// | ``accessoryCircularCapacity`` | A ring dial whose arc fills from the minimum to the value |
+/// | ``accessoryCircularTiny`` | A single compact pie glyph (`○◔◑◕●`) — where clarity matters less than size |
+///
+/// The **capacity** styles are cumulative: they fill the range from the
+/// minimum up to the current value. The **non-capacity** styles mark only the
+/// value's *position* (a point / a marker on the ring). This mirrors SwiftUI's
+/// distinction.
 ///
 /// > Note: A terminal cannot host user-defined gauge geometries, so — unlike
 /// > SwiftUI's open protocol — this is a closed set. The call site is identical
@@ -39,18 +45,24 @@ public enum GaugeStyle: Sendable, Equatable {
     /// bound labels. The default.
     case linearCapacity
 
-    /// A slim horizontal line with a marker at the current value.
+    /// A plain horizontal line with a marker at the current value's position —
+    /// no fill (position only).
     case accessoryLinear
 
-    /// A slim horizontal bar that fills to the current value, with sub-cell
-    /// precision.
+    /// A slim horizontal bar filled from the minimum to the current value, with
+    /// sub-cell precision (cumulative capacity).
     case accessoryLinearCapacity
 
-    /// A compact circular dial (a pie glyph) beside the current value.
+    /// A ring dial with a marker at the current value's position on the ring.
     case accessoryCircular
 
-    /// A compact circular dial with the current value leading the dial.
+    /// A ring dial whose arc fills from the minimum to the current value
+    /// (cumulative capacity).
     case accessoryCircularCapacity
+
+    /// A single compact pie glyph (`○◔◑◕●`) beside the value — for when a
+    /// gauge must fit a tight space and exact resolution isn't important.
+    case accessoryCircularTiny
 }
 
 // MARK: - Environment

@@ -149,6 +149,7 @@ struct ProgressViewPage: View {
                     HStack(spacing: 3) {
                         circularGauge(label: "accessoryCircular", fraction: fraction, style: .accessoryCircular)
                         circularGauge(label: "…Capacity", fraction: fraction, style: .accessoryCircularCapacity)
+                        circularGauge(label: "…Tiny", fraction: fraction, style: .accessoryCircularTiny)
                     }
                 }
             }

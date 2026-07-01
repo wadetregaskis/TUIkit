@@ -75,7 +75,7 @@ struct GaugeTests {
 
     // MARK: - GaugeStyle variants
 
-    @Test("The accessory-circular style renders a compact pie dial beside the value")
+    @Test("The accessory-circular style renders a ring dial around the value")
     func accessoryCircularDial() {
         let buffer = renderToBuffer(
             Gauge(value: 0.75) {
@@ -84,27 +84,47 @@ struct GaugeTests {
                 Text("75%")
             }
             .gaugeStyle(.accessoryCircular),
-            context: makeRenderContext(width: 30, height: 4))
+            context: makeRenderContext(width: 30, height: 6))
         let joined = buffer.lines.map { $0.stripped }.joined(separator: "\n")
-        // 0.75 → the three-quarter pie glyph, next to the value, with the label below.
-        #expect(joined.contains("◕"))
+        // A rounded-box ring (╭─╮ / │75%│ / ╰─╯) with the label below.
+        #expect(joined.contains("╭"))
+        #expect(joined.contains("╰"))
         #expect(joined.contains("75%"))
         #expect(joined.contains("Load"))
-        // A dial hugs its content — far narrower than the 30-column proposal.
+        #expect(buffer.height == 4)  // 3 ring rows + label
+    }
+
+    @Test("The accessory-circular-tiny style keeps the single pie glyph")
+    func accessoryCircularTinyDial() {
+        let buffer = renderToBuffer(
+            Gauge(value: 0.75) { EmptyView() } currentValueLabel: { Text("75%") }
+                .gaugeStyle(.accessoryCircularTiny),
+            context: makeRenderContext(width: 30, height: 4))
+        let joined = buffer.lines.map { $0.stripped }.joined()
+        #expect(joined.contains("◕"))  // three-quarter pie glyph
         #expect(buffer.width < 10)
     }
 
-    @Test("The accessory-linear style uses a marker, not the shaded meter")
-    func accessoryLinearMarker() {
-        let buffer = renderToBuffer(
+    @Test("accessoryLinear marks position (no fill); accessoryLinearCapacity fills")
+    func linearCapacityVsMarker() {
+        let marker = renderToBuffer(
             Gauge(value: 0.5) { EmptyView() }.gaugeStyle(.accessoryLinear),
-            context: makeRenderContext(width: 20, height: 4))
-        let bar = buffer.lines.first?.stripped ?? ""
-        #expect(bar.contains("●"))  // the marker head
-        #expect(!bar.contains("▓"))  // not the default shaded meter
+            context: makeRenderContext(width: 20, height: 4)
+        ).lines.first?.stripped ?? ""
+        // Position marker on a plain line: a ● surrounded by ─, and NO fill.
+        #expect(marker.contains("●"))
+        #expect(marker.contains("─"))
+        #expect(!marker.contains("▓") && !marker.contains("▬"))
+
+        let capacity = renderToBuffer(
+            Gauge(value: 0.5) { EmptyView() }.gaugeStyle(.accessoryLinearCapacity),
+            context: makeRenderContext(width: 20, height: 4)
+        ).lines.first?.stripped ?? ""
+        // Capacity fills the range — a filled block bar, not a bare marker line.
+        #expect(capacity.contains("█") || capacity.contains("░"))
     }
 
-    @Test("measure == render: a circular gauge reports the size it draws")
+    @Test("measure == render: a ring-dial gauge reports the size it draws")
     func circularSizeMatchesRender() {
         let gauge = Gauge(value: 0.5) {
             Text("L")

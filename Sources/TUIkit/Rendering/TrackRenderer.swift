@@ -105,6 +105,15 @@ enum TrackRenderer {
                 headColor: accentColor,
                 emptyColor: emptyColor
             )
+        case .marker:
+            return renderMarkerStyle(
+                fraction: fraction,
+                width: width,
+                lineChar: "─",
+                markerChar: "●",
+                lineColor: emptyColor,
+                markerColor: accentColor
+            )
         case .braille:
             return renderBrailleStyle(
                 fraction: fraction,
@@ -358,6 +367,35 @@ extension TrackRenderer {
                 empty += emptyFill.ansiAwarePrefix(visibleCount: emptyRemainder)
             }
             result += ANSIRenderer.colorize(empty, foreground: emptyColor)
+        }
+        return result
+    }
+
+    /// Renders a position-marker style: a plain line with a single marker at
+    /// the value, and NO fill — `─────●─────`. Marks *where* the value sits
+    /// rather than a filled range.
+    private static func renderMarkerStyle(
+        fraction: Double,
+        width: Int,
+        lineChar: Character,
+        markerChar: Character,
+        lineColor: Color,
+        markerColor: Color
+    ) -> String {
+        guard width > 1 else {
+            return ANSIRenderer.colorize(String(markerChar), foreground: markerColor)
+        }
+        let position = Int((fraction * Double(width - 1)).rounded())
+        var result = ""
+        if position > 0 {
+            result += ANSIRenderer.colorize(
+                String(repeating: lineChar, count: position), foreground: lineColor)
+        }
+        result += ANSIRenderer.colorize(String(markerChar), foreground: markerColor)
+        let trailing = width - 1 - position
+        if trailing > 0 {
+            result += ANSIRenderer.colorize(
+                String(repeating: lineChar, count: trailing), foreground: lineColor)
         }
         return result
     }

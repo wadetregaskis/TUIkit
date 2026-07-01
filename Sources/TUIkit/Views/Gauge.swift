@@ -210,7 +210,11 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         let palette = context.environment.palette
         let style = context.environment.gaugeStyle
         if style.isCircular {
-            return renderCircular(capacity: style == .accessoryCircularCapacity, palette: palette, context: context)
+            if style == .accessoryCircularTiny {
+                return renderCircularTiny(palette: palette, context: context)
+            }
+            return renderCircularDial(
+                capacity: style == .accessoryCircularCapacity, palette: palette, context: context)
         }
         let width = context.availableWidth
         var lines: [String] = []
@@ -235,8 +239,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     /// ``Slider`` (a knob on a rail) so the three read differently at a glance.
     private func trackStyle(for style: GaugeStyle) -> TrackStyle {
         switch style {
-        case .accessoryLinear: return .dot  // a marker on a thin line
-        case .accessoryLinearCapacity: return .blockFine  // slim, sub-cell precise
+        case .accessoryLinear: return .marker  // position only, no fill
+        case .accessoryLinearCapacity: return .blockFine  // fills min→value, sub-cell precise
         default: return .shade  // linearCapacity / automatic — a shaded meter
         }
     }
@@ -275,16 +279,12 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
 
     // MARK: - Circular rendering
 
-    /// The circular-dial rendering: a pie glyph beside the current value, with
-    /// the label (if any) on the row below. `capacity` puts the value first.
-    private func renderCircular(capacity: Bool, palette: any Palette, context: RenderContext) -> FrameBuffer {
+    /// The tiny circular dial: a single pie glyph beside the current value, with
+    /// the label (if any) on the row below.
+    private func renderCircularTiny(palette: any Palette, context: RenderContext) -> FrameBuffer {
         let dial = ANSIRenderer.colorize(String(GaugePieDial.glyph(for: fraction)), foreground: palette.accent)
         let valueText = inlineText(currentValueLabel, context: context)
-        var row = dial
-        if valueText.strippedLength > 0 {
-            row = capacity ? valueText + " " + dial : dial + " " + valueText
-        }
-        var lines = [row]
+        var lines = [valueText.strippedLength > 0 ? dial + " " + valueText : dial]
         let labelText = inlineText(label, context: context)
         if labelText.strippedLength > 0 {
             lines.append(labelText)
@@ -292,24 +292,97 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         return FrameBuffer(lines: lines)
     }
 
-    /// The natural size of the circular dial (kept in step with
-    /// `renderCircular`).
+    /// The full ring dial: a rounded box whose border is the gauge track and
+    /// whose centre holds the value. For `capacity` the border fills clockwise
+    /// from the top-left, proportional to the value; otherwise a single bright
+    /// cell marks the value's position on the ring. The label (if any) sits
+    /// below. Uses more space than the tiny dial, for clarity.
+    private func renderCircularDial(
+        capacity: Bool, palette: any Palette, context: RenderContext
+    ) -> FrameBuffer {
+        let valueText = inlineText(currentValueLabel, context: context)
+        let inner = max(3, valueText.strippedLength)
+        let dim = palette.foregroundTertiary
+        let accent = palette.accent
+
+        // Border glyphs per cell of the 3×(inner+2) box.
+        var glyphs: [[Character]] = [
+            ["╭"] + Array(repeating: "─", count: inner) + ["╮"],
+            ["│"] + Array(repeating: " ", count: inner) + ["│"],
+            ["╰"] + Array(repeating: "─", count: inner) + ["╯"],
+        ]
+        // Perimeter cells in clockwise order from the top-left corner.
+        var perimeter: [(r: Int, c: Int)] = []
+        for col in 0...(inner + 1) { perimeter.append((0, col)) }  // top L→R
+        perimeter.append((1, inner + 1))  // right side
+        for col in stride(from: inner + 1, through: 0, by: -1) { perimeter.append((2, col)) }  // bottom R→L
+        perimeter.append((1, 0))  // left side
+
+        // Which perimeter cells are "on" (accent): a filled arc for capacity,
+        // a single marker for position.
+        var isOn = [Bool](repeating: false, count: perimeter.count)
+        if capacity {
+            let filled = Int((fraction * Double(perimeter.count)).rounded())
+            for index in 0..<min(filled, perimeter.count) { isOn[index] = true }
+        } else {
+            let marker = Int((fraction * Double(perimeter.count - 1)).rounded())
+            isOn[min(max(0, marker), perimeter.count - 1)] = true
+        }
+        var colorAt: [String: Color] = [:]
+        for (index, cell) in perimeter.enumerated() {
+            colorAt["\(cell.r),\(cell.c)"] = isOn[index] ? accent : dim
+        }
+
+        // The centred value occupies the middle row's interior.
+        let stripped = valueText.stripped
+        let leftPad = max(0, (inner - stripped.count) / 2)
+        for (offset, char) in stripped.enumerated() where 1 + leftPad + offset <= inner {
+            glyphs[1][1 + leftPad + offset] = char
+        }
+
+        var lines: [String] = []
+        for row in 0..<3 {
+            var line = ""
+            for col in 0...(inner + 1) {
+                let ch = String(glyphs[row][col])
+                if let color = colorAt["\(row),\(col)"] {
+                    line += ANSIRenderer.colorize(ch, foreground: color)
+                } else {
+                    // Interior: the value text (or a blank).
+                    line += ch == " " ? " " : ANSIRenderer.colorize(ch, foreground: palette.foreground)
+                }
+            }
+            lines.append(line)
+        }
+        let labelText = inlineText(label, context: context)
+        if labelText.strippedLength > 0 {
+            lines.append(labelText)
+        }
+        return FrameBuffer(lines: lines)
+    }
+
+    /// The natural size of a circular gauge (kept in step with the renderers).
     private func circularSize(context: RenderContext) -> (width: Int, height: Int) {
         let valueWidth = inlineText(currentValueLabel, context: context).strippedLength
-        let rowWidth = valueWidth > 0 ? 1 + 1 + valueWidth : 1  // dial + space + value
         let labelWidth = inlineText(label, context: context).strippedLength
-        let width = max(1, max(rowWidth, labelWidth))
-        let height = labelWidth > 0 ? 2 : 1
-        return (width, height)
+        if context.environment.gaugeStyle == .accessoryCircularTiny {
+            let rowWidth = valueWidth > 0 ? 1 + 1 + valueWidth : 1  // dial + space + value
+            return (max(1, max(rowWidth, labelWidth)), labelWidth > 0 ? 2 : 1)
+        }
+        // Ring dial: a 3-row box of width inner+2, plus a label row.
+        let inner = max(3, valueWidth)
+        let width = max(inner + 2, labelWidth)
+        return (width, labelWidth > 0 ? 4 : 3)
     }
 }
 
 // MARK: - GaugeStyle helpers
 
 extension GaugeStyle {
-    /// Whether this style renders as a compact circular dial rather than a bar.
+    /// Whether this style renders as a circular dial rather than a bar.
     fileprivate var isCircular: Bool {
         self == .accessoryCircular || self == .accessoryCircularCapacity
+            || self == .accessoryCircularTiny
     }
 }
 
