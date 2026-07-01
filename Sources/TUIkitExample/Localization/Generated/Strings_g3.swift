@@ -15,13 +15,7 @@ extension ExampleStrings {
         "en": [
             // Spinners
             "page.spinners.title": "Spinners",
-            "page.spinners.dotsSection": "Dots Spinner",
-            "page.spinners.loadingData": "Loading data",
-            "page.spinners.lineSection": "Line Spinner",
-            "page.spinners.compiling": "Compiling",
-            "page.spinners.bouncingSection": "Bouncing Spinner",
-            "page.spinners.moreSection": "More styles",
-            "page.spinners.processing": "Processing",
+            "page.spinners.styles": "Styles",
             "page.spinners.customColorSection": "Custom Color",
             "page.spinners.installing": "Installing...",
 
@@ -143,13 +137,7 @@ extension ExampleStrings {
         "de": [
             // Spinners
             "page.spinners.title": "Spinner",
-            "page.spinners.dotsSection": "Punkte-Spinner",
-            "page.spinners.loadingData": "Daten werden geladen",
-            "page.spinners.lineSection": "Linien-Spinner",
-            "page.spinners.compiling": "Wird kompiliert",
-            "page.spinners.bouncingSection": "Springender Spinner",
-            "page.spinners.moreSection": "Weitere Stile",
-            "page.spinners.processing": "Wird verarbeitet",
+            "page.spinners.styles": "Stile",
             "page.spinners.customColorSection": "Benutzerdefinierte Farbe",
             "page.spinners.installing": "Wird installiert …",
 
@@ -271,13 +259,7 @@ extension ExampleStrings {
         "fr": [
             // Spinners
             "page.spinners.title": "Indicateurs",
-            "page.spinners.dotsSection": "Indicateur à points",
-            "page.spinners.loadingData": "Chargement des données",
-            "page.spinners.lineSection": "Indicateur linéaire",
-            "page.spinners.compiling": "Compilation",
-            "page.spinners.bouncingSection": "Indicateur rebondissant",
-            "page.spinners.moreSection": "Autres styles",
-            "page.spinners.processing": "Traitement",
+            "page.spinners.styles": "Styles",
             "page.spinners.customColorSection": "Couleur personnalisée",
             "page.spinners.installing": "Installation…",
 
@@ -399,13 +381,7 @@ extension ExampleStrings {
         "it": [
             // Spinners
             "page.spinners.title": "Indicatori",
-            "page.spinners.dotsSection": "Indicatore a punti",
-            "page.spinners.loadingData": "Caricamento dati",
-            "page.spinners.lineSection": "Indicatore a linee",
-            "page.spinners.compiling": "Compilazione",
-            "page.spinners.bouncingSection": "Indicatore rimbalzante",
-            "page.spinners.moreSection": "Altri stili",
-            "page.spinners.processing": "Elaborazione",
+            "page.spinners.styles": "Stili",
             "page.spinners.customColorSection": "Colore personalizzato",
             "page.spinners.installing": "Installazione…",
 
@@ -527,13 +503,7 @@ extension ExampleStrings {
         "es": [
             // Spinners
             "page.spinners.title": "Indicadores",
-            "page.spinners.dotsSection": "Indicador de puntos",
-            "page.spinners.loadingData": "Cargando datos",
-            "page.spinners.lineSection": "Indicador de líneas",
-            "page.spinners.compiling": "Compilando",
-            "page.spinners.bouncingSection": "Indicador rebotante",
-            "page.spinners.moreSection": "Más estilos",
-            "page.spinners.processing": "Procesando",
+            "page.spinners.styles": "Estilos",
             "page.spinners.customColorSection": "Color personalizado",
             "page.spinners.installing": "Instalando…",
 
@@ -655,13 +625,7 @@ extension ExampleStrings {
         "zh": [
             // Spinners
             "page.spinners.title": "加载指示器",
-            "page.spinners.dotsSection": "圆点指示器",
-            "page.spinners.loadingData": "正在加载数据",
-            "page.spinners.lineSection": "线条指示器",
-            "page.spinners.compiling": "正在编译",
-            "page.spinners.bouncingSection": "弹跳指示器",
-            "page.spinners.moreSection": "更多样式",
-            "page.spinners.processing": "正在处理",
+            "page.spinners.styles": "样式",
             "page.spinners.customColorSection": "自定义颜色",
             "page.spinners.installing": "正在安装…",
 
@@ -783,13 +747,7 @@ extension ExampleStrings {
         "ja": [
             // Spinners
             "page.spinners.title": "スピナー",
-            "page.spinners.dotsSection": "ドットスピナー",
-            "page.spinners.loadingData": "データを読み込み中",
-            "page.spinners.lineSection": "ラインスピナー",
-            "page.spinners.compiling": "コンパイル中",
-            "page.spinners.bouncingSection": "バウンススピナー",
-            "page.spinners.moreSection": "その他のスタイル",
-            "page.spinners.processing": "処理中",
+            "page.spinners.styles": "スタイル",
             "page.spinners.customColorSection": "カスタムカラー",
             "page.spinners.installing": "インストール中…",
 

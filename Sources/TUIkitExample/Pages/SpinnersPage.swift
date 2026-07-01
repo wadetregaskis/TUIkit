@@ -11,22 +11,14 @@ struct SpinnersPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.spinners.dotsSection")) {
-                Spinner(L("page.spinners.loadingData"))
-            }
-
-            DemoSection(L("page.spinners.lineSection")) {
-                Spinner(L("page.spinners.compiling"), style: .line)
-            }
-
-            DemoSection(L("page.spinners.bouncingSection")) {
-                Spinner(L("page.spinners.processing"), style: .bouncing)
-            }
-
-            // The full style catalogue. The labels are the API case names (an
-            // API surface, left untranslated), like the ProgressView catalogue.
-            DemoSection(L("page.spinners.moreSection")) {
+            // The full style catalogue — every SpinnerStyle in declaration
+            // order. The labels are the API case names (an API surface, left
+            // untranslated), like the ProgressView catalogue.
+            DemoSection(L("page.spinners.styles")) {
                 VStack(alignment: .leading, spacing: 0) {
+                    spinnerRow("dots", .dots)
+                    spinnerRow("line", .line)
+                    spinnerRow("bouncing", .bouncing)
                     spinnerRow("pie", .pie)
                     spinnerRow("beachball", .beachball)
                     spinnerRow("box", .box)
