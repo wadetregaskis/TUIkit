@@ -4,10 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-#if canImport(AppKit)
-import Foundation
-#endif
-
 /// Resolves an SF Symbol name (`"star.fill"`, `"gearshape"`) to the terminal
 /// glyph that renders it, and enumerates every known symbol.
 ///
@@ -59,8 +55,21 @@ public enum SFSymbol {
     /// - Parameter name: The SF Symbol name, e.g. `"star.fill"`.
     public static func glyph(named name: String) -> String? {
         #if canImport(AppKit)
-        guard let scalar = lookup[name] else { return nil }
-        return String(scalar)
+        // Binary-search the name-sorted table.
+        var low = 0
+        var high = table.count
+        while low < high {
+            let mid = low + (high - low) / 2
+            if table[mid].name < name {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        if low < table.count, table[low].name == name {
+            return String(table[low].glyph)
+        }
+        return nil
         #else
         return nil
         #endif
@@ -80,76 +89,28 @@ public enum SFSymbol {
     }
 
     #if canImport(AppKit)
-    /// The Plane-16 Private Use Area base every SF Symbol codepoint offsets from.
-    private static let puaBase: UInt32 = 0x10_0000
-
-    /// Decoded `(name, scalar)` pairs, sorted by name. Built once, lazily.
-    private static let decoded: [(name: String, scalar: Unicode.Scalar)] = decodeTable()
-
-    /// Name → glyph-scalar map for `O(1)` resolution.
-    private static let lookup: [String: Unicode.Scalar] = {
-        var map = [String: Unicode.Scalar](minimumCapacity: decoded.count)
-        for pair in decoded { map[pair.name] = pair.scalar }
-        return map
+    /// The name → glyph table, parsed once on first use from the generated
+    /// `bakedTable` (one `name<space>HEXCODEPOINT` line per symbol). Sorted
+    /// ascending by name — as the generator emits it — so ``glyph(named:)`` can
+    /// binary-search it directly, no dictionary to build.
+    private static let table: [(name: String, glyph: Character)] = {
+        var result: [(name: String, glyph: Character)] = []
+        result.reserveCapacity(bakedCount)
+        for line in bakedTable.split(separator: "\n", omittingEmptySubsequences: true) {
+            guard let space = line.firstIndex(of: " ") else { continue }
+            let name = String(line[..<space])
+            guard
+                let value = UInt32(line[line.index(after: space)...], radix: 16),
+                let scalar = Unicode.Scalar(value)
+            else { continue }
+            result.append((name, Character(scalar)))
+        }
+        return result
     }()
 
     /// Public-facing entries (name + glyph string), sorted by name.
-    private static let entries: [Entry] = decoded.map {
-        Entry(name: $0.name, glyph: String($0.scalar))
-    }
-
-    /// Decodes the baked blob (see `Tools/GenerateSFSymbols` for the format):
-    /// a little-endian `UInt32` name-section length, a front-coded name
-    /// section, then one little-endian `UInt16` codepoint offset per name.
-    private static func decodeTable() -> [(name: String, scalar: Unicode.Scalar)] {
-        // The literal is wrapped across lines for readability; ignore the
-        // newlines when decoding.
-        guard
-            let blob = Data(base64Encoded: bakedTableBase64, options: .ignoreUnknownCharacters),
-            blob.count >= 4
-        else { return [] }
-        let bytes = [UInt8](blob)
-
-        let nameLength =
-            Int(bytes[0]) | Int(bytes[1]) << 8 | Int(bytes[2]) << 16 | Int(bytes[3]) << 24
-        let nameStart = 4
-        let nameEnd = nameStart + nameLength
-        guard nameEnd <= bytes.count else { return [] }
-
-        // Front-coded names: each entry is a shared-prefix length, the differing
-        // suffix bytes, then a NUL. The shared prefix comes from the previous
-        // name, so names rebuild in a single forward pass.
-        var names: [String] = []
-        names.reserveCapacity(bakedCount)
-        var previous: [UInt8] = []
-        var index = nameStart
-        while index < nameEnd {
-            let shared = Int(bytes[index])
-            index += 1
-            var nameBytes = Array(previous.prefix(shared))
-            while index < nameEnd, bytes[index] != 0 {
-                nameBytes.append(bytes[index])
-                index += 1
-            }
-            index += 1  // skip the NUL terminator
-            // Names are ASCII, so decoding never fails; `?? ""` keeps the
-            // name/codepoint positional pairing intact in the impossible case.
-            names.append(String(bytes: nameBytes, encoding: .utf8) ?? "")
-            previous = nameBytes
-        }
-
-        // One UInt16 codepoint offset per name, in the same order.
-        var result: [(name: String, scalar: Unicode.Scalar)] = []
-        result.reserveCapacity(names.count)
-        var cursor = nameEnd
-        for name in names {
-            guard cursor + 1 < bytes.count else { break }
-            let offset = UInt32(bytes[cursor]) | UInt32(bytes[cursor + 1]) << 8
-            cursor += 2
-            guard let scalar = Unicode.Scalar(puaBase + offset) else { continue }
-            result.append((name, scalar))
-        }
-        return result
+    private static let entries: [Entry] = table.map {
+        Entry(name: $0.name, glyph: String($0.glyph))
     }
     #endif
 }

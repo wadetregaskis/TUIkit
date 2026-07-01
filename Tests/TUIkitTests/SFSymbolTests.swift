@@ -68,6 +68,19 @@ struct SFSymbolTests {
     }
 
     #if canImport(AppKit)
+    @Test("Binary search resolves an exact name that is a prefix of others")
+    func resolverPrefixBoundary() {
+        // `star` is a prefix of `star.fill`, `star.circle`, … — the binary
+        // search must return star's own glyph (U+1002C2), not a neighbour's.
+        #expect(SFSymbol.glyph(named: "star") == String(Unicode.Scalar(0x10_02C2)!))
+        #expect(SFSymbol.glyph(named: "star.fill") == String(Unicode.Scalar(0x10_02C3)!))
+        #expect(SFSymbol.glyph(named: "star") != SFSymbol.glyph(named: "star.fill"))
+        // An almost-match that isn't a real name still misses.
+        #expect(SFSymbol.glyph(named: "star.fil") == nil)
+    }
+    #endif
+
+    #if canImport(AppKit)
     @Test("The baked table is well-formed: PUA glyphs, sorted, unique names")
     func tableWellFormed() {
         let all = SFSymbol.all

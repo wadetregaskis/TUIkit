@@ -54,22 +54,18 @@ func cryptonDecryptObfuscatedFontTable(tableTag: UInt32, from: CTFont) -> Data?
 
 // MARK: - Output format
 //
-// The baked blob (decoded by `SFSymbol` in the shipped package) is:
+// The generated file is a plain, readable table: ONE Swift multiline string
+// literal holding one `name<space>HEXCODEPOINT` line per symbol, sorted by name.
+// `SFSymbol` parses it once at first use into a sorted `[(name, Character)]`
+// array and binary-searches that.
 //
-//   [UInt32 LE: nameSectionLength]
-//   [name section: front-coded names, sorted ascending]
-//       per entry: [UInt8 sharedPrefixLen][suffix bytes][0x00]
-//   [codepoint section: nameCount × UInt16 LE, each = codepoint − 0x100000]
-//
-// Front-coding exploits the deep shared prefixes between adjacent sorted names
-// (square.and.arrow.up, .up.fill, .up.circle, …): each entry stores only the
-// byte count shared with its predecessor plus the differing suffix. The whole
-// blob is base64'd into one Swift string literal — ~126 KB of source, gated
-// behind `#if canImport(AppKit)` so non-Apple builds carry none of it.
-
-/// The Plane-16 Private Use Area base; every SF Symbol codepoint is an offset
-/// from here that fits in a `UInt16`.
-let puaBase: UInt32 = 0x10_0000
+// Why a string literal and not an array literal of tuples: the Swift optimiser
+// chokes on a literal of this size — `[(String, Character)]` with 8466 elements
+// takes ~2 minutes under `-O` (even split into parallel `[String]`/`[UInt32]`
+// arrays it is ~15 s), whereas a single string literal compiles in <0.5 s and
+// the one-time parse into the sorted array is sub-millisecond. Readable and
+// greppable (unlike base64), gated behind `#if canImport(AppKit)` so non-Apple
+// builds carry none of it.
 
 // MARK: - Locate the SF Symbols app
 
@@ -166,54 +162,14 @@ func parsePairs(from csv: Data) -> [(name: String, codepoint: UInt32)] {
 
 // MARK: - Encode
 
-/// Front-codes the sorted names and packs the codepoints into the baked blob.
-func encode(_ pairs: [(name: String, codepoint: UInt32)]) -> Data {
-    var names = Data()
-    var previous: [UInt8] = []
-    for pair in pairs {
-        let bytes = Array(pair.name.utf8)
-        var shared = 0
-        let limit = min(previous.count, bytes.count, 255)
-        while shared < limit, previous[shared] == bytes[shared] { shared += 1 }
-        names.append(UInt8(shared))
-        names.append(contentsOf: bytes[shared...])
-        names.append(0)
-        previous = bytes
-    }
-
-    var codepoints = Data()
-    for pair in pairs {
-        let offset = UInt16(pair.codepoint - puaBase)
-        codepoints.append(UInt8(offset & 0xFF))
-        codepoints.append(UInt8((offset >> 8) & 0xFF))
-    }
-
-    var blob = Data()
-    var length = UInt32(names.count).littleEndian
-    withUnsafeBytes(of: &length) { blob.append(contentsOf: $0) }
-    blob.append(names)
-    blob.append(codepoints)
-    return blob
-}
-
-/// Emits the generated Swift source for the baked table.
-func emitSource(base64: String, count: Int) -> String {
-    // Emit the base64 as ONE multiline string literal, wrapped to a readable
-    // column width. A multiline literal is a single token, so it type-checks
-    // instantly; a `"a" + "b" + …` chain of this length would send Swift's
-    // constant folder quadratic (minutes). The embedded newlines are stripped
-    // at decode time via `.ignoreUnknownCharacters`. The content sits at column
-    // zero with the closing delimiter also at column zero, so no leading
-    // whitespace creeps into the data regardless of the surrounding indentation.
-    let width = 100
-    var lines: [String] = []
-    var line = ""
-    for character in base64 {
-        line.append(character)
-        if line.count == width { lines.append(line); line = "" }
-    }
-    if !line.isEmpty { lines.append(line) }
-    let wrapped = lines.joined(separator: "\n")
+/// Emits the generated Swift source: a readable `name<space>HEXCODEPOINT` table
+/// as one multiline string literal.
+func emitSource(pairs: [(name: String, codepoint: UInt32)]) -> String {
+    // One line per symbol, at column zero (with the closing delimiter also at
+    // column zero) so no indentation creeps into the data.
+    let table = pairs
+        .map { "\($0.name) \(String($0.codepoint, radix: 16, uppercase: true))" }
+        .joined(separator: "\n")
 
     return """
     //  🖥️ TUIKit — Terminal UI Kit for Swift
@@ -226,10 +182,10 @@ func emitSource(base64: String, count: Int) -> String {
     //
     //  Produced by `Tools/GenerateSFSymbols/generate.sh` from the SF Symbols
     //  app's authoritative name → codepoint table (see that tool for how and
-    //  why). \(count) symbols. The blob is base64 of a front-coded name section
-    //  plus a UInt16 codepoint section; `SFSymbol` decodes it lazily on first
-    //  use. Gated to Apple platforms — SF Symbols never render elsewhere — so no
-    //  other platform carries the weight.
+    //  why). \(pairs.count) symbols, sorted by name, one `name HEXCODEPOINT` line
+    //  each. `SFSymbol` parses this once into a sorted `[(name, Character)]` array
+    //  and binary-searches it. Gated to Apple platforms — SF Symbols never render
+    //  elsewhere — so no other platform carries the weight.
 
     // swiftlint:disable file_length
 
@@ -237,12 +193,12 @@ func emitSource(base64: String, count: Int) -> String {
 
     extension SFSymbol {
         /// Number of symbols in the baked table.
-        static let bakedCount = \(count)
+        static let bakedCount = \(pairs.count)
 
-        /// Base64 of the front-coded name + codepoint blob (newlines ignored at
-        /// decode time). See `Tools/GenerateSFSymbols` for the exact format.
-        static let bakedTableBase64 = \"\"\"
-    \(wrapped)
+        /// The name → codepoint table: one `name HEXCODEPOINT` line per symbol,
+        /// sorted ascending by name. See `Tools/GenerateSFSymbols`.
+        static let bakedTable = \"\"\"
+    \(table)
     \"\"\"
     }
 
@@ -287,14 +243,13 @@ guard !pairs.isEmpty else {
     exit(1)
 }
 
-let blob = encode(pairs)
-let source = emitSource(base64: blob.base64EncodedString(), count: pairs.count)
+let source = emitSource(pairs: pairs)
 
 let outputPath = "Sources/TUIkit/SFSymbols/SFSymbolTable.generated.swift"
 do {
     try source.write(toFile: outputPath, atomically: true, encoding: .utf8)
     FileHandle.standardError.write(
-        Data("wrote \(pairs.count) symbols (\(blob.count) bytes blob) to \(outputPath)\n".utf8))
+        Data("wrote \(pairs.count) symbols (\(source.utf8.count) bytes) to \(outputPath)\n".utf8))
 } catch {
     FileHandle.standardError.write(Data("error: writing \(outputPath): \(error)\n".utf8))
     exit(1)

@@ -53,20 +53,26 @@ codepoint that renders it) and carries no creative expression.
 
 ## Output format
 
-The generated file embeds one base64 string. Decoded, the blob is:
+The generated file is a plain, readable table — one Swift multiline string
+literal with one `name HEXCODEPOINT` line per symbol, sorted by name:
 
 ```
-[UInt32 LE: nameSectionLength]
-[name section: front-coded names, sorted ascending]
-    per entry: [UInt8 sharedPrefixLen][suffix bytes][0x00]
-[codepoint section: nameCount × UInt16 LE, each = codepoint − 0x100000]
+square.and.arrow.up 100D82
+square.and.arrow.up.fill 100D83
+star.fill 1002C3
+…
 ```
 
-Front-coding stores only the bytes each sorted name *differs* from its
-predecessor by, which collapses the deep shared prefixes
-(`square.and.arrow.up`, `.up.fill`, `.up.circle`, …). `SFSymbol` decodes it
-lazily on first use. The whole file is gated behind `#if canImport(AppKit)`, so
-non-Apple builds carry none of it.
+`SFSymbol` parses it once on first use into a sorted `[(name, Character)]` array
+and binary-searches that. The whole file is gated behind `#if canImport(AppKit)`,
+so non-Apple builds carry none of it.
+
+A literal Swift array (`[(String, Character)]`) would be the obvious
+representation, but the optimiser can't handle one this large: 8000+ tuples take
+~2 minutes under `-O` (even split into parallel `[String]` / `[UInt32]` arrays,
+~15 s). A single string literal compiles in under half a second and the one-time
+parse is sub-millisecond — so the source stays readable *and* the build stays
+fast.
 
 ## Fragility
 
