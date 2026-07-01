@@ -15,6 +15,7 @@
 /// block:     ████████████████░░░░░░░░░░░░░░░░
 /// blockFine: ████████████████▍░░░░░░░░░░░░░░░   (sub-character precision)
 /// dot:       ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬●────────────────
+/// knob:      ━━━━━━━━━━━━━━━●────────────────   (Slider default)
 /// shade:     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░
 /// ```
 public enum TrackStyle: Sendable, Equatable {
@@ -40,6 +41,14 @@ public enum TrackStyle: Sendable, Equatable {
     /// Uses `▬` for filled, `●` as the progress head, and `─` for empty.
     /// The dot head renders in the accent color.
     case dot
+
+    /// A thin rail with a round knob at the value — the ``Slider`` default.
+    ///
+    /// Uses `━` (heavy line) for the filled rail, `●` as the knob, and `─`
+    /// (light line) for the empty rail. The knob renders in the accent color.
+    /// The rail-and-knob reads unmistakably as a draggable control, distinct
+    /// from ``ProgressView``'s solid block bar and ``Gauge``'s shaded meter.
+    case knob
 
     /// Shade characters for a softer, textured look.
     ///

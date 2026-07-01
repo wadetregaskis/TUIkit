@@ -94,6 +94,17 @@ enum TrackRenderer {
                 headColor: accentColor,
                 emptyColor: emptyColor
             )
+        case .knob:
+            return renderHeadStyle(
+                fraction: fraction,
+                width: width,
+                filledChar: "━",
+                headChar: "●",
+                emptyChar: "─",
+                filledColor: accentColor,
+                headColor: accentColor,
+                emptyColor: emptyColor
+            )
         case .braille:
             return renderBrailleStyle(
                 fraction: fraction,

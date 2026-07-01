@@ -31,8 +31,13 @@ struct SliderRenderTests {
         renderToBuffer(v, context: makeRenderContext(width: w, height: h)).lines.map { $0.stripped }
     }
 
-    private func filled(_ line: String) -> Int { line.filter { $0 == "█" }.count }
-    private func empty(_ line: String) -> Int { line.filter { $0 == "░" }.count }
+    // The default slider is the knob style: a heavy rail `━` with a `●` knob at
+    // the value, over a light `─` rail. "Filled" cells are the rail up to and
+    // including the knob; "empty" cells are the light rail beyond it. (Counts
+    // match what the old block style produced, so the proportion assertions
+    // below are unchanged.)
+    private func filled(_ line: String) -> Int { line.filter { $0 == "━" || $0 == "●" }.count }
+    private func empty(_ line: String) -> Int { line.filter { $0 == "─" }.count }
 
     // MARK: - Structure
 

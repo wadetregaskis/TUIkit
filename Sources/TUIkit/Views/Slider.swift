@@ -13,9 +13,12 @@
 ///
 /// ## Rendering
 ///
+/// The default track is a rail with a round knob at the value — distinct at a
+/// glance from `ProgressView`'s solid block bar and `Gauge`'s shaded meter:
+///
 /// ```
-/// Unfocused:    ◀ ████████████░░░░░░░░ ▶  50%
-/// Focused:    ❙ ◀ ████████████░░░░░░░░ ▶ ❙ 50%
+/// Unfocused:    ◀ ━━━━━━━━●──────── ▶  50%
+/// Focused:    ❙ ◀ ━━━━━━━━●──────── ▶ ❙ 50%
 /// ```
 ///
 /// ## Keyboard Controls
@@ -135,7 +138,7 @@ extension Slider where Label == EmptyView, ValueLabel == EmptyView {
         self.step = Double(step)
         self.label = nil
         self.valueLabel = nil
-        self.trackStyle = .block
+        self.trackStyle = .knob
         self.focusID = nil
         self.isDisabled = false
         self.onEditingChanged = onEditingChanged
@@ -171,7 +174,7 @@ extension Slider where Label == Text, ValueLabel == EmptyView {
         self.step = Double(step)
         self.label = Text(String(title))
         self.valueLabel = nil
-        self.trackStyle = .block
+        self.trackStyle = .knob
         // Auto-generated focusID from view identity (collision-free)
         self.focusID = nil
         self.isDisabled = false
@@ -205,7 +208,7 @@ extension Slider where ValueLabel == EmptyView {
         self.step = Double(step)
         self.label = label()
         self.valueLabel = nil
-        self.trackStyle = .block
+        self.trackStyle = .knob
         self.focusID = nil
         self.isDisabled = false
         self.onEditingChanged = onEditingChanged

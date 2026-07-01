@@ -61,16 +61,17 @@ struct SliderTests {
 
     // MARK: - Track Styles
 
-    @Test("Default block style shows filled and empty blocks")
-    func blockStyleShowsBlocks() {
+    @Test("Default knob style shows a rail with a round handle")
+    func knobStyleShowsHandle() {
         var value = 0.5
         let view = Slider(value: Binding(get: { value }, set: { value = $0 }))
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
         let line = buffer.lines[0].stripped
-        #expect(line.contains("█"))
-        #expect(line.contains("░"))
+        #expect(line.contains("●"))  // the knob
+        #expect(line.contains("━"))  // the filled rail
+        #expect(line.contains("─"))  // the empty rail
     }
 
     @Test("Dot style shows track with dot head")
