@@ -301,7 +301,9 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         capacity: Bool, palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
         let valueText = inlineText(currentValueLabel, context: context)
-        let inner = max(3, valueText.strippedLength)
+        // Fixed interior width so the dial never resizes as the value changes
+        // ("67%" and "100%" both fit); only an unusually wide value grows it.
+        let inner = max(gaugeCircularInnerWidth, valueText.strippedLength)
         let dim = palette.foregroundTertiary
         let accent = palette.accent
 
@@ -311,11 +313,24 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             ["│"] + Array(repeating: " ", count: inner) + ["│"],
             ["╰"] + Array(repeating: "─", count: inner) + ["╯"],
         ]
-        // Perimeter cells in clockwise order from the top-left corner.
+        // A centred break at the bottom edge shows where the ring starts and
+        // ends. It is one cell when the ring's width (inner + 2) is odd and two
+        // when it is even; since inner + 2 shares inner's parity, that is:
+        let gapCells = inner.isMultiple(of: 2) ? 2 : 1
+        let gapStart = 1 + (inner - gapCells) / 2  // symmetric: same parity as inner
+        let gapCols = Set(gapStart..<(gapStart + gapCells))
+        for col in gapCols { glyphs[2][col] = " " }
+
+        // Perimeter cells in clockwise order from the top-left corner. The
+        // bottom-centre break is excluded, so the fill arc and the position
+        // marker never count or land on a gap cell and the ring visibly opens
+        // there.
         var perimeter: [(r: Int, c: Int)] = []
         for col in 0...(inner + 1) { perimeter.append((0, col)) }  // top L→R
         perimeter.append((1, inner + 1))  // right side
-        for col in stride(from: inner + 1, through: 0, by: -1) { perimeter.append((2, col)) }  // bottom R→L
+        for col in stride(from: inner + 1, through: 0, by: -1) where !gapCols.contains(col) {
+            perimeter.append((2, col))  // bottom R→L, skipping the break
+        }
         perimeter.append((1, 0))  // left side
 
         // Which perimeter cells are "on" (accent): a filled arc for capacity,
@@ -335,7 +350,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
 
         // The centred value occupies the middle row's interior.
         let stripped = valueText.stripped
-        let leftPad = max(0, (inner - stripped.count) / 2)
+        let leftPad = max(0, (inner - valueText.strippedLength) / 2)
         for (offset, char) in stripped.enumerated() where 1 + leftPad + offset <= inner {
             glyphs[1][1 + leftPad + offset] = char
         }
@@ -369,8 +384,9 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             let rowWidth = valueWidth > 0 ? 1 + 1 + valueWidth : 1  // dial + space + value
             return (max(1, max(rowWidth, labelWidth)), labelWidth > 0 ? 2 : 1)
         }
-        // Ring dial: a 3-row box of width inner+2, plus a label row.
-        let inner = max(3, valueWidth)
+        // Ring dial: a 3-row box of width inner+2, plus a label row. Mirrors
+        // renderCircularDial's fixed interior width so measure == render.
+        let inner = max(gaugeCircularInnerWidth, valueWidth)
         let width = max(inner + 2, labelWidth)
         return (width, labelWidth > 0 ? 4 : 3)
     }
@@ -385,6 +401,12 @@ extension GaugeStyle {
             || self == .accessoryCircularTiny
     }
 }
+
+/// The fixed interior width of the ring dial, sized so the widest common value
+/// ("100%") always fits and the dial never resizes as the value changes. A free
+/// constant because `_GaugeCore` is generic (which can't hold a static stored
+/// property).
+private let gaugeCircularInnerWidth = 4
 
 /// The pie glyphs a circular gauge dial fills through, and the nearest one for
 /// a fraction. A free helper because `_GaugeCore` is generic (which can't hold

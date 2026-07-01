@@ -124,6 +124,28 @@ struct GaugeTests {
         #expect(capacity.contains("█") || capacity.contains("░"))
     }
 
+    @Test("The ring dial is a fixed size across value widths and has a bottom break")
+    func circularDialFixedSizeAndBreak() {
+        func dial(_ value: Double, _ text: String) -> FrameBuffer {
+            renderToBuffer(
+                Gauge(value: value) { EmptyView() } currentValueLabel: { Text(text) }
+                    .gaugeStyle(.accessoryCircularCapacity),
+                context: makeRenderContext(width: 30, height: 6))
+        }
+        let narrow = dial(0.67, "67%")  // 3 cells
+        let wide = dial(1.0, "100%")  // 4 cells
+        // The dial no longer resizes with the value's text width.
+        #expect(narrow.width == wide.width)
+        #expect(narrow.height == wide.height)
+
+        // The bottom edge carries a centred break: an interior cell between the
+        // rounded corners is blank.
+        let bottom = wide.lines[2].stripped  // ╰ … ╯
+        #expect(bottom.hasPrefix("╰"))
+        #expect(bottom.hasSuffix("╯"))
+        #expect(bottom.dropFirst().dropLast().contains(" "))
+    }
+
     @Test("measure == render: a ring-dial gauge reports the size it draws")
     func circularSizeMatchesRender() {
         let gauge = Gauge(value: 0.5) {
