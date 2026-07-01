@@ -56,6 +56,16 @@ enum DialogDrag {
             appendGrabRegions(to: &buffer, handlerID: handlerID)
         }
 
+        // Trim any overshoot from dragging hard past an edge so the next grab
+        // starts from the on-screen range rather than through a dead zone. The
+        // display was already clamped by OverlayLayer.placed(); this keeps the
+        // *stored* offset in step. Uses the terminal size — a safe bound (the
+        // real composite box is a little shorter, and placed() clamps precisely).
+        handler.clampOffset(
+            dialogWidth: buffer.width, dialogHeight: buffer.height,
+            screenWidth: context.environment.terminalWidth,
+            screenHeight: context.environment.terminalHeight)
+
         return (handler.offsetX, handler.offsetY)
     }
 
@@ -69,23 +79,32 @@ enum DialogDrag {
         box.value.reset()
     }
 
-    /// Appends the grab handle: the title row plus the left/right/bottom border
-    /// cells, all pointing at `handlerID`. These never overlap the interior
-    /// controls, and — being registered after them — win the hit-test only on
-    /// the border cells, so interior clicks still reach the controls.
+    /// Registers the grab handle — the title row plus the left/right/bottom
+    /// border cells, all pointing at `handlerID`.
+    ///
+    /// The regions are registered *before* the dialog's own controls (the
+    /// existing regions), so the dispatcher's innermost-first (last-registered)
+    /// order lets any actual control win: the frame is draggable everywhere a
+    /// control is NOT. This matters for `.modal` / `.sheet`, which take
+    /// arbitrary content whose controls can sit on row 0, the last row, or an
+    /// edge column (a bordered Dialog/Alert keeps those clear, but plain content
+    /// need not).
     private static func appendGrabRegions(to buffer: inout FrameBuffer, handlerID: HitTestRegion.HandlerID) {
         let width = buffer.width
         let height = buffer.height
         guard width > 0, height > 0 else { return }
-        buffer.hitTestRegions.append(
-            HitTestRegion(offsetX: 0, offsetY: 0, width: width, height: 1, handlerID: handlerID))  // title row
-        guard height > 1 else { return }
-        buffer.hitTestRegions.append(
-            HitTestRegion(offsetX: 0, offsetY: height - 1, width: width, height: 1, handlerID: handlerID))  // bottom
-        buffer.hitTestRegions.append(
-            HitTestRegion(offsetX: 0, offsetY: 0, width: 1, height: height, handlerID: handlerID))  // left
-        buffer.hitTestRegions.append(
-            HitTestRegion(offsetX: width - 1, offsetY: 0, width: 1, height: height, handlerID: handlerID))  // right
+        var grab = [
+            HitTestRegion(offsetX: 0, offsetY: 0, width: width, height: 1, handlerID: handlerID)  // title row
+        ]
+        if height > 1 {
+            grab.append(
+                HitTestRegion(offsetX: 0, offsetY: height - 1, width: width, height: 1, handlerID: handlerID))  // bottom
+            grab.append(
+                HitTestRegion(offsetX: 0, offsetY: 0, width: 1, height: height, handlerID: handlerID))  // left
+            grab.append(
+                HitTestRegion(offsetX: width - 1, offsetY: 0, width: 1, height: height, handlerID: handlerID))  // right
+        }
+        buffer.hitTestRegions.insert(contentsOf: grab, at: 0)
     }
 }
 
@@ -121,6 +140,24 @@ final class _DialogDragHandler {
     }
 
     func endDrag() {}
+
+    /// Trims the offset to the range that keeps the whole dialog on screen —
+    /// the same range ``OverlayLayer/placed(maxWidth:maxHeight:)`` uses for
+    /// display — so a hard overshoot past an edge doesn't leave a dead zone on
+    /// the next grab. Idempotent, and never runs mid-computation of a drag (the
+    /// drag recomputes from the press anchor each event).
+    func clampOffset(dialogWidth: Int, dialogHeight: Int, screenWidth: Int, screenHeight: Int) {
+        offsetX = clampAxis(offsetX, dialog: dialogWidth, screen: screenWidth)
+        offsetY = clampAxis(offsetY, dialog: dialogHeight, screen: screenHeight)
+    }
+
+    /// Clamps a single axis so `centre + offset ∈ [0, screen − dialog]`, where
+    /// `centre = (screen − dialog) / 2`.
+    private func clampAxis(_ offset: Int, dialog: Int, screen: Int) -> Int {
+        let span = max(0, screen - dialog)
+        let centre = span / 2
+        return min(max(offset, -centre), span - centre)
+    }
 
     /// Recentres the dialog.
     func reset() {

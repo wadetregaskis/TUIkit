@@ -363,4 +363,20 @@ struct ModalIsolationTests {
         #expect(movedTitle.offsetX == title.offsetX + dx, "dialog moved right by \(dx)")
         #expect(movedTitle.offsetY == title.offsetY + dy, "dialog moved down by \(dy)")
     }
+
+    @Test("A plain modal's edge control is not shadowed by the drag grab region")
+    func plainModalControlNotShadowedByGrab() {
+        let sink = ClickSink()
+        // Arbitrary (non-Dialog) content: the Button sits on the modal buffer's
+        // own top row, exactly where the title grab region is — the drag grab
+        // must not swallow its click.
+        let view = VStack { Text("bg") }
+            .modal(isPresented: .constant(true)) {
+                Button("ok") { sink.hits.append("modal") }
+            }
+        let (buffer, _, tui) = renderInteractive(view)
+        clickAllRegions(buffer, tui)
+        #expect(sink.hits.contains("modal"),
+                "the modal's control still fires despite the overlapping drag grab region: \(sink.hits)")
+    }
 }
