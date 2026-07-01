@@ -89,10 +89,13 @@ struct SliderPage: View {
 
             DemoSection(L("page.slider.themedSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    // .sliderTextStyle re-themes only the percentage read-out;
-                    // the track and arrows are unaffected. Shown directly below a
-                    // default slider (same value) so the difference is visible:
-                    // the themed "%" is bold, underlined and success-coloured.
+                    // Three sliders at the same value so the differences show:
+                    //  • default;
+                    //  • .sliderTextStyle re-themes only the "%" read-out (bold,
+                    //    underlined, success-coloured — the underline sits under
+                    //    the digits only, not the padded field);
+                    //  • .tint recolours the slider ITSELF — the filled rail and
+                    //    the knob draw in the tint (the empty rail stays quiet).
                     HStack(spacing: 1) {
                         Text(L("page.slider.default")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume)
@@ -105,6 +108,11 @@ struct SliderPage: View {
                                 $0.underline = true
                                 $0.foreground = .palette.success
                             }
+                    }
+                    HStack(spacing: 1) {
+                        Text(L("page.slider.tinted")).foregroundStyle(.palette.foregroundSecondary)
+                        Slider(value: $volume)
+                            .tint(.rgb(255, 130, 40))
                     }
                 }
             }

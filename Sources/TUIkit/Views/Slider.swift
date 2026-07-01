@@ -312,13 +312,21 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// blank. The fraction is clamped exactly as it is for display, so the
     /// width is stable across the value-clamping that happens mid-render.
     private var valueLabelText: String {
+        let text = valueDisplayText
+        guard text.count < valueFieldWidth else { return text }
+        return text + String(repeating: " ", count: valueFieldWidth - text.count)
+    }
+
+    /// The value read-out with **no** field padding (`"52%"`) — the part the
+    /// slider actually styles. Kept separate from ``valueLabelText`` so a themed
+    /// style (colour / underline) applies to the digits only, not the trailing
+    /// blank cell the fixed field pads to.
+    private var valueDisplayText: String {
         let range = bounds.upperBound - bounds.lowerBound
         let fraction = range > 0
             ? min(1.0, max(0.0, (value.wrappedValue - bounds.lowerBound) / range))
             : 0
-        let text = "\(Int((fraction * 100).rounded()))%"
-        guard text.count < valueFieldWidth else { return text }
-        return text + String(repeating: " ", count: valueFieldWidth - text.count)
+        return "\(Int((fraction * 100).rounded()))%"
     }
 
     /// Columns consumed by everything other than the track:
@@ -743,16 +751,19 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // `chromeWidth` measures, so the label always fits the space reserved.
         // Its colour/weight inherit the slider's scoped style cascade
         // (`.sliderTextStyle { … }`) as soft overrides.
-        let valueText = valueLabelText
+        let valueDisplay = valueDisplayText
         let valueLabelColor =
             isDisabled
             ? palette.foregroundTertiary
             : (valueStyle.foreground?.resolve(with: palette) ?? palette.foregroundSecondary)
+        // Style only the digits; append the field padding UNSTYLED so a themed
+        // underline sits under "52%", never the blank fourth cell.
+        let padding = String(repeating: " ", count: max(0, valueFieldWidth - valueDisplay.count))
         let valueLabel = ANSIRenderer.colorize(
-            valueText,
+            valueDisplay,
             foreground: valueLabelColor,
             bold: !isDisabled && (valueStyle.bold ?? false),
-            underline: !isDisabled && (valueStyle.underline ?? false))
+            underline: !isDisabled && (valueStyle.underline ?? false)) + padding
 
         // Pulsing arrows indicate focus - no extra markers needed. The value
         // read-out is omitted when `.sliderShowsValue(false)` (some surrounding
