@@ -192,4 +192,40 @@ struct SpinnerRenderingTests {
 
         #expect(buffer1.lines[0].stripped == buffer2.lines[0].stripped)
     }
+
+    // MARK: - New styles
+
+    @Test("Each new frame-based style has the expected frames, positive interval")
+    func newStyleFrames() {
+        #expect(SpinnerStyle.pie.frames == ["◴", "◷", "◶", "◵"])
+        #expect(SpinnerStyle.beachball.frames == ["◐", "◓", "◑", "◒"])
+        #expect(SpinnerStyle.box.frames == ["◰", "◳", "◲", "◱"])
+        #expect(SpinnerStyle.bars.frames.first == "▁")
+        #expect(SpinnerStyle.blockWedge.frames == ["▙", "▛", "▜", "▟"])
+        #expect(SpinnerStyle.moon.frames.count == 8)
+        #expect(SpinnerStyle.earth.frames.count == 3)
+        #expect(SpinnerStyle.clock.frames.count == 24)
+        for style: SpinnerStyle in [.pie, .beachball, .box, .bars, .blockWedge, .moon, .earth, .clock] {
+            #expect(style.interval > 0)
+            #expect(!style.frames.isEmpty)
+        }
+    }
+
+    @Test("The emoji styles render as double-width glyphs, uniform across frames")
+    func emojiStyleWidths() {
+        for style: SpinnerStyle in [.moon, .earth, .clock] {
+            let widths = Set(style.frames.map(\.strippedLength))
+            #expect(widths == [2], "\(style) frames must all be width-2: \(widths)")
+        }
+    }
+
+    @Test("A custom spinner cycles each character of its sequence")
+    func customStyleFrames() {
+        #expect(SpinnerStyle.custom("123432").frames == ["1", "2", "3", "4", "3", "2"])
+        // An empty sequence degrades to a single blank frame (no crash).
+        #expect(SpinnerStyle.custom("").frames == [" "])
+        // Renders on one line like any other spinner.
+        let buffer = renderToBuffer(Spinner(style: .custom("AB")), context: testContext())
+        #expect(buffer.height == 1)
+    }
 }

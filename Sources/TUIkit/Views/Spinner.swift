@@ -10,11 +10,25 @@ import Foundation
 
 /// The visual style of a spinner animation.
 ///
-/// TUIKit provides three built-in styles:
+/// Built-in styles:
 ///
 /// - ``dots``: Braille character rotation (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`)
 /// - ``line``: ASCII line rotation (`|/-\`)
 /// - ``bouncing``: A highlight block (`▇`) bouncing across a track with a fading trail (Knight Rider / Larson scanner)
+/// - ``pie``: A rotating pie wedge (`◴◷◶◵`)
+/// - ``beachball``: A spinning half-shaded circle (`◐◓◑◒`)
+/// - ``box``: A rotating quadrant square (`◰◳◲◱`)
+/// - ``bars``: A single bar rising and falling (`▁▂▃▄▅▆▇█`)
+/// - ``blockWedge``: A rotating three-quarter block (`▙▛▜▟`)
+/// - ``moon``: Moon-phase emoji (`🌑🌒🌓🌔🌕🌖🌗🌘`)
+/// - ``earth``: Rotating globe emoji (`🌎🌍🌏`)
+/// - ``clock``: Clock-face emoji stepping through the day (`🕐🕜🕑…🕧`)
+/// - ``custom(_:)``: An arbitrary sequence of frame characters
+///
+/// > Note: The emoji styles (``moon``, ``earth``, ``clock``) render as
+/// > double-width glyphs. All frames of a built-in style share one width, so
+/// > the spinner never jitters; a mixed-width ``custom(_:)`` sequence is the
+/// > caller's responsibility.
 public enum SpinnerStyle: Sendable {
     /// Braille character rotation.
     ///
@@ -34,7 +48,36 @@ public enum SpinnerStyle: Sendable {
     /// motion trail.
     case bouncing
 
-    /// The animation frames for frame-based styles (dots, line).
+    /// A rotating pie wedge: `◴ ◷ ◶ ◵`.
+    case pie
+
+    /// A spinning half-shaded circle: `◐ ◓ ◑ ◒`.
+    case beachball
+
+    /// A rotating filled quadrant of a square: `◰ ◳ ◲ ◱`.
+    case box
+
+    /// A single bar rising then falling: `▁▂▃▄▅▆▇█▇▆▅▄▃▂`.
+    case bars
+
+    /// A rotating three-quarter block: `▙ ▛ ▜ ▟`.
+    case blockWedge
+
+    /// Moon-phase emoji (double-width): `🌕🌖🌗🌘🌑🌒🌓🌔`.
+    case moon
+
+    /// Rotating globe emoji (double-width): `🌎🌍🌏`.
+    case earth
+
+    /// Clock-face emoji stepping through the twelve hours in half-hour steps
+    /// (double-width): `🕐🕜🕑🕝…🕛🕧`.
+    case clock
+
+    /// An arbitrary spinner: each character of `sequence` is one frame, cycled
+    /// in order. For example `.custom("123432")` counts up and back down.
+    case custom(String)
+
+    /// The animation frames for frame-based styles.
     var frames: [String] {
         switch self {
         case .dots:
@@ -44,6 +87,29 @@ public enum SpinnerStyle: Sendable {
         case .bouncing:
             return Self.bouncingPositions(trackLength: Self.trackWidth)
                 .map { String($0) }
+        case .pie:
+            return ["◴", "◷", "◶", "◵"]
+        case .beachball:
+            return ["◐", "◓", "◑", "◒"]
+        case .box:
+            return ["◰", "◳", "◲", "◱"]
+        case .bars:
+            return ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▂"]
+        case .blockWedge:
+            return ["▙", "▛", "▜", "▟"]
+        case .moon:
+            return ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"]
+        case .earth:
+            return ["🌎", "🌍", "🌏"]
+        case .clock:
+            return [
+                "🕐", "🕜", "🕑", "🕝", "🕒", "🕞", "🕓", "🕟", "🕔", "🕠", "🕕", "🕡",
+                "🕖", "🕢", "🕗", "🕣", "🕘", "🕤", "🕙", "🕥", "🕚", "🕦", "🕛", "🕧",
+            ]
+        case .custom(let sequence):
+            // Each grapheme is a frame; never empty, so the frame index is safe.
+            let mapped = sequence.map(String.init)
+            return mapped.isEmpty ? [" "] : mapped
         }
     }
 
@@ -53,6 +119,15 @@ public enum SpinnerStyle: Sendable {
         case .dots: return 0.110
         case .line: return 0.140
         case .bouncing: return 0.100
+        case .pie: return 0.120
+        case .beachball: return 0.130
+        case .box: return 0.125
+        case .bars: return 0.080
+        case .blockWedge: return 0.120
+        case .moon: return 0.120
+        case .earth: return 0.150
+        case .clock: return 0.090
+        case .custom: return 0.120
         }
     }
 
@@ -301,10 +376,10 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         switch style {
         case .bouncing:
             frameCount = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth).count
-        case .dots, .line:
+        default:
             frameCount = style.frames.count
         }
-        let frameIndex = Int(elapsed / style.interval) % frameCount
+        let frameIndex = Int(elapsed / style.interval) % max(1, frameCount)
 
         // Resolve color: explicit color > environment foregroundStyle > palette accent
         let effectiveColor = color ?? context.environment.foregroundStyle ?? context.environment.palette.accent
@@ -319,7 +394,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
                 color: resolvedColor,
                 trackColor: context.environment.palette.foregroundQuaternary.opacity(0.4)
             )
-        case .dots, .line:
+        default:
             coloredSpinner = ANSIRenderer.colorize(
                 style.frames[frameIndex],
                 foreground: resolvedColor
