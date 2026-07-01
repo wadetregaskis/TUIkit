@@ -302,4 +302,65 @@ struct ModalIsolationTests {
         #expect(!sink.hits.contains("a") && !sink.hits.contains("page"),
                 "lower modal + page are inert under the topmost: \(sink.hits)")
     }
+
+    /// The full-width, single-row grab region at the dialog's top (its title bar).
+    private func titleRegion(_ buffer: FrameBuffer) -> HitTestRegion? {
+        let fullWidth = buffer.hitTestRegions.map(\.width).max() ?? 0
+        return buffer.hitTestRegions
+            .filter { $0.width == fullWidth && $0.height == 1 }
+            .min(by: { $0.offsetY < $1.offsetY })
+    }
+
+    @Test("Dragging a modal by its title bar moves it, clamped on screen")
+    func draggingTitleMovesModal() {
+        let view = VStack { Text("bg") }
+            .modal(isPresented: .constant(true)) {
+                Dialog(title: "Movable") { Text("body") }
+            }
+
+        // Render + composite twice through the SAME context so the drag offset,
+        // held in StateStorage, survives between frames.
+        let tui = TUIContext()
+        let fm = FocusManager()
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.stateStorage = tui.stateStorage
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let width = 60, height = 24
+        let context = RenderContext(
+            availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
+
+        func frame() -> FrameBuffer {
+            fm.beginRenderPass()
+            let raw = renderToBuffer(view, context: context)
+            fm.endRenderPass()
+            return raw.compositingOverlays(
+                maxWidth: width, maxHeight: height, palette: context.environment.palette)
+        }
+
+        let before = frame()
+        guard let title = titleRegion(before) else {
+            Issue.record("no title grab region")
+            return
+        }
+
+        // Press on the title bar, drag down-right by (dx, dy), release.
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.setRegions(before.hitTestRegions)
+        let px = title.offsetX + title.width / 2
+        let py = title.offsetY
+        let dx = 5, dy = 3
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: px, y: py))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: px + dx, y: py + dy))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: px + dx, y: py + dy))
+
+        let after = frame()
+        guard let movedTitle = titleRegion(after) else {
+            Issue.record("no title grab region after drag")
+            return
+        }
+        #expect(movedTitle.offsetX == title.offsetX + dx, "dialog moved right by \(dx)")
+        #expect(movedTitle.offsetY == title.offsetY + dy, "dialog moved down by \(dy)")
+    }
 }

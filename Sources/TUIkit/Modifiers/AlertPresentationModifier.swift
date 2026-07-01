@@ -68,6 +68,8 @@ extension AlertPresentationModifier: Renderable {
         guard isPresented.wrappedValue else {
             if !context.isMeasuring {
                 context.environment.focusManager?.deactivateSection(id: sectionID)
+                // Recentre next time it opens.
+                DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -131,18 +133,29 @@ extension AlertPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.terminalHeight)
         alertContext.environment.activeFocusSectionID = sectionID
-        let alertBuffer = TUIkit.renderToBuffer(alert, context: alertContext)
+        var alertBuffer = TUIkit.renderToBuffer(alert, context: alertContext)
 
         guard !alertBuffer.isEmpty else { return baseBuffer }
+
+        // Make the alert draggable by its title/border; the compositor clamps it
+        // fully on screen.
+        let dragOffset = DialogDrag.offset(
+            for: &alertBuffer, context: context, propertyIndex: StateIndex.dragHandler)
 
         // Float the alert to the screen root: it composites centred over the whole
         // screen and dims everything beneath, from any attachment point.
         baseBuffer.overlays.append(
             OverlayLayer(
-                offsetX: 0, offsetY: 0, content: alertBuffer,
+                offsetX: dragOffset.x, offsetY: dragOffset.y, content: alertBuffer,
                 level: .alert, centered: true, dimsBackground: true))
         return baseBuffer
     }
+}
+
+/// StateStorage property indices for ``AlertPresentationModifier``. A free enum
+/// because the modifier is generic (which can't hold static stored properties).
+private enum StateIndex {
+    static let dragHandler = 0
 }
 
 // MARK: - Layoutable

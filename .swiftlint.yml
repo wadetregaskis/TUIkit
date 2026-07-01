@@ -180,6 +180,7 @@ type_name:
     - _FormRowAlignmentModifier
     - _MemoizedRow
     - _SplitDividerHandler
+    - _DialogDragHandler
     - _RawTab
     - _Color256GridCore
     - _Palette256Editor

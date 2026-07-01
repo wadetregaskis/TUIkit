@@ -58,6 +58,8 @@ extension ModalPresentationModifier: Renderable {
             // resetting the scroll position.
             if !context.isMeasuring {
                 context.environment.focusManager?.deactivateSection(id: sectionID)
+                // Recentre next time it opens.
+                DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
             }
             return TUIkit.renderToBuffer(content, context: context)
         }
@@ -109,9 +111,14 @@ extension ModalPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.terminalHeight)
         modalContext.environment.activeFocusSectionID = sectionID
-        let modalBuffer = TUIkit.renderToBuffer(modal, context: modalContext)
+        var modalBuffer = TUIkit.renderToBuffer(modal, context: modalContext)
 
         guard !modalBuffer.isEmpty else { return baseBuffer }
+
+        // Make the dialog draggable by its title/border, and read back the offset
+        // to place it at. The compositor clamps it fully on screen.
+        let dragOffset = DialogDrag.offset(
+            for: &modalBuffer, context: context, propertyIndex: StateIndex.dragHandler)
 
         // Float the modal to the screen root: it composites centred over the whole
         // screen and dims everything beneath — so it presents over the full screen
@@ -119,10 +126,16 @@ extension ModalPresentationModifier: Renderable {
         // centring on the attachment's local area).
         baseBuffer.overlays.append(
             OverlayLayer(
-                offsetX: 0, offsetY: 0, content: modalBuffer,
+                offsetX: dragOffset.x, offsetY: dragOffset.y, content: modalBuffer,
                 level: .modal, centered: true, dimsBackground: true))
         return baseBuffer
     }
+}
+
+/// StateStorage property indices for ``ModalPresentationModifier``. A free enum
+/// because the modifier is generic (which can't hold static stored properties).
+private enum StateIndex {
+    static let dragHandler = 0
 }
 
 // MARK: - Layoutable

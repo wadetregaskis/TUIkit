@@ -65,4 +65,38 @@ struct OverlayPlacementTests {
         let placed = layer.placed(maxWidth: 40, maxHeight: 24)
         #expect(placed.x == 32, "nudged left so it fits (40 − 8): \(placed.x)")
     }
+
+    @Test("A centred overlay with no offset is centred")
+    func centredNoOffset() {
+        let layer = OverlayLayer(
+            offsetX: 0, offsetY: 0, content: popup(width: 10, height: 4),
+            level: .modal, centered: true)
+        let placed = layer.placed(maxWidth: 40, maxHeight: 20)
+        #expect(placed.x == 15)  // (40 − 10) / 2
+        #expect(placed.y == 8)  // (20 − 4) / 2
+    }
+
+    @Test("A centred overlay's offset shifts it, and it clamps fully on screen")
+    func centredOffsetDragsAndClamps() {
+        let content = popup(width: 10, height: 4)
+        // A modest drag shifts the dialog by that many cells from centre.
+        let dragged = OverlayLayer(
+            offsetX: 4, offsetY: -2, content: content, level: .modal, centered: true)
+        let placed = dragged.placed(maxWidth: 40, maxHeight: 20)
+        #expect(placed.x == 19)  // 15 + 4
+        #expect(placed.y == 6)  // 8 − 2
+
+        // A large drag can never push it off screen: it clamps to the edges.
+        let farRight = OverlayLayer(
+            offsetX: 999, offsetY: 999, content: content, level: .modal, centered: true)
+        let clamped = farRight.placed(maxWidth: 40, maxHeight: 20)
+        #expect(clamped.x == 30)  // 40 − 10, right edge flush
+        #expect(clamped.y == 16)  // 20 − 4, bottom edge flush
+
+        let farUpLeft = OverlayLayer(
+            offsetX: -999, offsetY: -999, content: content, level: .modal, centered: true)
+        let pinned = farUpLeft.placed(maxWidth: 40, maxHeight: 20)
+        #expect(pinned.x == 0)
+        #expect(pinned.y == 0)
+    }
 }

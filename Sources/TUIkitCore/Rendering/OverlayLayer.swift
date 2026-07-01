@@ -130,9 +130,16 @@ public struct OverlayLayer: Sendable, Equatable {
         let width = clamped.width
 
         // Screen-level overlays (modals/alerts) centre on the whole composite
-        // area, ignoring the offset they happened to ride up the tree with.
+        // area. ``offsetX`` / ``offsetY`` are then a post-centre delta — zero for
+        // an untouched dialog, non-zero once the user has dragged it — clamped so
+        // the whole dialog always stays on screen (never partly off, unlike a
+        // typical GUI).
         if centered {
-            return (clamped, max(0, (maxWidth - width) / 2), max(0, (maxHeight - height) / 2))
+            let centeredX = (maxWidth - width) / 2 + offsetX
+            let centeredY = (maxHeight - height) / 2 + offsetY
+            let x = min(max(0, centeredX), max(0, maxWidth - width))
+            let y = min(max(0, centeredY), max(0, maxHeight - height))
+            return (clamped, x, y)
         }
 
         var y = offsetY
