@@ -115,4 +115,28 @@ struct LinkTests {
         ).lines.joined()
         #expect(!isUnderlined(raw), "no underline SGR when opted out: \(raw.debugDescription)")
     }
+
+    #if canImport(AppKit)
+    // The SF Symbol glyph only resolves on Apple platforms with the right font;
+    // off Apple the label is title-only, so there is nothing to check.
+    @Test("A link underlines a Label's title but not its SF Symbol icon")
+    func linkUnderlinesTitleNotSymbol() {
+        guard let glyph = SFSymbol.glyph(named: "swift") else { return }
+        let raw = renderToBuffer(
+            Link(destination: url) { Label("apple/swift", systemImage: "swift") },
+            context: makeRenderContext(width: 30, height: 3)
+        ).lines.joined()
+        // The title is still underlined…
+        #expect(isUnderlined(raw), "the title should be underlined: \(raw.debugDescription)")
+        // …but no underline SGR is active up to and including the symbol glyph.
+        guard let symbolRange = raw.range(of: String(glyph)) else {
+            Issue.record("symbol glyph not present in output")
+            return
+        }
+        let throughSymbol = String(raw[..<symbolRange.upperBound])
+        #expect(
+            !isUnderlined(throughSymbol),
+            "the SF Symbol glyph must not be underlined: \(throughSymbol.debugDescription)")
+    }
+    #endif
 }

@@ -61,7 +61,13 @@ public struct Label<Title: View, Icon: View>: View {
     public var body: some View {
         if iconIsVisible {
             HStack(spacing: 1) {
+                // Text decorations (underline, strikethrough) that an enclosing
+                // view cascades — e.g. a Link underlining its label — clash with
+                // an icon glyph's own strokes, so the icon opts out. The title
+                // still honours them.
                 icon
+                    .underline(false)
+                    .strikethrough(false)
                 title
             }
         } else {
