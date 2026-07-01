@@ -135,8 +135,16 @@ struct TextInputPage: View {
             DemoSection(L("page.textInput.editorSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.newControls.editorHint")).foregroundStyle(.palette.foregroundSecondary)
+                    // Default field appearance (a subtle field tint, like
+                    // TextField) — no box; a scroll indicator appears when the
+                    // text is taller than the frame.
                     TextEditor(text: $notes)
                         .frame(height: 5)
+                    // The boxed look is available by adding `.border()`. Both
+                    // share `notes`, so editing one updates the other.
+                    Text(L("page.textInput.editorBordered")).foregroundStyle(.palette.foregroundSecondary)
+                    TextEditor(text: $notes)
+                        .frame(height: 4)
                         .border()
                 }
             }

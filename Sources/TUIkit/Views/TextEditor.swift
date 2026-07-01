@@ -41,6 +41,11 @@
 ///     .frame(height: 6)
 /// ```
 ///
+/// It renders with a subtle field background by default so it reads as a text
+/// field (like ``TextField``), not a box; add `.border()` for a boxed look. A
+/// vertical scroll indicator appears in the trailing column when the text is
+/// taller than the view, so it's clear there's content out of view.
+///
 /// > Note: Long lines are **not** wrapped — the view scrolls horizontally to
 /// > follow the cursor (a common terminal-editor behaviour), and vertically when
 /// > the text is taller than the view. Soft word-wrap is a possible future
@@ -137,30 +142,75 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         let displayLines = lines(of: text.wrappedValue)
 
+        // When the text is taller than the view, reserve the trailing column for
+        // a scroll indicator so the user can see there's content out of view —
+        // the total width is unchanged, so measure == render still holds.
+        let hasVerticalOverflow = displayLines.count > height
+        let contentWidth = hasVerticalOverflow ? max(1, width - 1) : width
+
         // Follow the cursor. This mutates persistent scroll state, so it is
         // gated on the render pass — never during measuring.
         if !context.isMeasuring {
-            followCursor(handler, lineCount: displayLines.count, width: width, height: height)
+            followCursor(handler, lineCount: displayLines.count, width: contentWidth, height: height)
         }
+
+        // A subtle field background so the editor reads as a text field (like
+        // TextField's chrome) rather than plain text — no full box. Opt into the
+        // boxed look with `.border()`.
+        let fieldBackground: Color? = isDisabled
+            ? nil
+            : palette.accent.opacity(ViewConstants.focusBorderDim)
 
         var output: [String] = []
         output.reserveCapacity(height)
         for row in 0..<height {
             let lineIndex = handler.scrollLine + row
             guard lineIndex < displayLines.count else {
-                output.append(String(asciiSpaces(width)))
+                output.append(emptyRow(width: contentWidth, background: fieldBackground, palette: palette))
                 continue
             }
             let cursorColumn = (isFocused && lineIndex == handler.cursorLine) ? handler.cursorColumn : nil
             output.append(
                 styledRow(
-                    displayLines[lineIndex], scrollColumn: handler.scrollColumn, width: width,
-                    cursorColumn: cursorColumn, palette: palette, isDisabled: isDisabled))
+                    displayLines[lineIndex], scrollColumn: handler.scrollColumn, width: contentWidth,
+                    cursorColumn: cursorColumn, palette: palette, isDisabled: isDisabled,
+                    background: fieldBackground))
+        }
+
+        if hasVerticalOverflow {
+            appendScrollbar(
+                to: &output, height: height, extent: displayLines.count,
+                offset: handler.scrollLine, isFocused: isFocused, palette: palette)
         }
 
         var buffer = FrameBuffer(lines: output)
         registerMouse(context: context, buffer: &buffer, focusID: persistedFocusID, isDisabled: isDisabled)
         return buffer
+    }
+
+    /// Appends a one-column vertical scroll indicator to each row.
+    private func appendScrollbar(
+        to output: inout [String], height: Int, extent: Int, offset: Int,
+        isFocused: Bool, palette: any Palette
+    ) {
+        let bar = ScrollbarRenderer.verticalScrollbar(
+            height: height, extent: extent, viewport: height, offset: offset,
+            arrows: .none, proportional: true,
+            colors: ScrollbarColors(
+                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
+                track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
+        for index in 0..<min(height, output.count) {
+            output[index] += index < bar.count ? bar[index] : " "
+        }
+    }
+
+    /// A blank row filled to `width`, painted with the field background.
+    private func emptyRow(width: Int, background: Color?, palette: any Palette) -> String {
+        guard let background else { return String(asciiSpaces(width)) }
+        var style = TextStyle()
+        style.backgroundColor = background
+        return ANSIRenderer.render(String(asciiSpaces(width)), with: style.resolved(with: palette))
     }
 
     // MARK: - Helpers
@@ -193,7 +243,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// present.
     private func styledRow(
         _ chars: [Character], scrollColumn: Int, width: Int,
-        cursorColumn: Int?, palette: any Palette, isDisabled: Bool
+        cursorColumn: Int?, palette: any Palette, isDisabled: Bool, background: Color?
     ) -> String {
         let start = scrollColumn
         let end = min(chars.count, scrollColumn + width)
@@ -202,6 +252,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         var textStyle = TextStyle()
         textStyle.foregroundColor = isDisabled ? palette.foregroundTertiary : palette.foreground
+        textStyle.backgroundColor = background
         let resolved = textStyle.resolved(with: palette)
 
         guard let cursorColumn, case let cursorCell = cursorColumn - scrollColumn,

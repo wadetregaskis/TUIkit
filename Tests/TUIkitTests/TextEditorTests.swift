@@ -133,6 +133,31 @@ struct TextEditorTests {
         #expect(text.contains("three"))
     }
 
+    @Test("The editor paints a field background by default")
+    func fieldBackground() {
+        let sink = StringSink("hi")
+        let raw = renderToBuffer(
+            TextEditor(text: sink.binding), context: makeRenderContext(width: 12, height: 3)
+        ).lines.joined()
+        // A background SGR (48;…) is the field tint that makes it read as a field.
+        #expect(raw.contains("48;"))
+    }
+
+    @Test("An overflowing editor shows a vertical scroll indicator")
+    func overflowScrollIndicator() {
+        let sink = StringSink((1...20).map { "line \($0)" }.joined(separator: "\n"))
+        let buffer = renderToBuffer(
+            TextEditor(text: sink.binding), context: makeRenderContext(width: 12, height: 5))
+        // The scrollbar is reserved WITHIN the frame, so the size is unchanged.
+        #expect(buffer.width == 12)
+        #expect(buffer.height == 5)
+        // The trailing column carries a scrollbar block glyph (▀▁…█) — which a
+        // non-overflowing editor would not have.
+        let blocks = Set("▀▁▂▃▄▅▆▇█")
+        let hasBar = buffer.lines.contains { ($0.stripped.last.map(blocks.contains) ?? false) }
+        #expect(hasBar, "an overflowing editor should show a scrollbar cell")
+    }
+
     @Test("A focused editor shows a block cursor")
     func focusedShowsCursor() {
         let sink = StringSink("hi")
