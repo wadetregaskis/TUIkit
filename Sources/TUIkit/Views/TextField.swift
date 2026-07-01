@@ -380,79 +380,20 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
         var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
 
-        // Mouse: a click anywhere on the field grants it focus, and the same
-        // hit-test region drives the hover state machine. See the helper.
-        registerMouseHandler(
-            buffer: &buffer,
-            context: context,
-            persistedFocusID: persistedFocusID,
-            hoverBox: hoverBox)
+        // Mouse: click focuses the field and drops the caret at the clicked
+        // column; dragging selects. Hover rides on the same region. Shared with
+        // SecureField. No-op while measuring or disabled.
+        if !isDisabled {
+            TextFieldMouseHandler.register(
+                buffer: &buffer,
+                context: context,
+                handler: handler,
+                persistedFocusID: persistedFocusID,
+                hoverBox: hoverBox,
+                contentWidth: contentWidth)
+        }
 
         return buffer
-    }
-
-    /// Wires the field's mouse handling onto `buffer`: a click anywhere grants
-    /// it focus, and the same hit-test region drives the hover state machine
-    /// via the `.entered` / `.exited` events the dispatcher synthesises from
-    /// motion. We don't currently move the cursor to the clicked column —
-    /// that's a follow-up; first-priority is just being able to pick which
-    /// field is active by clicking it. No-op while measuring or when disabled;
-    /// mutates `buffer` by appending the hit-test region.
-    private func registerMouseHandler(
-        buffer: inout FrameBuffer,
-        context: RenderContext,
-        persistedFocusID: String,
-        hoverBox: StateBox<Bool>
-    ) {
-        guard !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        else { return }
-
-        // Ask the dispatcher to enable motion reporting this
-        // frame so the hover machine sees .moved events.
-        mouseDispatcher.requestFeature(.motion)
-
-        let focusManager = context.environment.focusManager
-        let captureFocusID = persistedFocusID
-        let captureHoverBox = hoverBox
-        let mouseHandlerID = mouseDispatcher.register { event in
-            switch event.phase {
-            case .entered:
-                captureHoverBox.value = true
-                return true
-            case .exited:
-                captureHoverBox.value = false
-                return true
-            case .pressed where event.button == .left:
-                return true
-            case .released where event.button == .left:
-                // Diagnostic (TUIKIT_DEBUG_FOCUS=1): log the
-                // click and what the focus manager looks like
-                // at the moment we ask it to switch focus.
-                // Helpful for the "click doesn't focus until
-                // something else re-renders" symptom.
-                debugFocusLog("""
-                    TextField click → focus(id: \(captureFocusID))
-                      sections: \(focusManager?.debugSectionsSummary() ?? "nil")
-                      focusedBefore: \(focusManager?.currentFocusedID ?? "nil")
-                    """)
-                focusManager?.focus(id: captureFocusID)
-                debugFocusLog(
-                    "  focusedAfter: \(focusManager?.currentFocusedID ?? "nil")")
-                return true
-            default: return false
-            }
-        }
-        buffer.hitTestRegions.append(
-            HitTestRegion(
-                offsetX: 0,
-                offsetY: 0,
-                width: buffer.width,
-                height: buffer.height,
-                handlerID: mouseHandlerID,
-                focusID: persistedFocusID
-            )
-        )
     }
 }
 

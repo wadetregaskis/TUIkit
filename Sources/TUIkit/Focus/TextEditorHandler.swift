@@ -23,6 +23,10 @@ final class TextEditorHandler: Focusable {
     var cursorLine = 0
     /// The cursor column, a character offset into the cursor line.
     var cursorColumn = 0
+    /// The selection anchor, or nil when there is no selection. A drag or
+    /// Shift-click sets it; the selection then spans anchor…cursor. Set by the
+    /// mouse handler and consumed/cleared by the next keystroke.
+    var selectionAnchor: TextEditorPosition?
     /// The column vertical motion tries to preserve (so Up/Down through a short
     /// line don't lose the horizontal position).
     private var desiredColumn = 0
@@ -62,17 +66,34 @@ final class TextEditorHandler: Focusable {
     /// The number of logical lines.
     var lineCount: Int { readLines().count }
 
-    /// Clamps the cursor into the current text — called each render because the
-    /// bound string can change outside the editor.
+    /// Clamps the cursor (and any selection anchor) into the current text —
+    /// called each render because the bound string can change outside the
+    /// editor.
     func clampCursor() {
         let lines = readLines()
         cursorLine = min(max(0, cursorLine), lines.count - 1)
         cursorColumn = min(max(0, cursorColumn), lines[cursorLine].count)
+        if let anchor = selectionAnchor {
+            let line = min(max(0, anchor.line), lines.count - 1)
+            selectionAnchor = TextEditorPosition(
+                line: line, column: min(max(0, anchor.column), lines[line].count))
+        }
     }
 
     // MARK: - Key handling
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // A drag/Shift-click selection is consumed by the next edit (delete, or
+        // delete-then-insert) and cleared by any other key. This lets mouse
+        // selection drive editing without the editor carrying a full
+        // keyboard-selection model.
+        if let span = selectionRange {
+            if !event.ctrl, !event.alt, let handled = replaceSelection(span, with: event.key) {
+                return handled
+            }
+            clearSelection()
+        }
+
         // Ctrl-modified keys map to the macOS/Emacs text-editing bindings (the
         // Cocoa `StandardKeyBinding.dict`). Ctrl+letter arrives as
         // `.character(letter, ctrl: true)`; Ctrl-H / Ctrl-I / Ctrl-M are
@@ -86,6 +107,31 @@ final class TextEditorHandler: Focusable {
         }
 
         return handleBaseKey(event)
+    }
+
+    /// If `key` is a text edit, replaces the selection with it and returns true;
+    /// returns nil for any other key so the caller clears the selection and
+    /// handles the key normally.
+    private func replaceSelection(_ span: SelectionSpan, with key: Key) -> Bool? {
+        switch key {
+        case .backspace, .delete:
+            deleteSelection(span)
+        case .character(let character) where isInsertable(character):
+            deleteSelection(span)
+            insert(String(character))
+        case .space:
+            deleteSelection(span)
+            insert(" ")
+        case .enter:
+            deleteSelection(span)
+            insertNewline()
+        case .paste(let string):
+            deleteSelection(span)
+            insert(string)
+        default:
+            return nil
+        }
+        return true
     }
 
     // A flat key table; splitting it further would fragment the mapping
@@ -465,5 +511,96 @@ final class TextEditorHandler: Focusable {
         lines[cursorLine] = line
         lines.insert(tail, at: cursorLine + 1)
         writeLines(lines)
+    }
+}
+
+// MARK: - Selection
+
+/// A normalized selection span: `start` is at or before `end`.
+typealias SelectionSpan = (start: TextEditorPosition, end: TextEditorPosition)
+
+extension TextEditorHandler {
+    /// The cursor as a position value.
+    var cursor: TextEditorPosition {
+        get { TextEditorPosition(line: cursorLine, column: cursorColumn) }
+        set {
+            cursorLine = newValue.line
+            cursorColumn = newValue.column
+        }
+    }
+
+    /// The normalized selection span (start ≤ end), or nil when empty.
+    var selectionRange: SelectionSpan? {
+        guard let anchor = selectionAnchor, anchor != cursor else { return nil }
+        return anchor < cursor ? (anchor, cursor) : (cursor, anchor)
+    }
+
+    /// Drops the selection without moving the cursor.
+    func clearSelection() {
+        selectionAnchor = nil
+    }
+
+    /// Anchors a selection at the current cursor if none exists (drag /
+    /// Shift-click), leaving an existing anchor in place.
+    func startOrExtendSelection() {
+        if selectionAnchor == nil {
+            selectionAnchor = cursor
+        }
+    }
+
+    /// Positions the cursor at a clicked point, clamped into the text. Used by
+    /// the mouse handler; leaves any selection anchor untouched (so a drag
+    /// extends from it).
+    func moveCursor(toLine line: Int, column: Int) {
+        let lines = readLines()
+        cursorLine = min(max(0, line), lines.count - 1)
+        cursorColumn = min(max(0, column), lines[cursorLine].count)
+    }
+
+    /// The selected column range within `lineIndex` (whose length is
+    /// `lineLength`), or nil if the line carries no selection. Interior lines of
+    /// a multi-line selection return their whole width.
+    func selectedColumns(inLine lineIndex: Int, lineLength: Int) -> Range<Int>? {
+        guard let span = selectionRange, lineIndex >= span.start.line, lineIndex <= span.end.line
+        else { return nil }
+        let lo = lineIndex == span.start.line ? span.start.column : 0
+        let hi = lineIndex == span.end.line ? span.end.column : lineLength
+        let clampedLo = max(0, min(lo, lineLength))
+        let clampedHi = max(0, min(hi, lineLength))
+        return clampedLo < clampedHi ? clampedLo..<clampedHi : nil
+    }
+
+    /// Removes the selected text, placing the cursor at the span's start and
+    /// clearing the selection.
+    fileprivate func deleteSelection(_ span: SelectionSpan) {
+        var lines = readLines()
+        let startLine = min(max(0, span.start.line), lines.count - 1)
+        let endLine = min(max(0, span.end.line), lines.count - 1)
+        let startColumn = min(max(0, span.start.column), lines[startLine].count)
+        let endColumn = min(max(0, span.end.column), lines[endLine].count)
+        if startLine == endLine {
+            lines[startLine].removeSubrange(startColumn..<endColumn)
+        } else {
+            let head = Array(lines[startLine][..<startColumn])
+            let tail = Array(lines[endLine][endColumn...])
+            lines[startLine] = head + tail
+            lines.removeSubrange((startLine + 1)...endLine)
+        }
+        cursorLine = startLine
+        cursorColumn = startColumn
+        desiredColumn = startColumn
+        selectionAnchor = nil
+        writeLines(lines)
+    }
+}
+
+/// A position in a ``TextEditor``: a line and a character column, ordered
+/// top-to-bottom then left-to-right.
+struct TextEditorPosition: Comparable {
+    var line: Int
+    var column: Int
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.line != rhs.line ? lhs.line < rhs.line : lhs.column < rhs.column
     }
 }

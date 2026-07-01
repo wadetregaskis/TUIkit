@@ -170,11 +170,15 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 continue
             }
             let cursorColumn = (isFocused && lineIndex == handler.cursorLine) ? handler.cursorColumn : nil
+            let selection =
+                isFocused
+                ? handler.selectedColumns(inLine: lineIndex, lineLength: displayLines[lineIndex].count)
+                : nil
             output.append(
                 styledRow(
                     displayLines[lineIndex], scrollColumn: handler.scrollColumn, width: contentWidth,
-                    cursorColumn: cursorColumn, palette: palette, isDisabled: isDisabled,
-                    background: fieldBackground))
+                    cursorColumn: cursorColumn, selection: selection, palette: palette,
+                    isDisabled: isDisabled, background: fieldBackground))
         }
 
         if hasVerticalOverflow {
@@ -184,7 +188,10 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         }
 
         var buffer = FrameBuffer(lines: output)
-        registerMouse(context: context, buffer: &buffer, focusID: persistedFocusID, isDisabled: isDisabled)
+        registerMouse(
+            context: context, buffer: &buffer, handler: handler,
+            contentWidth: contentWidth, height: height,
+            focusID: persistedFocusID, isDisabled: isDisabled)
         return buffer
     }
 
@@ -239,57 +246,110 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     }
 
     /// Renders one visible row: the line clipped to `[scrollColumn, +width)`,
-    /// padded to `width`, with the cursor cell drawn as a block caret when
-    /// present.
+    /// padded to `width`. Selected cells (columns in `selection`) get a palette
+    /// highlight and the cursor cell a block caret — both set explicit palette
+    /// colours rather than SGR 7 reverse-video (which inverts the terminal's
+    /// *default* colours and collapses to dark-on-dark on a mid-tone palette).
+    /// Consecutive cells that share a colour coalesce into one ANSI run.
     private func styledRow(
         _ chars: [Character], scrollColumn: Int, width: Int,
-        cursorColumn: Int?, palette: any Palette, isDisabled: Bool, background: Color?
+        cursorColumn: Int?, selection: Range<Int>?,
+        palette: any Palette, isDisabled: Bool, background: Color?
     ) -> String {
         let start = scrollColumn
         let end = min(chars.count, scrollColumn + width)
         var visible: [Character] = start < end ? Array(chars[start..<end]) : []
         while visible.count < width { visible.append(" ") }
 
-        var textStyle = TextStyle()
-        textStyle.foregroundColor = isDisabled ? palette.foregroundTertiary : palette.foreground
-        textStyle.backgroundColor = background
-        let resolved = textStyle.resolved(with: palette)
+        let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
+        let selectionForeground = palette.background
+        let selectionBackground = palette.accent.opacity(ViewConstants.selectionIndicator)
+        let cursorCell = cursorColumn.map { $0 - scrollColumn }
 
-        guard let cursorColumn, case let cursorCell = cursorColumn - scrollColumn,
-            cursorCell >= 0, cursorCell < width
-        else {
-            return ANSIRenderer.render(String(visible), with: resolved)
+        var result = ""
+        var runText = ""
+        var runForeground = textForeground
+        var runBackground = background
+        var hasRun = false
+
+        func flush() {
+            guard hasRun else { return }
+            var style = TextStyle()
+            style.foregroundColor = runForeground
+            style.backgroundColor = runBackground
+            result += ANSIRenderer.render(runText, with: style.resolved(with: palette))
+            runText = ""
+            hasRun = false
+        }
+        func emit(_ character: Character, foreground: Color, background: Color?) {
+            if hasRun, foreground != runForeground || background != runBackground {
+                flush()
+            }
+            if !hasRun {
+                runForeground = foreground
+                runBackground = background
+                hasRun = true
+            }
+            runText.append(character)
         }
 
-        // A block caret: draw the glyph under the cursor in the background
-        // colour on a foreground-coloured block. Setting the colours explicitly
-        // (rather than relying on SGR 7 reverse-video, which inverts the
-        // terminal's *default* colours and collapses to dark-on-dark on a
-        // mid-tone palette) keeps the caret visible on every theme.
-        var cursorStyle = TextStyle()
-        cursorStyle.foregroundColor = palette.background
-        cursorStyle.backgroundColor = palette.foreground
-        let before = String(visible[0..<cursorCell])
-        let cursor = String(visible[cursorCell])
-        let after = String(visible[(cursorCell + 1)...])
-        return (before.isEmpty ? "" : ANSIRenderer.render(before, with: resolved))
-            + ANSIRenderer.render(cursor, with: cursorStyle.resolved(with: palette))
-            + (after.isEmpty ? "" : ANSIRenderer.render(after, with: resolved))
+        for cell in 0..<width {
+            let column = scrollColumn + cell
+            if cell == cursorCell {
+                // Block caret: glyph in the background colour on a
+                // foreground-coloured block.
+                emit(visible[cell], foreground: palette.background, background: palette.foreground)
+            } else if let selection, selection.contains(column) {
+                emit(visible[cell], foreground: selectionForeground, background: selectionBackground)
+            } else {
+                emit(visible[cell], foreground: textForeground, background: background)
+            }
+        }
+        flush()
+        return result
     }
 
-    /// A single wide region so a left-click focuses the editor and the wheel
-    /// scrolls it. Column-precise caret placement is a documented follow-up.
+    /// A single wide region: a left-click focuses the editor and drops the
+    /// caret at the clicked line/column (mapping the click through the current
+    /// scroll offsets), and dragging extends a selection from the press point.
+    /// Shift-click extends the existing selection instead of starting a new one.
     private func registerMouse(
-        context: RenderContext, buffer: inout FrameBuffer, focusID: String, isDisabled: Bool
+        context: RenderContext, buffer: inout FrameBuffer, handler: TextEditorHandler,
+        contentWidth: Int, height: Int, focusID: String, isDisabled: Bool
     ) {
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
+        // Drag reporting is needed for click-and-drag selection.
+        mouseDispatcher.requestFeature(.drag)
         let focusManager = context.environment.focusManager
+
+        // Map a buffer-local (x, y) to a text position through the scroll
+        // offsets in effect for the displayed frame. The trailing scrollbar
+        // column (when present) clamps into the last content column.
+        func placeCursor(at event: MouseEvent) {
+            let row = max(0, min(event.y, height - 1))
+            let column = max(0, min(event.x, contentWidth))
+            handler.moveCursor(toLine: handler.scrollLine + row, column: handler.scrollColumn + column)
+        }
+
         let handlerID = mouseDispatcher.register { event in
             switch event.phase {
-            case .released where event.button == .left:
+            case .pressed where event.button == .left:
                 focusManager?.focus(id: focusID)
+                if event.shift {
+                    handler.startOrExtendSelection()
+                    placeCursor(at: event)
+                } else {
+                    placeCursor(at: event)
+                    handler.selectionAnchor = handler.cursor
+                }
+                return true
+            case .dragged:
+                handler.startOrExtendSelection()
+                placeCursor(at: event)
+                return true
+            case .released where event.button == .left:
                 return true
             default:
                 return false

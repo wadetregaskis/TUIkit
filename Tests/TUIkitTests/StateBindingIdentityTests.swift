@@ -378,4 +378,41 @@ struct StateBindingIdentityTests {
         )
         #expect(page.demoText.isEmpty)
     }
+
+    // MARK: - Click-to-position caret
+
+    private struct SingleFieldPage: View {
+        @State var text = "hello"
+        var body: some View {
+            TextField("Label", text: $text)
+        }
+    }
+
+    /// End-to-end: clicking partway into a field drops the caret at that column,
+    /// so the next keystroke inserts there rather than at the end. Exercises the
+    /// dispatcher → region → handler path with the real column→index mapping.
+    @Test("Clicking into a field positions the caret at the clicked column")
+    func clickPositionsCaret() {
+        let context = makeContext()
+        let page = StateRegistration.withHydration(context: context) { SingleFieldPage() }
+        let buffer = renderToBuffer(page, context: context)
+
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.standard)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("expected a TextField hit region")
+            return
+        }
+        // Buffer-local x = 1 (leading cap) + 2 (character index) → click before 'l'.
+        let x = region.offsetX + 3
+        let y = region.offsetY
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+
+        _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .character("X")))
+
+        #expect(page.text == "heXllo", "caret should land at index 2; got \(page.text.debugDescription)")
+    }
 }

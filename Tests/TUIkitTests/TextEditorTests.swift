@@ -334,4 +334,78 @@ struct TextEditorTests {
         #expect(editor.handleKeyEvent(ctrl("g")) == false)
         #expect(sink.value == "abc")  // and it did not insert 'g'
     }
+
+    // MARK: - Selection (mouse click / drag)
+
+    /// Simulates a press-and-drag: anchor at `from`, cursor dragged to `to`,
+    /// exactly as ``TextEditor``'s mouse handler drives the model.
+    private func dragSelect(_ editor: TextEditorHandler, from: (Int, Int), to: (Int, Int)) {
+        editor.moveCursor(toLine: from.0, column: from.1)
+        editor.selectionAnchor = editor.cursor
+        editor.startOrExtendSelection()
+        editor.moveCursor(toLine: to.0, column: to.1)
+    }
+
+    @Test("Dragging within a line selects that column range")
+    func dragSelectsColumns() {
+        let sink = StringSink("hello world")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 0), to: (0, 5))
+        #expect(editor.selectedColumns(inLine: 0, lineLength: 11) == 0..<5)
+        // A click with no drag (anchor == cursor) is no selection.
+        editor.moveCursor(toLine: 0, column: 3)
+        editor.selectionAnchor = editor.cursor
+        #expect(editor.selectionRange == nil)
+    }
+
+    @Test("A backward drag normalizes the selection span")
+    func backwardDragNormalizes() {
+        let sink = StringSink("hello")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 4), to: (0, 1))
+        #expect(editor.selectedColumns(inLine: 0, lineLength: 5) == 1..<4)
+    }
+
+    @Test("A multi-line selection covers whole interior lines")
+    func multiLineSelection() {
+        let sink = StringSink("first\nsecond\nthird")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 2), to: (2, 3))
+        #expect(editor.selectedColumns(inLine: 0, lineLength: 5) == 2..<5)  // col 2 to line end
+        #expect(editor.selectedColumns(inLine: 1, lineLength: 6) == 0..<6)  // whole interior line
+        #expect(editor.selectedColumns(inLine: 2, lineLength: 5) == 0..<3)  // to col 3
+    }
+
+    @Test("Typing replaces the selected text")
+    func typingReplacesSelection() {
+        let sink = StringSink("hello world")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 0), to: (0, 5))  // select "hello"
+        _ = editor.handleKeyEvent(KeyEvent(key: .character("H")))
+        #expect(sink.value == "H world")
+        #expect(editor.selectionRange == nil)  // selection consumed
+        #expect(editor.cursorColumn == 1)
+    }
+
+    @Test("Backspace deletes the selection without deleting an extra character")
+    func backspaceDeletesSelection() {
+        let sink = StringSink("first\nsecond")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 2), to: (1, 3))  // "rst\nsec"
+        _ = editor.handleKeyEvent(KeyEvent(key: .backspace))
+        #expect(sink.value == "fiond")  // "fi" + "ond"
+        #expect(editor.selectionRange == nil)
+        #expect(editor.cursorLine == 0)
+        #expect(editor.cursorColumn == 2)
+    }
+
+    @Test("An arrow key clears the selection but is otherwise normal")
+    func arrowClearsSelection() {
+        let sink = StringSink("hello")
+        let editor = handler(sink)
+        dragSelect(editor, from: (0, 1), to: (0, 4))
+        _ = editor.handleKeyEvent(KeyEvent(key: .left))
+        #expect(editor.selectionRange == nil)
+        #expect(sink.value == "hello")  // text unchanged
+    }
 }

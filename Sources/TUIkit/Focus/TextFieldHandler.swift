@@ -141,6 +141,25 @@ extension TextFieldHandler {
         }
     }
 
+    /// Maps a click column — measured from the content area's left edge, 0-based
+    /// — to a character index, inverting the horizontal-scroll math in
+    /// ``TextFieldContentRenderer`` `buildTextWithCursor`. The scroll offset is
+    /// derived from the *current* cursor position, exactly as the renderer
+    /// derives it, so a click lands where the user sees the caret land. Columns
+    /// left of the text clamp to the start of the visible window; columns past
+    /// the end clamp to the text length.
+    ///
+    /// The field renders one cell per character (wide characters are not given
+    /// extra cells), so this inverse is a straight column-to-index mapping,
+    /// matching what is on screen.
+    func characterIndex(forColumn column: Int, contentWidth: Int) -> Int {
+        let count = text.wrappedValue.count
+        let clamped = max(0, min(cursorPosition, count))
+        let visibleTextWidth = max(1, contentWidth - 1)  // renderer reserves 1 for the cursor
+        let scrollOffset = clamped <= visibleTextWidth ? 0 : clamped - visibleTextWidth
+        return max(0, min(scrollOffset + max(0, column), count))
+    }
+
     /// Deletes the text in the given range and positions cursor at start.
     ///
     /// Pushes the current state to the undo stack before deleting.

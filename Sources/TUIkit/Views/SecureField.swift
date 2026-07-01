@@ -344,48 +344,17 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
         var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
 
-        // Mouse: a click anywhere on the field grants it
-        // focus. The same hit-test region drives the hover
-        // state machine — .entered / .exited (synthesised by
-        // the dispatcher) flip the hover StateBox.
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            // Ask the dispatcher to enable motion reporting
-            // this frame so the hover machine sees .moved
-            // events.
-            mouseDispatcher.requestFeature(.motion)
-
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let captureHoverBox = hoverBox
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
-                case .pressed where event.button == .left:
-                    return true
-                case .released where event.button == .left:
-                    focusManager?.focus(id: captureFocusID)
-                    return true
-                default:
-                    return false
-                }
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: buffer.width,
-                    height: buffer.height,
-                    handlerID: mouseHandlerID,
-                    focusID: persistedFocusID
-                )
-            )
+        // Mouse: click focuses the field and drops the caret at the clicked
+        // column (masked cells map to indices just like TextField); dragging
+        // selects. Hover rides on the same region. Shared with TextField.
+        if !isDisabled {
+            TextFieldMouseHandler.register(
+                buffer: &buffer,
+                context: context,
+                handler: handler,
+                persistedFocusID: persistedFocusID,
+                hoverBox: hoverBox,
+                contentWidth: contentWidth)
         }
 
         return buffer

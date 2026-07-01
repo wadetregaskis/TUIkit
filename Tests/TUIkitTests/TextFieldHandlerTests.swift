@@ -501,4 +501,31 @@ struct TextFieldHandlerTests {
         #expect(range == 6..<11, "Selection spans 'world'")
         #expect(text == "hello world", "No 'b' was inserted")
     }
+
+    // MARK: - Click column → character index
+
+    @Test("A click column maps to a character index (unscrolled field)")
+    func clickColumnMapsToIndex() {
+        var text = "hello"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+
+        // With the whole word visible, the click column is the character index.
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 20) == 0)
+        #expect(handler.characterIndex(forColumn: 3, contentWidth: 20) == 3)
+        // Past the end clamps to the text length; negatives clamp to the start.
+        #expect(handler.characterIndex(forColumn: 40, contentWidth: 20) == 5)
+        #expect(handler.characterIndex(forColumn: -2, contentWidth: 20) == 0)
+    }
+
+    @Test("A click column maps through the horizontal scroll offset")
+    func clickColumnMapsThroughScroll() {
+        var text = "abcdefghij"  // 10 chars
+        let binding = Binding(get: { text }, set: { text = $0 })
+        // Cursor at the end scrolls the field: contentWidth 5 → visibleTextWidth 4,
+        // so scrollOffset = 10 - 4 = 6; visible window starts at index 6.
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 10)
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 5) == 6)
+        #expect(handler.characterIndex(forColumn: 2, contentWidth: 5) == 8)
+    }
 }
