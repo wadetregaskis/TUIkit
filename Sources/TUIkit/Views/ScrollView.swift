@@ -391,11 +391,21 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             viewportHeight: contentViewportHeight,
             context: context)
 
-        // Register focus so the dispatchKeyEvent → handler chain
-        // is wired up. The handler's own state controls what
-        // each key does — we don't read isFocused here because
-        // the ScrollView's appearance doesn't change with focus.
+        // Only be a Tab stop when there is actually something to scroll.
+        // Registering unconditionally made a non-overflowing ScrollView an
+        // invisible focus trap between the real controls (Tab would land on it
+        // with no visible indicator). Overflow is known now the content is
+        // measured.
+        let hasVerticalOverflow = fullBuffer.height > contentViewportHeight
+        let hasHorizontalOverflow = wantsHorizontal && fullBuffer.width > contentWidth
+        handler.canBeFocused = !isDisabled && (hasVerticalOverflow || hasHorizontalOverflow)
+
+        // Register so the dispatchKeyEvent → handler chain is wired up; the
+        // handler's `canBeFocused` (above) keeps a non-scrollable view out of
+        // the Tab ring. When it IS focused + scrollable we highlight the
+        // scrollbar (below) so there's a visible focus indicator.
         FocusRegistration.register(context: context, handler: handler)
+        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
         // Build the windowed buffer.
         var visibleBuffer = windowedBuffer(
@@ -426,7 +436,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // it interactive (arrows / track / thumb drag).
         if wantsScrollbar {
             visibleBuffer = appendVerticalScrollbar(
-                to: visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
+                to: visibleBuffer, contentWidth: contentWidth, handler: handler,
+                isFocused: isFocused, context: context)
             attachScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
@@ -436,7 +447,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         if wantsHorizontalBar {
             visibleBuffer = appendHorizontalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth,
-                hasVerticalBar: wantsScrollbar, handler: handler, context: context)
+                hasVerticalBar: wantsScrollbar, handler: handler,
+                isFocused: isFocused, context: context)
             attachHorizontalScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
@@ -682,7 +694,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// column never disturbs them.
     private func appendVerticalScrollbar(
         to buffer: FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, context: RenderContext
+        handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
     ) -> FrameBuffer {
         let height = buffer.height
         guard height > 0 else { return buffer }
@@ -695,9 +707,11 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
-                thumb: palette.foregroundSecondary,
+                // The thumb is the focus indicator: accent when the ScrollView
+                // holds keyboard focus, quiet otherwise.
+                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
                 track: palette.foregroundQuaternary,
-                arrow: palette.foregroundTertiary))
+                arrow: isFocused ? palette.accent : palette.foregroundTertiary))
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
         var lines = buffer.lines
         for index in 0..<height {
@@ -714,7 +728,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// bottom-right where the two meet.
     private func appendHorizontalScrollbar(
         to buffer: FrameBuffer, contentWidth: Int, hasVerticalBar: Bool,
-        handler: ScrollViewHandler, context: RenderContext
+        handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
     ) -> FrameBuffer {
         let palette = context.environment.palette
         let bar = ScrollbarRenderer.horizontalScrollbar(
@@ -725,9 +739,9 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
-                thumb: palette.foregroundSecondary,
+                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
                 track: palette.foregroundQuaternary,
-                arrow: palette.foregroundTertiary))
+                arrow: isFocused ? palette.accent : palette.foregroundTertiary))
         let corner =
             hasVerticalBar
             ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
