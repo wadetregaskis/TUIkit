@@ -50,7 +50,12 @@ extension EnvironmentValues {
     /// reader sits, letting an overlay (e.g. a ``Picker`` drop-down) size itself to
     /// the visible area. Defaults to a conservative 24 when no render loop has set
     /// it (e.g. in isolated tests).
-    var terminalHeight: Int {
+    ///
+    /// Public so an app can lay out responsively against the real screen size —
+    /// e.g. switch a row of panels to a column when the terminal is short. It is
+    /// published once per frame at the render root, so it is identical across a
+    /// view's measure and render passes (branching on it never oscillates).
+    public var terminalHeight: Int {
         get { self[TerminalHeightKey.self] }
         set { self[TerminalHeightKey.self] = newValue }
     }
@@ -61,7 +66,13 @@ extension EnvironmentValues {
     /// reader sits — unlike a context's `availableWidth`, which is only whatever a
     /// leaf was offered. A screen-level overlay (e.g. a centred modal) renders
     /// against it so it isn't clipped to its attachment's local area. Defaults to 80.
-    var terminalWidth: Int {
+    ///
+    /// Public so an app can lay out responsively against the real screen width —
+    /// e.g. place two panels side by side only when there is room, and stack
+    /// them otherwise. It is published once per frame at the render root, so it
+    /// is identical across a view's measure and render passes (branching on it
+    /// never oscillates, unlike a context's `availableWidth`).
+    public var terminalWidth: Int {
         get { self[TerminalWidthKey.self] }
         set { self[TerminalWidthKey.self] = newValue }
     }
