@@ -555,6 +555,9 @@ extension TextEditorHandler {
         let lines = readLines()
         cursorLine = min(max(0, line), lines.count - 1)
         cursorColumn = min(max(0, column), lines[cursorLine].count)
+        // Vertical motion after a click should keep the clicked column, so sync
+        // the preferred column like the keyboard motion methods do.
+        desiredColumn = cursorColumn
     }
 
     /// The selected column range within `lineIndex` (whose length is

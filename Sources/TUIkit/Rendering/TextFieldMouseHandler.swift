@@ -79,11 +79,13 @@ enum TextFieldMouseHandler {
                     handler.startOrExtendSelection()
                     handler.cursorPosition = index(atBufferX: event.x)
                 } else {
-                    // Plain click: caret to the column, anchor there so a drag
-                    // from here selects (a click with no drag leaves anchor ==
-                    // caret, i.e. no selection).
+                    // Plain click: caret to the column and drop any selection.
+                    // Don't anchor here — a drag anchors on its first .dragged
+                    // event; anchoring on the press would leave a collapsed
+                    // anchor that a later arrow key turns into a phantom
+                    // selection.
                     handler.cursorPosition = index(atBufferX: event.x)
-                    handler.selectionAnchor = handler.cursorPosition
+                    handler.clearSelection()
                 }
                 return true
             case .dragged:

@@ -341,8 +341,13 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     handler.startOrExtendSelection()
                     placeCursor(at: event)
                 } else {
+                    // Plain click: place the caret and drop any selection. Do
+                    // NOT anchor here — a collapsed anchor (anchor == cursor)
+                    // shows no highlight but survives into a phantom one-char
+                    // selection on the next arrow key. A drag anchors itself on
+                    // its first .dragged event (startOrExtendSelection below).
                     placeCursor(at: event)
-                    handler.selectionAnchor = handler.cursor
+                    handler.clearSelection()
                 }
                 return true
             case .dragged:

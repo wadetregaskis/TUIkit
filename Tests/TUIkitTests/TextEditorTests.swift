@@ -408,4 +408,32 @@ struct TextEditorTests {
         #expect(editor.selectionRange == nil)
         #expect(sink.value == "hello")  // text unchanged
     }
+
+    /// Regression: a plain click must not leave a collapsed anchor that the next
+    /// arrow key inflates into a phantom selection (which would then be
+    /// overwritten by the next keystroke). The view's mouse handler clears the
+    /// selection on a plain click; simulate that here.
+    @Test("A plain click then arrow then type inserts (no phantom selection)")
+    func plainClickThenArrowThenTypeInserts() {
+        let sink = StringSink("hello world")
+        let editor = handler(sink)
+        editor.moveCursor(toLine: 0, column: 3)  // plain click at column 3…
+        editor.clearSelection()  // …as registerMouse now does
+        _ = editor.handleKeyEvent(KeyEvent(key: .right))
+        #expect(editor.selectionRange == nil, "no selection should exist after a plain click + arrow")
+        _ = editor.handleKeyEvent(KeyEvent(key: .character("X")))
+        #expect(sink.value == "hellXo world", "the character inserts at the caret rather than overwriting")
+    }
+
+    @Test("Vertical motion after a click keeps the clicked column")
+    func verticalMotionAfterClickKeepsColumn() {
+        let sink = StringSink("abcdefgh\nij\nklmnopqr")  // line lengths 8, 2, 8
+        let editor = handler(sink)
+        _ = editor.handleKeyEvent(KeyEvent(key: .end))  // document end (2,8): desiredColumn 8
+        editor.moveCursor(toLine: 0, column: 2)  // click at column 2
+        _ = editor.handleKeyEvent(KeyEvent(key: .down))
+        _ = editor.handleKeyEvent(KeyEvent(key: .down))
+        #expect(editor.cursorLine == 2)
+        #expect(editor.cursorColumn == 2, "vertical motion keeps the clicked column, not the stale 8")
+    }
 }
