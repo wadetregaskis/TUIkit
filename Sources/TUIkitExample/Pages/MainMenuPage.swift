@@ -56,7 +56,7 @@ struct MainMenuPage: View {
         let caveat = L("feature.sfSymbols.macOSOnly")
         // The caveat now names the font requirement too, so it's wide — give it
         // its own line beneath the glyphs.
-        return examples.isEmpty ? caveat : "\(examples)\n\(caveat)"
+        return examples.isEmpty ? caveat : "\(examples) \(caveat)"
     }
 
     var body: some View {
@@ -118,12 +118,16 @@ struct MainMenuPage: View {
             // Feature highlights (centered)
             HStack {
                 Spacer()
-                HStack(spacing: 3) {
-                    FeatureBox(L("feature.pureSwift.title"), L("feature.pureSwift.subtitle")).equatable()
-                    FeatureBox(L("feature.declarative.title"), L("feature.declarative.subtitle")).equatable()
-                    FeatureBox(L("feature.composable.title"), L("feature.composable.subtitle")).equatable()
-                    FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
-                    FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle).equatable()
+                VStack(spacing: 1) {
+                    HStack(spacing: 3) {
+                        FeatureBox(L("feature.pureSwift.title"), L("feature.pureSwift.subtitle")).equatable()
+                        FeatureBox(L("feature.declarative.title"), L("feature.declarative.subtitle")).equatable()
+                        FeatureBox(L("feature.composable.title"), L("feature.composable.subtitle")).equatable()
+                        FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
+                    }
+                    HStack(spacing: 3) {
+                        FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle).equatable()
+                    }
                 }
                 Spacer()
             }
