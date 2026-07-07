@@ -28,10 +28,24 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Unicode block elements (5 shading levels), one glyph per cell.
     /// Requires Unicode support.
     ///
-    /// This is the lower-resolution block mode — each terminal cell encodes
-    /// a single image pixel by luminance. For colour images where vertical
-    /// detail matters, prefer ``fineBlocks``.
+    /// This is the lowest-resolution block mode — each terminal cell encodes
+    /// a single image pixel by luminance, drawn with one of `" ░▒▓█"`. For
+    /// colour, prefer ``blocks`` (one solid-colour pixel per cell) or
+    /// ``fineBlocks`` (two per cell).
     case coarseBlocks
+
+    /// Solid full-cell colour: each terminal cell is one image pixel, painted
+    /// as the cell **background** (a space, no glyph). One pixel per cell — half
+    /// the vertical resolution of ``fineBlocks`` — but **gap-free**: because it
+    /// draws no block glyph, it never shows the thin inter-row seams that some
+    /// fonts leave when their block glyphs (`▄`, `█`, …) are rasterised a hair
+    /// short of the cell (notably SF Mono in macOS Terminal.app). Use this when
+    /// ``fineBlocks`` bands on the target terminal and you'd rather have a clean
+    /// image than the extra vertical detail.
+    ///
+    /// On a colourless terminal (``ASCIIColorMode/mono``) there is no background
+    /// to fill, so it falls back to a `█` / space luminance threshold.
+    case blocks
 
     /// Half-block cells (`▄`) with independent foreground / background colours,
     /// doubling the effective vertical resolution compared with
@@ -52,10 +66,11 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// > grid is itself gap-free — every cell carries a real foreground and
     /// > background (pinned by `FineBlocksRenderTests`) — so thin seams between
     /// > cells come from the terminal's glyph rendering, not the output. (One
-    /// > observed case: macOS Terminal.app intermittently rasterised the block
-    /// > glyphs with seams until the font was re-applied from its profile
-    /// > settings.) ``coarseBlocks`` is foreground-only if a terminal proves
-    /// > troublesome.
+    /// > observed case: macOS Terminal.app + SF Mono rasterises the block
+    /// > glyphs a hair short of the cell, banding every row boundary — a
+    /// > terminal/font limitation no glyph choice fixes.) When a terminal bands,
+    /// > switch to ``blocks``, which fills the whole cell via the background
+    /// > colour and so has no glyph seams (at half the vertical resolution).
     case fineBlocks
 
     /// Shape-based character lookup, after Alex Harri's "ASCII characters
@@ -188,14 +203,14 @@ extension ASCIIConverter {
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
         // Each character set has its own sub-cell pixel grid.
-        //   .ascii / .coarseBlocks : 1×1  (one pixel per cell)
+        //   .ascii / .coarseBlocks / .blocks : 1×1  (one pixel per cell)
         //   .fineBlocks            : 1×2  (two vertical pixels per cell)
         //   .shapeBased       : 5×10 (sampled at six staggered circles per cell)
         //   .braille          : 2×4  (eight dots per cell)
         let pixelWidth: Int
         let pixelHeight: Int
         switch characterSet {
-        case .ascii, .coarseBlocks:
+        case .ascii, .coarseBlocks, .blocks:
             pixelWidth = width
             pixelHeight = height
         case .fineBlocks:
@@ -223,6 +238,8 @@ extension ASCIIConverter {
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
         case .fineBlocks:
             return convertFineBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .blocks:
+            return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .shapeBased:
             return convertShapeBased(scaled, width: width, height: height, mode: effectiveMode)
         case .ascii, .coarseBlocks:
@@ -281,6 +298,55 @@ extension ASCIIConverter {
         return lines
     }
 
+    /// Converts each pixel to a full-cell background fill: a space whose cell
+    /// **background** is the pixel colour. One pixel per cell — half the vertical
+    /// resolution of ``convertFineBlocks(_:width:height:mode:)`` — but gap-free:
+    /// it draws no glyph, so it never shows the inter-row seams a font leaves
+    /// when its block glyphs are rasterised short of the cell.
+    ///
+    /// Consecutive cells that share a colour coalesce into one ANSI run. On a
+    /// colourless terminal (``ASCIIColorMode/mono``), where there is no
+    /// background colour to use, it falls back to a `█` / space luminance
+    /// threshold.
+    private func convertBlocks(
+        _ image: RGBAImage,
+        width: Int,
+        height: Int,
+        mode: ASCIIColorMode
+    ) -> [String] {
+        var lines = [String]()
+        lines.reserveCapacity(height)
+
+        for y in 0..<height {
+            var line = ""
+            line.reserveCapacity(width * 12)  // background ANSI per colour run + a space per cell
+            var lastCode = ""
+
+            for x in 0..<width {
+                let pixel = image.pixel(at: x, y)
+
+                // No background colour to fill with — approximate with a solid
+                // block for dark pixels and a space for light ones.
+                if mode == .mono {
+                    line.append(pixel.luminance < 128 ? "█" : " ")
+                    continue
+                }
+
+                let code = backgroundColorCode(for: pixel, mode: mode)
+                if code != lastCode {
+                    if !lastCode.isEmpty { line += ANSIEscape.reset }
+                    line += code
+                    lastCode = code
+                }
+                line.append(" ")
+            }
+
+            if !lastCode.isEmpty { line += ANSIEscape.reset }
+            lines.append(line)
+        }
+        return lines
+    }
+
     /// The character ramp for the current character set, from darkest to brightest.
     private var characterRamp: [Character] {
         switch characterSet {
@@ -288,7 +354,7 @@ extension ASCIIConverter {
             return Array(" .:;+=xX$@")
         case .coarseBlocks:
             return Array(" ░▒▓█")
-        case .fineBlocks, .shapeBased, .braille:
+        case .blocks, .fineBlocks, .shapeBased, .braille:
             // Unused — these character sets have their own rendering paths.
             return []
         }
