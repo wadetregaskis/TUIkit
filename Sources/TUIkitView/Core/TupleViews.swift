@@ -64,15 +64,20 @@ extension TupleView: Renderable, ChildInfoProvider {
     /// Appends one or more `ChildInfo` entries for `child`.
     ///
     /// When `child` is itself a `ChildInfoProvider` (a nested
-    /// `TupleView`, a `ForEach`, etc.), its `childInfos` are
-    /// spliced in so the surrounding stack sees the children as
-    /// individual siblings — rather than treating the whole
-    /// provider as one opaque element. Without this a `ForEach`
-    /// buried inside a TupleView would never have its body
-    /// iterations enumerated, leaving the resulting `VStack` /
-    /// `HStack` to render the ForEach as a single empty buffer
-    /// via the Priority-3 'no rendering path' branch in
-    /// `renderToBuffer`.
+    /// `TupleView`, a `Group`, a `Section`), its `childInfos` are
+    /// spliced in so the surrounding container sees the children
+    /// as individual siblings — rather than treating the whole
+    /// provider as one opaque element.
+    ///
+    /// Note that `ForEach` is *not* a `ChildInfoProvider` — it
+    /// implements only the two-pass `ChildViewProvider` — so any
+    /// remaining consumer of this legacy single-pass path pushes
+    /// a `ForEach` child through the universal `renderToBuffer`,
+    /// where (body: Never, not Renderable) it silently yields an
+    /// empty buffer. The stacks and `ZStack` all resolve children
+    /// through `resolveChildViews` for exactly that reason; this
+    /// path remains only for `List`/`Section` row extraction,
+    /// which handles `ForEach` separately.
     @MainActor
     private static func appendChildInfos<C: View>(
         from child: C,

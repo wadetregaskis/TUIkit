@@ -291,3 +291,92 @@ struct LazyStackEquatableTests {
         #expect(stack1 != stack3)
     }
 }
+
+// MARK: - ForEach Expansion (issue #8)
+
+/// Regression tests for GitHub issue #8: `LazyVStack`/`LazyHStack` (and
+/// `ZStack`) rendered nothing when their content was a `ForEach`. The window
+/// render path resolved children through the legacy single-pass
+/// `resolveChildInfos`, which only expands `ChildInfoProvider`s — and
+/// `ForEach` implements only the two-pass `ChildViewProvider` — so the whole
+/// `ForEach` fell through the universal `renderToBuffer` (body: Never, not
+/// Renderable) and yielded an empty buffer.
+@MainActor
+@Suite("Lazy stacks expand ForEach (issue #8)")
+struct LazyStackForEachTests {
+
+    @Test("LazyVStack renders ForEach content")
+    func lazyVStackForEach() {
+        let stack = LazyVStack {
+            ForEach(0..<5) { Text("Item \($0)") }
+        }
+        let buffer = renderToBuffer(stack, context: testContext(width: 40, height: 10))
+        let lines = buffer.lines.map { $0.stripped }
+        #expect(buffer.height == 5, "all five rows render: \(lines)")
+        #expect(lines.first?.contains("Item 0") == true)
+        #expect(lines.last?.contains("Item 4") == true)
+    }
+
+    @Test("LazyHStack renders ForEach content")
+    func lazyHStackForEach() {
+        let stack = LazyHStack {
+            ForEach(0..<4) { Text("C\($0)") }
+        }
+        let buffer = renderToBuffer(stack, context: testContext(width: 40, height: 5))
+        let line = buffer.lines.first?.stripped ?? ""
+        #expect(line.contains("C0") && line.contains("C3"), "all four columns render: '\(line)'")
+    }
+
+    @Test("A ForEach mixed into a tuple keeps its siblings")
+    func lazyVStackMixedTuple() {
+        let stack = LazyVStack {
+            Text("Header")
+            ForEach(0..<3) { Text("Item \($0)") }
+        }
+        let buffer = renderToBuffer(stack, context: testContext(width: 40, height: 10))
+        let joined = buffer.lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(joined.contains("Header"))
+        #expect(joined.contains("Item 0") && joined.contains("Item 2"))
+    }
+
+    @Test("The issue's shape: ScrollView { LazyVStack { ForEach } }")
+    func scrollViewWrappedLazyVStack() {
+        let view = VStack {
+            Text("Hello, TUIkit!")
+            ScrollView {
+                LazyVStack {
+                    ForEach(0..<100) { Text("Item \($0 + 1)") }
+                }
+            }
+        }
+        let context = makeRenderContext(width: 60, height: 20)
+        let joined = renderToBuffer(view, context: context)
+            .lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(joined.contains("Item 1"), "scrollable lazy content renders")
+        #expect(joined.contains("Item 10"), "the viewport is filled, not blank")
+    }
+
+    @Test("Windowing still stops at the first child that would overflow")
+    func lazyVStackWindows() {
+        let stack = LazyVStack {
+            ForEach(0..<50) { Text("Item \($0)") }
+        }
+        let buffer = renderToBuffer(stack, context: testContext(width: 40, height: 6))
+        #expect(buffer.height == 6, "exactly the rows that fit")
+        #expect(buffer.lines.last?.stripped.contains("Item 5") == true)
+    }
+
+    @Test("Spacer distribution still works alongside a ForEach")
+    func lazyVStackSpacerWithForEach() {
+        let stack = LazyVStack {
+            Text("Top")
+            Spacer()
+            ForEach(0..<2) { Text("Bottom \($0)") }
+        }
+        let buffer = renderToBuffer(stack, context: testContext(width: 40, height: 10))
+        let lines = buffer.lines.map { $0.stripped }
+        #expect(buffer.height == 10, "the spacer expands the column to fill: \(lines)")
+        #expect(lines.first?.contains("Top") == true)
+        #expect(lines.last?.contains("Bottom 1") == true)
+    }
+}

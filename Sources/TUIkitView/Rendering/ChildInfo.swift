@@ -30,6 +30,11 @@ public struct ChildView {
     /// The minimum length of this spacer (only relevant if isSpacer is true).
     public let spacerMinLength: Int?
 
+    /// The child's explicit z-index (`0` unless set via `View.zIndex(_:)`).
+    /// Overlapping containers like `ZStack` draw children in ascending order
+    /// of this value; ties keep their original tree order.
+    public let zIndex: Double
+
     /// Resolves a child's spacer flag and minimum length without a speculative
     /// runtime conformance cast on the common (non-spacer) path.
     ///
@@ -41,8 +46,16 @@ public struct ChildView {
         return (true, (view as? SpacerProtocol)?.spacerMinLength)
     }
 
+    /// Resolves a child's z-index without a speculative runtime conformance
+    /// cast on the common path — same shape as ``spacerInfo(of:)``, using the
+    /// static witness ``View/_providesZIndex``.
+    static func zIndexInfo<V: View>(of view: V) -> Double {
+        V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0
+    }
+
     public init<V: View>(_ view: V) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
+        self.zIndex = Self.zIndexInfo(of: view)
         self.view = view
         self.identityType = nil
         self.childIndex = 0
@@ -59,6 +72,7 @@ public struct ChildView {
     ///   - childIndex: The positional index used for identity disambiguation.
     public init<V: View>(_ view: V, childIndex: Int) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
+        self.zIndex = Self.zIndexInfo(of: view)
         self.view = view
         self.identityType = V.self
         self.childIndex = childIndex
@@ -82,6 +96,7 @@ public struct ChildView {
         _ view: V, identityType: IdentityType.Type, childIndex: Int
     ) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
+        self.zIndex = Self.zIndexInfo(of: view)
         self.view = view
         self.identityType = identityType
         self.childIndex = childIndex

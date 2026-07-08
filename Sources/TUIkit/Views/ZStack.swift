@@ -72,11 +72,18 @@ private struct _ZStackCore<Content: View>: View, Renderable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let infos = resolveChildInfos(from: content, context: context)
+        // Children resolve through the two-pass `ChildView` API (as
+        // `sizeThatFits` below already did), so `ChildViewProvider` content —
+        // a `ForEach`, above all — expands to its individual layers with
+        // per-child identities. The legacy single-pass `resolveChildInfos`
+        // used here before only expanded `ChildInfoProvider`s, which `ForEach`
+        // is not, so `ZStack { ForEach }` rendered nothing at all (the ZStack
+        // face of issue #8).
+        let children = resolveChildViews(from: content, context: context)
 
         // Draw children in ascending z-index. Ties keep their tree order, so
         // the sort is made stable by using the original index as a tiebreaker.
-        let ordered = infos.enumerated().sorted { lhs, rhs in
+        let ordered = children.enumerated().sorted { lhs, rhs in
             if lhs.element.zIndex != rhs.element.zIndex {
                 return lhs.element.zIndex < rhs.element.zIndex
             }
@@ -84,8 +91,12 @@ private struct _ZStackCore<Content: View>: View, Renderable {
         }.map(\.element)
 
         // The stack's frame is the union of its children's sizes (like SwiftUI,
-        // a ZStack is as wide/tall as its widest/tallest child).
-        let buffers = ordered.compactMap(\.buffer)
+        // a ZStack is as wide/tall as its widest/tallest child). Spacers have
+        // no visual box in a ZStack.
+        let buffers = ordered.filter { !$0.isSpacer }.map {
+            $0.render(
+                width: context.availableWidth, height: context.availableHeight, context: context)
+        }
         let frameWidth = buffers.map(\.width).max() ?? 0
         let frameHeight = buffers.map(\.height).max() ?? 0
         guard frameWidth > 0, frameHeight > 0 else { return FrameBuffer() }

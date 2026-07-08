@@ -249,54 +249,85 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
     /// `.window` render (lazy `LazyVStack`): append whole children top-down while
     /// they fit `availableHeight`, stopping at the first that won't. Items beyond
-    /// the available height are never rendered.
+    /// that first overflow are never rendered (when no Spacer is present).
+    ///
+    /// Children resolve through the two-pass `ChildView` API — the same one the
+    /// `.clip` path uses — so `ChildViewProvider` content (a `ForEach`, above
+    /// all) expands to its individual rows with per-child identities. The legacy
+    /// single-pass `resolveChildInfos` used here before only expanded
+    /// `ChildInfoProvider`s, which `ForEach` is not, so `LazyVStack { ForEach }`
+    /// pushed the whole `ForEach` through the universal `renderToBuffer` and
+    /// rendered nothing at all (issue #8).
     private func renderWindow(context: RenderContext) -> FrameBuffer {
-        let infos = resolveChildInfos(from: content, context: context)
-
-        // Lazy rendering: only render items that fit within availableHeight
+        let children = resolveChildViews(from: content, context: context)
+        guard !children.isEmpty else { return FrameBuffer() }
         let availableHeight = context.availableHeight
 
-        // Spacer distribution (same as VStack)
-        let spacerCount = infos.filter(\.isSpacer).count
-        let fixedHeight = infos.compactMap(\.buffer).reduce(0) { $0 + $1.height }
-        let totalSpacing = max(0, infos.count - 1) * spacing
+        // Spacer distribution (same as VStack) needs every non-spacer child's
+        // rendered height up front, so the presence of a Spacer forfeits the
+        // early-stop: pre-render everything, as the single-pass path always did.
+        // The common spacer-less lazy stack keeps its laziness below.
+        let spacerCount = children.count { $0.isSpacer }
+        var eagerBuffers: [FrameBuffer?] = []
+        var spacerHeight = 0
+        var spacerRemainder = 0
+        if spacerCount > 0 {
+            eagerBuffers = children.map { child in
+                child.isSpacer
+                    ? nil
+                    : child.render(
+                        width: context.availableWidth, height: availableHeight, context: context)
+            }
+            let fixedHeight = eagerBuffers.compactMap { $0?.height }.reduce(0, +)
+            let totalSpacing = max(0, children.count - 1) * spacing
+            let availableForSpacers = max(0, availableHeight - fixedHeight - totalSpacing)
+            spacerHeight = availableForSpacers / spacerCount
+            spacerRemainder = availableForSpacers % spacerCount
+        }
 
-        let availableForSpacers = max(0, availableHeight - fixedHeight - totalSpacing)
-        let spacerHeight = spacerCount > 0 ? availableForSpacers / spacerCount : 0
-        let spacerRemainder = spacerCount > 0 ? availableForSpacers % spacerCount : 0
-
-        let childMaxWidth = infos.compactMap(\.buffer).map(\.width).max() ?? 0
-        let maxWidth = spacerCount > 0 ? context.availableWidth : childMaxWidth
-
-        var result = FrameBuffer()
+        // === PASS 1: Collect the children that fit, rendering on demand ===
+        // The walk stops at the first child that would overflow.
+        var collected: [(buffer: FrameBuffer, spacingBefore: Int, isSpacer: Bool)] = []
         var currentHeight = 0
         var spacerIndex = 0
-
-        for (index, info) in infos.enumerated() {
+        for (index, child) in children.enumerated() {
             let spacingToApply = index > 0 ? spacing : 0
 
-            if info.isSpacer {
+            if child.isSpacer {
                 let extraHeight = spacerIndex < spacerRemainder ? 1 : 0
-                let height = max(info.spacerMinLength ?? 0, spacerHeight + extraHeight)
-
-                // Lazy: check if spacer fits
+                let height = max(child.spacerMinLength ?? 0, spacerHeight + extraHeight)
                 if currentHeight + spacingToApply + height > availableHeight {
                     break
                 }
-
-                result.appendVertically(FrameBuffer(emptyWithHeight: height), spacing: spacingToApply)
+                collected.append((FrameBuffer(emptyWithHeight: height), spacingToApply, true))
                 currentHeight += spacingToApply + height
                 spacerIndex += 1
-            } else if let buffer = info.buffer {
-                // Lazy: check if item fits
+            } else {
+                let buffer =
+                    spacerCount > 0
+                    ? eagerBuffers[index]!
+                    : child.render(
+                        width: context.availableWidth, height: availableHeight, context: context)
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break
                 }
-
-                let alignedBuffer = alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
-                result.appendVertically(alignedBuffer, spacing: spacingToApply)
+                collected.append((buffer, spacingToApply, false))
                 currentHeight += spacingToApply + buffer.height
             }
+        }
+
+        // === PASS 2: Align to the placed children's width and assemble ===
+        // With a Spacer the column fills the available width (as the eager
+        // stack does); otherwise it hugs its widest *placed* child.
+        let maxWidth =
+            spacerCount > 0
+            ? context.availableWidth
+            : collected.map(\.buffer.width).max() ?? 0
+        var result = FrameBuffer()
+        for (buffer, spacingToApply, isSpacer) in collected {
+            let alignedBuffer =
+                isSpacer ? buffer : alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
+            result.appendVertically(alignedBuffer, spacing: spacingToApply)
         }
 
         return result

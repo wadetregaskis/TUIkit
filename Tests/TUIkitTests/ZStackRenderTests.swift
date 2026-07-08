@@ -183,3 +183,50 @@ struct ZStackRenderTests {
         #expect(withZ.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
     }
 }
+
+// MARK: - ForEach Expansion (issue #8)
+
+/// The ZStack face of issue #8: its render path used the legacy single-pass
+/// child resolution, which cannot expand a `ForEach`, so `ZStack { ForEach }`
+/// rendered nothing (and a ForEach mixed into a tuple was silently dropped).
+@MainActor
+@Suite("ZStack expands ForEach (issue #8)")
+struct ZStackForEachTests {
+    @Test("ZStack renders ForEach content")
+    func zStackForEach() {
+        let stack = ZStack {
+            ForEach(0..<3) { Text("Layer \($0)") }
+        }
+        let context = makeBareRenderContext(width: 40, height: 5)
+        let joined = renderToBuffer(stack, context: context)
+            .lines.map { $0.stripped }.joined(separator: "\n")
+        // All layers composite into the union frame; the last draws on top.
+        #expect(joined.contains("Layer"), "ForEach layers render: '\(joined)'")
+        #expect(joined.contains("Layer 2"), "the topmost (last) layer wins ties")
+    }
+
+    @Test("A ForEach mixed with other layers keeps them all")
+    func zStackMixedTuple() {
+        let stack = ZStack(alignment: .topLeading) {
+            Text("Underneath and wide")
+            ForEach(0..<1) { Text("Top \($0)") }
+        }
+        let context = makeBareRenderContext(width: 40, height: 5)
+        let line = renderToBuffer(stack, context: context).lines.first?.stripped ?? ""
+        #expect(line.hasPrefix("Top 0"), "the ForEach layer draws on top: '\(line)'")
+        #expect(line.contains("wide"), "the base layer shows where the top one ends")
+    }
+
+    @Test("zIndex ordering still applies through the two-pass path")
+    func zStackZIndexOrdering() {
+        let stack = ZStack(alignment: .topLeading) {
+            Text("AAAA").zIndex(1)
+            Text("BB")
+        }
+        let context = makeBareRenderContext(width: 20, height: 3)
+        let line = renderToBuffer(stack, context: context).lines.first?.stripped ?? ""
+        // "AAAA" has the higher z-index so it draws over "BB" despite being
+        // first in the tree.
+        #expect(line.hasPrefix("AAAA"), "explicit zIndex wins draw order: '\(line)'")
+    }
+}
