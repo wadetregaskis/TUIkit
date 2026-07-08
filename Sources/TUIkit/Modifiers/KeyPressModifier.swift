@@ -28,6 +28,19 @@ public struct KeyPressModifier<Content: View>: View {
 
 extension KeyPressModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // The registration is a render-pass side effect, twice over:
+        // - never during a measure pass — a render-to-measure ancestor would
+        //   register a SECOND handler for the same modifier within the frame,
+        //   running the action twice per keypress;
+        // - always declared to any value-memoizing ancestor — the dispatcher
+        //   clears its handlers every frame, so a cached row would stop
+        //   re-registering and its onKeyPress would go dead while the row is
+        //   still on screen.
+        guard !context.isMeasuring else {
+            return TUIkit.renderToBuffer(content, context: context)
+        }
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+
         // Register the key handler
         context.environment.keyEventDispatcher!.addHandler { [keys, handler] event in
             // Check if we should handle this key
