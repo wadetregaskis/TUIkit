@@ -123,12 +123,15 @@ extension EquatableView: Renderable {
             ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
+        // See _MemoizedRow: a state write during this render invalidates
+        // first, so storing afterwards would resurrect the pre-write buffer.
+        let clearsBefore = cache.stats.subtreeClears
 
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
 
         let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
         if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
-            && !readVolatile
+            && !readVolatile && cache.stats.subtreeClears == clearsBefore
         {
             cache.store(
                 identity: identity,

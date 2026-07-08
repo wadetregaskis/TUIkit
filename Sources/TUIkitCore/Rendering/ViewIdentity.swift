@@ -129,6 +129,25 @@ extension ViewIdentity {
         ViewIdentity(node: node.appending(.typed(type, index: nil)))
     }
 
+    /// Returns a child identity by appending a type name and a stable string
+    /// key — the id-keyed sibling of ``child(erasedType:index:)``.
+    ///
+    /// Used by `ForEach` so each row's identity follows its element's `id`
+    /// rather than its position: reordering, inserting or removing elements
+    /// then moves each row's `@State` / focus / lifecycle with the element,
+    /// as SwiftUI's `ForEach` identity contract requires. (Positional
+    /// identity handed every row its *neighbour's* state on reorder.)
+    ///
+    /// - Parameters:
+    ///   - type: The row content's type.
+    ///   - key: A stable, per-sibling-unique key (the element id's string
+    ///     form). Duplicate ids collapse onto one identity and alias state —
+    ///     the same app bug it is in SwiftUI.
+    /// - Returns: A new `ViewIdentity` for the keyed child.
+    public func child(erasedType type: Any.Type, key: String) -> ViewIdentity {
+        ViewIdentity(node: node.appending(.keyed(type, key: key)))
+    }
+
     /// Returns a child identity by appending a branch label.
     ///
     /// Used by ``ConditionalView`` to distinguish between the
@@ -210,6 +229,9 @@ final class IdentityNode: Sendable {
         case typed(Any.Type, index: Int?)
         /// A conditional branch (`ConditionalView`): the branch label.
         case branch(String)
+        /// A typed descent disambiguated by a stable string key instead of a
+        /// positional index — `ForEach` rows keyed by their element's `id`.
+        case keyed(Any.Type, key: String)
         /// A raw, pre-rendered path string — the root of a non-structural
         /// identity (``ViewIdentity/init(path:)``). Only ever a chain's root.
         case raw(String)
@@ -247,6 +269,10 @@ final class IdentityNode: Sendable {
         case .raw(let raw):
             hasher.combine(2)
             hasher.combine(raw)
+        case .keyed(let type, let key):
+            hasher.combine(3)
+            hasher.combine(ObjectIdentifier(type))
+            hasher.combine(key)
         }
         self.cachedHash = hasher.finalize()
     }
@@ -296,6 +322,13 @@ final class IdentityNode: Sendable {
                 }
             case .branch(let label):
                 result += "#" + label
+            case .keyed(let type, let key):
+                if node.parent == nil {
+                    result += cachedTypeName(type)
+                } else {
+                    result += "/" + cachedTypeName(type)
+                }
+                result += "[\(key)]"
             }
         }
         return result
@@ -309,6 +342,8 @@ final class IdentityNode: Sendable {
             return ll == rl
         case let (.raw(lr), .raw(rr)):
             return lr == rr
+        case let (.keyed(lt, lk), .keyed(rt, rk)):
+            return ObjectIdentifier(lt) == ObjectIdentifier(rt) && lk == rk
         default:
             return false
         }

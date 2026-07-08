@@ -117,10 +117,17 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
             ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
+        // Snapshot the cache's invalidation generation too: a @State write
+        // DURING this render (an onAppear stamping state, a synchronous task
+        // effect) fires clearAffected before we store — storing afterwards
+        // would resurrect the pre-write buffer and serve it until the element
+        // value next changes. Any clear during the render skips the store.
+        let clearsBefore = cache.stats.subtreeClears
 
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
 
         let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
+        let invalidatedDuringRender = cache.stats.subtreeClears > clearsBefore
         // Never store a buffer produced during a measure pass. Two reasons, both
         // load-bearing:
         //   • It is INCOMPLETE. Interactive controls suppress their hit-test
@@ -140,7 +147,9 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         //     next frame.
         // The measure pass still benefits — it reads sizes through the size memo
         // (`sizeThatFits`), which is keyed by proposal and so does not clobber.
-        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty && !readVolatile {
+        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
+            && !readVolatile && !invalidatedDuringRender
+        {
             cache.store(
                 identity: identity, view: element, buffer: buffer,
                 contextWidth: context.availableWidth, contextHeight: context.availableHeight)

@@ -135,6 +135,16 @@ public struct RenderContext {
         return copy
     }
 
+    /// Id-keyed form of ``withChildIdentity(erasedType:index:)`` — used for
+    /// `ForEach` rows, whose identity must follow their element's `id` (not
+    /// their position) so `@State`, focus and lifecycle move with the element
+    /// across reorders and insertions.
+    public func withChildIdentity(erasedType type: Any.Type, key: String) -> Self {
+        var copy = self
+        copy.identity = identity.child(erasedType: type, key: key)
+        return copy
+    }
+
     /// Creates a new context with a child identity for a composite view's body.
     ///
     /// Used when descending into a view's `body` where there is exactly

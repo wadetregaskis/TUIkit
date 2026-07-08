@@ -98,12 +98,19 @@ extension ForEach: ChildViewProvider {
     /// "no rendering path" branch and returns an empty buffer. With this
     /// conformance the elements re-appear as expected.
     ///
-    /// Each child carries its positional index as its `childIndex` so that
-    /// the per-child identity stays stable across passes — the same scheme
-    /// `TupleView` uses for its tuple of children.
+    /// Each child's identity is keyed by its element's `id` (via
+    /// ``ViewIdentity/child(erasedType:key:)``), stable across passes AND
+    /// across data mutations — reordering the data moves each row's state
+    /// with its element.
     public func childViews(context: RenderContext) -> [ChildView] {
-        data.enumerated().map { index, element in
+        data.map { element in
             let view = content(element)
+            // Identity is keyed by the element's ID — NOT its position — so a
+            // row's @State / focus / lifecycle follow the element across
+            // reorders, insertions and removals (SwiftUI's ForEach identity
+            // contract). Positional identity handed every row its neighbour's
+            // state when the data shifted.
+            let key = String(describing: element[keyPath: idKeyPath])
             // When the element is Equatable, wrap the row in a value-memo keyed
             // by the element (as List does), so a container re-measuring /
             // re-rendering its children each frame serves an unchanged row from
@@ -114,9 +121,9 @@ extension ForEach: ChildViewProvider {
                 return ChildView(
                     _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
                     identityType: Content.self,
-                    childIndex: index)
+                    key: key)
             }
-            return ChildView(view, childIndex: index)
+            return ChildView(view, identityType: Content.self, key: key)
         }
     }
 }

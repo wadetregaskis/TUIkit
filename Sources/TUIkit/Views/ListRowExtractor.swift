@@ -125,8 +125,12 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
 
             // Render the view under a per-row child identity (matching
             // ForEach.childViews) so each row's @State / focus / cache entry is
-            // distinct — previously every row shared `context`'s identity.
-            let rowContext = context.withChildIdentity(type: Content.self, index: index)
+            // distinct — and keyed by the element's ID, not its position, so
+            // the row's state follows the element across reorders/insertions
+            // (and across List scrolling, where the window's indices shift).
+            let rowContext = context.withChildIdentity(
+                erasedType: Content.self,
+                key: String(describing: element[keyPath: idKeyPath]))
 
             // When the element is Equatable, wrap the row in a value-memo keyed
             // by the element, so an unchanged row is served from the render cache

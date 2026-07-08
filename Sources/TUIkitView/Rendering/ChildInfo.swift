@@ -23,6 +23,10 @@ public struct ChildView {
     /// when the child descends under the parent identity (no disambiguation).
     private let identityType: Any.Type?
     private let childIndex: Int
+    /// When set, the child's identity is keyed by this stable string (a
+    /// `ForEach` element's id) instead of `childIndex` — identity then follows
+    /// the element across reorders, as SwiftUI's `ForEach` contract requires.
+    private let identityKey: String?
 
     /// Whether this child is a Spacer.
     public let isSpacer: Bool
@@ -59,6 +63,7 @@ public struct ChildView {
         self.view = view
         self.identityType = nil
         self.childIndex = 0
+        self.identityKey = nil
     }
 
     /// Creates a child view wrapper with an explicit child index for identity propagation.
@@ -76,6 +81,7 @@ public struct ChildView {
         self.view = view
         self.identityType = V.self
         self.childIndex = childIndex
+        self.identityKey = nil
     }
 
     /// Creates a child wrapper that renders `view` but derives its per-child
@@ -100,6 +106,21 @@ public struct ChildView {
         self.view = view
         self.identityType = identityType
         self.childIndex = childIndex
+        self.identityKey = nil
+    }
+
+    /// Creates a child wrapper whose per-child identity is keyed by a stable
+    /// string (a `ForEach` element's id) under `identityType`, rather than by
+    /// a positional index — see ``ViewIdentity/child(erasedType:key:)``.
+    public init<V: View, IdentityType>(
+        _ view: V, identityType: IdentityType.Type, key: String
+    ) {
+        (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
+        self.zIndex = Self.zIndexInfo(of: view)
+        self.view = view
+        self.identityType = identityType
+        self.childIndex = 0
+        self.identityKey = key
     }
 
     /// Measures this child view without rendering.
@@ -117,6 +138,9 @@ public struct ChildView {
     /// `identityType` is `nil` (the no-disambiguation initializer).
     private func childContext(_ context: RenderContext) -> RenderContext {
         guard let identityType else { return context }
+        if let identityKey {
+            return context.withChildIdentity(erasedType: identityType, key: identityKey)
+        }
         return context.withChildIdentity(erasedType: identityType, index: childIndex)
     }
 }
