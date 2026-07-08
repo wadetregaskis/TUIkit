@@ -107,6 +107,13 @@ struct FocusRegistration {
     ///   - handler: The focusable handler to register.
     static func register(context: RenderContext, handler: Focusable) {
         guard !context.isMeasuring else { return }
+        // Focus registration is per-frame presence (sections are rebuilt every
+        // pass), so a value-memoized row serving a cached buffer would drop
+        // its focusables from the ring while still on screen. In practice an
+        // interactive row is already uncacheable via its hit-test regions, but
+        // that only holds when a mouse dispatcher is wired in — declare the
+        // side effect so keyboard-only configurations are safe too.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
         // A nil focus manager means "no focus system" (e.g. an isolated test or
         // dimmed-backdrop render): skip registration so nothing auto-focuses.
         // markActive is unrelated to focus (state GC) and always runs.

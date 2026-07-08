@@ -51,6 +51,11 @@ extension OnAppearModifier: Renderable {
         // not record appearance, or it would mark the view "appeared" before the
         // real render and suppress the action. See the measure-side-effect rule.
         if !context.isMeasuring {
+            // The appearance record is per-frame presence: a cached buffer
+            // skipping it makes the token vanish from the frame's visible set,
+            // so endRenderPass fires the disappear machinery for a row that is
+            // still on screen. Declare the side effect so the memos decline.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             let token = lifecycleToken("appear", context)
             _ = context.environment.lifecycle!.recordAppear(token: token, action: action)
         }
@@ -76,6 +81,9 @@ struct OnDisappearModifier<Content: View>: View {
 extension OnDisappearModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         if !context.isMeasuring {
+            // See OnAppearModifier: presence must be re-recorded every frame,
+            // or the row "disappears" (firing the action) while still visible.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             let token = lifecycleToken("disappear", context)
             // Register the disappear callback…
             context.environment.lifecycle!.registerDisappear(token: token, action: action)
@@ -118,6 +126,10 @@ struct TaskModifier<Content: View>: View {
 extension TaskModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         if !context.isMeasuring {
+            // See OnAppearModifier: a cached row skipping this bookkeeping
+            // "disappears" its token, CANCELLING the task while the row is
+            // still on screen (and restarting it on the next cache miss).
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             let lifecycle = context.environment.lifecycle!
             var token = lifecycleToken("task", context)
             if let idToken { token += "-\(idToken)" }
