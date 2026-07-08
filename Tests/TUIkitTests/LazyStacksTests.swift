@@ -380,3 +380,99 @@ struct LazyStackForEachTests {
         #expect(lines.last?.contains("Bottom 1") == true)
     }
 }
+
+// MARK: - True laziness (window stops rendering, not just emitting)
+
+/// A probe that records whether it was ever actually rendered — laziness
+/// means children past the first overflow are never rendered at all, not
+/// merely dropped from the output.
+@MainActor
+private final class RenderFlag {
+    var rendered = false
+    var measured = false
+}
+
+private struct FlagProbe: View, Renderable, Layoutable {
+    let flag: RenderFlag
+
+    var body: Never { fatalError("probe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        if context.isMeasuring {
+            flag.measured = true
+        } else {
+            flag.rendered = true
+        }
+        return FrameBuffer(text: "PROBE")
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        flag.measured = true
+        return ViewSize.fixed(5, 1)
+    }
+}
+
+@MainActor
+@Suite("Lazy stack windowing is actually lazy")
+struct LazyStackLazinessTests {
+    @Test("A LazyVStack child beyond the window is never rendered")
+    func vStackStopsRenderingPastTheFold() {
+        let flag = RenderFlag()
+        let stack = LazyVStack {
+            ForEach(0..<10) { Text("Item \($0)") }
+            FlagProbe(flag: flag)
+        }
+
+        let buffer = renderToBuffer(stack, context: makeBareRenderContext(width: 40, height: 5))
+
+        #expect(buffer.height == 5, "the window fills the available height")
+        #expect(!flag.rendered, "a child past the first overflow must not render")
+    }
+
+    @Test("A LazyHStack child beyond the window is never rendered")
+    func hStackStopsRenderingPastTheFold() {
+        let flag = RenderFlag()
+        let stack = LazyHStack(spacing: 1) {
+            ForEach(0..<10) { Text("Column \($0)") }
+            FlagProbe(flag: flag)
+        }
+
+        _ = renderToBuffer(stack, context: makeBareRenderContext(width: 30, height: 3))
+
+        #expect(!flag.rendered, "a child past the first overflow must not render")
+    }
+
+    @Test("A Spacer keeps the pre-render (its distribution needs every extent)")
+    func spacerForfeitsLaziness() {
+        let flag = RenderFlag()
+        let stack = LazyVStack {
+            Text("Top")
+            Spacer()
+            ForEach(0..<10) { Text("Item \($0)") }
+            FlagProbe(flag: flag)
+        }
+
+        _ = renderToBuffer(stack, context: makeBareRenderContext(width: 40, height: 5))
+
+        // With a Spacer present every child pre-renders for the distribution
+        // arithmetic (the documented trade) even though the probe is past the
+        // fold and does not appear in the output.
+        #expect(flag.rendered, "spacer distribution pre-renders all children")
+    }
+
+    @Test("LazyHStack spacer distribution works alongside a ForEach")
+    func hStackSpacerWithForEach() {
+        let stack = LazyHStack(spacing: 0) {
+            Text("L")
+            Spacer()
+            ForEach(0..<2) { Text("R\($0)") }
+        }
+
+        let buffer = renderToBuffer(stack, context: makeBareRenderContext(width: 20, height: 3))
+        let line = buffer.lines.first?.stripped ?? ""
+
+        #expect(line.hasPrefix("L"), "leading content stays left: '\(line)'")
+        #expect(line.hasSuffix("R0R1"), "the ForEach columns are pushed to the trailing edge: '\(line)'")
+        #expect(line.strippedLength == 20, "the spacer fills the row")
+    }
+}

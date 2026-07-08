@@ -98,6 +98,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "A grid of N metric Panels (bars + progress) — dense container layout.",
         "stress.scenario.dashboard.stresses": "Panel/Card container measure · flexible-width row sharing · mixed leaves",
         "stress.scenario.dashboard.heading": "Dashboard — {0} metric panels",
+        "stress.scenario.framedcolumns.title": "Framed Columns",
+        "stress.scenario.framedcolumns.blurb": "Fixed-frame columns of interactive rows (List, Toggle Cards, a log Panel).",
+        "stress.scenario.framedcolumns.stresses": "non-infinity .frame measure · frames-in-stacks-in-frames cascade · uncacheable interactive rows",
+        "stress.scenario.framedcolumns.heading": "Framed columns — {0} toggle rows per card",
 
         // MARK: churn
         "stress.scenario.churn.title": "Churn Update",
@@ -193,6 +197,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "Ein Raster aus N Metrik-Panels (Balken + Fortschritt) — dichtes Container-Layout.",
         "stress.scenario.dashboard.stresses": "Panel/Card-Container-Messung · Zeilenteilung mit flexibler Breite · gemischte Blätter",
         "stress.scenario.dashboard.heading": "Dashboard — {0} Metrik-Panels",
+        "stress.scenario.framedcolumns.title": "Gerahmte Spalten",
+        "stress.scenario.framedcolumns.blurb": "Spalten mit festen Frames und interaktiven Zeilen (List, Toggle-Cards, ein Log-Panel).",
+        "stress.scenario.framedcolumns.stresses": "Messung endlicher .frames · Kaskade aus Frames in Stacks in Frames · nicht cachebare interaktive Zeilen",
+        "stress.scenario.framedcolumns.heading": "Gerahmte Spalten — {0} Toggle-Zeilen pro Card",
 
         // MARK: churn
         "stress.scenario.churn.title": "Churn-Aktualisierung",
@@ -288,6 +296,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "Une grille de N panneaux de métriques (barres + progression) — disposition de conteneurs dense.",
         "stress.scenario.dashboard.stresses": "Mesure de conteneur Panel/Card · partage de ligne à largeur flexible · feuilles mixtes",
         "stress.scenario.dashboard.heading": "Tableau de bord — {0} panneaux de métriques",
+        "stress.scenario.framedcolumns.title": "Colonnes cadrées",
+        "stress.scenario.framedcolumns.blurb": "Colonnes à cadres fixes de lignes interactives (List, Cards de Toggles, un Panel de journal).",
+        "stress.scenario.framedcolumns.stresses": "mesure des .frame finis · cascade de frames dans des stacks dans des frames · lignes interactives non mémorisables",
+        "stress.scenario.framedcolumns.heading": "Colonnes cadrées — {0} lignes de toggles par card",
 
         // MARK: churn
         "stress.scenario.churn.title": "Mise à jour continue",
@@ -383,6 +395,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "Una griglia di N pannelli di metriche (barre + avanzamento) — layout di contenitori denso.",
         "stress.scenario.dashboard.stresses": "Misura contenitore Panel/Card · condivisione riga a larghezza flessibile · foglie miste",
         "stress.scenario.dashboard.heading": "Dashboard — {0} pannelli di metriche",
+        "stress.scenario.framedcolumns.title": "Colonne incorniciate",
+        "stress.scenario.framedcolumns.blurb": "Colonne a frame fissi di righe interattive (List, Card di Toggle, un Panel di log).",
+        "stress.scenario.framedcolumns.stresses": "misura dei .frame finiti · cascata di frame in stack in frame · righe interattive non memorizzabili",
+        "stress.scenario.framedcolumns.heading": "Colonne incorniciate — {0} righe di toggle per card",
 
         // MARK: churn
         "stress.scenario.churn.title": "Aggiornamento continuo",
@@ -478,6 +494,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "Una cuadrícula de N paneles de métricas (barras + progreso) — disposición de contenedores densa.",
         "stress.scenario.dashboard.stresses": "Medición de contenedor Panel/Card · compartición de fila de ancho flexible · hojas mixtas",
         "stress.scenario.dashboard.heading": "Panel de control — {0} paneles de métricas",
+        "stress.scenario.framedcolumns.title": "Columnas enmarcadas",
+        "stress.scenario.framedcolumns.blurb": "Columnas de marcos fijos con filas interactivas (List, Cards de Toggles, un Panel de registro).",
+        "stress.scenario.framedcolumns.stresses": "medición de .frame finitos · cascada de frames en stacks en frames · filas interactivas no cacheables",
+        "stress.scenario.framedcolumns.heading": "Columnas enmarcadas — {0} filas de toggles por card",
 
         // MARK: churn
         "stress.scenario.churn.title": "Actualización continua",
@@ -573,6 +593,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "由 N 个指标面板组成的网格（条形 + 进度）— 密集容器布局。",
         "stress.scenario.dashboard.stresses": "Panel/Card 容器测量 · 弹性宽度行共享 · 混合叶子节点",
         "stress.scenario.dashboard.heading": "仪表盘 — {0} 个指标面板",
+        "stress.scenario.framedcolumns.title": "定框列",
+        "stress.scenario.framedcolumns.blurb": "固定 frame 的交互行列（List、Toggle 卡片、日志 Panel）。",
+        "stress.scenario.framedcolumns.stresses": "有限 .frame 测量 · frame 嵌套 stack 嵌套 frame 的级联 · 不可缓存的交互行",
+        "stress.scenario.framedcolumns.heading": "定框列 — 每张卡片 {0} 行开关",
 
         // MARK: churn
         "stress.scenario.churn.title": "翻动更新",
@@ -668,6 +692,10 @@ extension StressStrings {
         "stress.scenario.dashboard.blurb": "N 個のメトリックパネル（バー + 進捗）のグリッド — 高密度のコンテナレイアウト。",
         "stress.scenario.dashboard.stresses": "Panel/Card コンテナの計測 · 可変幅の行共有 · 混在したリーフ",
         "stress.scenario.dashboard.heading": "ダッシュボード — {0} 個のメトリックパネル",
+        "stress.scenario.framedcolumns.title": "固定フレーム列",
+        "stress.scenario.framedcolumns.blurb": "固定フレームの列に並ぶ対話行（List、Toggle カード、ログ Panel）。",
+        "stress.scenario.framedcolumns.stresses": "有限 .frame の計測 · フレーム→スタック→フレームのカスケード · キャッシュ不能な対話行",
+        "stress.scenario.framedcolumns.heading": "固定フレーム列 — カードあたり {0} 行のトグル",
 
         // MARK: churn
         "stress.scenario.churn.title": "チャーン更新",

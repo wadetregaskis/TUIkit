@@ -147,6 +147,28 @@ struct SpinnerRenderingTests {
         #expect(stripped.contains("|"))
     }
 
+    @Test("Whitespace-only label is honoured, not dropped")
+    func spinnerWhitespaceLabel() {
+        // The no-break-space padding label is a documented alignment
+        // workaround (GitHub issue #5); U+00A0 satisfies `isWhitespace`, so a
+        // blank-label check must not discard it.
+        let spinner = Spinner("\u{A0}\u{A0}\u{A0}", style: .line)
+        let context = testContext()
+        let stripped = renderToBuffer(spinner, context: context).lines[0].stripped
+
+        #expect(stripped.strippedLength == 5, "glyph + separator + 3 NBSP cells: '\(stripped)'")
+        #expect(stripped.contains("\u{A0}"), "the NBSP label survives to the output")
+    }
+
+    @Test("Empty label renders the bare glyph with no separator")
+    func spinnerEmptyLabel() {
+        let spinner = Spinner("", style: .line)
+        let context = testContext()
+        let stripped = renderToBuffer(spinner, context: context).lines[0].stripped
+
+        #expect(stripped.strippedLength == 1, "no trailing separator space: '\(stripped)'")
+    }
+
     @Test("Spinner renders with custom color")
     func spinnerCustomColor() {
         let spinner = Spinner(style: .dots, color: .red)

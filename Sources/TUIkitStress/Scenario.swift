@@ -57,6 +57,7 @@ enum Scenarios {
         TextWallScenario.descriptor,
         AnyViewStormScenario.descriptor,
         DashboardScenario.descriptor,
+        FramedColumnsScenario.descriptor,
         ChurnUpdateScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]

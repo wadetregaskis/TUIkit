@@ -208,3 +208,102 @@ struct EquatableViewTests {
         #expect(cache.lookup(identity: removedId, view: "r", contextWidth: 80, contextHeight: 24) == nil)
     }
 }
+
+// MARK: - Cache-safety gates
+
+/// An `Equatable` view whose render count is observable: equality is by
+/// `text` only, so re-renders are attributable to the cache gates rather
+/// than value changes.
+@MainActor
+private final class RenderTally {
+    var count = 0
+}
+
+private struct TalliedLabel: View, @MainActor Equatable {
+    let text: String
+    let tally: RenderTally
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.text == rhs.text }
+
+    var body: some View {
+        tally.count += 1
+        return Text(text)
+    }
+}
+
+private struct TalliedButton: View, @MainActor Equatable {
+    let title: String
+    let tally: RenderTally
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View {
+        tally.count += 1
+        return Button(title) {}
+    }
+}
+
+/// `EquatableView` used to store its rendered buffer unconditionally. That
+/// cached measure-pass buffers (incomplete — interactive controls suppress
+/// their hit-test regions while measuring — and the measure-size entry
+/// clobbered the render-size one every frame) and interactive buffers (whose
+/// hit-test handlers capture per-frame state). It now applies the same gate
+/// as `_MemoizedRow`; these tests pin each branch. The time-varying branch
+/// (Spinner/`requestAnimation`) is pinned in `SpinnerRowAnimationTests`.
+@MainActor
+@Suite("EquatableView cache-safety gates", .serialized)
+struct EquatableViewGateTests {
+    private func context(_ tuiContext: TUIContext) -> RenderContext {
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        return RenderContext(
+            availableWidth: 40, availableHeight: 10,
+            environment: environment, tuiContext: tuiContext
+        ).isolatingRenderCache()
+    }
+
+    @Test("A measure-pass render is never served as the render-pass buffer")
+    func measurePassBufferNotCached() {
+        let tally = RenderTally()
+        let view = EquatableView(content: TalliedLabel(text: "static", tally: tally))
+        let renderContext = context(TUIContext())
+        var measureContext = renderContext
+        measureContext.isMeasuring = true
+
+        _ = renderToBuffer(view, context: measureContext)
+        #expect(tally.count == 1)
+
+        // The render pass must not be satisfied by the measure-pass store…
+        _ = renderToBuffer(view, context: renderContext)
+        #expect(tally.count == 2, "the render pass re-renders; a measure buffer is incomplete")
+
+        // …while the render-pass buffer itself is cached as before.
+        _ = renderToBuffer(view, context: renderContext)
+        #expect(tally.count == 2, "the second render pass serves the cache")
+    }
+
+    @Test("An interactive subtree re-renders every frame (its regions are per-frame state)")
+    func interactiveContentNotCached() {
+        let tally = RenderTally()
+        let view = EquatableView(content: TalliedButton(title: "Press", tally: tally))
+        let renderContext = context(TUIContext())
+
+        let first = renderToBuffer(view, context: renderContext)
+        let second = renderToBuffer(view, context: renderContext)
+        #expect(!first.hitTestRegions.isEmpty, "the button registers a hit region")
+        #expect(!second.hitTestRegions.isEmpty)
+        #expect(tally.count == 2, "interactive content declines the cache")
+    }
+
+    @Test("Static content still caches (the gates cost nothing where safe)")
+    func staticContentStillCached() {
+        let tally = RenderTally()
+        let view = EquatableView(content: TalliedLabel(text: "static", tally: tally))
+        let renderContext = context(TUIContext())
+
+        _ = renderToBuffer(view, context: renderContext)
+        _ = renderToBuffer(view, context: renderContext)
+        _ = renderToBuffer(view, context: renderContext)
+        #expect(tally.count == 1, "one render, two cache hits")
+    }
+}

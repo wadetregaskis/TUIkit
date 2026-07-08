@@ -48,7 +48,8 @@ let usageText = """
     Benchmark:    TUIkitStress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
 
     Scenarios are listed in the interactive menu; ids: megalist, table, deep,
-    fanout, modifiers, textwall, anyview, dashboard, churn, kitchensink.
+    fanout, modifiers, textwall, anyview, dashboard, framedcolumns, churn,
+    kitchensink.
     """
 
 if rawArgs.contains("--help") || rawArgs.contains("-h") {
