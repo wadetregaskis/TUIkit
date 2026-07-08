@@ -144,17 +144,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// list (windowed, but still the visible rows) every frame; now the measure
     /// pass is O(1).
     ///
-    /// Width is reported flexible (and height fixed at the filled height) — the
-    /// same shape the render-to-measure fallback reported once the List began
-    /// filling — so a parent stack fills around it. Hugging content is opt-in via
+    /// Both axes are reported *flexible* (the offered extent is a minimum, per
+    /// the ``ViewSize`` contract, which names `List` as the canonical
+    /// height-filling view). Reporting the filled height as *fixed* — as this
+    /// once did — made every unframed List an immovable full-height demand, so
+    /// sibling Lists in a `VStack` starved: the distributor's overflow branch
+    /// placed the first at full height and collapsed the rest to zero (issue
+    /// #6). Flexible height instead lands in the weighted-share branch, which
+    /// splits the column evenly. Hugging content is opt-in via
     /// `.fixedSize(horizontal:)`, which proposes an unbounded width.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let height = proposal.height ?? context.availableHeight
-        // Default: greedy width, no rows built — the O(1) measure that makes the
-        // layout pass cheap.
+        // Default: greedy on both axes, no rows built — the O(1) measure that
+        // makes the layout pass cheap.
         guard context.environment.fixedSizeWidth else {
-            return ViewSize.flexibleWidth(
-                minWidth: proposal.width ?? context.availableWidth, height: height)
+            return ViewSize(
+                width: proposal.width ?? context.availableWidth, height: height,
+                isWidthFlexible: true, isHeightFlexible: true)
         }
         // `.fixedSize(horizontal:)`: hug content — the widest of ALL rows, stable
         // across scroll. Opt-in, so building the rows to measure them is fine, and
