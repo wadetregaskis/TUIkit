@@ -42,9 +42,17 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// ticking it: the nested-Spinner freeze of issue #1).
     public private(set) var animationRequests: Int = 0
 
+    /// Monotonic count of preference writes (`.preference(key:value:)`) and
+    /// preference-change registrations made during the scoped render. The
+    /// preference stack is rebuilt from scratch every render pass, so a
+    /// subtree that publishes (or observes) a preference must re-run each
+    /// frame — serving a cached buffer would silently drop its value from
+    /// the frame's collection.
+    public private(set) var preferenceWrites: Int = 0
+
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
-    public var cacheUnsafeCount: Int { reads &+ animationRequests }
+    public var cacheUnsafeCount: Int { reads &+ animationRequests &+ preferenceWrites }
 
     /// Creates a tracker with zero counts.
     public init() {}
@@ -58,6 +66,13 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// periodically (its output is time-varying).
     public func recordAnimationRequest() {
         animationRequests &+= 1
+    }
+
+    /// Records that the rendering view published a preference value (or
+    /// registered a preference-change observer) — per-frame state that a
+    /// cached buffer cannot reproduce.
+    public func recordPreferenceWrite() {
+        preferenceWrites &+= 1
     }
 }
 

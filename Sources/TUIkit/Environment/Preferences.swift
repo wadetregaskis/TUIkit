@@ -24,8 +24,17 @@ struct PreferenceModifier<Content: View, K: PreferenceKey>: View {
 
 extension PreferenceModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Set the preference value
-        context.environment.preferenceStorage!.setValue(value, forKey: K.self)
+        // The write is a render-pass side effect, twice over:
+        // - never during a measure pass (a measure-render of this subtree —
+        //   e.g. under a render-to-measure ancestor — would apply an
+        //   accumulating `reduce` a second time within the same frame);
+        // - always declared to any value-memoizing ancestor: the preference
+        //   stack is rebuilt every render pass, so a cached buffer would
+        //   silently drop this value from the frame's collection.
+        if !context.isMeasuring {
+            context.environment.volatileReadTracker?.recordPreferenceWrite()
+            context.environment.preferenceStorage!.setValue(value, forKey: K.self)
+        }
 
         // Render content
         return TUIkit.renderToBuffer(content, context: context)
@@ -58,7 +67,17 @@ where K.Value: Equatable {
 
 extension OnPreferenceChangeModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Pure passthrough during a measure pass: registering the callback and
+        // invoking the action are render side effects (the action would fire
+        // with a partial mid-measure collection).
+        guard !context.isMeasuring else {
+            return TUIkit.renderToBuffer(content, context: context)
+        }
         let prefs = context.environment.preferenceStorage!
+
+        // The registration and the action invocation below are per-frame
+        // side effects a cached buffer cannot reproduce — decline the memos.
+        context.environment.volatileReadTracker?.recordPreferenceWrite()
 
         // Register callback for preference changes
         prefs.onPreferenceChange(K.self, callback: action)
