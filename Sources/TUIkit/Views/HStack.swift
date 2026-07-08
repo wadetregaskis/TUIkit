@@ -299,12 +299,20 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, true))
                 currentWidth += spacingToApply + width
                 spacerIndex += 1
+            } else if spacerCount > 0 {
+                let buffer = eagerBuffers[index]!
+                if currentWidth + spacingToApply + buffer.width > availableWidth { break }
+                maxHeight = max(maxHeight, buffer.height)
+                collected.append((buffer, spacingToApply, false))
+                currentWidth += spacingToApply + buffer.width
             } else {
-                let buffer =
-                    spacerCount > 0
-                    ? eagerBuffers[index]!
-                    : child.render(
-                        width: availableWidth, height: context.availableHeight, context: context)
+                // Fit-check on a (side-effect-free) measure BEFORE rendering —
+                // see renderWindow in VStack.swift: rendering-to-check fired
+                // the first overflowing child's lifecycle every frame.
+                let measured = child.measure(proposal: .unspecified, context: context)
+                if currentWidth + spacingToApply + measured.width > availableWidth { break }
+                let buffer = child.render(
+                    width: availableWidth, height: context.availableHeight, context: context)
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
                 collected.append((buffer, spacingToApply, false))

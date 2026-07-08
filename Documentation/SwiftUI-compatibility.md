@@ -71,7 +71,7 @@ Code that uses them compiles and behaves the same.
 | State | `@State` (`init(wrappedValue:)` + `init(initialValue:)`), `@Binding` (`init(get:set:)`, `.constant`, `init(projectedValue:)`, **dynamic-member lookup**), `@Environment(\.key)` | ✓ | `$model.field` and `initialValue:` both work |
 | Observation | `@Observable` + `@Environment(Type.self)` + `.environment(obj)` | ✓ | modern reference-type state ports as-is |
 | Env / prefs | `EnvironmentKey`, `EnvironmentValues`, `PreferenceKey`, `.environment(_:_:)`, `.preference`/`.onPreferenceChange` | ✓ | custom keys work the SwiftUI way |
-| Stacks | `VStack` / `HStack` / `ZStack` / `LazyVStack` / `LazyHStack` | ✓ | `spacing:` is `Int` → §2.1; default spacing → §2.1 note |
+| Stacks | `VStack` / `HStack` / `ZStack` / `LazyVStack` / `LazyHStack` | ✓ | `spacing:` is `Int` → §2.1; default spacing → §2.1 note; lazy-stack semantics differ → §2.8 |
 | Iteration | `ForEach` (`id:` keypath, `Identifiable`, `Range<Int>`), `Section` (header/footer/title), `Group` | ✓ | all three `ForEach` forms present |
 | Data | `List` — content-closure **and** data-driven `List(_:id:selection:rowContent:)`, `Table` | ✓ | data-driven `List` routes through the windowed `ForEach` path (O(visible)) |
 | Scrolling | `ScrollView(_:content:)` | ✓ | the `showsIndicators:` variant mirrors a soft-deprecated SwiftUI init |
@@ -240,6 +240,48 @@ alignment.) The *flexible* `frame(maxWidth:…, alignment:)` **does** default to
 `.center`, matching SwiftUI, because slack-space distribution is exactly when
 centring makes sense.
 
+### 2.8 Lazy stacks window the render; `List` is the scalable container
+
+SwiftUI's lazy stacks (per the `LazyVStack` docs and the WWDC26 session
+"Dive into lazy stacks and scrolling") are defined by **deferred view
+creation inside a scroll view**: "the stack view doesn't create items until
+it needs to render them onscreen"; scrolled-off views are released after a
+few updates; the stack's main-axis extent is *estimated* ("based on the
+average size of views that have been placed before, and the estimated number
+of remaining subviews") and corrected as real views scroll in; the ideal
+cross-axis size is **that of the first subview**; and `pinnedViews:` pins
+section headers/footers.
+
+TUIkit re-renders the tree every frame and retains no view objects, so
+"creation cost" *is* render cost — and its lazy stacks are a **render
+window**, not a deferred-creation machine:
+
+- **Standalone** (the stack itself is the clipping container), they are
+  genuinely lazy: whole children render top-down until the next would
+  overflow `availableHeight`, and children past the fold are *never
+  rendered* (so their `onAppear`/`task` correctly never fire). `VStack`
+  instead distributes and clips at the cell.
+- **Inside a `ScrollView`**, the content is measured with a generous budget
+  (≈ `max(64 × viewport, 4096)` lines) and the whole extent **fully
+  materialises every frame** — scrolling reaches everything (up to that
+  budget) and the extent is *exact*, never estimated, but there is **no
+  laziness**: a `LazyVStack` costs the same as a `VStack` there, and
+  `onAppear`/`task` fire for every materialised row at once, not on
+  visibility. Content taller than the budget is unreachable (both stack
+  kinds alike).
+- **Cross-axis sizing** hugs the widest *placed* child (identical to
+  `VStack`), which is stabler than SwiftUI's first-subview ideal — TUIkit
+  has rendered every visible child anyway, so it knows the real width.
+- **`pinnedViews:` does not exist** (→ §4a).
+
+**Practical guidance (differs from SwiftUI's):** for large scrollable data
+sets use `List` — its row materialisation is windowed to the viewport
+(O(visible) row boxes per frame, id resolution included), making it TUIkit's
+actual lazy container. Reach for `LazyVStack`/`LazyHStack` when the *stack
+itself* is the clipped region (a fixed-height pane showing "as many whole
+rows as fit"). Viewport-driven lazy rendering inside `ScrollView` — the
+SwiftUI model — is future work (→ §4a).
+
 ---
 
 ## 3. Open divergence
@@ -271,6 +313,7 @@ non-obvious.)
 | **`NavigationStack` + `NavigationLink` + `navigationDestination(for:)` + `NavigationPath`** | Push/pop navigation is the backbone of most apps; TUIkit only has split-view. | Model a path stack of type-erased destinations; render the top of stack full-screen; back = pop. Biggest single gap. |
 | **Presentation: `confirmationDialog`, `popover`, `fullScreenCover`, `presentationDetents`** | Common modal patterns. | `confirmationDialog` ≈ an action-list `alert`; `popover`/`fullScreenCover` ≈ `modal` variants; detents → fractional-height modal. |
 | **`ScrollViewReader` / `ScrollViewProxy.scrollTo` / `.scrollPosition`** | Programmatic scrolling. | Expose the existing internal scroll-offset state through a proxy keyed by row id. |
+| **Viewport-driven lazy stacks in `ScrollView` (+ `pinnedViews:`)** | In SwiftUI, laziness exists *for* scroll views; TUIkit's lazy stacks fully materialise there (§2.8), so huge scrollable stacks pay full render cost and fire every row's lifecycle at once. `pinnedViews:` is also absent from the lazy inits. | Publish the scroll offset alongside the existing `scrollViewportSize`; have the window policy render only children intersecting the viewport (± margin) into a full-extent buffer, sizing off-window children by (cached or estimated) measures, SwiftUI-style. `pinnedViews` then composites the active `Section` header over the viewport top. Until then, `List` covers the big-data case. |
 | **`@FocusState` as a property wrapper** | SwiftUI's focus is `@FocusState var x` + `.focused($x)`; TUIkit's `FocusState` is a manually-constructed class — source-incompatible. | Wrap the existing `FocusManager` in a `@propertyWrapper struct FocusState<Value: Hashable>` + `.focused(_:)`/`.focused(_:equals:)`. Trade-off: reconcile with the imperative manager API. |
 | **`.keyboardShortcut`** | Bind a key to any action, not just status-bar items. | A modifier registering an action with the key dispatcher for the view's focus scope. |
 | **`.onTapGesture(count:)`** | Double/triple-click handling (TUIkit's tap gesture is single-count today). | Count clicks within a window; surface integer cell coords (§2.2). |

@@ -7,14 +7,34 @@
 // MARK: - LazyVStack
 
 /// A view that arranges its children in a line that grows vertically,
-/// creating items only as needed.
+/// rendering only the children that fit.
 ///
-/// Unlike ``VStack``, which renders all views immediately, `LazyVStack`
-/// only renders views when they become visible. In a terminal context,
-/// this means views outside the available height are not rendered.
+/// TUIkit re-renders the tree every frame and retains no view objects, so
+/// SwiftUI's "create items only as needed" translates here to a **render
+/// window**: whole children render top-down until the next would overflow
+/// `availableHeight`, and children past the fold are never rendered (their
+/// `onAppear`/`task` correctly never fire). `VStack` instead distributes the
+/// height and clips at the cell.
 ///
-/// Use `LazyVStack` when you have a large number of items or want to
-/// defer rendering of offscreen content.
+/// Use `LazyVStack` when the *stack itself* is the clipped region — a
+/// fixed-height pane showing "as many whole rows as fit".
+///
+/// - Important: Inside a ``ScrollView`` the window is the scroll *content*
+///   (which is measured with a generous budget), so the whole extent
+///   materialises every frame: scrolling reaches everything, but a
+///   `LazyVStack` there costs the same as a `VStack`, and every row's
+///   lifecycle fires at once rather than on visibility. For large scrollable
+///   data sets prefer ``List``, whose row materialisation is windowed to the
+///   viewport. (Viewport-driven laziness inside `ScrollView`, and SwiftUI's
+///   `pinnedViews:`, are future work — see §2.8/§4a of
+///   `Documentation/SwiftUI-compatibility.md`.)
+///
+/// - Note: Documented deviations from SwiftUI (per the parity rule): the
+///   cross-axis width hugs the widest *placed* child (SwiftUI's ideal width
+///   is its **first** subview's — an artefact of not creating the rest;
+///   TUIkit has rendered every visible child anyway, so it uses the real
+///   widest), the main-axis extent is exact rather than estimated, and the
+///   init takes no `pinnedViews:`.
 ///
 /// # Example
 ///
@@ -27,10 +47,6 @@
 ///     }
 /// }
 /// ```
-///
-/// - Note: In TUIKit's terminal context, lazy rendering is based on
-///   `availableHeight` in the render context. Items beyond this height
-///   are not rendered until they scroll into view.
 ///
 /// - Note: `LazyVStack` shares its rendering core (``_VStackCore``) with
 ///   ``VStack``; the only difference is the `.window` overflow policy, which
@@ -71,14 +87,12 @@ public struct LazyVStack<Content: View>: View {
 // MARK: - LazyHStack
 
 /// A view that arranges its children in a line that grows horizontally,
-/// creating items only as needed.
+/// rendering only the children that fit.
 ///
-/// Unlike ``HStack``, which renders all views immediately, `LazyHStack`
-/// only renders views when they become visible. In a terminal context,
-/// this means views outside the available width are not rendered.
-///
-/// Use `LazyHStack` when you have a large number of items or want to
-/// defer rendering of offscreen content.
+/// The horizontal render window: whole children render left-to-right until
+/// the next would overflow `availableWidth`, and children past the fold are
+/// never rendered. `HStack` instead distributes the width and clips at the
+/// cell. Use `LazyHStack` when the *stack itself* is the clipped region.
 ///
 /// # Example
 ///
@@ -92,9 +106,9 @@ public struct LazyVStack<Content: View>: View {
 /// }
 /// ```
 ///
-/// - Note: In TUIKit's terminal context, lazy rendering is based on
-///   `availableWidth` in the render context. Items beyond this width
-///   are not rendered until they scroll into view.
+/// - Note: `LazyHStack` is the horizontal twin of ``LazyVStack`` — see its
+///   discussion for the render-window semantics, the `ScrollView` caveat, and
+///   the documented deviations from SwiftUI.
 ///
 /// - Note: `LazyHStack` shares its rendering core (``_HStackCore``) with
 ///   ``HStack``; the only difference is the `.window` overflow policy, which

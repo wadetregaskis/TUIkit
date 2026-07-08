@@ -302,14 +302,26 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 collected.append((FrameBuffer(emptyWithHeight: height), spacingToApply, true))
                 currentHeight += spacingToApply + height
                 spacerIndex += 1
-            } else {
-                let buffer =
-                    spacerCount > 0
-                    ? eagerBuffers[index]!
-                    : child.render(
-                        width: context.availableWidth, height: availableHeight, context: context)
+            } else if spacerCount > 0 {
+                let buffer = eagerBuffers[index]!
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break
+                }
+                collected.append((buffer, spacingToApply, false))
+                currentHeight += spacingToApply + buffer.height
+            } else {
+                // Fit-check on a (side-effect-free) measure BEFORE rendering:
+                // rendering-to-check would run the first overflowing child's
+                // render every frame without ever displaying it — firing its
+                // onAppear and keeping its .task alive for an invisible row.
+                let measured = child.measure(proposal: .unspecified, context: context)
+                if currentHeight + spacingToApply + measured.height > availableHeight {
+                    break
+                }
+                let buffer = child.render(
+                    width: context.availableWidth, height: availableHeight, context: context)
+                if currentHeight + spacingToApply + buffer.height > availableHeight {
+                    break  // a child whose render exceeds its measure still can't overflow the window
                 }
                 collected.append((buffer, spacingToApply, false))
                 currentHeight += spacingToApply + buffer.height
