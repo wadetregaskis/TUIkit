@@ -265,13 +265,12 @@ extension FlexibleFrameView: Layoutable {
     /// always width-flexible, so its size needs no flexibility probe — a single
     /// content measure (structural when the content is itself `Layoutable`, the
     /// common `VStack`/`HStack`/`Text` case) gives the height, and the width is
-    /// the available width. Every other constraint shape makes the frame's width
-    /// depend on how the content *reflows* at different widths (a wrapping label
-    /// widens when given more room), which only re-rendering reliably captures —
-    /// those keep the original two-render measurement, byte-for-byte unchanged.
+    /// the available width. Every other constraint shape measures analytically
+    /// too, by mirroring `renderToBuffer`'s sizing math around one content
+    /// measure — see ``measureAnalytically(proposal:context:)``.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         guard hasInfiniteMaxWidth else {
-            return measureByRendering(proposal: proposal, context: context)
+            return measureAnalytically(proposal: proposal, context: context)
         }
 
         let availableWidth = proposal.width ?? context.availableWidth
@@ -312,32 +311,125 @@ extension FlexibleFrameView: Layoutable {
         return false
     }
 
-    /// A render-and-probe measure, kept locally for the constraint shapes whose
-    /// width depends on content reflow: render for the natural size, then 8 cells
-    /// wider to see whether the width grows. This is the same heuristic
-    /// `measureChild`'s fallback once used globally (since retired there in favour
-    /// of a single render); `FrameModifier` keeps it for these specific shapes
-    /// because their width genuinely tracks reflow.
-    private func measureByRendering(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        var measureContext = context
-        measureContext.isMeasuring = true
-        measureContext.hasExplicitWidth = false
-        if let width = proposal.width {
-            measureContext.availableWidth = width
-        }
-        if let height = proposal.height {
-            measureContext.availableHeight = height
-        }
-        let buffer = TUIkit.renderToBuffer(self, context: measureContext)
-        let naturalWidth = buffer.width
+    /// An analytic measure for the general constraint shapes (fixed, ideal and
+    /// min-only frames): one content *measure* through `measureChild`, with the
+    /// frame's own sizing math mirrored from ``renderToBuffer(context:)`` so
+    /// the two can never disagree.
+    ///
+    /// This replaces a render-and-probe measure (render the whole subtree for
+    /// its natural size, then again 8 cells wider to detect width growth) that
+    /// predated Layoutable-everywhere. Now that every view reports an honest
+    /// size *and flexibility* structurally, rendering to measure was only cost:
+    /// each `.frame(width:)`/`.frame(height:)` measure was two full subtree
+    /// renders, and because ancestors measure a child both in their own
+    /// `sizeThatFits` and again in their render pass, nested frames compounded
+    /// those renders multiplicatively — the issue #7 layout (two nested framed
+    /// columns of interactive rows) fully rendered its Card subtree 15 times
+    /// per idle pulse frame.
+    ///
+    /// Two clamps mirror the render path exactly:
+    /// - the *content's* report is capped at the width/height the frame offers
+    ///   it, because the universal `renderToBuffer` clamps the content's buffer
+    ///   to its available space (a Slider whose track floor exceeds a narrow
+    ///   `.frame(width:)` still renders inside it);
+    /// - the *frame's* report is capped at its own availability, because the
+    ///   same clamp applies to the frame's buffer in its parent (a
+    ///   `.frame(width: 20)` squeezed into 12 cells renders 12 wide).
+    private func measureAnalytically(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let availableWidth = proposal.width ?? context.availableWidth
+        let availableHeight = proposal.height ?? context.availableHeight
 
-        var probeContext = measureContext
-        probeContext.availableWidth = naturalWidth + 8
-        let probedWidth = TUIkit.renderToBuffer(self, context: probeContext).width
+        // The width/height the content is offered — the same shared helpers
+        // renderToBuffer uses.
+        let targetWidth = contentTargetWidth(availableWidth: availableWidth)
+        let targetHeight = contentTargetHeight(availableHeight: availableHeight)
 
-        if probedWidth > naturalWidth {
-            return ViewSize.flexibleWidth(minWidth: naturalWidth, height: buffer.height)
+        var contentContext = context
+        contentContext.availableWidth = targetWidth
+        contentContext.availableHeight = targetHeight ?? availableHeight
+        if minWidth != nil || idealWidth != nil || maxWidth != nil {
+            contentContext.hasExplicitWidth = true
         }
-        return ViewSize.fixed(naturalWidth, buffer.height)
+        let contentSize = measureChild(
+            content,
+            proposal: ProposedSize(width: targetWidth, height: targetHeight),
+            context: contentContext)
+
+        // Mirror renderToBuffer's final-size math: the content is capped at
+        // what the frame offers it, minimums floor the result, and an
+        // `.infinity` max fills the available extent.
+        var wantedWidth = min(contentSize.width, targetWidth)
+        var wantedHeight = targetHeight.map { min(contentSize.height, $0) } ?? contentSize.height
+        if let minimumWidth = minWidth {
+            wantedWidth = max(wantedWidth, minimumWidth)
+        }
+        if let minimumHeight = minHeight {
+            wantedHeight = max(wantedHeight, minimumHeight)
+        }
+        if let maximumWidth = maxWidth, case .infinity = maximumWidth {
+            wantedWidth = max(wantedWidth, availableWidth)
+        }
+        if let maximumHeight = maxHeight, case .infinity = maximumHeight {
+            wantedHeight = max(wantedHeight, availableHeight)
+        }
+
+        // The universal render clamp caps the frame's own buffer at its
+        // availability, so the report must not exceed it either.
+        let width = min(wantedWidth, availableWidth)
+        let height = min(wantedHeight, availableHeight)
+
+        // An axis is flexible iff offering more space would grow the rendered
+        // frame:
+        // - an `.infinity` max always fills whatever is offered;
+        // - a frame squeezed below the size its constraints want (the clamp
+        //   engaged) grows back toward it when offered more — e.g. a
+        //   `.frame(width: 20)` in 12 cells reports (12, flexible);
+        // - otherwise growth comes from the content filling extra space,
+        //   unless a cap (a fixed max, or an ideal acting as one) already pins
+        //   the reported size — a `.frame(width: 30)` at its cap is rigid,
+        //   while a `maxWidth: .fixed(60)` frame in 40 cells still grows.
+        func axisFlexible(
+            isInfinity: Bool, reported: Int, wanted: Int, contentFlexible: Bool, cap: Int?
+        ) -> Bool {
+            if isInfinity { return true }
+            if reported < wanted { return true }
+            guard contentFlexible else { return false }
+            guard let cap else { return true }
+            return wanted < cap
+        }
+        let widthCap: Int?
+        var widthInfinity = false
+        if let maximumWidth = maxWidth {
+            if case .fixed(let value) = maximumWidth {
+                widthCap = value
+            } else {
+                widthCap = nil
+                widthInfinity = true
+            }
+        } else {
+            widthCap = idealWidth
+        }
+        let heightCap: Int?
+        var heightInfinity = false
+        if let maximumHeight = maxHeight {
+            if case .fixed(let value) = maximumHeight {
+                heightCap = value
+            } else {
+                heightCap = nil
+                heightInfinity = true
+            }
+        } else {
+            heightCap = idealHeight
+        }
+
+        return ViewSize(
+            width: width,
+            height: height,
+            isWidthFlexible: axisFlexible(
+                isInfinity: widthInfinity, reported: width, wanted: wantedWidth,
+                contentFlexible: contentSize.isWidthFlexible, cap: widthCap),
+            isHeightFlexible: axisFlexible(
+                isInfinity: heightInfinity, reported: height, wanted: wantedHeight,
+                contentFlexible: contentSize.isHeightFlexible, cap: heightCap))
     }
 }
