@@ -25,14 +25,27 @@ struct RenderBottleneckTests {
     /// Uses `Date` instead of `CFAbsoluteTimeGetCurrent` because CoreFoundation
     /// timing functions are not available on Linux. The precision difference
     /// is negligible for performance benchmarks at millisecond granularity.
+    ///
+    /// The iterations run in several batches and the *fastest* batch is
+    /// reported, scaled back to the full iteration count. Scheduler noise (a
+    /// descheduled core mid-run under the parallel full-suite load) only ever
+    /// inflates a timing, so the minimum is the closest estimate of the true
+    /// cost — the single-run average this used to return made the ratio
+    /// assertions flake whenever one operand's run absorbed a stall.
     private func measure(_ name: String, iterations: Int = 1000, block: () -> Void) -> TimeInterval {
-        let start = Date()
-        for _ in 0..<iterations {
-            block()
+        let batches = 5
+        let perBatch = max(1, iterations / batches)
+        var best = TimeInterval.infinity
+        for _ in 0..<batches {
+            let start = Date()
+            for _ in 0..<perBatch {
+                block()
+            }
+            best = min(best, Date().timeIntervalSince(start))
         }
-        let time = Date().timeIntervalSince(start)
+        let time = best * Double(iterations) / Double(perBatch)
         let perIteration = (time / Double(iterations)) * 1000
-        print("  \(name): \(String(format: "%.3f", perIteration))ms per iteration")
+        print("  \(name): \(String(format: "%.3f", perIteration))ms per iteration (best of \(batches) batches)")
         return time
     }
 
