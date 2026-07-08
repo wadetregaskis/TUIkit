@@ -11,6 +11,12 @@
 // gain — the same rationale by which `type_body_length` is disabled project-wide.
 // swiftlint:disable file_length
 
+/// The horizontal cells `renderPlainLine`/`renderLineWithBadge` add around a
+/// row's content: a 1-cell gutter on the left and at least 1 cell of padding on
+/// the right. Row-width proposals must subtract this so a width-greedy row
+/// still fits the interior after composition.
+private let listRowGutter = 2
+
 // MARK: - Row Source (windowed materialisation)
 
 /// A windowed view over a `List`'s rows.
@@ -179,7 +185,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let widest = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
         let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
         let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
-        return max(widest, titleWidth) + borderOverhead
+        // The widest row still gets its gutters when composed, so the hugged
+        // width must include them or the row's trailing cells are clipped.
+        return max(widest + listRowGutter, titleWidth) + borderOverhead
     }
 
     /// Captures the populated-state values that the mouse-
@@ -205,24 +213,33 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let style = context.environment.listStyle
         let stateStorage = context.environment.stateStorage!
 
+        // Two border cells or none, on each axis: top + bottom rows, and left +
+        // right columns.
+        let borderOverhead = style.showsBorder ? 2 : 0
+
         // `.fixedSize(horizontal:)` makes the List hug its content; clear the flag
-        // before extracting so it doesn't leak into the rows' own content (only
-        // copying the context when the flag is actually set — the common path
-        // extracts straight from `context`). The List's own honouring of it reads
-        // `context.environment.fixedSizeWidth` (still set) in `buildPopulatedContent`.
-        let source: RowSource<SelectionValue>
+        // before extracting so it doesn't leak into the rows' own content. The
+        // List's own honouring of it reads `context.environment.fixedSizeWidth`
+        // (still set) in `buildPopulatedContent`.
+        //
+        // On the ordinary fill path, propose each row the width it actually gets
+        // on screen: the interior minus the row gutters that `renderPlainLine`
+        // adds around it. Extracting rows at the List's own full width let a
+        // width-greedy row (`HStack { … Spacer() … }`) fill all of it, only for
+        // the gutter + border clamp to chop the trailing cells — silently hiding
+        // a right-flushed trailing view (issue #5).
+        var rowContext = context
         if context.environment.fixedSizeWidth {
-            var rowContext = context
             rowContext.environment.fixedSizeWidth = false
-            source = extractRows(from: content, context: rowContext)
         } else {
-            source = extractRows(from: content, context: context)
+            rowContext.availableWidth = max(
+                1, context.availableWidth - borderOverhead - listRowGutter)
         }
+        let source = extractRows(from: content, context: rowContext)
 
         // Vertical chrome around the scrollable content; reserve
         // only what is actually present.
         let footerHeight = footer != nil ? 2 : 0  // footer line + separator
-        let borderOverhead = style.showsBorder ? 2 : 0  // top + bottom border
         let titleOverhead = title != nil ? 1 : 0
         let targetContentHeight = max(
             1,
@@ -713,8 +730,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
             let yStart = lines.count
             for rowLine in styledLines {
-                let pad = max(0, contentRowWidth - rowLine.strippedLength)
-                lines.append(rowLine + String(repeating: " ", count: pad) + barCell(at: lines.count))
+                // An intrinsically over-wide row must not push the bar cell past
+                // the interior (where the container clamp would cut the bar off);
+                // hard-clip it to the content column, matching the container's
+                // own clipping of over-wide rows on the bar-less path.
+                let fitted =
+                    rowLine.strippedLength > contentRowWidth
+                    ? rowLine.ansiAwarePrefix(visibleCount: contentRowWidth)
+                    : rowLine
+                let pad = max(0, contentRowWidth - fitted.strippedLength)
+                lines.append(fitted + String(repeating: " ", count: pad) + barCell(at: lines.count))
             }
             ranges.append((
                 rowIndex: rowIndex,

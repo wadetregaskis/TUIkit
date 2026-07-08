@@ -402,11 +402,14 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         }
 
         let output: String
-        if let label, !label.allSatisfy(\.isWhitespace) {
+        if let label, !label.isEmpty {
+            // A whitespace-only label is honoured, not dropped: it is an explicit
+            // request for trailing space (e.g. the no-break-space padding labels
+            // some apps use for alignment — U+00A0 satisfies `isWhitespace`).
             let styledLabel = ANSIRenderer.colorize(label, foreground: context.environment.palette.foreground)
             output = coloredSpinner + " " + styledLabel
         } else {
-            // No label (or a blank one) — render just the spinner glyph, with no
+            // No label (or an empty one) — render just the spinner glyph, with no
             // trailing separator space.
             output = coloredSpinner
         }
