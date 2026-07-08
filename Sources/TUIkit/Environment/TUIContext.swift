@@ -81,12 +81,27 @@ extension LifecycleManager {
         }
         visibleTokens = currentRenderTokens
         let callbacks = disappearCallbacks
+        // A fired callback has served its purpose: if the view ever returns,
+        // its modifier re-registers on that render (they register every
+        // frame). Keeping the entry leaked one closure — plus whatever app
+        // state it captured — for every ForEach row or task(id:) generation
+        // that ever left the tree.
+        for token in disappeared {
+            disappearCallbacks.removeValue(forKey: token)
+        }
         lock.unlock()
 
         // Execute callbacks outside the lock to avoid deadlocks
         for token in disappeared {
             callbacks[token]?()
         }
+    }
+
+    /// The number of registered disappear callbacks — a leak canary for tests.
+    var disappearCallbackCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return disappearCallbacks.count
     }
 
     /// Records that a view with the given token appeared.

@@ -260,3 +260,71 @@ struct LifecycleManagerTaskTests {
         #expect(manager.hasAppeared(token: "task-1") == false)
     }
 }
+
+// MARK: - Disappear-callback retention
+
+/// Fired disappear callbacks must be released: the modifiers re-register on
+/// every render a view is present, so an entry whose view has left the tree
+/// serves no future purpose — keeping it leaked one closure (plus whatever
+/// app state it captured) for every ForEach row or `task(id:)` generation
+/// that ever disappeared.
+@MainActor
+@Suite("LifecycleManager disappear-callback retention")
+struct LifecycleManagerRetentionTests {
+    /// One simulated frame in which exactly `tokens` are present.
+    private func frame(_ manager: LifecycleManager, tokens: [String]) {
+        manager.beginRenderPass()
+        for token in tokens {
+            manager.registerDisappear(token: token) {}
+            _ = manager.recordAppear(token: token) {}
+        }
+        manager.endRenderPass()
+    }
+
+    @Test("A fired disappear callback is released")
+    func firedCallbackReleased() {
+        let manager = LifecycleManager()
+        frame(manager, tokens: ["row-a", "row-b"])
+        #expect(manager.disappearCallbackCount == 2)
+
+        frame(manager, tokens: ["row-a"])  // row-b leaves the tree
+        #expect(manager.disappearCallbackCount == 1, "row-b's callback served its purpose")
+
+        frame(manager, tokens: [])
+        #expect(manager.disappearCallbackCount == 0)
+    }
+
+    @Test("task(id:)-style token churn stays bounded")
+    func tokenChurnStaysBounded() {
+        let manager = LifecycleManager()
+        // Every frame the id changes, so the token changes: the old generation
+        // disappears while the new one appears — the .task(id:) restart shape.
+        for generation in 0..<50 {
+            frame(manager, tokens: ["task-\(generation)"])
+        }
+        #expect(
+            manager.disappearCallbackCount == 1,
+            "only the live generation is registered, not all 50")
+    }
+
+    @Test("A view that returns still fires disappear on its next removal")
+    func reappearedViewStillFiresDisappear() {
+        let manager = LifecycleManager()
+        nonisolated(unsafe) var fired = 0
+        func frameWith(_ present: Bool) {
+            manager.beginRenderPass()
+            if present {
+                manager.registerDisappear(token: "view") { fired += 1 }
+                _ = manager.recordAppear(token: "view") {}
+            }
+            manager.endRenderPass()
+        }
+
+        frameWith(true)
+        frameWith(false)
+        #expect(fired == 1)
+        frameWith(true)   // returns (re-registers)
+        frameWith(false)  // leaves again
+        #expect(fired == 2, "the release of a fired callback must not eat later cycles")
+    }
+}
