@@ -172,31 +172,53 @@ extension StepperHandler {
         for _ in 0..<max(1, times) {
             if let onIncrement {
                 onIncrement()
-            } else {
-                let newValue = value.wrappedValue.advanced(by: step)
-                if let bounds {
-                    value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, newValue))
+            } else if let bounds {
+                // Choose the candidate WITHOUT overshooting the bound, then
+                // clamp. Computing `advanced(by: step)` unconditionally first
+                // (then clamping the result, as this did) traps on integer
+                // overflow when the value sits within `step` of the type's
+                // representable maximum — reachable with a bound at/near that
+                // maximum (e.g. `Stepper(value:in: 0...Int.max)` held at the
+                // top). The final `min`/`max` still pins the bound and
+                // neutralises a NaN value the way it always did.
+                let candidate: V
+                if value.wrappedValue >= bounds.upperBound
+                    || value.wrappedValue > bounds.upperBound.advanced(by: V.Stride.zero - step)
+                {
+                    candidate = bounds.upperBound  // at the bound, or a full step would overshoot
                 } else {
-                    value.wrappedValue = newValue
+                    candidate = value.wrappedValue.advanced(by: step)
                 }
+                value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, candidate))
+            } else {
+                value.wrappedValue = value.wrappedValue.advanced(by: step)
             }
         }
     }
 
     /// Decrements the value by `times` step sizes (default one). See ``increment(times:)``.
     func decrement(times: Int = 1) {
+        let negativeStep = V.Stride.zero - step
         for _ in 0..<max(1, times) {
             if let onDecrement {
                 onDecrement()
-            } else {
-                // For Strideable, we need to negate the step
-                let negativeStep = V.Stride.zero - step
-                let newValue = value.wrappedValue.advanced(by: negativeStep)
-                if let bounds {
-                    value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, newValue))
+            } else if let bounds {
+                // Mirror of `increment`: choose a candidate that never
+                // undershoots the lower bound (so a value within `step` of the
+                // type's minimum can't underflow), then clamp — the final
+                // `min`/`max` also pulls an out-of-range-high value back into
+                // bounds and neutralises NaN, exactly as before.
+                let candidate: V
+                if value.wrappedValue <= bounds.lowerBound
+                    || value.wrappedValue < bounds.lowerBound.advanced(by: step)
+                {
+                    candidate = bounds.lowerBound
                 } else {
-                    value.wrappedValue = newValue
+                    candidate = value.wrappedValue.advanced(by: negativeStep)
                 }
+                value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, candidate))
+            } else {
+                value.wrappedValue = value.wrappedValue.advanced(by: negativeStep)
             }
         }
     }
