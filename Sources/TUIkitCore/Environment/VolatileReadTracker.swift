@@ -30,29 +30,23 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// animation (a Spinner, say) is on screen.
     public private(set) var reads: Int = 0
 
-    /// Monotonic count of animation requests (`requestAnimation`) made during
-    /// the scoped render. Like ``reads``, only ever compared as a delta.
-    ///
-    /// An animation request means "this subtree's output is a function of
-    /// time": its next render differs from this one even though its inputs
-    /// compare equal. A value-memoizing view must not cache such a subtree —
-    /// serving the cached buffer would both freeze the visible frame *and*
-    /// skip the request's per-frame re-declaration, so the scheduler would
-    /// drop the animation's grid entirely (the demand-driven loop then stops
-    /// ticking it: the nested-Spinner freeze of issue #1).
-    public private(set) var animationRequests: Int = 0
-
-    /// Monotonic count of preference writes (`.preference(key:value:)`) and
-    /// preference-change registrations made during the scoped render. The
-    /// preference stack is rebuilt from scratch every render pass, so a
-    /// subtree that publishes (or observes) a preference must re-run each
-    /// frame — serving a cached buffer would silently drop its value from
-    /// the frame's collection.
-    public private(set) var preferenceWrites: Int = 0
+    /// Monotonic count of per-frame render side effects made during the
+    /// scoped render — work that must re-run every frame, which a cached
+    /// buffer cannot reproduce. Like ``reads``, only ever compared as a
+    /// delta. Recorded by:
+    /// - `requestAnimation` — the subtree's output is a function of time;
+    ///   a cached buffer would freeze it AND skip the per-frame token
+    ///   re-declaration, so the scheduler drops the animation (issue #1);
+    /// - the preference modifiers — the preference stack is rebuilt every
+    ///   render pass, so a cached publisher's value silently vanishes from
+    ///   the frame's collection (and a cached observer stops firing);
+    /// - `onChange(of:)` — the change detection is a per-frame comparison;
+    ///   a cached row never compares, so changes go permanently unnoticed.
+    public private(set) var sideEffects: Int = 0
 
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
-    public var cacheUnsafeCount: Int { reads &+ animationRequests &+ preferenceWrites }
+    public var cacheUnsafeCount: Int { reads &+ sideEffects }
 
     /// Creates a tracker with zero counts.
     public init() {}
@@ -62,17 +56,12 @@ public final class VolatileReadTracker: @unchecked Sendable {
         reads &+= 1
     }
 
-    /// Records that the rendering view asked the scheduler to re-render it
-    /// periodically (its output is time-varying).
-    public func recordAnimationRequest() {
-        animationRequests &+= 1
-    }
-
-    /// Records that the rendering view published a preference value (or
-    /// registered a preference-change observer) — per-frame state that a
-    /// cached buffer cannot reproduce.
-    public func recordPreferenceWrite() {
-        preferenceWrites &+= 1
+    /// Records a per-frame render side effect (an animation request, a
+    /// preference write/observation, an `onChange` comparison, …) — work a
+    /// cached buffer cannot reproduce, so the value memos must decline to
+    /// cache the subtree that performed it.
+    public func recordRenderSideEffect() {
+        sideEffects &+= 1
     }
 }
 

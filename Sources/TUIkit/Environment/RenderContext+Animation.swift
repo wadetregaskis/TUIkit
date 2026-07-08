@@ -50,7 +50,7 @@ extension RenderContext {
         // per-frame re-declaration, so the scheduler would drop the grid and stop
         // ticking it altogether (issue #1). Recorded before the scheduler guard
         // so scheduler-less one-off renders classify the subtree consistently.
-        environment.volatileReadTracker?.recordAnimationRequest()
+        environment.volatileReadTracker?.recordRenderSideEffect()
         guard let scheduler = environment.animationScheduler else { return }
         let onePeriod = Int64((1_000_000_000.0 / frequency).rounded())
         let request = AnimationRequest(

@@ -2,11 +2,11 @@
 //  VolatileReadTrackerTests.swift
 //
 //  Pins the tracker's two-counter design: `reads` drives the run loop's
-//  pulse-timer demand (`usesPulse: reads > 0`), while `animationRequests`
-//  only feeds `cacheUnsafeCount` for the value memos. Folding animation
-//  requests into `reads` would spin the pulse clock whenever any
-//  scheduler-driven animation (a Spinner, say) is on screen — the reason
-//  `requestAnimation` records on a separate counter.
+//  pulse-timer demand (`usesPulse: reads > 0`), while `sideEffects` (animation
+//  requests, preference writes, onChange comparisons) only feeds
+//  `cacheUnsafeCount` for the value memos. Folding side effects into `reads`
+//  would spin the pulse clock whenever any scheduler-driven animation (a
+//  Spinner, say) is on screen — the reason they record on a separate counter.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -32,7 +32,7 @@ struct VolatileReadTrackerTests {
         context.requestAnimation(token: "test", frequency: 10)
 
         #expect(tracker.reads == 0, "no pulse demand: the pulse timer keys off `reads` alone")
-        #expect(tracker.animationRequests == 1)
+        #expect(tracker.sideEffects == 1)
         #expect(tracker.cacheUnsafeCount == 1, "the memos see the request")
     }
 
@@ -49,7 +49,7 @@ struct VolatileReadTrackerTests {
 
         context.requestAnimation(token: "test", frequency: 10)
 
-        #expect(tracker.animationRequests == 1)
+        #expect(tracker.sideEffects == 1)
     }
 
     @Test("No side effects during a measure pass")
@@ -68,15 +68,15 @@ struct VolatileReadTrackerTests {
         #expect(tracker.cacheUnsafeCount == 0)
     }
 
-    @Test("Volatile reads and animation requests tally independently")
+    @Test("Volatile reads and render side effects tally independently")
     func countersAreIndependent() {
         let tracker = VolatileReadTracker()
         tracker.recordVolatileRead()
         tracker.recordVolatileRead()
-        tracker.recordAnimationRequest()
+        tracker.recordRenderSideEffect()
 
         #expect(tracker.reads == 2)
-        #expect(tracker.animationRequests == 1)
+        #expect(tracker.sideEffects == 1)
         #expect(tracker.cacheUnsafeCount == 3)
     }
 }

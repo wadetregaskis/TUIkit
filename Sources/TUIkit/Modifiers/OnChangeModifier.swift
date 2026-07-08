@@ -37,7 +37,22 @@ struct OnChangeModifier<Content: View, V: Equatable>: View {
 
 extension OnChangeModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Pure passthrough during a measure pass: the comparison, the index
+        // claim and the action are render side effects. A measure-pass render
+        // (under a render-to-measure ancestor) used to fire the action a
+        // second time within the frame AND advance the per-identity index
+        // counter, mis-slotting the render pass's tracked values.
+        guard !context.isMeasuring else {
+            return TUIkitView.renderToBuffer(content, context: context)
+        }
         let storage = context.environment.stateStorage!
+
+        // The comparison below is per-frame work a cached buffer cannot
+        // reproduce: a value-memoized row containing this modifier would
+        // never compare again after its first frame, so changes went
+        // permanently unnoticed. Declare the side effect so the memos
+        // decline to cache this subtree.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
 
         // Claim unique index for this onChange at this identity
         let index = storage.nextOnChangeIndex(for: context.identity)

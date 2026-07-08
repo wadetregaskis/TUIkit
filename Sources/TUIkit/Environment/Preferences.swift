@@ -32,7 +32,7 @@ extension PreferenceModifier: Renderable {
         //   stack is rebuilt every render pass, so a cached buffer would
         //   silently drop this value from the frame's collection.
         if !context.isMeasuring {
-            context.environment.volatileReadTracker?.recordPreferenceWrite()
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             context.environment.preferenceStorage!.setValue(value, forKey: K.self)
         }
 
@@ -77,7 +77,7 @@ extension OnPreferenceChangeModifier: Renderable {
 
         // The registration and the action invocation below are per-frame
         // side effects a cached buffer cannot reproduce — decline the memos.
-        context.environment.volatileReadTracker?.recordPreferenceWrite()
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
 
         // Register callback for preference changes
         prefs.onPreferenceChange(K.self, callback: action)
