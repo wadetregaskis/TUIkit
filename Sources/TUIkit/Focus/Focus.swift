@@ -640,9 +640,14 @@ extension FocusManager {
             restoreFocusForActiveSection()
         }
 
-        // Validate focused element
+        // Validate focused element. "Present but no longer focusable" is
+        // treated like "gone": some elements register with a dynamic
+        // `canBeFocused` (a ScrollView is focusable only while its content
+        // overflows), and focus resting on one would silently eat key events
+        // while showing no focus indicator anywhere.
         if let focusID = focusedID, let section = activeSection {
-            if !section.focusables.contains(where: { $0.focusID == focusID }) {
+            let focused = section.focusables.first { $0.focusID == focusID }
+            if focused == nil || focused?.canBeFocused == false {
                 // Previously focused element is gone — auto-focus first available
                 self.focusedID = nil
                 if let firstFocusable = section.focusables.first(where: { $0.canBeFocused }) {
@@ -671,21 +676,38 @@ extension FocusManager {
     fileprivate func cycleSection(direction: FocusDirection) {
         guard sections.count > 1 else { return }
 
-        let sectionIndex: Int
+        let startIndex: Int
         if let activeID = activeSectionID,
             let currentIndex = sections.firstIndex(where: { $0.id == activeID })
         {
-            switch direction {
-            case .forward:
-                sectionIndex = (currentIndex + 1) % sections.count
-            case .backward:
-                sectionIndex = currentIndex == 0 ? sections.count - 1 : currentIndex - 1
-            }
+            startIndex = currentIndex
         } else {
-            sectionIndex = direction == .forward ? 0 : sections.count - 1
+            // No active section: enter the ring just "before" the first
+            // candidate in the travel direction, so the walk below starts at
+            // the first / last section exactly as the old fixed pick did.
+            startIndex = direction == .forward ? sections.count - 1 : 0
         }
 
-        activateSection(id: sections[sectionIndex].id, focusBoundary: direction)
+        // Walk the ring in the travel direction, skipping sections with no
+        // currently-focusable element — activating one would strand the app
+        // with nothing focused (the boundary entry has nothing to land on),
+        // making the focus indicator vanish for a keypress. A section whose
+        // controls are all disabled (or all gone this frame) is simply not a
+        // Tab stop, matching desktop focus-ring conventions.
+        var index = startIndex
+        for _ in 1..<sections.count {
+            switch direction {
+            case .forward:
+                index = (index + 1) % sections.count
+            case .backward:
+                index = index == 0 ? sections.count - 1 : index - 1
+            }
+            if sections[index].focusables.contains(where: { $0.canBeFocused }) {
+                activateSection(id: sections[index].id, focusBoundary: direction)
+                return
+            }
+        }
+        // No other section has anything focusable; stay where we are.
     }
 
     /// Moves focus within the active section.
