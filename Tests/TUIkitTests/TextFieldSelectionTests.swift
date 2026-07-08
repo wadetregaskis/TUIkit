@@ -102,20 +102,38 @@ struct TextFieldSelectionTests {
         #expect(handler.cursorPosition == 2)
     }
 
-    @Test("Clamp also clamps selection anchor")
-    func clampClampsSelectionAnchor() {
+    @Test("Clamp drops a selection anchor the text no longer contains")
+    func clampDropsStaleSelectionAnchor() {
         var text = "Hello World"
         let binding = Binding(get: { text }, set: { text = $0 })
         let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 10)
         handler.selectionAnchor = 8
 
-        // Simulate external text change
+        // Simulate external text change. The anchor's index is meaningless in
+        // the new text, so it is dropped — clamping it into bounds would
+        // manufacture a selection the user never made, and the next edit key
+        // would delete text they never selected.
         text = "Hi"
         handler.text = binding
         handler.clampCursorPosition()
 
         #expect(handler.cursorPosition == 2)
-        #expect(handler.selectionAnchor == 2)
+        #expect(handler.selectionAnchor == nil)
+    }
+
+    @Test("Clamp keeps an anchor the text still contains")
+    func clampKeepsValidSelectionAnchor() {
+        var text = "Hello World"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 10)
+        handler.selectionAnchor = 3
+
+        text = "Hello"
+        handler.text = binding
+        handler.clampCursorPosition()
+
+        #expect(handler.cursorPosition == 5)
+        #expect(handler.selectionAnchor == 3, "an in-bounds anchor survives the shrink")
     }
 
     // MARK: - Selection Keyboard Handling

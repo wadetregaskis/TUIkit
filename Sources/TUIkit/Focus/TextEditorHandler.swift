@@ -66,23 +66,47 @@ final class TextEditorHandler: Focusable {
     /// The number of logical lines.
     var lineCount: Int { readLines().count }
 
-    /// Clamps the cursor (and any selection anchor) into the current text —
-    /// called each render because the bound string can change outside the
-    /// editor.
+    /// Clamps the cursor into the current text — called each render because
+    /// the bound string can change outside the editor. A selection anchor the
+    /// text no longer contains is DROPPED, not clamped: clamping would
+    /// manufacture a selection the user never made, and the next edit key
+    /// would replace text they never selected. A collapsed (anchor == cursor)
+    /// anchor is kept — a drag in progress anchors before its first movement.
     func clampCursor() {
         let lines = readLines()
         cursorLine = min(max(0, cursorLine), lines.count - 1)
         cursorColumn = min(max(0, cursorColumn), lines[cursorLine].count)
-        if let anchor = selectionAnchor {
-            let line = min(max(0, anchor.line), lines.count - 1)
-            selectionAnchor = TextEditorPosition(
-                line: line, column: min(max(0, anchor.column), lines[line].count))
+        if let anchor = selectionAnchor, !isInBounds(anchor, lines: lines) {
+            selectionAnchor = nil
+        }
+    }
+
+    /// Whether `position` denotes a real place in `lines` (column may sit at
+    /// the end-of-line insertion point).
+    private func isInBounds(_ position: TextEditorPosition, lines: [[Character]]) -> Bool {
+        position.line >= 0 && position.line < lines.count
+            && position.column >= 0 && position.column <= lines[position.line].count
+    }
+
+    /// Normalizes state that can go stale *between* key events: the bound text
+    /// can change outside the editor, and an edit can leave a collapsed anchor
+    /// behind whose position no longer means anything once lines have merged
+    /// or split. Without this, an anchor left on a removed line becomes a
+    /// phantom selection spanning past the end of the document, and the next
+    /// edit key replaces text the user never selected.
+    private func normalizeStaleState() {
+        let lines = readLines()
+        cursorLine = min(max(0, cursorLine), lines.count - 1)
+        cursorColumn = min(max(0, cursorColumn), lines[cursorLine].count)
+        if let anchor = selectionAnchor, !isInBounds(anchor, lines: lines) || anchor == cursor {
+            selectionAnchor = nil
         }
     }
 
     // MARK: - Key handling
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        normalizeStaleState()
         // A drag/Shift-click selection is consumed by the next edit (delete, or
         // delete-then-insert) and cleared by any other key. This lets mouse
         // selection drive editing without the editor carrying a full
@@ -582,7 +606,9 @@ extension TextEditorHandler {
         let startColumn = min(max(0, span.start.column), lines[startLine].count)
         let endColumn = min(max(0, span.end.column), lines[endLine].count)
         if startLine == endLine {
-            lines[startLine].removeSubrange(startColumn..<endColumn)
+            // The per-line clamps can invert a corrupt span's columns once its
+            // lines collapse together; an inverted range must not trap.
+            lines[startLine].removeSubrange(min(startColumn, endColumn)..<max(startColumn, endColumn))
         } else {
             let head = Array(lines[startLine][..<startColumn])
             let tail = Array(lines[endLine][endColumn...])

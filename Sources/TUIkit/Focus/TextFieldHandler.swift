@@ -235,6 +235,7 @@ extension TextFieldHandler {
 
 extension TextFieldHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        normalizeStaleState()
         switch event.key {
         case .space:
             insertCharacter(" ")
@@ -560,8 +561,29 @@ extension TextFieldHandler {
     func clampCursorPosition() {
         let maxPos = text.wrappedValue.count
         cursorPosition = max(0, min(cursorPosition, maxPos))
-        if let anchor = selectionAnchor {
-            selectionAnchor = max(0, min(anchor, maxPos))
+        // A stale anchor (the bound text shrank underneath it) is DROPPED, not
+        // clamped: clamping would manufacture a selection the user never made,
+        // and the next edit key would then delete text they never selected. A
+        // collapsed (anchor == cursor) anchor is kept - a drag in progress
+        // anchors before its first movement.
+        if let anchor = selectionAnchor, anchor < 0 || anchor > maxPos {
+            selectionAnchor = nil
+        }
+    }
+
+    /// Normalizes state that can go stale *between* key events: the bound text
+    /// can change outside the handler, and an edit can leave a collapsed
+    /// anchor behind whose index no longer means anything once the text has
+    /// shifted. Without this, a collapsed anchor left at the old end of the
+    /// text becomes a phantom selection after a backspace (anchor 11, cursor
+    /// 10) and the next delete indexes past the end of the string - a crash.
+    private func normalizeStaleState() {
+        let maxPos = text.wrappedValue.count
+        cursorPosition = max(0, min(cursorPosition, maxPos))
+        if let anchor = selectionAnchor,
+            anchor < 0 || anchor > maxPos || anchor == cursorPosition
+        {
+            selectionAnchor = nil
         }
     }
 }
