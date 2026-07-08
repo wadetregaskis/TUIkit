@@ -43,7 +43,15 @@ extension RenderContext {
         frequencyTolerance: Double = 0,
         phaseTolerance: Int64? = nil
     ) {
-        guard !isMeasuring, let scheduler = environment.animationScheduler else { return }
+        guard !isMeasuring else { return }
+        // Declare "this subtree's output is time-varying" to any value-memoizing
+        // ancestor (_MemoizedRow, EquatableView). Serving a cached buffer of an
+        // animating subtree would freeze its visible frame AND skip this method's
+        // per-frame re-declaration, so the scheduler would drop the grid and stop
+        // ticking it altogether (issue #1). Recorded before the scheduler guard
+        // so scheduler-less one-off renders classify the subtree consistently.
+        environment.volatileReadTracker?.recordAnimationRequest()
+        guard let scheduler = environment.animationScheduler else { return }
         let onePeriod = Int64((1_000_000_000.0 / frequency).rounded())
         let request = AnimationRequest(
             frequency: frequency,

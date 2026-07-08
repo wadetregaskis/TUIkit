@@ -51,9 +51,11 @@ import TUIkitCore
 ///   so the view struct compares as equal even when state changed)
 /// - Views that change every frame (the cache overhead adds no value)
 /// - Views that depend on environment values that change frequently
-/// - **Views containing focused interactive elements** (Button, Toggle, Slider,
-///   etc.) whose focus indicator animates via pulse phase. The cached buffer
-///   would show a frozen pulse animation.
+/// - Views containing interactive elements (Button, Toggle, Slider, …) or
+///   animating ones (Spinner, an indeterminate ProgressView): these are
+///   detected — hit-test regions/overlays in the buffer, volatile reads, and
+///   animation requests all decline the cache — so the wrapper is *safe*, it
+///   just buys nothing there.
 ///
 /// ## Cache Invalidation
 ///
@@ -103,16 +105,39 @@ extension EquatableView: Renderable {
             return cached
         }
 
-        // Cache miss: render normally and store result
-        let buffer = TUIkitView.renderToBuffer(content, context: context)
+        // Cache miss: render under a volatile-read tracker (reusing an
+        // ancestor's, so nesting bubbles up) and only store buffers that are
+        // safe to serve again — the same gate as `_MemoizedRow`:
+        //   • never a measure-pass buffer (incomplete: interactive controls
+        //     suppress their hit-test regions while measuring — and it would
+        //     clobber the render-pass entry at a different size every frame);
+        //   • never an interactive subtree (its regions/overlays capture
+        //     per-frame handler state, and a focused control pulses);
+        //   • never a time-varying subtree (a pulse-phase read or an animation
+        //     request means the next frame differs even though the value
+        //     compares equal — a cached Spinner would freeze, issue #1).
+        let existingTracker = context.environment.volatileReadTracker
+        let tracker = existingTracker ?? VolatileReadTracker()
+        let renderContext =
+            existingTracker == nil
+            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
+            : context
+        let unsafeBefore = tracker.cacheUnsafeCount
 
-        cache.store(
-            identity: identity,
-            view: content,
-            buffer: buffer,
-            contextWidth: context.availableWidth,
-            contextHeight: context.availableHeight
-        )
+        let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
+
+        let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
+        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
+            && !readVolatile
+        {
+            cache.store(
+                identity: identity,
+                view: content,
+                buffer: buffer,
+                contextWidth: context.availableWidth,
+                contextHeight: context.availableHeight
+            )
+        }
 
         return buffer
     }

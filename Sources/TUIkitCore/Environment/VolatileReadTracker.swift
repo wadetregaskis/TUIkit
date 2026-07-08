@@ -23,14 +23,41 @@
 public final class VolatileReadTracker: @unchecked Sendable {
     /// Monotonic count of volatile-value reads. Only ever compared as a delta
     /// (before vs. after a scoped render), so the absolute value is irrelevant.
+    ///
+    /// Kept separate from ``animationRequests`` because the run loop derives
+    /// its *pulse-timer* demand from this count alone; folding animation
+    /// requests in would spin the pulse clock whenever any scheduler-driven
+    /// animation (a Spinner, say) is on screen.
     public private(set) var reads: Int = 0
 
-    /// Creates a tracker with a zero read count.
+    /// Monotonic count of animation requests (`requestAnimation`) made during
+    /// the scoped render. Like ``reads``, only ever compared as a delta.
+    ///
+    /// An animation request means "this subtree's output is a function of
+    /// time": its next render differs from this one even though its inputs
+    /// compare equal. A value-memoizing view must not cache such a subtree —
+    /// serving the cached buffer would both freeze the visible frame *and*
+    /// skip the request's per-frame re-declaration, so the scheduler would
+    /// drop the animation's grid entirely (the demand-driven loop then stops
+    /// ticking it: the nested-Spinner freeze of issue #1).
+    public private(set) var animationRequests: Int = 0
+
+    /// The combined count a value-memoizing view snapshots around a scoped
+    /// render: any delta means the subtree is unsafe to cache.
+    public var cacheUnsafeCount: Int { reads &+ animationRequests }
+
+    /// Creates a tracker with zero counts.
     public init() {}
 
     /// Records that a per-frame-volatile environment value was read.
     public func recordVolatileRead() {
         reads &+= 1
+    }
+
+    /// Records that the rendering view asked the scheduler to re-render it
+    /// periodically (its output is time-varying).
+    public func recordAnimationRequest() {
+        animationRequests &+= 1
     }
 }
 

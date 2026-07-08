@@ -106,8 +106,9 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         // stateful rows stay correct. The two things the cache does NOT catch:
         //   • interactive content — a focused, pulsing control would freeze;
         //     it shows up as hit-test regions / overlays in the row's buffer.
-        //   • a non-interactive view that reads a per-frame-volatile value
-        //     (e.g. pulsePhase) directly — caught by the tracker delta.
+        //   • a non-interactive view whose output is time-varying — it reads a
+        //     per-frame-volatile value (e.g. pulsePhase) or requests a scheduled
+        //     animation (e.g. Spinner) — caught by the tracker delta.
         // Only memoize a row that exhibits neither.
         let existingTracker = context.environment.volatileReadTracker
         let tracker = existingTracker ?? VolatileReadTracker()
@@ -115,11 +116,11 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
             existingTracker == nil
             ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
             : context
-        let readsBefore = tracker.reads
+        let unsafeBefore = tracker.cacheUnsafeCount
 
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
 
-        let readVolatile = tracker.reads > readsBefore
+        let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
         // Never store a buffer produced during a measure pass. Two reasons, both
         // load-bearing:
         //   • It is INCOMPLETE. Interactive controls suppress their hit-test
