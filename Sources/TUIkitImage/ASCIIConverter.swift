@@ -92,7 +92,19 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// curved edges far better than the per-cell-luminance approach
     /// because the picked character itself carries directional shape
     /// information.
+    ///
+    /// A cell carrying a strong directional edge (detected from a Sobel-style
+    /// gradient over its six sampling regions) is drawn with the orientation-
+    /// matched line glyph (`-`, `|`, `/`, `\`) rather than the nearest coverage
+    /// match, so edges read as clean lines; flat / textured cells still use the
+    /// coverage match.
     case shapeBased
+
+    /// Like ``shapeBased`` but edges are drawn with Unicode box-drawing line
+    /// glyphs (`─ │ ╱ ╲`) instead of ASCII slashes, for noticeably cleaner
+    /// diagonals — at the cost of requiring a terminal/font with box-drawing
+    /// support. Non-edge cells use the same coverage glyphs as ``shapeBased``.
+    case shapeUnicode
 
     /// Unicode Braille patterns (2x4 pixel cells, 256 patterns). Highest resolution.
     case braille
@@ -228,7 +240,7 @@ extension ASCIIConverter {
         case .fineBlocks:
             pixelWidth = width
             pixelHeight = height * 2
-        case .shapeBased:
+        case .shapeBased, .shapeUnicode:
             pixelWidth = width * 5
             pixelHeight = height * 10
         case .braille:
@@ -253,7 +265,11 @@ extension ASCIIConverter {
         case .blocks:
             return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .shapeBased:
-            return convertShapeBased(scaled, width: width, height: height, mode: effectiveMode)
+            return convertShapeBased(
+                scaled, width: width, height: height, mode: effectiveMode, unicodeEdges: false)
+        case .shapeUnicode:
+            return convertShapeBased(
+                scaled, width: width, height: height, mode: effectiveMode, unicodeEdges: true)
         case .ascii, .coarseBlocks:
             return convertCharacterBased(
                 scaled, width: width, height: height, mode: effectiveMode, supersample: 1)
@@ -408,7 +424,7 @@ extension ASCIIConverter {
                 " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")
         case .coarseBlocks:
             return Array(" ░▒▓█")
-        case .blocks, .fineBlocks, .shapeBased, .braille:
+        case .blocks, .fineBlocks, .shapeBased, .shapeUnicode, .braille:
             // Unused — these character sets have their own rendering paths.
             return []
         }

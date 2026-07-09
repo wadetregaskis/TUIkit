@@ -323,9 +323,15 @@ extension ASCIIConverter {
         _ image: RGBAImage,
         width: Int,
         height: Int,
-        mode: ASCIIColorMode
+        mode: ASCIIColorMode,
+        unicodeEdges: Bool = false
     ) -> [String] {
         guard !shapeTable.isEmpty else { return [] }
+
+        // The line glyphs used for a strongly-directional (edge) cell: ASCII
+        // slashes, or Unicode box-drawing for the `.shapeUnicode` mode.
+        let edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character) =
+            unicodeEdges ? ("─", "│", "╲", "╱") : ("-", "|", "\\", "/")
 
         // Each cell of the output covers `cellPixelWidth × cellPixelHeight`
         // pixels of the (pre-scaled) source image.
@@ -406,10 +412,15 @@ extension ASCIIConverter {
                         sampling[centreIndex] = totalDarkness * inverseSampleCount
                     }
 
-                    let character = Self.pickCharacter(
-                        sampling: sampling,
-                        t0: table0, t1: table1, t2: table2, t3: table3, t4: table4, t5: table5,
-                        characters: characters)
+                    // A strong directional edge overrides the coverage match
+                    // with the orientation-matched line glyph; otherwise fall
+                    // back to the nearest-shape character.
+                    let character =
+                        Self.orientationGlyph(sampling: sampling, edge: edge)
+                        ?? Self.pickCharacter(
+                            sampling: sampling,
+                            t0: table0, t1: table1, t2: table2, t3: table3, t4: table4, t5: table5,
+                            characters: characters)
 
                     // Use the sampled pixels' average as the foreground colour;
                     // the 96 samples cover the cell densely enough that a
@@ -476,6 +487,40 @@ extension ASCIIConverter {
             }
         }
         return characters[bestIndex]
+    }
+
+    /// The minimum gradient magnitude (in the 0…1 region-darkness units) for a
+    /// cell to count as a directional edge. Tuned so a clean light/dark boundary
+    /// across the cell triggers orientation matching while flat or lightly-
+    /// textured cells fall through to the coverage match.
+    fileprivate static let edgeGradientThreshold: Double = 0.9
+
+    /// Returns the line glyph matching a cell's dominant edge orientation, or
+    /// `nil` when the cell carries no strong directional edge.
+    ///
+    /// The gradient is a Sobel-style difference over the six staggered darkness
+    /// regions (`[0][1]` top / `[2][3]` middle / `[4][5]` bottom): `gx` is the
+    /// left-minus-right darkness, `gy` the top-minus-bottom. The edge runs
+    /// perpendicular to the gradient — tangent `(-gy, gx)` — which classifies
+    /// into horizontal / vertical / the two diagonals. Reuses the darkness
+    /// vector already sampled for the coverage match, so it adds no image reads.
+    fileprivate static func orientationGlyph(
+        sampling: [Double],
+        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)
+    ) -> Character? {
+        let gx = (sampling[0] + sampling[2] + sampling[4]) - (sampling[1] + sampling[3] + sampling[5])
+        let gy = (sampling[0] + sampling[1]) - (sampling[4] + sampling[5])
+        guard (gx * gx + gy * gy).squareRoot() >= edgeGradientThreshold else { return nil }
+
+        // Edge tangent perpendicular to the gradient.
+        let tangentX = -gy
+        let tangentY = gx
+        let ax = abs(tangentX)
+        let ay = abs(tangentY)
+        if ax >= 2 * ay { return edge.horizontal }
+        if ay >= 2 * ax { return edge.vertical }
+        // Same sign → down-right tangent → "\"; opposite → up-right → "/".
+        return (tangentX * tangentY > 0) ? edge.backslash : edge.slash
     }
 }
 

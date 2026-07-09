@@ -10,7 +10,8 @@ import TUIkit
 /// Shared image demo configuration used by both `ImageFilePage` and `ImageURLPage`.
 enum ImageDemoHelpers {
     static let charSets: [ASCIICharacterSet] = [
-        .fineBlocks, .blocks, .coarseBlocks, .ascii, .asciiDetailed, .shapeBased, .braille,
+        .fineBlocks, .blocks, .coarseBlocks, .ascii, .asciiDetailed,
+        .shapeBased, .shapeUnicode, .braille,
     ]
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
 
@@ -22,6 +23,7 @@ enum ImageDemoHelpers {
         case .blocks: return "chars:blocks"
         case .fineBlocks: return "chars:fineBlocks"
         case .shapeBased: return "chars:shape"
+        case .shapeUnicode: return "chars:shape+uni"
         case .braille: return "chars:braille"
         }
     }
