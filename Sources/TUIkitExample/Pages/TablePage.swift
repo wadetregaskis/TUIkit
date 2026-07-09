@@ -35,6 +35,65 @@ private struct FileEntry: Identifiable, Sendable {
     ]
 }
 
+/// A tiny deterministic PRNG (SplitMix64) so the large-table corpus below is
+/// identical on every launch rather than reshuffling each run.
+private struct SplitMix64 {
+    var state: UInt64
+    mutating func next() -> UInt64 {
+        state = state &+ 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
+    }
+}
+
+/// A note row for the large multi-line table demo: hundreds of rows whose text
+/// wraps to a pseudo-random (but deterministic) number of lines, deliberately
+/// exercising every wrapping/truncation path — short one-liners, multi-line
+/// word-wrap, `.lineLimit` fold-with-ellipsis when a note is too tall, a single
+/// over-long "word" truncated mid-token, and explicit `\n` line breaks.
+private struct NoteEntry: Identifiable, Sendable {
+    let id: Int
+    let note: String
+
+    /// The row number, for the fixed-width leading column.
+    var index: String { String(id) }
+
+    static let bigNotes: [Self] = {
+        let words = [
+            "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
+            "terminal", "buffer", "render", "wrap", "truncate", "ellipsis",
+            "column", "cell", "line", "glyph", "unicode", "cascade", "layout",
+            "scroll", "viewport", "measure", "fraction", "width", "height",
+        ]
+        var rng = SplitMix64(state: 0x7ABC_DEF0_1234_5678)
+        func word() -> String { words[Int(rng.next() % UInt64(words.count))] }
+        return (1...300).map { i in
+            let text: String
+            switch rng.next() % 10 {
+            case 0:
+                // Short — comfortably fits one line.
+                text = word().capitalized
+            case 1:
+                // A single over-long "word" (wider than the column) → truncated
+                // mid-token with an ellipsis.
+                text = "supercalifragilistic" + String(repeating: "expialidocious", count: 4)
+            case 2:
+                // Explicit line breaks (honoured up to the line limit; the 4th
+                // line folds into the 3rd with an ellipsis).
+                text = "First line.\nSecond line.\nThird line.\nFourth (folded)."
+            default:
+                // N words → wraps to a variable number of lines; the taller ones
+                // exceed `.lineLimit(3)` and fold their tail with an ellipsis.
+                let count = Int(rng.next() % 45) + 2
+                text = (0..<count).map { _ in word() }.joined(separator: " ")
+            }
+            return Self(id: i, note: text)
+        }
+    }()
+}
+
 // MARK: - Table Page
 
 /// Table component demo page.
@@ -50,6 +109,7 @@ struct TablePage: View {
     @State var singleSelection: String?
     @State var multiSelection: Set<String> = []
     @State var ratioSelection: String?
+    @State var notesSelection: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -77,19 +137,48 @@ struct TablePage: View {
             .frame(height: 8)
             .scrollbarVisibility(.visible)
 
-            Text(L("page.table.multiSelectionCaption"))
-                .foregroundStyle(.palette.foregroundSecondary)
-            Table(
-                FileEntry.sampleFiles,
-                selection: $multiSelection
-            ) {
-                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
-                    .width(.fit)
-                // A narrow column with .lineLimit(2): the Details value wraps onto
-                // a second line, growing the row, and clips the rest.
-                TableColumn(L("page.table.column.details"), value: \FileEntry.details)
-                    .width(.fixed(22))
-                    .lineLimit(2)
+            // Two multi-line tables side by side: the small original (12 rows,
+            // 2-line Details) on the left, and a fixed-height table of hundreds
+            // of rows with pseudo-random line counts on the right.
+            HStack(alignment: .top, spacing: 2) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L("page.table.multiSelectionCaption"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Table(
+                        FileEntry.sampleFiles,
+                        selection: $multiSelection
+                    ) {
+                        TableColumn(L("page.table.column.name"), value: \FileEntry.name)
+                            .width(.fit)
+                        // A narrow column with .lineLimit(2): the Details value wraps
+                        // onto a second line, growing the row, and clips the rest.
+                        TableColumn(L("page.table.column.details"), value: \FileEntry.details)
+                            .width(.fixed(22))
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L("page.table.wrappingCaption"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // 300 rows in a fixed 20-row viewport → it scrolls. The Note
+                    // column is `.flexible` with `.lineLimit(3)`, so each row's
+                    // height varies: short notes stay one line, longer ones wrap
+                    // to two or three, and the tallest fold their tail with an
+                    // ellipsis (plus mid-word truncation and explicit breaks).
+                    Table(NoteEntry.bigNotes, selection: $notesSelection) {
+                        TableColumn("#", value: \NoteEntry.index)
+                            .width(.fixed(5))
+                            .alignment(.trailing)
+                        TableColumn(L("page.table.column.details"), value: \NoteEntry.note)
+                            .width(.flexible)
+                            .lineLimit(3)
+                    }
+                    .frame(height: 20)
+                    .scrollbarVisibility(.visible)
+                }
+                .frame(maxWidth: .infinity)
             }
 
             Text(L("page.table.ratioCaption"))
