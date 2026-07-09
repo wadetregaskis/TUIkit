@@ -185,6 +185,46 @@ struct SpinnerRowAnimationTests {
         #expect(result.liveFinal == result.live1, "List-row spinners' animation tokens dropped")
     }
 
+    @Test("Spinners inside a ScrollView's rows keep animating")
+    func spinnersInScrollViewAnimate() async throws {
+        let view = ScrollView {
+            VStack(spacing: 0) {
+                ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { item in
+                    HStack(spacing: 0) {
+                        Text(item)
+                        Spacer()
+                        Spinner(style: .line)
+                    }
+                }
+            }
+        }
+        .frame(height: 10)
+
+        let result = try await pollForGlyphChanges(view, markers: ["Alpha"])
+
+        #expect(result.changed.contains("Alpha"), "ScrollView-row spinner frozen (or not visible)")
+        #expect(result.liveFinal == result.live1, "ScrollView-row spinners' animation tokens dropped")
+    }
+
+    @Test("Spinners inside a LazyVStack's rendered rows keep animating")
+    func spinnersInLazyVStackAnimate() async throws {
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { item in
+                HStack(spacing: 0) {
+                    Text(item)
+                    Spacer()
+                    Spinner(style: .line)
+                }
+            }
+        }
+        .frame(height: 10)
+
+        let result = try await pollForGlyphChanges(view, markers: ["Alpha"])
+
+        #expect(result.changed.contains("Alpha"), "LazyVStack-row spinner frozen")
+        #expect(result.liveFinal == result.live1, "LazyVStack-row spinners' animation tokens dropped")
+    }
+
     @Test("A Spinner inside .equatable() content keeps animating")
     func spinnerInEquatableViewAnimates() async throws {
         let view = VStack {

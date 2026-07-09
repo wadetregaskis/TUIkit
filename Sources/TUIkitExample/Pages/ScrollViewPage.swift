@@ -62,7 +62,14 @@ struct ScrollViewPage: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(L("page.scrollView.heading")).bold()
+                            // An animated cell inside a ScrollView: the Spinner
+                            // must keep ticking even though its row is memoized
+                            // (verifies the animation-in-cell gate; see also
+                            // SpinnerRowAnimationTests).
+                            HStack(spacing: 1) {
+                                Text(L("page.scrollView.heading")).bold()
+                                Spinner(style: .dots)
+                            }
                             HStack(spacing: 1) {
                                 Text(L("page.scrollView.filter"))
                                 TextField(L("page.scrollView.filterField"), text: $searchText,

@@ -203,7 +203,14 @@ struct ListPage: View {
                 List(selection: $multiLineSelection) {
                     ForEach(FileItem.sampleFiles) { file in
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("\(file.icon) \(file.name)").bold()
+                            HStack(spacing: 1) {
+                                Text("\(file.icon) \(file.name)").bold()
+                                Spacer()
+                                // An animated cell inside a scrolling List row —
+                                // it must keep spinning even though the row is
+                                // memoized (see SpinnerRowAnimationTests).
+                                Spinner(style: .dots)
+                            }
                             Text(file.size).foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
