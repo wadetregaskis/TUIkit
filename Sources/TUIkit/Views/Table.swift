@@ -81,6 +81,11 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
     /// The spacing between columns in characters.
     let columnSpacing: Int
 
+    /// An action run when a row is double-clicked (its `Value.ID` is passed).
+    /// Set via ``onRowDoubleClick(_:)``. Because a `Table`'s cells are value-
+    /// based (not views), this is how a row gets a double-click "open" action.
+    var primaryAction: ((Value.ID) -> Void)?
+
     public var body: some View {
         _TableCore(
             data: data,
@@ -91,8 +96,28 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
             focusID: focusID,
             isDisabled: isDisabled,
             emptyPlaceholder: emptyPlaceholder,
-            columnSpacing: columnSpacing
+            columnSpacing: columnSpacing,
+            primaryAction: primaryAction
         )
+    }
+}
+
+extension Table {
+    /// Runs `action` when a row is double-clicked, passing that row's `id`.
+    ///
+    /// A `Table`'s cells are value-based rather than views, so a per-row
+    /// `.onTapGesture` isn't possible; this modifier is how a row gets a
+    /// double-click "open" action (e.g. a file browser opening a folder).
+    /// Single clicks still select via the selection binding.
+    ///
+    /// This is a TUI-specific modifier — SwiftUI's `Table` has no direct
+    /// equivalent.
+    ///
+    /// - Parameter action: Called with the double-clicked row's `id`.
+    public func onRowDoubleClick(_ action: @escaping (Value.ID) -> Void) -> Table {
+        var copy = self
+        copy.primaryAction = action
+        return copy
     }
 }
 
@@ -192,6 +217,7 @@ where Value.ID: Hashable {
     let isDisabled: Bool
     let emptyPlaceholder: String
     let columnSpacing: Int
+    var primaryAction: ((Value.ID) -> Void)?
 
     var body: Never {
         fatalError("_TableCore renders via Renderable")
@@ -931,6 +957,8 @@ where Value.ID: Hashable {
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
         let visibleRowHeights = state.visibleRowHeights
+        let rowIDs = data.map(\.id)
+        let capturedPrimaryAction = primaryAction
         return { event in
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
@@ -948,20 +976,31 @@ where Value.ID: Hashable {
                 // is the row. Multi-line tables walk the visible rows' heights, so
                 // a click anywhere in a tall row selects it.
                 let lineOffset = event.y - firstRowY
+                var clickedIndex: Int?
                 if visibleRowHeights.isEmpty {
                     if lineOffset >= 0, lineOffset < visibleRange.count {
-                        captureHandler.focusedIndex = visibleRange.lowerBound + lineOffset
-                        captureHandler.toggleSelectionAtFocusedIndex()
+                        clickedIndex = visibleRange.lowerBound + lineOffset
                     }
                 } else if lineOffset >= 0 {
                     var accumulated = 0
                     for (offset, height) in visibleRowHeights.enumerated() {
                         if lineOffset < accumulated + height {
-                            captureHandler.focusedIndex = visibleRange.lowerBound + offset
-                            captureHandler.toggleSelectionAtFocusedIndex()
+                            clickedIndex = visibleRange.lowerBound + offset
                             break
                         }
                         accumulated += height
+                    }
+                }
+                if let index = clickedIndex {
+                    captureHandler.focusedIndex = index
+                    // A double-click fires the row's primary action ("open");
+                    // a single click toggles selection as before.
+                    if event.clickCount >= 2, let action = capturedPrimaryAction,
+                        index >= 0, index < rowIDs.count
+                    {
+                        action(rowIDs[index])
+                    } else {
+                        captureHandler.toggleSelectionAtFocusedIndex()
                     }
                 }
                 focusManager?.focus(id: captureFocusID)

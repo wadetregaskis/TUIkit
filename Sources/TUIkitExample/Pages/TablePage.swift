@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 // MARK: - Demo Data
@@ -110,27 +111,42 @@ struct TablePage: View {
     @State var multiSelection: Set<String> = []
     @State var ratioSelection: String?
     @State var notesSelection: Int?
+    @State var browserURL: URL = FileBrowser.seedDirectory()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
+            // A real file browser: single-click selects, double-click a folder
+            // opens it in place (via `.onRowDoubleClick`), and the ".." row (🔙)
+            // navigates up. Reads the live filesystem starting at $HOME.
             Text(L("page.table.fileBrowserCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
+            Text(browserURL.path).dim()
             Table(
-                FileEntry.sampleFiles,
+                FileBrowser.entries(at: browserURL),
                 selection: $singleSelection
             ) {
-                // `.fit` sizes the Name column to its widest value
-                // (".swiftlint.yml") so no filename is ever truncated.
-                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
+                TableColumn("", value: \BrowserEntry.icon)
+                    .width(.fixed(2))
+                // `.fit` sizes the Name column to its widest entry.
+                TableColumn(L("page.table.column.name"), value: \BrowserEntry.name)
                     .width(.fit)
-                TableColumn(L("page.table.column.size"), value: \FileEntry.size)
+                TableColumn(L("page.table.column.size"), value: \BrowserEntry.size)
                     .width(.fixed(10))
                     .alignment(.trailing)
-                TableColumn(L("page.table.column.modified"), value: \FileEntry.modified)
+                TableColumn(L("page.table.column.modified"), value: \BrowserEntry.modified)
                     .width(.fixed(12))
-                TableColumn(L("page.table.column.type"), value: \FileEntry.type)
+                TableColumn(L("page.table.column.type"), value: \BrowserEntry.typeLabel)
                     .width(.flexible)
+            }
+            // `.onRowDoubleClick` is a `Table` modifier, so it chains before the
+            // generic view modifiers below.
+            .onRowDoubleClick { id in
+                if let entry = FileBrowser.entries(at: browserURL).first(where: { $0.id == id }),
+                    entry.isDirectory
+                {
+                    browserURL = entry.url
+                }
             }
             // A short height so the rows overflow, plus an opt-in scrollbar that
             // tracks the visible region (sub-cell-precise thumb, ▲/▼ end arrows).

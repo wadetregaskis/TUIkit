@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 // MARK: - Demo Item
@@ -48,6 +49,7 @@ struct ListPage: View {
     @State var multiSelection: Set<String> = []
     @State var transientSelection: String?
     @State var multiLineSelection: String?
+    @State var browserURL: URL = FileBrowser.seedDirectory()
 
     var body: some View {
         // The page is taller than most terminals, so it's wrapped in a
@@ -67,19 +69,39 @@ struct ListPage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             HStack(spacing: 2) {
-                List(
-                    L("page.list.singleSelection"),
-                    selection: $singleSelection
-                ) {
-                    ForEach(FileItem.sampleFiles) { file in
-                        HStack(spacing: 1) {
-                            Text(file.icon)
-                            Text(file.name)
+                // A real file browser: single-click selects a row, double-click
+                // opens a folder in place; the ".." row (🔙) navigates up. The
+                // per-row .onMouseEvent out-ranks the List's own click handling,
+                // so it drives both selection and the double-click navigation.
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(browserURL.path).dim()
+                    List(L("page.list.singleSelection"), selection: $singleSelection) {
+                        ForEach(FileBrowser.entries(at: browserURL)) { entry in
+                            HStack(spacing: 1) {
+                                Text(entry.icon)
+                                Text(entry.name)
+                            }
+                            .onMouseEvent { event in
+                                guard event.button == .left else { return false }
+                                switch event.phase {
+                                case .pressed:
+                                    return true
+                                case .released:
+                                    if event.clickCount >= 2 {
+                                        if entry.isDirectory { browserURL = entry.url }
+                                    } else {
+                                        singleSelection = entry.id
+                                    }
+                                    return true
+                                default:
+                                    return false
+                                }
+                            }
                         }
                     }
+                    .frame(height: 10)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 10)
 
                 List(
                     L("page.list.multiSelection"),
