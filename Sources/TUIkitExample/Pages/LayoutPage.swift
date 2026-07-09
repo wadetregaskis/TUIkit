@@ -6,6 +6,17 @@
 
 import TUIkit
 
+/// Collects the indices of the ``LazyVStack`` rows that actually rendered this
+/// frame. Because a row only emits its preference when it renders — and a
+/// `LazyVStack` inside a `ScrollView` now windows to the visible viewport — the
+/// union is exactly the set of rows on screen, and it changes as you scroll.
+private struct LazyRenderedRowsKey: PreferenceKey {
+    static let defaultValue: Set<Int> = []
+    static func reduce(value: inout Set<Int>, nextValue: () -> Set<Int>) {
+        value.formUnion(nextValue())
+    }
+}
+
 /// Layout system demo page.
 ///
 /// Shows various layout options including:
@@ -13,7 +24,13 @@ import TUIkit
 /// - HStack (horizontal stacking)
 /// - Spacer (flexible space)
 /// - Padding and frame modifiers
+/// - Lazy stacks windowing to a ScrollView's viewport (live rendered-row set)
 struct LayoutPage: View {
+    /// The rows the windowed `LazyVStack` rendered in the last frame.
+    @State private var renderedRows: Set<Int> = []
+
+    private let lazyRowCount = 40
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -102,19 +119,38 @@ struct LayoutPage: View {
             }
 
             DemoSection(L("page.layout.section.lazy")) {
-                // Same API shape as VStack/HStack, but rows/columns are
-                // realised lazily — only the part scrolled into view is
-                // rendered. Handy inside a ScrollView with many children.
+                // Same API shape as VStack/HStack, but rows are realised lazily.
+                // Inside a ScrollView the LazyVStack windows to the visible
+                // viewport — only those rows render (and fire onAppear). Each row
+                // reports its index via a preference when it renders, so the
+                // read-out below is exactly the on-screen set; scroll the list
+                // (wheel, or Tab to focus it and use ↑/↓/PageUp/PageDown) and
+                // watch the range-set slide.
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.layout.lazyExplain"))
                         .foregroundStyle(.palette.foregroundSecondary)
 
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        Text("\(L("page.layout.lazyRow")) 1")
-                        Text("\(L("page.layout.lazyRow")) 2")
-                        Text("\(L("page.layout.lazyRow")) 3")
+                    HStack(spacing: 1) {
+                        Text(L("page.layout.lazyRendered"))
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        Text(rangeSetDescription(renderedRows))
+                            .foregroundStyle(.palette.accent)
+                            .bold()
+                        Text("(\(renderedRows.count)/\(lazyRowCount))")
+                            .foregroundStyle(.palette.foregroundTertiary)
                     }
-                    .border(color: .brightBlack)
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(0..<lazyRowCount, id: \.self) { index in
+                                Text("\(L("page.layout.lazyRow")) \(index)")
+                                    .preference(key: LazyRenderedRowsKey.self, value: [index])
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+                    .border(color: .palette.border)
+                    .onPreferenceChange(LazyRenderedRowsKey.self) { renderedRows = $0 }
 
                     LazyHStack(spacing: 2) {
                         Text("\(L("page.layout.col")) 1")
@@ -131,5 +167,27 @@ struct LayoutPage: View {
         .appHeader {
             DemoAppHeader(L("page.layout.header"))
         }
+    }
+
+    /// Collapses a set of indices into a compact range-set string, e.g.
+    /// `{3,4,5,7}` → `"3–5, 7"`. `"—"` when empty.
+    private func rangeSetDescription(_ set: Set<Int>) -> String {
+        guard !set.isEmpty else { return "—" }
+        let sorted = set.sorted()
+        var runs: [String] = []
+        var start = sorted[0]
+        var previous = sorted[0]
+        func flush() { runs.append(start == previous ? "\(start)" : "\(start)–\(previous)") }
+        for value in sorted.dropFirst() {
+            if value == previous + 1 {
+                previous = value
+            } else {
+                flush()
+                start = value
+                previous = value
+            }
+        }
+        flush()
+        return runs.joined(separator: ", ")
     }
 }

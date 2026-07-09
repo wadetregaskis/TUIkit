@@ -19,14 +19,14 @@
 /// Use `LazyVStack` when the *stack itself* is the clipped region — a
 /// fixed-height pane showing "as many whole rows as fit".
 ///
-/// - Important: Inside a ``ScrollView`` the window is the scroll *content*
-///   (which is measured with a generous budget), so the whole extent
-///   materialises every frame: scrolling reaches everything, but a
-///   `LazyVStack` there costs the same as a `VStack`, and every row's
-///   lifecycle fires at once rather than on visibility. For large scrollable
-///   data sets prefer ``List``, whose row materialisation is windowed to the
-///   viewport. (Viewport-driven laziness inside `ScrollView`, and SwiftUI's
-///   `pinnedViews:`, are future work — see §2.8/§4a of
+/// - Important: A `LazyVStack` that is the *direct content* of a vertical
+///   ``ScrollView`` now windows to the visible viewport: only the rows
+///   intersecting the scrolled slice render (and fire their lifecycle), the
+///   rest becoming blank placeholders in a full-height buffer, so scrolling a
+///   1000-row list costs a viewport's worth of rendering, not all 1000 — and
+///   `onAppear` fires on visibility, matching SwiftUI. (A `LazyVStack` nested
+///   *below* other scroll content isn't at the content origin, so it is left
+///   un-windowed; and `pinnedViews:` is still absent — see §2.8/§4a of
 ///   `Documentation/SwiftUI-compatibility.md`.)
 ///
 /// - Note: Documented deviations from SwiftUI (per the parity rule): the

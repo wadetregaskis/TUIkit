@@ -77,7 +77,7 @@ struct LazyStackSemanticsTests {
         #expect(width(VStack { Text("hi"); Text(wide) }) == wide.count, "identical to the eager stack")
     }
 
-    @Test("Standalone laziness: lifecycle never fires past the fold; in ScrollView it fires for all")
+    @Test("Laziness: lifecycle fires only for the visible window, standalone and in a ScrollView")
     func lifecycleSemantics() {
         nonisolated(unsafe) var standaloneAppeared: [Int] = []
         nonisolated(unsafe) var scrollAppeared: [Int] = []
@@ -106,10 +106,10 @@ struct LazyStackSemanticsTests {
             height: 8)
         #expect(standaloneAppeared.count == 8, "exactly the windowed rows appear: \(standaloneAppeared)")
 
-        // In a ScrollView the whole extent materialises, so every row's
-        // onAppear fires at once. SwiftUI fires on visibility instead — this
-        // pins the DOCUMENTED deviation (§2.8); it changes intentionally if
-        // viewport-driven laziness lands.
+        // In a ScrollView, viewport windowing now renders (and fires lifecycle
+        // for) only the rows intersecting the visible slice — matching SwiftUI's
+        // visibility-driven laziness rather than the old materialise-everything
+        // behaviour. At offset 0 with an 8-row viewport, rows 0..7 appear.
         render(
             ScrollView {
                 LazyVStack {
@@ -119,6 +119,9 @@ struct LazyStackSemanticsTests {
                 }
             },
             height: 8)
-        #expect(scrollAppeared.count == 50, "all rows materialise in scroll content today")
+        #expect(
+            scrollAppeared.count == 8,
+            "only the visible window materialises in scroll content: \(scrollAppeared)")
+        #expect(scrollAppeared.allSatisfy { $0 < 8 }, "the first 8 rows, not rows past the viewport")
     }
 }

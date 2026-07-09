@@ -263,6 +263,19 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         guard !children.isEmpty else { return FrameBuffer() }
         let availableHeight = context.availableHeight
 
+        // True viewport windowing: when an enclosing vertical `ScrollView`
+        // published the visible slice (and this isn't a measure pass, and there's
+        // no Spacer forcing a full render), render ONLY the rows intersecting the
+        // viewport into a full-height buffer — off-window rows never render, so
+        // their `onAppear`/`.task` don't fire and their cost is skipped, while the
+        // ScrollView's clip and content-height stay correct.
+        if let window = context.environment.scrollContentWindow,
+            !context.isMeasuring,
+            children.allSatisfy({ !$0.isSpacer })
+        {
+            return renderViewportWindow(children: children, window: window, context: context)
+        }
+
         // Spacer distribution (same as VStack) needs every non-spacer child's
         // rendered height up front, so the presence of a Spacer forfeits the
         // early-stop: pre-render everything, as the single-pass path always did.
@@ -342,6 +355,59 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             result.appendVertically(alignedBuffer, spacing: spacingToApply)
         }
 
+        return result
+    }
+
+    /// Renders only the children intersecting an enclosing ScrollView's visible
+    /// vertical slice, into a full-height buffer (off-window rows become blank
+    /// placeholders of their measured height). Off-window children are measured
+    /// (cheap, side-effect-free) to keep every row at its true `y`, but never
+    /// rendered — so their `onAppear`/`.task` don't fire and their render cost is
+    /// skipped. The full height + exact positions keep the ScrollView's clip and
+    /// `contentHeight` correct. Only reached for a spacer-less lazy stack that is
+    /// the direct content of a vertical ScrollView.
+    private func renderViewportWindow(
+        children: [ChildView], window: ScrollContentWindow, context: RenderContext
+    ) -> FrameBuffer {
+        // Descendants aren't at the scroll origin, so they must not re-window.
+        var childContext = context
+        childContext.environment.scrollContentWindow = nil
+
+        let top = window.offset
+        let bottom = window.offset + window.viewportHeight
+        let width = context.availableWidth
+
+        var result = FrameBuffer()
+        var runningY = 0
+        for (index, child) in children.enumerated() {
+            let spacingBefore = index > 0 ? spacing : 0
+            let measuredHeight = child.measure(proposal: .unspecified, context: childContext).height
+            let rowTop = runningY + spacingBefore
+            let rowBottom = rowTop + measuredHeight
+            let slotHeight = spacingBefore + measuredHeight
+            runningY = rowBottom
+
+            if rowBottom <= top || rowTop >= bottom {
+                // Off-window: a blank placeholder of the same height.
+                result.appendVertically(FrameBuffer(emptyWithHeight: slotHeight), spacing: 0)
+                continue
+            }
+
+            let rendered = child.render(width: width, height: window.viewportHeight, context: childContext)
+            var slot = FrameBuffer()
+            if spacingBefore > 0 {
+                slot.appendVertically(FrameBuffer(emptyWithHeight: spacingBefore), spacing: 0)
+            }
+            slot.appendVertically(alignBuffer(rendered, toWidth: width, alignment: alignment), spacing: 0)
+            // Keep the slot exactly `slotHeight` tall so later rows stay at their
+            // true `y` even if a row rendered a different height than it measured.
+            if slot.height < slotHeight {
+                slot.appendVertically(FrameBuffer(emptyWithHeight: slotHeight - slot.height), spacing: 0)
+            } else if slot.height > slotHeight {
+                slot = slot.clamped(toWidth: max(width, slot.width), height: slotHeight)
+            }
+            result.appendVertically(slot, spacing: 0)
+        }
         return result
     }
 

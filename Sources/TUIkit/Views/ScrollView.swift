@@ -358,7 +358,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         let fullBuffer = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
-            horizontal: wantsHorizontal, context: context)
+            horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
+            context: context)
         handler.contentHeight = fullBuffer.height
         // Sync the horizontal axis to the rendered content width and clamp.
         if wantsHorizontal {
@@ -613,7 +614,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// when the content is taller, so it scrolls without the filler forcing extra
     /// height.
     private func renderedContent(
-        contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
+        contentWidth: Int, viewportHeight: Int, horizontal: Bool,
+        verticalScrollOffset: Int, context: RenderContext
     ) -> FrameBuffer {
         let extents = contentExtents(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
@@ -621,6 +623,18 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         var measureContext = context.withChildIdentity(type: Content.self)
         measureContext.environment.scrollViewportSize = ScrollViewportSize(
             width: contentWidth, height: viewportHeight)
+        // Publish the visible vertical slice so a direct `LazyVStack` renders only
+        // the rows intersecting the viewport (true windowing) rather than every
+        // row into the tall canvas. Vertical-only: horizontal scrolling has no
+        // row concept. The offset is this frame's already-clamped value; the
+        // final clip (`windowedBuffer`) uses the same value, so they agree for
+        // stable content. The published buffer stays full-height (off-window rows
+        // become blank placeholders), so `contentHeight` and the clip are
+        // unchanged.
+        if !horizontal {
+            measureContext.environment.scrollContentWindow = ScrollContentWindow(
+                offset: verticalScrollOffset, viewportHeight: viewportHeight)
+        }
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         return TUIkit.renderToBuffer(content, context: measureContext)
@@ -897,5 +911,36 @@ extension EnvironmentValues {
     var scrollViewportSize: ScrollViewportSize? {
         get { self[ScrollViewportSizeKey.self] }
         set { self[ScrollViewportSizeKey.self] = newValue }
+    }
+}
+
+// MARK: - Scroll Content Window
+
+/// The vertical slice of the scroll content that is currently visible: the
+/// scroll `offset` (in content lines) and the viewport `height`. A vertical
+/// ``ScrollView`` publishes this so its *direct* content — specifically a
+/// ``LazyVStack`` — can render only the rows intersecting the viewport (true
+/// viewport windowing) rather than materialising every row into the ScrollView's
+/// tall measure canvas. `nil` when there is no enclosing vertical scroll view.
+///
+/// Consumed once: the responding stack clears it for its children, so it only
+/// affects a `LazyVStack` sitting at the scroll content's origin. A `LazyVStack`
+/// nested below other content isn't at `offset == 0` in the ScrollView's
+/// coordinate space, so it is left un-windowed (renders normally).
+struct ScrollContentWindow: Sendable, Hashable {
+    var offset: Int
+    var viewportHeight: Int
+}
+
+private struct ScrollContentWindowKey: EnvironmentKey {
+    static let defaultValue: ScrollContentWindow? = nil
+}
+
+extension EnvironmentValues {
+    /// The visible vertical slice a ``LazyVStack`` should window to — see
+    /// ``ScrollContentWindow``.
+    var scrollContentWindow: ScrollContentWindow? {
+        get { self[ScrollContentWindowKey.self] }
+        set { self[ScrollContentWindowKey.self] = newValue }
     }
 }
