@@ -94,6 +94,20 @@ struct GaugeTests {
         #expect(buffer.height == 4)  // 3 ring rows + label
     }
 
+    @Test("The circular dial right-aligns its interior value")
+    func circularDialRightAligned() {
+        // A value narrower than the 4-cell interior must sit flush against the
+        // right border with the padding on the LEFT (right-aligned), e.g. the
+        // middle ring row reads `│  7%│`, not centred/left `│7%  │`.
+        let buffer = renderToBuffer(
+            Gauge(value: 0.07) { EmptyView() } currentValueLabel: { Text("7%") }
+                .gaugeStyle(.accessoryCircular),
+            context: makeRenderContext(width: 30, height: 6))
+        let mid = buffer.lines.map(\.stripped).first { $0.contains("7%") } ?? ""
+        #expect(mid.hasSuffix("7%│"), "value flush-right against the border: '\(mid)'")
+        #expect(mid.hasPrefix("│ "), "padding on the left proves right-alignment: '\(mid)'")
+    }
+
     @Test("The accessory-circular-tiny style keeps the single pie glyph")
     func accessoryCircularTinyDial() {
         let buffer = renderToBuffer(

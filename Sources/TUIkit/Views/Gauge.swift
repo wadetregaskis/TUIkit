@@ -348,9 +348,9 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             colorAt["\(cell.r),\(cell.c)"] = isOn[index] ? accent : dim
         }
 
-        // The centred value occupies the middle row's interior.
+        // The value is right-aligned within the middle row's interior.
         let stripped = valueText.stripped
-        let leftPad = max(0, (inner - valueText.strippedLength) / 2)
+        let leftPad = max(0, inner - valueText.strippedLength)
         for (offset, char) in stripped.enumerated() where 1 + leftPad + offset <= inner {
             glyphs[1][1 + leftPad + offset] = char
         }
