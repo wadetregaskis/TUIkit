@@ -10,13 +10,14 @@ import TUIkit
 /// Shared image demo configuration used by both `ImageFilePage` and `ImageURLPage`.
 enum ImageDemoHelpers {
     static let charSets: [ASCIICharacterSet] = [
-        .fineBlocks, .blocks, .coarseBlocks, .ascii, .shapeBased, .braille,
+        .fineBlocks, .blocks, .coarseBlocks, .ascii, .asciiDetailed, .shapeBased, .braille,
     ]
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
 
     static func charSetLabel(_ index: Int) -> String {
         switch charSets[index] {
         case .ascii: return "chars:ascii"
+        case .asciiDetailed: return "chars:ascii+"
         case .coarseBlocks: return "chars:coarseBlocks"
         case .blocks: return "chars:blocks"
         case .fineBlocks: return "chars:fineBlocks"

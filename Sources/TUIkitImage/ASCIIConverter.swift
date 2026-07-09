@@ -25,6 +25,14 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Standard ASCII characters (10 levels). Works in every terminal.
     case ascii
 
+    /// A longer, perceptually-ordered ASCII ramp (~70 ink levels) rendered with
+    /// 2× per-cell supersampling (each cell averages a 2×2 block of source
+    /// pixels), for markedly finer tonal gradation than ``ascii`` at the same
+    /// cell resolution. Still pure ASCII, so it renders anywhere — but opt in,
+    /// since a very long ramp can band or reverse on fonts whose glyph ink
+    /// coverage isn't monotonic; ``ascii`` stays the safe universal default.
+    case asciiDetailed
+
     /// Unicode block elements (5 shading levels), one glyph per cell.
     /// Requires Unicode support.
     ///
@@ -213,6 +221,10 @@ extension ASCIIConverter {
         case .ascii, .coarseBlocks, .blocks:
             pixelWidth = width
             pixelHeight = height
+        case .asciiDetailed:
+            // 2× supersample: each cell averages a 2×2 block of source pixels.
+            pixelWidth = width * 2
+            pixelHeight = height * 2
         case .fineBlocks:
             pixelWidth = width
             pixelHeight = height * 2
@@ -243,7 +255,11 @@ extension ASCIIConverter {
         case .shapeBased:
             return convertShapeBased(scaled, width: width, height: height, mode: effectiveMode)
         case .ascii, .coarseBlocks:
-            return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
+            return convertCharacterBased(
+                scaled, width: width, height: height, mode: effectiveMode, supersample: 1)
+        case .asciiDetailed:
+            return convertCharacterBased(
+                scaled, width: width, height: height, mode: effectiveMode, supersample: 2)
         }
     }
 }
@@ -253,11 +269,16 @@ extension ASCIIConverter {
 extension ASCIIConverter {
 
     /// Converts using character brightness mapping (ascii, blocks).
+    ///
+    /// `supersample` is the source-pixels-per-cell factor on each axis: `1` reads
+    /// one pixel per cell (the classic ascii path); `2` averages a 2×2 block,
+    /// anti-aliasing the tone so a longer ramp resolves smoother gradients.
     private func convertCharacterBased(
         _ image: RGBAImage,
         width: Int,
         height: Int,
-        mode: ASCIIColorMode
+        mode: ASCIIColorMode,
+        supersample: Int
     ) -> [String] {
         let ramp = characterRamp
 
@@ -270,7 +291,7 @@ extension ASCIIConverter {
             var lastColor = ""
 
             for x in 0..<width {
-                let pixel = image.pixel(at: x, y)
+                let pixel = averagedPixel(image, cellX: x, cellY: y, supersample: supersample)
 
                 // Map luminance to character
                 let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count - 1))
@@ -347,11 +368,44 @@ extension ASCIIConverter {
         return lines
     }
 
+    /// Averages a `supersample × supersample` block of source pixels into one
+    /// representative pixel for the cell at `(cellX, cellY)`. `supersample == 1`
+    /// is the fast path — a single pixel read.
+    private func averagedPixel(
+        _ image: RGBAImage, cellX: Int, cellY: Int, supersample: Int
+    ) -> RGBA {
+        if supersample <= 1 { return image.pixel(at: cellX, cellY) }
+        var rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0
+        let baseX = cellX * supersample
+        let baseY = cellY * supersample
+        for dy in 0..<supersample {
+            for dx in 0..<supersample {
+                let sampleX = min(baseX + dx, image.width - 1)
+                let sampleY = min(baseY + dy, image.height - 1)
+                let pixel = image.pixel(at: sampleX, sampleY)
+                rSum += Int(pixel.r)
+                gSum += Int(pixel.g)
+                bSum += Int(pixel.b)
+                aSum += Int(pixel.a)
+                count += 1
+            }
+        }
+        guard count > 0 else { return image.pixel(at: cellX, cellY) }
+        return RGBA(
+            r: UInt8(rSum / count), g: UInt8(gSum / count),
+            b: UInt8(bSum / count), a: UInt8(aSum / count))
+    }
+
     /// The character ramp for the current character set, from darkest to brightest.
     private var characterRamp: [Character] {
         switch characterSet {
         case .ascii:
             return Array(" .:;+=xX$@")
+        case .asciiDetailed:
+            // A long, ink-ordered pure-ASCII ramp (light → dense), after Paul
+            // Bourke's character-density table: ~70 levels of tonal gradation.
+            return Array(
+                " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")
         case .coarseBlocks:
             return Array(" ░▒▓█")
         case .blocks, .fineBlocks, .shapeBased, .braille:
