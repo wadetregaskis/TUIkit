@@ -49,40 +49,41 @@ enum TrackRenderer {
         let fraction = min(1.0, max(0.0, fraction))
 
         switch style {
+        // The "fill" family — a run of full cells, an optional fractional
+        // boundary cell, then the unfilled remainder — is one parameterized
+        // renderer driven by a `TrackConfiguration`. The named cases are just
+        // presets; `.custom` carries a caller-supplied recipe.
         case .block:
-            return renderSimpleStyle(
-                fraction: fraction,
-                width: width,
-                filledChar: "█",
-                emptyChar: "░",
-                filledColor: filledColor,
-                emptyColor: emptyColor
-            )
+            return renderConfigured(
+                fraction: fraction, width: width, config: .block,
+                filledColor: filledColor, emptyColor: emptyColor)
         case .blockFine:
-            return renderBlockFineStyle(
-                fraction: fraction,
-                width: width,
-                filledColor: filledColor,
-                emptyColor: emptyColor
-            )
+            return renderConfigured(
+                fraction: fraction, width: width, config: .blockFine,
+                filledColor: filledColor, emptyColor: emptyColor)
         case .shade:
-            return renderSimpleStyle(
-                fraction: fraction,
-                width: width,
-                filledChar: "▓",
-                emptyChar: "░",
-                filledColor: filledColor,
-                emptyColor: emptyColor
-            )
+            return renderConfigured(
+                fraction: fraction, width: width, config: .shade,
+                filledColor: filledColor, emptyColor: emptyColor)
         case .bar:
-            return renderSimpleStyle(
-                fraction: fraction,
-                width: width,
-                filledChar: "▌",
-                emptyChar: "─",
-                filledColor: filledColor,
-                emptyColor: emptyColor
-            )
+            return renderConfigured(
+                fraction: fraction, width: width, config: .bar,
+                filledColor: filledColor, emptyColor: emptyColor)
+        case .braille:
+            return renderConfigured(
+                fraction: fraction, width: width, config: .braille,
+                filledColor: filledColor, emptyColor: emptyColor)
+        case .shadeRamp(let gradient):
+            return renderConfigured(
+                fraction: fraction, width: width, config: .shadeRamp(gradient: gradient),
+                filledColor: filledColor, emptyColor: emptyColor)
+        case .custom(let config):
+            return renderConfigured(
+                fraction: fraction, width: width, config: config,
+                filledColor: filledColor, emptyColor: emptyColor)
+
+        // The head / marker / segment families are structurally distinct
+        // (single indicator, no fractional fill ramp) and keep their own paths.
         case .dot:
             return renderHeadStyle(
                 fraction: fraction,
@@ -114,21 +115,6 @@ enum TrackRenderer {
                 lineColor: emptyColor,
                 markerColor: accentColor
             )
-        case .braille:
-            return renderBrailleStyle(
-                fraction: fraction,
-                width: width,
-                filledColor: filledColor,
-                emptyColor: emptyColor
-            )
-        case .shadeRamp(let gradient):
-            return renderShadeRampStyle(
-                fraction: fraction,
-                width: width,
-                filledColor: filledColor,
-                emptyColor: emptyColor,
-                gradient: gradient
-            )
         case .threeSegment(let leading, let middle, let trailing, let emptyFill):
             return renderThreeSegmentStyle(
                 fraction: fraction,
@@ -147,136 +133,45 @@ enum TrackRenderer {
 // MARK: - Private Rendering Methods
 
 extension TrackRenderer {
-    /// Renders a simple two-character style (filled + empty, no head indicator).
-    private static func renderSimpleStyle(
+    /// Renders any "fill" track — a run of full cells, an optional fractional
+    /// boundary cell, then the unfilled remainder — from a ``TrackConfiguration``.
+    ///
+    /// This single routine backs `.block`, `.shade`, `.bar`, `.blockFine`,
+    /// `.braille`, `.shadeRamp`, and `.custom`. What varies between them is
+    /// purely data: the full-cell glyph, the (optional) sub-cell boundary ramp,
+    /// how the empty region is drawn, and an optional fill gradient.
+    private static func renderConfigured(
         fraction: Double,
         width: Int,
-        filledChar: Character,
-        emptyChar: Character,
+        config: TrackConfiguration,
         filledColor: Color,
         emptyColor: Color
     ) -> String {
-        let filledCount = Int((fraction * Double(width)).rounded())
-        let emptyCount = width - filledCount
+        // A ramp of n glyphs gives n+1 sub-cell steps; no ramp means whole-cell
+        // quantization (stepsPerCell == 1, so this reduces to a plain fill).
+        let ramp = config.partialRamp
+        let stepsPerCell = (ramp?.count ?? 0) + 1
+        let totalSteps = Int((fraction * Double(width) * Double(stepsPerCell)).rounded())
+        let fullCells = totalSteps / stepsPerCell
+        let partialStep = ramp == nil ? 0 : totalSteps % stepsPerCell
+        let fullCount = min(fullCells, width)
+        let hasPartial = ramp != nil && partialStep > 0 && fullCells < width
+        let litCellCount = min(width, fullCount + (hasPartial ? 1 : 0))
 
-        var result = ""
-        if filledCount > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: filledChar, count: filledCount),
-                foreground: filledColor
-            )
-        }
-        if emptyCount > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: emptyChar, count: emptyCount),
-                foreground: emptyColor
-            )
-        }
-        return result
-    }
-
-    /// Renders the `.blockFine` style with sub-character fractional precision.
-    private static func renderBlockFineStyle(
-        fraction: Double,
-        width: Int,
-        filledColor: Color,
-        emptyColor: Color
-    ) -> String {
-        let totalEighths = fraction * Double(width) * 8.0
-        let fullCells = Int(totalEighths) / 8
-        let remainderEighths = Int(totalEighths) % 8
-
-        let fractionalBlocks: [Character] = ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-
-        var result = ""
-
-        if fullCells > 0 {
-            let filledBar = String(repeating: "█", count: fullCells)
-            result += ANSIRenderer.colorize(filledBar, foreground: filledColor)
-        }
-
-        let cellsUsed: Int
-        if remainderEighths > 0 && fullCells < width {
-            let partialChar = fractionalBlocks[remainderEighths - 1]
-            result += ANSIRenderer.colorize(String(partialChar), foreground: filledColor)
-            cellsUsed = fullCells + 1
+        // `.background` paints the WHOLE track on the empty colour: the unfilled
+        // region is one flat colour, and because the filled cells carry the same
+        // background, any inter-cell gaps the terminal leaves in the fill show
+        // the bar's colour rather than the terminal background (one solid unit).
+        let trackBackground: Color?
+        if case .background = config.emptyStyle {
+            trackBackground = emptyColor
         } else {
-            cellsUsed = fullCells
+            trackBackground = nil
         }
 
-        let emptyCount = width - cellsUsed
-        if emptyCount > 0 {
-            let emptyBar = String(repeating: "░", count: emptyCount)
-            result += ANSIRenderer.colorize(emptyBar, foreground: emptyColor)
-        }
-
-        return result
-    }
-
-    /// Renders the `.braille` 8-step fill style.
-    ///
-    /// Each filled cell carries 8 steps of sub-cell precision via the
-    /// braille dot-density ramp `⣀⣄⣤⣦⣶⣷⣿`, so the boundary cell visually
-    /// communicates the fractional progress without needing
-    /// sub-character-width support from the terminal.
-    private static func renderBrailleStyle(
-        fraction: Double,
-        width: Int,
-        filledColor: Color,
-        emptyColor: Color
-    ) -> String {
-        let ramp: [Character] = ["⣀", "⣄", "⣤", "⣦", "⣶", "⣷", "⣿"]
-        let totalSteps = Int((fraction * Double(width) * Double(ramp.count + 1)).rounded())
-        let fullCells = totalSteps / (ramp.count + 1)
-        let partialStep = totalSteps % (ramp.count + 1)
-
-        var result = ""
-        if fullCells > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: "⣿", count: fullCells),
-                foreground: filledColor
-            )
-        }
-        var cellsUsed = fullCells
-        if partialStep > 0 && fullCells < width {
-            let ch = ramp[partialStep - 1]
-            result += ANSIRenderer.colorize(String(ch), foreground: filledColor)
-            cellsUsed += 1
-        }
-        let emptyCount = width - cellsUsed
-        if emptyCount > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: "⠀", count: emptyCount),
-                foreground: emptyColor
-            )
-        }
-        return result
-    }
-
-    /// Renders the `.shadeRamp` style.
-    ///
-    /// The four shade glyphs `░ ▒ ▓ █` give each cell two fractional
-    /// sub-steps inside its own footprint, which softens the appearance
-    /// of the boundary. When `gradient` is non-nil the filled portion
-    /// fades between the stops cell by cell — a richer look than the
-    /// flat `filledColor` of the other styles.
-    private static func renderShadeRampStyle(
-        fraction: Double,
-        width: Int,
-        filledColor: Color,
-        emptyColor: Color,
-        gradient: [Color]?
-    ) -> String {
-        let ramp: [Character] = ["░", "▒", "▓", "█"]
-        let totalSteps = Int((fraction * Double(width) * Double(ramp.count)).rounded())
-        let fullCells = totalSteps / ramp.count
-        let partialStep = totalSteps % ramp.count
-
-        var result = ""
-        let litCellCount = min(width, fullCells + (partialStep > 0 ? 1 : 0))
-
-        func colour(at index: Int) -> Color {
-            guard let gradient, gradient.count >= 2, litCellCount > 1 else {
+        // Optional per-cell colour fade across the lit cells.
+        func fillColour(at index: Int) -> Color {
+            guard let gradient = config.fillGradient, gradient.count >= 2, litCellCount > 1 else {
                 return filledColor
             }
             let parameter = Double(index) / Double(litCellCount - 1)
@@ -287,19 +182,29 @@ extension TrackRenderer {
             return Color.lerp(gradient[lowerIndex], gradient[lowerIndex + 1], phase: mix)
         }
 
-        for cellIndex in 0..<fullCells {
-            result += ANSIRenderer.colorize(String(ramp.last!), foreground: colour(at: cellIndex))
+        var result = ""
+        for index in 0..<fullCount {
+            result += ANSIRenderer.colorize(
+                String(config.fullGlyph), foreground: fillColour(at: index),
+                background: trackBackground)
         }
-        if partialStep > 0 && fullCells < width {
-            let ch = ramp[partialStep - 1]
-            result += ANSIRenderer.colorize(String(ch), foreground: colour(at: fullCells))
+        if hasPartial, let ramp {
+            result += ANSIRenderer.colorize(
+                String(ramp[partialStep - 1]), foreground: fillColour(at: fullCount),
+                background: trackBackground)
         }
         let emptyCount = width - litCellCount
         if emptyCount > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: "·", count: emptyCount),
-                foreground: emptyColor
-            )
+            switch config.emptyStyle {
+            case .glyph(let glyph):
+                result += ANSIRenderer.colorize(
+                    String(repeating: glyph, count: emptyCount), foreground: emptyColor)
+            case .background:
+                // Spaces on the empty colour → a solid unfilled remainder.
+                result += ANSIRenderer.colorize(
+                    String(repeating: " ", count: emptyCount), foreground: emptyColor,
+                    background: emptyColor)
+            }
         }
         return result
     }

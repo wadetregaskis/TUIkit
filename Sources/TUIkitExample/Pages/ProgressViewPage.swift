@@ -115,6 +115,16 @@ struct ProgressViewPage: View {
                             emptyFill: "·"
                         )
                     )
+                    // A hand-rolled `.custom` recipe: a shade-ramp fill with a
+                    // solid background for the unfilled region — a combination
+                    // no named preset provides (showcasing TrackConfiguration).
+                    determinateRow(
+                        label: "custom      ",
+                        style: .custom(
+                            TrackConfiguration(
+                                fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
+                                emptyStyle: .background))
+                    )
                 }
             }
 

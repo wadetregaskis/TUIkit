@@ -167,6 +167,72 @@ struct ProgressViewStyleTests {
         #expect(barLine.contains("░"))
     }
 
+    @Test("BlockFine fills the unfilled region with a solid background, not ░ blocks")
+    func blockFineUnfilledIsBackground() {
+        // #2: the unfilled portion is a consistent background colour (rendered
+        // as spaces) rather than ░ glyphs, so the boundary cell's remainder and
+        // the empty run read as one solid bar.
+        let view = ProgressView(value: 0.4).progressViewStyle(.blockFine)
+        let barLine = renderToBuffer(view, context: testContext(width: 20)).lines[0].stripped
+        #expect(!barLine.contains("░"), "blockFine no longer draws ░ for the unfilled region: '\(barLine)'")
+        #expect(barLine.hasSuffix(" "), "the unfilled remainder is trailing spaces: '\(barLine)'")
+        #expect(barLine.count == 20)
+    }
+
+    @Test("BlockFine paints the whole track on the empty colour as a background")
+    func blockFinePaintsBackground() {
+        // Rendering the fill family directly lets us inspect the raw ANSI. Under
+        // basic-16, using the empty colour (red) as a BACKGROUND emits SGR 41;
+        // `.block` uses the same colour only as a foreground (SGR 31 via ░).
+        withColorDepth(.basic16) {
+            let blockFine = TrackRenderer.render(
+                fraction: 0.4, width: 10, style: .blockFine,
+                filledColor: .green, emptyColor: .red, accentColor: .blue)
+            let block = TrackRenderer.render(
+                fraction: 0.4, width: 10, style: .block,
+                filledColor: .green, emptyColor: .red, accentColor: .blue)
+            #expect(blockFine.contains("41"), "blockFine paints a background: \(blockFine.debugDescription)")
+            #expect(!block.contains("41"), "block keeps the unfilled colour a foreground: \(block.debugDescription)")
+        }
+    }
+
+    @Test("shadeRamp uses · for empty, distinct from shade's ░")
+    func shadeRampVsShade() {
+        // #3: `.shade` (▓ on ░) reads close to `.block`; `.shadeRamp` is the
+        // visibly graded style — the demos point here. Confirm they differ.
+        let ramp = renderToBuffer(
+            ProgressView(value: 0.5).progressViewStyle(.shadeRamp()),
+            context: testContext(width: 20)).lines[0].stripped
+        let shade = renderToBuffer(
+            ProgressView(value: 0.5).progressViewStyle(.shade),
+            context: testContext(width: 20)).lines[0].stripped
+        #expect(ramp.contains("·"), "shadeRamp uses · dots for empty: '\(ramp)'")
+        #expect(!ramp.contains("░"), "shadeRamp does not use ░ for empty: '\(ramp)'")
+        #expect(shade.contains("░"), "plain shade still uses ░ for empty: '\(shade)'")
+    }
+
+    @Test("A custom TrackConfiguration mixes any fill glyph with any unfilled treatment")
+    func customConfigurationFlexibility() {
+        // #4: the whole point of the config — a shade-ramp fill but with ░
+        // blocks for the empty region (not · dots), a combination no named
+        // preset provides, and the same fill with a solid background instead.
+        let dotsForEmpty = TrackConfiguration(
+            fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .glyph("░"))
+        let bgForEmpty = TrackConfiguration(
+            fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .background)
+
+        let dotsBar = renderToBuffer(
+            ProgressView(value: 0.3).progressViewStyle(.custom(dotsForEmpty)),
+            context: testContext(width: 20)).lines[0].stripped
+        let bgBar = renderToBuffer(
+            ProgressView(value: 0.3).progressViewStyle(.custom(bgForEmpty)),
+            context: testContext(width: 20)).lines[0].stripped
+
+        #expect(dotsBar.contains("░"), "custom .glyph(\"░\") empty draws ░: '\(dotsBar)'")
+        #expect(!bgBar.contains("░"), "custom .background empty draws spaces: '\(bgBar)'")
+        #expect(dotsBar.count == 20 && bgBar.count == 20)
+    }
+
     @Test("Bar style uses ▌ and ─ characters")
     func barStyleCharacters() {
         let view = ProgressView(value: 0.5).progressViewStyle(.bar)

@@ -13,11 +13,15 @@
 /// ```
 /// bar:       ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌────────────────
 /// block:     ████████████████░░░░░░░░░░░░░░░░
-/// blockFine: ████████████████▍░░░░░░░░░░░░░░░   (sub-character precision)
+/// blockFine: ████████████████▍                (sub-cell precision; solid bg)
 /// dot:       ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬●────────────────
 /// knob:      ━━━━━━━━━━━━━━━●────────────────   (Slider default)
 /// shade:     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░
 /// ```
+///
+/// The "fill" styles (``bar``, ``block``, ``blockFine``, ``shade``,
+/// ``braille``, ``shadeRamp(gradient:)``) are presets of ``TrackConfiguration``
+/// and share one renderer; ``custom(_:)`` lets you supply your own recipe.
 public enum TrackStyle: Sendable, Equatable {
     /// Vertical bar characters with a horizontal line track.
     ///
@@ -31,9 +35,12 @@ public enum TrackStyle: Sendable, Equatable {
 
     /// Full block characters with sub-character fractional precision.
     ///
-    /// Uses `█` for filled cells, fractional blocks (`▉▊▋▌▍▎▏`) for the
-    /// partial cell at the boundary, and `░` for empty cells. This gives
-    /// 8x finer visual resolution than ``block``.
+    /// Uses `█` for filled cells and fractional blocks (`▉▊▋▌▍▎▏`) for the
+    /// partial cell at the boundary — 8× finer visual resolution than
+    /// ``block``. The unfilled region is a solid background (not `░` glyphs),
+    /// so the boundary cell's remainder matches the empty run and any
+    /// inter-cell gaps in the fill show the bar's colour, keeping it one solid
+    /// unit. See ``TrackConfiguration/blockFine``.
     case blockFine
 
     /// Rectangle track with a dot indicator at the progress position.
@@ -60,7 +67,10 @@ public enum TrackStyle: Sendable, Equatable {
 
     /// Shade characters for a softer, textured look.
     ///
-    /// Uses `▓` (dark shade) for filled and `░` (light shade) for empty.
+    /// Uses `▓` (dark shade) for filled and `░` (light shade) for empty. This
+    /// differs from ``block`` only in the fill glyph (`▓` vs `█`), so on most
+    /// terminal fonts the two read alike; ``shadeRamp(gradient:)`` is the
+    /// style that delivers a visibly graded "shaded" look.
     case shade
 
     /// Braille dot fill, 8 steps per cell using `⣀⣄⣤⣦⣶⣷⣿`.
@@ -91,6 +101,14 @@ public enum TrackStyle: Sendable, Equatable {
     /// rendered separately so callers can style them independently —
     /// pass coloured/bold/dim strings via the segments directly.
     case threeSegment(leading: String, middle: String, trailing: String, emptyFill: String = " ")
+
+    /// A fully-configurable "fill" track.
+    ///
+    /// Most fill styles above are just presets of ``TrackConfiguration``; use
+    /// this to supply your own combination of fill glyph, fractional boundary
+    /// ramp, unfilled treatment (glyph or solid background), and optional
+    /// colour gradient — without the framework predefining every mix.
+    case custom(TrackConfiguration)
 }
 
 // MARK: - Backwards Compatibility
