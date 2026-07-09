@@ -129,7 +129,7 @@ SwiftUI-like air.
 ```swift
 // SwiftUI                              // TUIkit
 .onTapGesture { /* () */ }              .onTapGesture { x, y in … }   // (Int, Int) cell coords
-.onTapGesture(count: 2) { p in p.x }    // p: CGPoint                 // count: → §4a
+.onTapGesture(count: 2) { /* () */ }    .onTapGesture(count: 2) { … } // count: matched (perform: () -> Void)
 DragGesture().onChanged { $0.location } // CGPoint                    .onDragGesture { e in (e.x, e.y) }  // Int
 ```
 
@@ -261,14 +261,13 @@ window**, not a deferred-creation machine:
   overflow `availableHeight`, and children past the fold are *never
   rendered* (so their `onAppear`/`task` correctly never fire). `VStack`
   instead distributes and clips at the cell.
-- **Inside a `ScrollView`**, the content is measured with a generous budget
-  (≈ `max(64 × viewport, 4096)` lines) and the whole extent **fully
-  materialises every frame** — scrolling reaches everything (up to that
-  budget) and the extent is *exact*, never estimated, but there is **no
-  laziness**: a `LazyVStack` costs the same as a `VStack` there, and
-  `onAppear`/`task` fire for every materialised row at once, not on
-  visibility. Content taller than the budget is unreachable (both stack
-  kinds alike).
+- **Inside a `ScrollView`** (as the *direct* content), a `LazyVStack` now
+  **windows to the visible viewport**: the ScrollView publishes its scroll
+  slice and the stack renders only the rows intersecting it (into a
+  full-height buffer, off-window rows blank), so `onAppear`/`task` fire on
+  visibility — matching SwiftUI's model rather than materialising everything.
+  A `LazyVStack` nested *below* other scroll content (not at the content
+  origin) is left un-windowed, and `pinnedViews:` is still absent.
 - **Cross-axis sizing** hugs the widest *placed* child (identical to
   `VStack`), which is stabler than SwiftUI's first-subview ideal — TUIkit
   has rendered every visible child anyway, so it knows the real width.
@@ -279,8 +278,9 @@ sets use `List` — its row materialisation is windowed to the viewport
 (O(visible) row boxes per frame, id resolution included), making it TUIkit's
 actual lazy container. Reach for `LazyVStack`/`LazyHStack` when the *stack
 itself* is the clipped region (a fixed-height pane showing "as many whole
-rows as fit"). Viewport-driven lazy rendering inside `ScrollView` — the
-SwiftUI model — is future work (→ §4a).
+rows as fit"). Viewport-driven lazy rendering inside `ScrollView` now works
+for a `LazyVStack` that is the direct scroll content; the remaining gaps
+(windowing a stack nested below other content, and `pinnedViews:`) are → §4a.
 
 ---
 
@@ -313,10 +313,9 @@ non-obvious.)
 | **`NavigationStack` + `NavigationLink` + `navigationDestination(for:)` + `NavigationPath`** | Push/pop navigation is the backbone of most apps; TUIkit only has split-view. | Model a path stack of type-erased destinations; render the top of stack full-screen; back = pop. Biggest single gap. |
 | **Presentation: `confirmationDialog`, `popover`, `fullScreenCover`, `presentationDetents`** | Common modal patterns. | `confirmationDialog` ≈ an action-list `alert`; `popover`/`fullScreenCover` ≈ `modal` variants; detents → fractional-height modal. |
 | **`ScrollViewReader` / `ScrollViewProxy.scrollTo` / `.scrollPosition`** | Programmatic scrolling. | Expose the existing internal scroll-offset state through a proxy keyed by row id. |
-| **Viewport-driven lazy stacks in `ScrollView` (+ `pinnedViews:`)** | In SwiftUI, laziness exists *for* scroll views; TUIkit's lazy stacks fully materialise there (§2.8), so huge scrollable stacks pay full render cost and fire every row's lifecycle at once. `pinnedViews:` is also absent from the lazy inits. | Publish the scroll offset alongside the existing `scrollViewportSize`; have the window policy render only children intersecting the viewport (± margin) into a full-extent buffer, sizing off-window children by (cached or estimated) measures, SwiftUI-style. `pinnedViews` then composites the active `Section` header over the viewport top. Until then, `List` covers the big-data case. |
+| **Viewport windowing for a nested `LazyVStack` + `pinnedViews:`** | A `LazyVStack` that is the *direct* content of a `ScrollView` now windows to the viewport (§2.8) — the offset-publishing + render-only-visible policy landed. Remaining: a `LazyVStack` nested *below* other scroll content isn't at the content origin so it can't map the offset yet, and `pinnedViews:` is still absent from the lazy inits. | Thread the stack's own y-offset within the scroll content so a non-top stack can window too; `pinnedViews` then composites the active `Section` header over the viewport top. |
 | **`@FocusState` as a property wrapper** | SwiftUI's focus is `@FocusState var x` + `.focused($x)`; TUIkit's `FocusState` is a manually-constructed class — source-incompatible. | Wrap the existing `FocusManager` in a `@propertyWrapper struct FocusState<Value: Hashable>` + `.focused(_:)`/`.focused(_:equals:)`. Trade-off: reconcile with the imperative manager API. |
 | **`.keyboardShortcut`** | Bind a key to any action, not just status-bar items. | A modifier registering an action with the key dispatcher for the view's focus scope. |
-| **`.onTapGesture(count:)`** | Double/triple-click handling (TUIkit's tap gesture is single-count today). | Count clicks within a window; surface integer cell coords (§2.2). |
 | **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. |
 | **Common modifiers: `.id`, `.opacity`(View), `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. (`.multilineTextAlignment` now shipped — §1.) |
 | **Scoped wrappers: `@Bindable`, `@SceneStorage`, `@FocusedValue`** | `@Bindable` pairs with `@Observable`; the others are niche. | `@Bindable` is the useful one (binding into an `@Observable`); `@SceneStorage` ≈ `@AppStorage` for a single scene. |
@@ -357,6 +356,10 @@ SwiftUI API (the CLAUDE.md rule).
 | `.dimmed()`, `Text.dim()/.blink()/.inverted()` | ANSI display attributes |
 | Image: `.imageCharacterSet`/`.imageColorMode`/`.imageDithering`/… | raster→ASCII conversion controls |
 | `Card`, `Panel`, `RadioButton`/`RadioButtonGroup`, `Spinner`, `Menu` (keyboard-driven), `TrackStyle`, `IndeterminateStyle` | terminal-idiomatic containers/controls/styles |
+| `TrackStyle.custom(TrackConfiguration)` | fully-configurable progress/slider/gauge fill (glyphs, sub-cell ramp, solid-background unfilled, gradient); the named styles are presets of it |
+| `Table.onRowDoubleClick(_:)`, `MouseEvent.clickCount` | double-click on a value-based `Table` row (terminals report no double-click, so the dispatcher synthesises `clickCount` by timing) |
+| `.radioButtonGroupWrapsAtEdge(_:)` | edge-arrow in a `RadioButtonGroup` escapes to the next control (default) or wraps within the group (opt-in) |
+| Image `.asciiDetailed` (long supersampled ramp), `.shapeUnicode` (Sobel-edge box-drawing lines) | higher-fidelity raster→text character sets |
 | `.navigationSplitViewResizable`, `.navigationSplitViewColumnWidth`, `.fixedSize` on `List`, `.listEmptyPlaceholder` | terminal split/list affordances |
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |
 | `.maxFrameRate` (App) | cap redraw rate |

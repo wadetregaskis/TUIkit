@@ -66,7 +66,7 @@ struct ContentView: View {
 ### Views & components
 
 - **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image`
-  - **`Image`** renders raster images (PNG/JPEG, decoded by AppKit's `NSImage` on Apple platforms and the bundled `stb_image` elsewhere) as terminal art. Five character sets via `.imageCharacterSet(_:)` — `fineBlocks` (the default; half-block `▄` cells giving near-square sub-pixels), `coarseBlocks`, `shapeBased` (shape-vector matching), `ascii`, and `braille`. Four colour modes via `.imageColorMode(_:)` — `trueColor` (default), `ansi256`, `grayscale`, `mono` — auto-downgraded to the terminal's capability, with optional Floyd–Steinberg dithering. Loads asynchronously from a file path or URL (session-cached) behind a placeholder spinner, and supports aspect-fit/fill, zoom including sub-1× (`.imageZoom(_:)`), and fit targets (`.imageFitTarget(.proposedSize | .viewport)`).
+  - **`Image`** renders raster images (PNG/JPEG, decoded by AppKit's `NSImage` on Apple platforms and the bundled `stb_image` elsewhere) as terminal art. Eight character sets via `.imageCharacterSet(_:)` — `fineBlocks` (the default; half-block `▄` cells giving near-square sub-pixels), `blocks` (gap-free background fill), `coarseBlocks`, `shapeBased` (shape-vector matching with Sobel edge-orientation lines), `shapeUnicode` (box-drawing edge lines), `ascii`, `asciiDetailed` (a long supersampled ramp), and `braille`. Four colour modes via `.imageColorMode(_:)` — `trueColor` (default), `ansi256`, `grayscale`, `mono` — auto-downgraded to the terminal's capability, with optional Floyd–Steinberg dithering. Loads asynchronously from a file path or URL (session-cached) behind a placeholder spinner, and supports aspect-fit/fill, zoom including sub-1× (`.imageZoom(_:)`), and fit targets (`.imageFitTarget(.proposedSize | .viewport)`).
 - **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack`, `Group`, `ViewThatFits`, and `TabView` / `Tab`
 - **Interactive controls**: `Button`, `ButtonRow`, `Toggle`, `Menu`, `Picker`, `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup`, and `ColorPicker` (with a rich `ColorPickerPanel` offering RGB/HSL/HSB/CMYK editing, a 256-colour grid, and named / web-safe / crayon palettes) — all with keyboard navigation and focus
   - `Picker` styles: `.automatic` (default), `.menu`, `.inline`, `.radioGroup`
@@ -77,7 +77,7 @@ struct ContentView: View {
   - `NavigationSplitView` columns are resizable by default (drag the divider or use the keyboard) and offer automatic / balanced / prominent-detail styles
 - **Containers & chrome**: `Alert`, `Dialog`, `Panel`, `Card`
 - **Feedback**:
-  - **`ProgressView`** — determinate or indeterminate. Determinate look via `.progressViewStyle(_:)` (`TrackStyle`): `block` (default), `bar`, `blockFine`, `dot`, `shade`, `braille`, `shadeRamp(gradient:)`, `threeSegment(...)`. Indeterminate animation via `.indeterminateStyle(_:)`: `sweep` (default), `barberPole`, `pulse`, `knightRider`, `gradient`.
+  - **`ProgressView`** — determinate or indeterminate. Determinate look via `.progressViewStyle(_:)` (`TrackStyle`): `block` (default), `bar`, `blockFine`, `dot`, `shade`, `braille`, `shadeRamp(gradient:)`, `threeSegment(...)`, or `custom(TrackConfiguration)` — the named fill styles are presets of one configurable renderer (fill glyph, sub-cell ramp, solid-background unfilled, gradient). Indeterminate animation via `.indeterminateStyle(_:)`: `sweep` (default), `barberPole`, `pulse`, `knightRider`, `gradient`.
   - **`Spinner`** — animated, in three styles: `dots` (default), `line`, `bouncing` (a Knight-Rider scanner with a fading trail), with an optional label and colour.
 - **`StatusBar`**: context-sensitive keyboard shortcuts with `.compact` and `.bordered` styles
 
@@ -89,7 +89,7 @@ struct ContentView: View {
 ### Mouse & trackpad
 
 - Left / middle / right clicks, vertical scroll-wheel, and horizontal + vertical trackpad scrolling, with drag tracking and enter/exit hit-testing. Both SGR and legacy X10 mouse-report encodings are parsed.
-- Gesture modifiers: `.onTapGesture`, `.onScrollGesture`, `.onDragGesture`, `.onHover`, and the raw `.onMouseEvent`.
+- Gesture modifiers: `.onTapGesture` (including `count:` for double/triple-click, via synthesised `MouseEvent.clickCount`), `.onScrollGesture`, `.onDragGesture`, `.onHover`, and the raw `.onMouseEvent`.
 - Enable the level you want with `.mouseSupport(.disabled | .scrollOnly | .standard | .full)` on a `View` or a `Scene`.
 
 ### Presentation
