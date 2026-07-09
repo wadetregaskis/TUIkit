@@ -26,6 +26,28 @@ extension Character {
     /// Most characters occupy 1 cell. East Asian wide characters (CJK, most
     /// emoji) occupy 2 cells. Zero-width characters (combining marks,
     /// variation selectors, ZWJ) occupy 0 cells.
+    /// Whether `sv` is a scalar that adds no terminal-cell width when it
+    /// appears as a *non-first* scalar of a grapheme cluster: a variation
+    /// selector, a combining mark, a zero-width joiner/space, or a tag. Used
+    /// by ``terminalWidth`` to tell a base-plus-accent cluster (width = the
+    /// base's) from a genuine multi-glyph sequence like a ZWJ emoji or a flag
+    /// (width 2). Mirrors the single-scalar zero-width ranges above.
+    static func isWidthNeutralExtraScalar(_ sv: UInt32) -> Bool {
+        switch sv {
+        case 0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD:  // ZWSP/ZWNJ/ZWJ/BOM, soft hyphen
+            return true
+        case 0xFE00...0xFE0F, 0xE0100...0xE01EF:  // variation selectors (+ supplement)
+            return true
+        case 0x0300...0x036F, 0x1AB0...0x1AFF, 0x1DC0...0x1DFF,  // combining diacriticals (+ ext/supp)
+            0x20D0...0x20FF, 0xFE20...0xFE2F:  // combining marks for symbols, half marks
+            return true
+        case 0xE0000...0xE007F:  // tags block
+            return true
+        default:
+            return false
+        }
+    }
+
     public var terminalWidth: Int {
         let scalars = unicodeScalars
         guard let first = scalars.first else { return 0 }
@@ -67,18 +89,21 @@ extension Character {
         // Multi-scalar grapheme clusters (emoji sequences with ZWJ, skin tones,
         // flag sequences, keycap sequences) are typically 2 cells wide.
         if scalars.count > 1 {
-            // If the only extra scalars are variation selectors (U+FE0F/U+FE0E),
-            // check whether the variation selector promotes the base to emoji
-            // presentation.  A `<base>+U+FE0F` cluster where the base has the
-            // Emoji property paints 2 cells in Terminal.app — this catches
-            // BMP emoji like ❤️ (U+2764+FE0F), ✏️ (U+270F+FE0F), ⚙️ (U+2699+FE0F)
-            // that the historical range checks below would otherwise have
-            // reported as 1 cell wide.
-            let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
-                let sv = scalar.value
-                return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
+            // A cluster is only forced to 2 cells when it carries an extra
+            // scalar that actually *adds* width — another emoji (ZWJ
+            // sequences), a regional indicator (flags), a skin-tone modifier.
+            // Extras that add NO width — variation selectors AND combining
+            // marks, ZWJ/joiners, and tags — do not make the cluster wide; a
+            // base letter carrying only those keeps the base's own width.
+            // This is what makes a *decomposed* (NFD) accented letter such as
+            // "é" (e + U+0301) one cell, not two — critical because macOS
+            // hands filenames back in NFD, so mis-measuring it drifts every
+            // border and column that renders such text. (A composed "é",
+            // U+00E9, is a single scalar and never reaches here.)
+            let hasWidthAddingExtras = scalars.dropFirst().contains { scalar in
+                !Self.isWidthNeutralExtraScalar(scalar.value)
             }
-            if hasNonVariationExtras {
+            if hasWidthAddingExtras {
                 // True multi-character sequence (ZWJ, flags, keycaps, skin tones)
                 return 2
             }
