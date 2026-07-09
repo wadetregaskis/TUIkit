@@ -1,8 +1,12 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  GenerateImageGlyphs.swift
+//  main.swift  —  GenerateImageGlyphs
 //
 //  Created by Wade Tregaskis
 //  License: MIT
+//
+//  (Named `main.swift` because it is compiled together with the framework's
+//  ShapeSampling.swift — Swift only allows top-level code in a file so named
+//  when more than one file is compiled at once.)
 //
 //  Font-rasterisation calibration for the Image renderer. Rasterises each
 //  candidate glyph in a reference monospace font (SF Mono Regular 11 by
@@ -18,6 +22,11 @@
 //    • `generatedAsciiDetailedRamp` — a coverage-ordered, gap-free pure-ASCII
 //      ramp for `.asciiDetailed`, replacing the hand-picked Bourke ordering
 //      with one calibrated to the reference font's actual ink coverage.
+//
+//  The sampling geometry (`ShapeRegion`) is not duplicated here: generate.sh
+//  compiles the framework's own `Sources/TUIkitImage/ShapeSampling.swift` into
+//  this tool, so the circles and spiral are the exact same source the runtime
+//  samples the image with.
 //
 //  macOS-only developer tooling (CoreText). End users consume the committed
 //  generated file; nothing here ships in the package.
@@ -62,15 +71,10 @@ let scale: CGFloat = 8
 let pxW = max(1, Int((cellWidthPt * scale).rounded()))
 let pxH = max(1, Int((cellHeightPt * scale).rounded()))
 
-// MARK: - Shape sampling geometry (MUST match ASCIIConverter+ShapeBased.swift)
-
-let regionCentres: [(x: Double, y: Double)] = [
-    (0.27, 0.22), (0.73, 0.15),  // upper
-    (0.27, 0.52), (0.73, 0.48),  // middle
-    (0.27, 0.82), (0.73, 0.78),  // lower
-]
-let regionRadius = 0.30
-let samplesPerCircle = 16
+// The shape sampling geometry (`ShapeRegion`) is NOT redefined here: this tool
+// compiles the framework's own `ShapeSampling.swift` (see generate.sh), so the
+// circle centres, radius, sample count, and spiral are literally the same
+// source the runtime renders with — they cannot drift.
 
 // MARK: - Rasterisation
 
@@ -105,30 +109,31 @@ func totalCoverage(_ ink: [Double]) -> Double {
     ink.reduce(0, +) / Double(ink.count)
 }
 
-/// The 6-region coverage vector, sampling each circle on a golden-angle
-/// sunflower spiral — the same distribution the renderer's `shapeVector` uses,
-/// but reading fractional ink instead of a binary bitmap hit.
+/// The 6-region coverage vector. Samples at exactly the points the runtime
+/// uses (`ShapeRegion.normalizedSamplePoints()`) and maps them with the same
+/// `ShapeRegion.pixel(for:width:height:)` — both shared source — into the
+/// supersampled glyph raster, reading fractional ink rather than a source-image
+/// pixel. Geometry and mapping match the runtime by construction, not by
+/// hand-kept parallel copies.
 func shapeVector(_ ink: [Double]) -> [Double] {
-    regionCentres.map { centre in
+    let points = ShapeRegion.normalizedSamplePoints()
+    let samples = ShapeRegion.samplesPerCircle
+    return (0..<ShapeRegion.centres.count).map { centreIndex in
         var sum = 0.0
-        for sampleIndex in 0..<samplesPerCircle {
-            let angle = Double(sampleIndex) * 2.39996  // golden angle
-            let r =
-                regionRadius
-                * (Double(sampleIndex) / Double(samplesPerCircle - 1)).squareRoot()
-            let sx = centre.x + r * cos(angle)
-            let sy = centre.y + r * sin(angle)
-            let px = min(pxW - 1, max(0, Int((sx * Double(pxW)).rounded(.down))))
-            let py = min(pxH - 1, max(0, Int((sy * Double(pxH)).rounded(.down))))
+        for sampleIndex in 0..<samples {
+            let point = points[centreIndex * samples + sampleIndex]
+            let (px, py) = ShapeRegion.pixel(for: point, width: pxW, height: pxH)
             sum += ink[py * pxW + px]
         }
-        return sum / Double(samplesPerCircle)
+        return sum / Double(samples)
     }
 }
 
 // MARK: - Candidate glyph sets
 
-/// The shape renderer's glyph set (must match `shapeBasedBitmaps`).
+/// The shape renderer's glyph set. This tool is the single author of it: the
+/// glyphs here become the keys of `generatedShapeCoverage`, which the runtime
+/// reads back — so there is no separate copy in the framework to keep in sync.
 let shapeGlyphs: [Character] = Array(" .,'`\":;-_~^|/\\+*=<>LJTVIO#%@")
 
 // MARK: - Generate

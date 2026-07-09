@@ -14,42 +14,10 @@
 //  in the lower-left, `T` along the top, `^` in the upper middle — instead
 //  of treating each cell as a single pixel.
 
-#if canImport(Glibc)
-import Glibc
-#elseif canImport(Darwin)
-import Darwin
-#endif
-
-// MARK: - Cell Shape Vector
-
-/// The 6 sampling-circle indices that make up a cell's shape vector.
-///
-/// Layout, matching the alexharri.com article — left circles dropped a
-/// little, right circles raised, so that staggering them fills the cell
-/// with minimal gaps:
-///
-/// ```
-///  [0]   [1]      ← upper row  (upper-left, upper-right)
-///  [2]   [3]      ← middle row
-///  [4]   [5]      ← lower row
-/// ```
-private enum ShapeRegion {
-    /// Normalised sampling-circle centres `(x, y)` in `[0, 1]` cell space.
-    static let centres: [(x: Double, y: Double)] = [
-        (0.27, 0.22),  // 0 upper-left
-        (0.73, 0.15),  // 1 upper-right
-        (0.27, 0.52),  // 2 middle-left
-        (0.73, 0.48),  // 3 middle-right
-        (0.27, 0.82),  // 4 lower-left
-        (0.73, 0.78),  // 5 lower-right
-    ]
-
-    /// Sampling-circle radius in normalised cell-width units.
-    static let radius: Double = 0.30
-
-    /// Number of samples taken per circle when computing a vector.
-    static let samplesPerCircle: Int = 16
-}
+// The sampling geometry (`ShapeRegion`: circle centres, radius, sample count,
+// and the spiral that places the samples) lives in ShapeSampling.swift, a
+// dependency-free file shared with the offline calibration tool so the two
+// cannot drift apart.
 
 // MARK: - Shape Vectors
 
@@ -365,26 +333,16 @@ private enum SampleOffsets {
     /// table is reused for every cell — eliminating ~96 sin/cos calls per
     /// cell and any per-sample multiply-by-width.
     static func compute(cellPixelWidth: Int, cellPixelHeight: Int, imageWidth: Int) -> [Int] {
-        let sampleCount = ShapeRegion.samplesPerCircle
-        let denom = max(1, sampleCount - 1)
-        let maxX = max(0, cellPixelWidth - 1)
-        let maxY = max(0, cellPixelHeight - 1)
-        let widthD = Double(cellPixelWidth)
-        let heightD = Double(cellPixelHeight)
-
+        // Both the spiral geometry and the point→pixel mapping are shared with
+        // the calibration tool via `ShapeRegion` (ShapeSampling.swift); here we
+        // only fold in this image's row stride. Computed once per call.
+        let points = ShapeRegion.normalizedSamplePoints()
         var offsets = [Int]()
-        offsets.reserveCapacity(ShapeRegion.centres.count * sampleCount)
-        for centre in ShapeRegion.centres {
-            for sampleIndex in 0..<sampleCount {
-                let angle = Double(sampleIndex) * 2.39996  // golden angle
-                let r = ShapeRegion.radius
-                    * (Double(sampleIndex) / Double(denom)).squareRoot()
-                let sx = centre.x + r * cos(angle)
-                let sy = centre.y + r * sin(angle)
-                let px = min(maxX, max(0, Int(sx * widthD)))
-                let py = min(maxY, max(0, Int(sy * heightD)))
-                offsets.append(py * imageWidth + px)
-            }
+        offsets.reserveCapacity(points.count)
+        for point in points {
+            let (px, py) = ShapeRegion.pixel(
+                for: point, width: cellPixelWidth, height: cellPixelHeight)
+            offsets.append(py * imageWidth + px)
         }
         return offsets
     }

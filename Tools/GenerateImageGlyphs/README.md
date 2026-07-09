@@ -49,11 +49,24 @@ ramp is ordered, both of which are robust to font face and point size (a denser
 font shifts every glyph together). So a single canonical profile from the
 assumed-default font calibrates the renderers well across terminals; there is no
 need for a per-emulator / per-font / per-size matrix. Change `pointSize` or the
-`NSFont` lookup at the top of `GenerateImageGlyphs.swift` to retarget.
+`NSFont` lookup at the top of `main.swift` to retarget.
+
+## Shared geometry (no drift)
+
+The sampling geometry — the circle centres, radius, sample count, and the
+golden-angle spiral that places the samples — is **not** copied into this tool.
+`generate.sh` compiles the framework's own
+[`Sources/TUIkitImage/ShapeSampling.swift`](../../Sources/TUIkitImage/ShapeSampling.swift)
+alongside `main.swift`, and both the runtime and this tool call
+`ShapeRegion.normalizedSamplePoints()`. So there is one definition of *where* a
+cell is sampled; changing it in `ShapeSampling.swift` changes both at once, and
+re-running the tool re-measures against the new geometry. The glyph set is
+authored here (it becomes the keys of `generatedShapeCoverage`, which the
+runtime reads back), so it too has no second copy to sync.
 
 ## Regenerating
 
 The output is deterministic. Re-run `generate.sh` after changing the reference
-font, the shape glyph set (keep it in sync with `ASCIIConverter+ShapeBased.swift`),
-or the sampling geometry (`regionCentres` / `regionRadius` / `samplesPerCircle`,
-which must mirror `ShapeRegion`). Then run `swift test` and SwiftLint.
+font, the shape glyph set (`shapeGlyphs` in `main.swift`), or the shared
+sampling geometry (`ShapeRegion` in `ShapeSampling.swift`). Then run
+`swift test` and SwiftLint.
