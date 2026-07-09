@@ -118,6 +118,15 @@ public struct MouseEvent: Sendable, Equatable {
     /// Whether Meta / Alt / Option was held.
     public let meta: Bool
 
+    /// How many clicks this event is part of: `1` for a single click, `2` for
+    /// the second click of a double-click, and so on.
+    ///
+    /// Terminals never report this — `MouseEventDispatcher` synthesises it by
+    /// timing successive presses/releases of the same button at (near) the same
+    /// cell. Parsed events default to `1`; the count is stamped on during
+    /// dispatch. Read it via ``TUIkitView/View/onTapGesture(count:perform:)``.
+    public let clickCount: Int
+
     /// Creates a mouse event.
     public init(
         button: MouseButton,
@@ -126,7 +135,8 @@ public struct MouseEvent: Sendable, Equatable {
         y: Int,
         shift: Bool = false,
         ctrl: Bool = false,
-        meta: Bool = false
+        meta: Bool = false,
+        clickCount: Int = 1
     ) {
         self.button = button
         self.phase = phase
@@ -135,6 +145,14 @@ public struct MouseEvent: Sendable, Equatable {
         self.shift = shift
         self.ctrl = ctrl
         self.meta = meta
+        self.clickCount = clickCount
+    }
+
+    /// Returns a copy of this event with its ``clickCount`` replaced.
+    public func withClickCount(_ count: Int) -> Self {
+        Self(
+            button: button, phase: phase, x: x, y: y,
+            shift: shift, ctrl: ctrl, meta: meta, clickCount: count)
     }
 }
 

@@ -148,6 +148,42 @@ extension View {
         }
     }
 
+    /// Adds an action that fires when this view is tapped `count` times in quick
+    /// succession — e.g. `count: 2` for a double-click.
+    ///
+    /// Mirrors SwiftUI's `onTapGesture(count:perform:)`. The dispatcher
+    /// synthesises the click count by timing successive left-button clicks at
+    /// (near) the same cell (see ``TUIkitCore/MouseEvent/clickCount``); the
+    /// action runs on the release of the `count`-th click. A `count: 1` tap
+    /// behaves like ``onTapGesture(_:)`` but without the `(x, y)` arguments.
+    ///
+    /// ```swift
+    /// Text(folder.name)
+    ///     .onTapGesture(count: 2) { open(folder) }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - count: The number of taps that triggers the action (clamped to ≥ 1).
+    ///   - action: The action to run once `count` taps land on this view.
+    /// - Returns: A view that consumes left-click presses/releases and fires
+    ///   `action` on the matching multi-click.
+    public func onTapGesture(count: Int, perform action: @escaping () -> Void) -> some View {
+        onMouseEvent { event in
+            guard event.button == .left else { return false }
+            switch event.phase {
+            case .pressed:
+                return true  // claim so the release routes back to us
+            case .released:
+                if event.clickCount == max(1, count) {
+                    action()
+                }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     /// Adds an action that fires on a scroll wheel tick inside this
     /// view's bounds.
     ///

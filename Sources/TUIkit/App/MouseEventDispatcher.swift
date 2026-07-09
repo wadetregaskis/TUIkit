@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Dispatch
 import TUIkitCore
 
 // MARK: - Mouse Event Dispatcher
@@ -115,6 +116,19 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// if `clicks` is false, click events arriving from the
     /// terminal are silently dropped.
     private var activeSupport: MouseSupport = .standard
+
+    /// The most recent button click, used to synthesise ``MouseEvent/clickCount``.
+    /// A press within ``multiClickWindowNanos`` of the previous one, on the same
+    /// button and (near) the same cell, increments the count.
+    private var lastClick: (button: MouseButton, x: Int, y: Int, timeNanos: UInt64, count: Int)?
+
+    /// The maximum gap between successive clicks for them to count as one
+    /// multi-click sequence (400 ms — a common desktop double-click threshold).
+    private static let multiClickWindowNanos: UInt64 = 400_000_000
+
+    /// Monotonic time source (nanoseconds), injectable for tests. Defaults to
+    /// the same clock the run loop uses.
+    var nowNanos: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
 
     init() {}
 }
@@ -267,6 +281,10 @@ extension MouseEventDispatcher {
         // but the user asked us not to surface them.
         guard eventIsAllowed(event) else { return false }
 
+        // Synthesise the click count before any routing so every handler —
+        // including a drag-captured one — sees the double-click.
+        let event = stampClickCount(event)
+
         // Bare cursor motion drives the hover state machine —
         // not the normal click routing. See dispatchMotion for
         // the rationale on why we route `.moved` separately.
@@ -405,7 +423,43 @@ extension MouseEventDispatcher {
             y: event.y - dy,
             shift: event.shift,
             ctrl: event.ctrl,
-            meta: event.meta
+            meta: event.meta,
+            clickCount: event.clickCount
         )
+    }
+
+    /// Stamps a button press/release with the synthesised ``MouseEvent/clickCount``.
+    ///
+    /// A `.pressed` within the multi-click window of the previous press, on the
+    /// same button and within one cell of it, advances the count; anything else
+    /// resets it to 1. The matching `.released` carries the same count so a
+    /// handler acting on release (the tap convention) sees the double-click.
+    /// Motion / drag / wheel events are left at count 1.
+    private func stampClickCount(_ event: MouseEvent) -> MouseEvent {
+        switch event.phase {
+        case .pressed:
+            let now = nowNanos()
+            let count: Int
+            if let last = lastClick,
+                last.button == event.button,
+                abs(last.x - event.x) <= 1,
+                abs(last.y - event.y) <= 1,
+                now &- last.timeNanos <= Self.multiClickWindowNanos
+            {
+                count = last.count + 1
+            } else {
+                count = 1
+            }
+            lastClick = (event.button, event.x, event.y, now, count)
+            return event.withClickCount(count)
+        case .released:
+            // Carry the in-flight press's count (if this release matches it).
+            if let last = lastClick, last.button == event.button {
+                return event.withClickCount(last.count)
+            }
+            return event
+        default:
+            return event
+        }
     }
 }
