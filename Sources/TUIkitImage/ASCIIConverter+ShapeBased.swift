@@ -51,143 +51,6 @@ private enum ShapeRegion {
     static let samplesPerCircle: Int = 16
 }
 
-// MARK: - Character Bitmaps
-
-/// A 5-wide × 10-tall binary bitmap for an ASCII character.
-///
-/// Each row is encoded as a five-character string of `"0"` / `"1"`. Both
-/// the visual density of each row and the row's position contribute to
-/// the character's shape vector, which is sampled from these bitmaps once
-/// at startup.
-private struct CharBitmap {
-    let character: Character
-    let rows: [String]
-}
-
-/// A small but expressive set of ASCII characters with hand-drawn bitmaps.
-///
-/// Picked to cover the major shape regions of the cell — upper-only
-/// characters (`"`, `^`, `'`), lower-only (`.`, `,`, `_`), corner
-/// characters (`L`, `J`), through to dense fills (`@`, `#`).
-private let shapeBasedBitmaps: [CharBitmap] = [
-    CharBitmap(character: " ", rows: [
-        "00000", "00000", "00000", "00000", "00000",
-        "00000", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: ".", rows: [
-        "00000", "00000", "00000", "00000", "00000",
-        "00000", "00000", "01110", "01110", "00000",
-    ]),
-    CharBitmap(character: ",", rows: [
-        "00000", "00000", "00000", "00000", "00000",
-        "00000", "00000", "01100", "01100", "11000",
-    ]),
-    CharBitmap(character: "'", rows: [
-        "01110", "01110", "01000", "00000", "00000",
-        "00000", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "`", rows: [
-        "11000", "01100", "00000", "00000", "00000",
-        "00000", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "\"", rows: [
-        "11011", "11011", "00000", "00000", "00000",
-        "00000", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: ":", rows: [
-        "00000", "00100", "00100", "00000", "00000",
-        "00000", "00000", "00100", "00100", "00000",
-    ]),
-    CharBitmap(character: ";", rows: [
-        "00000", "00100", "00100", "00000", "00000",
-        "00000", "00000", "00100", "00100", "01000",
-    ]),
-    CharBitmap(character: "-", rows: [
-        "00000", "00000", "00000", "00000", "11111",
-        "11111", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "_", rows: [
-        "00000", "00000", "00000", "00000", "00000",
-        "00000", "00000", "00000", "11111", "11111",
-    ]),
-    CharBitmap(character: "~", rows: [
-        "00000", "00000", "00000", "01001", "10110",
-        "11001", "01000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "^", rows: [
-        "00100", "01010", "10001", "00000", "00000",
-        "00000", "00000", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "|", rows: [
-        "00100", "00100", "00100", "00100", "00100",
-        "00100", "00100", "00100", "00100", "00100",
-    ]),
-    CharBitmap(character: "/", rows: [
-        "00001", "00001", "00010", "00010", "00100",
-        "00100", "01000", "01000", "10000", "10000",
-    ]),
-    CharBitmap(character: "\\", rows: [
-        "10000", "10000", "01000", "01000", "00100",
-        "00100", "00010", "00010", "00001", "00001",
-    ]),
-    CharBitmap(character: "+", rows: [
-        "00000", "00000", "00100", "00100", "01110",
-        "01110", "00100", "00100", "00000", "00000",
-    ]),
-    CharBitmap(character: "*", rows: [
-        "00000", "00000", "00000", "10101", "01110",
-        "01110", "10101", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "=", rows: [
-        "00000", "00000", "00000", "01110", "00000",
-        "00000", "01110", "00000", "00000", "00000",
-    ]),
-    CharBitmap(character: "<", rows: [
-        "00000", "00001", "00010", "00100", "01000",
-        "01000", "00100", "00010", "00001", "00000",
-    ]),
-    CharBitmap(character: ">", rows: [
-        "00000", "10000", "01000", "00100", "00010",
-        "00010", "00100", "01000", "10000", "00000",
-    ]),
-    CharBitmap(character: "L", rows: [
-        "10000", "10000", "10000", "10000", "10000",
-        "10000", "10000", "10000", "10000", "11111",
-    ]),
-    CharBitmap(character: "J", rows: [
-        "00001", "00001", "00001", "00001", "00001",
-        "00001", "00001", "10001", "10001", "01110",
-    ]),
-    CharBitmap(character: "T", rows: [
-        "11111", "11111", "00100", "00100", "00100",
-        "00100", "00100", "00100", "00100", "00100",
-    ]),
-    CharBitmap(character: "V", rows: [
-        "10001", "10001", "10001", "10001", "01010",
-        "01010", "01010", "00100", "00100", "00100",
-    ]),
-    CharBitmap(character: "I", rows: [
-        "11111", "00100", "00100", "00100", "00100",
-        "00100", "00100", "00100", "00100", "11111",
-    ]),
-    CharBitmap(character: "O", rows: [
-        "01110", "10001", "10001", "10001", "10001",
-        "10001", "10001", "10001", "10001", "01110",
-    ]),
-    CharBitmap(character: "#", rows: [
-        "01010", "01010", "11111", "01010", "01010",
-        "01010", "01010", "11111", "01010", "01010",
-    ]),
-    CharBitmap(character: "%", rows: [
-        "11001", "11010", "00010", "00100", "00100",
-        "01000", "01000", "10001", "01011", "00011",
-    ]),
-    CharBitmap(character: "@", rows: [
-        "01110", "10001", "10111", "10101", "10101",
-        "10101", "10101", "10110", "10000", "01111",
-    ]),
-]
-
 // MARK: - Shape Vectors
 
 /// One pre-computed entry — a character paired with the 6D shape vector
@@ -231,12 +94,10 @@ private let shapeTableColumns: (  // swiftlint:disable:this large_tuple
 }()
 
 private func computeShapeTable() -> [ShapeEntry] {
-    // Raw vectors before normalisation.
-    var raw: [(Character, [Double])] = []
-    raw.reserveCapacity(shapeBasedBitmaps.count)
-    for bitmap in shapeBasedBitmaps {
-        raw.append((bitmap.character, shapeVector(from: bitmap)))
-    }
+    // Raw per-region coverage vectors measured from the reference font by
+    // `Tools/GenerateImageGlyphs` (see ImageGlyphCalibration.generated.swift),
+    // sampled at the same six circles the runtime uses.
+    let raw: [(Character, [Double])] = generatedShapeCoverage
 
     // Normalise each component by the maximum value across all characters,
     // so the cluster of vectors expands to fill the unit cube — without
@@ -258,46 +119,6 @@ private func computeShapeTable() -> [ShapeEntry] {
         entries.append(ShapeEntry(character: character, vector: normalised))
     }
     return entries
-}
-
-/// Computes a 6D shape vector for a character bitmap by sampling its
-/// rasterised pixels inside each of the six sampling circles.
-private func shapeVector(from bitmap: CharBitmap) -> [Double] {
-    let width = bitmap.rows.first?.count ?? 0
-    let height = bitmap.rows.count
-    guard width > 0, height > 0 else {
-        return [Double](repeating: 0, count: ShapeRegion.centres.count)
-    }
-
-    // Quick lookup: is the pixel at (x, y) of the bitmap "filled"?
-    func filled(_ x: Int, _ y: Int) -> Bool {
-        guard (0..<height).contains(y), (0..<width).contains(x) else { return false }
-        let row = bitmap.rows[y]
-        return row[row.index(row.startIndex, offsetBy: x)] == "1"
-    }
-
-    var vector: [Double] = []
-    vector.reserveCapacity(ShapeRegion.centres.count)
-    for centre in ShapeRegion.centres {
-        var hits = 0
-        for sampleIndex in 0..<ShapeRegion.samplesPerCircle {
-            // Distribute sample points around the centre on a Vogel-like
-            // sunflower spiral so they cover the circle evenly.
-            let angle = Double(sampleIndex) * 2.39996  // golden angle
-            let r = ShapeRegion.radius
-                * (Double(sampleIndex) / Double(ShapeRegion.samplesPerCircle - 1)).squareRoot()
-            let sx = centre.x + r * cos(angle)
-            let sy = centre.y + r * sin(angle)
-            // Map normalised cell coords back to bitmap pixel indices.
-            let px = Int((sx * Double(width)).rounded(.down))
-            let py = Int((sy * Double(height)).rounded(.down))
-            if filled(px, py) {
-                hits += 1
-            }
-        }
-        vector.append(Double(hits) / Double(ShapeRegion.samplesPerCircle))
-    }
-    return vector
 }
 
 // MARK: - Conversion

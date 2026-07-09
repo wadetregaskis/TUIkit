@@ -418,10 +418,12 @@ extension ASCIIConverter {
         case .ascii:
             return Array(" .:;+=xX$@")
         case .asciiDetailed:
-            // A long, ink-ordered pure-ASCII ramp (light → dense), after Paul
-            // Bourke's character-density table: ~70 levels of tonal gradation.
-            return Array(
-                " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$")
+            // A coverage-ordered, gap-free pure-ASCII ramp (light → dense),
+            // calibrated to the reference font's measured ink coverage by
+            // `Tools/GenerateImageGlyphs` (see ImageGlyphCalibration.generated.swift).
+            // Fewer but correctly ordered levels beat a longer ramp whose
+            // hand-picked ordering doesn't match this font's actual tones.
+            return generatedAsciiDetailedRamp
         case .coarseBlocks:
             return Array(" ░▒▓█")
         case .blocks, .fineBlocks, .shapeBased, .shapeUnicode, .braille:
