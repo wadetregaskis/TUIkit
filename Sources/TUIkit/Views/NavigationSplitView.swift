@@ -535,8 +535,17 @@ extension _NavigationSplitViewCore {
         let usable = availableWidth - max(0, count - 1)
         guard usable > 0, count > 0 else { return Array(repeating: 0, count: count) }
 
-        let measureContext = context.withAvailableSize(width: usable, height: context.availableHeight)
-        let proposal = ProposedSize(width: usable, height: nil)
+        // Measure each column's HUGGED content width, not its greedy fill. A
+        // width-greedy root (the sidebar/content `List`) reports `isWidthFlexible`
+        // with a fill-the-offer width unless `fixedSizeWidth` is set — which
+        // bucketed every column "flexible" so they split the usable width evenly
+        // (1/N each), coming out WIDER than the proportional Automatic (1/4) and
+        // Balanced (~1/3) shares. Requesting the hug (and proposing an unbounded
+        // width so the ideal/content width is measured) makes a naturally-narrow
+        // column take just its content width; the rightmost absorbs the slack.
+        var measureContext = context.withAvailableSize(width: usable, height: context.availableHeight)
+        measureContext.environment.fixedSizeWidth = true
+        let proposal = ProposedSize(width: nil, height: nil)
         var natural = [Int](repeating: minimumColumnWidth, count: count)
         var flexible = [Bool](repeating: false, count: count)
         for (index, column) in visibleColumns.enumerated() {
