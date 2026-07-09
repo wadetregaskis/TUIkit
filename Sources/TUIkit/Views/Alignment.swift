@@ -113,3 +113,38 @@ public struct Alignment: Sendable, Equatable {
     /// Bottom trailing.
     public static let bottomTrailing = Self(horizontal: .trailing, vertical: .bottom)
 }
+
+// MARK: - Text Alignment
+
+/// How multiple lines of text align relative to each other within a text view.
+///
+/// Mirrors SwiftUI's `TextAlignment`. Applied with
+/// ``View/multilineTextAlignment(_:)``, it controls only the *line-to-line*
+/// alignment of wrapped (or explicitly multi-line) ``Text`` — where each line
+/// sits within the text block's own width (the width of its longest line). A
+/// single-line ``Text`` is unaffected; the block as a whole is still positioned
+/// by its parent (a `.frame` alignment, a stack). The default is ``leading``.
+public enum TextAlignment: Sendable, Hashable, CaseIterable {
+    /// Lines are flush to the leading (left) edge; the right edge is ragged.
+    case leading
+
+    /// Lines are centred relative to the widest line; both edges are ragged.
+    case center
+
+    /// Lines are flush to the trailing (right) edge; the left edge is ragged.
+    case trailing
+}
+
+extension TextAlignment {
+    /// The leading (left) padding, in cells, to place a `lineWidth`-wide line
+    /// inside a `blockWidth`-wide text block so it sits at this alignment. The
+    /// trailing padding is `blockWidth - lineWidth - leadingPad`.
+    func leadingPad(lineWidth: Int, blockWidth: Int) -> Int {
+        let slack = max(0, blockWidth - lineWidth)
+        switch self {
+        case .leading: return 0
+        case .center: return slack / 2
+        case .trailing: return slack
+        }
+    }
+}

@@ -352,17 +352,43 @@ extension Text: Renderable, Layoutable {
             Self.applyingCase(effectiveCase, to: content),
             width: maxWidth, maxLines: maxHeight, mode: mode, atWordBoundary: atWordBoundary)
 
-        // Apply styling to each line. ANSI escapes occupy zero visible cells, so
-        // the styled lines have exactly the same per-line widths as the plain
-        // wrapped lines — carry those widths (and the known max width) into the
-        // buffer so neither this construction nor a parent aligning the column
-        // re-`strippedLength`s the (now ANSI-laden) lines. The buffer stays
-        // ragged: per the layout contract `Text` does not pad its lines, so
-        // `linesAreUniformWidth` is left false (its default).
-        let styledLines = wrapped.lines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         let knownWidth = wrapped.widths.max() ?? 0
 
-        return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: wrapped.widths)
+        // `multilineTextAlignment`: for `.center` / `.trailing` over more than
+        // one line, pad each line into the block's own width (the widest line)
+        // so shorter lines shift right or centre relative to it — SwiftUI's
+        // line-to-line alignment. `.leading` (the default) and single-line text
+        // keep the ragged, unpadded lines exactly as before (no snapshot churn;
+        // the padding would be invisible trailing space anyway), and the block
+        // width the measure pass reported is unchanged in every case.
+        let alignment = context.environment.multilineTextAlignment
+        let plainLines: [String]
+        let lineWidths: [Int]
+        if alignment != .leading, wrapped.lines.count > 1, knownWidth > 0 {
+            var aligned: [String] = []
+            aligned.reserveCapacity(wrapped.lines.count)
+            for (line, lineWidth) in zip(wrapped.lines, wrapped.widths) {
+                let leadingPad = alignment.leadingPad(lineWidth: lineWidth, blockWidth: knownWidth)
+                let trailingPad = max(0, knownWidth - lineWidth - leadingPad)
+                aligned.append(
+                    String(repeating: " ", count: leadingPad) + line
+                        + String(repeating: " ", count: trailingPad))
+            }
+            plainLines = aligned
+            lineWidths = Array(repeating: knownWidth, count: aligned.count)
+        } else {
+            plainLines = wrapped.lines
+            lineWidths = wrapped.widths
+        }
+
+        // Apply styling to each line. ANSI escapes occupy zero visible cells, so
+        // the styled lines have exactly the same per-line widths as the plain
+        // (possibly alignment-padded) lines — carry those widths (and the known
+        // max width) into the buffer so neither this construction nor a parent
+        // aligning the column re-`strippedLength`s the (now ANSI-laden) lines.
+        let styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+
+        return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: lineWidths)
     }
 
     /// The palette role this text draws with, used to match `.semanticColor`

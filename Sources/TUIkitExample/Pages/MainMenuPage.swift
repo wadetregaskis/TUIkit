@@ -126,7 +126,14 @@ struct MainMenuPage: View {
                         FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
                     }
                     HStack(spacing: 3) {
-                        FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle).equatable()
+                        // The SF Symbols subtitle wraps to two lines (glyphs +
+                        // "(macOS only)" above, the font caveat below). Centre
+                        // them relative to each other to show off
+                        // `.multilineTextAlignment(_:)` — the modifier flows
+                        // through the custom `FeatureBox` into its inner `Text`.
+                        FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle)
+                            .equatable()
+                            .multilineTextAlignment(.center)
                     }
                 }
                 Spacer()
