@@ -285,6 +285,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         handler.selection = erasedSelection
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
+        handler.wrapsAtEdge = context.environment.radioButtonGroupWrapsAtEdge
 
         FocusRegistration.register(context: context, handler: handler)
         let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
@@ -539,6 +540,12 @@ final class RadioButtonGroupHandler: Focusable {
     let orientation: RadioButtonOrientation
     var canBeFocused: Bool
 
+    /// Whether arrowing past the first/last item wraps within the group
+    /// (`true`) or relinquishes focus to the neighbouring control (`false`,
+    /// the default). Synced each render from the environment. See
+    /// ``View/radioButtonGroupWrapsAtEdge(_:)``.
+    var wrapsAtEdge: Bool = false
+
     /// The currently focused item index within the group.
     /// Persisted across renders to maintain focus position.
     var focusedIndex: Int = 0
@@ -584,33 +591,22 @@ extension RadioButtonGroupHandler {
         focusedIndex = min(focusedIndex, itemValues.count - 1)
 
         switch event.key {
+        // On the group's movement axis, an interior press moves focus within the
+        // group; a press *past* the edge either wraps (opt-in) or relinquishes —
+        // returning `false` lets FocusManager move to the neighbouring control in
+        // that direction (the default; see `radioButtonGroupWrapsAtEdge`). A
+        // cross-axis press is consumed as a no-op, as before.
         case .up:
-            // Vertical: navigate focus up (don't change selection); Horizontal: consume but do nothing
-            if orientation == .vertical {
-                focusedIndex = focusedIndex > 0 ? focusedIndex - 1 : itemValues.count - 1
-            }
-            return true
+            return moveOnAxis(.vertical, forward: false)
 
         case .down:
-            // Vertical: navigate focus down (don't change selection); Horizontal: consume but do nothing
-            if orientation == .vertical {
-                focusedIndex = focusedIndex < itemValues.count - 1 ? focusedIndex + 1 : 0
-            }
-            return true
+            return moveOnAxis(.vertical, forward: true)
 
         case .left:
-            // Horizontal: navigate focus left (don't change selection); Vertical: consume but do nothing
-            if orientation == .horizontal {
-                focusedIndex = focusedIndex > 0 ? focusedIndex - 1 : itemValues.count - 1
-            }
-            return true
+            return moveOnAxis(.horizontal, forward: false)
 
         case .right:
-            // Horizontal: navigate focus right (don't change selection); Vertical: consume but do nothing
-            if orientation == .horizontal {
-                focusedIndex = focusedIndex < itemValues.count - 1 ? focusedIndex + 1 : 0
-            }
-            return true
+            return moveOnAxis(.horizontal, forward: true)
 
         case .enter, .space:
             // Select the currently focused item (make it the selection)
@@ -619,6 +615,36 @@ extension RadioButtonGroupHandler {
 
         default:
             return false
+        }
+    }
+
+    /// Handles an arrow press along `axis` (`forward` = down / right).
+    ///
+    /// A cross-axis press (the group's orientation differs from `axis`) is a
+    /// consumed no-op, matching the previous behaviour. On the movement axis an
+    /// interior press steps `focusedIndex` and consumes the event; a press past
+    /// the first/last item wraps and consumes when ``wrapsAtEdge`` is set,
+    /// otherwise returns `false` so `FocusManager` relinquishes focus to the
+    /// neighbouring control in that direction.
+    private func moveOnAxis(_ axis: RadioButtonOrientation, forward: Bool) -> Bool {
+        guard orientation == axis else { return true }  // cross-axis: consumed no-op
+        let lastIndex = itemValues.count - 1
+        if forward {
+            if focusedIndex < lastIndex {
+                focusedIndex += 1
+                return true
+            }
+            guard wrapsAtEdge else { return false }  // escape past the bottom / right
+            focusedIndex = 0
+            return true
+        } else {
+            if focusedIndex > 0 {
+                focusedIndex -= 1
+                return true
+            }
+            guard wrapsAtEdge else { return false }  // escape past the top / left
+            focusedIndex = lastIndex
+            return true
         }
     }
 }

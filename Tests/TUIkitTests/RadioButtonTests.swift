@@ -382,30 +382,88 @@ struct RadioButtonGroupHandlerTests {
         #expect(selection == AnyHashable("y"))
     }
 
-    @Test("Handler wraps focus navigation at boundaries")
-    func boundaryNavigation() {
+    /// Builds a 2-item vertical handler for the boundary tests.
+    private func boundaryHandler() -> RadioButtonGroupHandler {
         var selection = AnyHashable("opt1")
-        let binding = Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )
-
-        let itemValues = [AnyHashable("opt1"), AnyHashable("opt2")]
-        let handler = RadioButtonGroupHandler(
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        return RadioButtonGroupHandler(
             focusID: "test",
             selection: binding,
-            itemValues: itemValues,
+            itemValues: [AnyHashable("opt1"), AnyHashable("opt2")],
             orientation: .vertical,
             canBeFocused: true
         )
+    }
 
-        // Try to go up from first item — should wrap focus to last
-        let upEvent = KeyEvent(key: .up)
-        let handled = handler.handleKeyEvent(upEvent)
+    @Test("By default, arrowing past the edge relinquishes focus (does not wrap)")
+    func boundaryRelinquishesByDefault() {
+        // Up from the first item is NOT consumed (returns false), so FocusManager
+        // moves to the previous control instead of wrapping to the last item.
+        let handler = boundaryHandler()
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == false)
+        #expect(handler.focusedIndex == 0, "focus stays put; the group did not wrap")
 
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 1)  // Wrapped to last item
-        #expect(selection == AnyHashable("opt1"))  // Selection unchanged
+        // Down from the last item likewise relinquishes.
+        handler.focusedIndex = 1
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == false)
+        #expect(handler.focusedIndex == 1)
+    }
+
+    @Test("Interior arrow presses still move focus within the group and consume")
+    func interiorNavigationConsumes() {
+        let handler = boundaryHandler()  // focusedIndex 0 of 2
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == true)
+        #expect(handler.focusedIndex == 1)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
+        #expect(handler.focusedIndex == 0)
+    }
+
+    @Test("wrapsAtEdge restores wrap-around at the boundaries")
+    func boundaryWrapsWhenOptedIn() {
+        let handler = boundaryHandler()
+        handler.wrapsAtEdge = true  // what .radioButtonGroupWrapsAtEdge() syncs
+
+        // Up from the first item wraps to the last and consumes.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
+        #expect(handler.focusedIndex == 1)
+        // Down from the last item wraps back to the first and consumes.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == true)
+        #expect(handler.focusedIndex == 0)
+    }
+
+    @Test("radioButtonGroupWrapsAtEdge environment value defaults to false; modifier sets it")
+    func wrapEnvironmentAndModifier() {
+        var env = EnvironmentValues()
+        #expect(env.radioButtonGroupWrapsAtEdge == false, "default is escape, not wrap")
+        env.radioButtonGroupWrapsAtEdge = true
+        #expect(env.radioButtonGroupWrapsAtEdge == true)
+        // The View modifier compiles and returns a view.
+        _ = Text("x").radioButtonGroupWrapsAtEdge()
+        _ = Text("x").radioButtonGroupWrapsAtEdge(false)
+    }
+
+    @Test("Escaping past the bottom edge moves focus to the next control in the section")
+    func escapeMovesFocusToNeighbour() {
+        // End-to-end: the group relinquishing the arrow (returning false) lets
+        // FocusManager advance focus to the sibling control, the whole point of
+        // the default escape behaviour.
+        let manager = FocusManager()
+        var selection = AnyHashable("a")
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        let group = RadioButtonGroupHandler(
+            focusID: "radio", selection: binding,
+            itemValues: [AnyHashable("a"), AnyHashable("b")],
+            orientation: .vertical, canBeFocused: true)
+        let neighbour = MockFocusable(id: "after", shouldConsumeEvents: false)
+        manager.register(group)  // first registered → auto-focused
+        manager.register(neighbour)
+        manager.focus(group)
+        group.focusedIndex = group.itemValues.count - 1  // sit on the last item
+
+        _ = manager.dispatchKeyEvent(KeyEvent(key: .down))  // down past the bottom
+        #expect(
+            manager.currentFocusedID == "after",
+            "focus escaped the group to the next control, not wrapped inside it")
     }
 
     @Test("Handler handles empty items without crashing")
