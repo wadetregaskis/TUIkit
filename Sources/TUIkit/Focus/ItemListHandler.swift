@@ -154,6 +154,11 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// The currently focused item index (keyboard cursor).
     var focusedIndex: Int = 0
 
+    /// The anchor row for shift-click range selection (macOS semantics): the
+    /// last row plainly clicked or modifier-toggled. A later shift-click
+    /// selects the whole span between the anchor and the clicked row.
+    var selectionAnchor: Int?
+
     /// The scroll offset (first visible item index).
     var scrollOffset: Int = 0
 
@@ -623,6 +628,47 @@ extension ItemListHandler {
             return
         }
         toggleSelectionAtFocusedIndex()
+    }
+
+    /// Applies macOS mouse-selection semantics for a click on `index`:
+    ///
+    /// - plain click — the clicked row becomes the SOLE selection (and the
+    ///   range anchor);
+    /// - shift-click — selects the whole span from the anchor to the clicked
+    ///   row (replacing the selection, exactly like Finder);
+    /// - ctrl- or option-click — toggles the clicked row individually, like
+    ///   command-click (terminals never report the command key, so both
+    ///   reportable modifiers stand in for it).
+    ///
+    /// Single-selection mode keeps its existing click-to-toggle behaviour;
+    /// the keyboard path (Space toggles at the focus cursor) is unchanged.
+    func handleClickSelection(at index: Int, event: MouseEvent) {
+        focusedIndex = index
+        guard selectionMode == .multi else {
+            toggleSelectionAtFocusedIndex()
+            return
+        }
+        guard let clickedID = id(at: index) else { return }
+
+        if event.shift, let anchor = selectionAnchor {
+            var range = Set<SelectionValue>()
+            for row in min(anchor, index)...max(anchor, index) {
+                if let id = id(at: row) { range.insert(id) }
+            }
+            multiSelection?.wrappedValue = range
+            // The anchor stays put, so successive shift-clicks re-pivot the
+            // range around the original anchor (Finder behaviour).
+            return
+        }
+
+        if event.ctrl || event.meta {
+            toggleSelectionAtFocusedIndex()
+            selectionAnchor = index
+            return
+        }
+
+        multiSelection?.wrappedValue = [clickedID]
+        selectionAnchor = index
     }
 
     /// Toggles the selection state at the focused index.

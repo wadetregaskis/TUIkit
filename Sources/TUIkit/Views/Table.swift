@@ -1022,15 +1022,17 @@ where Value.ID: Hashable {
                     }
                 }
                 if let index = clickedIndex {
-                    captureHandler.focusedIndex = index
                     // A double-click fires the row's primary action ("open");
-                    // a single click toggles selection as before.
+                    // a single click selects with macOS semantics (plain =
+                    // sole selection, shift = range, ctrl/option = toggle) —
+                    // see ItemListHandler.handleClickSelection.
                     if event.clickCount >= 2, let action = capturedPrimaryAction,
                         index >= 0, index < rowIDs.count
                     {
+                        captureHandler.focusedIndex = index
                         action(rowIDs[index])
                     } else {
-                        captureHandler.toggleSelectionAtFocusedIndex()
+                        captureHandler.handleClickSelection(at: index, event: event)
                     }
                 }
                 focusManager?.focus(id: captureFocusID)

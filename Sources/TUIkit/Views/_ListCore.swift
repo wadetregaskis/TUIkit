@@ -959,13 +959,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     yInLines >= $0.yStart && yInLines < $0.yStart + $0.height
                 }) {
                     if case .content(let id) = hit.type {
-                        captureHandler.focusedIndex = hit.rowIndex
-                        // A double-click fires the row's activation
-                        // ("open"); a single click toggles selection.
+                        // A double-click fires the row's activation ("open");
+                        // a single click selects with macOS semantics (plain
+                        // = sole selection, shift = range, ctrl/option =
+                        // toggle) — see handleClickSelection.
                         if event.clickCount >= 2, let action = capturedPrimaryAction {
+                            captureHandler.focusedIndex = hit.rowIndex
                             action(id)
                         } else {
-                            captureHandler.toggleSelectionAtFocusedIndex()
+                            captureHandler.handleClickSelection(at: hit.rowIndex, event: event)
                         }
                     }
                 }
