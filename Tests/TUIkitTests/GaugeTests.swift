@@ -175,3 +175,38 @@ struct GaugeTests {
         #expect(measured.height == rendered.height)
     }
 }
+
+@MainActor
+@Suite("Circular dial speedometer origin")
+struct GaugeSpeedometerOriginTests {
+    /// The raw (ANSI-coded) dial rows of a capacity ring at `fraction`.
+    private func dialRows(fraction: Double) -> [String] {
+        let buffer = renderToBuffer(
+            Gauge(value: fraction) { EmptyView() } currentValueLabel: { Text("x") }
+                .gaugeStyle(.accessoryCircularCapacity),
+            context: makeRenderContext(width: 30, height: 6))
+        return buffer.lines.filter { $0.stripped.contains("╭") || $0.stripped.contains("╰") || $0.stripped.contains("│") }
+    }
+
+    @Test("A small capacity fill lights the bottom-left arc, not the top")
+    func lowFillStartsAtBottomLeft() {
+        // The fill sweeps like a speedometer: from just left of the
+        // bottom-centre break, clockwise. At ~10% only bottom-left cells are
+        // lit, so the accent colour appears on the BOTTOM row and not the top.
+        let rows = dialRows(fraction: 0.1)
+        guard rows.count >= 3 else {
+            Issue.record("expected a 3-row dial, got \(rows.count)")
+            return
+        }
+        let top = rows[0]
+        let bottom = rows[rows.count - 1]
+        // The dim ring colour differs from the accent; count distinct SGR
+        // colour codes per row — the lit row carries an extra one.
+        func colourCodes(_ line: String) -> Set<Substring> {
+            Set(line.split(separator: "\u{1B}").filter { $0.hasPrefix("[3") || $0.hasPrefix("[9") })
+        }
+        #expect(
+            colourCodes(bottom).count > colourCodes(top).count,
+            "the bottom row carries the accent at low fill; top: \(top.debugDescription) bottom: \(bottom.debugDescription)")
+    }
+}

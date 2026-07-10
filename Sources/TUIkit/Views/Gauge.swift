@@ -321,17 +321,22 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         let gapCols = Set(gapStart..<(gapStart + gapCells))
         for col in gapCols { glyphs[2][col] = " " }
 
-        // Perimeter cells in clockwise order from the top-left corner. The
-        // bottom-centre break is excluded, so the fill arc and the position
-        // marker never count or land on a gap cell and the ring visibly opens
-        // there.
+        // Perimeter cells in the order a SPEEDOMETER sweeps: starting at the
+        // arc's most counter-clockwise cell — just left of the bottom-centre
+        // break — and progressing clockwise all the way around to the cell
+        // just right of the break. The break itself is excluded, so the fill
+        // arc and the position marker never land on a gap cell and the ring
+        // visibly opens there.
         var perimeter: [(r: Int, c: Int)] = []
-        for col in 0...(inner + 1) { perimeter.append((0, col)) }  // top L→R
-        perimeter.append((1, inner + 1))  // right side
-        for col in stride(from: inner + 1, through: 0, by: -1) where !gapCols.contains(col) {
-            perimeter.append((2, col))  // bottom R→L, skipping the break
+        for col in stride(from: gapStart - 1, through: 0, by: -1) {
+            perimeter.append((2, col))  // bottom-left arc: break → corner
         }
-        perimeter.append((1, 0))  // left side
+        perimeter.append((1, 0))  // left side, upward
+        for col in 0...(inner + 1) { perimeter.append((0, col)) }  // top L→R
+        perimeter.append((1, inner + 1))  // right side, downward
+        for col in stride(from: inner + 1, through: gapStart + gapCells, by: -1) {
+            perimeter.append((2, col))  // bottom-right arc: corner → break
+        }
 
         // Which perimeter cells are "on" (accent): a filled arc for capacity,
         // a single marker for position.
