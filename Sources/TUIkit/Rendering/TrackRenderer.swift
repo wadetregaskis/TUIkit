@@ -173,16 +173,23 @@ extension TrackRenderer {
         let hasPartial = ramp != nil && partialStep > 0 && fullCells < width
         let litCellCount = min(width, fullCount + (hasPartial ? 1 : 0))
 
-        // `.background` paints the WHOLE track on the empty colour: the unfilled
-        // region is one flat colour, and because the filled cells carry the same
-        // background, any inter-cell gaps the terminal leaves in the fill show
-        // the bar's colour rather than the terminal background (one solid unit).
-        let trackBackground: Color?
+        // `.background` paints backgrounds across the whole track. The empty
+        // region and the partial boundary cell sit on the EMPTY colour (a flat
+        // unfilled remainder). Full cells paint their own FILL colour as the
+        // background: terminals don't reliably cover the whole cell with a
+        // glyph — Terminal.app leaves a few pixel rows above U+2588 and
+        // hairline seams between cells, which used to show the empty colour
+        // as a bleed above/through the fill (verified visually in
+        // Terminal.app). With glyph colour == background colour those
+        // unpainted pixels vanish, while the real glyph is kept so a
+        // plain-text copy (no styling) still shows where the progress was.
+        let paintsBackground: Bool
         if case .background = config.emptyStyle {
-            trackBackground = emptyColor
+            paintsBackground = true
         } else {
-            trackBackground = nil
+            paintsBackground = false
         }
+        let trackBackground: Color? = paintsBackground ? emptyColor : nil
 
         // Optional per-cell colour fade across the lit cells.
         func fillColour(at index: Int) -> Color {
@@ -197,11 +204,15 @@ extension TrackRenderer {
 
         var result = ""
         for index in 0..<fullCount {
+            let cellColour = fillColour(at: index)
             result += ANSIRenderer.colorize(
-                String(config.fullGlyph), foreground: fillColour(at: index),
-                background: trackBackground)
+                String(config.fullGlyph), foreground: cellColour,
+                background: paintsBackground ? cellColour : nil)
         }
         if hasPartial, let ramp {
+            // The boundary cell is genuinely part-empty: the glyph covers the
+            // filled fraction and the empty colour correctly shows behind the
+            // rest of the cell.
             result += ANSIRenderer.colorize(
                 String(ramp[partialStep - 1]), foreground: fillColour(at: fullCount),
                 background: trackBackground)

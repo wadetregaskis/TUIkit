@@ -196,6 +196,32 @@ struct ProgressViewStyleTests {
         }
     }
 
+    @Test("BlockFine full cells carry the FILL colour as their background (no bleed)")
+    func blockFineFullCellsFillBackground() {
+        // Terminal.app doesn't paint the whole cell with █ (a few pixel rows
+        // above the glyph and hairline seams between cells stay background).
+        // Painting the empty colour behind the FILLED cells showed through as
+        // a bleed above the fill — so full cells now use their own fill
+        // colour as the background (glyph == background ⇒ unpainted pixels
+        // invisible), while the partial boundary cell keeps the empty colour
+        // behind its genuinely-unfilled remainder. Under basic-16: green
+        // bg = 42 (full cells), red bg = 41 (partial + empty region).
+        withColorDepth(.basic16) {
+            // 0.45 × 10 cells × 8 eighths = 36 steps → 4 full cells + a ▌.
+            let bar = TrackRenderer.render(
+                fraction: 0.45, width: 10, style: .blockFine,
+                filledColor: .green, emptyColor: .red, accentColor: .blue)
+            #expect(bar.contains("42"), "full cells sit on the fill colour: \(bar.debugDescription)")
+            let partialCell = bar.split(separator: "▌").first.map(String.init) ?? ""
+            #expect(
+                !partialCell.isEmpty && bar.contains("▌"),
+                "the boundary cell renders its partial glyph: \(bar.debugDescription)")
+            #expect(
+                bar.contains("41"),
+                "the partial cell + empty remainder keep the empty colour behind them: \(bar.debugDescription)")
+        }
+    }
+
     @Test("shadeRamp uses · for empty, distinct from shade's ░")
     func shadeRampVsShade() {
         // #3: `.shade` (▓ on ░) reads close to `.block`; `.shadeRamp` is the
