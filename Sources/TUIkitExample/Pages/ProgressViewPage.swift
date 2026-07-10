@@ -38,48 +38,27 @@ struct ProgressViewPage: View {
     /// Which style the top "Determinate" section is currently showing.
     @State private var determinateStyleIndex = 0
 
+    /// Decides whether the Determinate and Indeterminate sections sit
+    /// side-by-side (wide terminals) or stack (narrow). An explicit width
+    /// check rather than `ViewThatFits`: both sections hold width-flexible
+    /// bars, and flexible content always "fits" whatever is proposed, so
+    /// `ViewThatFits` would never reject the side-by-side variant.
+    @Environment(\.terminalWidth) private var terminalWidth
+
     var body: some View {
         let current = Self.cyclableStyles[determinateStyleIndex]
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.progressView.determinate")) {
-                // Both bars animate slowly via `animatedFraction` — they
-                // share the same wall-clock phase so they stay in sync,
-                // and the PulseTimer's ~10 Hz re-render makes the
-                // animation look continuous despite being state-less.
-                // The `s` shortcut cycles the style applied to just these two.
-                VStack(alignment: .leading, spacing: 1) {
-                    let fraction = animatedFraction()
-                    ProgressView(L("page.progressView.downloadingFiles"), value: fraction)
-                        .progressViewStyle(current.style)
-
-                    ProgressView(value: fraction) {
-                        Text(L("page.progressView.buildProgress"))
-                            .foregroundStyle(.palette.foreground)
-                    } currentValueLabel: {
-                        Text("\(Int((fraction * 100).rounded()))%")
-                            .foregroundStyle(.palette.foregroundSecondary)
-                    }
-                    .progressViewStyle(current.style)
+            if terminalWidth >= 80 {
+                HStack(alignment: .top, spacing: 2) {
+                    determinateSection(style: current.style)
+                        .frame(maxWidth: .infinity)
+                    indeterminateSection
+                        .frame(maxWidth: .infinity)
                 }
-            }
-
-            DemoSection(L("page.progressView.indeterminate")) {
-                VStack(alignment: .leading, spacing: 1) {
-                    ProgressView(L("page.progressView.connecting"))
-
-                    ProgressView {
-                        Text(L("page.progressView.reticulatingSplines"))
-                            .foregroundStyle(.palette.foreground)
-                    }
-
-                    // Pure indeterminate, no label — useful inline against
-                    // another control.
-                    HStack(spacing: 1) {
-                        Text(L("page.progressView.working")).dim()
-                        ProgressView()
-                    }
-                }
+            } else {
+                determinateSection(style: current.style)
+                indeterminateSection
             }
 
             DemoSection(L("page.progressView.determinateStyles")) {
@@ -176,6 +155,52 @@ struct ProgressViewPage: View {
             StatusBarItem(shortcut: "s", label: "\(L("page.progressView.styleLabel")): \(current.name)") {
                 determinateStyleIndex =
                     (determinateStyleIndex + 1) % Self.cyclableStyles.count
+            }
+        }
+    }
+
+    /// The "Determinate" section — two labelled bars animating via the shared
+    /// wall-clock fraction (they stay in sync; the PulseTimer's ~10 Hz
+    /// re-render makes the animation look continuous despite being
+    /// state-less). The `s` shortcut cycles the style applied to just these.
+    @ViewBuilder
+    private func determinateSection(style: TrackStyle) -> some View {
+        DemoSection(L("page.progressView.determinate")) {
+            VStack(alignment: .leading, spacing: 1) {
+                let fraction = animatedFraction()
+                ProgressView(L("page.progressView.downloadingFiles"), value: fraction)
+                    .progressViewStyle(style)
+
+                ProgressView(value: fraction) {
+                    Text(L("page.progressView.buildProgress"))
+                        .foregroundStyle(.palette.foreground)
+                } currentValueLabel: {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                }
+                .progressViewStyle(style)
+            }
+        }
+    }
+
+    /// The "Indeterminate" section — labelled, custom-label and bare spinners.
+    @ViewBuilder
+    private var indeterminateSection: some View {
+        DemoSection(L("page.progressView.indeterminate")) {
+            VStack(alignment: .leading, spacing: 1) {
+                ProgressView(L("page.progressView.connecting"))
+
+                ProgressView {
+                    Text(L("page.progressView.reticulatingSplines"))
+                        .foregroundStyle(.palette.foreground)
+                }
+
+                // Pure indeterminate, no label — useful inline against
+                // another control.
+                HStack(spacing: 1) {
+                    Text(L("page.progressView.working")).dim()
+                    ProgressView()
+                }
             }
         }
     }
