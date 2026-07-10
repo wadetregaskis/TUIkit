@@ -27,9 +27,30 @@ final class TextEditorHandler: Focusable {
     /// Shift-click sets it; the selection then spans anchor…cursor. Set by the
     /// mouse handler and consumed/cleared by the next keystroke.
     var selectionAnchor: TextEditorPosition?
-    /// The column vertical motion tries to preserve (so Up/Down through a short
-    /// line don't lose the horizontal position).
+    /// The DISPLAY column vertical motion tries to preserve (so Up/Down
+    /// through a short line don't lose the horizontal position). Display, not
+    /// character, space: on tab-bearing lines the visual column runs ahead of
+    /// the character index, and the caret should track visually — the macOS
+    /// text system preserves the visual x the same way.
     private var desiredColumn = 0
+
+    /// How tabs are laid out — synced from the environment by the rendering
+    /// core each frame, so vertical motion and the renderer agree on where a
+    /// tab puts the columns after it.
+    var tabWidth: TabWidth = .periodic(4)
+
+    /// Remembers the cursor's display column for vertical motion.
+    private func syncDesiredColumn(_ lines: [[Character]]? = nil) {
+        let lines = lines ?? readLines()
+        guard cursorLine < lines.count else {
+            // Out-of-bounds cursor (stale state, normalised elsewhere): fall
+            // back to the raw index rather than reading a missing line.
+            desiredColumn = cursorColumn
+            return
+        }
+        desiredColumn = TabLayout.displayColumn(
+            ofCharIndex: cursorColumn, in: lines[cursorLine], tabWidth: tabWidth)
+    }
 
     /// Top visible line — the core advances it to follow the cursor.
     var scrollLine = 0
@@ -293,7 +314,7 @@ final class TextEditorHandler: Focusable {
             cursorLine = insertAt
         }
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// Splits the current line at the cursor.
@@ -327,7 +348,7 @@ final class TextEditorHandler: Focusable {
             return
         }
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// Deletes the character at the cursor, joining with the next line at the
@@ -343,7 +364,7 @@ final class TextEditorHandler: Focusable {
             return
         }
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func moveLeft() {
@@ -353,7 +374,7 @@ final class TextEditorHandler: Focusable {
             cursorLine -= 1
             cursorColumn = readLines()[cursorLine].count
         }
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func moveRight() {
@@ -364,7 +385,7 @@ final class TextEditorHandler: Focusable {
             cursorLine += 1
             cursorColumn = 0
         }
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// Moves the cursor up/down a line, preserving the desired column where the
@@ -374,7 +395,8 @@ final class TextEditorHandler: Focusable {
         let target = cursorLine + delta
         guard target >= 0, target < lines.count else { return }
         cursorLine = target
-        cursorColumn = min(desiredColumn, lines[cursorLine].count)
+        cursorColumn = TabLayout.charIndex(
+            forDisplayColumn: desiredColumn, in: lines[cursorLine], tabWidth: tabWidth)
     }
 
     /// Moves the cursor up/down a screenful (Page Up / Page Down, Ctrl-V).
@@ -383,7 +405,8 @@ final class TextEditorHandler: Focusable {
         let step = max(1, viewportHeight - 1)
         let target = min(max(0, cursorLine + pages * step), lines.count - 1)
         cursorLine = target
-        cursorColumn = min(desiredColumn, lines[cursorLine].count)
+        cursorColumn = TabLayout.charIndex(
+            forDisplayColumn: desiredColumn, in: lines[cursorLine], tabWidth: tabWidth)
     }
 
     // MARK: - Line / document motion
@@ -395,7 +418,7 @@ final class TextEditorHandler: Focusable {
 
     private func moveToEndOfLine() {
         cursorColumn = readLines()[cursorLine].count
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func moveToStartOfDocument() {
@@ -408,7 +431,7 @@ final class TextEditorHandler: Focusable {
         let lines = readLines()
         cursorLine = lines.count - 1
         cursorColumn = lines[cursorLine].count
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     // MARK: - Word motion
@@ -442,7 +465,7 @@ final class TextEditorHandler: Focusable {
             return
         }
         cursorColumn = wordBoundaryLeft(readLines()[cursorLine], from: cursorColumn)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func moveWordRight() {
@@ -452,7 +475,7 @@ final class TextEditorHandler: Focusable {
             return
         }
         cursorColumn = wordBoundaryRight(line, from: cursorColumn)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func deleteWordBackward() {
@@ -465,7 +488,7 @@ final class TextEditorHandler: Focusable {
         lines[cursorLine].removeSubrange(target..<cursorColumn)
         cursorColumn = target
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     private func deleteWordForward() {
@@ -477,7 +500,7 @@ final class TextEditorHandler: Focusable {
         let target = wordBoundaryRight(lines[cursorLine], from: cursorColumn)
         lines[cursorLine].removeSubrange(cursorColumn..<target)
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     // MARK: - Kill / yank / transpose / open
@@ -497,7 +520,7 @@ final class TextEditorHandler: Focusable {
             lines.remove(at: cursorLine + 1)
             writeLines(lines)
         }
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// Ctrl-Y: inserts the most recently killed text at the cursor.
@@ -522,7 +545,7 @@ final class TextEditorHandler: Focusable {
             cursorColumn += 1
         }
         writeLines(lines)
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// Ctrl-O: splits the line at the cursor but leaves the cursor in place, so
@@ -581,7 +604,7 @@ extension TextEditorHandler {
         cursorColumn = min(max(0, column), lines[cursorLine].count)
         // Vertical motion after a click should keep the clicked column, so sync
         // the preferred column like the keyboard motion methods do.
-        desiredColumn = cursorColumn
+        syncDesiredColumn()
     }
 
     /// The selected column range within `lineIndex` (whose length is

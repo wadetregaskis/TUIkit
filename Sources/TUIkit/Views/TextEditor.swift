@@ -36,6 +36,18 @@
 /// | Option-Backspace / Delete | Delete the word before / after the cursor |
 /// | Option-Tab | Insert a literal tab (plain Tab moves focus) |
 ///
+/// Literal tabs are laid out against tab *stops* — by default every 4 columns
+/// (a tab advances to the next multiple of 4, so its visual width varies),
+/// matching how the macOS text system, terminals and code editors treat tabs.
+/// Configure the interval, or switch to a constant advance, for a subtree with
+/// ``SwiftUICore/View/tabWidth(_:)``:
+///
+/// ```swift
+/// TextEditor(text: $source)
+///     .tabWidth(.periodic(8))   // classic terminal stops
+/// // or .tabWidth(.fixed(2))    // every tab exactly two cells
+/// ```
+///
 /// > Note: Option chords require the terminal to *send* Option as Meta
 /// > (`ESC` + key). Terminal.app ships with **Use Option as Meta Key**
 /// > disabled — enable it in Settings → Profiles → Keyboard (iTerm2: set the
@@ -143,6 +155,10 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         handler.text = text
         handler.canBeFocused = !isDisabled
         handler.viewportHeight = height
+        // Synced each render so the handler's vertical motion preserves the
+        // same *visual* column the renderer draws the caret at.
+        let tabWidth = context.environment.tabWidth
+        handler.tabWidth = tabWidth
         handler.clampCursor()
 
         FocusRegistration.register(context: context, handler: handler)
@@ -156,10 +172,18 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let hasVerticalOverflow = displayLines.count > height
         let contentWidth = hasVerticalOverflow ? max(1, width - 1) : width
 
-        // Follow the cursor. This mutates persistent scroll state, so it is
-        // gated on the render pass — never during measuring.
+        // Follow the cursor — in DISPLAY columns, since that's the space the
+        // scroll window and the caret cell live in (a tab makes the display
+        // column run ahead of the character index). Mutates persistent scroll
+        // state, so it is gated on the render pass — never during measuring.
+        let cursorDisplayColumn = TabLayout.displayColumn(
+            ofCharIndex: handler.cursorColumn,
+            in: displayLines[min(handler.cursorLine, displayLines.count - 1)],
+            tabWidth: tabWidth)
         if !context.isMeasuring {
-            followCursor(handler, lineCount: displayLines.count, width: contentWidth, height: height)
+            followCursor(
+                handler, cursorDisplayColumn: cursorDisplayColumn,
+                lineCount: displayLines.count, width: contentWidth, height: height)
         }
 
         // A subtle field background so the editor reads as a text field (like
@@ -177,14 +201,22 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 output.append(emptyRow(width: contentWidth, background: fieldBackground, palette: palette))
                 continue
             }
-            let cursorColumn = (isFocused && lineIndex == handler.cursorLine) ? handler.cursorColumn : nil
-            let selection =
-                isFocused
-                ? handler.selectedColumns(inLine: lineIndex, lineLength: displayLines[lineIndex].count)
+            let lineChars = displayLines[lineIndex]
+            let cursorColumn = (isFocused && lineIndex == handler.cursorLine) ? cursorDisplayColumn : nil
+            // The handler's selection is character-indexed; the row is painted
+            // in display cells, so convert the bounds (a char range maps to a
+            // contiguous display range — expansion is monotonic — and a
+            // selected tab highlights its whole span, as in any editor).
+            let selection: Range<Int>? = isFocused
+                ? handler.selectedColumns(inLine: lineIndex, lineLength: lineChars.count).map { range in
+                    TabLayout.displayColumn(ofCharIndex: range.lowerBound, in: lineChars, tabWidth: tabWidth)
+                        ..< TabLayout.displayColumn(ofCharIndex: range.upperBound, in: lineChars, tabWidth: tabWidth)
+                }
                 : nil
             output.append(
                 styledRow(
-                    displayLines[lineIndex], scrollColumn: handler.scrollColumn, width: contentWidth,
+                    TabLayout.expand(lineChars, tabWidth: tabWidth),
+                    scrollColumn: handler.scrollColumn, width: contentWidth,
                     cursorColumn: cursorColumn, selection: selection, palette: palette,
                     isDisabled: isDisabled, background: fieldBackground))
         }
@@ -237,7 +269,13 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     }
 
     /// Advances the handler's scroll offsets so the cursor stays visible.
-    private func followCursor(_ handler: TextEditorHandler, lineCount: Int, width: Int, height: Int) {
+    /// Horizontal scrolling is in display columns (`cursorDisplayColumn` —
+    /// the caret's on-screen cell, which runs ahead of the character index
+    /// on tab-bearing lines).
+    private func followCursor(
+        _ handler: TextEditorHandler, cursorDisplayColumn: Int,
+        lineCount: Int, width: Int, height: Int
+    ) {
         if handler.cursorLine < handler.scrollLine {
             handler.scrollLine = handler.cursorLine
         } else if handler.cursorLine >= handler.scrollLine + height {
@@ -245,10 +283,10 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         }
         handler.scrollLine = max(0, min(handler.scrollLine, max(0, lineCount - height)))
 
-        if handler.cursorColumn < handler.scrollColumn {
-            handler.scrollColumn = handler.cursorColumn
-        } else if handler.cursorColumn >= handler.scrollColumn + width {
-            handler.scrollColumn = handler.cursorColumn - width + 1
+        if cursorDisplayColumn < handler.scrollColumn {
+            handler.scrollColumn = cursorDisplayColumn
+        } else if cursorDisplayColumn >= handler.scrollColumn + width {
+            handler.scrollColumn = cursorDisplayColumn - width + 1
         }
         handler.scrollColumn = max(0, handler.scrollColumn)
     }
@@ -334,11 +372,22 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         // Map a buffer-local (x, y) to a text position through the scroll
         // offsets in effect for the displayed frame. The trailing scrollbar
-        // column (when present) clamps into the last content column.
+        // column (when present) clamps into the last content column. The click
+        // lands in DISPLAY space; the handler's cursor is a character index,
+        // so translate through the clicked line's tab layout (a click anywhere
+        // in a tab's span puts the caret on the tab).
+        let tabWidth = context.environment.tabWidth
+        let text = self.text
         func placeCursor(at event: MouseEvent) {
             let row = max(0, min(event.y, height - 1))
-            let column = max(0, min(event.x, contentWidth))
-            handler.moveCursor(toLine: handler.scrollLine + row, column: handler.scrollColumn + column)
+            let displayColumn = handler.scrollColumn + max(0, min(event.x, contentWidth))
+            let line = handler.scrollLine + row
+            let allLines = text.wrappedValue
+                .split(separator: "\n", omittingEmptySubsequences: false).map { Array($0) }
+            let lineChars = allLines.indices.contains(line) ? allLines[line] : []
+            let column = TabLayout.charIndex(
+                forDisplayColumn: displayColumn, in: lineChars, tabWidth: tabWidth)
+            handler.moveCursor(toLine: line, column: column)
         }
 
         let handlerID = mouseDispatcher.register { event in

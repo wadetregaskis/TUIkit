@@ -360,6 +360,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `Table.onRowDoubleClick(_:)`, `MouseEvent.clickCount` | double-click on a value-based `Table` row (terminals report no double-click, so the dispatcher synthesises `clickCount` by timing) |
 | `.radioButtonGroupWrapsAtEdge(_:)` | edge-arrow in a `RadioButtonGroup` escapes to the next control (default) or wraps within the group (opt-in) |
 | Image `.asciiDetailed` (long supersampled ramp), `.shapeUnicode` (Sobel-edge box-drawing lines) | higher-fidelity raster→text character sets |
+| `.tabWidth(_:)` (`TabWidth.periodic`/`.fixed`) | tab-stop layout for literal tabs in `TextEditor` (default: snap to 4-column stops, like the text system's `defaultTabInterval`; SwiftUI exposes no tab control) |
 | `.navigationSplitViewResizable`, `.navigationSplitViewColumnWidth`, `.fixedSize` on `List`, `.listEmptyPlaceholder` | terminal split/list affordances |
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |
 | `.maxFrameRate` (App) | cap redraw rate |
