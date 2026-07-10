@@ -375,11 +375,14 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         let stateStorage = context.environment.stateStorage!
         let palette = context.environment.palette
 
-        // Slider expands to fill available width (with minimum). Subtracting
-        // the chrome here means track + chrome fills exactly `availableWidth`,
-        // matching what `sizeThatFits` reports.
+        // Slider expands to fill available width. `sizeThatFits` REQUESTS at
+        // least `minTrackWidth` of track, but at render time we fit whatever
+        // width layout actually granted (e.g. a narrower explicit `.frame`):
+        // flooring the track here would push the trailing chrome — the right
+        // arrow and value field — past `availableWidth`, where it gets clipped
+        // and overlaps the next view. Chrome integrity beats track length.
         let showsValue = context.environment.sliderShowsValue
-        let trackWidth = max(minTrackWidth, context.availableWidth - chromeWidth(showsValue: showsValue))
+        let trackWidth = max(1, context.availableWidth - chromeWidth(showsValue: showsValue))
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,

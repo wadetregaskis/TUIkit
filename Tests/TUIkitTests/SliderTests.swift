@@ -59,6 +59,24 @@ struct SliderTests {
         #expect(buffer.lines[0].contains("50%"))
     }
 
+    @Test("A narrow frame compresses the track, never the chrome")
+    func narrowFrameKeepsChrome() {
+        // The slider REQUESTS at least `minTrackWidth` of track via
+        // sizeThatFits, but must FIT whatever layout actually grants — an
+        // explicit frame narrower than that used to overflow and clip the
+        // trailing " ▶" (and overlap whatever view came next).
+        var value = 0.5
+        let view = Slider(value: Binding(get: { value }, set: { value = $0 }))
+            .frame(width: 12)
+            .sliderShowsValue(false)
+        let buffer = renderToBuffer(view, context: testContext(width: 40))
+        let line = buffer.lines[0].stripped
+
+        #expect(line.contains("◀"), "left arrow: \(line)")
+        #expect(line.contains("▶"), "right arrow survives a narrow frame: \(line)")
+        #expect(line.count <= 12, "renders within the granted width: '\(line)'")
+    }
+
     // MARK: - Track Styles
 
     @Test("Default knob style shows a rail with a round handle")
