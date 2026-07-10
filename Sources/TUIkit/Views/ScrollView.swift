@@ -332,6 +332,8 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Captured at render so Shift+arrow can accelerate at event time, when the
         // environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
+        handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
 
         // Scrollbar reservation. Each bar steals one cell across the viewport — the
         // vertical bar a trailing column, the horizontal bar a bottom row. The

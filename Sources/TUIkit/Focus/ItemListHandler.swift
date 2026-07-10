@@ -163,6 +163,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// Held arrow/track auto-repeat action (``ScrollableOffsetState``).
     var scrollbarRepeat: ScrollbarRepeat?
 
+    /// Wheel-chaining grace state (``ScrollableOffsetState``).
+    var wheelEdgeHold = WheelEdgeHold()
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 

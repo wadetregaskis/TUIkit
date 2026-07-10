@@ -213,6 +213,9 @@ struct ScrollViewHandlerTests {
         let handler = ScrollViewHandler(focusID: "sv")
         handler.contentHeight = 100
         handler.viewportHeight = 10
+        // This test pins the CHAINING mechanics; the edge grace period that
+        // normally delays it is covered by WheelChainingGraceTests.
+        handler.wheelEdgeHold.delayNanos = 0
 
         // Mid-content: a wheel tick moves the viewport → consumed.
         handler.scrollOffset = 50
@@ -447,6 +450,9 @@ struct ScrollViewRenderingTests {
         dispatcher.setActiveSupport(.standard)
 
         // A short inner ScrollView at the top, then a tall run of outer rows.
+        // `.scrollChainingDelay(.zero)` disables the edge grace period (tested
+        // separately in WheelChainingGraceTests) so the chaining itself can be
+        // asserted without a clock — and exercises the environment plumbing.
         let view = ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ScrollView {
@@ -458,6 +464,7 @@ struct ScrollViewRenderingTests {
                 ForEach(0..<60, id: \.self) { Text("Outer \($0)") }
             }
         }
+        .scrollChainingDelay(.zero)
 
         let initial = renderToBuffer(view, context: context)
         dispatcher.setRegions(initial.hitTestRegions)

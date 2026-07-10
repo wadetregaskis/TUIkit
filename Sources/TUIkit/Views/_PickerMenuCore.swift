@@ -305,6 +305,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         handler.menuScroll.extent = entries.count
         handler.menuScroll.viewportHeight = maxVisible
+        handler.menuScroll.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
         // Follow the highlight only when keyboard navigation moved it; wheel/bar
         // scrolling (which doesn't set the flag) then moves the window freely.
         if handler.scrollFollowPending {

@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Dispatch
+
 // MARK: - ScrollableOffsetState
 
 /// The scroll-position arithmetic shared by
@@ -53,6 +55,10 @@ public protocol ScrollableOffsetState: AnyObject {
     /// handler so the bar's owner can drive it from the render loop across frames.
     var scrollbarRepeat: ScrollbarRepeat? { get set }
 
+    /// Grace-period state for wheel chaining at this scroller's edges — see
+    /// ``WheelEdgeHold`` and ``handleWheelEvent(_:linesPerTick:)``.
+    var wheelEdgeHold: WheelEdgeHold { get set }
+
     /// The largest valid ``scrollOffset`` for the current extent and viewport.
     ///
     /// A protocol *requirement* (with the obvious `extent - viewportHeight`
@@ -84,6 +90,35 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var extent: Int = 0
     public var scrollbarDragGrab: Int?
     public var scrollbarRepeat: ScrollbarRepeat?
+    public var wheelEdgeHold = WheelEdgeHold()
+
+    public init() {}
+}
+
+// MARK: - Wheel edge grace period
+
+/// Per-scroller state for the wheel-chaining grace period.
+///
+/// Hitting a nested scroller's edge mid-scroll used to chain the very next
+/// wheel tick to the parent — so finishing a scroll to the bottom of an inner
+/// list would fling the whole page. Instead, the first blocked tick at an
+/// edge starts a grace period (``delayNanos``, from the
+/// ``SwiftUICore/View/scrollChainingDelay(_:)`` environment; default 500 ms):
+/// blocked ticks within it are consumed silently, and only once it expires do
+/// they chain to the enclosing scroller. Any successful scroll re-arms the
+/// grace for the next edge hit. A scroller with nothing to scroll never
+/// traps the wheel at all.
+public struct WheelEdgeHold {
+    /// When the current run of blocked-at-edge wheel ticks began, or `nil`
+    /// when the last wheel event moved the viewport.
+    var arrivalNanos: UInt64?
+
+    /// The grace duration in nanoseconds; 0 chains immediately (the original
+    /// behaviour). Synced from the environment by the owning view each frame.
+    var delayNanos: UInt64 = 500_000_000
+
+    /// Monotonic clock, injectable for tests.
+    var nowNanos: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
 
     public init() {}
 }
@@ -175,6 +210,8 @@ extension ScrollableOffsetState {
     /// unconditionally — the previous behaviour — trapped the
     /// wheel in whichever scroller the cursor happened to be over,
     /// making the parent's lower content unreachable by wheel.
+    /// A wheel tick that hits the scroller's edge does not chain immediately:
+    /// see ``WheelEdgeHold`` for the grace-period model.
     @discardableResult
     public func handleWheelEvent(
         _ event: MouseEvent,
@@ -184,14 +221,33 @@ extension ScrollableOffsetState {
         case .scrollUp:
             let before = scrollOffset
             scroll(by: -linesPerTick)
-            return scrollOffset != before
+            return resolveWheelOutcome(moved: scrollOffset != before)
         case .scrollDown:
             let before = scrollOffset
             scroll(by: linesPerTick)
-            return scrollOffset != before
+            return resolveWheelOutcome(moved: scrollOffset != before)
         default:
             return false
         }
+    }
+
+    /// Maps "did the wheel move the viewport" onto "is the event consumed",
+    /// inserting the edge grace period: a moved event is consumed and re-arms
+    /// the grace; a blocked event is consumed while the grace runs and chains
+    /// (returns `false`) once it expires. A scroller with no overflow never
+    /// consumes a blocked event — the user can only mean the parent.
+    private func resolveWheelOutcome(moved: Bool) -> Bool {
+        if moved {
+            wheelEdgeHold.arrivalNanos = nil
+            return true
+        }
+        guard maxOffset > 0, wheelEdgeHold.delayNanos > 0 else { return false }
+        let now = wheelEdgeHold.nowNanos()
+        if let arrival = wheelEdgeHold.arrivalNanos {
+            return now &- arrival < wheelEdgeHold.delayNanos
+        }
+        wheelEdgeHold.arrivalNanos = now
+        return true
     }
 
     /// Like ``handleWheelEvent(_:linesPerTick:)`` but for a *horizontal* axis:
@@ -206,13 +262,48 @@ extension ScrollableOffsetState {
         case .scrollLeft:
             let before = scrollOffset
             scroll(by: -columnsPerTick)
-            return scrollOffset != before
+            return resolveWheelOutcome(moved: scrollOffset != before)
         case .scrollRight:
             let before = scrollOffset
             scroll(by: columnsPerTick)
-            return scrollOffset != before
+            return resolveWheelOutcome(moved: scrollOffset != before)
         default:
             return false
         }
+    }
+}
+
+// MARK: - Environment
+
+private struct ScrollChainingDelayKey: EnvironmentKey {
+    static let defaultValue: Duration = .milliseconds(500)
+}
+
+extension EnvironmentValues {
+    /// How long a nested scroller holds blocked wheel ticks at its edge
+    /// before they chain to the enclosing scroller.
+    public var scrollChainingDelay: Duration {
+        get { self[ScrollChainingDelayKey.self] }
+        set { self[ScrollChainingDelayKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Sets the grace period a nested scroller (List, Table, ScrollView, both
+    /// axes) holds blocked wheel ticks at its edge before they chain to the
+    /// enclosing scroller — so momentum finishing a scroll inside a child
+    /// doesn't immediately fling the parent. `.zero` chains immediately.
+    /// The default is 500 ms.
+    public func scrollChainingDelay(_ delay: Duration) -> some View {
+        environment(\.scrollChainingDelay, delay)
+    }
+}
+
+extension Duration {
+    /// This duration as whole nanoseconds, clamped at zero.
+    var wheelDelayNanos: UInt64 {
+        guard self > .zero else { return 0 }
+        let seconds = UInt64(components.seconds) &* 1_000_000_000
+        return seconds &+ UInt64(components.attoseconds / 1_000_000_000)
     }
 }

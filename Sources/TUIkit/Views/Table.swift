@@ -551,6 +551,7 @@ where Value.ID: Hashable {
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
         // The reveal-on-focus arithmetic (run between renders, on key events)

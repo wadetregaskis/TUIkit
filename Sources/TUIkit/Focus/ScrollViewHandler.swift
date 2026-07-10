@@ -59,6 +59,9 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// Held arrow/track auto-repeat action (``ScrollableOffsetState``).
     public var scrollbarRepeat: ScrollbarRepeat?
 
+    /// Wheel-chaining grace state (``ScrollableOffsetState``).
+    public var wheelEdgeHold = WheelEdgeHold()
+
     /// The horizontal scroll axis, used when the ScrollView's `axes` include
     /// `.horizontal`. The handler itself is the vertical axis; this carries the
     /// horizontal offset, content width, and viewport width (plus its own drag /

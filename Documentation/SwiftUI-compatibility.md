@@ -363,6 +363,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `.tabWidth(_:)` (`TabWidth.periodic`/`.fixed`) | tab-stop layout for literal tabs in `TextEditor` (default: snap to 4-column stops, like the text system's `defaultTabInterval`; SwiftUI exposes no tab control) |
 | `.navigationSplitViewResizable`, `.navigationSplitViewColumnWidth`, `.fixedSize` on `List`, `.listEmptyPlaceholder` | terminal split/list affordances |
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |
+| `.scrollChainingDelay(_:)` | grace period before wheel ticks blocked at a nested scroller's edge chain to the parent (default 500 ms; `.zero` chains immediately) |
 | `.maxFrameRate` (App) | cap redraw rate |
 
 ---
