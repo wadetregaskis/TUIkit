@@ -364,6 +364,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `.navigationSplitViewResizable`, `.navigationSplitViewColumnWidth`, `.fixedSize` on `List`, `.listEmptyPlaceholder` | terminal split/list affordances |
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |
 | `.scrollChainingDelay(_:)` | grace period before wheel ticks blocked at a nested scroller's edge chain to the parent (default 500 ms; `.zero` chains immediately) |
+| `.onRenderPass(_:)` (`RenderPass.measure`/`.render`) | instrumentation hook: observe a view's participation in measurement vs real rendering (e.g. what a lazy container measures but never draws) |
 | `.maxFrameRate` (App) | cap redraw rate |
 
 ---

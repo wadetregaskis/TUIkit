@@ -17,6 +17,24 @@ private struct LazyRenderedRowsKey: PreferenceKey {
     }
 }
 
+/// Collects the indices of rows that participated in LAYOUT (were measured),
+/// reported by the framework's `.onRenderPass` instrumentation. A plain sink
+/// class: the callbacks fire in the middle of the measure/render passes, where
+/// view state must not be mutated — the page snapshots it from a `.task` loop
+/// instead.
+@MainActor
+private final class LazyMeasureSink {
+    private var measured: Set<Int> = []
+
+    func record(_ index: Int) { measured.insert(index) }
+
+    /// The rows measured since the last snapshot (and resets the window).
+    func snapshot() -> Set<Int> {
+        defer { measured.removeAll(keepingCapacity: true) }
+        return measured
+    }
+}
+
 /// Layout system demo page.
 ///
 /// Shows various layout options including:
@@ -28,6 +46,13 @@ private struct LazyRenderedRowsKey: PreferenceKey {
 struct LayoutPage: View {
     /// The rows the windowed `LazyVStack` rendered in the last frame.
     @State private var renderedRows: Set<Int> = []
+
+    /// The rows measured (layout participation) in the last sampling window —
+    /// genuinely instrumented via `.onRenderPass`, not inferred.
+    @State private var measuredRows: Set<Int> = []
+
+    /// Raw sink the instrumentation callbacks write into mid-pass.
+    @State private var measureSink = LazyMeasureSink()
 
     private let lazyRowCount = 40
 
@@ -139,11 +164,26 @@ struct LayoutPage: View {
                         Text("(\(renderedRows.count)/\(lazyRowCount))")
                             .foregroundStyle(.palette.foregroundTertiary)
                     }
+                    // Layout participation ≠ rendering: the stack may measure
+                    // rows (to size the scroll extent) that it never draws.
+                    // Reported by the framework's own `.onRenderPass` hook.
+                    HStack(spacing: 1) {
+                        Text(L("page.layout.lazyMeasured"))
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        Text(rangeSetDescription(measuredRows))
+                            .foregroundStyle(.palette.success)
+                            .bold()
+                        Text("(\(measuredRows.count)/\(lazyRowCount))")
+                            .foregroundStyle(.palette.foregroundTertiary)
+                    }
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(0..<lazyRowCount, id: \.self) { index in
                                 Text("\(L("page.layout.lazyRow")) \(index)")
+                                    .onRenderPass { pass in
+                                        if pass == .measure { measureSink.record(index) }
+                                    }
                                     .preference(key: LazyRenderedRowsKey.self, value: [index])
                             }
                         }
@@ -151,6 +191,9 @@ struct LayoutPage: View {
                     .frame(height: 8)
                     .border(color: .palette.border)
                     .onPreferenceChange(LazyRenderedRowsKey.self) { renderedRows = $0 }
+                    .task {
+                        await runMeasureSampler()
+                    }
 
                     LazyHStack(spacing: 2) {
                         Text("\(L("page.layout.col")) 1")
@@ -166,6 +209,19 @@ struct LayoutPage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(L("page.layout.header"))
+        }
+    }
+
+    /// Snapshots the mid-pass measure sink on a safe async cadence — the
+    /// `.onRenderPass` callbacks fire during layout/render, where view state
+    /// must not be mutated, so the sink is drained from here instead.
+    private func runMeasureSampler() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(300))
+            let measured = measureSink.snapshot()
+            if !measured.isEmpty, measured != measuredRows {
+                measuredRows = measured
+            }
         }
     }
 
