@@ -357,7 +357,7 @@ SwiftUI API (the CLAUDE.md rule).
 | Image: `.imageCharacterSet`/`.imageColorMode`/`.imageDithering`/… | raster→ASCII conversion controls |
 | `Card`, `Panel`, `RadioButton`/`RadioButtonGroup`, `Spinner`, `Menu` (keyboard-driven), `TrackStyle`, `IndeterminateStyle` | terminal-idiomatic containers/controls/styles |
 | `TrackStyle.custom(TrackConfiguration)` | fully-configurable progress/slider/gauge fill (glyphs, sub-cell ramp, solid-background unfilled, gradient); the named styles are presets of it |
-| `Table.onRowDoubleClick(_:)`, `MouseEvent.clickCount` | double-click on a value-based `Table` row (terminals report no double-click, so the dispatcher synthesises `clickCount` by timing) |
+| `List`/`Table` `.onRowActivate(_:)`, `MouseEvent.clickCount` | row activation — double-click OR Return/Enter on the focused row (Space keeps selecting); the closest SwiftUI analogue is `contextMenu(forSelectionType:…primaryAction:)`. Terminals report no double-click, so the dispatcher synthesises `clickCount` by timing |
 | `.radioButtonGroupWrapsAtEdge(_:)` | edge-arrow in a `RadioButtonGroup` escapes to the next control (default) or wraps within the group (opt-in) |
 | Image `.asciiDetailed` (long supersampled ramp), `.shapeUnicode` (Sobel-edge box-drawing lines) | higher-fidelity raster→text character sets |
 | `.tabWidth(_:)` (`TabWidth.periodic`/`.fixed`) | tab-stop layout for literal tabs in `TextEditor` (default: snap to 4-column stops, like the text system's `defaultTabInterval`; SwiftUI exposes no tab control) |

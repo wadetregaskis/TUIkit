@@ -69,10 +69,10 @@ struct ListPage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             HStack(spacing: 2) {
-                // A real file browser: single-click selects a row, double-click
-                // opens a folder in place; the ".." row (↰) navigates up. The
-                // per-row .onMouseEvent out-ranks the List's own click handling,
-                // so it drives both selection and the double-click navigation.
+                // A real file browser: single-click (or Space) selects a row;
+                // double-click OR Return/Enter on the focused row activates it
+                // (`.onRowActivate`) — opening a folder in place; the ".." row
+                // (↰) navigates up.
                 VStack(alignment: .leading, spacing: 0) {
                     Text(browserURL.path).dim()
                     List(L("page.list.singleSelection"), selection: $singleSelection) {
@@ -81,22 +81,13 @@ struct ListPage: View {
                                 Text(entry.icon)
                                 Text(entry.name)
                             }
-                            .onMouseEvent { event in
-                                guard event.button == .left else { return false }
-                                switch event.phase {
-                                case .pressed:
-                                    return true
-                                case .released:
-                                    if event.clickCount >= 2 {
-                                        if entry.isDirectory { browserURL = entry.url }
-                                    } else {
-                                        singleSelection = entry.id
-                                    }
-                                    return true
-                                default:
-                                    return false
-                                }
-                            }
+                        }
+                    }
+                    .onRowActivate { id in
+                        if let entry = FileBrowser.entries(at: browserURL)
+                            .first(where: { $0.id == id }), entry.isDirectory
+                        {
+                            browserURL = entry.url
                         }
                     }
                     .frame(height: 10)

@@ -88,6 +88,11 @@ public struct List<SelectionValue: Hashable & Sendable, Content: View, Footer: V
     /// Whether to show separator before footer.
     var showFooterSeparator: Bool
 
+    /// Row activation ("open") — Enter on the focused row, or double-click.
+    /// Set via ``onRowActivate(_:)``; `nil` keeps Enter's default select
+    /// behaviour.
+    var primaryAction: ((SelectionValue) -> Void)?
+
     public var body: some View {
         _ListCore(
             title: title,
@@ -99,8 +104,23 @@ public struct List<SelectionValue: Hashable & Sendable, Content: View, Footer: V
             focusID: focusID,
             isDisabled: isDisabled,
             emptyPlaceholder: emptyPlaceholder,
-            showFooterSeparator: showFooterSeparator
+            showFooterSeparator: showFooterSeparator,
+            primaryAction: primaryAction
         )
+    }
+
+    /// Sets an action run when a row is ACTIVATED — double-clicked, or
+    /// Return/Enter pressed with the row focused (the row's id is passed).
+    ///
+    /// With an activation action set, Enter "opens" the focused row while
+    /// Space still toggles selection — the file-browser convention (AppKit's
+    /// action/doubleAction split). Without one, Enter keeps its default
+    /// select behaviour. TUI-specific: SwiftUI's closest analogue is the
+    /// `primaryAction` of `contextMenu(forSelectionType:menu:primaryAction:)`.
+    public func onRowActivate(_ action: @escaping (SelectionValue) -> Void) -> Self {
+        var copy = self
+        copy.primaryAction = action
+        return copy
     }
 }
 

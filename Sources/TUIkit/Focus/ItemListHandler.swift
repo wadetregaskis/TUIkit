@@ -137,6 +137,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         return top
     }
 
+    /// The row-activation action (``List``/``Table`` `.onRowActivate(_:)`):
+    /// invoked with the focused row's id on Return/Enter, and by the owning
+    /// view on double-click. When set, Enter ACTIVATES instead of toggling
+    /// selection — Space still toggles — matching the file-browser convention
+    /// (and AppKit's action/doubleAction split). `nil` keeps the original
+    /// behaviour: Enter and Space both toggle selection.
+    var primaryAction: ((SelectionValue) -> Void)?
+
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode
 
@@ -331,7 +339,7 @@ extension ItemListHandler {
             return true
 
         case .enter, .space:
-            toggleSelectionAtFocusedIndex()
+            handleSelectionKey(event.key)
             return true
 
         default:
@@ -505,6 +513,18 @@ extension ItemListHandler {
 // MARK: - Selection Helpers
 
 extension ItemListHandler {
+    /// Enter/Space at the focused row. With an activation action set, Enter
+    /// "opens" the row while Space remains the selection key (the
+    /// file-browser convention); without one, both keep the original select
+    /// behaviour.
+    func handleSelectionKey(_ key: Key) {
+        if key == .enter, let primaryAction, let id = id(at: focusedIndex) {
+            primaryAction(id)
+            return
+        }
+        toggleSelectionAtFocusedIndex()
+    }
+
     /// Toggles the selection state at the focused index.
     func toggleSelectionAtFocusedIndex() {
         guard let itemID = id(at: focusedIndex) else { return }

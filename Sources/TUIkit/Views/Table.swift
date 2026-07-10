@@ -81,9 +81,10 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
     /// The spacing between columns in characters.
     let columnSpacing: Int
 
-    /// An action run when a row is double-clicked (its `Value.ID` is passed).
-    /// Set via ``onRowDoubleClick(_:)``. Because a `Table`'s cells are value-
-    /// based (not views), this is how a row gets a double-click "open" action.
+    /// An action run when a row is ACTIVATED — double-clicked, or
+    /// Return/Enter with the row focused (its `Value.ID` is passed). Set via
+    /// ``onRowActivate(_:)``. Because a `Table`'s cells are value-based (not
+    /// views), this is how a row gets an "open" action.
     var primaryAction: ((Value.ID) -> Void)?
 
     public var body: some View {
@@ -114,7 +115,7 @@ extension Table {
     /// equivalent.
     ///
     /// - Parameter action: Called with the double-clicked row's `id`.
-    public func onRowDoubleClick(_ action: @escaping (Value.ID) -> Void) -> Table {
+    public func onRowActivate(_ action: @escaping (Value.ID) -> Void) -> Table {
         var copy = self
         copy.primaryAction = action
         return copy
@@ -546,6 +547,7 @@ where Value.ID: Hashable {
         handler.itemCount = data.count
         handler.contentHeight = contentHeight
         handler.canBeFocused = !isDisabled
+        handler.primaryAction = primaryAction
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
@@ -779,6 +781,7 @@ where Value.ID: Hashable {
         handler.contentHeight = contentHeight
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
+        handler.primaryAction = primaryAction
         handler.rowHeight = nil  // single-line path: uniform-height scroll math
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so

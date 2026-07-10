@@ -153,8 +153,9 @@ struct TablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            // A real file browser: single-click selects, double-click a folder
-            // opens it in place (via `.onRowDoubleClick`), and the ".." row (↰)
+            // A real file browser: single-click (or Space) selects; double-click
+            // OR Return/Enter on the focused row activates it (via
+            // `.onRowActivate`) — opening a folder in place; the ".." row (↰)
             // navigates up. Reads the live filesystem starting at $HOME.
             Text(L("page.table.fileBrowserCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -176,9 +177,9 @@ struct TablePage: View {
                 TableColumn(L("page.table.column.type"), value: \BrowserEntry.typeLabel)
                     .width(.flexible)
             }
-            // `.onRowDoubleClick` is a `Table` modifier, so it chains before the
+            // `.onRowActivate` is a `Table` modifier, so it chains before the
             // generic view modifiers below.
-            .onRowDoubleClick { id in
+            .onRowActivate { id in
                 if let entry = FileBrowser.entries(at: browserURL).first(where: { $0.id == id }),
                     entry.isDirectory
                 {

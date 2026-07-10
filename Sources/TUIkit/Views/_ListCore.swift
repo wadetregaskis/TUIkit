@@ -138,6 +138,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     let isDisabled: Bool
     let emptyPlaceholder: String
     let showFooterSeparator: Bool
+    /// Row activation ("open") — Enter on the focused row (via the handler)
+    /// or a double-click (via the container mouse handler). See
+    /// ``List/onRowActivate(_:)``.
+    let primaryAction: ((SelectionValue) -> Void)?
 
     var body: Never {
         fatalError("_ListCore renders via Renderable")
@@ -606,6 +610,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
+        handler.primaryAction = primaryAction
         return handler
     }
 
@@ -886,6 +891,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let captureHandler = state.handler
         let captureFocusID = state.focusID
         let rowRanges = state.visibleRowYRanges
+        let capturedPrimaryAction = primaryAction
         return { event in
             // Wheel scrolling moves the viewport, NEVER the
             // selection — same model as Finder / Explorer /
@@ -906,9 +912,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 if let hit = rowRanges.first(where: {
                     yInLines >= $0.yStart && yInLines < $0.yStart + $0.height
                 }) {
-                    if case .content = hit.type {
+                    if case .content(let id) = hit.type {
                         captureHandler.focusedIndex = hit.rowIndex
-                        captureHandler.toggleSelectionAtFocusedIndex()
+                        // A double-click fires the row's activation
+                        // ("open"); a single click toggles selection.
+                        if event.clickCount >= 2, let action = capturedPrimaryAction {
+                            action(id)
+                        } else {
+                            captureHandler.toggleSelectionAtFocusedIndex()
+                        }
                     }
                 }
                 focusManager?.focus(id: captureFocusID)
