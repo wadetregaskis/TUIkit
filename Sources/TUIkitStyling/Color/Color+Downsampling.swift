@@ -4,6 +4,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
+
 // MARK: - Public API
 
 extension Color {
@@ -57,61 +59,90 @@ extension Color {
 
     /// Finds the nearest 256-color palette index for an RGB color.
     ///
-    /// Compares the RGB value against both the 6×6×6 cube (16–231)
-    /// and the grayscale ramp (232–255), returning whichever is closer.
+    /// "Nearest" is perceptual, not per-channel: candidates (the whole 6×6×6
+    /// cube plus the grayscale ramp) are compared in OKLab with the HUE
+    /// difference weighted double. The 216-colour cube is coarse in the pale
+    /// range, where per-channel rounding shifts hue — Solid Colors' warm
+    /// cream #F2DEC9 rounded to pink (255,215,215) instead of the warm
+    /// (255,215,175), turning a whole background rosy. Weighting hue keeps a
+    /// quantised colour in its own colour family; greys (no chroma) and
+    /// saturated colours (a cube point close by) are unaffected.
+    ///
+    /// Results are memoised — a full-screen render quantises two colours per
+    /// cell, but an app only ever uses a few dozen distinct colours.
     fileprivate static func nearestPalette256Index(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
-        let cubeIndex = nearestCubeIndex(red: red, green: green, blue: blue)
-        let cubeRGB = palette256ToRGB(cubeIndex)
-        let cubeDistance = rgbDistanceSquared(
-            (red, green, blue),
-            (cubeRGB.red, cubeRGB.green, cubeRGB.blue)
-        )
+        let key = UInt32(red) << 16 | UInt32(green) << 8 | UInt32(blue)
+        quantiseCacheLock.lock()
+        let cached = quantiseCache[key]
+        quantiseCacheLock.unlock()
+        if let cached { return cached }
 
-        let grayIndex = nearestGrayscaleIndex(red: red, green: green, blue: blue)
-        let grayRGB = palette256ToRGB(grayIndex)
-        let grayDistance = rgbDistanceSquared(
-            (red, green, blue),
-            (grayRGB.red, grayRGB.green, grayRGB.blue)
-        )
-
-        return grayDistance < cubeDistance ? grayIndex : cubeIndex
-    }
-
-    /// Finds the nearest 6×6×6 cube index (16–231) for an RGB color.
-    fileprivate static func nearestCubeIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
-        UInt8(
-            16
-                + 36 * nearestCubeChannelLevel(red)
-                + 6 * nearestCubeChannelLevel(green)
-                + nearestCubeChannelLevel(blue)
-        )
-    }
-
-    /// Finds the nearest channel level index (0–5) for a single component.
-    fileprivate static func nearestCubeChannelLevel(_ value: UInt8) -> Int {
-        var bestIndex = 0
-        var bestDistance = Int.max
-
-        for (index, level) in cubeChannelLevels.enumerated() {
-            let distance = abs(Int(value) - Int(level))
+        let target = oklab(red: red, green: green, blue: blue)
+        var bestIndex = 16
+        var bestDistance = Double.infinity
+        for index in 16...255 {
+            let candidate = palette256Lab[index - 16]
+            let distance = hueWeightedDistanceSquared(target, candidate)
             if distance < bestDistance {
                 bestDistance = distance
                 bestIndex = index
             }
         }
 
-        return bestIndex
+        quantiseCacheLock.lock()
+        if quantiseCache.count > 4096 { quantiseCache.removeAll(keepingCapacity: true) }
+        quantiseCache[key] = UInt8(bestIndex)
+        quantiseCacheLock.unlock()
+        return UInt8(bestIndex)
     }
 
-    /// Finds the nearest grayscale ramp index (232–255) for an RGB color.
-    ///
-    /// The grayscale ramp covers values 8, 18, 28, …, 238.
-    fileprivate static func nearestGrayscaleIndex(red: UInt8, green: UInt8, blue: UInt8) -> UInt8 {
-        let gray = (Int(red) + Int(green) + Int(blue)) / 3
-        // Grayscale ramp: index N → gray level 8 + (N - 232) * 10
-        // Inverse: N = 232 + (gray - 8) / 10, clamped to 232–255
-        let index = min(255, max(232, 232 + (gray - 8 + 5) / 10))
-        return UInt8(index)
+    /// OKLab coordinates for palette indices 16...255, in index order.
+    private static let palette256Lab: [(l: Double, a: Double, b: Double)] = (16...255).map {
+        let rgb = palette256ToRGB(UInt8($0))
+        return oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    }
+
+    private static let quantiseCacheLock = NSLock()
+    nonisolated(unsafe) private static var quantiseCache: [UInt32: UInt8] = [:]
+
+    /// Converts sRGB bytes to OKLab.
+    private static func oklab(red: UInt8, green: UInt8, blue: UInt8) -> (l: Double, a: Double, b: Double) {
+        func linear(_ value: UInt8) -> Double {
+            let c = Double(value) / 255.0
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let linearRed = linear(red)
+        let linearGreen = linear(green)
+        let linearBlue = linear(blue)
+        let long = cbrt(
+            0.4122214708 * linearRed + 0.5363325363 * linearGreen + 0.0514459929 * linearBlue)
+        let medium = cbrt(
+            0.2119034982 * linearRed + 0.6806995451 * linearGreen + 0.1073969566 * linearBlue)
+        let short = cbrt(
+            0.0883024619 * linearRed + 0.2817188376 * linearGreen + 0.6299787005 * linearBlue)
+        return (
+            l: 0.2104542553 * long + 0.7936177850 * medium - 0.0040720468 * short,
+            a: 1.9779984951 * long - 2.4285922050 * medium + 0.4505937099 * short,
+            b: 0.0259040371 * long + 0.7827717662 * medium - 0.8086757660 * short
+        )
+    }
+
+    /// OKLab distance with the lightness/chroma/hue components split and hue
+    /// weighted ×2 (à la CIEDE2000's spirit: staying in the right colour
+    /// family matters more than exact chroma).
+    private static func hueWeightedDistanceSquared(
+        _ lhs: (l: Double, a: Double, b: Double),
+        _ rhs: (l: Double, a: Double, b: Double)
+    ) -> Double {
+        let deltaL = lhs.l - rhs.l
+        let chromaL = (lhs.a * lhs.a + lhs.b * lhs.b).squareRoot()
+        let chromaR = (rhs.a * rhs.a + rhs.b * rhs.b).squareRoot()
+        let deltaC = chromaL - chromaR
+        let deltaA = lhs.a - rhs.a
+        let deltaB = lhs.b - rhs.b
+        // Standard decomposition: ΔH² = Δa² + Δb² − ΔC² (tangential part).
+        let deltaH2 = max(0, deltaA * deltaA + deltaB * deltaB - deltaC * deltaC)
+        return deltaL * deltaL + deltaC * deltaC + 4 * deltaH2
     }
 
     /// Squared Euclidean distance between two RGB colors.

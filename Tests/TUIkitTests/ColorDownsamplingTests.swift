@@ -7,6 +7,7 @@
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitStyling
 
 // MARK: - downsampledToPalette256 Tests
 
@@ -208,5 +209,56 @@ struct ANSIRendererExplicitDepthTests {
         arguments: [ColorDepth.truecolor, .palette256, .basic16])
     func brightBackgroundPassthrough(_ depth: ColorDepth) {
         #expect(ANSIRenderer.backgroundCodes(for: .brightBlue, depth: depth) == ["104"])
+    }
+}
+
+// MARK: - Hue preservation (perceptual quantisation)
+
+@Suite("Palette256 quantisation preserves hue for pale tones")
+struct HuePreservingQuantisationTests {
+
+    /// Prints the chosen entries for the shipped pale palette tones.
+    @Test("Report: quantisation of the Terminal-profile pale tones")
+    func report() {
+        let cases: [(String, Color)] = [
+            ("SolidColors bg #F2DEC9", .rgb(242, 222, 201)),
+            ("SolidColors statusBar #EDD1B4", .rgb(237, 209, 180)),
+            ("SolidColors appHeader #E9C8A5", .rgb(233, 200, 165)),
+            ("ManPage bg #FEF49C", .rgb(254, 244, 156)),
+            ("Novel bg #DFDBC3", .rgb(223, 219, 195)),
+            ("SilverAerogel bg #929292", .rgb(146, 146, 146)),
+        ]
+        for (name, color) in cases {
+            if case .palette256(let index) = color.downsampledToPalette256().value {
+                let rgb = Color.palette256ToRGB(index)
+                print("\(name) -> \(index) (\(rgb.red),\(rgb.green),\(rgb.blue))")
+            }
+        }
+    }
+
+    @Test("Warm cream quantises to a warm cube entry, not pink")
+    func creamStaysWarm() {
+        // #F2DEC9 (Solid Colors' background): per-channel rounding used to
+        // pick (255,215,215) — a pink cast across the whole screen. The warm
+        // entry (255,215,175) is the same colour family.
+        let quantised = Color.rgb(242, 222, 201).downsampledToPalette256()
+        guard case .palette256(let index) = quantised.value else {
+            Issue.record("expected a palette256 index")
+            return
+        }
+        let rgb = Color.palette256ToRGB(index)
+        #expect(
+            rgb.red > rgb.green && rgb.green > rgb.blue,
+            "cream keeps its warm channel ordering; got (\(rgb.red),\(rgb.green),\(rgb.blue))")
+    }
+
+    @Test("Greys still take the grayscale ramp")
+    func greysUnaffected() {
+        let quantised = Color.rgb(146, 146, 146).downsampledToPalette256()
+        guard case .palette256(let index) = quantised.value else {
+            Issue.record("expected a palette256 index")
+            return
+        }
+        #expect(index >= 232, "mid-grey belongs to the ramp; got \(index)")
     }
 }
