@@ -49,6 +49,7 @@ struct ListPage: View {
     @State var multiSelection: Set<String> = []
     @State var transientSelection: String?
     @State var multiLineSelection: String?
+    @State var multiLineByLine = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
 
     var body: some View {
@@ -216,23 +217,13 @@ struct ListPage: View {
             // height and windows/scrolls by lines, so a two-line cell just works.
             // 12 items in an 8-row frame → it scrolls, with a scrollbar.
             DemoSection(L("page.list.multiLineSection")) {
-                List(selection: $multiLineSelection) {
-                    ForEach(FileItem.sampleFiles) { file in
-                        VStack(alignment: .leading, spacing: 0) {
-                            HStack(spacing: 1) {
-                                Text("\(file.icon) \(file.name)").bold()
-                                Spacer()
-                                // An animated cell inside a scrolling List row —
-                                // it must keep spinning even though the row is
-                                // memoized (see SpinnerRowAnimationTests).
-                                Spinner(style: .dots)
-                            }
-                            Text(file.size).foregroundStyle(.palette.foregroundSecondary)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 0) {
+                    // Line- vs row-centric scrolling, live: with two-line rows,
+                    // a wheel tick moves three LINES (the top row can rest
+                    // partially clipped) or three whole ROWS.
+                    Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
+                    multiLineList
                 }
-                .frame(height: 8)
-                .scrollbarVisibility(.visible)
             }
 
             KeyboardHelpSection(
@@ -254,5 +245,28 @@ struct ListPage: View {
     /// wheel scrolling is visible.
     private var longLines: [String] {
         (1...100).map { "Line \($0) — scroll the wheel to move past me." }
+    }
+
+    /// The multi-line cells list — extracted so the granularity toggle can
+    /// re-apply `.scrollGranularity` to it without deepening the section body.
+    @ViewBuilder private var multiLineList: some View {
+        List(selection: $multiLineSelection) {
+            ForEach(FileItem.sampleFiles) { file in
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 1) {
+                        Text("\(file.icon) \(file.name)").bold()
+                        Spacer()
+                        // An animated cell inside a scrolling List row —
+                        // it must keep spinning even though the row is
+                        // memoized (see SpinnerRowAnimationTests).
+                        Spinner(style: .dots)
+                    }
+                    Text(file.size).foregroundStyle(.palette.foregroundSecondary)
+                }
+            }
+        }
+        .frame(height: 8)
+        .scrollbarVisibility(.visible)
+        .scrollGranularity(multiLineByLine ? .line : .row)
     }
 }
