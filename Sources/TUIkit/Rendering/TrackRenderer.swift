@@ -115,7 +115,7 @@ enum TrackRenderer {
                 lineColor: emptyColor,
                 markerColor: accentColor
             )
-        case .threeSegment(let leading, let middle, let trailing, let emptyFill):
+        case .threeSegment(let leading, let middle, let trailing, let emptyFill, let coloring):
             return renderThreeSegmentStyle(
                 fraction: fraction,
                 width: width,
@@ -123,10 +123,25 @@ enum TrackRenderer {
                 middle: middle,
                 trailing: trailing,
                 emptyFill: emptyFill,
+                coloring: coloring,
                 filledColor: filledColor,
                 emptyColor: emptyColor
             )
         }
+    }
+
+    /// Piecewise-linear interpolation into gradient `stops` at `parameter`
+    /// (0…1). Shared by every gradient consumer — the configured fill tracks,
+    /// `.threeSegment`'s ``SegmentColoring/gradient(_:)``, and (via its own
+    /// cyclic wrapper) the indeterminate sweep — so "a gradient" always means
+    /// the same interpolation. Fewer than two stops yield `fallback`.
+    static func gradientColor(stops: [Color], parameter: Double, fallback: Color) -> Color {
+        guard stops.count >= 2 else { return fallback }
+        let segments = Double(stops.count - 1)
+        let scaled = max(0.0, min(segments, parameter * segments))
+        let lowerIndex = min(Int(scaled), stops.count - 2)
+        let mix = scaled - Double(lowerIndex)
+        return Color.lerp(stops[lowerIndex], stops[lowerIndex + 1], phase: mix)
     }
 }
 
@@ -171,15 +186,13 @@ extension TrackRenderer {
 
         // Optional per-cell colour fade across the lit cells.
         func fillColour(at index: Int) -> Color {
-            guard let gradient = config.fillGradient, gradient.count >= 2, litCellCount > 1 else {
+            guard let gradient = config.fillGradient, litCellCount > 1 else {
                 return filledColor
             }
-            let parameter = Double(index) / Double(litCellCount - 1)
-            let segments = Double(gradient.count - 1)
-            let scaled = max(0.0, min(segments, parameter * segments))
-            let lowerIndex = min(Int(scaled), gradient.count - 2)
-            let mix = scaled - Double(lowerIndex)
-            return Color.lerp(gradient[lowerIndex], gradient[lowerIndex + 1], phase: mix)
+            return gradientColor(
+                stops: gradient,
+                parameter: Double(index) / Double(litCellCount - 1),
+                fallback: filledColor)
         }
 
         var result = ""
@@ -209,12 +222,13 @@ extension TrackRenderer {
         return result
     }
 
-    /// Renders the `.threeSegment` style.
-    ///
-    /// `[leading][middle × N][trailing]` covers the filled region, with
-    /// `middle` repeated to span any gap. Each segment is coloured /
-    /// emitted as-is, so callers can pass already-styled strings (ANSI
-    /// codes embedded) and they'll render correctly.
+    // Renders the `.threeSegment` style: `[leading][middle × N][trailing]`
+    // covers the filled region, with `middle` repeated to span any gap; the
+    // lit region's colouring is delegated to `renderLitRegion`. (The inputs
+    // are the case's own associated values plus the two track colours —
+    // bundling them to satisfy the parameter ceiling would obscure the 1:1
+    // mapping to the style.)
+    // swiftlint:disable:next function_parameter_count
     private static func renderThreeSegmentStyle(
         fraction: Double,
         width: Int,
@@ -222,6 +236,7 @@ extension TrackRenderer {
         middle: String,
         trailing: String,
         emptyFill: String,
+        coloring: SegmentColoring,
         filledColor: Color,
         emptyColor: Color
     ) -> String {
@@ -236,27 +251,28 @@ extension TrackRenderer {
             // Nothing lit at all.
         } else if filledCount < leadingWidth + trailingWidth {
             // Not enough room for both endpoints; render whichever fits
-            // from the leading edge.
-            let truncated = leading + trailing
-            result += ANSIRenderer.colorize(
-                truncated.ansiAwarePrefix(visibleCount: filledCount),
-                foreground: filledColor
-            )
+            // from the leading edge (per-segment colouring uses the leading
+            // colour for the truncated composite).
+            let truncated = (leading + trailing).ansiAwarePrefix(visibleCount: filledCount)
+            result += renderLitRegion(
+                leading: truncated, middleRun: "", trailing: "",
+                coloring: coloring, filledColor: filledColor)
         } else {
             // Endpoints fit. Repeat `middle` to fill the gap, plus a
             // partial trailing slice if needed.
             let gap = filledCount - leadingWidth - trailingWidth
             let reps = gap / middleWidth
             let remainder = gap - reps * middleWidth
-            var lit = leading
+            var middleRun = ""
             if reps > 0 {
-                lit += String(repeating: middle, count: reps)
+                middleRun += String(repeating: middle, count: reps)
             }
             if remainder > 0 {
-                lit += middle.ansiAwarePrefix(visibleCount: remainder)
+                middleRun += middle.ansiAwarePrefix(visibleCount: remainder)
             }
-            lit += trailing
-            result += ANSIRenderer.colorize(lit, foreground: filledColor)
+            result += renderLitRegion(
+                leading: leading, middleRun: middleRun, trailing: trailing,
+                coloring: coloring, filledColor: filledColor)
         }
 
         let emptyCellCount = max(0, width - filledCount)
@@ -272,6 +288,53 @@ extension TrackRenderer {
                 empty += emptyFill.ansiAwarePrefix(visibleCount: emptyRemainder)
             }
             result += ANSIRenderer.colorize(empty, foreground: emptyColor)
+        }
+        return result
+    }
+
+    /// Colours the assembled lit region of a `.threeSegment` track.
+    ///
+    /// With `.automatic` / `.solid` / `.perSegment` each part is emitted
+    /// as-is, so callers can pass already-styled strings (ANSI codes
+    /// embedded); `.gradient` re-colours cell by cell and expects plain text.
+    private static func renderLitRegion(
+        leading: String, middleRun: String, trailing: String,
+        coloring: SegmentColoring, filledColor: Color
+    ) -> String {
+        switch coloring {
+        case .automatic:
+            return ANSIRenderer.colorize(leading + middleRun + trailing, foreground: filledColor)
+        case .solid(let color):
+            return ANSIRenderer.colorize(leading + middleRun + trailing, foreground: color)
+        case .perSegment(let leadingColor, let middleColor, let trailingColor):
+            var result = ANSIRenderer.colorize(leading, foreground: leadingColor)
+            if !middleRun.isEmpty {
+                result += ANSIRenderer.colorize(middleRun, foreground: middleColor)
+            }
+            if !trailing.isEmpty {
+                result += ANSIRenderer.colorize(trailing, foreground: trailingColor)
+            }
+            return result
+        case .gradient(let stops):
+            return gradientCells(
+                (leading + middleRun + trailing).stripped, stops: stops, fallback: filledColor)
+        }
+    }
+
+    /// Colours `text` cell by cell across gradient `stops` (the whole string
+    /// spans parameter 0…1). Used by `.threeSegment`'s gradient colouring.
+    private static func gradientCells(_ text: String, stops: [Color], fallback: Color) -> String {
+        let cells = Array(text)
+        guard cells.count > 1 else {
+            return ANSIRenderer.colorize(text, foreground: stops.first ?? fallback)
+        }
+        var result = ""
+        for (index, cell) in cells.enumerated() {
+            let color = gradientColor(
+                stops: stops,
+                parameter: Double(index) / Double(cells.count - 1),
+                fallback: fallback)
+            result += ANSIRenderer.colorize(String(cell), foreground: color)
         }
         return result
     }

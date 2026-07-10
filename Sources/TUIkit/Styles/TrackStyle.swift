@@ -97,10 +97,22 @@ public enum TrackStyle: Sendable, Equatable {
     /// `leading` is drawn once at the left of the filled region;
     /// `trailing` once at the right of the filled region; `middle` is
     /// repeated across the gap between them. Empty cells are filled with
-    /// a space, padded out to the track's width. Each segment is
-    /// rendered separately so callers can style them independently —
-    /// pass coloured/bold/dim strings via the segments directly.
-    case threeSegment(leading: String, middle: String, trailing: String, emptyFill: String = " ")
+    /// a space, padded out to the track's width.
+    ///
+    /// `coloring` selects how the lit region is coloured: the control's
+    /// own filled colour (``SegmentColoring/automatic``, the default), one
+    /// solid colour, a colour per segment, or a per-cell gradient across
+    /// the lit span. With `.automatic`/`.solid`/`.perSegment` the segment
+    /// strings may carry their own embedded ANSI styling; `.gradient`
+    /// re-colours every cell, so it expects plain segment text.
+    ///
+    /// (Five associated values is the honest shape here — three segment
+    /// strings, the unfilled fill, and the colouring are orthogonal, and
+    /// bundling them into a struct would just add a second spelling of the
+    /// same call.)
+    case threeSegment(  // swiftlint:disable:this enum_case_associated_values_count
+        leading: String, middle: String, trailing: String, emptyFill: String = " ",
+        coloring: SegmentColoring = .automatic)
 
     /// A fully-configurable "fill" track.
     ///
@@ -109,6 +121,28 @@ public enum TrackStyle: Sendable, Equatable {
     /// ramp, unfilled treatment (glyph or solid background), and optional
     /// colour gradient — without the framework predefining every mix.
     case custom(TrackConfiguration)
+}
+
+// MARK: - Segment Coloring
+
+/// How a ``TrackStyle/threeSegment(leading:middle:trailing:emptyFill:coloring:)``
+/// track's lit region is coloured.
+public enum SegmentColoring: Sendable, Equatable {
+    /// The control's own filled colour (the default).
+    case automatic
+
+    /// One solid colour for all three segments.
+    case solid(Color)
+
+    /// A distinct colour for each segment (the truncated-endpoints case at
+    /// very small fractions uses `leading`).
+    case perSegment(leading: Color, middle: Color, trailing: Color)
+
+    /// A per-cell colour fade across the lit span, interpolating between the
+    /// stops — the same stop model as ``TrackConfiguration/fillGradient`` and
+    /// ``TrackStyle/shadeRamp(gradient:)``. Needs at least two stops (fewer
+    /// fall back to the control's filled colour).
+    case gradient([Color])
 }
 
 // MARK: - Backwards Compatibility

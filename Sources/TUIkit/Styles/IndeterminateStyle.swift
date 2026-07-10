@@ -59,7 +59,13 @@ public enum IndeterminateStyle: Sendable, Equatable {
 
     /// A smoothly-coloured gradient slides continuously across the
     /// track at full opacity.
-    case gradient
+    ///
+    /// `colors` supplies custom gradient stops (at least two, cyclically
+    /// wrapped so the scroll is seamless); `nil` — and the bare `.gradient`
+    /// spelling — uses the built-in rainbow. The same stop model as
+    /// ``TrackConfiguration/fillGradient`` and
+    /// ``SegmentColoring/gradient(_:)``.
+    case gradient(colors: [Color]? = nil)
 }
 
 // MARK: - Environment Key

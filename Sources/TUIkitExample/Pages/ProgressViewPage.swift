@@ -94,6 +94,27 @@ struct ProgressViewPage: View {
                             emptyFill: "·"
                         )
                     )
+                    // Segment colouring: one colour per segment…
+                    determinateRow(
+                        label: "threeSeg(per)",
+                        style: .threeSegment(
+                            leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                            coloring: .perSegment(
+                                leading: .rgb(255, 120, 60),
+                                middle: .rgb(220, 220, 220),
+                                trailing: .rgb(80, 160, 255))
+                        )
+                    )
+                    // …or a per-cell gradient across the whole lit span.
+                    determinateRow(
+                        label: "threeSeg(gr)",
+                        style: .threeSegment(
+                            leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                            coloring: .gradient([
+                                .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
+                            ])
+                        )
+                    )
                     // A hand-rolled `.custom` recipe: a shade-ramp fill with a
                     // solid background for the unfilled region — a combination
                     // no named preset provides (showcasing TrackConfiguration).
@@ -119,7 +140,14 @@ struct ProgressViewPage: View {
                     indeterminateRow(label: "barberPole  ", style: .barberPole)
                     indeterminateRow(label: "pulse       ", style: .pulse)
                     indeterminateRow(label: "knightRider ", style: .knightRider)
-                    indeterminateRow(label: "gradient    ", style: .gradient)
+                    indeterminateRow(label: "gradient    ", style: .gradient())
+                    // The same slide with caller-supplied stops (teal → violet):
+                    // any ≥2 RGB colours, cyclically wrapped.
+                    indeterminateRow(
+                        label: "gradient(c) ",
+                        style: .gradient(colors: [
+                            .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
+                        ]))
                 }
             }
 

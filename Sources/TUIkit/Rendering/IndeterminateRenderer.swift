@@ -44,8 +44,8 @@ enum IndeterminateRenderer {
             return renderPulse(width: width, dim: emptyColor, bright: accentColor)
         case .knightRider:
             return renderKnightRider(width: width, empty: emptyColor, accent: accentColor)
-        case .gradient:
-            return renderGradient(width: width)
+        case .gradient(let colors):
+            return renderGradient(width: width, colors: colors)
         }
     }
 
@@ -167,8 +167,15 @@ extension IndeterminateRenderer {
     /// position means a given colour (say amber) reappears at a higher
     /// index as time passes, so the eye reads the gradient as moving
     /// rightward.
-    private static func renderGradient(width: Int) -> String {
-        let stops: [(r: UInt8, g: UInt8, b: UInt8)] = [
+    private static func renderGradient(width: Int, colors: [Color]?) -> String {
+        // Custom stops need resolvable RGB (semantic colours have none until a
+        // palette is applied); anything unresolvable is skipped, and fewer
+        // than two usable stops falls back to the built-in rainbow.
+        let custom = colors?.compactMap { color -> (r: UInt8, g: UInt8, b: UInt8)? in
+            guard let components = color.rgbComponents else { return nil }
+            return (components.red, components.green, components.blue)
+        }
+        let builtIn: [(r: UInt8, g: UInt8, b: UInt8)] = [
             // swiftlint:disable comma
             (180,  30,  80),  // magenta-pink
             (220, 110,  40),  // amber
@@ -178,6 +185,7 @@ extension IndeterminateRenderer {
             (140,  90, 220),  // violet
             // swiftlint:enable comma
         ]
+        let stops = (custom?.count ?? 0) >= 2 ? custom! : builtIn
         let phase = phase(period: 2.4)
         var result = ""
         for index in 0..<width {
