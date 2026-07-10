@@ -39,6 +39,10 @@ internal struct InputHandler {
     /// The appearance manager for appearance cycling (`a` key).
     let appearanceManager: ThemeManager
 
+    /// The semantic-shortcut registry (default / cancel buttons), consulted
+    /// after the focused control declines a Return/Escape.
+    let keyboardShortcuts: KeyboardShortcutRegistry
+
     /// Called when the user requests to quit the application.
     let onQuit: () -> Void
 }
@@ -111,6 +115,18 @@ extension InputHandler {
             }
         }
 
+        // Layer 3.5: semantic shortcut actions — the default button
+        // (Return/Enter) and the cancel button (Escape), à la SwiftUI's
+        // `.keyboardShortcut(.defaultAction / .cancelAction)`. Reached only
+        // when the focused control let the key fall through: a TextEditor
+        // inserting a newline, a list activating its row, or a focused
+        // Button firing itself all consumed it earlier (macOS responder-
+        // chain semantics); a TextField without `onSubmit` deliberately
+        // lets Return through so the dialog's default button fires.
+        if keyboardShortcuts.trigger(for: event) {
+            return true
+        }
+
         // Layer 4: Default key bindings.
         //
         // Quit stays available even behind a transient surface — a modal's status
@@ -131,7 +147,11 @@ extension InputHandler {
         // theme from *behind* the modal, which the user never asked for and
         // can't see the controls for.
         let inputGrabbed = focusManager.activeSectionIsModal || statusBar.escapeLabelOverride != nil
+        return handleGlobalShortcut(event, inputGrabbed: inputGrabbed)
+    }
 
+    /// The tail of layer 4: the global appearance/theme cycling shortcuts.
+    private func handleGlobalShortcut(_ event: KeyEvent, inputGrabbed: Bool) -> Bool {
         switch event.key {
         case .character(let character) where character == "t" || character == "T":
             if statusBar.showThemeItem && !inputGrabbed {

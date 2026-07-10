@@ -214,6 +214,7 @@ extension EnvironmentValues {
     /// header, focus, palette, appearance); callers add those as they
     /// need them.
     mutating func applyRuntimeServices(from context: TUIContext) {
+        keyboardShortcutRegistry = context.keyboardShortcuts
         stateStorage = context.stateStorage
         lifecycle = context.lifecycle
         keyEventDispatcher = context.keyEventDispatcher

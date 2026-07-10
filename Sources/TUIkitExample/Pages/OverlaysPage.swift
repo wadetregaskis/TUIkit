@@ -262,17 +262,23 @@ struct OverlaysPage: View {
             } footer: {
                 HStack {
                     Spacer()
+                    // Escape cancels, Return/Enter signs in — from anywhere in
+                    // the dialog: the credential fields have no onSubmit, so
+                    // Return falls through to the default button even while
+                    // typing (macOS dialog semantics).
                     Button(L("page.overlays.button.cancel")) {
                         authUsername = ""
                         authPassword = ""
                         showOverlay = false
                     }
+                    .keyboardShortcut(.cancelAction)
                     Button(L("page.overlays.button.signIn")) {
                         // Demo only — clear the password for safety.
                         authPassword = ""
                         showOverlay = false
                     }
                     .buttonStyle(.primary)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .frame(width: 55)

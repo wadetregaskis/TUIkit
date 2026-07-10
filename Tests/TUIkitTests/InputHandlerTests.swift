@@ -68,6 +68,7 @@ struct InputHandlerTests {
         let focus: FocusManager
         let palette: ThemeManager
         let appearance: ThemeManager
+        let shortcuts: KeyboardShortcutRegistry
         let probe: Probe
     }
 
@@ -82,17 +83,20 @@ struct InputHandlerTests {
             FakeCyclable(id: "a1", name: "a1"), FakeCyclable(id: "a2", name: "a2"),
         ])
         let probe = Probe()
+        let shortcuts = KeyboardShortcutRegistry()
         let handler = InputHandler(
             statusBar: statusBar,
             keyEventDispatcher: dispatcher,
             focusManager: focus,
             paletteManager: palette,
             appearanceManager: appearance,
+            keyboardShortcuts: shortcuts,
             onQuit: { probe.quitCount += 1 }
         )
         return Fixture(
             handler: handler, statusBar: statusBar, dispatcher: dispatcher,
-            focus: focus, palette: palette, appearance: appearance, probe: probe)
+            focus: focus, palette: palette, appearance: appearance,
+            shortcuts: shortcuts, probe: probe)
     }
 
     /// Registers a focused, consuming focusable so layer 3 would fire
@@ -268,5 +272,36 @@ struct InputHandlerTests {
 
         #expect(focusable.sawEvent, "focus system should receive the modal-claimed Escape")
         #expect(!fixture.probe.statusBarRan, "the page-level Escape handler must not fire")
+    }
+    @Test("Layer 3.5: an unconsumed Return fires the registered default action")
+    func defaultActionFiresWhenReturnFallsThrough() {
+        let fixture = makeFixture()
+        var fired = 0
+        fixture.shortcuts.register(.defaultAction) { fired += 1 }
+
+        // No focused consumer: Return falls through layers 0–3 to the registry.
+        #expect(fixture.handler.handle(KeyEvent(key: .enter)))
+        #expect(fired == 1)
+    }
+
+    @Test("Layer 3.5: a focused consumer keeps Return from the default action")
+    func focusedConsumerBeatsDefaultAction() {
+        let fixture = makeFixture()
+        var fired = 0
+        fixture.shortcuts.register(.defaultAction) { fired += 1 }
+        focusConsumer(fixture.focus)  // consumes every key at layer 3
+
+        #expect(fixture.handler.handle(KeyEvent(key: .enter)))
+        #expect(fired == 0, "the focused control consumed Return first")
+    }
+
+    @Test("Layer 3.5: Escape fires the cancel action when nothing else claims it")
+    func cancelActionFiresOnEscape() {
+        let fixture = makeFixture()
+        var fired = 0
+        fixture.shortcuts.register(.cancelAction) { fired += 1 }
+
+        #expect(fixture.handler.handle(KeyEvent(key: .escape)))
+        #expect(fired == 1)
     }
 }

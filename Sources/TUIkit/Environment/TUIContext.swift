@@ -240,6 +240,10 @@ extension LifecycleManager {
 /// }
 /// ```
 final class TUIContext: @unchecked Sendable {
+    /// Semantic keyboard-shortcut registry (default / cancel actions),
+    /// re-populated each render pass by buttons carrying a
+    /// ``KeyboardShortcut`` and consulted by the input chain.
+    let keyboardShortcuts = KeyboardShortcutRegistry()
 
     /// View lifecycle tracking (appear, disappear, task management).
     let lifecycle: LifecycleManager

@@ -520,6 +520,7 @@ extension RenderLoop {
     fileprivate func beginRenderPass() {
         tuiContext.keyEventDispatcher.clearHandlers()
         tuiContext.mouseEventDispatcher.beginRenderPass()
+        tuiContext.keyboardShortcuts.beginRenderPass()
         tuiContext.preferences.beginRenderPass()
         focusManager.beginRenderPass()
         statusBar.clearSectionItems()

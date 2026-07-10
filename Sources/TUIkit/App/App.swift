@@ -115,18 +115,24 @@ internal final class AppRunner<A: App> {
 // MARK: - Internal API
 
 extension AppRunner {
-    func run() async {
-        // Create run-loop dependencies (previously IUOs, now local variables)
-        let inputHandler = InputHandler(
+    /// The five-layer key-dispatch chain over the runner's collaborators.
+    private func makeInputHandler() -> InputHandler {
+        InputHandler(
             statusBar: statusBar,
             keyEventDispatcher: tuiContext.keyEventDispatcher,
             focusManager: focusManager,
             paletteManager: paletteManager,
             appearanceManager: appearanceManager,
+            keyboardShortcuts: tuiContext.keyboardShortcuts,
             onQuit: { [weak self] in
                 self?.isRunning = false
             }
         )
+    }
+
+    func run() async {
+        // Create run-loop dependencies (previously IUOs, now local variables)
+        let inputHandler = makeInputHandler()
         // Wire the synthesised-key path: clicks on system status-
         // bar items (Back / Quit / Show — items with only a
         // triggerKey, no inline action) route their click through

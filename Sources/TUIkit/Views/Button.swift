@@ -265,6 +265,21 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let hoverBox: StateBox<Bool> = stateStorage.storage(for: hoverKey, default: false)
         let isHovered = !isDisabled && hoverBox.value
 
+        // A `.keyboardShortcut(.defaultAction / .cancelAction)` wrapper plants a
+        // claimable assignment in the environment; the wrapped button claims it
+        // and registers its action for the frame. Registration is a per-frame
+        // render side effect — declared so the value memos don't cache it away
+        // (a memoised button that skipped this would leave the default button
+        // dead from the second frame on).
+        if !isDisabled, !context.isMeasuring,
+            let assignment = context.environment.assignedKeyboardShortcut,
+            let registry = context.environment.keyboardShortcutRegistry,
+            let shortcut = assignment.claim()
+        {
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+            registry.register(shortcut, action: action)
+        }
+
         let style = context.environment.buttonStyle
         let configuration = ButtonStyleConfiguration(
             label: label,

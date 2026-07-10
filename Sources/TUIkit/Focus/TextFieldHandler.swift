@@ -283,7 +283,12 @@ extension TextFieldHandler {
             return true
 
         case .enter:
-            onSubmit?()
+            // A field with a submit action consumes Return; without one it
+            // lets Return fall through — so in a dialog, Return pressed while
+            // typing triggers the `.keyboardShortcut(.defaultAction)` button
+            // (the macOS text-system behaviour).
+            guard let onSubmit else { return false }
+            onSubmit()
             return true
 
         case .paste(let text):
