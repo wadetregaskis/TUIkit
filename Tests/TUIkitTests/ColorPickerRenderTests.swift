@@ -37,6 +37,22 @@ struct ColorPickerRenderTests {
                 "three labelled channel sliders: \(out)")
     }
 
+    @Test("Inline channels: full slider chrome, gapped fixed-width right-aligned values")
+    func inlineChannelLayout() {
+        // rgb(102, 45, 255) exercises a 3-digit, a 2-digit and the max value.
+        let out = joined(
+            ColorPicker("Heading", selection: .constant(.rgb(102, 45, 255))), w: 84, h: 4)
+        // Every channel slider keeps its trailing arrow (the old fixed frame
+        // used to clip it), with a space between the arrow and the value.
+        #expect(out.contains("▶ 102"), "R value gapped from the slider: \(out)")
+        #expect(out.contains("▶  45"), "2-digit value right-aligned in a 3-wide field: \(out)")
+        #expect(out.contains("▶ 255"), "B channel intact at the row's end: \(out)")
+        // Two columns between a channel's value and the next channel's label,
+        // so "102  G" can't read as a "102 G" suffix.
+        #expect(out.contains("102  G"), "channels separated by two spaces: \(out)")
+        #expect(out.contains("45  B"), "second gap too: \(out)")
+    }
+
     @Test("Inline ColorPicker's channels reflect the bound colour")
     func inlineColorPickerReflectsBinding() {
         // The picker is stateless — the bound colour is the single source of

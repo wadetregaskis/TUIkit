@@ -41,7 +41,10 @@ public struct ColorPicker: View {
     }
 
     public var body: some View {
-        HStack(spacing: 1) {
+        // Two-column gaps between the swatch and each channel group, so a
+        // channel's value field reads as its own ("…102  G ◀…", not "102 G"
+        // where the G looks like a suffix of the previous channel's value).
+        HStack(spacing: 2) {
             Text(title)
                 .frame(width: 18, alignment: .leading)
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -57,10 +60,25 @@ public struct ColorPicker: View {
     @ViewBuilder
     private func channel(_ label: String, _ index: Int) -> some View {
         let binding = channelBinding(index)
-        HStack(spacing: 0) {
-            Text(" \(label) ").foregroundStyle(.palette.foregroundTertiary)
-            Slider(value: binding, in: 0...255, step: step).frame(width: 10)
-            Text(String(format: "%3d", Int(binding.wrappedValue)))
+        // The gaps come from the stack's `spacing`, NOT leading spaces in the
+        // texts — Text trims leading whitespace, which is exactly how the old
+        // layout ended up reading "102 G" with the G hugging the previous
+        // channel's value.
+        HStack(spacing: 1) {
+            Text(label).foregroundStyle(.palette.foregroundTertiary)
+            // The slider's built-in read-out is a percentage; these channels
+            // show the raw 0–255 value instead, so the built-in display is
+            // off. No fixed frame: the three channels split the available
+            // width evenly (Slider is width-flexible), growing finer on wide
+            // terminals and compressing — track first, never the arrows —
+            // on narrow ones.
+            Slider(value: binding, in: 0...255, step: step)
+                .sliderShowsValue(false)
+            // The value in a fixed-width right-aligned 3-column field
+            // ("  0" … "255") — frame alignment, because string padding would
+            // be trimmed.
+            Text("\(Int(binding.wrappedValue))")
+                .frame(width: 3, alignment: .trailing)
                 .foregroundStyle(.palette.foregroundTertiary)
         }
     }
