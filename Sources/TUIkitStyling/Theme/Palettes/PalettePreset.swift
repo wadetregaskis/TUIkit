@@ -90,10 +90,12 @@ public struct SystemPalette: Palette {
         self.appHeaderBackground = Color.hsl(hue, tuning.barSaturation, 7)
         self.overlayBackground = Color.hsl(hue, tuning.bgSaturation, 3)
 
-        // Foregrounds
+        // Foregrounds. Tertiary is floored against the background — the
+        // deep-hued presets (Red, Violet) tuned it a hair under legibility.
         self.foreground = Color.hsl(tuning.fgHue, tuning.fgSaturation, tuning.fgLightness)
         self.foregroundSecondary = Color.hsl(tuning.fgHue, tuning.fgSecSaturation, tuning.fgSecLightness)
         self.foregroundTertiary = Color.hsl(tuning.fgHue, tuning.fgTerSaturation, tuning.fgTerLightness)
+            .ensuringContrast(atLeast: 2.4, against: background)
         self.foregroundQuaternary = Color.hsl(tuning.fgHue, tuning.fgQuatSaturation, tuning.fgQuatLightness)
 
         // Accent

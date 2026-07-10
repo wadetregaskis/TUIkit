@@ -116,36 +116,72 @@ public struct TerminalProfilePalette: Palette {
         let darkBackground = Self.isDark(background)
 
         self.background = background
-        self.statusBarBackground =
-            darkBackground ? background.lighter(by: 0.10) : background.darker(by: 0.06)
-        self.appHeaderBackground =
-            darkBackground ? background.lighter(by: 0.16) : background.darker(by: 0.10)
+        // Bars keep their preferred standout direction (lighter on a dark
+        // background, darker on a light one) UNLESS that direction drops the
+        // foreground below body-text contrast — saturated mid-dark profiles
+        // (Grass green, Red Sands brick) lose their light text on a lightened
+        // bar, so those flip to darkened bars instead.
+        self.statusBarBackground = Self.barBackground(
+            background: background, foreground: foreground,
+            darkBackground: darkBackground, step: darkBackground ? 0.10 : 0.06)
+        self.appHeaderBackground = Self.barBackground(
+            background: background, foreground: foreground,
+            darkBackground: darkBackground, step: darkBackground ? 0.16 : 0.10)
         self.overlayBackground = background
 
+        // The dimming ladder keeps each step's hue but is floored so even
+        // "tertiary" remains legible against the background.
         self.foreground = foreground
         self.foregroundSecondary = Color.lerp(foreground, background, phase: 0.25)
+            .ensuringContrast(atLeast: 3.0, against: background)
         self.foregroundTertiary = Color.lerp(foreground, background, phase: 0.45)
+            .ensuringContrast(atLeast: 2.4, against: background)
         self.foregroundQuaternary = Color.lerp(foreground, background, phase: 0.62)
 
+        // The accent keeps the profile's signature hue (Grass amber, Homebrew
+        // green…) but is floored to stay readable as text — Basic's pale
+        // system-selection blue and Silver Aerogel's muted violet deepen just
+        // enough to read on their backgrounds.
         let accent = Self.deriveAccent(
             background: background, foreground: foreground,
             candidates: [bold, cursor, selection].compactMap { $0 })
+            .ensuringContrast(atLeast: 3.0, against: background)
         self.accent = accent
 
         self.border = Color.lerp(foreground, background, phase: 0.6)
         // The profile's selection colour is the same role as a focused row's
         // background; when a profile doesn't define one, tint the background
-        // gently toward the accent so the highlight still reads.
-        self.focusBackground = selection ?? Color.lerp(accent, background, phase: 0.78)
+        // gently toward the accent so the highlight still reads. Floored the
+        // other way around: the foreground must stay readable ON it.
+        let focusBackground = selection ?? Color.lerp(accent, background, phase: 0.78)
+        self.focusBackground = focusBackground.ensuringContrast(atLeast: 3.0, against: foreground)
         self.cursorColor = cursor ?? foreground
 
         // Status colours: readable green / amber / red / blue, brighter on a
         // dark background and deeper on a light one. Profile-independent in hue
-        // (Terminal uses its default ANSI palette for every profile).
+        // (Terminal uses its default ANSI palette for every profile), with the
+        // lightness floored per-background — mid-tone and saturated
+        // backgrounds (Silver Aerogel grey, Ocean blue) push each hue as far
+        // as it needs to stay legible.
         self.success = Color.hsl(135, darkBackground ? 55 : 50, darkBackground ? 62 : 38)
+            .ensuringContrast(atLeast: 2.7, against: background)
         self.warning = Color.hsl(40, darkBackground ? 80 : 72, darkBackground ? 62 : 42)
+            .ensuringContrast(atLeast: 2.7, against: background)
         self.error = Color.hsl(6, darkBackground ? 70 : 62, darkBackground ? 64 : 46)
+            .ensuringContrast(atLeast: 2.7, against: background)
         self.info = Color.hsl(208, darkBackground ? 70 : 60, darkBackground ? 68 : 48)
+            .ensuringContrast(atLeast: 2.7, against: background)
+    }
+
+    /// A status-bar / app-header background: steps the app background in the
+    /// standout direction, flipping to the other side when the preferred side
+    /// would drop the foreground below body-text contrast (4.5:1).
+    private static func barBackground(
+        background: Color, foreground: Color, darkBackground: Bool, step: Double
+    ) -> Color {
+        let preferred = darkBackground ? background.lighter(by: step) : background.darker(by: step)
+        if foreground.contrastRatio(against: preferred) >= 4.5 { return preferred }
+        return darkBackground ? background.darker(by: step) : background.lighter(by: step)
     }
 }
 
@@ -204,9 +240,16 @@ extension TerminalProfilePalette {
                 background: .rgb(146, 146, 146), foreground: .rgb(0, 0, 0),
                 bold: .rgb(255, 255, 255), cursor: .rgb(224, 224, 224), selection: .rgb(120, 122, 156))
         case .solidColors:
+            // The .terminal file says white, but the profile's look comes from
+            // its background IMAGE (a legacy /Library/Desktop Pictures "Solid
+            // Colors" bookmark): Terminal.app renders it as a warm cream —
+            // ~#F2DEC9, confirmed against the profile's swatch in Terminal's
+            // settings. Text/bold/cursor are the file's real values; the
+            // selection is Terminal's default system-blue highlight.
             return Spec(
-                background: .rgb(255, 255, 255), foreground: .rgb(0, 0, 0),
-                bold: .rgb(0, 0, 0), cursor: .rgb(203, 203, 203), selection: nil)
+                background: .rgb(242, 222, 201), foreground: .rgb(0, 0, 0),
+                bold: .rgb(0, 0, 0), cursor: .rgb(203, 203, 203),
+                selection: .rgb(179, 215, 255))
         }
     }
 }

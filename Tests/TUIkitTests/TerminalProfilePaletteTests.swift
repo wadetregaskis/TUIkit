@@ -33,17 +33,49 @@ struct TerminalProfilePaletteTests {
 
     @Test("Accent is the profile's signature emphasis colour where one exists")
     func signatureAccents() {
-        // Bold text colour is the signature for these.
+        // Bold text colour is the signature for these — already readable, so
+        // the contrast floor leaves the exact profile colour untouched.
         #expect(TerminalProfilePalette(.grass).accent == .rgb(255, 176, 59))      // amber
         #expect(TerminalProfilePalette(.homebrew).accent == .rgb(0, 249, 0))       // green
         #expect(TerminalProfilePalette(.redSands).accent == .rgb(230, 199, 43))    // gold
         #expect(TerminalProfilePalette(.novel).accent == .rgb(147, 58, 33))        // brick
-        // Bold is white/black (== fg or neutral), so the selection colour wins.
-        #expect(TerminalProfilePalette(.ocean).accent == .rgb(41, 134, 255))       // bright blue
-        #expect(TerminalProfilePalette(.basic).accent == .rgb(164, 205, 255))      // selection blue
-        #expect(TerminalProfilePalette(.silverAerogel).accent == .rgb(120, 122, 156))  // periwinkle
         // Fully monochrome: the most background-distinct candidate (white bold).
         #expect(TerminalProfilePalette(.pro).accent == .rgb(255, 255, 255))
+    }
+
+    @Test("Unreadable signature accents keep their hue but gain contrast")
+    func flooredAccents() {
+        // These profiles' emphasis colour comes from a selection shade that is
+        // unreadable as text on the profile's own background (Basic's pale
+        // system-selection blue on white was 1.65:1). The palette keeps the
+        // hue — the profile's character — and shifts only lightness until the
+        // accent works as text.
+        let cases: [(TerminalProfilePalette.Profile, raw: Color)] = [
+            (.basic, raw: .rgb(164, 205, 255)),          // selection blue
+            (.ocean, raw: .rgb(41, 134, 255)),           // bright blue
+            (.silverAerogel, raw: .rgb(120, 122, 156)),  // periwinkle
+        ]
+        for (profile, raw) in cases {
+            let palette = TerminalProfilePalette(profile)
+            let accent = palette.accent
+            #expect(
+                accent.contrastRatio(against: palette.background) >= 3.0,
+                "\(profile) accent must be readable on its background")
+            guard
+                let (ar, ag, ab) = accent.rgbComponents,
+                let (rr, rg, rb) = raw.rgbComponents
+            else {
+                Issue.record("\(profile) accent must resolve to RGB")
+                continue
+            }
+            let accentHue = Color.rgbToHSL(red: ar, green: ag, blue: ab).hue
+            let rawHue = Color.rgbToHSL(red: rr, green: rg, blue: rb).hue
+            let delta = abs(accentHue - rawHue)
+            let hueDistance = min(delta, 360 - delta)
+            #expect(
+                hueDistance <= 8,
+                "\(profile) accent keeps the signature hue (Δh \(hueDistance))")
+        }
     }
 
     @Test("focusBackground adopts the profile's selection colour")
