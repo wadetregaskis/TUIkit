@@ -68,7 +68,10 @@ struct ListPage: View {
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            HStack(spacing: 2) {
+            // Bottom-aligned: the browser column is one line taller (its path
+            // caption sits above the list), and both lists are equally tall —
+            // aligning bottoms therefore aligns the LIST tops exactly.
+            HStack(alignment: .bottom, spacing: 2) {
                 // A real file browser: single-click (or Space) selects a row;
                 // double-click OR Return/Enter on the focused row activates it
                 // (`.onRowActivate`) — opening a folder in place; the ".." row

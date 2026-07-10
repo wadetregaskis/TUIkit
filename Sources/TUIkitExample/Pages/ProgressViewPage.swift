@@ -64,21 +64,21 @@ struct ProgressViewPage: View {
             DemoSection(L("page.progressView.determinateStyles")) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 1) {
-                        Text("Style       ").dim()
+                        Text("Style        ").dim()
                         Text("    Progress       ").dim().frame(width: 24)
                     }
-                    determinateRow(label: "block       ", style: .block)
-                    determinateRow(label: "blockFine   ", style: .blockFine)
-                    determinateRow(label: "shade       ", style: .shade)
-                    determinateRow(label: "bar         ", style: .bar)
-                    determinateRow(label: "dot         ", style: .dot)
-                    determinateRow(label: "braille     ", style: .braille)
+                    determinateRow(label: "block        ", style: .block)
+                    determinateRow(label: "blockFine    ", style: .blockFine)
+                    determinateRow(label: "shade        ", style: .shade)
+                    determinateRow(label: "bar          ", style: .bar)
+                    determinateRow(label: "dot          ", style: .dot)
+                    determinateRow(label: "braille      ", style: .braille)
                     determinateRow(
-                        label: "shadeRamp   ",
+                        label: "shadeRamp    ",
                         style: .shadeRamp(gradient: nil)
                     )
                     determinateRow(
-                        label: "shadeRamp(g)",
+                        label: "shadeRamp(g) ",
                         style: .shadeRamp(gradient: [
                             .rgb(255, 80, 80),
                             .rgb(255, 200, 80),
@@ -86,7 +86,7 @@ struct ProgressViewPage: View {
                         ])
                     )
                     determinateRow(
-                        label: "threeSegment",
+                        label: "threeSegment ",
                         style: .threeSegment(
                             leading: "Sw",
                             middle: "i",
@@ -107,7 +107,7 @@ struct ProgressViewPage: View {
                     )
                     // …or a per-cell gradient across the whole lit span.
                     determinateRow(
-                        label: "threeSeg(gr)",
+                        label: "threeSeg(gr) ",
                         style: .threeSegment(
                             leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
                             coloring: .gradient([
@@ -119,7 +119,7 @@ struct ProgressViewPage: View {
                     // solid background for the unfilled region — a combination
                     // no named preset provides (showcasing TrackConfiguration).
                     determinateRow(
-                        label: "custom      ",
+                        label: "custom       ",
                         style: .custom(
                             TrackConfiguration(
                                 fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
@@ -136,15 +136,15 @@ struct ProgressViewPage: View {
 
             DemoSection(L("page.progressView.indeterminateAnimations")) {
                 VStack(alignment: .leading, spacing: 0) {
-                    indeterminateRow(label: "sweep       ", style: .sweep)
-                    indeterminateRow(label: "barberPole  ", style: .barberPole)
-                    indeterminateRow(label: "pulse       ", style: .pulse)
-                    indeterminateRow(label: "knightRider ", style: .knightRider)
-                    indeterminateRow(label: "gradient    ", style: .gradient())
+                    indeterminateRow(label: "sweep        ", style: .sweep)
+                    indeterminateRow(label: "barberPole   ", style: .barberPole)
+                    indeterminateRow(label: "pulse        ", style: .pulse)
+                    indeterminateRow(label: "knightRider  ", style: .knightRider)
+                    indeterminateRow(label: "gradient     ", style: .gradient())
                     // The same slide with caller-supplied stops (teal → violet):
                     // any ≥2 RGB colours, cyclically wrapped.
                     indeterminateRow(
-                        label: "gradient(c) ",
+                        label: "gradient(c)  ",
                         style: .gradient(colors: [
                             .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
                         ]))
