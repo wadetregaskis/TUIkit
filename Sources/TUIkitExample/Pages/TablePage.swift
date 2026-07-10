@@ -117,7 +117,7 @@ struct TablePage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             // A real file browser: single-click selects, double-click a folder
-            // opens it in place (via `.onRowDoubleClick`), and the ".." row (🔙)
+            // opens it in place (via `.onRowDoubleClick`), and the ".." row (↰)
             // navigates up. Reads the live filesystem starting at $HOME.
             Text(L("page.table.fileBrowserCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)

@@ -70,7 +70,7 @@ struct ListPage: View {
 
             HStack(spacing: 2) {
                 // A real file browser: single-click selects a row, double-click
-                // opens a folder in place; the ".." row (🔙) navigates up. The
+                // opens a folder in place; the ".." row (↰) navigates up. The
                 // per-row .onMouseEvent out-ranks the List's own click handling,
                 // so it drives both selection and the double-click navigation.
                 VStack(alignment: .leading, spacing: 0) {

@@ -22,10 +22,13 @@ struct BrowserEntry: Identifiable, Sendable {
     let size: String
     let modified: String
 
-    /// The leading emoji glyph: a "back up" arrow for "..", a folder or a file.
-    /// Emoji (not SF Symbols) so it renders on Linux too, matching the other demos.
+    /// The leading glyph: an "up and back" arrow for ".." (↰ — navigating to
+    /// the parent is not a *back* operation, so no back-arrow emoji), a folder
+    /// or a file. Emoji / plain Unicode (not SF Symbols) so it renders on
+    /// Linux too, matching the other demos. The arrow is padded to two cells
+    /// to align with the double-width emoji on the other rows.
     var icon: String {
-        if isParent { return "🔙" }
+        if isParent { return "↰ " }
         return isDirectory ? "📁" : "📄"
     }
 
