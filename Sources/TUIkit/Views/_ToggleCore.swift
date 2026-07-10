@@ -72,7 +72,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let mark = isOnValue ? style.onMark : style.offMark
 
         if style.openBracket.isEmpty {
-            // Self-contained glyph (squares): its *shape* shows on/off, so its
+            // Self-contained glyph (unicode squares): its *shape* shows on/off, so its
             // colour is free to show state — accent when checked, plus the
             // focus / hover / disabled tints the brackets would otherwise carry.
             let markColor = (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor

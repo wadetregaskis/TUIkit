@@ -53,9 +53,9 @@ struct ExampleStyling: Equatable {
     var tint: Color?
     var uppercaseSectionHeaders = false
     var boldButtons = false
-    /// The app-wide checkbox glyph style (`.squares` or `.ascii`), applied to
+    /// The app-wide checkbox glyph style (`.unicode` or `.ascii`), applied to
     /// every Toggle / RadioButton in the app via `.checkboxStyle(_:)`.
-    var checkboxStyle: CheckboxStyle = .squares
+    var checkboxStyle: CheckboxStyle = .unicode
     /// A user-built border, edited on the Theme page. When non-nil it overrides
     /// the appearance manager's built-in border for the whole app; nil falls back
     /// to the built-in appearance (F2/F3/the appearance picker).

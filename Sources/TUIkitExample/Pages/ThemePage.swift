@@ -102,8 +102,8 @@ struct ThemePage: View {
             set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color }
         )
         let checkboxSelection = Binding(
-            get: { styling.checkboxStyle == .ascii ? "ASCII" : "Squares" },
-            set: { name in styling.checkboxStyle = (name == "ASCII") ? .ascii : .squares }
+            get: { styling.checkboxStyle == .ascii ? "ASCII" : "Unicode" },
+            set: { name in styling.checkboxStyle = (name == "ASCII") ? .ascii : .unicode }
         )
         let languageSelection = Binding(
             get: { LocalizationService.shared.currentLanguage.rawValue },
@@ -209,7 +209,7 @@ struct ThemePage: View {
                                 set: { styling.boldButtons = $0 }))
 
                         Picker(L("page.theme.checkboxesLabel"), selection: checkboxSelection) {
-                            Text("Squares ⬛").tag("Squares")
+                            Text("Unicode ⬛").tag("Unicode")
                             Text("ASCII [x]").tag("ASCII")
                         }
                         .pickerStyle(.radioGroup)

@@ -12,7 +12,7 @@ import TUIkitCore
 /// choice, distinct from the SwiftUI-parity ``ToggleStyle`` (which selects
 /// checkbox vs switch *semantics*).
 ///
-/// The default ``squares`` uses the large-square glyphs ⬛ / ⬜. Terminals or
+/// The default ``unicode`` uses the large-square glyphs ⬛ / ⬜. Terminals or
 /// fonts that don't render those well can opt into the pure-ASCII ``ascii``
 /// style (`[x]` / `[ ]`) for a whole subtree with ``SwiftUICore/View/checkboxStyle(_:)``:
 ///
@@ -22,7 +22,7 @@ import TUIkitCore
 /// ```
 ///
 /// A style is just the on/off marks plus an optional bracket pair. When the
-/// brackets are empty (``squares``) the mark is a self-contained glyph whose
+/// brackets are empty (``unicode``) the mark is a self-contained glyph whose
 /// *shape* shows the on/off state, so its colour is free to show focus /
 /// checked / disabled. When brackets are present (``ascii``) they are coloured
 /// by focus while the inner mark is coloured by on/off — the classic two-tone
@@ -50,13 +50,17 @@ public struct CheckboxStyle: Sendable, Equatable {
         self.closeBracket = closeBracket
     }
 
-    /// The default: filled / empty large squares, ⬛ / ⬜.
+    /// The default: filled / empty large Unicode squares, ⬛ / ⬜.
     ///
     /// The glyphs carry a text-presentation variation selector (U+FE0E) so they
     /// render monochrome — letting the theme tint them for focus / checked /
     /// disabled rather than appearing as a fixed-colour emoji. They occupy two
     /// terminal cells.
-    public static let squares = Self(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
+    public static let unicode = Self(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
+
+    /// Deprecated original name for ``unicode``.
+    @available(*, deprecated, renamed: "unicode")
+    public static let squares = unicode
 
     /// A pure-ASCII style, `[x]` / `[ ]`, for terminals where the square glyphs
     /// don't render correctly. Three cells wide, two-tone (brackets show focus,
@@ -67,7 +71,7 @@ public struct CheckboxStyle: Sendable, Equatable {
 // MARK: - Environment
 
 private struct CheckboxStyleKey: EnvironmentKey {
-    static let defaultValue: CheckboxStyle = .squares
+    static let defaultValue: CheckboxStyle = .unicode
 }
 
 extension EnvironmentValues {
@@ -79,7 +83,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Sets the checkbox indicator style (``CheckboxStyle/squares`` by default,
+    /// Sets the checkbox indicator style (``CheckboxStyle/unicode`` by default,
     /// or ``CheckboxStyle/ascii``) for ``Toggle``s in this view.
     ///
     /// TUI-specific: SwiftUI has no equivalent, so this is kept separate from the

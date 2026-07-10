@@ -64,11 +64,11 @@ struct TogglePage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(".squares") (\(L("page.toggle.default")))").dim()
+                            Text("\(".unicode") (\(L("page.toggle.default")))").dim()
                             Toggle(L("page.toggle.on"), isOn: .constant(true))
                             Toggle(L("page.toggle.off"), isOn: .constant(false))
                         }
-                        .checkboxStyle(.squares)
+                        .checkboxStyle(.unicode)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(".ascii").dim()
                             Toggle(L("page.toggle.on"), isOn: .constant(true))
