@@ -95,6 +95,40 @@ private struct NoteEntry: Identifiable, Sendable {
     }()
 }
 
+/// A simulated live transfer for the animated-cells demo. Table cells are
+/// string-valued, so animation here means *deriving the strings from a tick*:
+/// the page advances a `@State` counter four times a second and every cell
+/// value below is a pure function of it.
+private struct TransferEntry: Identifiable, Sendable {
+    let id: Int
+    let name: String
+    let status: String
+    let elapsed: String
+
+    /// Braille spinner frames (the same set as `Spinner`'s `.dots`), stepped
+    /// once per tick and offset per row so the rows spin independently.
+    private static let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    static func liveTransfers(tick: Int) -> [Self] {
+        let jobs = [
+            (name: "assets.tar.gz", rate: 3),
+            (name: "photos-2026/", rate: 2),
+            (name: "backup.sqlite", rate: 1),
+        ]
+        let seconds = tick / 4
+        let elapsed = String(format: "%d:%02d", seconds / 60, seconds % 60)
+        return jobs.enumerated().map { index, job in
+            // Progress climbs at a per-row rate, holds at 100% for a stretch,
+            // then wraps and starts over — so the demo never goes static.
+            let pct = min(100, (tick * job.rate + index * 17) % 130)
+            let status = pct >= 100
+                ? "✓ 100%"
+                : "\(frames[(tick + index) % frames.count]) \(pct)%"
+            return Self(id: index, name: job.name, status: status, elapsed: elapsed)
+        }
+    }
+}
+
 // MARK: - Table Page
 
 /// Table component demo page.
@@ -112,6 +146,9 @@ struct TablePage: View {
     @State var ratioSelection: String?
     @State var notesSelection: Int?
     @State var browserURL: URL = FileBrowser.seedDirectory()
+    @State var liveSelection: Int?
+    /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
+    @State var liveTick: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -212,6 +249,22 @@ struct TablePage: View {
             }
             .frame(height: 6)
 
+            // Animated cells: every string below derives from `liveTick`, which
+            // a `.task` loop advances four times a second — spinner frames,
+            // climbing percentages and a running clock, all in plain cells.
+            Text(L("page.table.liveCaption"))
+                .foregroundStyle(.palette.foregroundSecondary)
+            Table(TransferEntry.liveTransfers(tick: liveTick), selection: $liveSelection) {
+                TableColumn(L("page.table.column.name"), value: \TransferEntry.name)
+                    .width(.fit)
+                TableColumn(L("page.table.column.status"), value: \TransferEntry.status)
+                    .width(.flexible)
+                TableColumn(L("page.table.column.elapsed"), value: \TransferEntry.elapsed)
+                    .width(.fixed(8))
+                    .alignment(.trailing)
+            }
+            .frame(height: 5)
+
             DemoSection(L("page.table.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {
                     ValueDisplayRow(L("page.table.single"), singleSelection ?? L("page.table.none"))
@@ -233,8 +286,20 @@ struct TablePage: View {
             Spacer()
         }
         .scrollableDemoPage()
+        .task {
+            await runLiveTicker()
+        }
         .appHeader {
             DemoAppHeader(L("page.table.title"))
+        }
+    }
+
+    /// The animated-cells ticker. Cancelled automatically when the page goes
+    /// away; every tick re-derives the live table's cell strings.
+    private func runLiveTicker() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(250))
+            liveTick += 1
         }
     }
 }

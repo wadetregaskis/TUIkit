@@ -45,6 +45,15 @@ struct ScrollViewPage: View {
 
                     ScrollView {
                         VStack(alignment: .leading) {
+                            // An animated row right at the top of the FIRST
+                            // scroll view, so the "animation keeps running
+                            // inside scrolled content" behaviour is visible the
+                            // moment the page opens (there's a second Spinner
+                            // in the mixed-content section below).
+                            HStack(spacing: 1) {
+                                Spinner(style: .line)
+                                Text(L("page.scrollView.liveRow")).dim()
+                            }
                             ForEach(loremLines, id: \.self) { line in
                                 Text(line)
                             }
