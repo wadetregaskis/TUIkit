@@ -47,10 +47,17 @@ struct SliderPage: View {
                         Slider(value: $volume).trackStyle(.block)
                     }
                     HStack(spacing: 1) {
-                        // The visibly "shaded" track is `.shadeRamp` (░▒▓█); the
-                        // flat `.shade` (▓) reads almost like `.block` on most
-                        // fonts, so the demo points here.
+                        // Truth in labelling: the row that says "shade" renders
+                        // `.shade`, exactly as the ProgressView demo's "shade"
+                        // row does — a style name must look the same on every
+                        // control. (`.shade`'s ▓ fill reads close to `.block`
+                        // on most fonts by design; the visibly graded look is
+                        // the separate `.shadeRamp` row below.)
                         Text(L("page.slider.shade")).foregroundStyle(.palette.foregroundSecondary)
+                        Slider(value: $volume).trackStyle(.shade)
+                    }
+                    HStack(spacing: 1) {
+                        Text(L("page.slider.shadeRamp")).foregroundStyle(.palette.foregroundSecondary)
                         Slider(value: $volume).trackStyle(.shadeRamp())
                     }
                     HStack(spacing: 1) {
