@@ -61,6 +61,14 @@ extension AlertPresentationModifier: Renderable {
         // modals each isolate (only the topmost active section is interactive).
         let sectionID = "alert-\(context.identity.path)"
 
+        // Each subtree gets its OWN child identity (mirrors
+        // ModalPresentationModifier): rendered at the modifier's identity, an
+        // action's / the content's first `@State` would share StateStorage key
+        // (identity, 0) with this modifier's drag-handler slot, and the two
+        // boxes would replace each other every frame. The content identity is
+        // identical in both branches so page state survives presentation.
+        let contentContext = context.withChildIdentity(type: Content.self, index: 0)
+
         // If not presented, just return base content. Tear down the alert's
         // focus section if it's still active (the alert was just dismissed), so
         // the page's focus — and a ScrollView's scroll position — is restored
@@ -74,13 +82,14 @@ extension AlertPresentationModifier: Renderable {
                 // Recentre next time it opens.
                 DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
             }
-            return TUIkit.renderToBuffer(content, context: context)
+            return TUIkit.renderToBuffer(content, context: contentContext)
         }
 
         // Render message content to string if provided
         let messageString: String
         if let message {
-            let messageBuffer = TUIkit.renderToBuffer(message, context: context)
+            let messageBuffer = TUIkit.renderToBuffer(
+                message, context: context.withChildIdentity(type: Message.self, index: 2))
             messageString = messageBuffer.lines.joined(separator: "\n").stripped
         } else {
             messageString = ""
@@ -133,11 +142,13 @@ extension AlertPresentationModifier: Renderable {
         // and (via throwaway state) preserves the page's scroll/@State. The root
         // compositor dims this buffer for the backdrop; mouse is isolated by that
         // dimmed backdrop dropping the page's hit-test regions.
-        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatedForBackground())
+        var baseBuffer = TUIkit.renderToBuffer(
+            content, context: contentContext.isolatedForBackground())
 
         // Render the alert against the FULL screen (not the attachment's local
         // area) so it isn't clipped, in the alert section.
         var alertContext = context
+            .withChildIdentity(erasedType: Alert<Actions>.self, index: 1)
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.terminalHeight)
         alertContext.environment.activeFocusSectionID = sectionID
@@ -175,6 +186,10 @@ extension AlertPresentationModifier: Layoutable {
     /// the focus-section / status-bar side-effects on the render pass; a measure
     /// must not register or activate sections.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        // The content's child identity mirrors the render path so
+        // measure-time @State binds to the same boxes.
+        measureChild(
+            content, proposal: proposal,
+            context: context.withChildIdentity(type: Content.self, index: 0))
     }
 }

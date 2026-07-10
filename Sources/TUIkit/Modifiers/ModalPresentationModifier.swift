@@ -49,6 +49,17 @@ extension ModalPresentationModifier: Renderable {
         // modals register into one section and break that isolation.
         let sectionID = "modal-\(context.identity.path)"
 
+        // Both subtrees get their OWN child identities (the ContainerView
+        // body/footer pattern). Rendering them at the modifier's identity made
+        // a dialog's first `@State` share StateStorage key (identity, 0) with
+        // this modifier's own drag-handler slot — the two boxes replaced each
+        // other every frame (`storage(for:)` swaps on type mismatch), so any
+        // state INSIDE the dialog silently reset (the colour picker's tab
+        // selection never moved). The content identity is the same in the
+        // dismissed and presented branches, so the page's state and lifecycle
+        // tokens are stable across presentation.
+        let contentContext = context.withChildIdentity(type: Content.self, index: 0)
+
         // If not presented, just return base content.
         guard isPresented.wrappedValue else {
             // Tear down the modal focus section if it's still active (the modal
@@ -64,7 +75,7 @@ extension ModalPresentationModifier: Renderable {
                 // Recentre next time it opens.
                 DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
             }
-            return TUIkit.renderToBuffer(content, context: context)
+            return TUIkit.renderToBuffer(content, context: contentContext)
         }
 
         // Register the modal focus section and activate it FIRST — so the page
@@ -109,13 +120,15 @@ extension ModalPresentationModifier: Renderable {
         // and (via throwaway state) preserves the page's scroll/@State. The root
         // compositor dims this buffer for the backdrop; mouse is isolated by that
         // dimmed backdrop dropping the page's hit-test regions.
-        var baseBuffer = TUIkit.renderToBuffer(content, context: context.isolatedForBackground())
+        var baseBuffer = TUIkit.renderToBuffer(
+            content, context: contentContext.isolatedForBackground())
 
         // Render the modal content against the FULL screen (not the attachment's
         // local area, which may be a tiny leaf) so it isn't clipped, in the modal
         // section so its focusables register there. The root compositor then
         // centres and clamps it.
         var modalContext = context
+            .withChildIdentity(type: Modal.self, index: 1)
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.terminalHeight)
         modalContext.environment.activeFocusSectionID = sectionID
@@ -153,8 +166,11 @@ extension ModalPresentationModifier: Layoutable {
     /// base, which spans the page), so the layout footprint is the base
     /// `content` — both when dismissed and when presented. Forwarding also keeps
     /// the focus-section / status-bar side-effects on the render pass; a measure
-    /// must not register or activate sections.
+    /// must not register or activate sections. The content's child identity
+    /// mirrors the render path so measure-time @State binds to the same boxes.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        measureChild(
+            content, proposal: proposal,
+            context: context.withChildIdentity(type: Content.self, index: 0))
     }
 }
