@@ -67,6 +67,9 @@ extension AlertPresentationModifier: Renderable {
         // rather than jumping to the top.
         guard isPresented.wrappedValue else {
             if !context.isMeasuring {
+                // Deactivation mutates focus state — a render side effect
+                // (see the presentation branch below).
+                context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
                 // Recentre next time it opens.
                 DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
@@ -97,6 +100,11 @@ extension AlertPresentationModifier: Renderable {
         // beneath registers its controls in the now-inactive page section (and
         // can't steal focus/scroll) while the alert's own controls auto-focus.
         if !context.isMeasuring {
+            // Section registration/activation is a per-frame render side
+            // effect: a memoised replay of this subtree would skip it, leaving
+            // an alert that no longer grabs focus. Declare it so value/measure
+            // memos decline caching.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)

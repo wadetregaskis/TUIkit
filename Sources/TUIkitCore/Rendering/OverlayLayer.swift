@@ -161,11 +161,19 @@ public struct OverlayLayer: Sendable, Equatable {
 
     /// Returns a copy of this layer with its offset shifted by `(dx, dy)`.
     ///
+    /// ``centered`` layers are returned unchanged: they are anchored to the
+    /// *screen* (centre + post-centre drag delta), not to the content that
+    /// emitted them, so the positional shifts of buffer composition must not
+    /// apply — folding an attachment point's position into the offset would
+    /// displace the dialog off-centre (it presented correctly only when
+    /// attached at the tree root).
+    ///
     /// - Parameters:
     ///   - dx: The horizontal shift in columns.
     ///   - dy: The vertical shift in rows.
-    /// - Returns: A shifted copy of the layer.
+    /// - Returns: A shifted copy of the layer (or `self` when ``centered``).
     public func shifted(byX dx: Int, y dy: Int) -> Self {
+        guard !centered else { return self }
         var copy = self
         copy.offsetX += dx
         copy.offsetY += dy

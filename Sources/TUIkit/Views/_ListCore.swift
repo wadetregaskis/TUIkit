@@ -877,6 +877,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     )
                 )
             }
+
+            // Overlay layers need the same explicit carry: a modal/alert
+            // presented from row content (or a popover anchored to it) is
+            // emitted into the row's standalone buffer and would otherwise
+            // never reach the root compositor — an invisible dialog that
+            // still grabs focus. Anchored layers translate to the row's
+            // on-screen position (`shifted` leaves screen-centred layers
+            // untouched); no clipping — floating above the in-flow content
+            // is the point of an overlay.
+            buffer.overlays.append(
+                contentsOf: visible.row.buffer.shiftedOverlays(
+                    byX: rowContentX, y: topInset + position.yStart))
         }
     }
 

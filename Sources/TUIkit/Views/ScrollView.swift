@@ -815,10 +815,15 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // vertical span intersects [scrollOffset, scrollOffset
         // + viewportHeight). Its offsetY is shifted up by
         // scrollOffset so it stays anchored to its content.
+        // Centred layers (modals/alerts) are screen-anchored, not
+        // content-anchored: they ride through untouched no matter
+        // where their attachment point has scrolled to — a presented
+        // dialog must not vanish because its trigger scrolled away.
         let viewportTop = scrollOffset
         let viewportBottom = scrollOffset + viewportHeight
         let dx = horizontalEnabled ? -horizontalOffset : 0
         let visibleOverlays = full.overlays.compactMap { overlay -> OverlayLayer? in
+            guard !overlay.centered else { return overlay }
             let topY = overlay.offsetY
             let bottomY = overlay.offsetY + overlay.content.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }

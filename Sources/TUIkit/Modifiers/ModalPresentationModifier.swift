@@ -57,6 +57,9 @@ extension ModalPresentationModifier: Renderable {
             // first element — which a ScrollView would then snap-scroll to,
             // resetting the scroll position.
             if !context.isMeasuring {
+                // Deactivation mutates focus state — a render side effect
+                // (see the presentation branch below).
+                context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
                 // Recentre next time it opens.
                 DialogDrag.reset(context: context, propertyIndex: StateIndex.dragHandler)
@@ -71,6 +74,11 @@ extension ModalPresentationModifier: Renderable {
         // within the modal. (Skipped while measuring — a measure mustn't mutate
         // focus or the status bar.)
         if !context.isMeasuring {
+            // Section registration/activation + the status-bar item are
+            // per-frame render side effects: a memoised replay of this subtree
+            // would skip them, leaving a modal that no longer grabs focus.
+            // Declare them so value/measure memos decline caching.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)
