@@ -52,6 +52,18 @@ public protocol ScrollableOffsetState: AnyObject {
     /// to apply on each tick; `nil` when nothing is held. Lives on the persistent
     /// handler so the bar's owner can drive it from the render loop across frames.
     var scrollbarRepeat: ScrollbarRepeat? { get set }
+
+    /// The largest valid ``scrollOffset`` for the current extent and viewport.
+    ///
+    /// A protocol *requirement* (with the obvious `extent - viewportHeight`
+    /// default below) so a conformer whose rows and viewport are measured in
+    /// different units can supply the exact bound — ``ItemListHandler`` counts
+    /// its extent in rows but its viewport can be lines when rows span
+    /// multiple lines, and the default's mixed-unit subtraction caps the
+    /// offset far short of the true bottom. Every helper in the extension
+    /// (``clampScrollOffset()``, wheel scrolling, the scrollbar arithmetic)
+    /// dispatches through this requirement, so an override applies uniformly.
+    var maxOffset: Int { get }
 }
 
 // MARK: - Generic single-axis scroll state
@@ -80,9 +92,8 @@ public final class ScrollAxis: ScrollableOffsetState {
 
 extension ScrollableOffsetState {
 
-    /// The largest valid ``scrollOffset`` for the current
-    /// extent and viewport. Zero when the content already
-    /// fits entirely.
+    /// The default ``maxOffset``: uniform units (rows-and-rows, or
+    /// lines-and-lines). Zero when the content already fits entirely.
     public var maxOffset: Int {
         max(0, extent - viewportHeight)
     }

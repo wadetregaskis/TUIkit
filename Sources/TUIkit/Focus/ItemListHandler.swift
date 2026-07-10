@@ -89,16 +89,53 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// handler's own unit tests).
     var contentHeight: Int?
 
-    /// A closure giving the height in lines of row `i`, for a table whose cells can
-    /// span multiple lines — or `nil` when every row is exactly one line (a `List`,
-    /// and single-line tables). When set, ``ensureFocusedItemVisible()`` accumulates
-    /// these so a tall focused row is fully revealed rather than partially scrolled
-    /// off. It is a *closure*, not an array, so the owning view answers it lazily —
-    /// only for the rows the scroll arithmetic actually touches (a viewport's worth,
-    /// not every row) — which is what lets a tall table skip wrapping its off-screen
-    /// rows. A `nil` value leaves the original uniform-height behaviour (and `List`)
-    /// completely unchanged.
+    /// A closure giving the height in lines of row `i`, for rows that can span
+    /// multiple lines — `List` rows are arbitrary views and `Table` cells can
+    /// wrap, so both wire this. `nil` (single-line tables, plus the handler's
+    /// own unit tests) keeps the original uniform-height arithmetic. When set,
+    /// ``ensureFocusedItemVisible()`` accumulates these so a tall focused row
+    /// is fully revealed rather than partially scrolled off. It is a
+    /// *closure*, not an array, so the owning view answers it lazily — only
+    /// for the rows the scroll arithmetic actually touches (a viewport's
+    /// worth, not every row) — which is what lets a tall table/list skip
+    /// wrapping or rendering its off-screen rows.
     var rowHeight: ((Int) -> Int)?
+
+    /// The largest valid scroll offset, in rows.
+    ///
+    /// With variable-height rows (``rowHeight`` set) the default
+    /// `extent - viewportHeight` mixes units — the extent is rows but the
+    /// provisional viewport is lines — capping the offset short of the true
+    /// bottom (and letting the render-pass clamp scrub back a reveal that had
+    /// correctly scrolled a tall focused row into view). Walk back from the
+    /// last row instead, accumulating real heights: the answer is the
+    /// smallest top row for which everything below fits the content area
+    /// (reserving the "above" indicator's line whenever that top isn't row
+    /// zero). O(viewport) closure calls, on rows the frame renders anyway.
+    var maxOffset: Int {
+        guard let rowHeight, let contentHeight, contentHeight > 0 else {
+            return max(0, extent - viewportHeight)
+        }
+        // Every row is at least one line, so at most `contentHeight` rows fit:
+        // the true bound is never below this floor. Until the viewport is
+        // actually within reach of the tail, the floor is exact enough for
+        // every consumer — the clamp can't bite (offset ≤ floor ≤ max) and the
+        // scrollbar's denominator is off by at most a viewport — and returning
+        // it early avoids materialising tail rows' heights every frame on
+        // large lists.
+        let floor = max(0, itemCount - contentHeight)
+        guard scrollOffset >= floor else { return floor }
+        var used = 0
+        var top = itemCount
+        while top > 0 {
+            let budget = (top - 1 == 0) ? contentHeight : contentHeight - 1
+            let height = max(1, rowHeight(top - 1))
+            if used + height > budget { break }
+            used += height
+            top -= 1
+        }
+        return top
+    }
 
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode

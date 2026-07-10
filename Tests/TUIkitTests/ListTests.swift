@@ -629,6 +629,42 @@ struct ListRenderingTests {
             "the focused row must stay visible at the top→middle transition; got:\n\(joined)")
     }
 
+    /// Regression: a List of MULTI-LINE rows must scroll to keep the moved
+    /// focus/selection visible. The reveal arithmetic assumed one line per
+    /// row (`rowHeight` was only ever wired for Table), so with two-line
+    /// rows the handler believed the focused row was still on screen while
+    /// the renderer — which windows by real line heights — had already
+    /// pushed it below the fold: Down appeared to "deselect" (the demo's
+    /// "Multi-line cells (scrollable)" symptom).
+    @Test("Down-arrow keeps a two-line focused row visible (list scrolls it into view)")
+    func multiLineRowsRevealFocusedRow() {
+        let context = createTestContext(width: 30, height: 8)
+        let items = (0..<10).map { "item-\($0)" }
+        // Two-line rows, mirroring the demo (title + detail), in an 8-line
+        // frame: only ~3 rows fit on screen at once.
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { item in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(item)
+                    Text("detail of \(item)")
+                }
+            }
+        }
+        .frame(height: 8)
+        _ = renderToBuffer(view, context: context)  // register + focus
+
+        // Walk the cursor down the whole list: after every keypress the
+        // focused row must be somewhere in the rendered output.
+        for step in 1...9 {
+            _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down))
+            let joined = renderToBuffer(view, context: context)
+                .lines.map(\.stripped).joined(separator: "\n")
+            #expect(
+                joined.contains("item-\(step)"),
+                "after \(step) Down(s) the focused two-line row must be visible; got:\n\(joined)")
+        }
+    }
+
     /// The scroll offset must never rest at 1: an "▲ 1 more above"
     /// indicator hides a single row using a line that could simply
     /// show that row, so offset 0 (first row visible, no indicator)

@@ -531,6 +531,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // List rows can be any height (the renderer already windows by real
+        // line heights), so the focus-reveal AND offset-clamp arithmetic must
+        // accumulate the same heights — otherwise a Down past the fold leaves
+        // the focused multi-line row off screen ("selection disappears"), and
+        // the tail rows are unreachable. Wired BEFORE the clamp below so this
+        // frame's clamp uses this frame's rows. Lazy + memoised: only a
+        // viewport's worth of rows is ever queried, so single-line lists pay
+        // nothing new and windowed lists stay O(visible).
+        handler.rowHeight = { source.row(at: $0).buffer.height }
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing
