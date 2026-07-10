@@ -197,6 +197,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let handler: ItemListHandler<SelectionValue>
         let focusID: String
         let visibleRowYRanges: [VisibleRowRange]
+        /// The rows behind ``visibleRowYRanges``, index-aligned with it (both
+        /// are built from the same visible-window walk). Their buffers carry
+        /// the rows' own hit-test regions, which `attachMouseHandlers` merges
+        /// into the list's buffer.
+        let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
         /// The buffer column of the scrollbar and its line-height, when one is
         /// drawn (`nil` column = no bar). Drives the bar's mouse handler in
         /// `attachMouseHandlers`.
@@ -457,6 +462,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 handler: handler,
                 focusID: persistedFocusID,
                 visibleRowYRanges: visibleRowYRanges,
+                visibleRows: visibleRows,
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight
             )
@@ -834,6 +840,38 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ),
             at: 0
         )
+
+        // Rows render into standalone (per-frame memoised) buffers, so their
+        // own hit-test regions — per-row `.onMouseEvent`, Buttons and other
+        // interactive children — must be carried into the list's buffer
+        // explicitly, translated to each row's on-screen position. Without
+        // this merge the container fallback above is the ONLY region that
+        // ever sees a click, and the "children win" contract is vacuously
+        // false. Rows re-render every frame (the row memo lives on the
+        // per-frame RowSource), so the handler ids are current. Appended
+        // after the container's insert(at: 0) — higher indices, which the
+        // dispatcher's reverse iteration matches first.
+        let style = context.environment.listStyle
+        // Border column (when drawn) + the leading space `renderPlainLine`
+        // prefixes to every row line.
+        let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
+        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
+            for region in visible.row.buffer.hitTestRegions {
+                // The last row can be only partially visible: clip its regions
+                // to the lines actually shown.
+                let visibleHeight = min(region.height, position.height - region.offsetY)
+                guard visibleHeight > 0 else { continue }
+                buffer.hitTestRegions.append(
+                    HitTestRegion(
+                        offsetX: rowContentX + region.offsetX,
+                        offsetY: topInset + position.yStart + region.offsetY,
+                        width: region.width,
+                        height: visibleHeight,
+                        handlerID: region.handlerID
+                    )
+                )
+            }
+        }
     }
 
     /// Builds the closure that the container-wide hit-test
