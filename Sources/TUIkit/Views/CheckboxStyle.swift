@@ -58,10 +58,6 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// terminal cells.
     public static let unicode = Self(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
 
-    /// Deprecated original name for ``unicode``.
-    @available(*, deprecated, renamed: "unicode")
-    public static let squares = unicode
-
     /// A pure-ASCII style, `[x]` / `[ ]`, for terminals where the square glyphs
     /// don't render correctly. Three cells wide, two-tone (brackets show focus,
     /// the inner mark shows on/off).
