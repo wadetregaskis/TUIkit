@@ -56,7 +56,10 @@ struct TextFieldContentRenderer {
         contentWidth: Int
     ) -> String {
         let isEmpty = text.isEmpty
-        let backgroundColor = palette.accent.opacity(ViewConstants.focusBorderDim)
+        // The palette's field surface (the tab-strip tone): palette-aware, so
+        // light palettes get a light field. The old fixed accent-dim tint
+        // multiplied toward black, rendering dark-on-light fields unreadable.
+        let backgroundColor = palette.fieldBackground.resolve(with: palette)
 
         if isEmpty && !isFocused && prompt != nil {
             return buildPromptContent(palette: palette, background: backgroundColor, width: contentWidth)

@@ -84,6 +84,16 @@ public protocol Palette: Cyclable {
     /// Defaults to `accent` if not explicitly set. Custom palettes can override
     /// this to provide a distinct cursor color independent of the accent.
     var cursorColor: Color { get }
+
+    /// The field surface behind editable text (TextField, SecureField,
+    /// TextEditor).
+    ///
+    /// Defaults to ``appHeaderBackground`` — the same subtle lift above the
+    /// base background the tab strip uses, so fields stay readable on light
+    /// and dark palettes alike (a fixed dark tint rendered dark-on-light
+    /// fields unreadable). Custom palettes can override for a distinct
+    /// field tone.
+    var fieldBackground: Color { get }
 }
 
 // MARK: - Default Palette Implementation
@@ -106,6 +116,8 @@ extension Palette {
     public var focusBackground: Color { foregroundTertiary.opacity(0.3) }
 
     public var cursorColor: Color { accent }
+
+    public var fieldBackground: Color { appHeaderBackground }
 }
 
 // MARK: - Palette Registry

@@ -96,6 +96,10 @@ public struct SystemPalette: Palette {
         self.foregroundSecondary = Color.hsl(tuning.fgHue, tuning.fgSecSaturation, tuning.fgSecLightness)
         self.foregroundTertiary = Color.hsl(tuning.fgHue, tuning.fgTerSaturation, tuning.fgTerLightness)
             .ensuringContrast(atLeast: 2.4, against: background)
+            // The field surface (= appHeaderBackground) sits a shade lighter
+            // than the background on these near-black presets; tertiary is
+            // also the field prompt colour, so it must clear that surface too.
+            .ensuringContrast(atLeast: 2.4, against: appHeaderBackground)
         self.foregroundQuaternary = Color.hsl(tuning.fgHue, tuning.fgQuatSaturation, tuning.fgQuatLightness)
 
         // Accent

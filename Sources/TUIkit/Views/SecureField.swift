@@ -336,10 +336,14 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // visual language as TextField. Focused fields don't
         // show the hover bump (focus is the more emphatic
         // signal).
-        let capOpacity = isHovered
-            ? ViewConstants.hoverBackground
-            : ViewConstants.focusBorderDim
-        let capColor = palette.accent.opacity(capOpacity)
+        // The caps are half-block glyphs painted in the field surface — they
+        // read as the field's rounded ends on any palette. Hover tints them
+        // toward the accent so the affordance still reads as "clickable".
+        let surface = palette.fieldBackground.resolve(with: palette)
+        let capColor =
+            isHovered
+            ? Color.lerp(surface, palette.accent.resolve(with: palette), phase: 0.35)
+            : surface
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
         var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)

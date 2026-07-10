@@ -188,10 +188,12 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         // A subtle field background so the editor reads as a text field (like
         // TextField's chrome) rather than plain text — no full box. Opt into the
-        // boxed look with `.border()`.
+        // boxed look with `.border()`. The palette's field surface keeps it
+        // readable on light and dark palettes alike (the old fixed accent-dim
+        // tint multiplied toward black — dark grey behind black text on Basic).
         let fieldBackground: Color? = isDisabled
             ? nil
-            : palette.accent.opacity(ViewConstants.focusBorderDim)
+            : palette.fieldBackground.resolve(with: palette)
 
         var output: [String] = []
         output.reserveCapacity(height)

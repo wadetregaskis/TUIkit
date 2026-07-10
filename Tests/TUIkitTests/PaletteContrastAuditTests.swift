@@ -97,6 +97,14 @@ struct PaletteContrastAuditTests {
             AuditedPair(
                 name: "info/background",
                 foreground: palette.info, background: palette.background, minimum: 2.7),
+            AuditedPair(
+                name: "foreground/fieldBackground",
+                foreground: palette.foreground, background: palette.fieldBackground,
+                minimum: 4.5),
+            AuditedPair(
+                name: "tertiary/fieldBackground",  // the prompt text
+                foreground: palette.foregroundTertiary, background: palette.fieldBackground,
+                minimum: 2.4),
         ]
     }
 
