@@ -557,12 +557,16 @@ where Value.ID: Hashable {
         // The reveal-on-focus arithmetic (run between renders, on key events)
         // answers heights lazily too, from this frame's data and column widths.
         handler.rowHeight = { rowHeight(of: data[$0], columnWidths: columnWidths) }
+        // Captured for wheel events, which arrive when the environment is out
+        // of reach — line granularity steps by lines through the tall rows.
+        handler.scrollGranularity = context.environment.scrollGranularity
         // Choose viewportHeight so the handler's row-based maxOffset
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
         let furthest = maxScrollOffset(count: data.count, contentHeight: contentHeight, height: heightOf)
         handler.viewportHeight = max(1, data.count - furthest)
         if !context.isMeasuring {
             handler.clampScrollOffset()
+            handler.clampTopClip()
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
@@ -570,13 +574,21 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        let topClip = handler.scrollTopClipLines
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
-            contentHeight: contentHeight, height: heightOf)
+            contentHeight: contentHeight, topClip: topClip, height: heightOf)
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth, context: context, palette: palette)
 
+        // The first row's on-screen height is net of the line-granularity top
+        // clip — the mouse row-mapping walks these heights from the first
+        // visible line, so they must be as-rendered.
+        var visibleRowHeights = window.range.map(heightOf)
+        if topClip > 0, !visibleRowHeights.isEmpty {
+            visibleRowHeights[0] = max(1, visibleRowHeights[0] - topClip)
+        }
         return (
             lines: lines,
             state: PopulatedRenderState(
@@ -584,7 +596,7 @@ where Value.ID: Hashable {
                 focusID: persistedFocusID,
                 visibleRange: window.range,
                 scrollOffsetAbove: window.showAbove ? 1 : 0,
-                visibleRowHeights: window.range.map(heightOf)
+                visibleRowHeights: visibleRowHeights
             )
         )
     }
@@ -646,14 +658,16 @@ where Value.ID: Hashable {
     /// the content area fills, reserving a line for each scroll indicator actually
     /// shown. Mirrors the single-line indicator reservation, height-aware.
     private func rowWindow(
-        scrollOffset: Int, count: Int, contentHeight: Int, height: (Int) -> Int
+        scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0, height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool) {
         guard count > 0 else { return (0..<0, false, false) }
         let offset = min(max(0, scrollOffset), count - 1)
-        let showAbove = offset > 0
+        // A line-granularity clip partially hides the top row — content above.
+        let showAbove = offset > 0 || topClip > 0
 
         func fill(budget: Int) -> Int {
-            var used = 0
+            // The clipped lines of the top row don't occupy the viewport.
+            var used = -topClip
             var end = offset
             while end < count {
                 let rowH = height(end)
@@ -689,14 +703,21 @@ where Value.ID: Hashable {
         var lines: [String] = []
         if window.showAbove {
             lines.append(renderScrollIndicator(
-                direction: .up, count: window.range.lowerBound, width: contentWidth, palette: palette))
+                direction: .up, count: max(1, window.range.lowerBound),
+                width: contentWidth, palette: palette))
         }
         for rowIndex in window.range {
-            lines.append(contentsOf: renderMultiLineRow(
+            var rowLines = renderMultiLineRow(
                 item: data[rowIndex],
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
-                columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette))
+                columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette)
+            // Line granularity: the top row enters partially, its first
+            // `scrollTopClipLines` lines scrolled off above the viewport.
+            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
+                rowLines.removeFirst(min(handler.scrollTopClipLines, rowLines.count - 1))
+            }
+            lines.append(contentsOf: rowLines)
         }
         if window.showBelow {
             lines.append(renderScrollIndicator(
@@ -784,6 +805,10 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
         handler.rowHeight = nil  // single-line path: uniform-height scroll math
+        // With uniform rows lines == rows, so granularity is moot here — but
+        // sync it (and zero any stale clip below) in case the table's rows
+        // switch between the single-line and multi-line paths across frames.
+        handler.scrollGranularity = context.environment.scrollGranularity
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
@@ -803,6 +828,7 @@ where Value.ID: Hashable {
         // Mirrors _ListCore / ScrollView.
         if !context.isMeasuring {
             handler.clampScrollOffset()
+            handler.clampTopClip()
             // An "above" indicator that hides exactly one row wastes its
             // line: that line could just show the row. So never rest at
             // offset 1 — snap to 0, where the first row shows with no

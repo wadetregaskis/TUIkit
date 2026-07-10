@@ -70,6 +70,20 @@ public protocol ScrollableOffsetState: AnyObject {
     /// (``clampScrollOffset()``, wheel scrolling, the scrollbar arithmetic)
     /// dispatches through this requirement, so an override applies uniformly.
     var maxOffset: Int { get }
+
+    /// Moves the scroll position by `delta` *fine* steps — the unit a wheel
+    /// tick or scrollbar arrow click moves — returning whether the viewport
+    /// actually moved.
+    ///
+    /// A requirement (defaulted to ``scroll(by:)``, one row/line per step) so
+    /// a conformer with a finer unit than its offset can interpose:
+    /// ``ItemListHandler`` under ``ScrollGranularity/line`` steps by terminal
+    /// LINES through multi-line rows — its row-based ``scrollOffset`` plus a
+    /// top clip — while offset, extent and ``maxOffset`` stay row-based (an
+    /// O(1) model even for 50k-row lists). The wheel path dispatches through
+    /// this requirement, so the override applies to every wheel event.
+    @discardableResult
+    func scrollFine(by delta: Int) -> Bool
 }
 
 // MARK: - Generic single-axis scroll state
@@ -190,6 +204,14 @@ extension ScrollableOffsetState {
         scrollOffset = max(0, min(maxOffset, scrollOffset))
     }
 
+    /// The default fine step: one offset unit, via ``scroll(by:)``.
+    @discardableResult
+    public func scrollFine(by delta: Int) -> Bool {
+        let before = scrollOffset
+        scroll(by: delta)
+        return scrollOffset != before
+    }
+
     /// Routes a mouse event through the wheel-scroll path.
     ///
     /// Returns `true` only if the event was a wheel event that
@@ -219,13 +241,9 @@ extension ScrollableOffsetState {
     ) -> Bool {
         switch event.button {
         case .scrollUp:
-            let before = scrollOffset
-            scroll(by: -linesPerTick)
-            return resolveWheelOutcome(moved: scrollOffset != before)
+            return resolveWheelOutcome(moved: scrollFine(by: -linesPerTick))
         case .scrollDown:
-            let before = scrollOffset
-            scroll(by: linesPerTick)
-            return resolveWheelOutcome(moved: scrollOffset != before)
+            return resolveWheelOutcome(moved: scrollFine(by: linesPerTick))
         default:
             return false
         }

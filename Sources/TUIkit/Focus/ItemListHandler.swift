@@ -157,6 +157,20 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// The scroll offset (first visible item index).
     var scrollOffset: Int = 0
 
+    /// How many LINES of the top visible row (``scrollOffset``) are scrolled
+    /// off the top edge — the sub-row position that makes
+    /// ``ScrollGranularity/line`` scrolling line-precise while
+    /// ``scrollOffset`` / ``maxOffset`` / ``extent`` stay row-based (O(1) for
+    /// any list size). Always `0` under ``ScrollGranularity/row``, for
+    /// single-line rows, and at the very bottom (``maxOffset`` is the last
+    /// row-aligned top). Clamped each render by ``clampTopClip()``.
+    var scrollTopClipLines: Int = 0
+
+    /// The scroll granularity, synced from `environment.scrollGranularity`
+    /// during render (default ``ScrollGranularity/line``); read at event time
+    /// by ``scrollFine(by:)``, when the environment is no longer reachable.
+    var scrollGranularity: ScrollGranularity = .line
+
     /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
     var scrollbarDragGrab: Int?
 
@@ -433,6 +447,77 @@ extension ItemListHandler {
     /// these moved out of this class.)
     var extent: Int { itemCount }
 
+    /// The wheel/arrow step (``ScrollableOffsetState`` requirement). Under
+    /// ``ScrollGranularity/line`` with multi-line rows, each step moves one
+    /// terminal LINE: the top clip advances within the top row and rolls into
+    /// ``scrollOffset`` at row boundaries, so a five-line row scrolls in five
+    /// smooth steps instead of one jump. Row granularity — or uniform
+    /// single-line rows, where the two coincide — keeps the protocol's
+    /// row-stepping default. Only the touched rows' heights are queried, so
+    /// the cost is O(delta), independent of list size.
+    @discardableResult
+    func scrollFine(by delta: Int) -> Bool {
+        guard scrollGranularity == .line, let rowHeight else {
+            let before = scrollOffset
+            scroll(by: delta)
+            return scrollOffset != before
+        }
+        guard delta != 0, viewportHeight > 0, maxOffset > 0 else { return false }
+        var moved = false
+        var remaining = delta
+        while remaining > 0 {  // Scrolling down.
+            // maxOffset is recomputed per step: far from the tail it
+            // short-circuits to a cheap floor (an UNDER-estimate — stopping
+            // there would strand the scroll short of the true bottom), and
+            // only within reach of the tail does it do the exact walk.
+            if scrollOffset >= maxOffset {
+                // The bottom: the last row-aligned top; no clip past it.
+                scrollTopClipLines = 0
+                break
+            }
+            let topHeight = max(1, rowHeight(scrollOffset))
+            if scrollTopClipLines + 1 < topHeight {
+                scrollTopClipLines += 1
+            } else {
+                scrollOffset += 1
+                scrollTopClipLines = 0
+            }
+            moved = true
+            remaining -= 1
+        }
+        while remaining < 0 {  // Scrolling up.
+            if scrollTopClipLines > 0 {
+                scrollTopClipLines -= 1
+            } else if scrollOffset > 0 {
+                scrollOffset -= 1
+                scrollTopClipLines = max(0, max(1, rowHeight(scrollOffset)) - 1)
+            } else {
+                break
+            }
+            moved = true
+            remaining += 1
+        }
+        return moved
+    }
+
+    /// Clamps ``scrollTopClipLines`` to its valid range for the current rows
+    /// and granularity: zero under ``ScrollGranularity/row``, zero at the
+    /// bottom (``maxOffset``), and always inside the top row's height. Called
+    /// alongside ``ScrollableOffsetState/clampScrollOffset()`` on the render
+    /// pass.
+    func clampTopClip() {
+        guard scrollTopClipLines > 0 else { return }
+        guard scrollGranularity == .line, let rowHeight else {
+            scrollTopClipLines = 0
+            return
+        }
+        if scrollOffset >= maxOffset {
+            scrollTopClipLines = 0
+            return
+        }
+        scrollTopClipLines = min(scrollTopClipLines, max(0, max(1, rowHeight(scrollOffset)) - 1))
+    }
+
     /// Adjusts scroll offset to keep the focused item visible.
     ///
     /// When ``contentHeight`` is set the scroll-down target reserves
@@ -455,9 +540,14 @@ extension ItemListHandler {
         // Scroll up: the focused row becomes the first visible row.
         // When it isn't the very first item an "above" indicator
         // appears, but the focused row is still the first *row* shown
-        // (just below the indicator), so it stays visible.
+        // (just below the indicator), so it stays visible. A focused
+        // row must be FULLY visible, so any line-granularity top clip
+        // on it is cleared too.
         if focusedIndex < scrollOffset {
             scrollOffset = focusedIndex
+            scrollTopClipLines = 0
+        } else if focusedIndex == scrollOffset, scrollTopClipLines > 0 {
+            scrollTopClipLines = 0
         }
 
         // Scroll down: keep the focused row within the visible rows. The
@@ -467,6 +557,7 @@ extension ItemListHandler {
         if let rowHeight, focusedIndex < itemCount {
             // Multi-line rows: pull the top down only as far as needed for the
             // focused row to fit as the last visible row, accumulating heights.
+            // The top row's height counts net of any line-granularity clip.
             let budget = max(1, contentHeight - 2)
             var top = focusedIndex
             var used = rowHeight(focusedIndex)
@@ -474,8 +565,12 @@ extension ItemListHandler {
                 used += rowHeight(top - 1)
                 top -= 1
             }
+            // A top clip only frees MORE lines below, so it can never hide a
+            // focused row this arithmetic says fits — reset it only when the
+            // reveal actually repositions the top.
             if scrollOffset < top {
                 scrollOffset = top
+                scrollTopClipLines = 0
             }
         } else {
             let safeRows =
@@ -484,10 +579,12 @@ extension ItemListHandler {
                 : max(1, contentHeight - 2)
             if focusedIndex >= scrollOffset + safeRows {
                 scrollOffset = focusedIndex - safeRows + 1
+                scrollTopClipLines = 0
             }
         }
 
         clampScrollOffset()
+        clampTopClip()
     }
 
     /// The pre-dynamic-indicator scroll-into-view arithmetic, kept

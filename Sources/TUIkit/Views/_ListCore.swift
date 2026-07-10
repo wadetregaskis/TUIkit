@@ -551,6 +551,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // viewport's worth of rows is ever queried, so single-line lists pay
         // nothing new and windowed lists stay O(visible).
         handler.rowHeight = { source.row(at: $0).buffer.height }
+        // Captured at render for the same reason as the shift multiplier:
+        // wheel events arrive when the environment is out of reach.
+        handler.scrollGranularity = context.environment.scrollGranularity
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing
@@ -565,6 +568,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // happens every frame.
         if !context.isMeasuring {
             handler.clampScrollOffset()
+            handler.clampTopClip()
             // An "above" indicator that hides exactly one row wastes its
             // line: that line could just show the row. So never rest at
             // offset 1 — snap to 0, where the first row shows with no
@@ -572,8 +576,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // that was at the bottom of the viewport is still shown. A
             // scrollbar shows no such indicator line, so it has nothing to
             // save — and the snap would otherwise undo a single up/down-arrow
-            // click on the bar (0↔1). Skip it when the bar is shown.
-            if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
+            // click on the bar (0↔1). Skip it when the bar is shown. Also
+            // skip under line granularity with multi-line rows: a wheel step
+            // there legitimately RESTS at row 1 (e.g. one three-line tick
+            // over three-line rows), and the snap would undo the scroll —
+            // making the list unscrollable whenever ticks land row-aligned.
+            let lineGranular =
+                handler.scrollGranularity == .line
+                && (handler.scrollTopClipLines > 0 || source.row(at: 0).buffer.height > 1)
+            if overflowing, !showsScrollbar, handler.scrollOffset == 1, !lineGranular {
                 handler.scrollOffset = 0
             }
         }
@@ -632,10 +643,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var lines: [String] = []
         var ranges: [VisibleRowRange] = []
 
-        if handler.hasContentAbove {
+        if handler.hasContentAbove || handler.scrollTopClipLines > 0 {
             lines.append(renderScrollIndicator(
                 direction: .up,
-                count: handler.rowsAbove,
+                count: max(1, handler.rowsAbove),
                 width: rowWidth,
                 palette: palette
             ))
@@ -646,7 +657,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isFocused(at: rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
-            let styledLines = renderRow(
+            var styledLines = renderRow(
                 row: row,
                 isFocused: isFocused,
                 isSelected: isSelected,
@@ -656,6 +667,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            // Line granularity: the top visible row enters partially, its
+            // first `clip` lines scrolled off above the viewport.
+            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
+                styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
+            }
             let yStart = lines.count
             lines.append(contentsOf: styledLines)
             ranges.append((
@@ -701,8 +717,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             extentLines = source.count
             offsetLines = handler.scrollOffset
         } else {
+            // A line-granularity top clip adds its hidden lines to the
+            // offset, so the thumb tracks fine wheel steps exactly.
             extentLines = (0..<source.count).reduce(0) { $0 + source.row(at: $1).buffer.height }
-            offsetLines = (0..<handler.scrollOffset).reduce(0) { $0 + source.row(at: $1).buffer.height }
+            offsetLines =
+                (0..<handler.scrollOffset).reduce(0) { $0 + source.row(at: $1).buffer.height }
+                + handler.scrollTopClipLines
         }
 
         return ScrollbarRenderer.verticalScrollbar(
@@ -739,7 +759,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isFocused(at: rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
-            let styledLines = renderRow(
+            var styledLines = renderRow(
                 row: row,
                 isFocused: isFocused,
                 isSelected: isSelected,
@@ -749,6 +769,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            // Line granularity: the top visible row enters partially (see
+            // composeRowLines).
+            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
+                styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
+            }
             let yStart = lines.count
             for rowLine in styledLines {
                 // An intrinsically over-wide row must not push the bar cell past
@@ -861,18 +886,26 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Border column (when drawn) + the leading space `renderPlainLine`
         // prefixes to every row line.
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
+        let topClip = state.handler.scrollTopClipLines
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
+            // Line granularity: the top row's first `clip` lines are scrolled
+            // off above the viewport, so its row-local coordinates shift up
+            // by that much. Every other row has no clip.
+            let clip = visible.index == state.handler.scrollOffset ? topClip : 0
             for region in visible.row.buffer.hitTestRegions {
-                // The last row can be only partially visible: clip its regions
-                // to the lines actually shown.
-                let visibleHeight = min(region.height, position.height - region.offsetY)
-                guard visibleHeight > 0 else { continue }
+                // Rows can be partially visible — the top row clipped above
+                // (line granularity), the last row clipped below: intersect
+                // each region with the row-local window of lines actually
+                // shown, [clip, clip + position.height).
+                let start = max(region.offsetY, clip)
+                let end = min(region.offsetY + region.height, clip + position.height)
+                guard end > start else { continue }
                 buffer.hitTestRegions.append(
                     HitTestRegion(
                         offsetX: rowContentX + region.offsetX,
-                        offsetY: topInset + position.yStart + region.offsetY,
+                        offsetY: topInset + position.yStart + (start - clip),
                         width: region.width,
-                        height: visibleHeight,
+                        height: end - start,
                         handlerID: region.handlerID
                     )
                 )
@@ -888,7 +921,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // is the point of an overlay.
             buffer.overlays.append(
                 contentsOf: visible.row.buffer.shiftedOverlays(
-                    byX: rowContentX, y: topInset + position.yStart))
+                    byX: rowContentX, y: topInset + position.yStart - clip))
         }
     }
 
@@ -1078,7 +1111,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             return calculateVisibleRows(
                 source: source, handler: handler, viewportHeight: contentHeight)
         }
-        let aboveLines = handler.scrollOffset > 0 ? 1 : 0
+        // A line-granularity top clip means the top row is partially hidden,
+        // which warrants the "above" indicator just like whole hidden rows.
+        let contentAbove = handler.scrollOffset > 0 || handler.scrollTopClipLines > 0
+        let aboveLines = contentAbove ? 1 : 0
         // First fill assuming no "below" indicator…
         let withoutBelow = calculateVisibleRows(
             source: source,
@@ -1100,7 +1136,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         viewportHeight: Int
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         var result: [(Int, SelectableListRow<SelectionValue>)] = []
-        var linesUsed = 0
+        // A line-granularity top clip hides the first `clip` lines of the top
+        // row, freeing that many lines for content further down.
+        var linesUsed = -handler.scrollTopClipLines
         var currentIndex = handler.scrollOffset
 
         // Only these rows are materialised — `source.row(at:)` builds (and
