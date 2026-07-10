@@ -146,6 +146,33 @@ struct ProgressViewPage: View {
                         circularGauge(label: "…Capacity", fraction: fraction, style: .accessoryCircularCapacity)
                         circularGauge(label: "…Tiny", fraction: fraction, style: .accessoryCircularTiny)
                     }
+
+                    // Non-percentage read-outs: the same gauges over other
+                    // ranges, exercising the label rendering with varied text
+                    // widths — decimals ("0.62"), plain integers up to three
+                    // digits, and signed degrees ("-12°").
+                    Text(L("page.progressView.gaugeNonPercent"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    gaugeRow(
+                        label: "0…1                     ", fraction: fraction,
+                        text: String(format: "%.2f", fraction), style: .accessoryLinear)
+                    gaugeRow(
+                        label: "0…140                   ", fraction: fraction,
+                        text: "\(Int((fraction * 140).rounded()))", style: .accessoryLinear)
+                    gaugeRow(
+                        label: "0…140 (capacity)        ", fraction: fraction,
+                        text: "\(Int((fraction * 140).rounded()))", style: .accessoryLinearCapacity)
+                    HStack(spacing: 3) {
+                        circularGauge(
+                            label: "0…1", fraction: fraction,
+                            text: String(format: "%.2f", fraction), style: .accessoryCircular)
+                        circularGauge(
+                            label: "0…140", fraction: fraction,
+                            text: "\(Int((fraction * 140).rounded()))", style: .accessoryCircular)
+                        circularGauge(
+                            label: "−20…40°", fraction: fraction,
+                            text: "\(Int((-20 + fraction * 60).rounded()))°", style: .accessoryCircular)
+                    }
                 }
             }
 
@@ -236,24 +263,30 @@ struct ProgressViewPage: View {
     }
 
     /// A `[style name | linear gauge]` row, echoing the ProgressView catalogue.
+    /// `text` overrides the read-out (default: the fraction as a percentage).
     @ViewBuilder
-    private func gaugeRow(label: String, fraction: Double, style: GaugeStyle) -> some View {
+    private func gaugeRow(
+        label: String, fraction: Double, text: String? = nil, style: GaugeStyle
+    ) -> some View {
         HStack(spacing: 1) {
             Text(label).dim()
             Gauge(value: fraction) { EmptyView() } currentValueLabel: {
-                Text("\(Int((fraction * 100).rounded()))%")
+                Text(text ?? "\(Int((fraction * 100).rounded()))%")
             }
             .gaugeStyle(style)
             .frame(width: 28)
         }
     }
 
-    /// A circular gauge with its style name below it.
+    /// A circular gauge with its style name below it. `text` overrides the
+    /// read-out (default: the fraction as a percentage).
     @ViewBuilder
-    private func circularGauge(label: String, fraction: Double, style: GaugeStyle) -> some View {
+    private func circularGauge(
+        label: String, fraction: Double, text: String? = nil, style: GaugeStyle
+    ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Gauge(value: fraction) { EmptyView() } currentValueLabel: {
-                Text("\(Int((fraction * 100).rounded()))%")
+                Text(text ?? "\(Int((fraction * 100).rounded()))%")
             }
             .gaugeStyle(style)
             Text(label).dim()
