@@ -180,6 +180,16 @@ extension KeyEvent {
             return KeyEvent(key: .escape)
         }
 
+        // Meta-prefixed sequence ("option as meta key"): ESC + a full escape
+        // sequence — e.g. Option-Shift-Tab arrives as ESC ESC [ Z. Parse the
+        // inner sequence and mark alt.
+        if bytes[1] == 0x1B {
+            if bytes.count > 2, let inner = parseEscapeSequence(Array(bytes.dropFirst())) {
+                return KeyEvent(key: inner.key, ctrl: inner.ctrl, alt: true, shift: inner.shift)
+            }
+            return KeyEvent(key: .escape, alt: true)
+        }
+
         // CSI sequences: ESC [
         if bytes[1] == ASCIIByte.openBracket {
             return parseCSISequence(Array(bytes.dropFirst(2)))

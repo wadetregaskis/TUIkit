@@ -535,6 +535,22 @@ extension Terminal {
             return bytes
         }
 
+        if second == 0x1B {
+            // Meta-prefixed escape sequence ("option as meta key"): ESC + a
+            // full CSI/SS3 sequence, e.g. Option-Shift-Tab = ESC ESC [ Z.
+            // Consuming just the two ESCs here stranded the sequence's tail
+            // as literal keystrokes — the `[` then fired a page shortcut.
+            // Extract the INNER event and re-attach the meta prefix; if the
+            // inner sequence hasn't fully arrived, put the prefix back and
+            // wait (the stale-partial machinery handles a dead one).
+            consume(1)
+            if let inner = tryExtractRegularEvent() {
+                return [0x1B] + inner
+            }
+            input.insert(0x1B, at: 0)
+            return nil
+        }
+
         // Alt+key — 2 bytes total.
         let bytes = [first, second]
         consume(2)

@@ -260,6 +260,9 @@ final class TextEditorHandler: Focusable {
         case .tab:
             // Plain Tab moves focus; Option-Tab types a literal tab, since a
             // multi-line editor legitimately needs tab characters.
+            // Option-Shift-Tab (shift unchecked here) does the same: the
+            // modifier superset shouldn't surprise, and macOS has no
+            // established binding for it in plain-text editing.
             insert("\t")
         case .left:
             moveWordLeft()

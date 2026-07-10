@@ -73,6 +73,12 @@ struct InputSplitInvarianceTests {
             ("text-then-arrow", Array("a".utf8) + esc + Array("[B".utf8)),
             ("arrow-then-text", esc + Array("[B".utf8) + Array("b".utf8)),
             ("two-arrows", esc + Array("[A".utf8) + esc + Array("[B".utf8)),
+            // Option-as-meta prefixes a FULL sequence with ESC: Option-Shift-Tab
+            // is ESC ESC [ Z. The class of bug: consuming just "ESC ESC" and
+            // leaking "[ Z" as literal keystrokes (the '[' page shortcut).
+            ("meta-shift-tab", esc + esc + Array("[Z".utf8)),
+            ("meta-up", esc + esc + Array("[A".utf8)),
+            ("meta-shift-tab-then-text", esc + esc + Array("[Z".utf8) + Array("x".utf8)),
         ]
 
         var reports: [String] = []

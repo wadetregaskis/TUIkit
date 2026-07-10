@@ -435,3 +435,26 @@ struct KeyEventParseTests {
         #expect(event?.alt == false)
     }
 }
+
+@Suite("Meta-prefixed sequences (option as meta key)")
+struct MetaPrefixedKeyTests {
+    private let esc: UInt8 = 0x1B
+
+    @Test("ESC ESC [ Z decodes as alt+shift+tab (Option-Shift-Tab)")
+    func metaShiftTab() {
+        let event = KeyEvent.parse([esc, esc] + Array("[Z".utf8))
+        #expect(event == KeyEvent(key: .tab, alt: true, shift: true))
+    }
+
+    @Test("ESC ESC [ A decodes as alt+up")
+    func metaUp() {
+        let event = KeyEvent.parse([esc, esc] + Array("[A".utf8))
+        #expect(event == KeyEvent(key: .up, alt: true))
+    }
+
+    @Test("ESC ESC alone decodes as alt+escape")
+    func metaEscape() {
+        let event = KeyEvent.parse([esc, esc])
+        #expect(event == KeyEvent(key: .escape, alt: true))
+    }
+}
