@@ -34,6 +34,14 @@
 /// | Option-← / → | Move by a word |
 /// | Option-B / F | Move by a word (Emacs) |
 /// | Option-Backspace / Delete | Delete the word before / after the cursor |
+/// | Option-Tab | Insert a literal tab (plain Tab moves focus) |
+///
+/// > Note: Option chords require the terminal to *send* Option as Meta
+/// > (`ESC` + key). Terminal.app ships with **Use Option as Meta Key**
+/// > disabled — enable it in Settings → Profiles → Keyboard (iTerm2: set the
+/// > Option key to "Esc+"). Without it the terminal sends the plain key —
+/// > Option-Tab arrives byte-identical to Tab, so focus moves; TUIkit never
+/// > sees the modifier.
 ///
 /// ```swift
 /// @State private var notes = ""

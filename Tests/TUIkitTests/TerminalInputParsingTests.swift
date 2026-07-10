@@ -75,6 +75,40 @@ struct TerminalInputParsingTests {
         #expect(!results.contains(.key(KeyEvent(character: "["))))
     }
 
+    @Test("ESC+Tab in one read parses as Option-Tab (alt-modified tab)")
+    func escTabIsAltTab() {
+        // What a meta-capable terminal (Terminal.app with "Use Option as Meta
+        // Key", iTerm2 "Esc+") sends for Option-Tab. TextEditor relies on this
+        // to insert a literal tab instead of moving focus.
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B, 0x09])
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true)))
+    }
+
+    @Test("ESC then Tab split across reads (within the grace window) is still Option-Tab")
+    func splitEscTabWithinWindowIsAltTab() {
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B])
+        #expect(terminal.readEvent() == nil)  // partial — one stale frame
+        stage([0x09])                          // tail arrives before the deferral commits
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true)))
+    }
+
+    @Test("ESC then Tab far apart resolves as Escape + plain Tab (two real keystrokes)")
+    func lateTabAfterDeferredEscIsTwoKeys() {
+        // Once the bare ESC has sat unresolved past the grace window it commits
+        // as the Escape key; a Tab arriving later is its own keystroke. Unlike
+        // a CSI '[' tail, a Tab is a legitimate standalone key, so re-attaching
+        // it here would eat real Escape-then-Tab input.
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B])
+        #expect(terminal.readEvent() == nil)  // stale frame 1
+        #expect(terminal.readEvent() == nil)  // stale frame 2 → deferred
+        stage([0x09])                          // arrives after the window
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .escape)))
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .tab)))
+    }
+
     @Test("A genuine lone ESC still commits as the Escape key")
     func bareEscapeStillWorks() {
         let (terminal, stage) = makeTerminal()
