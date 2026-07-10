@@ -71,6 +71,12 @@ struct SliderPage: View {
                 }
             }
 
+            // The same custom-style editor as the Progress page, previewing on
+            // a Slider — one TrackConfiguration drives both controls.
+            DemoSection(L("page.trackEditor.section")) {
+                TrackStyleEditor(preview: .slider)
+            }
+
             DemoSection(L("page.slider.customRangesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {

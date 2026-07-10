@@ -107,6 +107,12 @@ struct ProgressViewPage: View {
                 }
             }
 
+            // Build-your-own TrackConfiguration: every ingredient the named
+            // presets are made of, applied live to a determinate bar.
+            DemoSection(L("page.trackEditor.section")) {
+                TrackStyleEditor(preview: .progress)
+            }
+
             DemoSection(L("page.progressView.indeterminateAnimations")) {
                 VStack(alignment: .leading, spacing: 0) {
                     indeterminateRow(label: "sweep       ", style: .sweep)
