@@ -359,7 +359,8 @@ SwiftUI API (the CLAUDE.md rule).
 | `TrackStyle.custom(TrackConfiguration)` | fully-configurable progress/slider/gauge fill (glyphs, sub-cell ramp, solid-background unfilled, gradient); the named styles are presets of it |
 | `List`/`Table` `.onRowActivate(_:)`, `MouseEvent.clickCount` | row activation — double-click OR Return/Enter on the focused row (Space keeps selecting); the closest SwiftUI analogue is `contextMenu(forSelectionType:…primaryAction:)`. Terminals report no double-click, so the dispatcher synthesises `clickCount` by timing |
 | `.radioButtonGroupWrapsAtEdge(_:)` | edge-arrow in a `RadioButtonGroup` escapes to the next control (default) or wraps within the group (opt-in) |
-| Image `.asciiDetailed` (long supersampled ramp), `.shapeUnicode` (Sobel-edge box-drawing lines) | higher-fidelity raster→text character sets |
+| Image `.asciiDetailed` (long supersampled ramp), `.shapeUnicode` (Sobel-edge box-drawing lines), `.unicodeDetailed` (wide block/quadrant/shade set, ink-coverage matched), `.customRamp(_:)` (caller-supplied luminance ramp) | higher-fidelity / configurable raster→text character sets |
+| `.imageSupersampling(_:)`, `.imageEdgeThreshold(_:)` | image-fidelity knobs: source-pixels-per-cell averaging for the ramp modes (1...4; nil = per-set default), and the shape modes' edge-glyph gradient threshold (lower = more edges; nil = pure coverage matching) |
 | `.tabWidth(_:)` (`TabWidth.periodic`/`.fixed`) | tab-stop layout for literal tabs in `TextEditor` (default: snap to 4-column stops, like the text system's `defaultTabInterval`; SwiftUI exposes no tab control) |
 | `.navigationSplitViewResizable`, `.navigationSplitViewColumnWidth`, `.fixedSize` on `List`, `.listEmptyPlaceholder` | terminal split/list affordances |
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |

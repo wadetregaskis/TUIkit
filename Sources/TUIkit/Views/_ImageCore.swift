@@ -40,6 +40,8 @@ private struct ImageRenderCache: Equatable {
     var characterSet: ASCIICharacterSet
     var colorMode: ASCIIColorMode
     var dithering: DitheringMode
+    var supersampling: Int?
+    var edgeThreshold: Double?
     var contentMode: ContentMode
     var aspectRatioOverride: Double?
     var lines: [String]
@@ -50,7 +52,9 @@ private struct ImageRenderCache: Equatable {
         rawImageWidth: Int, rawImageHeight: Int,
         width: Int, height: Int,
         characterSet: ASCIICharacterSet, colorMode: ASCIIColorMode,
-        dithering: DitheringMode, contentMode: ContentMode,
+        dithering: DitheringMode,
+        supersampling: Int?, edgeThreshold: Double?,
+        contentMode: ContentMode,
         aspectRatioOverride: Double?
     ) -> Bool {
         self.rawImageWidth == rawImageWidth
@@ -60,6 +64,8 @@ private struct ImageRenderCache: Equatable {
             && self.characterSet == characterSet
             && self.colorMode == colorMode
             && self.dithering == dithering
+            && self.supersampling == supersampling
+            && self.edgeThreshold == edgeThreshold
             && self.contentMode == contentMode
             && self.aspectRatioOverride == aspectRatioOverride
     }
@@ -259,6 +265,8 @@ struct _ImageCore: View, Renderable, Layoutable {
                 characterSet: characterSet,
                 colorMode: colorMode,
                 dithering: dithering,
+                supersampling: context.environment.imageSupersampling,
+                edgeThreshold: context.environment.imageEdgeThreshold,
                 contentMode: contentMode,
                 aspectRatioOverride: aspectRatioOverride,
                 stateStorage: stateStorage,
@@ -292,6 +300,8 @@ extension _ImageCore {
         characterSet: ASCIICharacterSet,
         colorMode: ASCIIColorMode,
         dithering: DitheringMode,
+        supersampling: Int?,
+        edgeThreshold: Double?,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
         stateStorage: StateStorage,
@@ -322,6 +332,8 @@ extension _ImageCore {
             characterSet: characterSet,
             colorMode: colorMode,
             dithering: dithering,
+            supersampling: supersampling,
+            edgeThreshold: edgeThreshold,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride
         ) {
@@ -331,7 +343,9 @@ extension _ImageCore {
         let converter = ASCIIConverter(
             characterSet: characterSet,
             colorMode: colorMode,
-            dithering: dithering
+            dithering: dithering,
+            supersampling: supersampling,
+            edgeThreshold: edgeThreshold
         )
         let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
 
@@ -343,6 +357,8 @@ extension _ImageCore {
             characterSet: characterSet,
             colorMode: colorMode,
             dithering: dithering,
+            supersampling: supersampling,
+            edgeThreshold: edgeThreshold,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
             lines: lines

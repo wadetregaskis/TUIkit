@@ -136,11 +136,25 @@ func shapeVector(_ ink: [Double]) -> [Double] {
 /// reads back — so there is no separate copy in the framework to keep in sync.
 let shapeGlyphs: [Character] = Array(" .,'`\":;-_~^|/\\+*=<>LJTVIO#%@")
 
+/// The additional glyphs of the WIDE Unicode set (`.unicodeDetailed`): block
+/// elements with strong spatial signatures — shades for even tone, half
+/// blocks, quadrants (a corner's worth of ink exactly where the image has
+/// it), and the vertical/horizontal eighth-block ladders for fine partial
+/// coverage. Combined with the ASCII shape glyphs above into
+/// `generatedUnicodeShapeCoverage`, so the matcher can pick whichever family
+/// fits a cell best.
+let unicodeExtraGlyphs: [Character] = Array("░▒▓█▀▄▌▐▁▂▃▅▆▇▉▊▋▍▎▏▘▝▖▗▚▞▛▜▙▟")
+
 // MARK: - Generate
 
 var shapeRows: [(Character, [Double])] = []
 for glyph in shapeGlyphs {
     shapeRows.append((glyph, shapeVector(rasterInk(glyph))))
+}
+
+var unicodeRows: [(Character, [Double])] = shapeRows
+for glyph in unicodeExtraGlyphs {
+    unicodeRows.append((glyph, shapeVector(rasterInk(glyph))))
 }
 
 // Coverage-ordered ASCII ramp: measure every printable ASCII glyph, sort by
@@ -190,6 +204,20 @@ for (ch, vector) in shapeRows {
 out += """
 ]
 
+/// Like `generatedShapeCoverage` but over the WIDE Unicode set backing
+/// `.unicodeDetailed`: the ASCII shape glyphs plus shades, half blocks,
+/// quadrants, and the eighth-block ladders.
+let generatedUnicodeShapeCoverage: [(Character, [Double])] = [
+
+"""
+for (ch, vector) in unicodeRows {
+    let literal = escaped(ch)
+    let values = vector.map(fmt).joined(separator: ", ")
+    out += "    (\(literal), [\(values)]),\n"
+}
+out += """
+]
+
 /// A coverage-ordered, gap-free pure-ASCII ramp (light → dense) calibrated to
 /// the reference font, backing `.asciiDetailed`.
 let generatedAsciiDetailedRamp: [Character] = Array(\(swiftStringLiteral(rampGlyphs)))
@@ -219,13 +247,18 @@ func swiftStringLiteral(_ chars: [Character]) -> String {
 let outputPath = "Sources/TUIkitImage/ImageGlyphCalibration.generated.swift"
 try! out.write(toFile: outputPath, atomically: true, encoding: .utf8)
 
-// Summary + a couple of sanity checks (T should be upper-heavy, _ lower-heavy).
-func vec(_ ch: Character) -> [Double] { shapeRows.first { $0.0 == ch }?.1 ?? [] }
+// Summary + sanity checks (T upper-heavy, _ lower-heavy; the quadrants must
+// put their ink in their own corner).
+func vec(_ ch: Character) -> [Double] { unicodeRows.first { $0.0 == ch }?.1 ?? [] }
 let tVec = vec("T")
 let underscore = vec("_")
+let upperLeft = vec("▘")
+let lowerRight = vec("▗")
 print("Reference font : \(resolvedName) \(Int(pointSize))pt  →  cell \(pxW)×\(pxH)px")
-print("Shape glyphs   : \(shapeRows.count)")
+print("Shape glyphs   : \(shapeRows.count) ascii, \(unicodeRows.count) unicode")
 print("ASCII ramp     : \(rampGlyphs.count) levels  '\(String(rampGlyphs))'")
 print("sanity  'T'    : upper \(fmt(tVec[0]))/\(fmt(tVec[1]))  lower \(fmt(tVec[4]))/\(fmt(tVec[5]))")
 print("sanity  '_'    : upper \(fmt(underscore[0]))/\(fmt(underscore[1]))  lower \(fmt(underscore[4]))/\(fmt(underscore[5]))")
+print("sanity  '▘'    : upper-L \(fmt(upperLeft[0])) vs upper-R \(fmt(upperLeft[1]))  lower-L \(fmt(upperLeft[4])) lower-R \(fmt(upperLeft[5]))")
+print("sanity  '▗'    : upper-L \(fmt(lowerRight[0])) vs lower-R \(fmt(lowerRight[5]))")
 print("wrote \(outputPath)")

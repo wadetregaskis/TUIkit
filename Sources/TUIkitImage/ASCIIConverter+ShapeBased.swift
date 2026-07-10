@@ -28,44 +28,41 @@ private struct ShapeEntry {
     let vector: [Double]  // length 6
 }
 
-/// The pre-computed (and normalised) shape table, one entry per bitmap.
-///
-/// The table is built once on first access and reused across every
-/// conversion call. Sampling each character is cheap (a few hundred
-/// integer operations) but the work is constant per process.
-private let shapeTable: [ShapeEntry] = computeShapeTable()
-
-/// Parallel-array view of ``shapeTable``: each of the six shape dimensions
+/// Parallel-array view of a shape table: each of the six shape dimensions
 /// laid out contiguously, plus the characters themselves.
 ///
 /// The hot ``pickCharacter`` loop reads each dimension separately, so a
 /// per-dimension flat array gives better locality than indirecting through
-/// a struct-of-arrays. Materialised once on first access, then reused —
-/// the previous code materialised these six maps + the characters array
-/// on every call, costing seven allocations per `convertShapeBased` even
-/// before the loop ran.
-private let shapeTableColumns: (  // swiftlint:disable:this large_tuple
-    t0: [Double], t1: [Double], t2: [Double],
-    t3: [Double], t4: [Double], t5: [Double],
-    characters: [Character]
-) = {
-    let table = shapeTable
-    return (
-        t0: table.map { $0.vector[0] },
-        t1: table.map { $0.vector[1] },
-        t2: table.map { $0.vector[2] },
-        t3: table.map { $0.vector[3] },
-        t4: table.map { $0.vector[4] },
-        t5: table.map { $0.vector[5] },
-        characters: table.map { $0.character }
-    )
-}()
+/// a struct-of-arrays.
+struct ShapeTableColumns {
+    let t0: [Double], t1: [Double], t2: [Double]
+    let t3: [Double], t4: [Double], t5: [Double]
+    let characters: [Character]
 
-private func computeShapeTable() -> [ShapeEntry] {
+    fileprivate init(_ table: [ShapeEntry]) {
+        t0 = table.map { $0.vector[0] }
+        t1 = table.map { $0.vector[1] }
+        t2 = table.map { $0.vector[2] }
+        t3 = table.map { $0.vector[3] }
+        t4 = table.map { $0.vector[4] }
+        t5 = table.map { $0.vector[5] }
+        characters = table.map { $0.character }
+    }
+}
+
+// The pre-computed (and normalised) shape tables — the ASCII set behind
+// `.shapeBased` / `.shapeUnicode`, and the wide Unicode set (blocks,
+// quadrants, shades, eighth-block ladders + the ASCII glyphs) behind
+// `.unicodeDetailed`. Built once on first access and reused across every
+// conversion call; materialising the column views up front spares seven
+// allocations per convert call.
+let asciiShapeColumns = ShapeTableColumns(computeShapeTable(raw: generatedShapeCoverage))
+let unicodeShapeColumns = ShapeTableColumns(computeShapeTable(raw: generatedUnicodeShapeCoverage))
+
+private func computeShapeTable(raw: [(Character, [Double])]) -> [ShapeEntry] {
     // Raw per-region coverage vectors measured from the reference font by
     // `Tools/GenerateImageGlyphs` (see ImageGlyphCalibration.generated.swift),
     // sampled at the same six circles the runtime uses.
-    let raw: [(Character, [Double])] = generatedShapeCoverage
 
     // Normalise each component by the maximum value across all characters,
     // so the cluster of vectors expands to fill the unit cube — without
@@ -113,12 +110,17 @@ extension ASCIIConverter {
         width: Int,
         height: Int,
         mode: ASCIIColorMode,
-        unicodeEdges: Bool = false
+        unicodeEdges: Bool = false,
+        wideUnicode: Bool = false
     ) -> [String] {
-        guard !shapeTable.isEmpty else { return [] }
+        // The glyph table: the ASCII shape set, or the wide Unicode set
+        // (blocks/quadrants/shades + the ASCII glyphs) for `.unicodeDetailed`.
+        let columns = wideUnicode ? unicodeShapeColumns : asciiShapeColumns
+        guard !columns.characters.isEmpty else { return [] }
 
         // The line glyphs used for a strongly-directional (edge) cell: ASCII
-        // slashes, or Unicode box-drawing for the `.shapeUnicode` mode.
+        // slashes, or Unicode box-drawing for the `.shapeUnicode` /
+        // `.unicodeDetailed` modes.
         let edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character) =
             unicodeEdges ? ("─", "│", "╲", "╱") : ("-", "|", "\\", "/")
 
@@ -143,10 +145,8 @@ extension ASCIIConverter {
         let inverseAllSamples = 1.0 / Double(sampleCount * centreCount)
         let imageWidth = image.width
 
-        // Pull the shape table's parallel-array columns once. These are
-        // global, immutable, and materialised on first access — see
-        // ``shapeTableColumns``.
-        let columns = shapeTableColumns
+        // Pull the shape table's parallel-array columns once; global,
+        // immutable, materialised on first access.
         let table0 = columns.t0
         let table1 = columns.t1
         let table2 = columns.t2
@@ -205,7 +205,8 @@ extension ASCIIConverter {
                     // with the orientation-matched line glyph; otherwise fall
                     // back to the nearest-shape character.
                     let character =
-                        Self.orientationGlyph(sampling: sampling, edge: edge)
+                        Self.orientationGlyph(
+                            sampling: sampling, edge: edge, threshold: edgeThreshold)
                         ?? Self.pickCharacter(
                             sampling: sampling,
                             t0: table0, t1: table1, t2: table2, t3: table3, t4: table4, t5: table5,
@@ -278,14 +279,9 @@ extension ASCIIConverter {
         return characters[bestIndex]
     }
 
-    /// The minimum gradient magnitude (in the 0…1 region-darkness units) for a
-    /// cell to count as a directional edge. Tuned so a clean light/dark boundary
-    /// across the cell triggers orientation matching while flat or lightly-
-    /// textured cells fall through to the coverage match.
-    fileprivate static let edgeGradientThreshold: Double = 0.9
-
     /// Returns the line glyph matching a cell's dominant edge orientation, or
-    /// `nil` when the cell carries no strong directional edge.
+    /// `nil` when the cell carries no strong directional edge (or edge glyphs
+    /// are disabled: `threshold` `nil`).
     ///
     /// The gradient is a Sobel-style difference over the six staggered darkness
     /// regions (`[0][1]` top / `[2][3]` middle / `[4][5]` bottom): `gx` is the
@@ -295,11 +291,13 @@ extension ASCIIConverter {
     /// vector already sampled for the coverage match, so it adds no image reads.
     fileprivate static func orientationGlyph(
         sampling: [Double],
-        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)
+        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character),
+        threshold: Double?
     ) -> Character? {
+        guard let threshold else { return nil }
         let gx = (sampling[0] + sampling[2] + sampling[4]) - (sampling[1] + sampling[3] + sampling[5])
         let gy = (sampling[0] + sampling[1]) - (sampling[4] + sampling[5])
-        guard (gx * gx + gy * gy).squareRoot() >= edgeGradientThreshold else { return nil }
+        guard (gx * gx + gy * gy).squareRoot() >= threshold else { return nil }
 
         // Edge tangent perpendicular to the gradient.
         let tangentX = -gy

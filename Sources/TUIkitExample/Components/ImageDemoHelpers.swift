@@ -11,7 +11,7 @@ import TUIkit
 enum ImageDemoHelpers {
     static let charSets: [ASCIICharacterSet] = [
         .fineBlocks, .blocks, .coarseBlocks, .ascii, .asciiDetailed,
-        .shapeBased, .shapeUnicode, .braille,
+        .shapeBased, .shapeUnicode, .unicodeDetailed, .braille,
     ]
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
 
@@ -24,6 +24,8 @@ enum ImageDemoHelpers {
         case .fineBlocks: return "chars:fineBlocks"
         case .shapeBased: return "chars:shape"
         case .shapeUnicode: return "chars:shape+uni"
+        case .unicodeDetailed: return "chars:unicode+"
+        case .customRamp: return "chars:custom"
         case .braille: return "chars:braille"
         }
     }

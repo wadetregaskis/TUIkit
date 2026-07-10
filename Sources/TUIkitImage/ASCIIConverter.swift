@@ -106,6 +106,30 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// support. Non-edge cells use the same coverage glyphs as ``shapeBased``.
     case shapeUnicode
 
+    /// Shape matching over a much WIDER Unicode glyph set: the ASCII shape
+    /// glyphs plus shades (`░▒▓█`), half blocks, quadrants (`▘▝▖▗▚▞…`), and
+    /// the eighth-block ladders (`▁▂▃…`, `▏▎▍…`) — every glyph's spatial ink
+    /// signature measured from the reference font by the calibration tool.
+    /// A cell whose darkness sits in one corner gets that corner's quadrant,
+    /// a bottom-heavy cell a partial block, an even mid-tone a shade — the
+    /// highest structural fidelity short of ``braille``, while keeping real
+    /// per-glyph tone. Edges use box-drawing lines like ``shapeUnicode``.
+    /// Requires a terminal/font with block-element support.
+    case unicodeDetailed
+
+    /// A caller-supplied luminance ramp for the brightness-mapping renderer,
+    /// ordered darkest pixel → brightest pixel: the FIRST character renders
+    /// black pixels (usually a space, so dark regions stay blank on a dark
+    /// terminal) and the LAST renders white ones (usually the densest glyph
+    /// — its ink carries the bright colour). Use this to tune the output to
+    /// a specific font or aesthetic (e.g. `" ·∘●"`, or a ramp measured for
+    /// your terminal's font) without waiting for a built-in preset. Long
+    /// ramps (over 20 levels) are rendered with the same 2× per-cell
+    /// supersampling as ``asciiDetailed``, unless ``ASCIIConverter`` is given
+    /// an explicit supersampling factor. An empty ramp falls back to
+    /// ``ascii``.
+    case customRamp(String)
+
     /// Unicode Braille patterns (2x4 pixel cells, 256 patterns). Highest resolution.
     case braille
 }
@@ -159,15 +183,39 @@ public struct ASCIIConverter: Sendable {
     /// The dithering algorithm (nil or .none means no dithering).
     let dithering: DitheringMode
 
+    /// Source-pixels-per-cell on each axis for the brightness-mapping
+    /// character sets (`.ascii` / `.asciiDetailed` / `.coarseBlocks` /
+    /// `.customRamp`): each output cell averages an N×N block of source
+    /// pixels, anti-aliasing the tone so a longer ramp resolves smoother
+    /// gradients. `nil` keeps each set's own default (1, except 2 for
+    /// `.asciiDetailed` and long custom ramps). Clamped to 1...4; higher
+    /// factors cost quadratically more sampling for no visible gain. Ignored
+    /// by the sub-cell sets (blocks / shape / braille), whose sampling grids
+    /// are fixed by their glyphs.
+    let supersampling: Int?
+
+    /// The minimum Sobel gradient magnitude (in 0…1 region-darkness units,
+    /// practical range roughly 0.3…2) for a shape-mode cell (`.shapeBased` /
+    /// `.shapeUnicode` / `.unicodeDetailed`) to be drawn as a directional
+    /// line glyph instead of its nearest coverage match. Lower values trace
+    /// more edges; `nil` disables line glyphs entirely (pure coverage
+    /// matching). The default 0.9 triggers on a clean light/dark boundary
+    /// across a cell while flat or lightly-textured cells fall through.
+    let edgeThreshold: Double?
+
     /// Creates a converter with the specified options.
     public init(
         characterSet: ASCIICharacterSet = .fineBlocks,
         colorMode: ASCIIColorMode = .trueColor,
-        dithering: DitheringMode = .none
+        dithering: DitheringMode = .none,
+        supersampling: Int? = nil,
+        edgeThreshold: Double? = 0.9
     ) {
         self.characterSet = characterSet
         self.colorMode = colorMode
         self.dithering = dithering
+        self.supersampling = supersampling.map { min(4, max(1, $0)) }
+        self.edgeThreshold = edgeThreshold
     }
 }
 
@@ -227,20 +275,22 @@ extension ASCIIConverter {
         //   .fineBlocks            : 1×2  (two vertical pixels per cell)
         //   .shapeBased       : 5×10 (sampled at six staggered circles per cell)
         //   .braille          : 2×4  (eight dots per cell)
+        // The brightness-mapping sets scale by the (configurable)
+        // supersampling factor instead.
         let pixelWidth: Int
         let pixelHeight: Int
         switch characterSet {
-        case .ascii, .coarseBlocks, .blocks:
+        case .blocks:
             pixelWidth = width
             pixelHeight = height
-        case .asciiDetailed:
-            // 2× supersample: each cell averages a 2×2 block of source pixels.
-            pixelWidth = width * 2
-            pixelHeight = height * 2
+        case .ascii, .coarseBlocks, .asciiDetailed, .customRamp:
+            let factor = rampSupersampling
+            pixelWidth = width * factor
+            pixelHeight = height * factor
         case .fineBlocks:
             pixelWidth = width
             pixelHeight = height * 2
-        case .shapeBased, .shapeUnicode:
+        case .shapeBased, .shapeUnicode, .unicodeDetailed:
             pixelWidth = width * 5
             pixelHeight = height * 10
         case .braille:
@@ -270,12 +320,30 @@ extension ASCIIConverter {
         case .shapeUnicode:
             return convertShapeBased(
                 scaled, width: width, height: height, mode: effectiveMode, unicodeEdges: true)
-        case .ascii, .coarseBlocks:
+        case .unicodeDetailed:
+            return convertShapeBased(
+                scaled, width: width, height: height, mode: effectiveMode,
+                unicodeEdges: true, wideUnicode: true)
+        case .ascii, .coarseBlocks, .asciiDetailed, .customRamp:
             return convertCharacterBased(
-                scaled, width: width, height: height, mode: effectiveMode, supersample: 1)
+                scaled, width: width, height: height, mode: effectiveMode,
+                supersample: rampSupersampling)
+        }
+    }
+
+    /// The effective source-pixels-per-cell factor for the brightness-mapping
+    /// sets: the explicit ``supersampling`` when given, else the set's own
+    /// default — 2 for `.asciiDetailed` and long custom ramps (whose extra
+    /// tonal levels only resolve with averaged sampling), 1 otherwise.
+    private var rampSupersampling: Int {
+        if let supersampling { return supersampling }
+        switch characterSet {
         case .asciiDetailed:
-            return convertCharacterBased(
-                scaled, width: width, height: height, mode: effectiveMode, supersample: 2)
+            return 2
+        case .customRamp(let ramp):
+            return ramp.count > 20 ? 2 : 1
+        default:
+            return 1
         }
     }
 }
@@ -426,7 +494,11 @@ extension ASCIIConverter {
             return generatedAsciiDetailedRamp
         case .coarseBlocks:
             return Array(" ░▒▓█")
-        case .blocks, .fineBlocks, .shapeBased, .shapeUnicode, .braille:
+        case .customRamp(let ramp):
+            // Caller-supplied, ordered light → dense by contract; an empty
+            // ramp falls back to the classic ascii levels.
+            return ramp.isEmpty ? Array(" .:;+=xX$@") : Array(ramp)
+        case .blocks, .fineBlocks, .shapeBased, .shapeUnicode, .unicodeDetailed, .braille:
             // Unused — these character sets have their own rendering paths.
             return []
         }

@@ -103,6 +103,16 @@ private struct ImageDitheringKey: EnvironmentKey {
     static let defaultValue: DitheringMode = .none
 }
 
+/// Environment key for the brightness-mapping supersampling factor.
+private struct ImageSupersamplingKey: EnvironmentKey {
+    static let defaultValue: Int? = nil
+}
+
+/// Environment key for the shape-mode edge-glyph gradient threshold.
+private struct ImageEdgeThresholdKey: EnvironmentKey {
+    static let defaultValue: Double? = 0.9
+}
+
 /// Environment key for the placeholder text shown while loading.
 private struct ImagePlaceholderTextKey: EnvironmentKey {
     static let defaultValue: String? = nil
@@ -173,6 +183,20 @@ extension EnvironmentValues {
     var imageColorMode: ASCIIColorMode {
         get { self[ImageColorModeKey.self] }
         set { self[ImageColorModeKey.self] = newValue }
+    }
+
+    /// The supersampling factor for brightness-mapping character sets —
+    /// see ``SwiftUICore/View/imageSupersampling(_:)``.
+    var imageSupersampling: Int? {
+        get { self[ImageSupersamplingKey.self] }
+        set { self[ImageSupersamplingKey.self] = newValue }
+    }
+
+    /// The shape-mode edge-glyph threshold — see
+    /// ``SwiftUICore/View/imageEdgeThreshold(_:)``.
+    var imageEdgeThreshold: Double? {
+        get { self[ImageEdgeThresholdKey.self] }
+        set { self[ImageEdgeThresholdKey.self] = newValue }
     }
 
     /// The dithering mode for ASCII art rendering.
@@ -255,6 +279,31 @@ extension View {
     /// - Returns: A modified view.
     public func imageColorMode(_ colorMode: ASCIIColorMode) -> some View {
         environment(\.imageColorMode, colorMode)
+    }
+
+    /// Sets the supersampling factor for the brightness-mapping character
+    /// sets (``ASCIICharacterSet/ascii`` / ``ASCIICharacterSet/asciiDetailed``
+    /// / ``ASCIICharacterSet/coarseBlocks`` /
+    /// ``ASCIICharacterSet/customRamp(_:)``): each output cell averages a
+    /// factor×factor block of source pixels, anti-aliasing the tone so a
+    /// longer ramp resolves smoother gradients. Clamped to 1...4. Pass `nil`
+    /// to restore each set's own default (1, except 2 for `.asciiDetailed`
+    /// and long custom ramps). Ignored by the sub-cell sets (blocks / shape /
+    /// braille), whose sampling grids are fixed by their glyphs.
+    public func imageSupersampling(_ factor: Int?) -> some View {
+        environment(\.imageSupersampling, factor)
+    }
+
+    /// Sets the minimum Sobel gradient magnitude for a shape-mode cell
+    /// (``ASCIICharacterSet/shapeBased`` / ``ASCIICharacterSet/shapeUnicode``
+    /// / ``ASCIICharacterSet/unicodeDetailed``) to be drawn as a directional
+    /// line glyph (`─ │ ╱ ╲`) instead of its nearest coverage match. Lower
+    /// values trace more edges; the default `0.9` (in 0…1 region-darkness
+    /// units, practical range roughly 0.3…2) triggers on a clean light/dark
+    /// boundary across a cell. Pass `nil` to disable line glyphs entirely
+    /// (pure coverage matching).
+    public func imageEdgeThreshold(_ threshold: Double?) -> some View {
+        environment(\.imageEdgeThreshold, threshold)
     }
 
     /// Sets the dithering mode for ASCII art image rendering.
