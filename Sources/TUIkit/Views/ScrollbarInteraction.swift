@@ -70,7 +70,15 @@ public struct ScrollbarRepeat: Sendable, Equatable {
 extension ScrollbarRenderer {
     /// The pause before a held arrow/track starts repeating (like a key-repeat
     /// delay), then the gap between repeats.
-    static let autoRepeatInitialDelayNanos: Int64 = 400_000_000
+    ///
+    /// The initial delay must clear a deliberate CLICK's press–release span:
+    /// a careful click on a one-cell arrow commonly holds the button for
+    /// 400–600 ms, and if the first repeat fires inside that window a single
+    /// click "sometimes scrolls two rows" (timing-dependent, so it reads as
+    /// inconsistent). 700 ms is comfortably past a slow click while still
+    /// prompt for an intentional hold — the same reasoning as OS key-repeat
+    /// delays.
+    static let autoRepeatInitialDelayNanos: Int64 = 700_000_000
     static let autoRepeatIntervalNanos: Int64 = 60_000_000
 
     /// Drives a held scrollbar's auto-repeat. Call it each frame from the bar's
