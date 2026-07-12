@@ -504,10 +504,32 @@ internal protocol SceneRenderable {
 /// and vertically within the available terminal space.
 extension WindowGroup: SceneRenderable {
     func renderScene(context: RenderContext) -> FrameBuffer {
+        // Drop targets re-register as the tree renders (like focus), so the
+        // drag session's per-frame registry resets here, before the pass.
+        let dragSession = context.environment.dragAndDropSession
+        dragSession?.beginFrame()
+
         let buffer = renderToBuffer(content, context: context)
 
         // Center the content in the available space, like SwiftUI does
-        return centerBuffer(buffer, inWidth: context.availableWidth, height: context.availableHeight)
+        var centered = centerBuffer(
+            buffer, inWidth: context.availableWidth, height: context.availableHeight)
+
+        // The floating drag preview rides above everything, at the cursor.
+        // Attached AFTER centering so its offsets are in the same absolute
+        // content-area space as the mouse events driving it; the +1/+1 keeps
+        // the pointed-at cell itself visible, macOS-style.
+        if let drag = dragSession?.active {
+            centered.overlays.append(
+                OverlayLayer(
+                    offsetX: drag.cursorX + 1,
+                    offsetY: drag.cursorY + 1,
+                    content: drag.preview,
+                    level: .notification
+                )
+            )
+        }
+        return centered
     }
 
     /// Centers a buffer within the target dimensions.

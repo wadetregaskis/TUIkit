@@ -34,6 +34,13 @@ public enum MouseFeature: Sendable {
 }
 
 final class MouseEventDispatcher: @unchecked Sendable {
+    /// The app's drag-and-drop session, when one is wired (see
+    /// ``TUIContext``). The dispatcher stamps it with every press / drag /
+    /// release event in ABSOLUTE coordinates before routing — a drag-captured
+    /// handler only ever sees region-relative coordinates, but drop targeting
+    /// needs the on-screen cursor position.
+    weak var dragAndDropSession: DragAndDropSession?
+
     /// Per-frame handlers keyed by ``HitTestRegion/HandlerID``.
     ///
     /// `RenderLoop.beginRenderPass()` clears the table at the start of
@@ -285,6 +292,12 @@ extension MouseEventDispatcher {
         // including a drag-captured one — sees the double-click.
         let event = stampClickCount(event)
 
+        // Give the drag-and-drop session the absolute cursor before any
+        // localisation (drop targeting hit-tests screen coordinates).
+        if event.phase == .pressed || event.phase == .dragged || event.phase == .released {
+            dragAndDropSession?.lastAbsoluteEvent = event
+        }
+
         // Bare cursor motion drives the hover state machine —
         // not the normal click routing. See dispatchMotion for
         // the rationale on why we route `.moved` separately.
@@ -352,6 +365,21 @@ extension MouseEventDispatcher {
     /// ``dispatch`` to implement wheel-event fall-through.
     private func matchingRegions(at x: Int, y: Int) -> [HitTestRegion] {
         regions.reversed().filter { $0.contains(x: x, y: y) }
+    }
+
+    /// The handler ids of every region containing the given (absolute)
+    /// point, innermost-first. Drop targeting matches these against the
+    /// frame's registered drop targets.
+    func handlerIDs(at x: Int, y: Int) -> [HitTestRegion.HandlerID] {
+        matchingRegions(at: x, y: y).map(\.handlerID)
+    }
+
+    /// The absolute top-left offset of the region registered with `id`, or
+    /// `nil` when no current region carries it. Lets a drop destination
+    /// translate an absolute drop point into its local space.
+    func regionOffset(for id: HitTestRegion.HandlerID) -> (x: Int, y: Int)? {
+        guard let region = regions.first(where: { $0.handlerID == id }) else { return nil }
+        return (region.offsetX, region.offsetY)
     }
 
     /// Processes a bare cursor-motion event by synthesising

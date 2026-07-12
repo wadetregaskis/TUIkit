@@ -254,6 +254,9 @@ final class TUIContext: @unchecked Sendable {
     /// Mouse event handler registration and hit-test dispatch.
     let mouseEventDispatcher: MouseEventDispatcher
 
+    /// App-wide drag-and-drop state (active drag + per-frame drop targets).
+    let dragAndDropSession: DragAndDropSession
+
     /// Preference value collection during rendering.
     let preferences: PreferenceStorage
 
@@ -299,6 +302,11 @@ final class TUIContext: @unchecked Sendable {
         self.lifecycle = LifecycleManager()
         self.keyEventDispatcher = KeyEventDispatcher()
         self.mouseEventDispatcher = MouseEventDispatcher()
+        self.dragAndDropSession = DragAndDropSession()
+        // Drop targeting hit-tests the dispatcher's composited regions; the
+        // dispatcher stamps the session with absolute cursor positions.
+        self.dragAndDropSession.dispatcher = self.mouseEventDispatcher
+        self.mouseEventDispatcher.dragAndDropSession = self.dragAndDropSession
         self.preferences = PreferenceStorage()
         self.stateStorage = StateStorage()
         self.renderCache = RenderCache()
@@ -330,6 +338,10 @@ final class TUIContext: @unchecked Sendable {
         self.lifecycle = lifecycle
         self.keyEventDispatcher = keyEventDispatcher
         self.mouseEventDispatcher = mouseEventDispatcher
+        self.dragAndDropSession = DragAndDropSession()
+        // See init(): drop targeting hit-tests the dispatcher's regions.
+        self.dragAndDropSession.dispatcher = self.mouseEventDispatcher
+        self.mouseEventDispatcher.dragAndDropSession = self.dragAndDropSession
         self.preferences = preferences
         self.stateStorage = stateStorage
         self.renderCache = renderCache

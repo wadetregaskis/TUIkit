@@ -99,6 +99,11 @@ private struct FocusIndicatorColorKey: EnvironmentKey {
     static let defaultValue: Color? = nil
 }
 
+/// EnvironmentKey for the drag-and-drop session.
+private struct DragAndDropSessionKey: EnvironmentKey {
+    static let defaultValue: DragAndDropSession? = nil
+}
+
 // MARK: - Active Focus Section
 
 /// EnvironmentKey for the focus section that child views should register in.
@@ -145,6 +150,12 @@ extension EnvironmentValues {
     var mouseEventDispatcher: MouseEventDispatcher? {
         get { self[MouseEventDispatcherKey.self] }
         set { self[MouseEventDispatcherKey.self] = newValue }
+    }
+
+    /// The app-wide drag-and-drop session, or `nil` outside a live app.
+    var dragAndDropSession: DragAndDropSession? {
+        get { self[DragAndDropSessionKey.self] }
+        set { self[DragAndDropSessionKey.self] = newValue }
     }
 
     /// The run loop's animation scheduler, or `nil` outside the live loop.
@@ -220,6 +231,7 @@ extension EnvironmentValues {
         keyEventDispatcher = context.keyEventDispatcher
         synthesizeKeyEvent = context.synthesizeKeyEvent
         mouseEventDispatcher = context.mouseEventDispatcher
+        dragAndDropSession = context.dragAndDropSession
         renderCache = context.renderCache
         preferenceStorage = context.preferences
         localizationService = LocalizationService.shared

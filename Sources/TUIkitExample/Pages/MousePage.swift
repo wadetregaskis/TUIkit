@@ -33,6 +33,9 @@ struct MousePage: View {
     @State var lastModifier: String = "—"
     @State var isHovering: Bool = false
     @State var scrollTicks: Int = 0
+    @State var fruits: [String] = ["🍎 Apple", "🍐 Pear", "🍇 Grapes"]
+    @State var basket: [String] = []
+    @State var basketTargeted: Bool = false
     @State var lastScrollDirection: String = "—"
 
     var body: some View {
@@ -148,6 +151,28 @@ struct MousePage: View {
                 }
             }
 
+            // `.draggable` / `.dropDestination`: press a chip and drag — its
+            // preview follows the cursor; the basket highlights while
+            // targeted, and DropInfo's modifiers turn a Ctrl-drop into a
+            // copy instead of a move.
+            DemoSection(L("page.mouse.dragDrop")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.mouse.dragDropHint"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(alignment: .top, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(fruits, id: \.self) { fruit in
+                                Text(fruit)
+                                    .padding(EdgeInsets(horizontal: 1, vertical: 0))
+                                    .border(color: .palette.border)
+                                    .draggable(fruit)
+                            }
+                        }
+                        basketZone
+                    }
+                }
+            }
+
             DemoSection(L("page.mouse.rawEvents")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.mouse.rawEventsInstruction"))
@@ -259,6 +284,37 @@ struct MousePage: View {
             chars[centreX] = "+"
         }
         return String(chars)
+    }
+
+    /// The drop zone: highlights while a compatible drag is over it; a plain
+    /// drop MOVES the fruit into the basket, a Ctrl-drop COPIES it (DropInfo
+    /// carries the modifiers held at release).
+    @ViewBuilder private var basketZone: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(L("page.mouse.basket")).bold()
+            if basket.isEmpty {
+                Text(L("page.mouse.basketEmpty"))
+                    .foregroundStyle(.palette.foregroundTertiary)
+            } else {
+                ForEach(basket.indices, id: \.self) { index in
+                    Text(basket[index])
+                }
+            }
+        }
+        .padding(EdgeInsets(horizontal: 1, vertical: 0))
+        .frame(width: 24)
+        .border(color: basketTargeted ? .palette.accent : .palette.border)
+        .dropDestination(for: String.self) { items, info in
+            for item in items {
+                basket.append(item)
+                if !info.ctrl {
+                    fruits.removeAll { $0 == item }
+                }
+            }
+            return true
+        } isTargeted: { targeted in
+            basketTargeted = targeted
+        }
     }
 
     private func describePhase(_ phase: DragGestureEvent.Phase) -> String {
