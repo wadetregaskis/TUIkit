@@ -131,6 +131,106 @@ struct DragAndDropTests {
         #expect(log.targetedChanges.isEmpty, "an incompatible zone is never targeted")
     }
 
+    @Test("A drop still lands after a re-render that shifts handler ids mid-drag")
+    func dropSurvivesMidDragRerender() {
+        // Handler ids reset to 0 every render pass and are only stable while
+        // the tree SHAPE is stable. A re-render between the last drag
+        // movement and the release is routine (the consumed drag requests
+        // one), and `isTargeted` highlighting or async state can change the
+        // shape — inserting a region before the zone shifts every later id.
+        // The session must not resolve the drop through a stale id: the
+        // payload must land on the zone under the cursor, and the zone's
+        // `isTargeted` must close out (no permanently-highlighted zone).
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+
+        @MainActor
+        @ViewBuilder func tree(_ extraRow: Bool) -> some View {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("CHIP").draggable("apple")
+                if extraRow {
+                    Text("XTRA").draggable(99)  // registers BEFORE the zone → ids shift
+                } else {
+                    Text("").frame(height: 1)
+                }
+                Text("").frame(height: 2)
+                Text("ZONE========")
+                    .dropDestination(for: String.self) { items, info in
+                        log.dropped.append(contentsOf: items)
+                        log.info = info
+                        return true
+                    } isTargeted: { log.targetedChanges.append($0) }
+            }
+        }
+
+        func render(_ extraRow: Bool) {
+            dispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let buffer = renderToBuffer(tree(extraRow), context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+        }
+
+        render(false)
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: 4))
+        #expect(log.targetedChanges == [true], "over the zone before the re-render")
+
+        // The consumed drag triggers a re-render; this one also changes the
+        // tree shape, so the zone re-registers under a DIFFERENT handler id.
+        render(true)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 4))
+        #expect(log.dropped == ["apple"], "the drop must resolve against the CURRENT frame")
+        #expect(log.info?.y == 0, "zone-local coordinates from the current registration")
+        #expect(
+            log.targetedChanges.last == false,
+            "the zone must untarget when the drag ends: \(log.targetedChanges)")
+        #expect(tui.dragAndDropSession.active == nil)
+    }
+
+    @Test("A zone that disappears mid-drag untargets and the drop cancels")
+    func removedZoneUntargetsAndCancels() {
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+
+        func render(zonePresent: Bool) {
+            dispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let tree = VStack(alignment: .leading, spacing: 0) {
+                Text("CHIP").draggable("apple")
+                Text("").frame(height: 3)
+                if zonePresent {
+                    Text("ZONE========")
+                        .dropDestination(for: String.self) { items, _ in
+                            log.dropped.append(contentsOf: items)
+                            return true
+                        } isTargeted: { log.targetedChanges.append($0) }
+                }
+            }
+            let buffer = renderToBuffer(tree, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+        }
+
+        render(zonePresent: true)
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: 4))
+        #expect(log.targetedChanges == [true])
+
+        // The zone vanishes from the tree (async data change) mid-drag.
+        render(zonePresent: false)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 4))
+        #expect(log.dropped.isEmpty, "no zone under the cursor anymore — the drop cancels")
+        #expect(
+            log.targetedChanges == [true, false],
+            "the removed zone's isTargeted must still close out: \(log.targetedChanges)")
+        #expect(tui.dragAndDropSession.active == nil)
+    }
+
     @Test("The floating preview composites at the cursor during a drag")
     func previewFollowsCursor() {
         let log = DropLog()

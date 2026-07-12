@@ -86,8 +86,18 @@ final class DragAndDropSession: @unchecked Sendable {
         var cursorX: Int
         var cursorY: Int
 
-        /// The currently targeted destination, if any.
+        /// The id of the currently targeted destination, if any — valid only
+        /// within the frame that registered it (handler ids reset to 0 every
+        /// render pass), so it is used purely to detect targeting
+        /// *transitions*, never to look a target up later.
         var targetedID: HitTestRegion.HandlerID?
+
+        /// The targeted destination itself, held by value so its
+        /// `setTargeted` closure stays reachable across re-renders — the
+        /// zone may re-register under a different id next frame (tree shape
+        /// changed) or not re-register at all (zone removed mid-drag), and
+        /// its `isTargeted` observer must still be closed out either way.
+        var targeted: Target?
     }
 
     /// The dispatcher whose composited regions supply target geometry.
@@ -122,7 +132,7 @@ final class DragAndDropSession: @unchecked Sendable {
         guard let event = lastAbsoluteEvent else { return }
         active = ActiveDrag(
             payload: payload, preview: preview,
-            cursorX: event.x, cursorY: event.y, targetedID: nil)
+            cursorX: event.x, cursorY: event.y, targetedID: nil, targeted: nil)
         dragMoved()
     }
 
@@ -134,47 +144,55 @@ final class DragAndDropSession: @unchecked Sendable {
         drag.cursorX = event.x
         drag.cursorY = event.y
 
-        // The innermost on-screen region at the cursor that is a registered,
-        // payload-compatible target wins.
-        let hitIDs = dispatcher?.handlerIDs(at: event.x, y: event.y) ?? []
-        let newTarget = hitIDs.lazy
-            .compactMap { id in
-                self.targets.first { $0.handlerID == id && $0.accepts(drag.payload) }
-            }
-            .first
-
+        let newTarget = resolveTarget(atX: event.x, y: event.y, payload: drag.payload)
         if newTarget?.handlerID != drag.targetedID {
-            if let previous = drag.targetedID {
-                target(for: previous)?.setTargeted(false)
-            }
+            // The transition CLOSES on the stored target's own closure, not
+            // an id lookup — after a re-render the old id maps to a
+            // different (or no) registration.
+            drag.targeted?.setTargeted(false)
             newTarget?.setTargeted(true)
-            drag.targetedID = newTarget?.handlerID
         }
+        // Always refresh the stored target, even when the id is unchanged:
+        // it may be this frame's re-registration of the same zone, whose
+        // captured region id the drop's coordinate localisation relies on.
+        drag.targetedID = newTarget?.handlerID
+        drag.targeted = newTarget
         active = drag
     }
 
-    /// Drops the payload on the targeted destination (if any), ends the
-    /// drag, and reports whether a destination took the payload.
+    /// Drops the payload on the destination under the cursor (if any), ends
+    /// the drag, and reports whether a destination took the payload.
     @discardableResult
     func performDrop() -> Bool {
         guard let drag = active else { return false }
         defer { end() }
-        guard let targetedID = drag.targetedID,
-            let target = target(for: targetedID),
-            let event = lastAbsoluteEvent
+        // Resolve against the CURRENT frame's registrations at the release
+        // position — never through the id stored at the last movement:
+        // handler ids reset every render pass, and a re-render between the
+        // last drag event and the release is routine (the consumed drag
+        // requests one). A stale id would silently lose the drop — or, if
+        // the tree shape shifted the ids, deliver it to the WRONG zone.
+        guard let event = lastAbsoluteEvent,
+            let target = resolveTarget(atX: event.x, y: event.y, payload: drag.payload)
         else { return false }
         return target.perform(drag.payload, event)
     }
 
     /// Ends the drag without dropping (or after one), clearing any targeting.
     func end() {
-        if let targetedID = active?.targetedID {
-            target(for: targetedID)?.setTargeted(false)
-        }
+        active?.targeted?.setTargeted(false)
         active = nil
     }
 
-    private func target(for id: HitTestRegion.HandlerID) -> Target? {
-        targets.first { $0.handlerID == id }
+    /// The innermost on-screen region at the given position that is a
+    /// registered, payload-compatible target, from THIS frame's
+    /// registrations.
+    private func resolveTarget(atX x: Int, y: Int, payload: Any) -> Target? {
+        let hitIDs = dispatcher?.handlerIDs(at: x, y: y) ?? []
+        return hitIDs.lazy
+            .compactMap { id in
+                self.targets.first { $0.handlerID == id && $0.accepts(payload) }
+            }
+            .first
     }
 }
