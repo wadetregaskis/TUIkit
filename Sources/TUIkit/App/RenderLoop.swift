@@ -528,8 +528,11 @@ extension RenderLoop {
         // open modal surface (Picker drop-down, etc.) renders in this
         // frame; clearing it here makes the default the absence of any
         // override, so a surface that disappeared on the previous frame
-        // never leaves its stale label behind on the next page.
+        // never leaves its stale label behind on the next page. The
+        // grabs-input flag travels with it (modal by default; a list's
+        // lightweight selection claim lowers it each frame it applies).
         statusBar.escapeLabelOverride = nil
+        statusBar.escapeClaimGrabsInput = true
         appHeader.beginRenderPass()
         statusBar.focusManager = focusManager
         tuiContext.lifecycle.beginRenderPass()

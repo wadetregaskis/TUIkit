@@ -146,7 +146,12 @@ extension InputHandler {
         // claimed ESC). Otherwise `a` would cycle the border style and `t` the
         // theme from *behind* the modal, which the user never asked for and
         // can't see the controls for.
-        let inputGrabbed = focusManager.activeSectionIsModal || statusBar.escapeLabelOverride != nil
+        // A lightweight ESC claim (a list's clearable selection) re-routes
+        // only the ESC key; it doesn't ground the chrome shortcuts the way
+        // an open drop-down does — hence the grabs-input qualifier.
+        let escapeClaimGrabs =
+            statusBar.escapeLabelOverride != nil && statusBar.escapeClaimGrabsInput
+        let inputGrabbed = focusManager.activeSectionIsModal || escapeClaimGrabs
         return handleGlobalShortcut(event, inputGrabbed: inputGrabbed)
     }
 

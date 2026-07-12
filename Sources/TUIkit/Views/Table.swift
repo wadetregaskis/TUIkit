@@ -501,6 +501,7 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
 
         if overflowing {
             reserveIndicatorLines(handler: handler, contentHeight: contentHeight)
@@ -558,6 +559,7 @@ where Value.ID: Hashable {
         }
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
 
         // The handler's accessor, not a raw `scrollOffset..<min(…)`: the
         // persisted offset can exceed a freshly-shrunk `data.count` during a
@@ -666,6 +668,7 @@ where Value.ID: Hashable {
 
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
 
         let topClip = handler.scrollTopClipLines
         let window = rowWindow(

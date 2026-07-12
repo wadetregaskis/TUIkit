@@ -376,6 +376,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         FocusRegistration.register(context: context, handler: handler)
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
 
         // Reserve a line for each scroll indicator that is actually
         // present at this offset, so the rows plus indicators fill

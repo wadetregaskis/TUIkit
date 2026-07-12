@@ -122,6 +122,8 @@ struct ListPage: View {
                             ? L("page.list.none")
                             : multiSelection.sorted().joined(separator: ", ")
                     )
+                    Text(L("component.multiSelectHint"))
+                        .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 

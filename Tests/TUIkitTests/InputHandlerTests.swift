@@ -273,6 +273,53 @@ struct InputHandlerTests {
         #expect(focusable.sawEvent, "focus system should receive the modal-claimed Escape")
         #expect(!fixture.probe.statusBarRan, "the page-level Escape handler must not fire")
     }
+
+    @Test("A list's Escape claim clears its selection; without one Escape navigates")
+    func listEscapeClaimClearsSelectionNotPage() {
+        let fixture = makeFixture()
+        fixture.statusBar.setItemsSilently([
+            StatusBarItem(shortcut: "esc", label: "Back", key: .escape,
+                action: { fixture.probe.statusBarRan = true })
+        ])
+
+        var selection: Set<String> = ["b"]
+        let list = ItemListHandler<String>(
+            focusID: "list", itemCount: 3, viewportHeight: 3, selectionMode: .multi)
+        list.itemIDs = ["a", "b", "c"]
+        list.multiSelection = Binding(get: { selection }, set: { selection = $0 })
+        fixture.focus.register(list)
+        fixture.focus.focus(list)
+
+        // The render pass would have published the claim (selection non-empty).
+        fixture.statusBar.escapeLabelOverride = "clear selection"
+        fixture.statusBar.escapeClaimGrabsInput = false
+
+        #expect(fixture.handler.handle(KeyEvent(key: .escape)))
+        #expect(selection.isEmpty, "the claimed Escape clears the selection")
+        #expect(!fixture.probe.statusBarRan, "the page's Escape item must not fire that press")
+
+        // Next frame: nothing to clear, so no claim is published — Escape
+        // reaches the page's own binding untouched (the fall-through the
+        // list guarantees).
+        fixture.statusBar.escapeLabelOverride = nil
+        fixture.statusBar.escapeClaimGrabsInput = true
+
+        #expect(fixture.handler.handle(KeyEvent(key: .escape)))
+        #expect(fixture.probe.statusBarRan, "with no selection the page navigates as usual")
+    }
+
+    @Test("Layer 4 'a' still works under a lightweight (non-grabbing) Escape claim")
+    func appearanceSurvivesLightweightEscapeClaim() {
+        let fixture = makeFixture()
+        // A list's selection claim re-routes only ESC itself — unlike an open
+        // drop-down, it must NOT ground the global chrome shortcuts.
+        fixture.statusBar.escapeLabelOverride = "clear selection"
+        fixture.statusBar.escapeClaimGrabsInput = false
+        let before = fixture.appearance.current.id
+
+        #expect(fixture.handler.handle(KeyEvent(key: .character("a"))))
+        #expect(fixture.appearance.current.id != before, "the appearance shortcut stays live")
+    }
     @Test("Layer 3.5: an unconsumed Return fires the registered default action")
     func defaultActionFiresWhenReturnFallsThrough() {
         let fixture = makeFixture()

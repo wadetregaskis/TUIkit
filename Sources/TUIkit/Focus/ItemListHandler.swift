@@ -53,6 +53,16 @@ public enum SelectionMode: Sendable {
 /// | PageUp | Move up by viewport height |
 /// | PageDown | Move down by viewport height |
 /// | Enter/Space | Toggle selection at focused index |
+///
+/// Multi-selection (`Set`-bound) lists additionally follow the macOS
+/// keyboard-selection model, adapted to what terminals can deliver:
+///
+/// | Key | Action |
+/// |-----|--------|
+/// | Shift+Up/Down/Home/End/PageUp/PageDown | Extend the selection from the anchor (where the terminal reports Shift — Terminal.app strips it from Up/Down) |
+/// | `v` | Toggle extend mode: plain movement keys extend the selection, in ANY terminal |
+/// | Ctrl+A | Select all |
+/// | Escape | Exit extend mode, else clear a non-empty selection; otherwise falls through (page navigation is never blocked) |
 final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffsetState {
     /// The unique identifier for this focusable element.
     let focusID: String
@@ -170,10 +180,20 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// The currently focused item index (keyboard cursor).
     var focusedIndex: Int = 0
 
-    /// The anchor row for shift-click range selection (macOS semantics): the
-    /// last row plainly clicked or modifier-toggled. A later shift-click
-    /// selects the whole span between the anchor and the clicked row.
+    /// The anchor row for range selection (macOS semantics): the last row
+    /// plainly clicked, modifier-toggled, or Space-toggled. Shift-clicks and
+    /// keyboard range extension both select the whole span between the anchor
+    /// and the cursor, re-pivoting around it.
     var selectionAnchor: Int?
+
+    /// Whether extend mode (`v`) is active: plain movement keys extend the
+    /// selection from the anchor instead of just moving the cursor. The
+    /// portable stand-in for Shift+movement — most terminals don't deliver
+    /// Shift on Up/Down (Terminal.app strips it) and none distinguish
+    /// Shift+Space from Space, so a mode toggled by a plain printable key is
+    /// the only gesture guaranteed to work everywhere. Exited by `v`, Escape,
+    /// Space/Enter, any click, or focus loss.
+    var isExtendingSelection = false
 
     /// The scroll offset (first visible item index).
     var scrollOffset: Int = 0
@@ -219,10 +239,12 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
 
     /// Lazy id resolver used in place of ``itemIDs`` by the windowed `List` path.
     ///
-    /// When set, ``id(at:)`` resolves a row's id on demand (only the visible
-    /// window and the focused row are ever asked), so a 50k-row list pays O(1)
-    /// for handler setup instead of building a 50k-entry ``itemIDs``. `nil` for
-    /// the eager paths, which use ``itemIDs``.
+    /// When set, ``id(at:)`` resolves a row's id on demand — per frame only the
+    /// visible window and the focused row are asked — so a 50k-row list pays
+    /// O(1) for handler setup instead of building a 50k-entry ``itemIDs``.
+    /// (User-initiated selection gestures ask for more: a range extension
+    /// resolves its span, select-all every row — but never per-frame.) `nil`
+    /// for the eager paths, which use ``itemIDs``.
     var idAt: ((Int) -> SelectionValue?)?
 
     /// The set of indices that can be selected and focused.
@@ -262,8 +284,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
 extension ItemListHandler {
     /// The id of the row at `index`, or `nil` for a non-selectable / out-of-range
     /// row. Resolves through the lazy ``idAt`` when present (windowed `List`),
-    /// else the eager ``itemIDs`` (Table / Sections). O(1) either way — only the
-    /// visible window and the focused row are ever asked.
+    /// else the eager ``itemIDs`` (Table / Sections). O(1) either way — per
+    /// frame only the visible window and the focused row are asked (selection
+    /// gestures ask for their span on the way in, never per-frame).
     func id(at index: Int) -> SelectionValue? {
         guard index >= 0 else { return nil }
         if let idAt {
@@ -293,6 +316,11 @@ extension ItemListHandler {
 
 extension ItemListHandler {
     func onFocusLost() {
+        // Extend mode is a transient interaction state of THIS focus tenure —
+        // arrows silently extending the selection after tabbing away and back
+        // would be a surprise.
+        isExtendingSelection = false
+
         // When focus is lost, reset focused index to the first selected item
         // (if any) so that when focus returns, the user sees the selection.
         switch selectionMode {
@@ -327,6 +355,14 @@ extension ItemListHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         guard itemCount > 0 else { return false }
 
+        // Multi-selection lists understand the macOS selection keys (range
+        // extension, select-all, clear). Consulted first so an extending
+        // movement key doesn't fall into the plain-movement cases below;
+        // `nil` means "not a selection concern — handle normally".
+        if selectionMode == .multi, let handled = handleMultiSelectionKey(event) {
+            return handled
+        }
+
         switch event.key {
         case .up:
             // A plain Up moves one row and wraps; Shift jumps by the multiplier
@@ -347,24 +383,12 @@ extension ItemListHandler {
             return true
 
         case .home:
-            if selectableIndices.isEmpty {
-                focusedIndex = 0
-            } else if let firstSelectable = selectableIndices.min() {
-                focusedIndex = firstSelectable
-            } else {
-                return false
-            }
+            focusedIndex = selectableIndices.min() ?? 0
             ensureFocusedItemVisible()
             return true
 
         case .end:
-            if selectableIndices.isEmpty {
-                focusedIndex = itemCount - 1
-            } else if let lastSelectable = selectableIndices.max() {
-                focusedIndex = lastSelectable
-            } else {
-                return false
-            }
+            focusedIndex = selectableIndices.max() ?? (itemCount - 1)
             ensureFocusedItemVisible()
             return true
 
@@ -383,6 +407,102 @@ extension ItemListHandler {
         default:
             return false
         }
+    }
+
+    /// The multi-selection keyboard model (macOS semantics, adapted to what
+    /// terminals can deliver — see the type comment's key table). Returns
+    /// `nil` when the event isn't a selection gesture, `false` when it is one
+    /// but there's nothing to do (Escape with no selection MUST fall through,
+    /// so a focused list never blocks page navigation).
+    private func handleMultiSelectionKey(_ event: KeyEvent) -> Bool? {
+        // A movement key extends while Shift is held OR extend mode is on;
+        // any other movement falls to the plain-navigation handling.
+        if isExtendingSelection || event.shift,
+            let handled = handleExtensionMovement(event)
+        {
+            return handled
+        }
+
+        switch event.key {
+        case .character("v") where !event.ctrl && !event.alt && !event.shift:
+            toggleExtendMode()
+            return true
+
+        case .character("a") where event.ctrl && !event.alt:
+            selectAll()
+            isExtendingSelection = false
+            return true
+
+        case .escape:
+            return handleEscapeKey()
+
+        default:
+            return nil
+        }
+    }
+
+    /// The movement keys while extending: each moves the cursor and selects
+    /// the anchored span. `nil` for non-movement keys.
+    private func handleExtensionMovement(_ event: KeyEvent) -> Bool? {
+        switch event.key {
+        case .up, .down:
+            // Inside extend mode Shift keeps its accelerated meaning (the
+            // multiplier); outside it Shift+arrow extends one row, exactly
+            // like macOS.
+            let step = (isExtendingSelection && event.shift) ? max(1, shiftStepMultiplier) : 1
+            extendSelection(movingBy: event.key == .up ? -step : step)
+            return true
+
+        case .home:
+            extendSelection(to: selectableIndices.min() ?? 0)
+            return true
+
+        case .end:
+            extendSelection(to: selectableIndices.max() ?? (itemCount - 1))
+            return true
+
+        case .pageUp:
+            extendSelection(movingBy: -viewportHeight)
+            return true
+
+        case .pageDown:
+            extendSelection(movingBy: viewportHeight)
+            return true
+
+        default:
+            return nil
+        }
+    }
+
+    /// `v`: enters or exits extend mode. Entering re-anchors at the cursor
+    /// and selects it (a span of one) — the immediate highlight is the
+    /// mode's feedback. Exiting keeps the selection made; the mode only
+    /// changes what movement keys do.
+    private func toggleExtendMode() {
+        if isExtendingSelection {
+            isExtendingSelection = false
+        } else {
+            isExtendingSelection = true
+            selectionAnchor = focusedIndex
+            applyAnchoredSpan()
+        }
+    }
+
+    /// Escape, staged — one action per press: exit extend mode, then clear
+    /// the selection. With neither to do, the event is deliberately NOT
+    /// consumed so it falls through to the page (back-navigation etc.) — a
+    /// focused list must never block Escape.
+    private func handleEscapeKey() -> Bool {
+        if isExtendingSelection {
+            isExtendingSelection = false
+            return true
+        }
+        if let selection = multiSelection?.wrappedValue, !selection.isEmpty {
+            multiSelection?.wrappedValue = []
+            selectionAnchor = nil
+            return true
+        }
+        return false
     }
 }
 
@@ -637,13 +757,70 @@ extension ItemListHandler {
     /// Enter/Space at the focused row. With an activation action set, Enter
     /// "opens" the row while Space remains the selection key (the
     /// file-browser convention); without one, both keep the original select
-    /// behaviour.
+    /// behaviour. Either way the key is an *action*, so it ends extend mode.
     func handleSelectionKey(_ key: Key) {
+        isExtendingSelection = false
         if key == .enter, let primaryAction, let id = id(at: focusedIndex) {
             primaryAction(id)
             return
         }
         toggleSelectionAtFocusedIndex()
+    }
+
+    /// Extends the selection by moving the focus cursor `delta` rows (no
+    /// wrap — extension clamps at the ends, like macOS) and selecting the
+    /// whole span from the anchor to the new cursor. The first extension
+    /// anchors at the pre-move cursor.
+    func extendSelection(movingBy delta: Int) {
+        if selectionAnchor == nil { selectionAnchor = focusedIndex }
+        moveFocus(by: delta, wrap: false)
+        applyAnchoredSpan()
+    }
+
+    /// Extends the selection to `index` (Home/End): the cursor jumps there
+    /// and the span from the anchor is selected.
+    func extendSelection(to index: Int) {
+        if selectionAnchor == nil { selectionAnchor = focusedIndex }
+        focusedIndex = max(0, min(itemCount - 1, index))
+        ensureFocusedItemVisible()
+        applyAnchoredSpan()
+    }
+
+    /// Replaces the selection with the span between ``selectionAnchor`` and
+    /// the focus cursor, skipping non-selectable rows. Shared by shift-click
+    /// and every keyboard extension gesture, so the two pivot around the same
+    /// anchor. Both ends are clamped into the current data range first — the
+    /// anchor persists across frames and the data can shrink underneath it
+    /// (the inverted-range trap of the scroll-offset seam).
+    func applyAnchoredSpan() {
+        guard let anchor = selectionAnchor, itemCount > 0 else { return }
+        let bound = itemCount - 1
+        let anchorRow = max(0, min(bound, anchor))
+        let cursorRow = max(0, min(bound, focusedIndex))
+        var span = Set<SelectionValue>()
+        for row in min(anchorRow, cursorRow)...max(anchorRow, cursorRow) {
+            if let id = id(at: row) { span.insert(id) }
+        }
+        multiSelection?.wrappedValue = span
+    }
+
+    /// Selects every selectable row (Ctrl+A). The one deliberate O(total)
+    /// id materialisation on the windowed `List` path — user-initiated,
+    /// never per-frame.
+    func selectAll() {
+        guard selectionMode == .multi else { return }
+        var all = Set<SelectionValue>()
+        if selectableIndices.isEmpty {
+            all.reserveCapacity(itemCount)
+            for row in 0..<itemCount {
+                if let id = id(at: row) { all.insert(id) }
+            }
+        } else {
+            for row in selectableIndices {
+                if let id = id(at: row) { all.insert(id) }
+            }
+        }
+        multiSelection?.wrappedValue = all
     }
 
     /// Applies macOS mouse-selection semantics for a click on `index`:
@@ -660,26 +837,25 @@ extension ItemListHandler {
     /// the keyboard path (Space toggles at the focus cursor) is unchanged.
     func handleClickSelection(at index: Int, event: MouseEvent) {
         focusedIndex = index
+        // A click is a pointer gesture with its own selection semantics —
+        // whatever it does, it ends keyboard extend mode.
+        isExtendingSelection = false
         guard selectionMode == .multi else {
             toggleSelectionAtFocusedIndex()
             return
         }
         guard let clickedID = id(at: index) else { return }
 
-        if event.shift, let anchor = selectionAnchor {
-            var range = Set<SelectionValue>()
-            for row in min(anchor, index)...max(anchor, index) {
-                if let id = id(at: row) { range.insert(id) }
-            }
-            multiSelection?.wrappedValue = range
+        if event.shift, selectionAnchor != nil {
             // The anchor stays put, so successive shift-clicks re-pivot the
-            // range around the original anchor (Finder behaviour).
+            // range around the original anchor (Finder behaviour) — and
+            // keyboard extension continues from the same anchor.
+            applyAnchoredSpan()
             return
         }
 
         if event.ctrl || event.meta {
             toggleSelectionAtFocusedIndex()
-            selectionAnchor = index
             return
         }
 
@@ -701,7 +877,9 @@ extension ItemListHandler {
             }
 
         case .multi:
-            // Multi-selection: toggle this item in the set
+            // Multi-selection: toggle this item in the set. A toggle moves
+            // the range anchor (like command-click), so a following range
+            // extension pivots around the toggled row.
             if var current = multiSelection?.wrappedValue {
                 if current.contains(itemID) {
                     current.remove(itemID)
@@ -710,6 +888,7 @@ extension ItemListHandler {
                 }
                 multiSelection?.wrappedValue = current
             }
+            selectionAnchor = focusedIndex
         }
     }
 
@@ -734,6 +913,38 @@ extension ItemListHandler {
     /// - Returns: True if the item is focused.
     func isFocused(at index: Int) -> Bool {
         focusedIndex == index
+    }
+}
+
+// MARK: - Escape Claim
+
+extension ItemListHandler {
+    /// Publishes this frame's Escape claim when the focused multi-selection
+    /// list would act on it (exit extend mode / clear a non-empty selection).
+    ///
+    /// Status-bar items and page `onKeyPress` handlers see keys BEFORE the
+    /// focused element, so without a claim a page-level "esc back" would
+    /// steal the key and navigate away instead of clearing the selection.
+    /// The claim (the same mechanism an open Picker drop-down uses) routes
+    /// ESC to the focus chain first for this frame AND relabels the status
+    /// bar's escape entry, so what ESC currently does is always visible.
+    /// When Escape has nothing to do here, no claim is published and page
+    /// navigation is completely untouched — the list never blocks it.
+    /// Unlike a modal surface's claim, this one does not suppress the
+    /// global app-chrome shortcuts (`grabsInput` false): a selection is
+    /// ordinary control state, not a transient surface the user must leave.
+    ///
+    /// Called by the owning view during its render pass, after focus
+    /// registration (never on measure passes).
+    func publishEscapeClaim(context: RenderContext, isFocused: Bool) {
+        guard isFocused, !context.isMeasuring, selectionMode == .multi else { return }
+        if isExtendingSelection {
+            context.environment.statusBar.escapeLabelOverride = "stop extending selection"
+            context.environment.statusBar.escapeClaimGrabsInput = false
+        } else if let selection = multiSelection?.wrappedValue, !selection.isEmpty {
+            context.environment.statusBar.escapeLabelOverride = "clear selection"
+            context.environment.statusBar.escapeClaimGrabsInput = false
+        }
     }
 }
 

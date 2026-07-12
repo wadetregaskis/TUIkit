@@ -202,6 +202,8 @@ struct TablePage: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(L("page.table.multiSelectionCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("component.multiSelectHint"))
+                        .foregroundStyle(.palette.foregroundSecondary)
                     Table(
                         FileEntry.sampleFiles,
                         selection: $multiSelection

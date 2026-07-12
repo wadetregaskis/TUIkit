@@ -141,6 +141,18 @@ public final class StatusBarState: @unchecked Sendable {
     /// Clearing the modal (set to nil) restores the underlying item label.
     public var escapeLabelOverride: String?
 
+    /// Whether the surface that claimed ESC (``escapeLabelOverride``) is an
+    /// input-grabbing transient surface — an open drop-down menu, a
+    /// suggestions pop-up — whose presence should also suppress the global
+    /// app-chrome shortcuts (theme/appearance cycling), exactly like a modal.
+    ///
+    /// `true` (the default, restored every frame) preserves that modal
+    /// behaviour. A lightweight claim — a multi-selection list offering ESC
+    /// to clear its selection — sets this `false` alongside the label: only
+    /// the ESC key itself is re-routed, everything else behaves normally.
+    /// Meaningless while ``escapeLabelOverride`` is `nil`.
+    public var escapeClaimGrabsInput = true
+
     /// The `id` of the status-bar item the mouse cursor is
     /// currently hovering over, or `nil` if the cursor isn't on
     /// any item.
