@@ -195,6 +195,25 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             ? nil
             : palette.fieldBackground.resolve(with: palette)
 
+        // The caret honours `.textCursor(_:)` exactly like TextField: same
+        // shape, same blink/pulse animation, same speed — one setting styles
+        // every text input. Computed only while focused: the cursor timer is
+        // demand-driven (it keeps ticking only while a frame READS it), so an
+        // unfocused editor must not consult it and pin the animation clock.
+        let caret: CaretAppearance
+        if isFocused {
+            let cursorStyle = context.environment.textCursorStyle
+            let cursorState = TextFieldContentRenderer.computeCursorState(
+                baseColor: palette.cursorColor,
+                animation: cursorStyle.animation,
+                speed: cursorStyle.speed,
+                cursorTimer: context.environment.cursorTimer)
+            caret = CaretAppearance(
+                shape: cursorStyle.shape, visible: cursorState.visible, color: cursorState.color)
+        } else {
+            caret = CaretAppearance(shape: .block, visible: false, color: palette.cursorColor)
+        }
+
         var output: [String] = []
         output.reserveCapacity(height)
         for row in 0..<height {
@@ -204,7 +223,9 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 continue
             }
             let lineChars = displayLines[lineIndex]
-            let cursorColumn = (isFocused && lineIndex == handler.cursorLine) ? cursorDisplayColumn : nil
+            let rowCaret: RowCaret? =
+                (isFocused && lineIndex == handler.cursorLine)
+                ? RowCaret(column: cursorDisplayColumn, appearance: caret) : nil
             // The handler's selection is character-indexed; the row is painted
             // in display cells, so convert the bounds (a char range maps to a
             // contiguous display range — expansion is monotonic — and a
@@ -219,8 +240,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 styledRow(
                     TabLayout.expand(lineChars, tabWidth: tabWidth),
                     scrollColumn: handler.scrollColumn, width: contentWidth,
-                    cursorColumn: cursorColumn, selection: selection, palette: palette,
-                    isDisabled: isDisabled, background: fieldBackground))
+                    caret: rowCaret, selection: selection,
+                    palette: palette, isDisabled: isDisabled, background: fieldBackground))
         }
 
         if hasVerticalOverflow {
@@ -299,9 +320,25 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// colours rather than SGR 7 reverse-video (which inverts the terminal's
     /// *default* colours and collapses to dark-on-dark on a mid-tone palette).
     /// Consecutive cells that share a colour coalesce into one ANSI run.
+    /// The caret's resolved per-frame appearance: the configured shape plus
+    /// the animation's current visibility/colour (see
+    /// ``TextFieldContentRenderer/computeCursorState(baseColor:animation:speed:cursorTimer:)``).
+    private struct CaretAppearance {
+        let shape: TextCursorStyle.Shape
+        let visible: Bool
+        let color: Color
+    }
+
+    /// The caret as one row sees it: its display column plus the per-frame
+    /// appearance. `nil` for rows the caret isn't on.
+    private struct RowCaret {
+        let column: Int
+        let appearance: CaretAppearance
+    }
+
     private func styledRow(
         _ chars: [Character], scrollColumn: Int, width: Int,
-        cursorColumn: Int?, selection: Range<Int>?,
+        caret: RowCaret?, selection: Range<Int>?,
         palette: any Palette, isDisabled: Bool, background: Color?
     ) -> String {
         let start = scrollColumn
@@ -312,7 +349,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
         let selectionForeground = palette.background
         let selectionBackground = palette.accent.opacity(ViewConstants.selectionIndicator)
-        let cursorCell = cursorColumn.map { $0 - scrollColumn }
+        let cursorCell = caret.map { $0.column - scrollColumn }
 
         var result = ""
         var runText = ""
@@ -343,10 +380,22 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         for cell in 0..<width {
             let column = scrollColumn + cell
-            if cell == cursorCell {
-                // Block caret: glyph in the background colour on a
-                // foreground-coloured block.
-                emit(visible[cell], foreground: palette.background, background: palette.foreground)
+            if let caret, cell == cursorCell, caret.appearance.visible {
+                switch caret.appearance.shape {
+                case .block:
+                    // The block caret keeps the character legible: glyph in
+                    // the background colour on a caret-coloured block (the
+                    // pulse animation modulates the block's colour).
+                    emit(
+                        visible[cell], foreground: palette.background,
+                        background: caret.appearance.color)
+                case .bar, .underscore:
+                    // Thin carets draw their shape glyph in place of the
+                    // cell, like TextField.
+                    emit(
+                        caret.appearance.shape.character,
+                        foreground: caret.appearance.color, background: background)
+                }
             } else if let selection, selection.contains(column) {
                 emit(visible[cell], foreground: selectionForeground, background: selectionBackground)
             } else {

@@ -144,7 +144,7 @@ struct TextFieldContentRenderer {
         let visibleStart = scrollOffset
 
         // Compute cursor visibility and color based on animation style
-        let (cursorVisible, cursorColor) = computeCursorState(
+        let (cursorVisible, cursorColor) = Self.computeCursorState(
             baseColor: palette.cursorColor,
             animation: cursorStyle.animation,
             speed: cursorStyle.speed,
@@ -233,8 +233,11 @@ struct TextFieldContentRenderer {
 
     // MARK: - Cursor State
 
-    /// Computes the cursor visibility and color based on the animation style and cursor timer.
-    private func computeCursorState(
+    /// Computes the cursor visibility and color based on the animation style
+    /// and cursor timer. Shared by every text-input caret (``TextField``,
+    /// ``SecureField``, ``TextEditor``) so one `.textCursor(_:)` setting
+    /// animates identically across all of them.
+    static func computeCursorState(
         baseColor: Color,
         animation: TextCursorStyle.Animation,
         speed: TextCursorStyle.Speed,

@@ -168,6 +168,34 @@ struct TextEditorTests {
         #expect(buffer.height == 3)
     }
 
+    @Test("The editor honours the .textCursor shape like TextField")
+    func editorHonoursCursorStyle() {
+        // A static (non-animated) thin caret draws its shape glyph at the
+        // caret cell — the same `.textCursor(_:)` setting that styles
+        // TextField styles the editor.
+        // The editor's caret starts at the text's beginning, so the shape
+        // glyph replaces the first cell.
+        let sink = StringSink("hi")
+        for (shape, glyph) in [
+            (TextCursorStyle.Shape.underscore, "▁"), (.bar, "│"),
+        ] {
+            let context = makeRenderContext(width: 12, height: 3) { env, _ in
+                env.textCursorStyle = TextCursorStyle(shape: shape, animation: .none)
+            }
+            let buffer = renderToBuffer(TextEditor(text: sink.binding), context: context)
+            let firstLine = buffer.lines[0].stripped
+            #expect(firstLine.hasPrefix("\(glyph)i"), "\(shape): |\(firstLine)|")
+        }
+
+        // The block shape keeps the underlying character legible (an
+        // inverted cell, not a solid glyph) — no shape glyph in the text.
+        let blockContext = makeRenderContext(width: 12, height: 3) { env, _ in
+            env.textCursorStyle = TextCursorStyle(shape: .block, animation: .none)
+        }
+        let block = renderToBuffer(TextEditor(text: sink.binding), context: blockContext)
+        #expect(block.lines[0].stripped.hasPrefix("hi "), "|\(block.lines[0].stripped)|")
+    }
+
     // MARK: - Standard / Emacs key bindings
 
     /// A Ctrl+letter chord, as the terminal parser delivers it.
