@@ -84,6 +84,48 @@ public struct ChildView {
         self.identityKey = nil
     }
 
+    /// Full-field copy initializer backing ``reindexed(to:)``.
+    private init(
+        view: any View,
+        identityType: Any.Type?,
+        childIndex: Int,
+        identityKey: String?,
+        isSpacer: Bool,
+        spacerMinLength: Int?,
+        zIndex: Double
+    ) {
+        self.view = view
+        self.identityType = identityType
+        self.childIndex = childIndex
+        self.identityKey = identityKey
+        self.isSpacer = isSpacer
+        self.spacerMinLength = spacerMinLength
+        self.zIndex = zIndex
+    }
+
+    /// A copy whose positional identity is rebased to `index`.
+    ///
+    /// When a provider's flattened children are spliced into an enclosing
+    /// container's child list, their identity must reflect the FLATTENED
+    /// position — two same-typed children contributed by different providers
+    /// (two `Group`s, two `if` branches) would otherwise carry identical
+    /// (type, inner-index) identities and collide in `StateStorage` (the
+    /// second silently adopts the first's state and focus slots). Children
+    /// with a stable `identityKey` (`ForEach` rows) keep it and are returned
+    /// unchanged; a child with no identity type adopts its view's dynamic
+    /// type, matching what it would get as a direct tuple child.
+    func reindexed(to index: Int) -> Self {
+        guard identityKey == nil else { return self }
+        return Self(
+            view: view,
+            identityType: identityType ?? type(of: view),
+            childIndex: index,
+            identityKey: nil,
+            isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength,
+            zIndex: zIndex)
+    }
+
     /// Creates a child wrapper that renders `view` but derives its per-child
     /// identity from a *different* type `IdentityType`.
     ///

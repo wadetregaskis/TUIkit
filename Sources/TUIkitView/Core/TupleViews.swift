@@ -121,7 +121,11 @@ extension TupleView: ChildViewProvider {
         context: RenderContext
     ) {
         if let provider = child as? ChildViewProvider {
-            views.append(contentsOf: provider.childViews(context: context))
+            // Rebase each flattened child's positional identity to its
+            // FLATTENED position — see ``ChildView/reindexed(to:)``.
+            for entry in provider.childViews(context: context) {
+                views.append(entry.reindexed(to: views.count))
+            }
         } else {
             views.append(ChildView(child, childIndex: views.count))
         }

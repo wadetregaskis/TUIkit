@@ -132,6 +132,33 @@ extension EmptyView: Renderable {
     }
 }
 
+// MARK: - ConditionalView Child Flattening
+
+/// A conditional's active branch flattens into the enclosing stack — SwiftUI
+/// semantics: `if`/`else` around a `ForEach` (or several views) contributes
+/// the branch's CHILDREN to the parent, it does not bundle them into one
+/// opaque block. Without this, a `ForEach` under an `if` reached the
+/// bare-`ForEach` render path, which is deliberately empty (`ForEach` has no
+/// standalone rendering), and the rows silently vanished.
+extension ConditionalView: ChildViewProvider {
+    public func childViews(context: RenderContext) -> [ChildView] {
+        switch self {
+        case .trueContent(let content):
+            resolveChildViews(from: content, context: context)
+        case .falseContent(let content):
+            resolveChildViews(from: content, context: context)
+        }
+    }
+}
+
+/// An optional view (an `if` without `else`) flattens the same way: present
+/// content contributes its children, `nil` contributes nothing.
+extension Optional: ChildViewProvider where Wrapped: View {
+    public func childViews(context: RenderContext) -> [ChildView] {
+        self.map { resolveChildViews(from: $0, context: context) } ?? []
+    }
+}
+
 // MARK: - ConditionalView Rendering
 
 extension ConditionalView: Renderable {

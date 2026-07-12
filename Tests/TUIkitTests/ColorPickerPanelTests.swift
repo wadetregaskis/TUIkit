@@ -620,8 +620,14 @@ struct ColorPickerEditableFieldTests {
         let box = Box(.rgb(200, 16, 16))  // R = 200 = 0xC8
         let (render, fm) = harness(box)
         _ = render()
-        // combined-hex → strip → R slider → R% → R int → R hex.
-        for _ in 0..<5 { _ = fm.dispatchKeyEvent(KeyEvent(key: .tab)); _ = render() }
+        // Tab to the red hex field. (By id, not a fixed count: the number of
+        // stops before it depends on which ViewThatFits row layout the panel
+        // width selects, which has changed before — e.g. when conditional
+        // children stopped occupying phantom stack slots.)
+        for _ in 0..<12 where fm.currentFocusedID != "RGB-0-hex" {
+            _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))
+            _ = render()
+        }
         #expect(fm.currentFocusedID == "RGB-0-hex", "focused the red hex field")
         _ = fm.dispatchKeyEvent(KeyEvent(key: .backspace))   // 0xC8 → 0xC
         let row = render().first { $0.contains("R ◀") } ?? ""
