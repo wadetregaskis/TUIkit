@@ -54,6 +54,34 @@ struct ScrollbarInteractionTests {
         #expect(hit(11) == .arrow(delta: 1), "bottom down-arrow scrolls down")
     }
 
+    @Test("Arrow clicks honour line granularity: one LINE through a tall row")
+    func arrowStepsByLineUnderLineGranularity() {
+        // A list of 3-line rows under `.line` granularity: the bar's ▼ arrow
+        // must move one line (advancing the top clip within the top row),
+        // exactly like the wheel — not jump a whole row.
+        let handler = ItemListHandler<Int>(
+            focusID: "t", itemCount: 10, viewportHeight: 6, selectionMode: .single)
+        handler.itemIDs = Array(0..<10)
+        handler.contentHeight = 6
+        handler.rowHeight = { _ in 3 }
+        handler.scrollGranularity = .line
+
+        let barHandler = Bar.verticalMouseHandler(
+            for: handler, length: 10, arrows: .single,
+            proportional: true, behavior: .page)
+        #expect(barHandler(event(0, 9)), "the ▼ arrow consumes the press")
+        #expect(handler.scrollOffset == 0, "the top row stays the top row")
+        #expect(handler.scrollTopClipLines == 1, "…with ONE line scrolled off")
+        _ = barHandler(event(0, 9, .released))
+
+        // Row granularity keeps the classic whole-row step.
+        handler.scrollGranularity = .row
+        handler.scrollTopClipLines = 0
+        #expect(barHandler(event(0, 9)))
+        #expect(handler.scrollOffset == 1, "row granularity steps a whole row")
+        #expect(handler.scrollTopClipLines == 0)
+    }
+
     @Test("Clicking the bottom up-arrow (double arrows) scrolls up")
     func doubleArrowBottomUpScrollsUp() {
         let handler = ScrollViewHandler(focusID: "t")

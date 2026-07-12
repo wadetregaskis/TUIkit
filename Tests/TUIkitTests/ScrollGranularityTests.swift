@@ -140,6 +140,59 @@ struct ScrollGranularityTests {
     /// `wheelTicks` wheel events through the real mouse-dispatch path (each
     /// event is the default three fine steps), and returns the final frame's
     /// stripped lines.
+    /// Like ``renderList(granularity:linesPerRow:wheelTicks:)`` but returns
+    /// every frame's buffer, for asserting across-scroll invariants (constant
+    /// height, partial bottom rows).
+    private func renderListFrames(
+        granularity: ScrollGranularity = .line,
+        linesPerRow: Int = 3,
+        wheelTicks: Int = 0
+    ) -> [FrameBuffer] {
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.stateStorage = tui.stateStorage
+        env.lifecycle = tui.lifecycle
+        env.keyEventDispatcher = tui.keyEventDispatcher
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        env.renderCache = tui.renderCache
+        env.preferenceStorage = tui.preferences
+        env.scrollGranularity = granularity
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(["a", "b", "c", "d", "e", "f"], id: \.self) { name in
+                Text((1...linesPerRow).map { "\(name)-\($0)" }.joined(separator: "\n"))
+            }
+        }
+        .frame(height: 11)
+
+        func renderOnce() -> FrameBuffer {
+            var context = RenderContext(
+                availableWidth: 24, availableHeight: 14, environment: env, tuiContext: tui)
+            context.hasExplicitWidth = true
+            context.hasExplicitHeight = true
+            return renderToBuffer(view, context: context)
+        }
+
+        var frames = [renderOnce()]
+        for _ in 0..<wheelTicks {
+            let buffer = frames[frames.count - 1]
+            dispatcher.setRegions(buffer.hitTestRegions)
+            guard let region = buffer.hitTestRegions.max(by: { $0.height < $1.height }) else {
+                Issue.record("expected the list's hit-test region")
+                break
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .scrollDown, phase: .scrolled,
+                    x: region.offsetX + 2, y: region.offsetY + 2))
+            frames.append(renderOnce())
+        }
+        return frames
+    }
+
     private func renderList(
         granularity: ScrollGranularity = .line,
         linesPerRow: Int = 3,
@@ -188,6 +241,22 @@ struct ScrollGranularityTests {
             buffer = renderOnce()
         }
         return buffer.lines.map(\.stripped).joined(separator: "\n")
+    }
+
+    @Test("List (line granularity): the height stays constant, clipping the bottom row")
+    func listLineGranularityConstantHeight() {
+        // Three-line rows in an 11-line frame: the content area can't hold a
+        // whole number of rows, so the bottom row must be PARTIALLY clipped
+        // — never pushing the list taller — and the height must not change
+        // as the window scrolls through different row phases.
+        let frames = renderListFrames(linesPerRow: 3, wheelTicks: 5)
+        let heights = Set(frames.map(\.height))
+        #expect(heights.count == 1, "the list's height never changes: \(frames.map(\.height))")
+
+        // At the top: rows a and b fit whole; row c is clipped mid-row.
+        let first = frames[0].lines.map(\.stripped).joined(separator: "\n")
+        #expect(first.contains("c-1"), "the partial bottom row's first lines show:\n\(first)")
+        #expect(!first.contains("c-3"), "…but its last line is clipped off:\n\(first)")
     }
 
     @Test("List (line granularity): a wheel event moves three LINES, clipping the top row")

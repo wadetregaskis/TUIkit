@@ -676,7 +676,8 @@ where Value.ID: Hashable {
             contentHeight: contentHeight, topClip: topClip, height: heightOf)
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
-            columnWidths: columnWidths, innerWidth: innerWidth, context: context, palette: palette)
+            columnWidths: columnWidths, innerWidth: innerWidth,
+            contentHeight: contentHeight, context: context, palette: palette)
 
         // The first row's on-screen height is net of the line-granularity top
         // clip — the mouse row-mapping walks these heights from the first
@@ -788,6 +789,7 @@ where Value.ID: Hashable {
         tableHasFocus: Bool,
         columnWidths: [Int],
         innerWidth: Int,
+        contentHeight: Int,
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
@@ -802,6 +804,15 @@ where Value.ID: Hashable {
                 direction: .up, count: max(1, window.range.lowerBound),
                 width: contentWidth, palette: palette))
         }
+        // Line granularity fills the content area EXACTLY: the bottom row may
+        // be partially clipped (the top row already can be, via
+        // `scrollTopClipLines`), so the table's height never changes with
+        // which rows happen to be visible. Row granularity keeps whole rows.
+        let rowLineBudget: Int? =
+            context.environment.scrollGranularity == .line
+            ? max(1, contentHeight - lines.count - (window.showBelow ? 1 : 0))
+            : nil
+        var rowLinesEmitted = 0
         for rowIndex in window.range {
             var rowLines = renderMultiLineRow(
                 item: data[rowIndex],
@@ -809,11 +820,20 @@ where Value.ID: Hashable {
                 isSelected: handler.isSelected(at: rowIndex),
                 columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette)
             // Line granularity: the top row enters partially, its first
-            // `scrollTopClipLines` lines scrolled off above the viewport.
+            // `scrollTopClipLines` lines scrolled off above the viewport…
             if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
                 rowLines.removeFirst(min(handler.scrollTopClipLines, rowLines.count - 1))
             }
+            // …and the bottom row leaves partially, clipped at the budget.
+            if let rowLineBudget {
+                let remaining = rowLineBudget - rowLinesEmitted
+                if remaining <= 0 { break }
+                if rowLines.count > remaining {
+                    rowLines.removeLast(rowLines.count - remaining)
+                }
+            }
             lines.append(contentsOf: rowLines)
+            rowLinesEmitted += rowLines.count
         }
         if window.showBelow {
             lines.append(renderScrollIndicator(

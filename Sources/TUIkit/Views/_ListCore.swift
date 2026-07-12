@@ -455,6 +455,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visibleRows: visibleRows,
                 listHasFocus: listHasFocus,
                 rowWidth: rowWidth,
+                contentHeight: targetContentHeight,
                 style: style,
                 context: context,
                 palette: palette
@@ -637,6 +638,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         visibleRows: [(Int, SelectableListRow<SelectionValue>)],
         listHasFocus: Bool,
         rowWidth: Int,
+        contentHeight: Int,
         style: any ListStyle,
         context: RenderContext,
         palette: any Palette
@@ -652,6 +654,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             ))
         }
+
+        // Line granularity fills the content area EXACTLY: the bottom row may
+        // be partially clipped (as the top row already can be, via
+        // `scrollTopClipLines`), so the list's height never changes with
+        // which rows happen to be visible. Row granularity keeps whole rows.
+        let indicatorLines = lines.count + (handler.hasContentBelow ? 1 : 0)
+        let rowLineBudget: Int? =
+            context.environment.scrollGranularity == .line
+            ? max(1, contentHeight - indicatorLines)
+            : nil
+        var rowLinesEmitted = 0
 
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
@@ -673,8 +686,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
                 styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
             }
+            // …and the bottom row leaves partially, clipped at the budget.
+            if let rowLineBudget {
+                let remaining = rowLineBudget - rowLinesEmitted
+                if remaining <= 0 { break }
+                if styledLines.count > remaining {
+                    styledLines.removeLast(styledLines.count - remaining)
+                }
+            }
             let yStart = lines.count
             lines.append(contentsOf: styledLines)
+            rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
                 yStart: yStart,
@@ -771,9 +793,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             )
             // Line granularity: the top visible row enters partially (see
-            // composeRowLines).
+            // composeRowLines)…
             if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
                 styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
+            }
+            // …and the bottom row leaves partially: the bar area's height is
+            // the hard budget, so the list never grows to fit a whole row.
+            if context.environment.scrollGranularity == .line {
+                let remaining = contentHeight - lines.count
+                if remaining <= 0 { break }
+                if styledLines.count > remaining {
+                    styledLines.removeLast(styledLines.count - remaining)
+                }
             }
             let yStart = lines.count
             for rowLine in styledLines {
