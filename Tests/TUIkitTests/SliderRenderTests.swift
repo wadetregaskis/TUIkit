@@ -73,11 +73,14 @@ struct SliderRenderTests {
 
     // MARK: - Value → fill proportion
 
-    @Test("0% shows an entirely empty track and reads 0%")
+    @Test("0% keeps the knob visible at the far left of an empty track")
     func zeroPercent() {
         let line = lines(Slider(value: .constant(0.0))).first ?? ""
-        #expect(filled(line) == 0, "no filled cells at 0%, got \(filled(line)): |\(line)|")
-        #expect(empty(line) == 21, "all 21 cells empty, got \(empty(line))")
+        // The knob is the slider's grab handle: it must never disappear, so
+        // at 0% it sits on the first track cell with nothing behind it.
+        #expect(line.contains("●"), "the knob shows at 0%: |\(line)|")
+        #expect(filled(line) == 1, "only the knob is lit at 0%, got \(filled(line)): |\(line)|")
+        #expect(empty(line) == 20, "the other 20 cells are empty, got \(empty(line))")
         #expect(line.contains("0%"))
     }
 
@@ -141,7 +144,9 @@ struct SliderRenderTests {
 
         let low = lines(Slider(value: .constant(-0.5))).first ?? ""
         #expect(low.contains("0%") && !low.contains("-"), "got: |\(low)|")
-        #expect(filled(low) == 0, "clamped-low track is empty, got \(filled(low))")
+        #expect(
+            filled(low) == 1,
+            "clamped-low track shows only the knob, got \(filled(low)): |\(low)|")
     }
 
     // MARK: - Track styles

@@ -27,9 +27,12 @@
 public struct TrackConfiguration: Sendable, Equatable {
     /// How the unfilled region of a track is drawn.
     public enum EmptyStyle: Sendable, Equatable {
-        /// Draw `glyph` in the empty colour across the unfilled cells — the
-        /// classic look (`░`, `·`, `⠀`, `─`).
-        case glyph(Character)
+        /// Draw `pattern` cyclically across the unfilled cells in the empty
+        /// colour — a single character gives the classic look (`░`, `·`, `⠀`,
+        /// `─`); several repeat in sequence, anchored to the track (cell *j*
+        /// always shows the same pattern character, so the texture stays put
+        /// while the fill sweeps over it).
+        case pattern(String)
 
         /// Paint the ENTIRE track on the empty colour as a solid background,
         /// with the unfilled cells reduced to spaces. Two benefits: the
@@ -39,10 +42,25 @@ public struct TrackConfiguration: Sendable, Equatable {
         /// instead of the terminal background — so the bar always reads as one
         /// solid unit.
         case background
+
+        /// A single-character unfilled pattern — sugar for
+        /// ``pattern(_:)`` with a one-character string.
+        public static func glyph(_ glyph: Character) -> Self {
+            .pattern(String(glyph))
+        }
     }
 
-    /// The glyph for a full (100%-lit) cell.
-    public var fullGlyph: Character
+    /// The fill pattern: repeated cyclically along the lit region and
+    /// truncated at the boundary, so `"abc"` over five cells grows
+    /// `a----`, `ab---`, `abc--`, `abca-`, `abcab`. A single character is
+    /// the classic solid fill.
+    ///
+    /// Multi-cell characters (emoji, CJK) cannot be truncated mid-glyph:
+    /// they coarsen the track's resolution to the widest character's cell
+    /// width, and the track PERMANENTLY shrinks to a neat multiple of it —
+    /// the width must not change with the fill:unfilled ratio. The sub-cell
+    /// ``partialRamp`` is skipped in that coarse mode.
+    public var fill: String
 
     /// The sub-cell ramp for the single fractional boundary cell, ordered
     /// lightest → fullest (e.g. `▏▎▍▌▋▊▉` or `░▒▓`). `nil` quantizes the fill to
@@ -61,21 +79,35 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// Creates a track configuration.
     ///
     /// - Parameters:
-    ///   - fullGlyph: The glyph for a full cell.
+    ///   - fill: The fill pattern, repeated cyclically along the lit region
+    ///     (see ``fill``).
     ///   - partialRamp: The lightest→fullest ramp for the fractional boundary
     ///     cell, or `nil` to quantize to whole cells.
     ///   - emptyStyle: How the unfilled region is drawn.
     ///   - fillGradient: An optional colour gradient across the lit cells.
+    public init(
+        fill: String,
+        partialRamp: [Character]? = nil,
+        emptyStyle: EmptyStyle,
+        fillGradient: [Color]? = nil
+    ) {
+        self.fill = fill
+        self.partialRamp = partialRamp
+        self.emptyStyle = emptyStyle
+        self.fillGradient = fillGradient
+    }
+
+    /// Creates a track configuration with a single-character fill — sugar
+    /// for ``init(fill:partialRamp:emptyStyle:fillGradient:)``.
     public init(
         fullGlyph: Character,
         partialRamp: [Character]? = nil,
         emptyStyle: EmptyStyle,
         fillGradient: [Color]? = nil
     ) {
-        self.fullGlyph = fullGlyph
-        self.partialRamp = partialRamp
-        self.emptyStyle = emptyStyle
-        self.fillGradient = fillGradient
+        self.init(
+            fill: String(fullGlyph), partialRamp: partialRamp,
+            emptyStyle: emptyStyle, fillGradient: fillGradient)
     }
 }
 

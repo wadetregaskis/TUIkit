@@ -153,8 +153,14 @@ extension TrackRenderer {
     ///
     /// This single routine backs `.block`, `.shade`, `.bar`, `.blockFine`,
     /// `.braille`, `.shadeRamp`, and `.custom`. What varies between them is
-    /// purely data: the full-cell glyph, the (optional) sub-cell boundary ramp,
+    /// purely data: the fill pattern, the (optional) sub-cell boundary ramp,
     /// how the empty region is drawn, and an optional fill gradient.
+    ///
+    /// Fill and unfilled patterns repeat cyclically and truncate at their
+    /// boundaries; multi-cell characters (emoji, CJK) can't be truncated, so
+    /// they switch to a coarse mode: the resolution drops to the widest
+    /// character's cell width and the track permanently shrinks to a neat
+    /// multiple of it (see ``renderCoarsePattern``).
     private static func renderConfigured(
         fraction: Double,
         width: Int,
@@ -162,6 +168,32 @@ extension TrackRenderer {
         filledColor: Color,
         emptyColor: Color
     ) -> String {
+        let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
+        let emptyChars: [Character]
+        let paintsBackground: Bool
+        switch config.emptyStyle {
+        case .pattern(let pattern):
+            emptyChars = Array(pattern.isEmpty ? " " : pattern)
+            paintsBackground = false
+        case .background:
+            emptyChars = []
+            paintsBackground = true
+        }
+
+        // Any multi-cell character forces the coarse quantized mode. (The
+        // solid `.background` unfilled region is spaces, so only a patterned
+        // unfill constrains the quantum.)
+        let quantum = max(
+            fillChars.map(\.terminalWidth).max() ?? 1,
+            emptyChars.map(\.terminalWidth).max() ?? 1)
+        if quantum > 1 {
+            return renderCoarsePattern(
+                fraction: fraction, width: width, quantum: quantum,
+                fillChars: fillChars, emptyChars: emptyChars,
+                config: config, filledColor: filledColor, emptyColor: emptyColor,
+                paintsBackground: paintsBackground)
+        }
+
         // A ramp of n glyphs gives n+1 sub-cell steps; no ramp means whole-cell
         // quantization (stepsPerCell == 1, so this reduces to a plain fill).
         let ramp = config.partialRamp
@@ -183,12 +215,6 @@ extension TrackRenderer {
         // Terminal.app). With glyph colour == background colour those
         // unpainted pixels vanish, while the real glyph is kept so a
         // plain-text copy (no styling) still shows where the progress was.
-        let paintsBackground: Bool
-        if case .background = config.emptyStyle {
-            paintsBackground = true
-        } else {
-            paintsBackground = false
-        }
         let trackBackground: Color? = paintsBackground ? emptyColor : nil
 
         // Optional per-cell colour fade across the lit cells.
@@ -206,7 +232,7 @@ extension TrackRenderer {
         for index in 0..<fullCount {
             let cellColour = fillColour(at: index)
             result += ANSIRenderer.colorize(
-                String(config.fullGlyph), foreground: cellColour,
+                String(fillChars[index % fillChars.count]), foreground: cellColour,
                 background: paintsBackground ? cellColour : nil)
         }
         if hasPartial, let ramp {
@@ -219,17 +245,113 @@ extension TrackRenderer {
         }
         let emptyCount = width - litCellCount
         if emptyCount > 0 {
-            switch config.emptyStyle {
-            case .glyph(let glyph):
-                result += ANSIRenderer.colorize(
-                    String(repeating: glyph, count: emptyCount), foreground: emptyColor)
-            case .background:
+            if paintsBackground {
                 // Spaces on the empty colour → a solid unfilled remainder.
                 result += ANSIRenderer.colorize(
                     String(repeating: " ", count: emptyCount), foreground: emptyColor,
                     background: emptyColor)
+            } else {
+                // The unfilled pattern is anchored to the TRACK (cell j always
+                // shows the same character), so the texture stays put while
+                // the fill sweeps across it.
+                var empty = ""
+                for cell in litCellCount..<width {
+                    empty.append(emptyChars[cell % emptyChars.count])
+                }
+                result += ANSIRenderer.colorize(empty, foreground: emptyColor)
             }
         }
+        return result
+    }
+
+    // The coarse pattern mode: some fill/unfilled character is wider than
+    // one cell, so the fill can only advance in steps of the widest
+    // character's width (`quantum`), and the track PERMANENTLY shrinks to
+    // the largest multiple of the quantum that fits — its width must not
+    // vary with the fill:unfilled ratio. The sub-cell ramp is meaningless
+    // at this resolution and is skipped. Mixed-width patterns that cannot
+    // land exactly on a step boundary are padded with spaces.
+    // The inputs are the decomposed configuration plus the two colours;
+    // bundling them into a struct would obscure the 1:1 relationship with
+    // renderConfigured's locals.
+    // swiftlint:disable:next function_parameter_count
+    private static func renderCoarsePattern(
+        fraction: Double,
+        width: Int,
+        quantum: Int,
+        fillChars: [Character],
+        emptyChars: [Character],
+        config: TrackConfiguration,
+        filledColor: Color,
+        emptyColor: Color,
+        paintsBackground: Bool
+    ) -> String {
+        let effectiveWidth = (width / quantum) * quantum
+        guard effectiveWidth > 0 else { return "" }
+        let steps = effectiveWidth / quantum
+        let litSteps = Int((fraction * Double(steps)).rounded())
+        let targetCells = litSteps * quantum
+
+        func fillColour(atCell cell: Int) -> Color {
+            guard let gradient = config.fillGradient, targetCells > 1 else {
+                return filledColor
+            }
+            return gradientColor(
+                stops: gradient,
+                parameter: Double(cell) / Double(targetCells - 1),
+                fallback: filledColor)
+        }
+
+        // The fill: walk the cyclic pattern up to the step boundary.
+        var result = ""
+        var cell = 0
+        var index = 0
+        while cell < targetCells {
+            let character = fillChars[index % fillChars.count]
+            let charWidth = max(1, character.terminalWidth)
+            guard cell + charWidth <= targetCells else { break }
+            let colour = fillColour(atCell: cell)
+            result += ANSIRenderer.colorize(
+                String(character), foreground: colour,
+                background: paintsBackground ? colour : nil)
+            cell += charWidth
+            index += 1
+        }
+        if cell < targetCells {
+            // A mixed-width pattern that can't land on the boundary: pad the
+            // shortfall so the unfilled region still starts on its cell.
+            result += ANSIRenderer.colorize(
+                String(repeating: " ", count: targetCells - cell),
+                foreground: emptyColor,
+                background: paintsBackground ? emptyColor : nil)
+        }
+
+        // The unfilled remainder: spaces on the empty colour for
+        // `.background`, else the cyclic unfilled pattern truncated at its
+        // own character boundaries and space-padded to the track edge.
+        let remaining = effectiveWidth - targetCells
+        guard remaining > 0 else { return result }
+        if paintsBackground {
+            result += ANSIRenderer.colorize(
+                String(repeating: " ", count: remaining), foreground: emptyColor,
+                background: emptyColor)
+            return result
+        }
+        var empty = ""
+        var emptyCell = 0
+        var emptyIndex = 0
+        while emptyCell < remaining {
+            let character = emptyChars[emptyIndex % emptyChars.count]
+            let charWidth = max(1, character.terminalWidth)
+            guard emptyCell + charWidth <= remaining else { break }
+            empty.append(character)
+            emptyCell += charWidth
+            emptyIndex += 1
+        }
+        if emptyCell < remaining {
+            empty += String(repeating: " ", count: remaining - emptyCell)
+        }
+        result += ANSIRenderer.colorize(empty, foreground: emptyColor)
         return result
     }
 
@@ -380,6 +502,11 @@ extension TrackRenderer {
     }
 
     /// Renders a head-indicator style (filled track + head + empty track).
+    ///
+    /// The head is ALWAYS visible: at fraction 0 it sits on the first cell
+    /// with no fill behind it, at 1 on the last cell with the fill all the
+    /// way up — the same position quantisation as ``renderMarkerStyle``. A
+    /// knob-style slider must never lose its grab handle at the ends.
     private static func renderHeadStyle(
         fraction: Double,
         width: Int,
@@ -390,30 +517,26 @@ extension TrackRenderer {
         headColor: Color,
         emptyColor: Color
     ) -> String {
-        let filledCount = Int((fraction * Double(width)).rounded())
+        guard width > 1 else {
+            return ANSIRenderer.colorize(String(headChar), foreground: headColor)
+        }
+        let position = Int((fraction * Double(width - 1)).rounded())
 
         var result = ""
-
-        let trackCount = max(0, filledCount - 1)
-        if trackCount > 0 {
+        if position > 0 {
             result += ANSIRenderer.colorize(
-                String(repeating: filledChar, count: trackCount),
+                String(repeating: filledChar, count: position),
                 foreground: filledColor
             )
         }
-
-        if filledCount > 0 && filledCount <= width {
-            result += ANSIRenderer.colorize(String(headChar), foreground: headColor)
-        }
-
-        let emptyCount = width - max(filledCount, 0)
-        if emptyCount > 0 {
+        result += ANSIRenderer.colorize(String(headChar), foreground: headColor)
+        let trailing = width - 1 - position
+        if trailing > 0 {
             result += ANSIRenderer.colorize(
-                String(repeating: emptyChar, count: emptyCount),
+                String(repeating: emptyChar, count: trailing),
                 foreground: emptyColor
             )
         }
-
         return result
     }
 }

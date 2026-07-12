@@ -301,15 +301,17 @@ struct ProgressViewStyleTests {
         }
     }
 
-    @Test("Dot style at 0% shows no head and all empty")
+    @Test("Dot style at 0% shows the head at the start of an empty track")
     func dotStyleZeroPercent() {
         let view = ProgressView(value: 0.0).progressViewStyle(.dot)
         let context = testContext(width: 10)
         let buffer = renderToBuffer(view, context: context)
 
+        // The head marker never disappears: at 0% it sits on the first cell
+        // with no fill behind it.
         let barLine = buffer.lines[0].stripped
-        #expect(!barLine.contains("●"))
-        #expect(!barLine.contains("▬"))
+        #expect(barLine.first == "●", "head leads the track: |\(barLine)|")
+        #expect(!barLine.contains("▬"), "no fill behind the head at 0%")
         #expect(barLine.contains("─"))
     }
 
