@@ -70,7 +70,20 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
     /// The total natural height of the scroll view's content,
     /// computed during the layout pass.
-    public var contentHeight: Int = 0
+    ///
+    /// Shrinking the content immediately re-bounds ``scrollOffset`` to the
+    /// last line — the viewport-independent half of the scroll clamp, safe on
+    /// any pass (the full ``clampScrollOffset()`` is render-gated because its
+    /// `maxOffset` depends on the offered viewport). Mirrors
+    /// `ItemListHandler.itemCount`.
+    public var contentHeight: Int = 0 {
+        didSet {
+            let bound = max(0, contentHeight - 1)
+            if scrollOffset > bound {
+                scrollOffset = bound
+            }
+        }
+    }
 
     /// The visible height of the scroll view's viewport.
     public var viewportHeight: Int = 0

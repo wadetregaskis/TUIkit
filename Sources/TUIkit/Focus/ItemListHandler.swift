@@ -58,7 +58,23 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     let focusID: String
 
     /// The total number of items in the list.
-    var itemCount: Int
+    ///
+    /// Shrinking the count immediately re-bounds ``scrollOffset`` to the last
+    /// item. This is the *viewport-independent* half of the scroll clamp, so
+    /// it is safe on any pass — unlike ``clampScrollOffset()``, whose
+    /// `maxOffset` depends on the offered viewport and is therefore gated to
+    /// render passes by the owning views. Without it, a measure pass that
+    /// syncs a freshly-shrunk count (rows removed by an async reload) leaves
+    /// a scrolled-near-the-end offset pointing past the data, and range /
+    /// `data[index]` math downstream traps.
+    var itemCount: Int {
+        didSet {
+            let bound = max(0, itemCount - 1)
+            if scrollOffset > bound {
+                scrollOffset = bound
+            }
+        }
+    }
 
     /// The number of visible items in the viewport.
     ///

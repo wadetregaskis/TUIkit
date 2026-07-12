@@ -470,9 +470,13 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
-        let visibleRange = handler.scrollOffset..<min(data.count, handler.scrollOffset + contentHeight)
+        // The handler's accessor, not a raw `scrollOffset..<min(…)`: the
+        // persisted offset can exceed a freshly-shrunk `data.count` during a
+        // measure pass (the clamp above is render-gated), and the raw form
+        // would construct an inverted range (e.g. `1300..<2`) and trap.
+        let visibleRange = handler.visibleRange
         let bar = ScrollbarRenderer.verticalScrollbar(
-            height: contentHeight, extent: data.count, viewport: contentHeight, offset: handler.scrollOffset,
+            height: contentHeight, extent: data.count, viewport: contentHeight, offset: visibleRange.lowerBound,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(

@@ -173,10 +173,19 @@ extension ScrollableOffsetState {
 
     /// The half-open range of indices currently visible — rows
     /// for ``ItemListHandler``, lines for ``ScrollViewHandler``.
+    ///
+    /// Total for ANY state, not just clamped state: the persistent
+    /// ``scrollOffset`` outlives the data it was clamped against (rows can be
+    /// added or removed between frames, and a measure pass deliberately skips
+    /// the viewport-dependent clamp), so this must not assume
+    /// `scrollOffset < extent`. A stale offset is bounded to the last
+    /// row/line here — building `scrollOffset..<min(extent, …)` raw would
+    /// construct an inverted range (e.g. `1300..<2`) and trap.
     public var visibleRange: Range<Int> {
         guard extent > 0 else { return 0..<0 }
-        let end = min(extent, scrollOffset + viewportHeight)
-        return scrollOffset..<end
+        let start = max(0, min(scrollOffset, extent - 1))
+        let end = min(extent, start + max(0, viewportHeight))
+        return start..<end
     }
 
     /// Moves the scroll position by `delta`. Negative scrolls
