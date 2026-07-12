@@ -26,10 +26,14 @@ struct TrackStyleEditor: View {
 
     let preview: PreviewControl
 
-    @State private var fullGlyph = "█"
-    @State private var rampText = "▏▎▍▌▋▊▉"
-    @State private var unfilledName = "░"
-    @State private var gradientEnabled = false
+    // The edited style itself persists app-wide (and across sessions, like
+    // the recents): leaving the page and coming back — or relaunching —
+    // resumes the same custom style. Shared between the Slider and
+    // ProgressView pages' editors, which deliberately edit one style.
+    @AppStorage("trackEditor.fill") private var fullGlyph = "█"
+    @AppStorage("trackEditor.ramp") private var rampText = "▏▎▍▌▋▊▉"
+    @AppStorage("trackEditor.unfilled") private var unfilledName = "░"
+    @AppStorage("trackEditor.gradient") private var gradientEnabled = false
     @State private var sliderValue = 0.6
 
     // The last hundred committed values per field, most recent first,
@@ -55,16 +59,20 @@ struct TrackStyleEditor: View {
         .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
     ]
 
-    /// The configuration the fields currently describe.
+    /// The configuration the fields currently describe. Both the fill and
+    /// the unfilled entries are PATTERNS: several characters repeat
+    /// cyclically along the track, and multi-cell characters (emoji, CJK)
+    /// coarsen the resolution — see ``TrackConfiguration/fill``.
     private var configuration: TrackConfiguration {
         let empty: TrackConfiguration.EmptyStyle
         switch unfilledName {
         case "␣": empty = .glyph(" ")
         case "background": empty = .background  // stable token; label is localized
-        default: empty = .glyph(unfilledName.first ?? "░")
+        case "": empty = .glyph("░")
+        default: empty = .pattern(unfilledName)
         }
         return TrackConfiguration(
-            fullGlyph: fullGlyph.first ?? "█",
+            fill: fullGlyph.isEmpty ? "█" : fullGlyph,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
             fillGradient: gradientEnabled ? Self.gradient : nil)
@@ -85,7 +93,13 @@ struct TrackStyleEditor: View {
                     predefined: Self.fullGlyphs, recentsJSON: $recentFillsJSON)
                 comboField(
                     L("component.trackEditor.ramp"), text: $rampText, width: 14,
-                    predefined: Self.ramps, recentsJSON: $recentRampsJSON)
+                    predefined: Self.ramps, recentsJSON: $recentRampsJSON,
+                    extraCompletions: [""]
+                ) {
+                    // An explicit "no sub-cell ramp" choice: its completion is
+                    // the empty string, which the configuration maps to nil.
+                    Text(L("component.trackEditor.rampNone")).textInputCompletion("")
+                }
                 comboField(
                     L("component.trackEditor.unfilled"), text: $unfilledName, width: 9,
                     predefined: Self.unfilledGlyphs, recentsJSON: $recentUnfilledJSON,
