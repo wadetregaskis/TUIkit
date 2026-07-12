@@ -16,44 +16,40 @@ struct ImageFilePage: View {
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
     @State var zoom: Double = 1.0
+    @State var supersampling: Int = 0
+    @State var edgeLines: Bool = true
+    @State var edgeThreshold: Double = 0.9
+    @State var customRamp: String = ""
 
     var body: some View {
-        let charSet = ImageDemoHelpers.charSets[charSetIndex]
+        let charSet = ImageDemoHelpers.effectiveCharSet(
+            index: charSetIndex, customRamp: customRamp)
         let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
         let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
 
         // The image lives in a two-axis ScrollView fitted to the viewport: at zoom 1
         // the whole image shows with no scrollbars; `+`/`-` zoom in and out, and the
         // scrollbars appear automatically once it grows past the visible area.
-        // The Pickers and status-bar shortcuts drive the same @State, so either
-        // changes the character set / colour mode.
+        // The controls and status-bar shortcuts drive the same @State, so either
+        // changes the rendering knobs.
         VStack(alignment: .leading, spacing: 1) {
-            pickerControls
+            ImageRenderingControls(
+                charSetIndex: $charSetIndex,
+                colorModeIndex: $colorModeIndex,
+                supersampling: $supersampling,
+                edgeLines: $edgeLines,
+                edgeThreshold: $edgeThreshold,
+                customRamp: $customRamp)
             imageContent
                 .imageCharacterSet(charSet)
                 .imageColorMode(colorMode)
                 .imageDithering(dithering)
+                .imageSupersampling(supersampling == 0 ? nil : supersampling)
+                .imageEdgeThreshold(edgeLines ? edgeThreshold : nil)
         }
         .statusBarItems(statusBarItems)
         .appHeader {
             DemoAppHeader(L("page.imageFile.title"))
-        }
-    }
-
-    /// Live Pickers that switch the rendered character set and colour
-    /// mode across every available value.
-    @ViewBuilder private var pickerControls: some View {
-        HStack(spacing: 2) {
-            Picker(L("page.imageFile.characters"), selection: $charSetIndex) {
-                ForEach(ImageDemoHelpers.charSets.indices, id: \.self) { index in
-                    Text(ImageDemoHelpers.charSetLabel(index)).tag(index)
-                }
-            }
-            Picker(L("page.imageFile.colour"), selection: $colorModeIndex) {
-                ForEach(ImageDemoHelpers.colorModes.indices, id: \.self) { index in
-                    Text(ImageDemoHelpers.colorModeLabel(index)).tag(index)
-                }
-            }
         }
     }
 

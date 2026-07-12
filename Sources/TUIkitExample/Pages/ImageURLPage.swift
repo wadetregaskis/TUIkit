@@ -19,9 +19,14 @@ struct ImageURLPage: View {
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
     @State var zoom: Double = 1.0
+    @State var supersampling: Int = 0
+    @State var edgeLines: Bool = true
+    @State var edgeThreshold: Double = 0.9
+    @State var customRamp: String = ""
 
     var body: some View {
-        let charSet = ImageDemoHelpers.charSets[charSetIndex]
+        let charSet = ImageDemoHelpers.effectiveCharSet(
+            index: charSetIndex, customRamp: customRamp)
         let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
         let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
 
@@ -35,6 +40,13 @@ struct ImageURLPage: View {
                     }
                     .textContentType(.url)
             }
+            ImageRenderingControls(
+                charSetIndex: $charSetIndex,
+                colorModeIndex: $colorModeIndex,
+                supersampling: $supersampling,
+                edgeLines: $edgeLines,
+                edgeThreshold: $edgeThreshold,
+                customRamp: $customRamp)
             .padding(.bottom, 1)
 
             if !activeURL.isEmpty {
@@ -60,6 +72,8 @@ struct ImageURLPage: View {
         .imageCharacterSet(charSet)
         .imageColorMode(colorMode)
         .imageDithering(dithering)
+        .imageSupersampling(supersampling == 0 ? nil : supersampling)
+        .imageEdgeThreshold(edgeLines ? edgeThreshold : nil)
         .statusBarItems(statusBarItems)
         .appHeader {
             DemoAppHeader(L("page.imageURL.title"))
