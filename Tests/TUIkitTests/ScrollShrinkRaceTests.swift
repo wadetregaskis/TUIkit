@@ -93,6 +93,60 @@ struct ScrollShrinkRaceTests {
         }
     }
 
+    @Test("Storm: random wheel/measure/render/resize interleavings never trap")
+    func scrollResizeStorm() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                // Seeded LCG so a failure reproduces exactly.
+                var seed: UInt64 = 0x5EED_CAFE
+                func random(_ bound: Int) -> Int {
+                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                    return Int(seed >> 33) % bound
+                }
+
+                var context = makeRenderContext(width: 30, height: 8)
+                context.hasExplicitWidth = true
+                context.hasExplicitHeight = true
+                var measureContext = context
+                measureContext.isMeasuring = true
+                let dispatcher = context.environment.mouseEventDispatcher!
+                dispatcher.setActiveSupport(.standard)
+
+                var count = 500
+                // Named nested functions don't inherit the closure's actor
+                // isolation, so this must be explicit.
+                @MainActor func table() -> some View {
+                    Table((0..<count).map { RowItem(id: $0) }, selection: .constant(Int?.none)) {
+                        TableColumn("Name", value: \RowItem.name)
+                    }
+                }
+
+                for _ in 0..<400 {
+                    switch random(6) {
+                    case 0:  // render pass (also refreshes hit regions)
+                        dispatcher.setRegions(renderToBuffer(table(), context: context).hitTestRegions)
+                    case 1:  // measure pass (clamp deliberately skipped)
+                        _ = renderToBuffer(table(), context: measureContext)
+                    case 2:  // wheel down, hard
+                        for _ in 0..<random(80) {
+                            _ = dispatcher.dispatch(
+                                MouseEvent(button: .scrollDown, phase: .scrolled, x: 5, y: 3))
+                        }
+                    case 3:  // wheel up
+                        for _ in 0..<random(20) {
+                            _ = dispatcher.dispatch(
+                                MouseEvent(button: .scrollUp, phase: .scrolled, x: 5, y: 3))
+                        }
+                    case 4:  // rows removed (sometimes drastically)
+                        count = max(0, count - random(400))
+                    default:  // rows added
+                        count = min(2_000, count + random(300))
+                    }
+                }
+            }
+        }
+    }
+
     @Test("A List measure pass right after its data shrinks must not trap")
     func listMeasurePassAfterShrink() async {
         await #expect(processExitsWith: .success) {
