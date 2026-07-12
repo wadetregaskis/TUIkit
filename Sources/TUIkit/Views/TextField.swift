@@ -91,6 +91,9 @@ public struct TextField<Label: View>: View {
     /// Action to perform when the user submits (presses Enter).
     var onSubmitAction: (() -> Void)?
 
+    /// Action fired when editing begins (`true`) and ends (`false`).
+    var onEditingChangedAction: ((Bool) -> Void)?
+
     public var body: some View {
         _TextFieldCore(
             label: label,
@@ -98,7 +101,8 @@ public struct TextField<Label: View>: View {
             prompt: prompt,
             focusID: focusID,
             isDisabled: isDisabled,
-            onSubmitAction: onSubmitAction
+            onSubmitAction: onSubmitAction,
+            onEditingChangedAction: onEditingChangedAction
         )
     }
 }
@@ -119,6 +123,7 @@ extension TextField where Label == Text {
         self.focusID = nil
         self.isDisabled = false
         self.onSubmitAction = nil
+        self.onEditingChangedAction = nil
     }
 
     /// Creates a text field with a prompt.
@@ -136,6 +141,7 @@ extension TextField where Label == Text {
         self.focusID = nil
         self.isDisabled = false
         self.onSubmitAction = nil
+        self.onEditingChangedAction = nil
     }
 }
 
@@ -173,6 +179,7 @@ extension TextField {
         self.focusID = nil
         self.isDisabled = false
         self.onSubmitAction = nil
+        self.onEditingChangedAction = nil
     }
 }
 
@@ -211,6 +218,28 @@ extension TextField {
         return copy
     }
 
+    /// Adds an action fired when editing begins and ends: `true` as the
+    /// field gains focus, `false` as it loses it.
+    ///
+    /// The `false` call is the "editing ended" commit point — a combo box
+    /// records the entered value to its recents there, so a value that
+    /// applied live isn't lost just because the user tabbed away instead of
+    /// pressing Enter.
+    ///
+    /// (SwiftUI carries this signal as the classic
+    /// `TextField(_:text:onEditingChanged:)` initializer parameter; TUIkit
+    /// exposes it as a modifier, per its modifier-first convention for
+    /// options beyond the core SwiftUI signatures.)
+    ///
+    /// - Parameter action: Receives `true` when editing begins, `false` when
+    ///   it ends.
+    /// - Returns: A text field that reports editing transitions.
+    public func onEditingChanged(_ action: @escaping (Bool) -> Void) -> TextField {
+        var copy = self
+        copy.onEditingChangedAction = action
+        return copy
+    }
+
     /// Sets a custom focus identifier for this text field.
     ///
     /// - Parameter id: The unique focus identifier.
@@ -241,6 +270,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     let focusID: String?
     let isDisabled: Bool
     let onSubmitAction: (() -> Void)?
+    let onEditingChangedAction: ((Bool) -> Void)?
 
     /// Minimum width for the text field content area. Small, so an explicit
     /// narrow `.frame(width:)` is honoured (e.g. a 0–255 / "100%" numeric field
@@ -400,13 +430,18 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         // column; dragging selects. Hover rides on the same region. Shared with
         // SecureField. No-op while measuring or disabled.
         if !isDisabled {
+            // The ▾ disclosure occupies the two cells between the content and
+            // the closing cap; clicks there toggle the menu, not the caret.
+            let disclosureRange: Range<Int>? =
+                suggestionMenu != nil ? (1 + textWidth)..<(1 + textWidth + 2) : nil
             TextFieldMouseHandler.register(
                 buffer: &buffer,
                 context: context,
                 handler: handler,
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
-                contentWidth: textWidth)
+                contentWidth: textWidth,
+                disclosureRange: disclosureRange)
         }
 
         if let suggestionMenu, suggestionMenu.isOpen {
@@ -440,6 +475,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         handler.text = text
         handler.canBeFocused = !isDisabled
         handler.onSubmit = onSubmitAction
+        handler.onEditingChanged = onEditingChangedAction
         handler.textContentType = context.environment.textContentType
         handler.clampCursorPosition()
         return handler

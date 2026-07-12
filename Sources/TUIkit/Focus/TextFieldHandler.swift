@@ -97,8 +97,20 @@ final class TextFieldHandler: Focusable {
     /// highlight into the menu; Up from the first row returns to the caret.
     var suggestionHighlight: Int?
 
-    /// Set when Escape closed the suggestions menu; any edit re-opens it.
-    var suggestionsDismissed = false
+    /// Whether the suggestions pop-up is showing. Opt-IN: the menu opens
+    /// only on an explicit request — the Down key, or a click on the field's
+    /// `▾` disclosure — and closes on Escape, a second disclosure click,
+    /// accepting a suggestion, or focus loss. Gaining focus does NOT open
+    /// it, and typing neither opens nor closes it (the combo-box field is a
+    /// text field first).
+    var suggestionsOpen = false
+
+    /// Fired with `true` when the field gains focus and `false` when it
+    /// loses it — the classic SwiftUI `TextField(_:text:onEditingChanged:)`
+    /// signal. `false` is the "editing ended" commit point: a combo box
+    /// records its recents there, not just on Enter. Re-synced by the
+    /// field's render pass.
+    var onEditingChanged: ((Bool) -> Void)?
 
     /// The suggestions menu's window scroll (see ``DropdownMenu``).
     let suggestionScroll = ScrollAxis()
@@ -450,17 +462,54 @@ extension TextFieldHandler {
 
 extension TextFieldHandler {
     /// True while the suggestions menu is showing: the field has suggestions
-    /// (synced by its render pass) and Escape hasn't hidden them. Only
-    /// consulted while focused — that's the only time key events arrive.
+    /// (synced by its render pass) and one of the open gestures showed the
+    /// pop-up. Only consulted while focused — that's the only time key
+    /// events arrive.
     var suggestionsActive: Bool {
-        !suggestionCompletions.isEmpty && !suggestionsDismissed
+        !suggestionCompletions.isEmpty && suggestionsOpen
     }
 
-    /// Handles the keys the open suggestions menu consumes. Returns `nil`
-    /// when the event is not menu navigation, so normal field handling
-    /// proceeds — typing always keeps editing the field.
+    /// Opens or closes the suggestions menu — the disclosure-click gesture.
+    /// Opening highlights the row matching the field's current text (the ✓
+    /// row), so the menu comes up "at" the field's value like NSComboBox.
+    func toggleSuggestionsOpen() {
+        guard !suggestionCompletions.isEmpty else { return }
+        if suggestionsOpen {
+            suggestionsOpen = false
+            suggestionHighlight = nil
+        } else {
+            openSuggestions(preferFirstRow: false)
+        }
+    }
+
+    /// Shows the menu, highlighting the current value's row when there is
+    /// one. A keyboard open (Down) falls back to the first row — the key
+    /// expresses "into the menu" — while a pointer open leaves the highlight
+    /// at the caret for the mouse to take over.
+    private func openSuggestions(preferFirstRow: Bool) {
+        suggestionsOpen = true
+        suggestionHighlight =
+            suggestionCompletions.firstIndex(of: text.wrappedValue)
+            ?? (preferFirstRow ? 0 : nil)
+        suggestionFollowPending = suggestionHighlight != nil
+    }
+
+    /// Handles the keys the suggestions menu consumes. Returns `nil` when
+    /// the event is not menu interaction, so normal field handling proceeds
+    /// — typing always keeps editing the field.
     private func handleSuggestionKeyEvent(_ event: KeyEvent) -> Bool? {
-        guard suggestionsActive, !event.shift, !event.alt, !event.ctrl else { return nil }
+        guard !suggestionCompletions.isEmpty, !event.shift, !event.alt, !event.ctrl else {
+            return nil
+        }
+        guard suggestionsOpen else {
+            // Closed: Down is the open gesture (the NSComboBox convention);
+            // every other key is ordinary field editing.
+            if event.key == .down {
+                openSuggestions(preferFirstRow: true)
+                return true
+            }
+            return nil
+        }
         switch event.key {
         case .down:
             // Down enters the menu (from the caret) and then walks it,
@@ -483,11 +532,16 @@ extension TextFieldHandler {
             suggestionFollowPending = true
             return true
         case .enter:
-            guard let highlight = suggestionHighlight else { return nil }
+            guard let highlight = suggestionHighlight else {
+                // Enter at the caret submits as usual; the menu closes so
+                // the committed field isn't left with a dangling pop-up.
+                suggestionsOpen = false
+                return nil
+            }
             acceptSuggestion(at: highlight)
             return true
         case .escape:
-            suggestionsDismissed = true
+            suggestionsOpen = false
             suggestionHighlight = nil
             return true
         default:
@@ -507,15 +561,15 @@ extension TextFieldHandler {
         cursorPosition = text.wrappedValue.count
         clearSelection()
         suggestionHighlight = nil
-        suggestionsDismissed = true
+        suggestionsOpen = false
         onSubmit?()
     }
 
-    /// Any edit returns the keyboard to the caret and re-opens a dismissed
-    /// menu — typing is how the user asks for (fresh) suggestions.
+    /// Any edit returns the keyboard to the caret. The menu's open state is
+    /// deliberately untouched — opening and closing are explicit gestures
+    /// (Down/disclosure and Escape/disclosure), not side effects of typing.
     func resetSuggestionNavigation() {
         suggestionHighlight = nil
-        suggestionsDismissed = false
     }
 }
 
@@ -731,11 +785,16 @@ extension TextFieldHandler {
     func onFocusReceived() {
         // Ensure cursor is at a valid position
         clampCursorPosition()
+        onEditingChanged?(true)
     }
 
     func onFocusLost() {
-        // A fresh focus session starts with the menu showing and the
-        // keyboard at the caret.
+        // The pop-up never outlives the focus session, and a fresh session
+        // starts with the keyboard at the caret and the menu closed.
+        suggestionsOpen = false
         resetSuggestionNavigation()
+        // Editing has ended: the commit point for values that apply live —
+        // a combo box records its recents here, not just on Enter.
+        onEditingChanged?(false)
     }
 }

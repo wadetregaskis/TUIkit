@@ -37,6 +37,9 @@ enum TextFieldMouseHandler {
     ///   - leadingCapWidth: Cells occupied by the opening cap (the click column
     ///     is measured from the buffer's left edge, so this is subtracted to get
     ///     the content-relative column). Defaults to 1.
+    ///   - disclosureRange: The buffer-x columns of the combo box's `▾`
+    ///     disclosure, when the field has one. A click there toggles the
+    ///     suggestions menu instead of positioning the caret.
     static func register(
         buffer: inout FrameBuffer,
         context: RenderContext,
@@ -44,7 +47,8 @@ enum TextFieldMouseHandler {
         persistedFocusID: String,
         hoverBox: StateBox<Bool>,
         contentWidth: Int,
-        leadingCapWidth: Int = 1
+        leadingCapWidth: Int = 1,
+        disclosureRange: Range<Int>? = nil
     ) {
         guard !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
@@ -74,6 +78,12 @@ enum TextFieldMouseHandler {
                 return true
             case .pressed where event.button == .left:
                 focusManager?.focus(id: captureFocusID)
+                if let disclosureRange, disclosureRange.contains(event.x) {
+                    // The `▾` disclosure: toggle the suggestions menu; the
+                    // caret stays where it was.
+                    handler.toggleSuggestionsOpen()
+                    return true
+                }
                 if event.shift {
                     // Shift-click: keep the anchor, extend to the clicked column.
                     handler.startOrExtendSelection()

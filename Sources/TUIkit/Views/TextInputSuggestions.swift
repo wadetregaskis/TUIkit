@@ -189,14 +189,16 @@ extension View {
     ///
     /// ## Interaction
     ///
-    /// The menu opens while the field is focused. Typing keeps editing the
-    /// field; Down moves the highlight into the menu (and Up from the first
-    /// row returns to the caret); Enter picks the highlighted suggestion —
-    /// filling the field and firing ``TextField/onSubmit(_:)``, the combo-box
-    /// convention — while Enter with no highlight submits as usual. Escape
-    /// closes the menu until the next edit. Clicking a row picks it; the
-    /// wheel scrolls a long menu. A `▾` affordance at the field's trailing
-    /// edge marks the field as having suggestions.
+    /// The menu opens ON DEMAND, never just because the field gained focus:
+    /// press Down at the caret, or click the `▾` disclosure at the field's
+    /// trailing edge (clicking it again — or Escape — closes). Typing keeps
+    /// editing the field and leaves the menu's open state alone; Down then
+    /// walks the menu (Up from the first row returns to the caret); Enter
+    /// picks the highlighted suggestion — filling the field and firing
+    /// ``TextField/onSubmit(_:)``, the combo-box convention — while Enter
+    /// with no highlight submits as usual and closes the menu. Clicking a
+    /// row picks it; the wheel scrolls a long menu. The menu never outlives
+    /// the field's focus.
     ///
     /// - Parameter suggestions: A view builder of suggestion entries.
     /// - Returns: A view whose text fields offer the suggestions.
@@ -329,8 +331,7 @@ enum TextFieldSuggestions {
             handler.suggestionHighlight = completions.isEmpty ? nil : completions.count - 1
         }
 
-        let isOpen =
-            isFocused && !handler.suggestionsDismissed && !optionRowIndices.isEmpty
+        let isOpen = isFocused && handler.suggestionsOpen && !optionRowIndices.isEmpty
         if isOpen, !context.isMeasuring {
             // The menu's Escape (close) takes precedence over any page-level
             // ESC handler while open — surface that in the status bar, as the

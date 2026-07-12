@@ -228,6 +228,12 @@ extension FocusManager {
     public func focus(_ element: Focusable) {
         guard element.canBeFocused else { return }
 
+        // Focusing the already-focused element is a no-op: a click inside a
+        // focused control must not fire a spurious lost/received lifecycle —
+        // that would tear down the control's transient state (an open
+        // suggestions menu, editing-session callbacks) mid-interaction.
+        guard focusedID != element.focusID else { return }
+
         notifyFocusLost()
 
         focusedID = element.focusID

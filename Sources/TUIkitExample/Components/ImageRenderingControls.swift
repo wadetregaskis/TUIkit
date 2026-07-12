@@ -79,17 +79,24 @@ struct ImageRenderingControls: View {
     }
 
     /// The custom-ramp combo field: type any ramp (darkest character first),
-    /// or pick a pre-defined or recent one; Enter records it. A non-empty
-    /// ramp overrides the character-set picker.
+    /// or pick a pre-defined or recent one. A genuinely custom ramp is
+    /// recorded on Enter and when the field loses focus (it applies live, so
+    /// tabbing away must not lose it); the pre-defined options are never
+    /// recorded — they already have a home above the divider.
     @ViewBuilder private var rampField: some View {
         let recents = RecentValues.list(from: recentRampsJSON)
             .filter { !Self.ramps.contains($0) }
+        let record = {
+            guard !Self.ramps.contains(customRamp) else { return }
+            recentRampsJSON = RecentValues.recording(customRamp, in: recentRampsJSON)
+        }
         // Label above the field, matching the pickers' label-above shape.
         VStack(alignment: .leading, spacing: 0) {
             Text(L("component.imageControls.customRamp")).dim()
             TextField(L("component.imageControls.customRamp"), text: $customRamp)
-                .onSubmit {
-                    recentRampsJSON = RecentValues.recording(customRamp, in: recentRampsJSON)
+                .onSubmit(record)
+                .onEditingChanged { began in
+                    if !began { record() }
                 }
                 .textInputSuggestions {
                     ForEach(Self.ramps, id: \.self) { Text($0) }

@@ -88,7 +88,8 @@ struct TrackStyleEditor: View {
                     predefined: Self.ramps, recentsJSON: $recentRampsJSON)
                 comboField(
                     L("component.trackEditor.unfilled"), text: $unfilledName, width: 9,
-                    predefined: Self.unfilledGlyphs, recentsJSON: $recentUnfilledJSON
+                    predefined: Self.unfilledGlyphs, recentsJSON: $recentUnfilledJSON,
+                    extraCompletions: ["background"]
                 ) {
                     // The localized "solid background" option carries the
                     // stable token as its completion — a language switch must
@@ -116,25 +117,36 @@ struct TrackStyleEditor: View {
 
     /// One labelled combo field: free text entry over a suggestions menu of
     /// the pre-defined values, any extra options, and — under a divider — the
-    /// persisted recents. Enter (or picking a suggestion, which submits)
-    /// records the value.
+    /// persisted recents. A value is recorded on Enter, on picking a
+    /// suggestion (which submits), and when the field loses focus — a custom
+    /// value applies live, so tabbing away must not lose it. Only genuinely
+    /// custom values are recorded: the pre-defined options (and any extra
+    /// options' completions) already have a home above the divider.
     @ViewBuilder private func comboField(
         _ title: String,
         text: Binding<String>,
         width: Int,
         predefined: [String],
         recentsJSON: Binding<String>,
+        extraCompletions: [String] = [],
         @ViewBuilder extraOptions: () -> some View = { EmptyView() }
     ) -> some View {
-        // Recents that just repeat a pre-defined option would show twice.
+        // Recents that just repeat a pre-defined option would show twice
+        // (defensive display filter for storage recorded before this rule).
         let recents = RecentValues.list(from: recentsJSON.wrappedValue)
-            .filter { !predefined.contains($0) }
+            .filter { !predefined.contains($0) && !extraCompletions.contains($0) }
+        let record = {
+            let value = text.wrappedValue
+            guard !predefined.contains(value), !extraCompletions.contains(value) else { return }
+            recentsJSON.wrappedValue = RecentValues.recording(
+                value, in: recentsJSON.wrappedValue)
+        }
         VStack(alignment: .leading, spacing: 0) {
             Text(title).dim()
             TextField(title, text: text)
-                .onSubmit {
-                    recentsJSON.wrappedValue = RecentValues.recording(
-                        text.wrappedValue, in: recentsJSON.wrappedValue)
+                .onSubmit(record)
+                .onEditingChanged { began in
+                    if !began { record() }
                 }
                 .textInputSuggestions {
                     ForEach(predefined, id: \.self) { Text($0) }

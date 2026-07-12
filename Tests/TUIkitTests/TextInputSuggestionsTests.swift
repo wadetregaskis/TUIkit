@@ -102,17 +102,41 @@ struct TextSuggestionKeyboardTests {
         return handler
     }
 
-    @Test("Down enters the menu and walks it, stopping at the last row")
+    @Test("Down opens the menu and walks it, stopping at the last row")
     func downNavigation() {
         let box = TextBox()
         let handler = makeHandler(box, completions: ["alpha", "beta"])
 
+        #expect(!handler.suggestionsOpen, "the menu is closed until asked for")
         #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
+        #expect(handler.suggestionsOpen, "Down is the keyboard open gesture")
         #expect(handler.suggestionHighlight == 0)
         #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
         #expect(handler.suggestionHighlight == 1)
         #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
         #expect(handler.suggestionHighlight == 1, "Down stops at the last suggestion")
+    }
+
+    @Test("Opening lands on the current value's row when there is one")
+    func openHighlightsCurrentValue() {
+        let box = TextBox()
+        box.value = "beta"
+        let handler = makeHandler(box, completions: ["alpha", "beta"])
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.suggestionHighlight == 1, "the ✓ row is where the menu opens")
+    }
+
+    @Test("The disclosure toggle opens and closes the menu")
+    func disclosureToggles() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: ["alpha"])
+
+        handler.toggleSuggestionsOpen()
+        #expect(handler.suggestionsOpen)
+        #expect(handler.suggestionHighlight == nil, "a pointer open leaves the keyboard at the caret")
+        handler.toggleSuggestionsOpen()
+        #expect(!handler.suggestionsOpen)
     }
 
     @Test("Up from the first row returns the keyboard to the caret")
@@ -142,7 +166,7 @@ struct TextSuggestionKeyboardTests {
         #expect(box.value == "alpha")
         #expect(box.submitted == 1, "picking a suggestion fires onSubmit")
         #expect(handler.suggestionHighlight == nil)
-        #expect(handler.suggestionsDismissed, "the menu closes after a pick")
+        #expect(!handler.suggestionsOpen, "the menu closes after a pick")
         #expect(handler.cursorPosition == 5, "caret lands at the end of the completion")
     }
 
@@ -155,29 +179,42 @@ struct TextSuggestionKeyboardTests {
         #expect(handler.handleKeyEvent(KeyEvent(key: .enter)))
         #expect(box.value == "custom")
         #expect(box.submitted == 1)
-        #expect(!handler.suggestionsDismissed)
+        #expect(!handler.suggestionsOpen)
     }
 
-    @Test("Escape dismisses the menu; typing re-opens it")
-    func escapeThenTyping() {
+    @Test("Escape closes the open menu; a second Escape falls through")
+    func escapeCloses() {
         let box = TextBox()
         let handler = makeHandler(box, completions: ["alpha"])
 
-        #expect(handler.handleKeyEvent(KeyEvent(key: .escape)))
-        #expect(handler.suggestionsDismissed)
-        #expect(!handler.suggestionsActive)
-
-        // While dismissed, Down is the field's normal caret-to-end.
-        box.value = "ab"
-        handler.cursorPosition = 0
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))
-        #expect(handler.suggestionHighlight == nil)
-        #expect(handler.cursorPosition == 2)
-
-        // An edit re-opens the menu.
-        _ = handler.handleKeyEvent(KeyEvent(key: .character("c")))
-        #expect(!handler.suggestionsDismissed)
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open
         #expect(handler.suggestionsActive)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .escape)))
+        #expect(!handler.suggestionsOpen)
+        #expect(!handler.suggestionsActive)
+        #expect(
+            !handler.handleKeyEvent(KeyEvent(key: .escape)),
+            "with the menu closed, Escape falls through to the page")
+
+        // Typing does NOT re-open the menu — opening is an explicit gesture.
+        _ = handler.handleKeyEvent(KeyEvent(key: .character("c")))
+        #expect(!handler.suggestionsOpen)
+    }
+
+    @Test("Gaining focus does not open the menu; losing focus closes it")
+    func focusDoesNotOpen() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: ["alpha"])
+        var editing: [Bool] = []
+        handler.onEditingChanged = { editing.append($0) }
+
+        handler.onFocusReceived()
+        #expect(!handler.suggestionsOpen, "focus alone must not open the menu")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open explicitly
+        handler.onFocusLost()
+        #expect(!handler.suggestionsOpen, "the menu never outlives the focus session")
+        #expect(editing == [true, false], "onEditingChanged brackets the focus session")
     }
 
     @Test("Shift+Down keeps its select-to-end meaning while the menu shows")
@@ -266,7 +303,7 @@ struct TextSuggestionMenuTests {
         #expect(!screen.contains("alpha"), "no menu while unfocused: \(screen)")
     }
 
-    @Test("Focusing the field opens the menu with dividers between groups")
+    @Test("Down on the focused field opens the menu with dividers between groups")
     func focusedMenu() {
         let tui = TUIContext()
         let focus = FocusManager()
@@ -276,6 +313,8 @@ struct TextSuggestionMenuTests {
 
         _ = render(field, tui: tui, focus: focus, env: env)  // register
         focus.focus(id: "combo")
+        _ = render(field, tui: tui, focus: focus, env: env)  // sync completions
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))  // the open gesture
         let buffer = render(field, tui: tui, focus: focus, env: env)
         let composited = buffer.compositingOverlays(
             maxWidth: 60, maxHeight: 20, palette: env.palette)
@@ -307,6 +346,8 @@ struct TextSuggestionMenuTests {
 
         _ = render(field, tui: tui, focus: focus, env: env)
         focus.focus(id: "combo")
+        _ = render(field, tui: tui, focus: focus, env: env)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
         let buffer = render(field, tui: tui, focus: focus, env: env)
         let composited = buffer.compositingOverlays(
             maxWidth: 60, maxHeight: 20, palette: env.palette)
@@ -336,6 +377,8 @@ struct TextSuggestionMenuTests {
 
         _ = render(field, tui: tui, focus: focus, env: env)
         focus.focus(id: "combo")
+        _ = render(field, tui: tui, focus: focus, env: env)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
         let buffer = render(field, tui: tui, focus: focus, env: env)
         let composited = buffer.compositingOverlays(
             maxWidth: 60, maxHeight: 20, palette: env.palette)
@@ -343,6 +386,40 @@ struct TextSuggestionMenuTests {
         // start beneath it.
         let betaLine = composited.lines.dropFirst().map(\.stripped).first { $0.contains("beta") }
         #expect(betaLine?.contains(DropdownMenu.selectedMarker) == true, "\(betaLine ?? "nil")")
+    }
+
+    @Test("Clicking the ▾ disclosure toggles the menu open and closed")
+    func disclosureClickToggles() {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let env = makeEnvironment(tui: tui, focus: focus)
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        let box = TextBox()
+        let field = makeField(box)
+
+        func renderAndWire() -> FrameBuffer {
+            let buffer = render(field, tui: tui, focus: focus, env: env)
+            let composited = buffer.compositingOverlays(
+                maxWidth: 60, maxHeight: 20, palette: env.palette)
+            dispatcher.setRegions(composited.hitTestRegions)
+            return composited
+        }
+        _ = renderAndWire()
+
+        // The frame is 24 wide: closing cap at x=23, the disclosure in the
+        // two cells before it.
+        func clickDisclosure() {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 22, y: 0))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 22, y: 0))
+        }
+        clickDisclosure()
+        var screen = renderAndWire().lines.map(\.stripped).joined(separator: "\n")
+        #expect(screen.contains("alpha"), "the disclosure click opens the menu: \(screen)")
+
+        clickDisclosure()
+        screen = renderAndWire().lines.map(\.stripped).joined(separator: "\n")
+        #expect(!screen.contains("alpha"), "a second click closes it: \(screen)")
     }
 
     /// The (y, x) of `needle`'s first character in the buffer, or nil.
