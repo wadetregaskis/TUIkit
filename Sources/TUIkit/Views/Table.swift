@@ -250,7 +250,20 @@ where Value.ID: Hashable {
         if let height = proposal.height {
             measureContext.availableHeight = height
         }
-        let buffer = renderToBuffer(context: measureContext)
+
+        // A single-line table's dimensions are analytic — every row is one
+        // line, so the height is a row count and the width is column
+        // arithmetic. Rendering the whole table (styled cells, ANSI-aware
+        // padding) just to read the buffer's size dominated the measure
+        // pass of large tables. Multi-line tables keep the render-based
+        // measure: their height is the sum of per-row wrapped heights.
+        let size: (width: Int, height: Int)
+        if columns.contains(where: { $0.lineLimit > 1 }) {
+            let buffer = renderToBuffer(context: measureContext)
+            size = (buffer.width, buffer.height)
+        } else {
+            size = analyticSingleLineSize(context: measureContext)
+        }
 
         let fillsWidth = columns.contains { column in
             switch column.width {
@@ -261,8 +274,97 @@ where Value.ID: Hashable {
             }
         }
         return fillsWidth
-            ? ViewSize.flexibleWidth(minWidth: buffer.width, height: buffer.height)
-            : ViewSize.fixed(buffer.width, buffer.height)
+            ? ViewSize.flexibleWidth(minWidth: size.width, height: size.height)
+            : ViewSize.fixed(size.width, size.height)
+    }
+
+    /// The single-line table's rendered size, computed without building its
+    /// rows: the header and column arithmetic are O(columns), the content
+    /// block is a fixed-size stand-in reporting the exact line count and
+    /// width the real rows would occupy, and the shared ``ContainerView``
+    /// chrome is *measured* for real so padding/border/fill semantics stay
+    /// exactly the render path's. Mirrors the corresponding line/width
+    /// choices in `renderToBuffer` / `buildScrollbarContent` /
+    /// `buildPopulatedContent` — TableAnalyticMeasureTests holds the two
+    /// paths equal across the configuration matrix.
+    private func analyticSingleLineSize(context: RenderContext) -> (width: Int, height: Int) {
+        let palette = context.environment.palette
+        let innerWidth = max(0, context.availableWidth - 4)
+        let rowArea = max(1, context.availableHeight - 3)
+        let barVisibility = context.environment.scrollbarVisibility
+        let wantsScrollbar =
+            !data.isEmpty && barVisibility != .hidden
+            && (barVisibility == .visible || data.count > rowArea)
+        let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
+        let columnWidths = calculateColumnWidths(
+            availableWidth: contentInnerWidth, spacing: columnSpacing)
+        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+        if wantsScrollbar {
+            headerLine += String(
+                repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
+        }
+
+        let contentSize: (width: Int, height: Int)
+        if data.isEmpty {
+            contentSize = (emptyPlaceholder.strippedLength, 1)
+        } else if wantsScrollbar {
+            // The scrollbar path fills the whole content area: every line is
+            // the row content padded to `contentInnerWidth` plus the bar cell.
+            contentSize = (contentInnerWidth + 1, rowArea)
+        } else {
+            // The plain path emits the visible rows plus indicator lines,
+            // filling the content area exactly when overflowing; rows are
+            // padded to the table's content width, but an indicator line can
+            // exceed it ("▼ N more below" on narrow tables), so the ones the
+            // render pass would draw at the current scroll state are built
+            // (O(1) each) and folded into the width.
+            let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+            var widest = contentWidth
+            if data.count > rowArea {
+                let persistedFocusID = FocusRegistration.persistFocusID(
+                    context: context, explicitFocusID: focusID,
+                    defaultPrefix: "table", propertyIndex: 1)
+                let handler = resolveHandler(
+                    persistedFocusID: persistedFocusID,
+                    stateStorage: context.environment.stateStorage!,
+                    context: context, contentHeight: rowArea, overflowing: true)
+                reserveIndicatorLines(handler: handler, contentHeight: rowArea)
+                if handler.hasContentAbove {
+                    widest = max(
+                        widest,
+                        renderScrollIndicator(
+                            direction: .up, count: handler.rowsAbove,
+                            width: contentWidth, palette: palette
+                        ).strippedLength)
+                }
+                if handler.hasContentBelow {
+                    widest = max(
+                        widest,
+                        renderScrollIndicator(
+                            direction: .down, count: handler.rowsBelow,
+                            width: contentWidth, palette: palette
+                        ).strippedLength)
+                }
+            }
+            contentSize = (widest, min(data.count, rowArea))
+        }
+
+        let container = ContainerView(
+            title: nil,
+            style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
+            padding: EdgeInsets(horizontal: 1, vertical: 0)
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                _TableHeaderView(line: headerLine)
+                _TableSizeStub(width: contentSize.width, height: contentSize.height)
+            }
+        }
+        let measured = measureChild(
+            container,
+            proposal: ProposedSize(
+                width: context.availableWidth, height: context.availableHeight),
+            context: context)
+        return (measured.width, measured.height)
     }
 
     /// Populated-state snapshot the mouse handler needs.
@@ -400,21 +502,8 @@ where Value.ID: Hashable {
         let tableHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
 
-        // Reserve a line for each scroll indicator actually present
-        // at this offset so the rows plus indicators fill the content
-        // area exactly — no wasted blank line at the ends (which used
-        // to push the "N more below" indicator one row too high), no
-        // overflow in the middle. Mirrors _ListCore.
         if overflowing {
-            let aboveLines = handler.scrollOffset > 0 ? 1 : 0
-            let remaining = data.count - handler.scrollOffset
-            let rowsWithoutBelow = min(remaining, max(1, contentHeight - aboveLines))
-            let belowShown = handler.scrollOffset + rowsWithoutBelow < data.count
-            let visibleRowCount =
-                belowShown
-                ? max(1, contentHeight - aboveLines - 1)
-                : rowsWithoutBelow
-            handler.viewportHeight = max(1, min(visibleRowCount, remaining))
+            reserveIndicatorLines(handler: handler, contentHeight: contentHeight)
         }
 
         let lines = composeRowLines(
@@ -861,6 +950,26 @@ where Value.ID: Hashable {
         return min(innerWidth, gutter + columnWidths.reduce(0, +) + spacing)
     }
 
+    /// Reserves a line for each scroll indicator actually present at this
+    /// offset so the rows plus indicators fill the content area exactly — no
+    /// wasted blank line at the ends (which used to push the "N more below"
+    /// indicator one row too high), no overflow in the middle. Mirrors
+    /// _ListCore. Shared by the render pass and the analytic measure (both
+    /// must agree on which indicators show).
+    private func reserveIndicatorLines(
+        handler: ItemListHandler<Value.ID>, contentHeight: Int
+    ) {
+        let aboveLines = handler.scrollOffset > 0 ? 1 : 0
+        let remaining = data.count - handler.scrollOffset
+        let rowsWithoutBelow = min(remaining, max(1, contentHeight - aboveLines))
+        let belowShown = handler.scrollOffset + rowsWithoutBelow < data.count
+        let visibleRowCount =
+            belowShown
+            ? max(1, contentHeight - aboveLines - 1)
+            : rowsWithoutBelow
+        handler.viewportHeight = max(1, min(visibleRowCount, remaining))
+    }
+
     /// Stitches scroll indicators around the visible data rows.
     private func composeRowLines(
         handler: ItemListHandler<Value.ID>,
@@ -1055,6 +1164,14 @@ where Value.ID: Hashable {
         let indicatorWidth = 2
         let contentWidth = max(0, availableWidth - totalSpacing - indicatorWidth)
 
+        // Single-line cells are CLIPPED to their column, so once a `.fit`
+        // column's widest-so-far already spans the whole interior, no later
+        // row can change anything visible — stop scanning. Multi-line cells
+        // instead WRAP at the column width, so there the true maximum
+        // matters and the scan must run to the end.
+        let fitScanCap =
+            columns.contains(where: { $0.lineLimit > 1 }) ? nil : Optional(contentWidth)
+
         var widths = [Int](repeating: 0, count: columns.count)
         var usedWidth = 0
         var flexibleIndices: [Int] = []
@@ -1071,9 +1188,12 @@ where Value.ID: Hashable {
             case .fit:
                 // Fit to the widest of the header and every cell value in this
                 // column. O(rows) per column, but stable as the table scrolls
-                // (all rows are considered, not just the visible ones).
-                let fitted = data.reduce(column.title.strippedLength) { widest, item in
-                    max(widest, column.value(for: item).strippedLength)
+                // (all rows are considered, not just the visible ones) — with
+                // the early-out above once the interior is saturated.
+                var fitted = column.title.strippedLength
+                for item in data {
+                    fitted = max(fitted, column.value(for: item).strippedLength)
+                    if let cap = fitScanCap, fitted >= cap { break }
                 }
                 widths[index] = fitted
                 usedWidth += fitted
@@ -1248,5 +1368,30 @@ private struct _TableHeaderView: View, Renderable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         FrameBuffer(lines: [line])
+    }
+}
+
+/// A fixed-size stand-in for the table's content lines, used only by the
+/// analytic measure path: it reports the size the real lines would occupy
+/// without building them, so measuring the table's ``ContainerView`` chrome
+/// is O(chrome) instead of O(rows × cells).
+private struct _TableSizeStub: View, Renderable, Layoutable {
+    let width: Int
+    let height: Int
+
+    var body: Never {
+        fatalError("_TableSizeStub renders via Renderable")
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize.fixed(width, height)
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Only reached if a parent measures by rendering; blank lines of the
+        // reported size keep that path dimension-accurate too.
+        FrameBuffer(
+            lines: Array(
+                repeating: String(repeating: " ", count: width), count: height))
     }
 }
