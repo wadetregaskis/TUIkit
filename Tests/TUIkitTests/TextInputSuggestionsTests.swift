@@ -388,6 +388,35 @@ struct TextSuggestionMenuTests {
         #expect(betaLine?.contains(DropdownMenu.selectedMarker) == true, "\(betaLine ?? "nil")")
     }
 
+    @Test("The menu grows wider than a narrow control to fit its options")
+    func menuExceedsControlWidth() {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var env = makeEnvironment(tui: tui, focus: focus)
+        env.terminalWidth = 60
+        let box = TextBox()
+        // A 10-cell field offering an option far wider than the field: the
+        // pop-up must NOT truncate it to the control's width.
+        let field = TextField("Value", text: box.binding)
+            .focusID("combo")
+            .textInputSuggestions {
+                Text("solid background option")
+            }
+            .frame(width: 10)
+
+        _ = render(field, tui: tui, focus: focus, env: env)
+        focus.focus(id: "combo")
+        _ = render(field, tui: tui, focus: focus, env: env)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        let buffer = render(field, tui: tui, focus: focus, env: env)
+        let composited = buffer.compositingOverlays(
+            maxWidth: 60, maxHeight: 20, palette: env.palette)
+        let screen = composited.lines.map(\.stripped).joined(separator: "\n")
+        #expect(
+            screen.contains("solid background option"),
+            "the full label shows, wider than the field: \(screen)")
+    }
+
     @Test("Clicking the ▾ disclosure toggles the menu open and closed")
     func disclosureClickToggles() {
         let tui = TUIContext()

@@ -84,9 +84,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // Render every option's label once (dividers have none); reuse for
         // sizing and drawing. Row indices match `entries` throughout — the
         // drop-down highlight is tracked as an option ordinal on the handler
-        // and mapped to a row via `optionRowIndices`.
+        // and mapped to a row via `optionRowIndices`. Labels render at the
+        // SCREEN width, not the control's: the drop-down is an overlay that
+        // may grow wider than its control, so a narrow picker must not
+        // wrap/truncate its option labels.
+        let labelContext = context.withAvailableWidth(
+            max(context.availableWidth, context.environment.terminalWidth))
         let renderedLabels: [String?] = entries.map { entry in
-            entry.label.map { $0.renderToBuffer(context: context).lines.first ?? "" }
+            entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
         }
         let optionRowIndices = entries.indices.filter { entries[$0].tag != nil }
         let maxLabelWidth = renderedLabels.compactMap { $0?.strippedLength }.max() ?? 0
@@ -100,7 +105,12 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let wantsScrollbar = DropdownMenu.wantsScrollbar(
             rowCount: entries.count, context: context)
         let desiredInner = maxLabelWidth + 4 + (wantsScrollbar ? 1 : 0)
-        let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
+        // The drop-down is an overlay: it may grow WIDER than its control to
+        // fit its options, up to the screen. It anchors at the control's left
+        // edge (preferring to grow rightward); the overlay compositor nudges
+        // it left only when the screen's right edge forces it.
+        let widthCap = max(context.availableWidth, context.environment.terminalWidth)
+        let innerWidth = max(6, min(desiredInner, max(6, widthCap - 2)))
 
         let isOpen = handler.isOpen && !optionRowIndices.isEmpty
         publishOpenEscapeLabel(context: context, isOpen: isOpen)

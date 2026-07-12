@@ -301,6 +301,12 @@ enum TextFieldSuggestions {
         }
         let palette = context.environment.palette
 
+        // Labels render at the SCREEN width, not the field's: the pop-up is
+        // an overlay that may grow wider than its control, so a narrow field
+        // must not wrap/truncate its option labels.
+        let labelContext = context.withAvailableWidth(
+            max(context.availableWidth, context.environment.terminalWidth))
+
         var rows: [DropdownMenu.Row] = []
         var completions: [String] = []
         var optionRowIndices: [Int] = []
@@ -310,7 +316,7 @@ enum TextFieldSuggestions {
             case .divider:
                 rows.append(.divider)
             case .option(let explicit, let label):
-                let rendered = label.renderToBuffer(context: context).lines.first ?? ""
+                let rendered = label.renderToBuffer(context: labelContext).lines.first ?? ""
                 let completion = explicit ?? rendered.stripped
                 // The row whose completion is the field's current text gets
                 // the ✓ marker — the field's value is "selected".
@@ -355,11 +361,15 @@ enum TextFieldSuggestions {
     ) {
         // Same width recipe as the picker's drop-down: marker column + label
         // + padding, plus a gap column when the scrollbar takes the rightmost
-        // interior column; clamped to the space the field actually has.
+        // interior column. The popup is an overlay, so it may grow WIDER than
+        // its field to fit its options — capped by the screen, anchored at
+        // the field's left edge (growing rightward; the overlay compositor
+        // nudges it left only when the screen's right edge forces it).
         let wantsBar = DropdownMenu.wantsScrollbar(
             rowCount: menu.rows.count, context: context)
         let desiredInner = menu.maxLabelWidth + 4 + (wantsBar ? 1 : 0)
-        let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
+        let widthCap = max(context.availableWidth, context.environment.terminalWidth)
+        let innerWidth = max(6, min(desiredInner, max(6, widthCap - 2)))
 
         let highlightedRow = handler.suggestionHighlight.flatMap { ordinal in
             menu.optionRowIndices.indices.contains(ordinal)
