@@ -20,15 +20,6 @@ private enum PickerMenuConstants {
 
     /// `StateStorage` property index for the persisted hover state.
     static let isHoveredStateIndex = 2
-
-    /// The caret shown when the drop-down is closed (▾).
-    static let closedCaret = "\u{25BE}"
-
-    /// The caret shown when the drop-down is open (▴).
-    static let openCaret = "\u{25B4}"
-
-    /// The marker drawn beside the currently selected option (✓).
-    static let selectedMarker = "\u{2713}"
 }
 
 // MARK: - Picker Menu Core
@@ -90,24 +81,28 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             stateStorage: stateStorage, context: context)
         let isHovered = !isDisabled && !isFocused && hoverBox.value
 
-        // Render every option's label once; reuse for sizing and drawing.
-        let renderedLabels: [String] = entries.map { entry in
-            entry.label.renderToBuffer(context: context).lines.first ?? ""
+        // Render every option's label once (dividers have none); reuse for
+        // sizing and drawing. Row indices match `entries` throughout — the
+        // drop-down highlight is tracked as an option ordinal on the handler
+        // and mapped to a row via `optionRowIndices`.
+        let renderedLabels: [String?] = entries.map { entry in
+            entry.label.map { $0.renderToBuffer(context: context).lines.first ?? "" }
         }
-        let maxLabelWidth = renderedLabels.map(\.strippedLength).max() ?? 0
+        let optionRowIndices = entries.indices.filter { entries[$0].tag != nil }
+        let maxLabelWidth = renderedLabels.compactMap { $0?.strippedLength }.max() ?? 0
 
         // Inner width = label + selection marker + a space + 1 char padding
         // on each side. When the option list overflows, the drop-down shows a
         // scrollbar in its rightmost interior column; reserve one more column so
         // there's a blank gap between the option text and the bar (rather than the
         // text running flush against it) without truncating any label. The
-        // overflow test mirrors the windowing in `renderOpenMenu`.
-        let maxVisibleForWidth = min(entries.count, max(4, context.environment.overlayContentHeight - 2))
-        let wantsScrollbar = entries.count > maxVisibleForWidth
+        // overflow test mirrors the drop-down's windowing.
+        let wantsScrollbar = DropdownMenu.wantsScrollbar(
+            rowCount: entries.count, context: context)
         let desiredInner = maxLabelWidth + 4 + (wantsScrollbar ? 1 : 0)
         let innerWidth = max(6, min(desiredInner, max(6, context.availableWidth - 2)))
 
-        let isOpen = handler.isOpen && !entries.isEmpty
+        let isOpen = handler.isOpen && !optionRowIndices.isEmpty
         publishOpenEscapeLabel(context: context, isOpen: isOpen)
 
         let collapsed = collapsedLine(
@@ -132,7 +127,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         guard isOpen else { return buffer }
         handler.highlightedIndex = min(
-            max(0, handler.highlightedIndex), entries.count - 1)
+            max(0, handler.highlightedIndex), optionRowIndices.count - 1)
         attachOpenPopup(
             to: &buffer,
             context: context,
@@ -140,6 +135,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             persistedFocusID: persistedFocusID,
             innerWidth: innerWidth,
             renderedLabels: renderedLabels,
+            optionRowIndices: optionRowIndices,
             palette: palette
         )
         return buffer
@@ -167,7 +163,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 }
             }
         )
-        let itemValues = entries.map { AnyHashable($0.tag) }
+        // Options only — dividers are not navigable, so the handler's
+        // highlight moves over the option ordinals.
+        let itemValues = entries.compactMap { $0.tag.map { AnyHashable($0) } }
 
         let handlerKey = StateStorage.StateKey(
             identity: context.identity,
@@ -277,80 +275,87 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         )
     }
 
-    /// Builds the open drop-down popup, wires its per-row mouse
-    /// handlers, and attaches it as an overlay layer anchored
-    /// one row below the collapsed control. The in-flow control
-    /// stays a single line so opening the picker never disturbs
-    /// the layout of sibling views and the list draws on top of
-    /// whatever sits beneath it.
+    /// Builds the open drop-down popup via the shared ``DropdownMenu``
+    /// machinery and attaches it as an overlay layer anchored one row below
+    /// the collapsed control. The in-flow control stays a single line so
+    /// opening the picker never disturbs the layout of sibling views and the
+    /// list draws on top of whatever sits beneath it.
     private func attachOpenPopup(
         to buffer: inout FrameBuffer,
         context: RenderContext,
         handler: _PickerMenuHandler,
         persistedFocusID: String,
         innerWidth: Int,
-        renderedLabels: [String],
+        renderedLabels: [String?],
+        optionRowIndices: [Int],
         palette: any Palette
     ) {
-        // Window the options against the visible screen, scrolling (with a
-        // scrollbar) when they don't all fit. Use the published overlay content
-        // height — the area above the status bar / below the header that the
-        // compositor clamps overlays to — not `availableHeight` (a Picker inside a
-        // ScrollView is offered a huge measure budget) nor `terminalHeight` (that
-        // includes the status bar + header, so the drop-down would be sized too
-        // tall and have its bottom border + last rows shaved off against the status
-        // bar). Subtract 2 for the drop-down's own top/bottom border; keep a floor.
-        let maxVisible = min(entries.count, max(4, context.environment.overlayContentHeight - 2))
-        let wantsBar = entries.count > maxVisible
+        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
+        // not reach this helper).
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
 
-        handler.menuScroll.extent = entries.count
-        handler.menuScroll.viewportHeight = maxVisible
-        handler.menuScroll.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
+        // Row content: ` ✓ label` for the selected option, ` · label` rows
+        // otherwise (the marker column keeps labels aligned); dividers pass
+        // through as rules.
+        let rows: [DropdownMenu.Row] = entries.indices.map { index in
+            switch entries[index] {
+            case .divider:
+                return .divider
+            case .option(let tag, _):
+                let marker =
+                    tag == selection.wrappedValue
+                    ? ANSIRenderer.colorize(
+                        DropdownMenu.selectedMarker,
+                        foreground: palette.accent
+                    )
+                    : " "
+                return .option(" " + marker + " " + (renderedLabels[index] ?? ""))
+            }
+        }
+
+        // The handler's highlight is an option ordinal; the drop-down wants a
+        // row index (and reports row indices back from hover/click).
+        let ordinalByRow = Dictionary(
+            uniqueKeysWithValues: optionRowIndices.enumerated().map { ($1, $0) })
+        let highlightedRow =
+            optionRowIndices.indices.contains(handler.highlightedIndex)
+            ? optionRowIndices[handler.highlightedIndex] : nil
+
         // Follow the highlight only when keyboard navigation moved it; wheel/bar
         // scrolling (which doesn't set the flag) then moves the window freely.
-        if handler.scrollFollowPending {
-            ensureHighlightedVisible(handler: handler, maxVisible: maxVisible)
-            handler.scrollFollowPending = false
-        }
-        handler.menuScroll.clampScrollOffset()
-        let scrollOffset = handler.menuScroll.scrollOffset
-        let visibleRange = scrollOffset..<min(entries.count, scrollOffset + maxVisible)
+        let followHighlight = handler.scrollFollowPending
+        handler.scrollFollowPending = false
 
-        let barCells: [String]? =
-            wantsBar
-            ? ScrollbarRenderer.verticalScrollbar(
-                height: maxVisible, extent: entries.count, viewport: maxVisible,
-                offset: scrollOffset, arrows: context.environment.scrollbarArrows,
-                proportional: context.environment.scrollbarProportionalThumb,
-                colors: ScrollbarColors(
-                    thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
-                    arrow: palette.foregroundTertiary))
-            : nil
-
-        let popup = popupLines(
-            innerWidth: innerWidth,
-            renderedLabels: renderedLabels,
-            highlightedIndex: handler.highlightedIndex,
-            visibleRange: visibleRange,
-            barCells: barCells,
+        let focusManager = context.environment.focusManager
+        let captureSelection = selection
+        let captureEntries = entries
+        var popupBuffer = DropdownMenu.popup(
+            DropdownMenu.Configuration(
+                rows: rows,
+                highlightedRow: highlightedRow,
+                innerWidth: innerWidth,
+                scroll: handler.menuScroll,
+                followHighlight: followHighlight,
+                autoRepeatToken: "picker-menu-scrollbar-\(context.identity.path)"),
             context: context,
-            palette: palette
+            onHover: { row in
+                guard let ordinal = ordinalByRow[row] else { return }
+                handler.highlightedIndex = ordinal
+            },
+            onActivate: { row in
+                guard let ordinal = ordinalByRow[row],
+                    let tag = captureEntries[row].tag
+                else { return }
+                focusManager?.focus(id: persistedFocusID)
+                captureSelection.wrappedValue = tag
+                handler.highlightedIndex = ordinal
+                handler.isOpen = false
+            }
         )
-        var popupBuffer = FrameBuffer(lines: popup)
-        attachPopupRowHandlers(
-            to: &popupBuffer,
-            context: context,
-            handler: handler,
-            persistedFocusID: persistedFocusID,
-            innerWidth: innerWidth,
-            visibleRange: visibleRange,
-            wantsBar: wantsBar,
-            maxVisible: maxVisible
-        )
-        if wantsBar {
-            ScrollbarRenderer.driveAutoRepeat(
-                state: handler.menuScroll,
-                token: "picker-menu-scrollbar-\(context.identity.path)", context: context)
+        // A disabled picker never opens (the handler closes it), but belt and
+        // braces: drop the popup's interactivity if we got here disabled.
+        if isDisabled {
+            popupBuffer.hitTestRegions.removeAll()
         }
         buffer.overlays = [
             OverlayLayer(
@@ -363,115 +368,12 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         ]
     }
 
-    /// Adjusts the menu's scroll offset so the highlighted option is within the
-    /// visible window (called only when keyboard navigation moved the highlight).
-    private func ensureHighlightedVisible(handler: _PickerMenuHandler, maxVisible: Int) {
-        let highlighted = handler.highlightedIndex
-        var offset = handler.menuScroll.scrollOffset
-        if highlighted < offset {
-            offset = highlighted
-        } else if highlighted >= offset + maxVisible {
-            offset = highlighted - maxVisible + 1
-        }
-        handler.menuScroll.scrollOffset = offset
-    }
-
-    /// Emits the popup's hit-test regions: a wheel/click-catcher over the whole
-    /// drop-down, the scrollbar (when shown), and one region per *visible* option
-    /// row. Order matters under the dispatcher's reverse-iteration: the wheel
-    /// catcher goes in first (lowest priority — it only catches the fall-through
-    /// wheel and stray clicks), then the bar, then the rows (highest priority for
-    /// their cells). Rows start at y=1 (after the top border).
-    private func attachPopupRowHandlers(
-        to popupBuffer: inout FrameBuffer,
-        context: RenderContext,
-        handler: _PickerMenuHandler,
-        persistedFocusID: String,
-        innerWidth: Int,
-        visibleRange: Range<Int>,
-        wantsBar: Bool,
-        maxVisible: Int
-    ) {
-        // Combine own + cascaded disabled (renderToBuffer's shadowing local does
-        // not reach this helper).
-        let isDisabled = self.isDisabled || !context.environment.isEnabled
-        guard !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        else { return }
-        let focusManager = context.environment.focusManager
-        let captureSelection = selection
-        let contentInner = wantsBar ? max(1, innerWidth - 1) : innerWidth
-
-        // Wheel anywhere over the popup scrolls the window freely (it does not set
-        // the follow flag, so the highlight may scroll out of view — like a desktop
-        // drop-down). Left clicks on chrome/empty area are consumed so they don't
-        // fall through to whatever sits behind the open menu.
-        let menuScroll = handler.menuScroll
-        let wheelID = mouseDispatcher.register { event in
-            if menuScroll.handleWheelEvent(event) { return true }
-            return event.button == .left
-        }
-        popupBuffer.hitTestRegions.append(
-            HitTestRegion(
-                offsetX: 0, offsetY: 0, width: innerWidth + 2, height: maxVisible + 2,
-                handlerID: wheelID))
-
-        // The scrollbar column (rightmost interior column over the option rows).
-        if wantsBar {
-            let barHandler = ScrollbarRenderer.verticalMouseHandler(
-                for: menuScroll, length: maxVisible,
-                arrows: context.environment.scrollbarArrows,
-                proportional: context.environment.scrollbarProportionalThumb,
-                behavior: context.environment.scrollbarClickBehavior)
-            let barID = mouseDispatcher.register(barHandler)
-            popupBuffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: innerWidth, offsetY: 1, width: 1, height: maxVisible,
-                    handlerID: barID))
-        }
-
-        for (local, index) in visibleRange.enumerated() {
-            let entry = entries[index]
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    // Hover follows the cursor across the popup (desktop drop-down
-                    // model): whichever row is under the cursor becomes highlighted.
-                    handler.highlightedIndex = index
-                    return true
-                case .exited:
-                    // Leave the highlight where it is when the cursor leaves.
-                    return true
-                case .pressed where event.button == .left:
-                    return true
-                case .released where event.button == .left:
-                    focusManager?.focus(id: persistedFocusID)
-                    captureSelection.wrappedValue = entry.tag
-                    handler.highlightedIndex = index
-                    handler.isOpen = false
-                    return true
-                default:
-                    return false
-                }
-            }
-            popupBuffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 1,
-                    offsetY: 1 + local,
-                    width: contentInner,
-                    height: 1,
-                    handlerID: mouseHandlerID
-                )
-            )
-        }
-    }
-
     // MARK: Collapsed Control
 
     /// Draws the single-line collapsed control: `▐ Selection      ▾ ▌`.
     private func collapsedLine(
         innerWidth: Int,
-        renderedLabels: [String],
+        renderedLabels: [String?],
         isOpen: Bool,
         isFocused: Bool,
         isHovered: Bool,
@@ -484,16 +386,16 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // The text of the currently selected option, if any.
         let selectedText: String
         if let index = entries.firstIndex(where: { $0.tag == selection.wrappedValue }) {
-            selectedText = renderedLabels[index].stripped
+            selectedText = renderedLabels[index]?.stripped ?? ""
         } else {
             selectedText = ""
         }
 
-        let caret = isOpen ? PickerMenuConstants.openCaret : PickerMenuConstants.closedCaret
+        let caret = isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret
 
         // Content layout: leading space + text + caret + trailing space.
         let textWidth = max(0, innerWidth - 3)
-        let fittedText = fit(selectedText, to: textWidth)
+        let fittedText = DropdownMenu.fit(selectedText, to: textWidth)
         let content = " " + fittedText + caret + " "
 
         // Same hover treatment as Button: bump the background
@@ -541,97 +443,6 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             bold: isFocused && !isDisabled
         )
         return openCap + styledContent + closeCap
-    }
-
-    // MARK: Drop-down Popup
-
-    /// Draws the bordered drop-down list shown below the collapsed control.
-    private func popupLines(
-        innerWidth: Int,
-        renderedLabels: [String],
-        highlightedIndex: Int,
-        visibleRange: Range<Int>,
-        barCells: [String]?,
-        context: RenderContext,
-        palette: any Palette
-    ) -> [String] {
-        let borderStyle = context.environment.appearance.borderStyle
-        // While the drop-down is open the picker holds keyboard focus, so we
-        // pulse the highlighted row's background between a dim and a bright
-        // accent — the same affordance ``List`` uses for its focused row —
-        // to make it visually obvious that arrow keys and Enter are driving
-        // the drop-down rather than whatever sits behind it.
-        let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-        let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax)
-        let indicator = SelectionIndicator.resolve(isFocused: true, context: context)
-        let highlightBg = indicator.color(dim: dimAccent, bright: brightAccent)
-        // The border colour echoes the highlight pulse at lower intensity so
-        // the drop-down's frame reads as part of the same active control,
-        // not as a static element with a moving inside.
-        let borderColor = indicator.color(
-            dim: palette.accent.opacity(ViewConstants.focusBorderDim), bright: palette.accent)
-
-        var lines: [String] = [
-            BorderRenderer.standardTopBorder(
-                style: borderStyle,
-                innerWidth: innerWidth,
-                color: borderColor
-            )
-        ]
-
-        // When a scrollbar is shown it takes the rightmost interior column, so the
-        // option content fits the remaining width and each row is composed manually
-        // (border + content + bar cell + border) — mirroring `contentLine`.
-        let verticalBorder = ANSIRenderer.colorize(String(borderStyle.vertical), foreground: borderColor)
-        let contentInner = barCells == nil ? innerWidth : max(1, innerWidth - 1)
-
-        for (local, index) in visibleRange.enumerated() {
-            let entry = entries[index]
-            let isSelected = entry.tag == selection.wrappedValue
-            let isHighlighted = index == highlightedIndex
-
-            let marker =
-                isSelected
-                ? ANSIRenderer.colorize(
-                    PickerMenuConstants.selectedMarker,
-                    foreground: palette.accent
-                )
-                : " "
-            let rowContent = " " + marker + " " + renderedLabels[index]
-
-            if let barCells {
-                let fitted = fit(rowContent, to: contentInner)
-                let styled = fitted.withPersistentBackground(isHighlighted ? highlightBg : nil)
-                let cell = local < barCells.count ? barCells[local] : " "
-                lines.append(verticalBorder + styled + ANSIRenderer.reset + cell + verticalBorder)
-            } else {
-                lines.append(
-                    BorderRenderer.standardContentLine(
-                        content: rowContent,
-                        innerWidth: innerWidth,
-                        style: borderStyle,
-                        color: borderColor,
-                        backgroundColor: isHighlighted ? highlightBg : nil
-                    )
-                )
-            }
-        }
-
-        lines.append(
-            BorderRenderer.standardBottomBorder(
-                style: borderStyle,
-                innerWidth: innerWidth,
-                color: borderColor
-            )
-        )
-        return lines
-    }
-
-    /// Truncates or pads a plain string to exactly `width` visible columns.
-    private func fit(_ text: String, to width: Int) -> String {
-        text.strippedLength > width
-            ? text.ansiAwarePrefix(visibleCount: width)
-            : text.padToVisibleWidth(width)
     }
 }
 

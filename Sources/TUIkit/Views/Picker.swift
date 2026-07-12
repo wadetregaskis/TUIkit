@@ -7,13 +7,14 @@
 // MARK: - Picker Option Extraction
 
 /// A picker option recovered from a tagged view, before its tag has been
-/// matched to a concrete selection-value type.
-struct _RawPickerOption {
-    /// The option's tag, still type-erased.
-    let tagValue: AnyHashable
+/// matched to a concrete selection-value type — or a ``Divider`` separating
+/// option groups.
+enum _RawPickerOption {
+    /// A tagged option: the tag (still type-erased) and its label view.
+    case option(tagValue: AnyHashable, label: AnyView)
 
-    /// The option's label view.
-    let label: AnyView
+    /// A rule between option groups (a ``Divider`` in the picker content).
+    case divider
 }
 
 /// A protocol for views that can contribute options to a ``Picker``.
@@ -29,7 +30,13 @@ protocol PickerOptionProvider {
 
 extension _TaggedView: PickerOptionProvider {
     func pickerOptions() -> [_RawPickerOption] {
-        [_RawPickerOption(tagValue: tagValue, label: AnyView(content))]
+        [.option(tagValue: tagValue, label: AnyView(content))]
+    }
+}
+
+extension Divider: PickerOptionProvider {
+    func pickerOptions() -> [_RawPickerOption] {
+        [.divider]
     }
 }
 
@@ -63,16 +70,45 @@ extension ForEach: PickerOptionProvider {
     }
 }
 
+extension ConditionalView: PickerOptionProvider {
+    func pickerOptions() -> [_RawPickerOption] {
+        switch self {
+        case .trueContent(let content):
+            (content as? PickerOptionProvider)?.pickerOptions() ?? []
+        case .falseContent(let content):
+            (content as? PickerOptionProvider)?.pickerOptions() ?? []
+        }
+    }
+}
+
+extension Optional: PickerOptionProvider where Wrapped: View {
+    func pickerOptions() -> [_RawPickerOption] {
+        self.flatMap { ($0 as? PickerOptionProvider)?.pickerOptions() } ?? []
+    }
+}
+
 // MARK: - Picker Entry
 
 /// A picker option whose tag has been resolved to the picker's concrete
-/// selection-value type.
-struct _PickerEntry<SelectionValue: Hashable> {
-    /// The value selected when this option is chosen.
-    let tag: SelectionValue
+/// selection-value type — or a divider between option groups.
+enum _PickerEntry<SelectionValue: Hashable> {
+    /// An option: the value selected when it is chosen, and its label view.
+    case option(tag: SelectionValue, label: AnyView)
 
-    /// The option's label view.
-    let label: AnyView
+    /// A rule between option groups. Never selectable.
+    case divider
+
+    /// The option's tag, or `nil` for a divider.
+    var tag: SelectionValue? {
+        if case .option(let tag, _) = self { return tag }
+        return nil
+    }
+
+    /// The option's label, or `nil` for a divider.
+    var label: AnyView? {
+        if case .option(_, let label) = self { return label }
+        return nil
+    }
 }
 
 // MARK: - Picker
@@ -175,23 +211,37 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
     }
 
     /// Walks the content tree and resolves every tagged option whose tag
-    /// matches the picker's selection-value type.
+    /// matches the picker's selection-value type. ``Divider``s in the content
+    /// pass through as separator entries (menu style only), with edge and
+    /// adjacent dividers collapsed so conditional groups never leave a stray
+    /// rule.
     private func resolvedEntries() -> [_PickerEntry<SelectionValue>] {
         guard let provider = content as? PickerOptionProvider else { return [] }
-        return provider.pickerOptions().compactMap { raw in
-            guard let value = raw.tagValue.base as? SelectionValue else { return nil }
-            return _PickerEntry(tag: value, label: raw.label)
+        let entries = provider.pickerOptions().compactMap { raw -> _PickerEntry<SelectionValue>? in
+            switch raw {
+            case .option(let tagValue, let label):
+                guard let value = tagValue.base as? SelectionValue else { return nil }
+                return .option(tag: value, label: label)
+            case .divider:
+                return .divider
+            }
+        }
+        return DropdownMenu.normalizedEntries(entries) { entry in
+            if case .divider = entry { return true }
+            return false
         }
     }
 
     /// Builds the radio-button group used for the inline / radio-group
     /// styles, reusing ``RadioButtonGroup`` rather than duplicating its
-    /// focus and keyboard machinery.
+    /// focus and keyboard machinery. Dividers only make sense in a drop-down
+    /// list, so they are skipped here.
     private func radioGroup(
         entries: [_PickerEntry<SelectionValue>]
     ) -> RadioButtonGroup<SelectionValue> {
-        let items = entries.map { entry in
-            RadioButtonItem(entry.tag) { entry.label }
+        let items = entries.compactMap { entry -> RadioButtonItem<SelectionValue>? in
+            guard case .option(let tag, let label) = entry else { return nil }
+            return RadioButtonItem(tag) { label }
         }
         let group = RadioButtonGroup(selection: selection, items: items)
         let identified = focusID.map { group.focusID($0) } ?? group

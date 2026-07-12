@@ -127,9 +127,9 @@ struct PickerTests {
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
 
-        let entries = [
-            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
-            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
         ]
         let core = _PickerMenuCore(
             entries: entries,
@@ -190,7 +190,7 @@ struct PickerTests {
         var choice = AnyHashable("opt-0")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
         let entries = (0..<20).map {
-            _PickerEntry(tag: AnyHashable("opt-\($0)"), label: AnyView(Text("Option \($0)")))
+            _PickerEntry.option(tag: AnyHashable("opt-\($0)"), label: AnyView(Text("Option \($0)")))
         }
         let core = _PickerMenuCore(
             entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
@@ -235,9 +235,9 @@ struct PickerTests {
         let context = createTestContext()
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
-        let entries = [
-            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
-            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
         ]
         let core = _PickerMenuCore(
             entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
@@ -269,9 +269,9 @@ struct PickerTests {
         let context = createTestContext()
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
-        let entries = [
-            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
-            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
         ]
         let core = _PickerMenuCore(
             entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
@@ -304,9 +304,9 @@ struct PickerTests {
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
 
-        let entries = [
-            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
-            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
         ]
         let core = _PickerMenuCore(
             entries: entries,
@@ -350,9 +350,9 @@ struct PickerTests {
 
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
-        let entries = [
-            _PickerEntry(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
-            _PickerEntry(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
         ]
         let core = _PickerMenuCore(
             entries: entries,

@@ -291,27 +291,11 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             propertyIndex: StateIndex.focusID
         )
 
-        // Get or create persistent handler from state storage.
-        // The handler maintains cursor position across renders.
-        let handlerKey = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: StateIndex.handler)
-        let handlerBox: StateBox<TextFieldHandler> = stateStorage.storage(
-            for: handlerKey,
-            default: TextFieldHandler(
-                focusID: persistedFocusID,
-                text: text,
-                canBeFocused: !isDisabled
-            )
-        )
-        let handler = handlerBox.value
-
-        // Keep handler in sync with current values
-        handler.text = text
-        handler.canBeFocused = !isDisabled
-        handler.onSubmit = onSubmitAction
-        handler.textContentType = context.environment.textContentType
-        handler.clampCursorPosition()
-
+        let handler = resolveHandler(
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            isDisabled: isDisabled,
+            context: context)
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
@@ -342,6 +326,21 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 """)
         }
 
+        // Input suggestions (``View/textInputSuggestions(_:)``): sync the
+        // handler's completions and reserve two trailing columns for the ▾
+        // affordance that marks the field as a combo box.
+        let suggestionMenu =
+            isDisabled
+            ? nil
+            : TextFieldSuggestions.prepare(
+                entries: context.environment.textInputSuggestions,
+                handler: handler,
+                currentText: text.wrappedValue,
+                isFocused: isFocused,
+                context: context)
+        let textWidth =
+            suggestionMenu != nil ? max(minContentWidth, contentWidth - 2) : contentWidth
+
         // Build the text field content using shared renderer. The entered text
         // honours a `.control(.textField)` cascade foreground (`.textFieldTextStyle`).
         let cascaded = context.environment.styleCascade.resolve(
@@ -363,7 +362,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             palette: palette,
             cursorStyle: cursorStyle,
             cursorTimer: context.environment.cursorTimer,
-            contentWidth: contentWidth
+            contentWidth: textWidth
         )
 
         // Wrap with half-block caps. Hover bumps the cap tint so
@@ -382,7 +381,20 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             : surface
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
-        var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
+
+        // The ▾/▴ combo-box affordance sits inside the field surface, against
+        // the trailing cap.
+        let disclosure: String
+        if let suggestionMenu {
+            let caret = suggestionMenu.isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret
+            disclosure = ANSIRenderer.colorize(
+                " " + caret,
+                foreground: palette.foregroundSecondary,
+                background: surface)
+        } else {
+            disclosure = ""
+        }
+        var buffer = FrameBuffer(text: openCap + fieldContent + disclosure + closeCap)
 
         // Mouse: click focuses the field and drops the caret at the clicked
         // column; dragging selects. Hover rides on the same region. Shared with
@@ -394,10 +406,43 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 handler: handler,
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
-                contentWidth: contentWidth)
+                contentWidth: textWidth)
+        }
+
+        if let suggestionMenu, suggestionMenu.isOpen {
+            TextFieldSuggestions.attach(
+                menu: suggestionMenu, to: &buffer, handler: handler, context: context)
         }
 
         return buffer
+    }
+
+    /// Fetches (or creates) the persistent editing handler from StateStorage
+    /// — it maintains the cursor position across renders — and syncs the
+    /// per-frame bindings on it.
+    private func resolveHandler(
+        persistedFocusID: String,
+        stateStorage: StateStorage,
+        isDisabled: Bool,
+        context: RenderContext
+    ) -> TextFieldHandler {
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
+        let handlerBox: StateBox<TextFieldHandler> = stateStorage.storage(
+            for: handlerKey,
+            default: TextFieldHandler(
+                focusID: persistedFocusID,
+                text: text,
+                canBeFocused: !isDisabled
+            )
+        )
+        let handler = handlerBox.value
+        handler.text = text
+        handler.canBeFocused = !isDisabled
+        handler.onSubmit = onSubmitAction
+        handler.textContentType = context.environment.textContentType
+        handler.clampCursorPosition()
+        return handler
     }
 }
 

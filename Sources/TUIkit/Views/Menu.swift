@@ -15,6 +15,10 @@ public struct MenuItem: Identifiable {
     /// An optional keyboard shortcut (e.g., "1", "a", "q").
     public let shortcut: Character?
 
+    /// Whether this item is a separator rule rather than a selectable option.
+    /// See ``divider``.
+    public let isDivider: Bool
+
     /// Creates a menu item.
     ///
     /// - Parameters:
@@ -25,6 +29,27 @@ public struct MenuItem: Identifiable {
         self.id = id ?? label
         self.label = label
         self.shortcut = shortcut
+        self.isDivider = false
+    }
+
+    /// A separator rule between groups of items.
+    ///
+    /// Dividers are purely visual: keyboard navigation skips over them and
+    /// clicks on them do nothing.
+    ///
+    /// - Note: Every divider shares one `id` ("\u{2500}divider\u{2500}"), so
+    ///   give dividers explicit identity (`MenuItem(id:label:)` is not it —
+    ///   use position) if you diff a menu's items by `id` yourself.
+    public static var divider: Self {
+        Self(divider: ())
+    }
+
+    /// Backs ``divider`` (the public init always creates selectable items).
+    private init(divider: Void) {
+        self.id = "\u{2500}divider\u{2500}"
+        self.label = ""
+        self.shortcut = nil
+        self.isDivider = true
     }
 }
 
@@ -218,8 +243,9 @@ private struct _MenuCore: View, Renderable, Layoutable {
         // Calculate the content width for full-width selection bar
         let contentWidth = maxItemWidth + 2  // +2 for padding
 
-        // Track the divider line index (for T-junction rendering)
-        var dividerLineIndex: Int?
+        // Track divider line indices (for T-junction rendering): the rule
+        // under the title, plus any `.divider` items.
+        var dividerLineIndices: Set<Int> = []
 
         // Title if present (a blank/whitespace title is treated as no title —
         // otherwise it would reserve an empty title row plus a divider).
@@ -236,7 +262,7 @@ private struct _MenuCore: View, Renderable, Layoutable {
             lines.append(" " + titleStyled)
 
             // Mark divider position - actual divider will be rendered by applyBorder
-            dividerLineIndex = lines.count
+            dividerLineIndices.insert(lines.count)
             lines.append("")  // Placeholder for divider
         }
 
@@ -244,6 +270,13 @@ private struct _MenuCore: View, Renderable, Layoutable {
         let currentSelection = selectionBinding?.wrappedValue ?? selectedIndex
 
         for (index, item) in items.enumerated() {
+            if item.isDivider {
+                // A separator rule between item groups — rendered by
+                // applyBorder with T-junctions, skipped by navigation.
+                dividerLineIndices.insert(lines.count)
+                lines.append("")  // Placeholder for divider
+                continue
+            }
             let isSelected = index == currentSelection
 
             // Build the label with optional shortcut
@@ -288,89 +321,88 @@ private struct _MenuCore: View, Renderable, Layoutable {
             to: contentBuffer,
             style: effectiveBorderStyle,
             color: borderColor,
-            dividerLineIndex: dividerLineIndex,
+            dividerLineIndices: dividerLineIndices,
             palette: palette
         )
 
-        // Mouse: scroll-wheel anywhere on the menu changes selection;
-        // a left-click on an item row selects it. Item rows live inside
-        // the border (top border + title/divider if present), so we
-        // translate the buffer-relative y back to an item index before
-        // forwarding the event.
-        if !context.isMeasuring,
-            let binding = selectionBinding,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            let menuItems = items
-            let selectCallback = onSelect
-            let itemsStartRow = 1 + (title != nil ? 2 : 0)  // top border + (title + divider)
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.button {
-                case .scrollUp:
-                    let current = binding.wrappedValue
-                    binding.wrappedValue = current > 0 ? current - 1 : menuItems.count - 1
-                    return true
-                case .scrollDown:
-                    let current = binding.wrappedValue
-                    binding.wrappedValue = current < menuItems.count - 1 ? current + 1 : 0
-                    return true
-                case .left where event.phase == .released:
-                    let itemIndex = event.y - itemsStartRow
-                    if itemIndex >= 0 && itemIndex < menuItems.count {
-                        binding.wrappedValue = itemIndex
-                        selectCallback?(itemIndex)
-                        return true
-                    }
-                    return false
-                case .left where event.phase == .pressed:
-                    // Claim presses inside item rows so the matching
-                    // release routes back here for the activation above.
-                    let itemIndex = event.y - itemsStartRow
-                    return itemIndex >= 0 && itemIndex < menuItems.count
-                default:
-                    return false
-                }
-            }
-            contentBuffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: contentBuffer.width,
-                    height: contentBuffer.height,
-                    handlerID: mouseHandlerID
-                )
-            )
-        }
+        registerMouseHandlers(on: &contentBuffer, context: context)
 
         return contentBuffer
     }
 
+    /// Mouse: scroll-wheel anywhere on the menu changes selection; a
+    /// left-click on an item row selects it. Item rows live inside the border
+    /// (top border + title/divider if present), so the buffer-relative y is
+    /// translated back to an item index before forwarding the event.
+    private func registerMouseHandlers(
+        on contentBuffer: inout FrameBuffer, context: RenderContext
+    ) {
+        guard !context.isMeasuring,
+            let binding = selectionBinding,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        let menuItems = items
+        let selectCallback = onSelect
+        let itemsStartRow = 1 + (title != nil ? 2 : 0)  // top border + (title + divider)
+        let mouseHandlerID = mouseDispatcher.register { event in
+            switch event.button {
+            case .scrollUp:
+                binding.wrappedValue = Self.nextSelectableIndex(
+                    from: binding.wrappedValue, by: -1, in: menuItems)
+                return true
+            case .scrollDown:
+                binding.wrappedValue = Self.nextSelectableIndex(
+                    from: binding.wrappedValue, by: 1, in: menuItems)
+                return true
+            case .left where event.phase == .released:
+                let itemIndex = event.y - itemsStartRow
+                if itemIndex >= 0 && itemIndex < menuItems.count,
+                    !menuItems[itemIndex].isDivider
+                {
+                    binding.wrappedValue = itemIndex
+                    selectCallback?(itemIndex)
+                    return true
+                }
+                return false
+            case .left where event.phase == .pressed:
+                // Claim presses inside item rows so the matching
+                // release routes back here for the activation above.
+                // (Divider rows are inert, so their presses fall through.)
+                let itemIndex = event.y - itemsStartRow
+                return itemIndex >= 0 && itemIndex < menuItems.count
+                    && !menuItems[itemIndex].isDivider
+            default:
+                return false
+            }
+        }
+        contentBuffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0,
+                offsetY: 0,
+                width: contentBuffer.width,
+                height: contentBuffer.height,
+                handlerID: mouseHandlerID
+            )
+        )
+    }
+
     /// Registers key handlers for menu navigation.
     private func registerKeyHandlers(binding: Binding<Int>, context: RenderContext) {
-        let itemCount = items.count
         let menuItems = items
         let selectCallback = onSelect
 
         context.environment.keyEventDispatcher!.addHandler { event in
             switch event.key {
             case .up:
-                // Move selection up
-                let current = binding.wrappedValue
-                if current > 0 {
-                    binding.wrappedValue = current - 1
-                } else {
-                    binding.wrappedValue = itemCount - 1  // Wrap to bottom
-                }
+                // Move selection up, wrapping and skipping dividers
+                binding.wrappedValue = Self.nextSelectableIndex(
+                    from: binding.wrappedValue, by: -1, in: menuItems)
                 return true
 
             case .down:
-                // Move selection down
-                let current = binding.wrappedValue
-                if current < itemCount - 1 {
-                    binding.wrappedValue = current + 1
-                } else {
-                    binding.wrappedValue = 0  // Wrap to top
-                }
+                // Move selection down, wrapping and skipping dividers
+                binding.wrappedValue = Self.nextSelectableIndex(
+                    from: binding.wrappedValue, by: 1, in: menuItems)
                 return true
 
             case .enter:
@@ -397,6 +429,20 @@ private struct _MenuCore: View, Renderable, Layoutable {
         }
     }
 
+    /// The next selectable index from `current`, stepping by `delta` with
+    /// wrap-around and skipping dividers. Returns `current` unchanged when
+    /// the menu has no selectable items.
+    private static func nextSelectableIndex(
+        from current: Int, by delta: Int, in items: [MenuItem]
+    ) -> Int {
+        guard items.contains(where: { !$0.isDivider }) else { return current }
+        var index = current
+        repeat {
+            index = (index + delta + items.count) % items.count
+        } while items[index].isDivider
+        return index
+    }
+
     /// The maximum width of menu items (for sizing).
     private var maxItemWidth: Int {
         items.map { item -> Int in
@@ -411,12 +457,12 @@ private struct _MenuCore: View, Renderable, Layoutable {
     ///   - buffer: The content buffer to wrap with border.
     ///   - style: The border style to use.
     ///   - color: The border color (optional).
-    ///   - dividerLineIndex: If set, renders a horizontal divider with T-junctions at this line index.
+    ///   - dividerLineIndices: Line indices rendered as horizontal dividers with T-junctions.
     private func applyBorder(
         to buffer: FrameBuffer,
         style: BorderStyle,
         color: Color?,
-        dividerLineIndex: Int? = nil,
+        dividerLineIndices: Set<Int> = [],
         palette: any Palette
     ) -> FrameBuffer {
         guard !buffer.isEmpty else { return buffer }
@@ -428,7 +474,7 @@ private struct _MenuCore: View, Renderable, Layoutable {
         result.append(BorderRenderer.standardTopBorder(style: style, innerWidth: innerWidth, color: borderForeground))
 
         for (index, line) in buffer.lines.enumerated() {
-            if let dividerIndex = dividerLineIndex, index == dividerIndex {
+            if dividerLineIndices.contains(index) {
                 result.append(BorderRenderer.standardDivider(style: style, innerWidth: innerWidth, color: borderForeground))
             } else {
                 result.append(

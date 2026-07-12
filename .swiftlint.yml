@@ -171,6 +171,11 @@ type_name:
     - _PickerMenuCore
     - _PickerMenuHandler
     - _RawPickerOption
+    # Input-suggestions (combo box) infrastructure: the entry model, and the
+    # public wrapper view created by `.textInputCompletion(_:)` (public so the
+    # modifier's `some View` can name it, `_`-prefixed as SwiftUI does).
+    - _TextSuggestionEntry
+    - _TextCompletionView
     # Internal Form row/section model value types.
     - _FormRow
     - _FormRowKind

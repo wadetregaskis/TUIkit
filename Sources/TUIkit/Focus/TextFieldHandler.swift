@@ -85,6 +85,29 @@ final class TextFieldHandler: Focusable {
     /// Maximum number of undo states to keep.
     private let maxUndoStates = 50
 
+    // MARK: Input suggestions (``View/textInputSuggestions(_:)``)
+
+    /// The completions of the field's current suggestions, in menu order
+    /// (options only — dividers are not navigable). Synced by the field's
+    /// render pass; empty when the field has no suggestions.
+    var suggestionCompletions: [String] = []
+
+    /// The highlighted suggestion (an index into ``suggestionCompletions``),
+    /// or `nil` while the keyboard is editing the field text. Down moves the
+    /// highlight into the menu; Up from the first row returns to the caret.
+    var suggestionHighlight: Int?
+
+    /// Set when Escape closed the suggestions menu; any edit re-opens it.
+    var suggestionsDismissed = false
+
+    /// The suggestions menu's window scroll (see ``DropdownMenu``).
+    let suggestionScroll = ScrollAxis()
+
+    /// Set when keyboard navigation moved the highlight, so the next render
+    /// scrolls the menu window to keep it visible. Wheel/bar scrolling leaves
+    /// it `false` so those move the window freely.
+    var suggestionFollowPending = false
+
     /// Creates a text field handler.
     ///
     /// - Parameters:
@@ -236,6 +259,9 @@ extension TextFieldHandler {
 extension TextFieldHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         normalizeStaleState()
+        if let handled = handleSuggestionKeyEvent(event) {
+            return handled
+        }
         switch event.key {
         case .space:
             insertCharacter(" ")
@@ -420,6 +446,79 @@ extension TextFieldHandler {
     }
 }
 
+// MARK: - Input Suggestions
+
+extension TextFieldHandler {
+    /// True while the suggestions menu is showing: the field has suggestions
+    /// (synced by its render pass) and Escape hasn't hidden them. Only
+    /// consulted while focused — that's the only time key events arrive.
+    var suggestionsActive: Bool {
+        !suggestionCompletions.isEmpty && !suggestionsDismissed
+    }
+
+    /// Handles the keys the open suggestions menu consumes. Returns `nil`
+    /// when the event is not menu navigation, so normal field handling
+    /// proceeds — typing always keeps editing the field.
+    private func handleSuggestionKeyEvent(_ event: KeyEvent) -> Bool? {
+        guard suggestionsActive, !event.shift, !event.alt, !event.ctrl else { return nil }
+        switch event.key {
+        case .down:
+            // Down enters the menu (from the caret) and then walks it,
+            // stopping at the last row — the NSComboBox model, not the
+            // picker's wrap-around: the field "above" the first row makes
+            // wrapping read as a jump.
+            if let highlight = suggestionHighlight {
+                suggestionHighlight = min(highlight + 1, suggestionCompletions.count - 1)
+            } else {
+                suggestionHighlight = 0
+            }
+            suggestionFollowPending = true
+            return true
+        case .up:
+            // Up from the first row returns the keyboard to the caret; with
+            // no highlight it falls through to the field's usual Up
+            // behaviour (caret to start).
+            guard let highlight = suggestionHighlight else { return nil }
+            suggestionHighlight = highlight > 0 ? highlight - 1 : nil
+            suggestionFollowPending = true
+            return true
+        case .enter:
+            guard let highlight = suggestionHighlight else { return nil }
+            acceptSuggestion(at: highlight)
+            return true
+        case .escape:
+            suggestionsDismissed = true
+            suggestionHighlight = nil
+            return true
+        default:
+            return nil
+        }
+    }
+
+    /// Fills the field with the given completion, closes the menu, and fires
+    /// the submit action — picking from the list commits a value, the
+    /// combo-box (NSComboBox) convention. (SwiftUI's `textInputSuggestions`
+    /// doesn't document its submit behaviour; the terminal combo-box reads
+    /// better when a pick acts immediately.)
+    func acceptSuggestion(at index: Int) {
+        guard suggestionCompletions.indices.contains(index) else { return }
+        pushUndoState()
+        text.wrappedValue = suggestionCompletions[index]
+        cursorPosition = text.wrappedValue.count
+        clearSelection()
+        suggestionHighlight = nil
+        suggestionsDismissed = true
+        onSubmit?()
+    }
+
+    /// Any edit returns the keyboard to the caret and re-opens a dismissed
+    /// menu — typing is how the user asks for (fresh) suggestions.
+    func resetSuggestionNavigation() {
+        suggestionHighlight = nil
+        suggestionsDismissed = false
+    }
+}
+
 // MARK: - Text Editing
 
 extension TextFieldHandler {
@@ -431,6 +530,7 @@ extension TextFieldHandler {
     func insertCharacter(_ char: Character) {
         guard textContentType?.isAllowed(char) ?? true else { return }
 
+        resetSuggestionNavigation()
         pushUndoState()
 
         // Replace selection if present
@@ -465,6 +565,7 @@ extension TextFieldHandler {
     ///
     /// If text is selected, the entire selection is deleted.
     func deleteBackward() {
+        resetSuggestionNavigation()
         // Delete selection if present
         if let range = selectionRange {
             pushUndoState()
@@ -486,6 +587,7 @@ extension TextFieldHandler {
     ///
     /// If text is selected, the entire selection is deleted.
     func deleteForward() {
+        resetSuggestionNavigation()
         // Delete selection if present
         if let range = selectionRange {
             pushUndoState()
@@ -616,6 +718,7 @@ extension TextFieldHandler {
     /// Restores the previous text state from the undo stack.
     func undo() {
         guard let previous = undoStack.popLast() else { return }
+        resetSuggestionNavigation()
         text.wrappedValue = previous.text
         cursorPosition = min(previous.cursor, previous.text.count)
         clearSelection()
@@ -631,6 +734,8 @@ extension TextFieldHandler {
     }
 
     func onFocusLost() {
-        // Nothing special needed when losing focus
+        // A fresh focus session starts with the menu showing and the
+        // keyboard at the caret.
+        resetSuggestionNavigation()
     }
 }

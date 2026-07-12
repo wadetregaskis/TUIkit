@@ -63,6 +63,7 @@ extension TextFieldHandler {
     /// - Parameter string: The text to insert.
     func insertText(_ string: String) {
         guard !string.isEmpty else { return }
+        resetSuggestionNavigation()
 
         // For single-line text fields, strip newlines from pasted text.
         var sanitized = string.replacingOccurrences(of: "\n", with: "")
