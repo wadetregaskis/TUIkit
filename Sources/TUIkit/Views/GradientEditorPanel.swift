@@ -16,7 +16,8 @@ import TUIkitStyling
 /// TUIkit gradients are evenly-spaced colour stops interpolated piecewise
 /// (`TrackRenderer.gradientColor`); the editor shows that exact interpolation
 /// live in its preview strip. Below it, the stop strip selects a stop (click
-/// its swatch), the action row inserts / removes / reorders stops, preset and
+/// its swatch) and reorders them (drag a swatch onto another), the action row
+/// inserts / removes / reorders stops, preset and
 /// recently-applied gradients offer one-click starting points, and an embedded
 /// colour panel — the same preview-plus-tabs body ``ColorPickerPanel`` wraps —
 /// edits the selected stop in place, rather than nesting a second dialog.
@@ -50,6 +51,10 @@ public struct GradientEditorPanel: View {
     /// The index of the stop the embedded colour panel is editing. Clamped on
     /// every read, so external shrinking of `stops` can't strand it.
     @State private var selectedStop = 0
+
+    /// The stop whose chip a dragged stop currently hovers, if any — drives
+    /// the drop cue in the strip.
+    @State private var dropTargetStop: Int?
 
     /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
     /// the dismissal callback must read the values as they are when it fires,
@@ -175,11 +180,19 @@ public struct GradientEditorPanel: View {
     /// label — so the chips carry no numbering and no chrome beside them.
     /// The CENTRE cell doubles as the state indicator: a readable-contrast
     /// bullet marks the stop the panel below is editing, pulsing while the
-    /// chip holds keyboard focus, dim as a hover hint (``_StopChipStyle``).
-    /// Every state re-colours that one cell in place, so nothing ever shifts.
+    /// chip holds keyboard focus, dim as a hover or drop-target hint
+    /// (``_StopChipStyle``). Every state re-colours that one cell in place,
+    /// so nothing ever shifts.
+    ///
+    /// Chips also drag: dropping one on another moves the dragged stop to
+    /// that position (`movingStop(_:from:to:)`), an alternative to the ◀ ▶
+    /// single-step buttons. Click-to-select survives the `.draggable`
+    /// wrapper because a press released without movement forwards to the
+    /// button as an ordinary click.
     private var stopStrip: some View {
         let list = stops.wrappedValue
         let selection = clampedSelection
+        let dropTarget = dropTargetStop
         let rows = Self.wrappedRows(
             itemWidths: Array(repeating: Self.stopChipWidth, count: list.count),
             spacing: 1, budget: Self.previewWidth)
@@ -187,14 +200,36 @@ public struct GradientEditorPanel: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 1) {
                     ForEach(row, id: \.self) { index in
-                        Button("") { selectedStop = index }
-                            .buttonStyle(
-                                _StopChipStyle(
-                                    color: list[index], isSelected: index == selection))
+                        stopChip(
+                            index: index, color: list[index],
+                            isSelected: index == selection,
+                            isDropTarget: index == dropTarget)
                     }
                 }
             }
         }
+    }
+
+    private func stopChip(
+        index: Int, color: Color, isSelected: Bool, isDropTarget: Bool
+    ) -> some View {
+        Button("") { selectedStop = index }
+            .buttonStyle(
+                _StopChipStyle(
+                    color: color, isSelected: isSelected, isDropTarget: isDropTarget))
+            .draggable(index)
+            .dropDestination(for: Int.self) { dropped, _ in
+                guard let source = dropped.first, source != index else { return false }
+                let (updated, selected) = Self.movingStop(
+                    stops.wrappedValue, from: source, to: index)
+                stops.wrappedValue = updated
+                selectedStop = selected
+                return true
+            } isTargeted: { targeted in
+                // The session untargets the old chip BEFORE targeting the
+                // new one, so plain assignment tracks the transition.
+                dropTargetStop = targeted ? index : nil
+            }
     }
 
     /// The cell width of every stop chip: a 3-cell swatch — wide enough to
@@ -345,6 +380,21 @@ extension GradientEditorPanel {
         }
         var updated = stops
         updated.swapAt(index, destination)
+        return (updated, destination)
+    }
+
+    /// Moves the stop at `source` to `destination` (remove + insert — the
+    /// stops between them shift one place, drag-to-reorder semantics, unlike
+    /// the neighbour SWAP of `movingStop(_:at:by:)`) and follows it with the
+    /// selection. Out-of-range or same-place moves are no-ops.
+    static func movingStop(_ stops: [Color], from source: Int, to destination: Int) -> ([Color], selected: Int) {
+        guard stops.indices.contains(source), stops.indices.contains(destination),
+            source != destination
+        else {
+            return (stops, max(0, min(source, stops.count - 1)))
+        }
+        var updated = stops
+        updated.insert(updated.remove(at: source), at: destination)
         return (updated, destination)
     }
 }

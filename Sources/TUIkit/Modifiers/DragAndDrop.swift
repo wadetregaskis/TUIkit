@@ -22,10 +22,11 @@ import TUIkitCore
 /// any cursor movement begins a drag session (the payload is evaluated
 /// then), the drag preview follows the cursor as a floating overlay, and
 /// release either drops on a targeted ``View/dropDestination(for:action:isTargeted:)``
-/// or cancels. A press released without movement is treated as a click and
-/// falls through to nothing — like a dialog title bar, a draggable view's
-/// surface is a drag handle, so interactive children are better placed
-/// outside it.
+/// or cancels. A press released without movement is a CLICK, forwarded to
+/// the interactive child under the cursor — so a `Button` (or any control)
+/// wrapped in `.draggable` still clicks, matching SwiftUI. Hover
+/// transitions forward the same way, so the child keeps its hover
+/// affordance. Only genuine drags (press + movement) are consumed here.
 public struct DraggableModifier<Content: View, Payload>: View {
     let content: Content
     let payload: () -> Payload
@@ -61,27 +62,82 @@ extension DraggableModifier: Renderable, Layoutable {
         previewBuffer.hitTestRegions = []
         previewBuffer.overlays = []
 
+        // The content's interactive regions, captured WITH their handler
+        // closures. Clicks and hover forward to them below — and that must
+        // go through closures, never ids: handler ids reset every render
+        // pass while a press or hover routinely spans one (a consumed press
+        // requests a re-render), so an id resolved at delivery time would
+        // hit the wrong handler. Same reasoning as the dispatcher's own
+        // press capture.
+        let children: [(region: HitTestRegion, handler: (MouseEvent) -> Bool)] =
+            buffer.hitTestRegions.compactMap { region in
+                dispatcher.handler(for: region.handlerID).map { (region, $0) }
+            }
+        // Innermost child at a point (in this buffer's space, which is also
+        // the space of the events this handler receives — its region sits at
+        // the buffer's origin). Last-registered = innermost, as dispatched.
+        func innermostChild(atX x: Int, y: Int) -> (region: HitTestRegion, handler: (MouseEvent) -> Bool)? {
+            children.last { $0.region.contains(x: x, y: y) }
+        }
+        func forward(
+            _ event: MouseEvent, phase: MousePhase,
+            to child: (region: HitTestRegion, handler: (MouseEvent) -> Bool)
+        ) {
+            let localized = MouseEvent(
+                button: event.button, phase: phase,
+                x: event.x - child.region.offsetX, y: event.y - child.region.offsetY,
+                shift: event.shift, ctrl: event.ctrl, meta: event.meta,
+                clickCount: event.clickCount)
+            _ = child.handler(localized)
+        }
+
         let payload = self.payload
         let capturedPreview = previewBuffer
-        let dragging = DragFlag()
+        let scratch = DragScratch()
         let id = dispatcher.register { event in
+            // Hover transitions land here (the draggable's region is the
+            // innermost); ride them through to the child under the cursor
+            // so it keeps its hover affordance.
+            switch event.phase {
+            case .entered:
+                scratch.hoveredChild = innermostChild(atX: event.x, y: event.y)
+                if let child = scratch.hoveredChild { forward(event, phase: .entered, to: child) }
+                return true
+            case .exited:
+                if let child = scratch.hoveredChild { forward(event, phase: .exited, to: child) }
+                scratch.hoveredChild = nil
+                return true
+            default:
+                break
+            }
             guard event.button == .left else { return false }
             switch event.phase {
             case .pressed:
-                dragging.isDragging = false
+                scratch.isDragging = false
                 return true
             case .dragged:
-                if !dragging.isDragging {
-                    dragging.isDragging = true
+                if !scratch.isDragging {
+                    scratch.isDragging = true
                     session.begin(payload: payload(), preview: capturedPreview)
                 } else {
                     session.dragMoved()
                 }
                 return true
             case .released:
-                if dragging.isDragging {
-                    session.performDrop()
-                    dragging.isDragging = false
+                debugFocusLog(
+                    "draggable release: isDragging=\(scratch.isDragging) at (\(event.x), \(event.y))")
+                if scratch.isDragging {
+                    let dropped = session.performDrop()
+                    debugFocusLog("draggable drop performed=\(dropped)")
+                    scratch.isDragging = false
+                } else if let child = innermostChild(atX: event.x, y: event.y) {
+                    // A press released without movement is a CLICK. The
+                    // press itself was claimed (as a potential drag), so
+                    // deliver the whole click — synthetic press, then the
+                    // release — to the interactive child under the cursor:
+                    // a Button inside a draggable still clicks.
+                    forward(event, phase: .pressed, to: child)
+                    forward(event, phase: .released, to: child)
                 }
                 return true
             default:
@@ -101,9 +157,11 @@ extension DraggableModifier: Renderable, Layoutable {
     }
 }
 
-/// Per-handler scratch: whether the current press has turned into a drag.
-private final class DragFlag {
+/// Per-handler scratch: whether the current press has turned into a drag,
+/// and which content child is hovered (to close its hover out on exit).
+private final class DragScratch {
     var isDragging = false
+    var hoveredChild: (region: HitTestRegion, handler: (MouseEvent) -> Bool)?
 }
 
 // MARK: - Drop Destination
@@ -194,11 +252,16 @@ extension View {
     /// matching ``View/dropDestination(for:action:isTargeted:)`` delivers
     /// the payload (evaluated lazily, at drag start).
     ///
-    /// Deviations from SwiftUI, forced by the terminal: the payload needs no
+    /// The whole view surface acts as the drag handle, but interactive
+    /// children keep working: a press released without movement is delivered
+    /// to the child under the cursor as an ordinary click (and hover rides
+    /// through likewise), so `Button { … }.draggable(value)` both clicks and
+    /// drags — matching SwiftUI. Only genuine drags are consumed.
+    ///
+    /// Deviation from SwiftUI, forced by the terminal: the payload needs no
     /// `Transferable` conformance (CoreTransferable is Apple-only, and there
     /// is no system pasteboard to marshal through — drags stay inside the
-    /// app), and the whole view surface acts as the drag handle, so a press
-    /// on it is claimed rather than passed to interactive children.
+    /// app).
     ///
     /// - Parameter payload: The value delivered on drop, evaluated when the
     ///   drag begins.

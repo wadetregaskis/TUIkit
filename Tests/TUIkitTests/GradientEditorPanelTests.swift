@@ -59,6 +59,30 @@ struct GradientEditorPanelMutationTests {
         #expect(unmoved == [teal, blue])
         #expect(unmovedSelected == 0)
     }
+
+    @Test("Drag-moving relocates the stop (insert, not swap) and follows it")
+    func moveFromTo() {
+        let white = Color.rgb(255, 255, 255)
+
+        // Forward: the stops between source and destination shift left.
+        let (forward, forwardSelected) = Panel.movingStop(
+            [teal, blue, violet, white], from: 0, to: 2)
+        #expect(forward == [blue, violet, teal, white], "insert semantics, not a swap")
+        #expect(forwardSelected == 2)
+
+        // Backward: they shift right.
+        let (backward, backwardSelected) = Panel.movingStop(
+            [teal, blue, violet, white], from: 3, to: 1)
+        #expect(backward == [teal, white, blue, violet])
+        #expect(backwardSelected == 1)
+
+        // Same place and out-of-range are no-ops.
+        let (samePlace, _) = Panel.movingStop([teal, blue], from: 1, to: 1)
+        #expect(samePlace == [teal, blue])
+        let (outOfRange, outSelected) = Panel.movingStop([teal, blue], from: 5, to: 0)
+        #expect(outOfRange == [teal, blue])
+        #expect(outSelected == 1, "selection clamps into range")
+    }
 }
 
 @MainActor
@@ -197,6 +221,74 @@ struct GradientEditorPanelRenderTests {
         // the full proposed width.
         let dialogWidth = lines.first { $0.contains("╭") }?.count ?? 0
         #expect(dialogWidth < 70, "the dialog hugs its content (got \(dialogWidth) of 70)")
+    }
+
+    @Test("Dragging a chip onto another reorders the stops; a bare click still selects")
+    func dragReordersStops() {
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 70, availableHeight: 45, environment: env, tuiContext: tui
+        ).isolatingRenderCache()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+
+        // One frame: render, publish regions (the buffer is the root here,
+        // so its region offsets ARE absolute), locate the chip strip.
+        func renderFrame() -> (y: Int, columns: [Int]) {
+            tui.dragAndDropSession.beginFrame()
+            let buffer = renderToBuffer(panel, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            let stripped = buffer.lines.map(\.stripped)
+            let y = stripped.firstIndex { $0.contains("█●█") }
+            #expect(y != nil, "the stop strip renders")
+            guard let y else { return (0, []) }
+            // Chip columns: each chip is 3 cells with 1-cell gaps, so chip
+            // starts sit at pitch 4 from the first block cell.
+            let line = stripped[y]
+            let first = line.distance(
+                from: line.startIndex,
+                to: line.range(of: "█")!.lowerBound)
+            return (y, [first, first + 4, first + 8])
+        }
+
+        var (y, columns) = renderFrame()
+
+        // A bare click (press + release, no movement) on the THIRD chip
+        // selects it — through the draggable wrapper.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: columns[2] + 1, y: y))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: columns[2] + 1, y: y))
+        (y, columns) = renderFrame()
+        let strip = renderToBuffer(panel, context: context).lines.map(\.stripped)[y]
+        #expect(strip.contains("███ ███ █●█"), "click through .draggable selects: |\(strip)|")
+
+        // Drag the FIRST chip onto the THIRD: red moves to the end. Re-render
+        // between every event, exactly like the live loop (consumed events
+        // request a render) — handler ids and drop-target registrations reset
+        // each pass, and the drag must survive that.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: columns[0] + 1, y: y))
+        (y, columns) = renderFrame()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[1] + 1, y: y))
+        (y, columns) = renderFrame()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[2] + 1, y: y))
+        (y, columns) = renderFrame()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: columns[2] + 1, y: y))
+        #expect(
+            stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
+            "the dragged stop moved to the drop position (insert semantics)")
+
+        // The drop cue cleared: no chip still claims to be a target.
+        (y, columns) = renderFrame()
+        let after = renderToBuffer(panel, context: context).lines.map(\.stripped)[y]
+        #expect(after.filter { $0 == "●" }.count == 1, "one bullet (the selection): |\(after)|")
     }
 
     @Test("The footer offers Cancel alongside Done")

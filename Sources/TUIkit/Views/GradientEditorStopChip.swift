@@ -21,6 +21,10 @@ struct _StopChipStyle: ButtonStyle {
     /// Whether this chip's stop is the one the panel below is editing.
     let isSelected: Bool
 
+    /// Whether a dragged stop currently hovers this chip (release moves it
+    /// here).
+    let isDropTarget: Bool
+
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 0) {
             Text("█").foregroundStyle(color).background(color)
@@ -28,7 +32,8 @@ struct _StopChipStyle: ButtonStyle {
                 color: color,
                 isSelected: isSelected,
                 isFocused: configuration.isFocused,
-                isHovered: configuration.isHovered)
+                isHovered: configuration.isHovered,
+                isDropTarget: isDropTarget)
             Text("█").foregroundStyle(color).background(color)
         }
     }
@@ -44,6 +49,7 @@ struct _StopChipCentreCell: View {
     let isSelected: Bool
     let isFocused: Bool
     let isHovered: Bool
+    let isDropTarget: Bool
 
     @Environment(\.palette) private var palette
 
@@ -62,6 +68,13 @@ struct _StopChipCentreCell: View {
     /// `Palette.readableText(on:)`, so the bullet reads on any stop colour.
     private var indicator: Color? {
         let readable = palette.readableText(on: color)
+        if isDropTarget {
+            // A dragged stop hovers this chip: releasing moves it here. A
+            // dim bullet — the drag is what the eye is on; the cue only
+            // needs to say WHERE. Wins over the focus pulse: mid-drag, the
+            // drop position outranks where keyboard focus happens to sit.
+            return readable.opacity(ViewConstants.focusBorderDim, over: color)
+        }
         if isFocused {
             // Focused: the bullet pulses whether or not this stop is
             // selected — activating (Enter / Space / click) selects it.

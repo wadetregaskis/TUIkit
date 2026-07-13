@@ -242,6 +242,17 @@ extension MouseEventDispatcher {
         return id
     }
 
+    /// The handler registered under `id` this frame, if any.
+    ///
+    /// Lets a wrapping modifier forward events to its content's handlers —
+    /// ``DraggableModifier`` resolves its content's regions to closures at
+    /// render time (ids die at the next render pass; closures don't — the
+    /// same reasoning as ``PressCapture``) so a click or hover on the
+    /// draggable surface can reach the interactive children beneath it.
+    func handler(for id: HitTestRegion.HandlerID) -> ((MouseEvent) -> Bool)? {
+        handlers[id]
+    }
+
     /// Dispatches one mouse event to the appropriate handler.
     ///
     /// Coordinates in the event passed to the handler are **localised
@@ -417,20 +428,26 @@ extension MouseEventDispatcher {
         // is still registered. (Between event and re-render,
         // the previous frame's handlers are still in `handlers`
         // — beginRenderPass for the next frame hasn't run yet.)
+        // Coordinates are localised to the region, honouring the
+        // dispatcher's contract for every phase — hover handlers
+        // mostly ignore them, but DraggableModifier hit-tests the
+        // transition point against its content's regions to route
+        // hover through to interactive children.
         if let oldID = lastHoveredHandlerID, let oldHandler = handlers[oldID] {
+            let offset = regionOffset(for: oldID) ?? (0, 0)
             let exit = MouseEvent(
                 button: .none, phase: .exited,
-                x: event.x, y: event.y,
+                x: event.x - offset.x, y: event.y - offset.y,
                 shift: event.shift, ctrl: event.ctrl, meta: event.meta
             )
             _ = oldHandler(exit)
             fired = true
         }
 
-        if let newID = currentID, let newHandler = handlers[newID] {
+        if let newID = currentID, let newHandler = handlers[newID], let region = currentRegion {
             let enter = MouseEvent(
                 button: .none, phase: .entered,
-                x: event.x, y: event.y,
+                x: event.x - region.offsetX, y: event.y - region.offsetY,
                 shift: event.shift, ctrl: event.ctrl, meta: event.meta
             )
             _ = newHandler(enter)

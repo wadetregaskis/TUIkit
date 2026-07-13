@@ -174,7 +174,14 @@ final class DragAndDropSession: @unchecked Sendable {
         // the tree shape shifted the ids, deliver it to the WRONG zone.
         guard let event = lastAbsoluteEvent,
             let target = resolveTarget(atX: event.x, y: event.y, payload: drag.payload)
-        else { return false }
+        else {
+            debugFocusLog(
+                "performDrop: no target at (\(lastAbsoluteEvent?.x ?? -1), "
+                    + "\(lastAbsoluteEvent?.y ?? -1)); \(targets.count) targets, "
+                    + "hit ids \(dispatcher?.handlerIDs(at: lastAbsoluteEvent?.x ?? -1, y: lastAbsoluteEvent?.y ?? -1).map(\.raw) ?? []), "
+                    + "target ids \(targets.map(\.handlerID.raw))")
+            return false
+        }
         return target.perform(drag.payload, event)
     }
 

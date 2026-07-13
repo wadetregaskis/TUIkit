@@ -297,4 +297,58 @@ struct DragAndDropTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 2))
         #expect(tui.dragAndDropSession.active == nil)
     }
+
+    @Test("A press released without movement clicks the interactive child")
+    func clickFallsThroughToChildren() {
+        // The draggable's region is innermost and claims every press as a
+        // potential drag — but a press + release with no movement is a
+        // CLICK, and must reach a Button inside (SwiftUI behaviour). A
+        // genuine drag must NOT click.
+        final class Counter { var clicks = 0 }
+        let counter = Counter()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        let tree = Button("GO") { counter.clicks += 1 }.draggable("apple")
+        let buffer = renderToBuffer(tree, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // Click: press + release on the same cell.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: 0))
+        #expect(counter.clicks == 1, "the click reaches the button inside the draggable")
+
+        // Drag: press, move, release — the button must NOT fire.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 8, y: 2))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 2))
+        #expect(counter.clicks == 1, "a genuine drag is not a click")
+        #expect(tui.dragAndDropSession.active == nil)
+    }
+
+    @Test("Hover transitions ride through to the interactive child")
+    func hoverForwardsToChildren() {
+        // The draggable's innermost region receives the synthetic
+        // .entered / .exited transitions; they must forward to the content
+        // so a hoverable child keeps its affordance.
+        final class HoverLog { var changes: [Bool] = [] }
+        let log = HoverLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)  // hover needs motion
+        tui.dragAndDropSession.beginFrame()
+
+        let tree = Text("CHIP")
+            .onHover { log.changes.append($0) }
+            .draggable("apple")
+        let buffer = renderToBuffer(tree, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 0))
+        #expect(log.changes == [true], "entering the chip hovers the child")
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 20, y: 5))
+        #expect(log.changes == [true, false], "leaving un-hovers it")
+    }
 }
