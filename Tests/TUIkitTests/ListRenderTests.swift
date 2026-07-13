@@ -454,6 +454,60 @@ struct ListRenderTests {
         }
     }
 
+    @Test("A row too narrow for content + badge truncates the content, keeps the badge")
+    func badgeSurvivesNarrowRow() {
+        // The badge is composed OUTSIDE the row buffer; when both can't fit
+        // the CONTENT gives way (as in SwiftUI, where the label truncates
+        // first) — overflowing instead put the badge in the cells the border
+        // clips, silently hiding it. A wrapping Text folds itself before
+        // this matters, so the squeeze needs a single-line label beside a
+        // wide string badge.
+        let lines = strippedLines(
+            List {
+                Text("Notifications").badge("unread")
+            },
+            context: listContext(width: 18, height: 5, explicitWidth: true)
+        )
+
+        let row = lines.first { $0.contains("N") }
+        #expect(row != nil, "the row renders: \(lines)")
+        if let row {
+            #expect(row.contains("unread"), "the badge survives a narrow row: '\(row)'")
+            #expect(row.contains("…"), "the content truncates instead: '\(row)'")
+        }
+    }
+
+    @Test("A content-hugged sidebar reserves room for its badges (sizeToFitFromLeft)")
+    func badgeFitsInSizeToFitSidebar() {
+        // Mirrors the Split View demo: a NavigationSplitView sized to fit
+        // its sidebar, whose WIDEST row carries a badge. The hugged width is
+        // measured from the row buffers, and the badge lives outside them —
+        // unless the measure reserves the badge's cells, the widest row's
+        // badge always lands in the clipped overhang and vanishes (the
+        // "Starred loses its badge" report; narrower rows have slack, so
+        // their badges survive by accident).
+        let split = NavigationSplitView {
+            List(selection: .constant(String?.none)) {
+                ForEach(["Inbox", "Starred!!"], id: \.self) { name in
+                    Text(name).badge(name == "Inbox" ? 12 : 3)
+                }
+            }
+        } detail: {
+            Text("DETAIL")
+        }
+        .navigationSplitViewStyle(.sizeToFitFromLeft)
+
+        let lines = strippedLines(split, context: listContext(width: 60, height: 8))
+        let widest = lines.first { $0.contains("Starred!!") }
+        #expect(widest != nil, "the sidebar renders: \(lines)")
+        if let widest {
+            #expect(widest.contains("3"), "the WIDEST row keeps its badge: '\(widest)'")
+        }
+        #expect(
+            lines.first { $0.contains("Inbox") }?.contains("12") == true,
+            "the narrower row keeps its badge too: \(lines)")
+    }
+
     @Test("Badges on several static rows each render; a zero count hides")
     func badgesOnTupleChildren() {
         let lines = strippedLines(

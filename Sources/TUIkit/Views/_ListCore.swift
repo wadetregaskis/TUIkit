@@ -186,7 +186,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var rowContext = context
         rowContext.environment.fixedSizeWidth = false
         let source = extractRows(from: content, context: rowContext)
-        let widest = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
+        let widest = (0..<source.count).map { index in
+            let row = source.row(at: index)
+            // A badge is composed OUTSIDE the row's own buffer
+            // (`renderLineWithBadge`: content, ≥1 fill, badge), so the hugged
+            // width must reserve its cells too — in SwiftUI a badge is an
+            // overlay outside layout, but a terminal cell grid has no
+            // overlay: sizing a column to "fit" its rows must mean fitting
+            // their badges, or the widest row always loses its badge.
+            let badgeCells: Int =
+                if let badge = row.badge, !badge.isHidden, row.isSelectable {
+                    badge.displayText.strippedLength + 1
+                } else {
+                    0
+                }
+            return row.buffer.width + badgeCells
+        }.max() ?? 0
         let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
         let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
         // The widest row still gets its gutters when composed, so the hugged
@@ -1343,14 +1358,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         backgroundColor: Color?,
         palette: any Palette
     ) -> String {
-        let lineLength = line.strippedLength
         let badgeText = badge.displayText
         let styledBadge = ANSIRenderer.colorize(badgeText, foreground: palette.foregroundTertiary)
-
         let badgeWidth = badgeText.strippedLength
-        let usedWidth = 1 + lineLength + badgeWidth + 1
+
+        // When the row is too narrow for both, the CONTENT truncates and the
+        // badge survives (as in SwiftUI, where the label truncates first) —
+        // overflowing instead put the badge in the cells the container
+        // clips, silently hiding it.
+        let contentBudget = rowWidth - badgeWidth - 3
+        let fittedLine =
+            line.strippedLength > contentBudget
+            ? line.truncatedToWidth(max(1, contentBudget)) : line
+
+        let usedWidth = 1 + fittedLine.strippedLength + badgeWidth + 1
         let fillPadding = max(1, rowWidth - usedWidth)
-        let paddedLine = " " + line + String(repeating: " ", count: fillPadding) + styledBadge + " "
+        let paddedLine =
+            " " + fittedLine + String(repeating: " ", count: fillPadding) + styledBadge + " "
 
         return paddedLine.withPersistentBackground(backgroundColor)
     }
