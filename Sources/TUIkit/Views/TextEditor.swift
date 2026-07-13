@@ -390,9 +390,24 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     emit(
                         visible[cell], foreground: palette.background,
                         background: caret.appearance.color)
+                case .underscore where visible[cell] != " ":
+                    // The character itself, underlined, in the caret colour
+                    // — the insertion point stays readable.
+                    flush()
+                    var style = TextStyle()
+                    style.foregroundColor = caret.appearance.color
+                    style.backgroundColor = background
+                    style.isUnderlined = true
+                    result += ANSIRenderer.render(
+                        String(visible[cell]), with: style.resolved(with: palette))
+                case .bar where visible[cell] != " ":
+                    // The character with a combining vertical-line overlay
+                    // (U+20D2) — there is no SGR for an in-cell bar.
+                    emit(
+                        Character(String(visible[cell]) + "\u{20D2}"),
+                        foreground: caret.appearance.color, background: background)
                 case .bar, .underscore:
-                    // Thin carets draw their shape glyph in place of the
-                    // cell, like TextField.
+                    // Over a space the shape's standalone glyph reads best.
                     emit(
                         caret.appearance.shape.character,
                         foreground: caret.appearance.color, background: background)

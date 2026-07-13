@@ -192,4 +192,30 @@ struct TextCursorStyleTests {
         #expect(style.animation == .blink)
         #expect(style.speed == .regular)
     }
+
+    // MARK: - Over-the-top rendering (TextField)
+
+    @Test("Thin field carets draw over the character, not in place of it")
+    @MainActor
+    func fieldCaretsPreserveContent() {
+        func render(_ shape: TextCursorStyle.Shape) -> String {
+            let context = makeRenderContext(width: 20, height: 3) { env, _ in
+                env.textCursorStyle = TextCursorStyle(shape: shape, animation: .none)
+                env.focusManager = FocusManager()
+            }
+            let field = TextField("", text: .constant("hi")).focusID("caret-field")
+            _ = renderToBuffer(field, context: context)  // register focus
+            context.environment.focusManager?.focus(id: "caret-field")
+            return renderToBuffer(field, context: context).lines.first ?? ""
+        }
+
+        // A fresh field's caret sits at the END of "hi", over a space —
+        // the standalone shape glyph territory. The text must be intact
+        // with the caret appended after it (the over-a-character cases are
+        // pinned by the TextEditor test, whose caret starts at position 0).
+        let underscore = render(.underscore)
+        #expect(underscore.stripped.contains("hi▁"), "|\(underscore.stripped)|")
+        let bar = render(.bar)
+        #expect(bar.stripped.contains("hi│"), "|\(bar.stripped)|")
+    }
 }

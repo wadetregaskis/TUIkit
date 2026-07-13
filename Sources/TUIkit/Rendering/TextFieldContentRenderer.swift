@@ -162,6 +162,18 @@ struct TextFieldContentRenderer {
     /// as spaces (it can't be shown half). The block caret is one cell; over a
     /// wide character it covers the first cell and the remainder pads with
     /// spaces, so the caret never changes the field's width.
+    /// Cell metrics: per-character display widths, and the end-anchored
+    /// scroll window [scrollStart, windowEnd) around the caret. The click-
+    /// to-caret inverse of this math lives in TextFieldHandler.
+    private func scrollWindow(
+        text: String, clampedPosition: Int, width: Int
+    ) -> (widths: [Int], scrollStart: Int, windowEnd: Int) {
+        let widths = Self.displayCellWidths(of: text, displayCharacter: displayCharacter)
+        let cursorCellX = widths[0..<clampedPosition].reduce(0, +)
+        let scrollStart = Self.scrollCells(cursorCellX: cursorCellX, width: width)
+        return (widths, scrollStart, scrollStart + width)
+    }
+
     private func buildTextWithCursor(
         text: String,
         cursorPosition: Int,
@@ -174,14 +186,8 @@ struct TextFieldContentRenderer {
     ) -> String {
         let characterCount = text.count
         let clampedPosition = max(0, min(cursorPosition, characterCount))
-
-        // Cell metrics: per-character display widths, the caret's cell x, and
-        // the end-anchored scroll window [scrollStart, windowEnd). The click-
-        // to-caret inverse of this math lives in TextFieldHandler.
-        let widths = Self.displayCellWidths(of: text, displayCharacter: displayCharacter)
-        let cursorCellX = widths[0..<clampedPosition].reduce(0, +)
-        let scrollStart = Self.scrollCells(cursorCellX: cursorCellX, width: width)
-        let windowEnd = scrollStart + width
+        let (widths, scrollStart, windowEnd) = scrollWindow(
+            text: text, clampedPosition: clampedPosition, width: width)
 
         // Compute cursor visibility and color based on animation style
         let (cursorVisible, cursorColor) = Self.computeCursorState(
@@ -252,18 +258,45 @@ struct TextFieldContentRenderer {
             }
         }
 
+        // Draws the caret OVER the character beneath it wherever the shape
+        // allows, so the insertion point stays readable:
+        // - `.underscore`: the character itself, underlined (SGR 4), in the
+        //   cursor colour — universally supported.
+        // - `.bar`: the character with a combining vertical-line overlay
+        //   (U+20D2) in the cursor colour; there is no SGR for an in-cell
+        //   bar, and overlay rendering is the closest terminals offer.
+        // - `.block` (and every shape over a space or a WIDE character,
+        //   whose overlay/underline support is poor): the shape's glyph
+        //   replaces the first cell as before — a block covers its cell by
+        //   definition, and the remainder of a wide character pads with
+        //   spaces so nothing after it shifts.
+        // (The caret's own cell never clips: the scroll window is anchored
+        // so the caret is always fully inside it.)
+        func emitCaret(cells: Int) {
+            let underlying: Character =
+                clampedPosition < characterCount ? displayCharacter(clampedPosition, text) : " "
+            switch cursorStyle.shape {
+            case .underscore where cells == 1 && underlying != " ":
+                flushRun()
+                result += ANSIRenderer.colorize(
+                    String(underlying), foreground: cursorColor, background: background, underline: true)
+                (cellX, outputCells) = (cellX + 1, outputCells + 1)
+            case .bar where cells == 1 && underlying != " ":
+                emitClipped(
+                    Character(String(underlying) + "\u{20D2}"), cells: 1,
+                    foreground: cursorColor, background: background)
+            default:
+                emitClipped(
+                    cursorStyle.shape.character, cells: 1, foreground: cursorColor, background: background)
+                if cells > 1 {
+                    emitClipped(" ", cells: cells - 1, foreground: textForeground, background: background)
+                }
+            }
+        }
+
         for index in 0..<characterCount {
             if index == clampedPosition && cursorVisible {
-                // The caret covers the character's first cell; the remainder of
-                // a wide character pads with spaces so nothing after it shifts.
-                emitClipped(
-                    cursorStyle.shape.character, cells: 1,
-                    foreground: cursorColor, background: background)
-                if widths[index] > 1 {
-                    emitClipped(
-                        " ", cells: widths[index] - 1,
-                        foreground: textForeground, background: background)
-                }
+                emitCaret(cells: widths[index])
                 continue
             }
             // Blink-off at the caret shows the underlying character, styled
@@ -278,9 +311,7 @@ struct TextFieldContentRenderer {
         }
         // The caret past the last character sits on its own cell.
         if clampedPosition == characterCount && cursorVisible {
-            emitClipped(
-                cursorStyle.shape.character, cells: 1,
-                foreground: cursorColor, background: background)
+            emitCaret(cells: 1)
         }
         // Pad to exactly `width` cells.
         while outputCells < width {

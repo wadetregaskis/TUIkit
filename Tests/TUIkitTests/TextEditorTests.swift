@@ -170,22 +170,30 @@ struct TextEditorTests {
 
     @Test("The editor honours the .textCursor shape like TextField")
     func editorHonoursCursorStyle() {
-        // A static (non-animated) thin caret draws its shape glyph at the
-        // caret cell — the same `.textCursor(_:)` setting that styles
-        // TextField styles the editor.
-        // The editor's caret starts at the text's beginning, so the shape
-        // glyph replaces the first cell.
+        // Thin carets draw OVER the character beneath them, keeping the
+        // insertion point readable — the same `.textCursor(_:)` setting
+        // that styles TextField styles the editor. The caret starts at the
+        // text's beginning, over the "h".
         let sink = StringSink("hi")
-        for (shape, glyph) in [
-            (TextCursorStyle.Shape.underscore, "▁"), (.bar, "│"),
-        ] {
-            let context = makeRenderContext(width: 12, height: 3) { env, _ in
-                env.textCursorStyle = TextCursorStyle(shape: shape, animation: .none)
-            }
-            let buffer = renderToBuffer(TextEditor(text: sink.binding), context: context)
-            let firstLine = buffer.lines[0].stripped
-            #expect(firstLine.hasPrefix("\(glyph)i"), "\(shape): |\(firstLine)|")
+
+        // Underscore: the character itself, underlined (SGR 4).
+        let underscoreContext = makeRenderContext(width: 12, height: 3) { env, _ in
+            env.textCursorStyle = TextCursorStyle(shape: .underscore, animation: .none)
         }
+        let underscore = renderToBuffer(TextEditor(text: sink.binding), context: underscoreContext)
+        #expect(underscore.lines[0].stripped.hasPrefix("hi"), "|\(underscore.lines[0].stripped)|")
+        #expect(
+            underscore.lines[0].range(of: "\u{1B}\\[[0-9;]*4[0-9;]*m", options: .regularExpression) != nil,
+            "the caret cell carries the underline attribute: |\(underscore.lines[0])|")
+
+        // Bar: the character with a combining vertical-line overlay.
+        let barContext = makeRenderContext(width: 12, height: 3) { env, _ in
+            env.textCursorStyle = TextCursorStyle(shape: .bar, animation: .none)
+        }
+        let bar = renderToBuffer(TextEditor(text: sink.binding), context: barContext)
+        #expect(
+            bar.lines[0].stripped.hasPrefix("h\u{20D2}i"),
+            "the caret overlays the character: |\(bar.lines[0].stripped)|")
 
         // The block shape keeps the underlying character legible (an
         // inverted cell, not a solid glyph) — no shape glyph in the text.
