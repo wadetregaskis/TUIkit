@@ -39,10 +39,17 @@ struct ImageRenderingControls: View {
     private static let ramps = [" .:-=+*#%@", " ░▒▓█", " .oO@", " ._xX#"]
 
     var body: some View {
+        // Each knob is enabled only while the selected character mode
+        // actually consumes it, so what applies is always visible at a
+        // glance (see ASCIIConverter.convert's per-set dispatch).
+        let selected = ImageDemoHelpers.selectedCharSet(index: charSetIndex)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 2) {
+                // "custom" is an explicit mode in this picker — the ramp
+                // field below only applies (and is only enabled) while it is
+                // selected, so the active mode is never an implicit override.
                 Picker(L("component.imageControls.characters"), selection: $charSetIndex) {
-                    ForEach(ImageDemoHelpers.charSets.indices, id: \.self) { index in
+                    ForEach(0...ImageDemoHelpers.charSets.count, id: \.self) { index in
                         Text(ImageDemoHelpers.charSetLabel(index)).tag(index)
                     }
                 }
@@ -57,7 +64,9 @@ struct ImageRenderingControls: View {
                     Text(L("component.imageControls.auto")).tag(0)
                     ForEach(1...4, id: \.self) { Text("\($0)\u{D7}").tag($0) }
                 }
+                .disabled(!ImageDemoHelpers.usesSupersampling(selected))
                 rampField
+                    .disabled(charSetIndex != ImageDemoHelpers.customCharSetIndex)
             }
             HStack(spacing: 2) {
                 // Edge tracing applies to the shape sets (shape / shape+uni /
@@ -65,7 +74,8 @@ struct ImageRenderingControls: View {
                 // directional line glyphs; the threshold picks how strong a
                 // gradient qualifies.
                 Toggle(L("component.imageControls.edgeLines"), isOn: $edgeLines)
-                if edgeLines {
+                    .disabled(!ImageDemoHelpers.usesEdgeTracing(selected))
+                if edgeLines && ImageDemoHelpers.usesEdgeTracing(selected) {
                     Text(L("component.imageControls.edgeThreshold")).dim()
                     // The slider's own `%`-of-range read-out would mislead
                     // beside the raw threshold value shown after it.
@@ -111,9 +121,41 @@ struct ImageRenderingControls: View {
 }
 
 extension ImageDemoHelpers {
-    /// The character set the controls currently describe: a non-empty custom
-    /// ramp wins over the picker.
+    /// The Characters picker tag for the explicit "custom ramp" mode (one
+    /// past the built-in sets).
+    static var customCharSetIndex: Int { charSets.count }
+
+    /// The character set the controls currently describe. "Custom" is an
+    /// explicit picker choice (no implicit ramp-overrides-picker rule): only
+    /// while it is selected does the ramp field apply. An empty custom ramp
+    /// falls back to plain ascii so the demo never renders blank.
     static func effectiveCharSet(index: Int, customRamp: String) -> ASCIICharacterSet {
-        customRamp.isEmpty ? charSets[index] : .customRamp(customRamp)
+        guard index == customCharSetIndex else { return charSets[min(index, charSets.count - 1)] }
+        return customRamp.isEmpty ? .ascii : .customRamp(customRamp)
+    }
+
+    /// The set the picker row `index` denotes, for the applicability checks
+    /// (the custom mode reports as a custom ramp regardless of its text).
+    static func selectedCharSet(index: Int) -> ASCIICharacterSet {
+        index == customCharSetIndex
+            ? .customRamp("") : charSets[min(index, charSets.count - 1)]
+    }
+
+    /// Whether `set` consumes the supersampling factor — the
+    /// brightness-mapping renderers (see `ASCIIConverter.convert`).
+    static func usesSupersampling(_ set: ASCIICharacterSet) -> Bool {
+        switch set {
+        case .ascii, .asciiDetailed, .coarseBlocks, .customRamp: return true
+        default: return false
+        }
+    }
+
+    /// Whether `set` consumes the edge-tracing knobs — the shape-aware
+    /// renderers.
+    static func usesEdgeTracing(_ set: ASCIICharacterSet) -> Bool {
+        switch set {
+        case .shapeBased, .shapeUnicode, .unicodeDetailed: return true
+        default: return false
+        }
     }
 }

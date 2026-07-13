@@ -16,6 +16,9 @@ enum ImageDemoHelpers {
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
 
     static func charSetLabel(_ index: Int) -> String {
+        // One past the built-in sets is the explicit "custom ramp" mode
+        // (see ImageRenderingControls / customCharSetIndex).
+        guard index < charSets.count else { return "chars:custom" }
         switch charSets[index] {
         case .ascii: return "chars:ascii"
         case .asciiDetailed: return "chars:ascii+"
