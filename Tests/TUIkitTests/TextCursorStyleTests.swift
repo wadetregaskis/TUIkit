@@ -17,9 +17,9 @@ struct TextCursorStyleTests {
         #expect(TextCursorStyle.Shape.block.character == "█")
     }
 
-    @Test("Bar shape returns centered vertical line")
+    @Test("Bar shape returns a left-edge insertion bar")
     func barShapeCharacter() {
-        #expect(TextCursorStyle.Shape.bar.character == "│")
+        #expect(TextCursorStyle.Shape.bar.character == "▎")
     }
 
     @Test("Underscore shape returns lower block")
@@ -216,6 +216,13 @@ struct TextCursorStyleTests {
         let underscore = render(.underscore)
         #expect(underscore.stripped.contains("hi▁"), "|\(underscore.stripped)|")
         let bar = render(.bar)
-        #expect(bar.stripped.contains("hi│"), "|\(bar.stripped)|")
+        #expect(bar.stripped.contains("hi▎"), "|\(bar.stripped)|")
+        // The block caret inverts its cell (character in the background
+        // colour on a caret-coloured block) rather than stamping a `█`
+        // glyph, matching TextEditor — over the end-of-text space that is
+        // a space on the caret colour, so no block glyph appears anywhere.
+        let block = render(.block)
+        #expect(block.stripped.contains("hi "), "|\(block.stripped)|")
+        #expect(!block.stripped.contains("█"), "|\(block.stripped)|")
     }
 }

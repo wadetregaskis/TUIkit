@@ -258,33 +258,35 @@ struct TextFieldContentRenderer {
             }
         }
 
-        // Draws the caret OVER the character beneath it wherever the shape
-        // allows, so the insertion point stays readable:
+        // Keeps the character beneath the caret readable wherever the shape
+        // allows:
+        // - `.block`: the character itself, in the field's background colour
+        //   on a caret-coloured block (covering a wide character whole) —
+        //   explicit palette colours, never SGR 7.
         // - `.underscore`: the character itself, underlined (SGR 4), in the
         //   cursor colour — universally supported.
-        // - `.bar`: the character with a combining vertical-line overlay
-        //   (U+20D2) in the cursor colour; there is no SGR for an in-cell
-        //   bar, and overlay rendering is the closest terminals offer.
-        // - `.block` (and every shape over a space or a WIDE character,
-        //   whose overlay/underline support is poor): the shape's glyph
-        //   replaces the first cell as before — a block covers its cell by
-        //   definition, and the remainder of a wide character pads with
-        //   spaces so nothing after it shifts.
+        // - `.bar` (and `.underscore` over a space or a WIDE character,
+        //   whose underline support is poor): the shape's standalone glyph
+        //   replaces the first cell; the remainder of a wide character pads
+        //   with spaces so nothing after it shifts. A bar caret reads as
+        //   sitting BEFORE the character, so it deliberately draws the same
+        //   left-edge glyph for every character — a combining-overlay
+        //   approach was tried and rejected: terminals compose the overlay
+        //   differently per base glyph, often near-invisibly.
         // (The caret's own cell never clips: the scroll window is anchored
         // so the caret is always fully inside it.)
         func emitCaret(cells: Int) {
             let underlying: Character =
                 clampedPosition < characterCount ? displayCharacter(clampedPosition, text) : " "
             switch cursorStyle.shape {
+            case .block:
+                emitClipped(
+                    underlying, cells: cells, foreground: background, background: cursorColor)
             case .underscore where cells == 1 && underlying != " ":
                 flushRun()
                 result += ANSIRenderer.colorize(
                     String(underlying), foreground: cursorColor, background: background, underline: true)
                 (cellX, outputCells) = (cellX + 1, outputCells + 1)
-            case .bar where cells == 1 && underlying != " ":
-                emitClipped(
-                    Character(String(underlying) + "\u{20D2}"), cells: 1,
-                    foreground: cursorColor, background: background)
             default:
                 emitClipped(
                     cursorStyle.shape.character, cells: 1, foreground: cursorColor, background: background)

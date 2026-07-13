@@ -42,10 +42,16 @@ struct TextInputPage: View {
     private var currentSpeed: TextCursorStyle.Speed { speeds[cursorSpeedIndex] }
 
     private var shapeLabel: String {
+        // The glyph prefix is the shape's own rendering, so the label always
+        // previews exactly what the caret will draw.
+        "\(currentShape.character) \(localizedShapeName)"
+    }
+
+    private var localizedShapeName: String {
         switch currentShape {
-        case .block: "█ \(L("page.textField.shape.block"))"
-        case .bar: "│ \(L("page.textField.shape.bar"))"
-        case .underscore: "▁ \(L("page.textField.shape.underscore"))"
+        case .block: L("page.textField.shape.block")
+        case .bar: L("page.textField.shape.bar")
+        case .underscore: L("page.textField.shape.underscore")
         }
     }
 

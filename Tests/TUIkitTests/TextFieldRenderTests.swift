@@ -16,8 +16,21 @@ import Testing
 /// The half-block caps that wrap the field content (U+2590 / U+258C).
 private let openCap = "▐"
 private let closeCap = "▌"
-/// The default block cursor shape (U+2588), shown when a field is focused.
-private let cursor = "█"
+
+/// Whether `rawLine` paints any cell on the palette's caret colour.
+///
+/// The block caret inverts its cell — the character rendered on a
+/// caret-coloured background — rather than stamping a `█` glyph, so in raw
+/// output the caret is a background-colour run, not a character. Backgrounds
+/// are emitted last in a style sequence, so the caret background's SGR
+/// fragment terminates its escape (`…;48;…m`), making it an unambiguous
+/// marker.
+@MainActor
+private func hasCaretCell(_ rawLine: String, palette: (any Palette)? = nil) -> Bool {
+    let cursorColor = (palette ?? EnvironmentValues().palette).cursorColor
+    let fragment = ANSIRenderer.backgroundCodes(for: cursorColor).joined(separator: ";") + "m"
+    return rawLine.contains(fragment)
+}
 
 /// Builds a render context backed by a fresh `FocusManager`.
 ///
@@ -43,12 +56,17 @@ private func fieldContext(
 
 /// Renders a view twice through the same context (the first pass registers
 /// the focus handler; the second pass observes the resolved focus state) and
-/// returns the stripped lines.
+/// returns the raw (ANSI-bearing) lines.
+@MainActor
+private func rawLines(_ view: some View, context: RenderContext) -> [String] {
+    _ = renderToBuffer(view, context: context)
+    return renderToBuffer(view, context: context).lines
+}
+
+/// `rawLines`, stripped of ANSI escapes.
 @MainActor
 private func strippedLines(_ view: some View, context: RenderContext) -> [String] {
-    _ = renderToBuffer(view, context: context)
-    let buffer = renderToBuffer(view, context: context)
-    return buffer.lines.map { $0.stripped }
+    rawLines(view, context: context).map { $0.stripped }
 }
 
 // MARK: - Tests
@@ -63,38 +81,40 @@ struct TextFieldRenderTests {
     func focusedWithText() {
         let fm = FocusManager()
         let ctx = fieldContext(width: 30, focusManager: fm)
-        let lines = strippedLines(
+        let raw = rawLines(
             TextField("Name", text: .constant("hello")).focusID("tf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
+        #expect(raw.count == 1)
         #expect(fm.currentFocusedID == "tf")  // first focusable auto-focuses
-        let line = lines[0]
+        let line = raw[0].stripped
         #expect(line.count == 30)
         #expect(line.hasPrefix(openCap))
         #expect(line.hasSuffix(closeCap))
-        // Content between the caps: "hello" + cursor + padding.
+        // Content between the caps: "hello", then the caret cell (an
+        // inverted space, invisible when stripped) and padding.
         let content = String(line.dropFirst().dropLast())
-        #expect(content.hasPrefix("hello\(cursor)"))
-        #expect(content.count == 28)
-        // The remainder is padding spaces only.
-        #expect(content.dropFirst("hello\(cursor)".count).allSatisfy { $0 == " " })
+        #expect(content == "hello" + String(repeating: " ", count: 23))
+        #expect(hasCaretCell(raw[0]))
     }
 
     @Test("Focused empty field shows only the cursor")
     func focusedEmpty() {
         let fm = FocusManager()
         let ctx = fieldContext(width: 30, focusManager: fm)
-        let lines = strippedLines(
+        let raw = rawLines(
             TextField("Name", text: .constant("")).focusID("tf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 30)
-        #expect(line == "\(openCap)\(cursor)" + String(repeating: " ", count: 27) + closeCap)
+        // The caret is a caret-coloured cell, not a glyph — the stripped
+        // line is all padding.
+        #expect(line == openCap + String(repeating: " ", count: 28) + closeCap)
+        #expect(hasCaretCell(raw[0]))
     }
 
     // MARK: Wide characters (cell-exact layout)
@@ -162,26 +182,30 @@ struct TextFieldRenderTests {
 
     @Test("The block caret over a wide character keeps the field's width")
     func caretOverWideCharacter() {
-        // Caret ON the emoji (index 0): the caret covers its first cell and
-        // the second pads with a space — nothing after it may shift.
+        // Caret ON the emoji (index 0): the caret inverts the WHOLE wide
+        // character (both cells) — the emoji stays legible on the caret
+        // colour, and nothing after it may shift.
+        let palette = SystemPalette(.green)
         let renderer = TextFieldContentRenderer(
             prompt: nil,
             isDisabled: false,
             displayCharacter: { index, text in text[text.index(text.startIndex, offsetBy: index)] },
             contentForeground: nil
         )
-        let content = renderer.buildContent(
+        let raw = renderer.buildContent(
             text: "😃ab",
             cursorPosition: 0,
             selectionRange: nil,
             isFocused: true,
-            palette: SystemPalette(.green),
+            palette: palette,
             cursorStyle: TextCursorStyle(),
             cursorTimer: nil,
             contentWidth: 10
-        ).stripped
+        )
+        let content = raw.stripped
         #expect(content.strippedLength == 10, "|\(content)|")
-        #expect(content.hasPrefix("\(cursor) ab"), "caret + pad + following text: |\(content)|")
+        #expect(content.hasPrefix("😃ab"), "caret keeps the wide char legible: |\(content)|")
+        #expect(hasCaretCell(raw, palette: palette))
     }
 
     // MARK: Unfocused
@@ -195,17 +219,17 @@ struct TextFieldRenderTests {
         _ = renderToBuffer(TextField("Decoy", text: .constant("x")).focusID("decoy"), context: decoyCtx)
 
         let ctx = fieldContext(width: 30, focusManager: fm, identityPath: "real")
-        let lines = strippedLines(
+        let raw = rawLines(
             TextField("Name", text: .constant("hello")).focusID("tf"),
             context: ctx
         )
 
         #expect(fm.currentFocusedID == "decoy")  // not our field
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 30)
-        // No cursor when unfocused.
-        #expect(!line.contains(cursor))
+        // No cursor when unfocused: no cell carries the caret colour.
+        #expect(!hasCaretCell(raw[0]))
         let content = String(line.dropFirst().dropLast())
         #expect(content.hasPrefix("hello"))
         #expect(content == "hello" + String(repeating: " ", count: 23))
@@ -218,15 +242,15 @@ struct TextFieldRenderTests {
         _ = renderToBuffer(TextField("Decoy", text: .constant("x")).focusID("decoy"), context: decoyCtx)
 
         let ctx = fieldContext(width: 30, focusManager: fm, identityPath: "real")
-        let lines = strippedLines(
+        let raw = rawLines(
             TextField("Email", text: .constant(""), prompt: Text("you@example.com")).focusID("tf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 30)
-        #expect(!line.contains(cursor))
+        #expect(!hasCaretCell(raw[0]))
         let content = String(line.dropFirst().dropLast())
         #expect(content == "you@example.com" + String(repeating: " ", count: 13))
     }
@@ -266,7 +290,7 @@ struct TextFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 20)
-        #expect(line == "\(openCap)hi\(cursor)" + String(repeating: " ", count: 15) + closeCap)
+        #expect(line == "\(openCap)hi" + String(repeating: " ", count: 16) + closeCap)
     }
 
     // MARK: Disabled
@@ -285,7 +309,6 @@ struct TextFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 30)
-        #expect(!line.contains(cursor))  // no cursor when unfocusable
         let content = String(line.dropFirst().dropLast())
         #expect(content == "hello" + String(repeating: " ", count: 23))
     }
@@ -315,18 +338,19 @@ struct TextFieldRenderTests {
     func focusedNarrowScrolls() {
         let fm = FocusManager()
         let ctx = fieldContext(width: 14, focusManager: fm)
-        let lines = strippedLines(
+        let raw = rawLines(
             TextField("N", text: .constant("abcdefghijklmnopqrstuvwxyz")).focusID("tf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 14)
         // Cursor sits at the end (position 26); the field scrolls so the
-        // tail of the text plus the cursor are visible: "pqrstuvwxyz" + cursor.
-        #expect(line == "\(openCap)pqrstuvwxyz\(cursor)\(closeCap)")
-        #expect(line.hasSuffix("\(cursor)\(closeCap)"))
+        // tail of the text plus the caret cell (an inverted space) are
+        // visible: "pqrstuvwxyz" + one cell.
+        #expect(line == "\(openCap)pqrstuvwxyz \(closeCap)")
+        #expect(hasCaretCell(raw[0]))
     }
 
     @Test("Narrow field at its minimum total width keeps both caps")
@@ -344,8 +368,8 @@ struct TextFieldRenderTests {
         #expect(line.count == 12)
         #expect(line.hasPrefix(openCap))
         #expect(line.hasSuffix(closeCap))
-        // 10-wide content: 9 trailing chars + cursor.
-        #expect(line == "\(openCap)ghijklmno\(cursor)\(closeCap)")
+        // 10-wide content: 9 trailing chars + the caret cell.
+        #expect(line == "\(openCap)ghijklmno \(closeCap)")
     }
 
     // MARK: Wide
@@ -399,12 +423,12 @@ struct TextFieldRenderTests {
             #expect(line.hasPrefix(openCap))
             #expect(line.hasSuffix(closeCap))
         }
-        // Only the first field is focused, so only line 0 shows a cursor.
+        // Only the first field is focused, so only line 0 shows a caret.
         #expect(fm.currentFocusedID == "a")
-        #expect(lines[0].contains(cursor))
-        #expect(!lines[1].contains(cursor))
-        #expect(!lines[2].contains(cursor))
-        #expect(lines[0] == "\(openCap)one\(cursor)" + String(repeating: " ", count: 18) + closeCap)
+        #expect(hasCaretCell(buffer.lines[0]))
+        #expect(!hasCaretCell(buffer.lines[1]))
+        #expect(!hasCaretCell(buffer.lines[2]))
+        #expect(lines[0] == "\(openCap)one" + String(repeating: " ", count: 19) + closeCap)
         #expect(lines[1] == "\(openCap)two" + String(repeating: " ", count: 19) + closeCap)
         #expect(lines[2] == "\(openCap)three" + String(repeating: " ", count: 17) + closeCap)
     }

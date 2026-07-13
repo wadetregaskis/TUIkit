@@ -17,10 +17,20 @@ import Testing
 /// The half-block caps that wrap the field content (U+2590 / U+258C).
 private let openCap = "▐"
 private let closeCap = "▌"
-/// The default block cursor shape (U+2588), shown when focused.
-private let cursor = "█"
 /// The mask character SecureField substitutes for every input character (U+25CF).
 private let bullet = "●"
+
+/// Whether `rawLine` paints any cell on the palette's caret colour.
+///
+/// The block caret inverts its cell (character on a caret-coloured
+/// background) rather than stamping a `█` glyph, so in raw output the caret
+/// is a background-colour run, not a character.
+@MainActor
+private func hasCaretCell(_ rawLine: String) -> Bool {
+    let fragment = ANSIRenderer.backgroundCodes(for: EnvironmentValues().palette.cursorColor)
+        .joined(separator: ";") + "m"
+    return rawLine.contains(fragment)
+}
 
 @MainActor
 private func fieldContext(
@@ -40,10 +50,14 @@ private func fieldContext(
 }
 
 @MainActor
-private func strippedLines(_ view: some View, context: RenderContext) -> [String] {
+private func rawLines(_ view: some View, context: RenderContext) -> [String] {
     _ = renderToBuffer(view, context: context)
-    let buffer = renderToBuffer(view, context: context)
-    return buffer.lines.map { $0.stripped }
+    return renderToBuffer(view, context: context).lines
+}
+
+@MainActor
+private func strippedLines(_ view: some View, context: RenderContext) -> [String] {
+    rawLines(view, context: context).map { $0.stripped }
 }
 
 // MARK: - Tests
@@ -58,39 +72,40 @@ struct SecureFieldRenderTests {
     func focusedWithText() {
         let fm = FocusManager()
         let ctx = fieldContext(width: 30, focusManager: fm)
-        let lines = strippedLines(
+        let raw = rawLines(
             SecureField("Password", text: .constant("secret")).focusID("sf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
+        #expect(raw.count == 1)
         #expect(fm.currentFocusedID == "sf")
-        let line = lines[0]
+        let line = raw[0].stripped
         #expect(line.count == 30)
         #expect(line.hasPrefix(openCap))
         #expect(line.hasSuffix(closeCap))
-        // The plaintext must never appear; "secret" -> six bullets + cursor.
+        // The plaintext must never appear; "secret" -> six bullets, then the
+        // caret cell (an inverted space, invisible when stripped).
         #expect(!line.contains("secret"))
         let content = String(line.dropFirst().dropLast())
-        #expect(content.hasPrefix("\(bullet)\(bullet)\(bullet)\(bullet)\(bullet)\(bullet)\(cursor)"))
-        #expect(content.count == 28)
-        #expect(content == String(repeating: bullet, count: 6) + cursor + String(repeating: " ", count: 21))
+        #expect(content == String(repeating: bullet, count: 6) + String(repeating: " ", count: 22))
+        #expect(hasCaretCell(raw[0]))
     }
 
     @Test("Focused empty field shows only the cursor")
     func focusedEmpty() {
         let fm = FocusManager()
         let ctx = fieldContext(width: 30, focusManager: fm)
-        let lines = strippedLines(
+        let raw = rawLines(
             SecureField("Password", text: .constant("")).focusID("sf"),
             context: ctx
         )
 
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 30)
         #expect(!line.contains(bullet))
-        #expect(line == "\(openCap)\(cursor)" + String(repeating: " ", count: 27) + closeCap)
+        #expect(line == openCap + String(repeating: " ", count: 28) + closeCap)
+        #expect(hasCaretCell(raw[0]))
     }
 
     // MARK: Unfocused
@@ -102,16 +117,16 @@ struct SecureFieldRenderTests {
         _ = renderToBuffer(SecureField("Decoy", text: .constant("x")).focusID("decoy"), context: decoyCtx)
 
         let ctx = fieldContext(width: 30, focusManager: fm, identityPath: "real")
-        let lines = strippedLines(
+        let raw = rawLines(
             SecureField("Password", text: .constant("secret")).focusID("sf"),
             context: ctx
         )
 
         #expect(fm.currentFocusedID == "decoy")
-        #expect(lines.count == 1)
-        let line = lines[0]
+        #expect(raw.count == 1)
+        let line = raw[0].stripped
         #expect(line.count == 30)
-        #expect(!line.contains(cursor))
+        #expect(!hasCaretCell(raw[0]))  // no caret when unfocused
         #expect(!line.contains("secret"))
         let content = String(line.dropFirst().dropLast())
         #expect(content == String(repeating: bullet, count: 6) + String(repeating: " ", count: 22))
@@ -132,7 +147,6 @@ struct SecureFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 30)
-        #expect(!line.contains(cursor))
         #expect(!line.contains(bullet))  // empty field has nothing to mask
         let content = String(line.dropFirst().dropLast())
         #expect(content == "Required" + String(repeating: " ", count: 20))
@@ -152,7 +166,7 @@ struct SecureFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 20)
-        #expect(line == "\(openCap)\(bullet)\(bullet)\(cursor)" + String(repeating: " ", count: 15) + closeCap)
+        #expect(line == "\(openCap)\(bullet)\(bullet)" + String(repeating: " ", count: 16) + closeCap)
     }
 
     // MARK: Disabled
@@ -170,7 +184,6 @@ struct SecureFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 30)
-        #expect(!line.contains(cursor))
         #expect(!line.contains("pw"))
         let content = String(line.dropFirst().dropLast())
         #expect(content == String(repeating: bullet, count: 2) + String(repeating: " ", count: 26))
@@ -191,9 +204,9 @@ struct SecureFieldRenderTests {
         let line = lines[0]
         #expect(line.count == 14)
         #expect(!line.contains("abc"))  // never reveal plaintext
-        // 16 bullets scroll so the tail + cursor are visible: 11 bullets + cursor.
-        #expect(line == openCap + String(repeating: bullet, count: 11) + cursor + closeCap)
-        #expect(line.hasSuffix("\(cursor)\(closeCap)"))
+        // 16 bullets scroll so the tail + the caret cell are visible:
+        // 11 bullets + the caret (an inverted space).
+        #expect(line == openCap + String(repeating: bullet, count: 11) + " " + closeCap)
     }
 
     @Test("Unfocused narrow field clips bullets to the content width")
@@ -212,7 +225,6 @@ struct SecureFieldRenderTests {
         let line = lines[0]
         #expect(line.count == 14)
         // width 14 => content width 12; first 12 bullets shown, no cursor.
-        #expect(!line.contains(cursor))
         #expect(line == openCap + String(repeating: bullet, count: 12) + closeCap)
     }
 
@@ -230,8 +242,8 @@ struct SecureFieldRenderTests {
         #expect(lines.count == 1)
         let line = lines[0]
         #expect(line.count == 50)
-        // Focused: two bullets + cursor + padding.
-        #expect(line == openCap + String(repeating: bullet, count: 2) + cursor + String(repeating: " ", count: 45) + closeCap)
+        // Focused: two bullets + the caret cell (an inverted space) + padding.
+        #expect(line == openCap + String(repeating: bullet, count: 2) + String(repeating: " ", count: 46) + closeCap)
     }
 
     // MARK: Multi-field composition
@@ -264,9 +276,9 @@ struct SecureFieldRenderTests {
             #expect(line.hasSuffix(closeCap))
         }
         #expect(fm.currentFocusedID == "a")
-        #expect(lines[0].contains(cursor))
-        #expect(!lines[1].contains(cursor))
-        #expect(lines[0] == openCap + String(repeating: bullet, count: 2) + cursor + String(repeating: " ", count: 19) + closeCap)
+        #expect(hasCaretCell(buffer.lines[0]))
+        #expect(!hasCaretCell(buffer.lines[1]))
+        #expect(lines[0] == openCap + String(repeating: bullet, count: 2) + String(repeating: " ", count: 20) + closeCap)
         #expect(lines[1] == openCap + String(repeating: bullet, count: 3) + String(repeating: " ", count: 19) + closeCap)
     }
 }

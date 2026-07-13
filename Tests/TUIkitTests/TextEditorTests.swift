@@ -170,10 +170,8 @@ struct TextEditorTests {
 
     @Test("The editor honours the .textCursor shape like TextField")
     func editorHonoursCursorStyle() {
-        // Thin carets draw OVER the character beneath them, keeping the
-        // insertion point readable — the same `.textCursor(_:)` setting
-        // that styles TextField styles the editor. The caret starts at the
-        // text's beginning, over the "h".
+        // The same `.textCursor(_:)` setting that styles TextField styles
+        // the editor. The caret starts at the text's beginning, on the "h".
         let sink = StringSink("hi")
 
         // Underscore: the character itself, underlined (SGR 4).
@@ -186,14 +184,17 @@ struct TextEditorTests {
             underscore.lines[0].range(of: "\u{1B}\\[[0-9;]*4[0-9;]*m", options: .regularExpression) != nil,
             "the caret cell carries the underline attribute: |\(underscore.lines[0])|")
 
-        // Bar: the character with a combining vertical-line overlay.
+        // Bar: the SAME standalone left-edge glyph for every character (a
+        // combining overlay was tried and rejected — terminals compose it
+        // differently per base glyph, often near-invisibly). The bar reads
+        // as sitting before the character; the rest of the text is intact.
         let barContext = makeRenderContext(width: 12, height: 3) { env, _ in
             env.textCursorStyle = TextCursorStyle(shape: .bar, animation: .none)
         }
         let bar = renderToBuffer(TextEditor(text: sink.binding), context: barContext)
         #expect(
-            bar.lines[0].stripped.hasPrefix("h\u{20D2}i"),
-            "the caret overlays the character: |\(bar.lines[0].stripped)|")
+            bar.lines[0].stripped.hasPrefix("▎i"),
+            "the caret cell draws the bar glyph: |\(bar.lines[0].stripped)|")
 
         // The block shape keeps the underlying character legible (an
         // inverted cell, not a solid glyph) — no shape glyph in the text.

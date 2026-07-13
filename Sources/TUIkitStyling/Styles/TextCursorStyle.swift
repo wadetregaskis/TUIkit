@@ -18,7 +18,7 @@
 /// | Shape | Character | Description |
 /// |-------|-----------|-------------|
 /// | `block` | `█` | Full block cursor (default) |
-/// | `bar` | `│` | Centered vertical line |
+/// | `bar` | `▎` | Insertion bar at the left edge of the cell |
 /// | `underscore` | `▁` | Lower one eighth block |
 ///
 /// ## Animation Styles
@@ -91,9 +91,11 @@ extension TextCursorStyle {
         /// The default cursor shape, providing maximum visibility.
         case block
 
-        /// Centered vertical bar cursor (`│`, U+2502).
+        /// Left-edge bar cursor (`▎`, U+258E).
         ///
-        /// A thin vertical line similar to modern GUI text editors.
+        /// An insertion bar at the left edge of the character cell, similar
+        /// to modern GUI text editors (where the bar sits just before the
+        /// character at the insertion point).
         case bar
 
         /// Lower underscore cursor (`▁`, U+2581).
@@ -105,7 +107,7 @@ extension TextCursorStyle {
         public var character: Character {
             switch self {
             case .block: "█"
-            case .bar: "│"
+            case .bar: "▎"
             case .underscore: "▁"
             }
         }

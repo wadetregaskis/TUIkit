@@ -400,14 +400,15 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     style.isUnderlined = true
                     result += ANSIRenderer.render(
                         String(visible[cell]), with: style.resolved(with: palette))
-                case .bar where visible[cell] != " ":
-                    // The character with a combining vertical-line overlay
-                    // (U+20D2) — there is no SGR for an in-cell bar.
-                    emit(
-                        Character(String(visible[cell]) + "\u{20D2}"),
-                        foreground: caret.appearance.color, background: background)
                 case .bar, .underscore:
-                    // Over a space the shape's standalone glyph reads best.
+                    // The shape's standalone glyph replaces the cell. A bar
+                    // caret reads as sitting BEFORE the character, so it
+                    // deliberately draws the same left-edge glyph for every
+                    // character — a combining-overlay approach was tried and
+                    // rejected: terminals compose the overlay differently
+                    // per base glyph, often near-invisibly. (`.underscore`
+                    // reaches here only over a space, where there is nothing
+                    // to underline.)
                     emit(
                         caret.appearance.shape.character,
                         foreground: caret.appearance.color, background: background)
