@@ -163,6 +163,9 @@ struct TextFieldContentRenderer {
         // Entered text honours the `.textFieldTextStyle` cascade override; the
         // cursor and selection keep their own colours.
         let textForeground = resolvedContentForeground(palette)
+        let selectionBackground = palette.accent.opacity(
+            ViewConstants.selectionIndicator, over: background)
+        let selectionForeground = palette.readableText(on: selectionBackground)
         var result = ""
         var runText = ""
         var runForeground = textForeground
@@ -208,11 +211,7 @@ struct TextFieldContentRenderer {
                 let isSelected = selectionRange.map { textIndex >= $0.lowerBound && textIndex < $0.upperBound } ?? false
 
                 if isSelected {
-                    emit(
-                        char,
-                        foreground: palette.background,
-                        background: palette.accent.opacity(ViewConstants.selectionIndicator)
-                    )
+                    emit(char, foreground: selectionForeground, background: selectionBackground)
                 } else {
                     emit(char, foreground: textForeground, background: background)
                 }

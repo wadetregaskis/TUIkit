@@ -8,6 +8,14 @@ import Testing
 
 @testable import TUIkit
 
+/// The `r;g;b` SGR parameter fragment for a resolved colour — matches both
+/// foreground (`38;2;…`) and background (`48;2;…`) uses in a rendered line.
+@MainActor
+private func sgrTriplet(_ color: Color) -> String {
+    guard let (red, green, blue) = color.rgbComponents else { return "unresolved" }
+    return "2;\(red);\(green);\(blue)"
+}
+
 @MainActor
 @Suite("Style cascade")
 struct StyleCascadeTests {
@@ -286,7 +294,12 @@ struct ThemeBundleTests {
         .theme(theme)
         let buffer = renderToBuffer(view, context: makeRenderContext(width: 40, height: 12))
         let joined = buffer.lines.joined()
-        #expect(joined.contains("38;2;7;8;9"), "theme tint reaches the button accent")
+        // The tint reaches the button as its face: the accent blended over
+        // the palette background (the label itself is contrast-floored, so
+        // the raw tint RGB shows in the fill, not the text).
+        let face = Color.rgb(7, 8, 9).opacity(
+            ViewConstants.focusBorderDim, over: TerminalProfilePalette(.ocean).background)
+        #expect(joined.contains(sgrTriplet(face)), "theme tint reaches the button face")
         #expect(
             buffer.lines.contains { $0.contains("SETTINGS") },
             "theme's chrome style uppercases the section header")
@@ -310,9 +323,14 @@ struct TintTests {
 
     @Test("tint recolours a control's accent affordance")
     func tintButtonAccent() {
+        let context = makeRenderContext()
         let view = Button("Save") {}.buttonStyle(.primary).tint(.rgb(7, 8, 9))
-        let line = renderToBuffer(view, context: makeRenderContext()).lines.joined()
-        #expect(line.contains("38;2;7;8;9"))
+        let line = renderToBuffer(view, context: context).lines.joined()
+        // The tint shows as the button's face (accent blended over the
+        // background); the label is contrast-floored against that face.
+        let face = Color.rgb(7, 8, 9).opacity(
+            ViewConstants.focusBorderDim, over: context.environment.palette.background)
+        #expect(line.contains(sgrTriplet(face)))
     }
 
     @Test("tint cascades from a container to a toggle's ON mark")

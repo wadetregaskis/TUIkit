@@ -1313,9 +1313,11 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> (indicator: String, indicatorColor: Color, backgroundColor: Color?) {
         if isFocused && isSelected {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
             let bg = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dimAccent, bright: palette.accent.opacity(ViewConstants.focusPulseMax))
+                .color(
+                    dim: dimAccent,
+                    bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
             return ("●", palette.accent, bg)
         } else if isFocused {
             return (" ", palette.foregroundTertiary, palette.focusBackground)
@@ -1329,7 +1331,7 @@ where Value.ID: Hashable {
             if context.environment.unfocusedSelectionVisibility == .hidden {
                 return (" ", palette.foregroundTertiary, nil)
             }
-            return ("●", palette.accent.opacity(ViewConstants.selectionIndicator), nil)
+            return ("●", palette.accent.opacity(ViewConstants.selectionIndicator, over: palette.background), nil)
         } else {
             return (" ", palette.foregroundTertiary, nil)
         }

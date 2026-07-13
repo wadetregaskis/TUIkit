@@ -197,14 +197,15 @@ enum DropdownMenu {
         // accent — the same affordance ``List`` uses for its focused row —
         // to make it visually obvious that the arrow keys and Enter are
         // driving the menu rather than whatever sits behind it.
-        let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
-        let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax)
+        let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
         let indicator = SelectionIndicator.resolve(isFocused: true, context: context)
         let highlightBg = indicator.color(dim: dimAccent, bright: brightAccent)
         // The border echoes the highlight pulse at lower intensity so the
         // popup's frame reads as part of the same active control.
         let borderColor = indicator.color(
-            dim: palette.accent.opacity(ViewConstants.focusBorderDim), bright: palette.accent)
+            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+            bright: palette.accent)
 
         var lines: [String] = [
             BorderRenderer.standardTopBorder(

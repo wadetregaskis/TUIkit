@@ -385,7 +385,8 @@ private struct _ButtonStyleBody: View, Renderable {
 
             let foregroundColor: Color =
                 isDisabled
-                ? palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+                ? palette.foregroundTertiary.opacity(
+                    ViewConstants.disabledForeground, over: palette.background)
                 : (cascadeForeground?.resolve(with: palette)
                     ?? baseForeground?.resolve(with: palette) ?? palette.accent)
 
@@ -418,7 +419,7 @@ private struct _ButtonStyleBody: View, Renderable {
         let buttonBgOpacity = isHovered
             ? ViewConstants.hoverBackground
             : ViewConstants.focusBorderDim
-        let buttonBg = palette.accent.opacity(buttonBgOpacity)
+        let buttonBg = palette.accent.opacity(buttonBgOpacity, over: palette.background)
 
         // Label foreground: a scoped cascade colour wins (in every state);
         // otherwise the style/role's own colour is used in every state too. A
@@ -430,13 +431,20 @@ private struct _ButtonStyleBody: View, Renderable {
         // applied below) and the caps/background pulse, not whether the tint
         // shows. The default style's own colour already IS `foregroundSecondary`,
         // so an unfocused default button still reads as a dim, recessive control.
+        // Framework-chosen colours are floored (hue-preserving) against the
+        // face they sit on — a mid-tone palette's secondary text over its
+        // accent-tinted face can land tone-on-tone (Red Sands' parchment on
+        // gold-over-brick). An explicit cascade colour is the app author's
+        // and is left alone.
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            labelFg = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
         } else {
-            labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
+            labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
+                .ensuringContrast(atLeast: 3.0, against: buttonBg)
         }
 
         // Caps match the background normally, pulsing to accent when focused.
@@ -446,7 +454,7 @@ private struct _ButtonStyleBody: View, Renderable {
         } else if isFocused {
             resolvedCapColor = Color.lerp(
                 buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright),
+                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
                 phase: context.environment.pulsePhase
             )
         } else {
@@ -489,13 +497,25 @@ private struct _ButtonStyleBody: View, Renderable {
         let cascadeForeground: Color? =
             configuration.role == .destructive ? nil : cascaded.foreground
 
+        // Computed up front so the standard path can floor its default label
+        // colour against the face it sits on; the plain path ignores it.
+        let buttonBg = palette.accent.opacity(
+            isHovered ? ViewConstants.hoverBackground : ViewConstants.focusBorderDim,
+            over: palette.background)
+
+        // Same rules as the string path: cascade wins untouched; framework
+        // colours are floored against the face (see makeStandardBody).
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            labelFg = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
-        } else {
+        } else if appearance.isPlain {
             labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
+        } else {
+            labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
+                .ensuringContrast(atLeast: 3.0, against: buttonBg)
         }
 
         // Plain: focus-indicator prefix + the label, no caps or background.
@@ -509,13 +529,11 @@ private struct _ButtonStyleBody: View, Renderable {
         }
 
         // Standard: half-block caps around the background-tinted, padded label.
-        let buttonBg = palette.accent.opacity(
-            isHovered ? ViewConstants.hoverBackground : ViewConstants.focusBorderDim)
         let capColor: Color
         if isFocused && !isDisabled {
             capColor = Color.lerp(
                 buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright),
+                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
                 phase: context.environment.pulsePhase)
         } else {
             capColor = buttonBg

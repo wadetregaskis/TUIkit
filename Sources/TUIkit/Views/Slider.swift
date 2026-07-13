@@ -724,16 +724,18 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         //   - Otherwise: dimmed foregroundTertiary
         let arrowColor: Color
         if isDisabled {
-            arrowColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            arrowColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
             // Pulse between 35% and 100% accent
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
             arrowColor = indicator.color(dim: dimAccent, bright: palette.accent)
         } else if isHovered {
-            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground)
+            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
         } else {
             // Dimmed arrows when unfocused
-            arrowColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            arrowColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         }
 
         // Build track

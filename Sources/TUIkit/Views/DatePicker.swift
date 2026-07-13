@@ -261,8 +261,8 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // it's colour-only, so width is identical whether or not it's applied.
         let activeHighlight: Color? = (isFocused && !context.isMeasuring)
             ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusPulseMin),
-                palette.accent.opacity(ViewConstants.focusPulseMax),
+                palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+                palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background),
                 phase: context.environment.pulsePhase)
             : nil
 

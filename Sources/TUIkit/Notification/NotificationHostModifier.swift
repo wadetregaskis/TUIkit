@@ -74,8 +74,9 @@ extension NotificationHostModifier: Renderable {
             )
 
             let resolvedBorderColor = palette.border
-            let fadedBorderColor = resolvedBorderColor.opacity(opacity)
-            let fgColor = Color.palette.foreground.resolve(with: palette).opacity(opacity)
+            let fadedBorderColor = resolvedBorderColor.opacity(opacity, over: palette.background)
+            let fgColor = Color.palette.foreground.resolve(with: palette)
+                .opacity(opacity, over: palette.background)
 
             // Build content lines with horizontal padding, padded to full inner width
             // so the Box spans the intended width.

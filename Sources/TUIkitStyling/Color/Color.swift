@@ -315,6 +315,24 @@ extension Color {
         return .rgb(newRed, newGreen, newBlue)
     }
 
+    /// Returns the color composited at `opacity` over `surface` — true alpha
+    /// blending, unlike ``opacity(_:)`` which can only mix toward black.
+    ///
+    /// Over a black surface the two coincide exactly, which is how the
+    /// mix-toward-black shorthand survived on dark palettes; over light
+    /// surfaces it turns every "dim" into a near-black smudge (the
+    /// dark-on-dark controls seen under light palettes), so palette-aware
+    /// rendering should pass the surface the colour actually draws on.
+    ///
+    /// - Parameters:
+    ///   - opacity: The opacity (0–1).
+    ///   - surface: The colour beneath, typically the palette background the
+    ///     view draws over.
+    /// - Returns: The blended color, or `self` if either side is semantic.
+    public func opacity(_ opacity: Double, over surface: Color) -> Self {
+        Self.lerp(self, surface, phase: 1 - opacity)
+    }
+
     /// Linearly interpolates between two colors.
     ///
     /// Both colors are converted to RGB before interpolation. If either

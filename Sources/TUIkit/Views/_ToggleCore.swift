@@ -53,15 +53,16 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // the terminal background.)
         let bracketColor: Color
         if isDisabled {
-            bracketColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            bracketColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
             bracketColor = SelectionIndicator.resolve(isFocused: true, context: context)
                 .color(dim: dimAccent, bright: palette.accent)
         } else if isHovered {
             // Hover bumps the brackets to a partial accent tint
             // so the affordance reads without the focused pulse.
-            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground)
+            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
         } else {
             bracketColor = palette.foreground
         }
@@ -83,7 +84,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // disabled; the OFF mark is a space, so its colour is moot).
         let contentColor: Color
         if isDisabled {
-            contentColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            contentColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if isOnValue {
             contentColor = palette.accent
         } else {
@@ -118,11 +120,13 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let trackColor: Color
         let knobColor: Color
         if isDisabled {
-            // A dimmed (darker) grey with a dim knob — reads as greyed-out /
-            // inactive, and is always darker than the solid "off" grey (opacity
-            // darkens toward black), so the two never look alike in any theme.
-            trackColor = Color.brightBlack.opacity(ViewConstants.disabledForeground)
-            knobColor = palette.background.opacity(ViewConstants.disabledForeground)
+            // The off grey faded halfway toward the page background — reads as
+            // greyed-out / inactive on dark AND light palettes (a fade toward
+            // black turned the disabled track *more* prominent than "off" on
+            // light backgrounds), while staying distinct from the solid grey.
+            trackColor = Color.brightBlack.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
+            knobColor = palette.background
         } else if isOnValue {
             trackColor = palette.accent
             knobColor = palette.background
@@ -258,7 +262,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             labelContext.environment.controlKind = .toggle
             if isDisabled {
                 labelContext.environment.foregroundStyle =
-                    palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+                    palette.foregroundTertiary.opacity(
+                        ViewConstants.disabledForeground, over: palette.background)
             }
 
             // The switch style renders a two-position track (knob left = off,

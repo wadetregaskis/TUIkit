@@ -248,7 +248,8 @@ struct ToggleTests {
         let palette = context.environment.palette
         let dimLabel = ANSIRenderer.colorize(
             "Dimmed",
-            foreground: palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            foreground: palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         )
         #expect(line.contains(dimLabel), "A disabled toggle's label should be dimmed, got: \(line)")
     }

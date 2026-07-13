@@ -1256,9 +1256,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         case .content:
             if isFocused && isSelected {
-                let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+                let dimAccent = palette.accent.opacity(
+                    ViewConstants.focusPulseMin, over: palette.background)
                 return SelectionIndicator.resolve(isFocused: true, context: context)
-                    .color(dim: dimAccent, bright: palette.accent.opacity(ViewConstants.focusPulseMax))
+                    .color(
+                        dim: dimAccent,
+                        bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
             } else if isFocused {
                 return palette.focusBackground
             } else if isSelected {
@@ -1278,7 +1281,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         palette: palette
                     )
                 }
-                return palette.accent.opacity(ViewConstants.selectedBackground)
+                return palette.accent.opacity(ViewConstants.selectedBackground, over: palette.background)
             } else {
                 return alternatingBackgroundIfAny(
                     sectionContentIndex: sectionContentIndex,
@@ -1299,7 +1302,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         palette: any Palette
     ) -> Color? {
         if style.alternatingRowColors && sectionContentIndex.isMultiple(of: 2) {
-            return palette.accent.opacity(ViewConstants.alternatingRowBackground)
+            return palette.accent.opacity(ViewConstants.alternatingRowBackground, over: palette.background)
         }
         return nil
     }

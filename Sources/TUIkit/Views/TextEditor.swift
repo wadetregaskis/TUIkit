@@ -347,8 +347,9 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         while visible.count < width { visible.append(" ") }
 
         let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
-        let selectionForeground = palette.background
-        let selectionBackground = palette.accent.opacity(ViewConstants.selectionIndicator)
+        let selectionBackground = palette.accent.opacity(
+            ViewConstants.selectionIndicator, over: background ?? palette.background)
+        let selectionForeground = palette.readableText(on: selectionBackground)
         let cursorCell = caret.map { $0.column - scrollColumn }
 
         var result = ""

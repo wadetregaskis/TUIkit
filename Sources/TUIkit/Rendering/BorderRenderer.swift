@@ -47,7 +47,7 @@ extension BorderRenderer {
         }
 
         let accentColor = palette.accent
-        let dimColor = accentColor.opacity(ViewConstants.focusBorderDim)
+        let dimColor = accentColor.opacity(ViewConstants.focusBorderDim, over: palette.background)
         let interpolatedColor = Color.lerp(dimColor, accentColor, phase: pulsePhase)
 
         return ANSIRenderer.colorize(String(focusIndicator), foreground: interpolatedColor) + " "

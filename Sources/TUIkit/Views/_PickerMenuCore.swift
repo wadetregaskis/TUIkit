@@ -414,15 +414,18 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let buttonBgOpacity = isHovered
             ? ViewConstants.hoverBackground
             : ViewConstants.focusBorderDim
-        let buttonBg = palette.accent.opacity(buttonBgOpacity)
+        let buttonBg = palette.accent.opacity(buttonBgOpacity, over: palette.background)
 
+        // The label colours are floored (hue-preserving) against the face
+        // they sit on, like Button labels — see ButtonStyle.makeStandardBody.
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            labelFg = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
-            labelFg = palette.accent
+            labelFg = palette.accent.ensuringContrast(atLeast: 3.0, against: buttonBg)
         } else {
-            labelFg = palette.foregroundSecondary
+            labelFg = palette.foregroundSecondary.ensuringContrast(atLeast: 3.0, against: buttonBg)
         }
 
         let capColor: Color
@@ -431,7 +434,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         } else if isFocused {
             capColor = Color.lerp(
                 buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright),
+                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
                 phase: context.environment.pulsePhase
             )
         } else {

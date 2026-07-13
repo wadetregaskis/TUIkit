@@ -58,7 +58,8 @@ extension FocusSectionModifier: Renderable {
         // Never active during measurement.
         if !context.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false) {
             let accentColor = context.environment.palette.accent
-            let dimColor = accentColor.opacity(ViewConstants.focusBorderDim)
+            let dimColor = accentColor.opacity(
+                ViewConstants.focusBorderDim, over: context.environment.palette.background)
             sectionContext.environment.focusIndicatorColor = Color.lerp(dimColor, accentColor, phase: context.environment.pulsePhase)
         } else {
             sectionContext.environment.focusIndicatorColor = nil

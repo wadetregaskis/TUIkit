@@ -105,6 +105,61 @@ struct PaletteContrastAuditTests {
                 name: "tertiary/fieldBackground",  // the prompt text
                 foreground: palette.foregroundTertiary, background: palette.fieldBackground,
                 minimum: 2.4),
+        ] + controlSurfacePairs(for: palette)
+    }
+
+    /// The accent-tinted control surfaces, built with the SAME recipes the
+    /// views use (`Color.opacity(_:over:)` on the palette background). These
+    /// pin the class of bug where a "dim accent" fill was mixed toward black
+    /// instead of toward the page — invisible on dark palettes (black page ==
+    /// mixing toward black) but dark-on-dark buttons and selections under
+    /// light ones (Basic, Silver Aerogel, Solid Colors).
+    private static func controlSurfacePairs(for palette: some Palette) -> [AuditedPair] {
+        let background = palette.background
+        // ButtonStyle / _PickerMenuCore: the ▐…▌ face and its label — the
+        // label recipe mirrors the styles' (default colour floored against
+        // the face it sits on).
+        let buttonFace = palette.accent.opacity(ViewConstants.focusBorderDim, over: background)
+        let hoverFace = palette.accent.opacity(ViewConstants.hoverBackground, over: background)
+        let buttonLabel = palette.foregroundSecondary.ensuringContrast(atLeast: 3.0, against: buttonFace)
+        let hoverLabel = palette.foregroundSecondary.ensuringContrast(atLeast: 3.0, against: hoverFace)
+        let pickerFocusedLabel = palette.accent.ensuringContrast(atLeast: 3.0, against: buttonFace)
+        // TextField / TextEditor selections: fill + auto-picked text side.
+        let selectionFill = palette.accent.opacity(ViewConstants.selectionIndicator, over: background)
+        // List / Table rows: unfocused-selected fill, alternating stripe, and
+        // the focused-row pulse's two endpoints (content keeps its normal
+        // foreground over all of them).
+        let selectedRowFill = palette.accent.opacity(ViewConstants.selectedBackground, over: background)
+        let alternatingFill = palette.accent.opacity(
+            ViewConstants.alternatingRowBackground, over: background)
+        let pulseDim = palette.accent.opacity(ViewConstants.focusPulseMin, over: background)
+        let pulseBright = palette.accent.opacity(ViewConstants.focusPulseMax, over: background)
+        return [
+            AuditedPair(
+                name: "buttonLabel/buttonFace",
+                foreground: buttonLabel, background: buttonFace, minimum: 2.7),
+            AuditedPair(
+                name: "buttonLabel/hoverFace",
+                foreground: hoverLabel, background: hoverFace, minimum: 2.7),
+            AuditedPair(
+                name: "focusedPickerLabel/face",  // focused picker labels use the accent
+                foreground: pickerFocusedLabel, background: buttonFace, minimum: 2.7),
+            AuditedPair(
+                name: "selectionText/selectionFill",
+                foreground: palette.readableText(on: selectionFill), background: selectionFill,
+                minimum: 3.5),
+            AuditedPair(
+                name: "foreground/selectedRowFill",
+                foreground: palette.foreground, background: selectedRowFill, minimum: 3.0),
+            AuditedPair(
+                name: "foreground/alternatingRow",
+                foreground: palette.foreground, background: alternatingFill, minimum: 3.5),
+            AuditedPair(
+                name: "foreground/focusPulseDim",
+                foreground: palette.foreground, background: pulseDim, minimum: 2.4),
+            AuditedPair(
+                name: "foreground/focusPulseBright",
+                foreground: palette.foreground, background: pulseBright, minimum: 2.0),
         ]
     }
 

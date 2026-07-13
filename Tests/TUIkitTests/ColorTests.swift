@@ -36,6 +36,38 @@ struct ColorTests {
         #expect(Color.palette(42) != Color.palette(43))
     }
 
+    @Test("opacity(_:over:) over black matches the mix-toward-black opacity")
+    func opacityOverBlackEquivalence() {
+        // On a pure-black surface true alpha blending IS the historical
+        // multiply-toward-black — dark palettes render byte-identically.
+        for value in [0.0, 0.2, 0.45, 0.6, 1.0] {
+            let color = Color.rgb(64, 149, 255)
+            #expect(color.opacity(value, over: .rgb(0, 0, 0)) == color.opacity(value))
+        }
+    }
+
+    @Test("opacity(_:over:) fades toward the surface, not black")
+    func opacityOverLightSurface() {
+        // 20% blue over white: a pale blue, NOT a near-black navy (the
+        // dark-on-dark button bug under light palettes).
+        let faded = Color.rgb(0, 0, 255).opacity(0.2, over: .rgb(255, 255, 255))
+        guard let (red, green, blue) = faded.rgbComponents else {
+            Issue.record("unresolved")
+            return
+        }
+        #expect(red >= 200 && green >= 200, "\(faded) should be mostly white")
+        #expect(blue == 255)
+        // Endpoints: 0 disappears into the surface, 1 is the colour itself.
+        #expect(Color.red.opacity(0, over: .rgb(10, 20, 30)) == Color.rgb(10, 20, 30))
+        #expect(Color.rgb(1, 2, 3).opacity(1, over: .rgb(255, 255, 255)) == Color.rgb(1, 2, 3))
+    }
+
+    @Test("opacity(_:over:) leaves semantic colours unchanged")
+    func opacityOverSemanticPassthrough() {
+        let semantic = Color.palette.accent
+        #expect(semantic.opacity(0.5, over: .rgb(0, 0, 0)) == semantic)
+    }
+
     @Test("lerp at phase 0 returns from color")
     func lerpAtZero() {
         let from = Color.rgb(0, 0, 0)

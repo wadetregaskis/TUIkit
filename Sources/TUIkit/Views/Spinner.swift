@@ -392,7 +392,8 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             coloredSpinner = SpinnerStyle.renderBouncingFrame(
                 frameIndex: frameIndex,
                 color: resolvedColor,
-                trackColor: context.environment.palette.foregroundQuaternary.opacity(0.4)
+                trackColor: context.environment.palette.foregroundQuaternary.opacity(
+                    0.4, over: context.environment.palette.background)
             )
         default:
             coloredSpinner = ANSIRenderer.colorize(

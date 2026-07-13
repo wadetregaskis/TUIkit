@@ -490,10 +490,11 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         // compete.
         let indicatorColor: Color
         if isDisabled {
-            indicatorColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            indicatorColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
             // Focused: pulsing accent (whether selected or not)
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin)
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
             indicatorColor = SelectionIndicator.resolve(isFocused: true, context: context)
                 .color(dim: dimAccent, bright: palette.accent)
         } else if isSelected {
@@ -503,10 +504,11 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // Hovered (and neither focused nor selected):
             // dim accent — reads as "you can pick me" without
             // mimicking the focused or selected look.
-            indicatorColor = palette.accent.opacity(ViewConstants.focusBorderDim)
+            indicatorColor = palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background)
         } else {
             // Unselected, unfocused, unhovered: dimmed.
-            indicatorColor = palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            indicatorColor = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         }
 
         let styledIndicator = ANSIRenderer.colorize(indicator, foreground: indicatorColor)

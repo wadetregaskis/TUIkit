@@ -286,7 +286,8 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             // If this section is active, set the focus indicator color for borders (never active during measurement)
             if !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false) {
                 let accentColor = context.environment.palette.accent
-                let dimColor = accentColor.opacity(ViewConstants.focusBorderDim)
+                let dimColor = accentColor.opacity(
+                    ViewConstants.focusBorderDim, over: context.environment.palette.background)
                 sectionContext.environment.focusIndicatorColor = Color.lerp(dimColor, accentColor, phase: context.environment.pulsePhase)
             } else {
                 sectionContext.environment.focusIndicatorColor = nil
@@ -800,7 +801,7 @@ extension _NavigationSplitViewCore {
         // Grip foreground: a quiet dot, pulsing toward the accent while hovered.
         let dotColor = info.isHovered
             ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusBorderDim),
+                palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
                 palette.accent, phase: pulsePhase)
             : palette.foregroundTertiary
 
@@ -808,8 +809,9 @@ extension _NavigationSplitViewCore {
         // (same min/max the List focus-pulse uses).
         let background: Color? = info.isActive
             ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusPulseMin),
-                palette.accent.opacity(ViewConstants.focusPulseMax), phase: pulsePhase)
+                palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+                palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background),
+                phase: pulsePhase)
             : nil
 
         let lines: [String] = (0..<h).map { row in

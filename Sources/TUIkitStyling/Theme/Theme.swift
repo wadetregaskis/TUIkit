@@ -113,11 +113,32 @@ extension Palette {
 
     // MARK: - UI Element Defaults
 
-    public var focusBackground: Color { foregroundTertiary.opacity(0.3) }
+    public var focusBackground: Color { foregroundTertiary.opacity(0.3, over: background) }
 
     public var cursorColor: Color { accent }
 
     public var fieldBackground: Color { appHeaderBackground }
+}
+
+extension Palette {
+    /// The more readable of the palette's foreground / background on
+    /// `surface`, nudged (hue-preserving) until it reaches body-text
+    /// contrast (4.5:1) where possible.
+    ///
+    /// For text over accent-tinted fills (selections, filled indicators),
+    /// where the winning side flips between dark and light palettes: a dark
+    /// palette's selection fill is a deepened accent that wants the light
+    /// foreground; a light palette's is a pastel that wants the dark one.
+    /// Saturated mid-tone fills (Grass's amber over green) beat both sides,
+    /// so the winner is then pushed toward readable via
+    /// ``Color/ensuringContrast(atLeast:against:)``.
+    public func readableText(on surface: Color) -> Color {
+        let winner =
+            foreground.contrastRatio(against: surface) >= background.contrastRatio(against: surface)
+            ? foreground
+            : background
+        return winner.ensuringContrast(atLeast: 4.5, against: surface)
+    }
 }
 
 // MARK: - Palette Registry
