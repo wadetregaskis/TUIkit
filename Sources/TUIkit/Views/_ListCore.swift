@@ -863,6 +863,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // are in lines while its offset is in rows, so dragging is exact for
         // uniform 1-line rows and proportional for taller rows (arrows/track stay
         // exact). Its own repeat token lets it auto-repeat independently.
+        let showsBorder = context.environment.listStyle.showsBorder
         if let barColumn = state.scrollbarColumn, state.scrollbarHeight > 0 {
             let barHandler = ScrollbarRenderer.verticalMouseHandler(
                 for: state.handler, length: state.scrollbarHeight,
@@ -870,10 +871,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 proportional: context.environment.scrollbarProportionalThumb,
                 behavior: context.environment.scrollbarClickBehavior)
             let barHandlerID = mouseDispatcher.register(barHandler)
+            // A bordered list's bar sits against the right border: widen the
+            // bar's region over that border column too — a click there is
+            // almost certainly aimed at the bar, not at "select whatever row
+            // shares this y" (the handler only reads y, so the extra column
+            // costs nothing).
             buffer.hitTestRegions.insert(
                 HitTestRegion(
                     offsetX: barColumn, offsetY: topInset,
-                    width: 1, height: state.scrollbarHeight, handlerID: barHandlerID),
+                    width: showsBorder ? 2 : 1,
+                    height: state.scrollbarHeight, handlerID: barHandlerID),
                 at: 0
             )
             ScrollbarRenderer.driveAutoRepeat(
@@ -881,11 +888,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 token: "list-scrollbar-repeat-\(context.identity.path)", context: context)
         }
 
+        // Selection needs a click on the CONTENT columns: the border is
+        // chrome, and a click there (however row-aligned its y) must not
+        // select — see the x-guard in the handler. Clamped: a degenerate
+        // (sub-2-column) list still yields a valid, empty range.
+        let borderInset = showsBorder ? 1 : 0
+        let contentColumns = borderInset..<max(borderInset, buffer.width - borderInset)
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,
-                topInset: topInset
+                topInset: topInset,
+                contentColumns: contentColumns
             )
         )
         // Insert at index 0 so any interactive child inside a
@@ -964,7 +978,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func containerMouseHandler(
         state: PopulatedRenderState,
         focusManager: FocusManager?,
-        topInset: Int
+        topInset: Int,
+        contentColumns: Range<Int>
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
@@ -983,11 +998,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     return event.phase == .pressed
                 }
                 // Translate event.y → row index by walking the
-                // captured y-ranges. Clicks on a row select it
-                // and focus the list; clicks on chrome / empty
-                // area just focus.
+                // captured y-ranges. Clicks on a row's CONTENT
+                // columns select it and focus the list; clicks on
+                // chrome — the border columns, empty area — just
+                // focus (the border shares a y with some row, but
+                // nobody clicking a frame means "select that row").
                 let yInLines = event.y - topInset
-                if let hit = rowRanges.first(where: {
+                if contentColumns.contains(event.x), let hit = rowRanges.first(where: {
                     yInLines >= $0.yStart && yInLines < $0.yStart + $0.height
                 }) {
                     if case .content(let id) = hit.type {

@@ -142,4 +142,57 @@ struct ListRowMouseRegionTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: buttonX, y: rowY))
         #expect(box.taps == 1, "the row's Button gets the click, not the list container")
     }
+
+    /// The list's border is chrome: clicking a border character must not
+    /// select the row that happens to share its y — and the scrollbar's
+    /// region annexes the border column beside it, so a click there acts on
+    /// the bar (the likely intent), not on row selection.
+    @Test("Border clicks never select; the right border belongs to the scrollbar")
+    func borderClicksAreChrome() {
+        var selection: String?
+        let items = (1...20).map { "Row-\($0)" }
+        let view = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .frame(height: 8)
+        .scrollbarVisibility(.visible)
+
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var env = EnvironmentValues()
+        env.mouseEventDispatcher = dispatcher
+        env.focusManager = FocusManager()
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 10, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        guard let rowY = buffer.lines.firstIndex(where: { $0.stripped.contains("Row-1") }) else {
+            Issue.record("Row-1 not rendered")
+            return
+        }
+        let rightBorderX = buffer.width - 1
+
+        // Left border: consumed, but no selection.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 0, y: rowY))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 0, y: rowY))
+        #expect(selection == nil, "a left-border click must not select the adjacent row")
+
+        // Right border: the scrollbar's widened region owns it — still no
+        // selection (whatever the bar does with the click).
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: rightBorderX, y: rowY))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: rightBorderX, y: rowY))
+        #expect(selection == nil, "a right-border click acts on the scrollbar, not selection")
+        let barRegion = buffer.hitTestRegions.first {
+            $0.width == 2 && $0.offsetX + $0.width == buffer.width
+        }
+        #expect(barRegion != nil, "the bar's region annexes the border column: \(buffer.hitTestRegions)")
+
+        // Sanity: an actual content click still selects.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: rowY))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 4, y: rowY))
+        #expect(selection == "Row-1", "content clicks still select")
+    }
 }
