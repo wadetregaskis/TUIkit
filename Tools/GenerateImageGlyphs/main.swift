@@ -10,18 +10,16 @@
 //
 //  Font-rasterisation calibration for the Image renderer. Rasterises each
 //  candidate glyph in a reference monospace font (SF Mono Regular 11 by
-//  default — the font macOS Terminal.app uses) via CoreText, measures its ink
-//  coverage, and emits two calibrated tables into
+//  default — the font macOS Terminal.app uses) via CoreText, measures its
+//  ink, and emits ONE calibrated table into
 //  `Sources/TUIkitImage/ImageGlyphCalibration.generated.swift`:
 //
-//    • `generatedShapeCoverage` — per-glyph raw 6-region coverage vectors for
-//      the shape renderer, sampled at the SAME six staggered circles the
-//      runtime uses (so they drop straight into `computeShapeTable`, which
-//      normalises them). Replaces the hand-drawn 5×10 bitmaps with values
-//      measured from the real font.
-//    • `generatedAsciiDetailedRamp` — a coverage-ordered, gap-free pure-ASCII
-//      ramp for `.asciiDetailed`, replacing the hand-picked Bourke ordering
-//      with one calibrated to the reference font's actual ink coverage.
+//    • `generatedGlyphCalibration` — per glyph, the TOTAL ink coverage over
+//      the whole cell (for density-ramp selection) and the raw 6-region
+//      coverage vector sampled at the SAME six staggered circles the runtime
+//      uses (for shape matching and flatness scoring). The runtime
+//      (`GlyphRepertoire`) partitions it into the fundamental charsets by
+//      Unicode range and derives the ideal sized subsets at load.
 //
 //  The sampling geometry (`ShapeRegion`) is not duplicated here: generate.sh
 //  compiles the framework's own `Sources/TUIkitImage/ShapeSampling.swift` into
@@ -131,9 +129,10 @@ func shapeVector(_ ink: [Double]) -> [Double] {
 
 // MARK: - Candidate glyph sets
 
-/// The shape renderer's glyph set. This tool is the single author of it: the
-/// glyphs here become the keys of `generatedShapeCoverage`, which the runtime
-/// reads back — so there is no separate copy in the framework to keep in sync.
+/// The ASCII candidates. This tool is the single author of the glyph pool:
+/// the glyphs here become the keys of `generatedGlyphCalibration`, which the
+/// runtime reads back — so there is no separate copy in the framework to
+/// keep in sync.
 ///
 /// Every printable ASCII character: the matcher picks by measured 6-region
 /// ink coverage, so a bigger vocabulary only ever improves the fit — a `y`
@@ -143,7 +142,7 @@ func shapeVector(_ ink: [Double]) -> [Double] {
 /// and nothing else.
 let shapeGlyphs: [Character] = (0x20...0x7E).map { Character(UnicodeScalar($0)!) }
 
-/// The additional glyphs of the WIDE Unicode set (`.unicodeDetailed`),
+/// The additional non-ASCII candidate glyphs,
 /// chosen for strong spatial signatures and near-universal terminal-font
 /// coverage (Block Elements, Box Drawing, and the common Geometric Shapes —
 /// all single-cell in terminal fonts; the width test in ImageTests pins
@@ -163,9 +162,9 @@ let shapeGlyphs: [Character] = (0x20...0x7E).map { Character(UnicodeScalar($0)!)
 ///   circles, squares, diamond) whose ink distributions cover curved and
 ///   diagonal features.
 ///
-/// Combined with the ASCII shape glyphs above into
-/// `generatedUnicodeShapeCoverage`, so the matcher can pick whichever
-/// family fits a cell best. Characters the reference font lacks natively
+/// Calibrated alongside the ASCII glyphs above into
+/// `generatedGlyphCalibration`; the runtime partitions the pool into the
+/// fundamental charsets. Characters the reference font lacks natively
 /// are skipped at generation time (see `nativeGlyph`), so CoreText's
 /// font-fallback can't calibrate glyphs end-user fonts likely miss —
 /// except the `fallbackAllowedGlyphs`, measured through the fallback

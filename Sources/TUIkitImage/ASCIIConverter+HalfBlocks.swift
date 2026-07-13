@@ -1,5 +1,5 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  ASCIIConverter+FineBlocks.swift
+//  ASCIIConverter+HalfBlocks.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
@@ -25,16 +25,16 @@ extension ASCIIConverter {
     /// In monochrome mode the two pixels are thresholded against
     /// mid-luminance and drawn as space / `▀` / `▄` / `█` so the silhouette
     /// remains recognisable even without colour.
-    func convertFineBlocks(
+    func convertHalfBlocks(
         _ image: RGBAImage,
         width: Int,
         height: Int,
         mode: ASCIIColorMode
     ) -> [String] {
         if mode == .mono {
-            return convertFineBlocksMono(image, width: width, height: height)
+            return convertHalfBlocksMono(image, width: width, height: height)
         }
-        return convertFineBlocksColor(image, width: width, height: height, mode: mode)
+        return convertHalfBlocksColor(image, width: width, height: height, mode: mode)
     }
 
     /// Colour variant: top pixel → background, bottom pixel → foreground of `▄`.
@@ -46,7 +46,7 @@ extension ASCIIConverter {
     /// each row's bottom. Bold selects a heavier glyph that fills to the edge on
     /// the affected sizes; in true colour the fill colour is explicit RGB, so
     /// bold changes only the glyph weight, not the colour, and never the width.
-    private func convertFineBlocksColor(
+    private func convertHalfBlocksColor(
         _ image: RGBAImage,
         width: Int,
         height: Int,
@@ -92,7 +92,7 @@ extension ASCIIConverter {
 
     /// Monochrome variant: threshold both pixels at mid-luminance and pick
     /// the block glyph that best represents which halves are "dark".
-    private func convertFineBlocksMono(
+    private func convertHalfBlocksMono(
         _ image: RGBAImage,
         width: Int,
         height: Int

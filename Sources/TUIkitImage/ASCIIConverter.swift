@@ -65,7 +65,7 @@ public enum ASCIICharacterSet: Sendable, Equatable {
         /// > Note: this paints pixels into BOTH the cell foreground and
         /// > background, so a faithful image depends on the terminal drawing
         /// > `▄` cleanly across the whole cell. The emitted grid is itself
-        /// > gap-free (pinned by `FineBlocksRenderTests`); seams come from
+        /// > gap-free (pinned by `HalfBlocksRenderTests`); seams come from
         /// > the terminal's glyph rendering (e.g. Terminal.app + SF Mono).
         /// > When a terminal bands, use ``solid``.
         case half
@@ -115,33 +115,6 @@ public enum ASCIICharacterSet: Sendable, Equatable {
 
     /// The full non-block Unicode repertoire (`.unicode(glyphs: nil)`).
     public static var unicode: Self { .unicode(glyphs: nil) }
-
-    /// Solid full-cell colour (`.blocks(.solid)`) — the historical meaning
-    /// of the bare `blocks` spelling.
-    public static var blocks: Self { .blocks(.solid) }
-
-    // MARK: Historical spellings
-
-    @available(*, deprecated, renamed: "ascii(glyphs:)", message: "the full ASCII repertoire is .ascii (or .ascii(glyphs: nil))")
-    public static var asciiDetailed: Self { .ascii(glyphs: nil) }
-
-    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.coarse)")
-    public static var coarseBlocks: Self { .blocks(.coarse) }
-
-    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.half)")
-    public static var fineBlocks: Self { .blocks(.half) }
-
-    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.braille)")
-    public static var braille: Self { .blocks(.braille) }
-
-    @available(*, unavailable, message: "shape-awareness is a converter option now: use .ascii with ASCIIConverter(shapeAware: true) or .imageShapeAware(true)")
-    public static var shapeBased: Self { .ascii(glyphs: nil) }
-
-    @available(*, unavailable, message: "edge-line style follows the charset now: use .ascii or .unicode with shapeAware")
-    public static var shapeUnicode: Self { .unicode(glyphs: nil) }
-
-    @available(*, unavailable, message: "use .unicode with shapeAware (block glyphs moved to the shape-aware .blocks charset)")
-    public static var unicodeDetailed: Self { .unicode(glyphs: nil) }
 }
 
 // MARK: - Color Mode
@@ -347,7 +320,7 @@ extension ASCIIConverter {
         case .blocks(.braille):
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
         case .blocks(.half):
-            return convertFineBlocks(scaled, width: width, height: height, mode: effectiveMode)
+            return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .blocks(.solid):
             return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .ascii, .unicode, .blocks(.coarse), .customRamp:
@@ -463,7 +436,7 @@ extension ASCIIConverter {
 
     /// Converts each pixel to a full-cell background fill: a space whose cell
     /// **background** is the pixel colour. One pixel per cell — half the vertical
-    /// resolution of ``convertFineBlocks(_:width:height:mode:)`` — but gap-free:
+    /// resolution of ``convertHalfBlocks(_:width:height:mode:)`` — but gap-free:
     /// it draws no glyph, so it never shows the inter-row seams a font leaves
     /// when its block glyphs are rasterised short of the cell.
     ///

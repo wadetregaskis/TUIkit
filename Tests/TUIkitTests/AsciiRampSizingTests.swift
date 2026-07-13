@@ -1,5 +1,5 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  AsciiDetailedRenderTests.swift
+//  AsciiRampSizingTests.swift
 //
 //  The ASCII charset's configurable size: the full repertoire uses a long,
 //  ink-ordered ramp with 2× supersampling for fine tonal gradation, while a
@@ -16,7 +16,7 @@ import Testing
 
 @MainActor
 @Suite("ASCII charset sizing")
-struct AsciiDetailedRenderTests {
+struct AsciiRampSizingTests {
     /// A left→right greyscale ramp (luminance 0…255 across the width).
     private func horizontalGradient(_ width: Int, _ height: Int) -> RGBAImage {
         var pixels = [RGBA]()

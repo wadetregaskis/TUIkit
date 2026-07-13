@@ -201,7 +201,7 @@ struct ASCIIConverterTests {
     }
 
     @Test("Fine-block conversion uses two vertical pixels per cell")
-    func fineBlocksUsesTwoPixelsPerCell() {
+    func halfBlocksUsesTwoPixelsPerCell() {
         // Solid red image. With .blocks(.half) the converter scales to
         // (width, height*2) pixels and emits ▄ with a foreground = bottom
         // pixel and a background = top pixel for each cell.
@@ -222,7 +222,7 @@ struct ASCIIConverterTests {
     }
 
     @Test("Shape-based conversion picks a horizontal line for a clean top/bottom split")
-    func shapeBasedPicksHorizontalEdgeForTopDarkImage() {
+    func shapeAwarePicksHorizontalEdgeForTopDarkImage() {
         // Top half black, bottom half white — a clean HORIZONTAL edge across the
         // cell. Edge detection now recognises it and draws the orientation-
         // matched line glyph `-`, rather than a top-heavy coverage char (which
@@ -237,7 +237,7 @@ struct ASCIIConverterTests {
     }
 
     @Test("Shape-based conversion picks a horizontal line for a clean bottom/top split")
-    func shapeBasedPicksHorizontalEdgeForBottomDarkImage() {
+    func shapeAwarePicksHorizontalEdgeForBottomDarkImage() {
         // Top half white, bottom half black — also a clean horizontal edge → `-`.
         var pixels = [RGBA](repeating: RGBA(r: 255, g: 255, b: 255), count: 100)
         for index in 50..<100 { pixels[index] = RGBA(r: 0, g: 0, b: 0) }
@@ -249,7 +249,7 @@ struct ASCIIConverterTests {
     }
 
     @Test("Fine-block conversion in mono mode uses block glyphs only")
-    func fineBlocksMonoUsesBlockGlyphs() {
+    func halfBlocksMonoUsesBlockGlyphs() {
         // Top half dark, bottom half bright → expect ▀ (Upper Half Block: dark
         // ink on top, light below) for every cell.
         var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 16)

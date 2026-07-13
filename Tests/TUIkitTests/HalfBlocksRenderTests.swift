@@ -1,5 +1,5 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  FineBlocksRenderTests.swift
+//  HalfBlocksRenderTests.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
@@ -27,7 +27,7 @@ import Testing
 // real, in-our-output gap.
 
 @Suite("Fine-block grid integrity")
-struct FineBlocksRenderTests {
+struct HalfBlocksRenderTests {
 
     /// A `w`×`h` image with a smooth 2-D gradient, so adjacent cells differ in
     /// colour and the converter is forced through its per-cell colour-run and
