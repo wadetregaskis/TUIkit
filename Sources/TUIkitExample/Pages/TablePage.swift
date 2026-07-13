@@ -146,6 +146,7 @@ struct TablePage: View {
     @State var ratioSelection: String?
     @State var notesSelection: Int?
     @State var multiLineByLine = true
+    @State var fixedHeightByLine = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
@@ -194,16 +195,16 @@ struct TablePage: View {
 
             // Two multi-line tables side by side: the small original (12 rows,
             // 2-line Details) on the left, and a fixed-height table of hundreds
-            // of rows with pseudo-random line counts on the right. The toggle
-            // switches BOTH between line- and row-centric scrolling (the
-            // environment modifier below cascades to the whole HStack).
-            Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
+            // of rows with pseudo-random line counts on the right. Each has
+            // its OWN line/row scrolling toggle, so the two granularities can
+            // be compared side by side.
             HStack(alignment: .top, spacing: 2) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(L("page.table.multiSelectionCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text(L("component.multiSelectHint"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
                     Table(
                         FileEntry.sampleFiles,
                         selection: $multiSelection
@@ -216,12 +217,14 @@ struct TablePage: View {
                             .width(.fixed(22))
                             .lineLimit(2)
                     }
+                    .scrollGranularity(multiLineByLine ? .line : .row)
                 }
                 .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(L("page.table.wrappingCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(L("demo.scrollGranularity.line"), isOn: $fixedHeightByLine)
                     // 300 rows in a fixed 20-row viewport → it scrolls. The Note
                     // column is `.flexible` with `.lineLimit(3)`, so each row's
                     // height varies: short notes stay one line, longer ones wrap
@@ -237,10 +240,10 @@ struct TablePage: View {
                     }
                     .frame(height: 20)
                     .scrollbarVisibility(.visible)
+                    .scrollGranularity(fixedHeightByLine ? .line : .row)
                 }
                 .frame(maxWidth: .infinity)
             }
-            .scrollGranularity(multiLineByLine ? .line : .row)
 
             Text(L("page.table.ratioCaption"))
                 .foregroundStyle(.palette.foregroundSecondary)
