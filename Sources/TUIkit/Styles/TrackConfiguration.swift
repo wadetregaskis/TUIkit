@@ -58,14 +58,17 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// Multi-cell characters (emoji, CJK) cannot be truncated mid-glyph:
     /// they coarsen the track's resolution to the widest character's cell
     /// width, and the track PERMANENTLY shrinks to a neat multiple of it —
-    /// the width must not change with the fill:unfilled ratio. The sub-cell
-    /// ``partialRamp`` is skipped in that coarse mode.
+    /// the width must not change with the fill:unfilled ratio. In that coarse
+    /// mode the ``partialRamp`` subdivides the quantum *block* instead of a
+    /// cell: the partially-filled block renders as its ramp glyph repeated
+    /// across the block.
     public var fill: String
 
     /// The sub-cell ramp for the single fractional boundary cell, ordered
     /// lightest → fullest (e.g. `▏▎▍▌▋▊▉` or `░▒▓`). `nil` quantizes the fill to
     /// whole cells (no fractional boundary cell). A ramp of *n* glyphs gives
-    /// `n + 1` steps of sub-cell precision at the boundary.
+    /// `n + 1` steps of sub-cell precision at the boundary (sub-block, for a
+    /// coarse multi-cell ``fill`` — see there).
     public var partialRamp: [Character]?
 
     /// How the unfilled region is rendered.

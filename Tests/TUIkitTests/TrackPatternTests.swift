@@ -84,6 +84,44 @@ struct TrackPatternTests {
         #expect(render(0.625, width: 4, config: config) == "ab▌-")
     }
 
+    @Test("The boundary ramp works with a coarse emoji fill, one block at a time")
+    func rampSurvivesCoarseFill() {
+        // A 2-cell fill coarsens the track to 2-cell blocks; the ramp then
+        // subdivides the BLOCK: the partially-filled block renders as its ramp
+        // glyph (by sub-block fraction) repeated across the block. This used
+        // to be skipped outright — an emoji fill silently behaved as ramp=None.
+        let config = TrackConfiguration(
+            fill: "😀", partialRamp: ["░", "▒", "▓"], emptyStyle: .glyph("-"))
+
+        // 4 blocks × 4 sub-steps = 16 steps across the 8-cell track.
+        #expect(render(0.0, width: 8, config: config) == "--------")
+        #expect(render(1.0 / 16.0, width: 8, config: config) == "░░------", "¼ of the first block")
+        #expect(render(5.0 / 16.0, width: 8, config: config) == "😀░░----", "1 block + ¼")
+        #expect(render(0.5, width: 8, config: config) == "😀😀----", "exactly 2 blocks — no ramp cell")
+        #expect(render(15.0 / 16.0, width: 8, config: config) == "😀😀😀▓▓", "3 blocks + ¾")
+        #expect(render(1.0, width: 8, config: config) == "😀😀😀😀")
+
+        // The width stays constant at every value, ramp included.
+        for fraction in stride(from: 0.0, through: 1.0, by: 0.05) {
+            #expect(
+                render(fraction, width: 8, config: config).strippedLength == 8,
+                "constant width at \(fraction)")
+        }
+    }
+
+    @Test("The coarse ramp block sits on the empty colour under a solid background")
+    func coarseRampPaintsEmptyBackground() {
+        // `.background` unfill: the partial block is genuinely part-empty, so
+        // it must carry the EMPTY background (like the fine path's boundary
+        // cell), not the fill colour.
+        let config = TrackConfiguration(
+            fill: "😀", partialRamp: ["▒"], emptyStyle: .background)
+        let track = TrackRenderer.render(
+            fraction: 5.0 / 8.0, width: 8, style: .custom(config),
+            filledColor: .white, emptyColor: .brightBlack, accentColor: .cyan)
+        #expect(track.stripped == "😀😀▒▒  ", "2 blocks + ½ block of ramp + empty")
+    }
+
     @Test("Head styles (knob/dot) keep the head visible at every value")
     func headAlwaysVisible() {
         func knob(_ fraction: Double) -> String {

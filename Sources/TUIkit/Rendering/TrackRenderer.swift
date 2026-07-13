@@ -159,8 +159,9 @@ extension TrackRenderer {
     /// Fill and unfilled patterns repeat cyclically and truncate at their
     /// boundaries; multi-cell characters (emoji, CJK) can't be truncated, so
     /// they switch to a coarse mode: the resolution drops to the widest
-    /// character's cell width and the track permanently shrinks to a neat
-    /// multiple of it (see ``renderCoarsePattern``).
+    /// character's cell width, the track permanently shrinks to a neat
+    /// multiple of it, and the boundary ramp subdivides the quantum *block*
+    /// rather than a single cell (see ``renderCoarsePattern``).
     private static func renderConfigured(
         fraction: Double,
         width: Int,
@@ -268,9 +269,12 @@ extension TrackRenderer {
     // one cell, so the fill can only advance in steps of the widest
     // character's width (`quantum`), and the track PERMANENTLY shrinks to
     // the largest multiple of the quantum that fits — its width must not
-    // vary with the fill:unfilled ratio. The sub-cell ramp is meaningless
-    // at this resolution and is skipped. Mixed-width patterns that cannot
-    // land exactly on a step boundary are padded with spaces.
+    // vary with the fill:unfilled ratio. The boundary ramp keeps working at
+    // this resolution, one level coarser: it subdivides the quantum BLOCK
+    // instead of a single cell — the partially-filled block renders as the
+    // ramp glyph for its sub-block fraction, repeated across the block (an
+    // emoji fill with a shade ramp reads "😃😃▒▒····"). Mixed-width patterns
+    // that cannot land exactly on a step boundary are padded with spaces.
     // The inputs are the decomposed configuration plus the two colours;
     // bundling them into a struct would obscure the 1:1 relationship with
     // renderConfigured's locals.
@@ -289,7 +293,17 @@ extension TrackRenderer {
         let effectiveWidth = (width / quantum) * quantum
         guard effectiveWidth > 0 else { return "" }
         let steps = effectiveWidth / quantum
-        let litSteps = Int((fraction * Double(steps)).rounded())
+
+        // With a ramp of n glyphs each block has n+1 sub-steps — the same
+        // arithmetic the fine path applies per cell, at block granularity.
+        // Without one this reduces to whole-block quantization (the previous
+        // behaviour exactly).
+        let ramp = config.partialRamp
+        let stepsPerBlock = (ramp?.count ?? 0) + 1
+        let totalSteps = Int((fraction * Double(steps) * Double(stepsPerBlock)).rounded())
+        let litSteps = min(totalSteps / stepsPerBlock, steps)
+        let partialStep = ramp == nil ? 0 : totalSteps % stepsPerBlock
+        let hasPartial = ramp != nil && partialStep > 0 && totalSteps / stepsPerBlock < steps
         let targetCells = litSteps * quantum
 
         func fillColour(atCell cell: Int) -> Color {
@@ -326,10 +340,34 @@ extension TrackRenderer {
                 background: paintsBackground ? emptyColor : nil)
         }
 
+        // The partially-filled block: its ramp glyph (chosen by the sub-block
+        // fraction) repeated across the whole quantum, so the block reads as
+        // "this much of the next step". The glyph sits on the empty colour,
+        // exactly like the fine path's boundary cell — the block is genuinely
+        // part-empty.
+        var rampCells = 0
+        if hasPartial, let ramp {
+            let glyph = ramp[partialStep - 1]
+            let glyphWidth = max(1, glyph.terminalWidth)
+            let rampColour = fillColour(atCell: targetCells)
+            var block = ""
+            while rampCells + glyphWidth <= quantum {
+                block.append(glyph)
+                rampCells += glyphWidth
+            }
+            if rampCells < quantum {
+                block += String(repeating: " ", count: quantum - rampCells)
+                rampCells = quantum
+            }
+            result += ANSIRenderer.colorize(
+                block, foreground: rampColour,
+                background: paintsBackground ? emptyColor : nil)
+        }
+
         // The unfilled remainder: spaces on the empty colour for
         // `.background`, else the cyclic unfilled pattern truncated at its
         // own character boundaries and space-padded to the track edge.
-        let remaining = effectiveWidth - targetCells
+        let remaining = effectiveWidth - targetCells - rampCells
         guard remaining > 0 else { return result }
         if paintsBackground {
             result += ANSIRenderer.colorize(
