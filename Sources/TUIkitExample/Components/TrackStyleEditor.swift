@@ -34,7 +34,12 @@ struct TrackStyleEditor: View {
     @AppStorage("trackEditor.ramp") private var rampText = "▏▎▍▌▋▊▉"
     @AppStorage("trackEditor.unfilled") private var unfilledName = "░"
     @AppStorage("trackEditor.gradient") private var gradientEnabled = false
+    /// The fill gradient's stops, persisted as comma-separated hex like the
+    /// ProgressView page's sweep gradient. Default: red → amber → green.
+    @AppStorage("trackEditor.gradientStops") private var gradientStopsRaw = "FF5050,FFC850,50DC78"
     @State private var sliderValue = 0.6
+    /// Whether the gradient-editor dialog is up.
+    @State private var editingGradient = false
 
     // The last hundred committed values per field, most recent first,
     // persisted in app state (shared by the Slider and ProgressView pages).
@@ -54,10 +59,23 @@ struct TrackStyleEditor: View {
     /// value stays the stable "background" token.
     private static let unfilledGlyphs = ["░", "·", "─", "␣"]
 
-    /// The demo gradient (red → amber → green), applied when the toggle is on.
-    private static let gradient: [Color] = [
+    /// The fallback gradient (red → amber → green) when the persisted stops
+    /// don't decode to at least two colours.
+    private static let defaultGradient: [Color] = [
         .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
     ]
+
+    /// The persisted stops decoded to colours.
+    private var gradientStops: [Color] {
+        GradientStopsCodec.decode(gradientStopsRaw, fallback: Self.defaultGradient)
+    }
+
+    /// The gradient editor's binding: decodes on read, re-encodes on write.
+    private var gradientStopsBinding: Binding<[Color]> {
+        Binding(
+            get: { gradientStops },
+            set: { gradientStopsRaw = GradientStopsCodec.encode($0) })
+    }
 
     /// The configuration the fields currently describe. Both the fill and
     /// the unfilled entries are PATTERNS: several characters repeat
@@ -75,7 +93,7 @@ struct TrackStyleEditor: View {
             fill: fullGlyph.isEmpty ? "█" : fullGlyph,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
-            fillGradient: gradientEnabled ? Self.gradient : nil)
+            fillGradient: gradientEnabled ? gradientStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s), shared phase with the
@@ -112,7 +130,14 @@ struct TrackStyleEditor: View {
                         .textInputCompletion("background")
                 }
             }
-            Toggle(L("component.trackEditor.gradient"), isOn: $gradientEnabled)
+            HStack(spacing: 2) {
+                Toggle(L("component.trackEditor.gradient"), isOn: $gradientEnabled)
+                // Opens the modal gradient editor over the persisted stops.
+                // Only meaningful while the gradient is applied, so it
+                // disables with the toggle off.
+                Button(L("component.trackEditor.editGradient")) { editingGradient = true }
+                    .disabled(!gradientEnabled)
+            }
             Text(L("component.trackEditor.comboHint"))
                 .foregroundStyle(.palette.foregroundSecondary)
 
@@ -126,6 +151,12 @@ struct TrackStyleEditor: View {
                     .trackStyle(.custom(configuration))
                     .frame(width: 36)
             }
+        }
+        .modal(isPresented: $editingGradient) {
+            GradientEditorPanel(
+                L("component.trackEditor.gradientTitle"),
+                stops: gradientStopsBinding,
+                isPresented: $editingGradient)
         }
     }
 

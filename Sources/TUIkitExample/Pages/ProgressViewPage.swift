@@ -50,20 +50,16 @@ struct ProgressViewPage: View {
     /// The persisted stops decoded to colours (invalid entries dropped; fewer
     /// than two falls back to the default so the row always shows a gradient).
     private var gradientStops: [Color] {
-        let parsed = gradientStopsRaw.split(separator: ",").compactMap { Color.hex(String($0)) }
-        return parsed.count >= 2 ? parsed : [.rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220)]
+        GradientStopsCodec.decode(
+            gradientStopsRaw,
+            fallback: [.rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220)])
     }
 
     /// The editor's binding: decodes on read, re-encodes on write.
     private var gradientStopsBinding: Binding<[Color]> {
         Binding(
             get: { gradientStops },
-            set: { gradientStopsRaw = $0.map(Self.hexString).joined(separator: ",") })
-    }
-
-    private static func hexString(_ color: Color) -> String {
-        guard let c = color.rgbComponents else { return "000000" }
-        return String(format: "%02X%02X%02X", c.red, c.green, c.blue)
+            set: { gradientStopsRaw = GradientStopsCodec.encode($0) })
     }
 
     /// Decides whether the Determinate and Indeterminate sections sit
