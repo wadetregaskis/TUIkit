@@ -234,7 +234,21 @@ extension Character {
             && first.properties.isEmoji
             && !first.properties.isEmojiPresentation
         {
-            return 1
+            // …EXCEPT the BMP East Asian Wide emoji bases — 〰 U+3030,
+            // 〽 U+303D, ㊗ U+3297, ㊙ U+3299. Their CJK width is 2 with or
+            // without VS16, and Terminal.app advances them by that full
+            // width (observed with 〰️); "compensating" pushed the cursor a
+            // third cell along, and the skipped cell is never painted, so
+            // it showed the terminal's default background — a black hole
+            // after every 〰️, whatever the palette. (Framework width tables
+            // are NOT the discriminator here: a pictographic base like
+            // U+1F5A5 also measures 2 yet genuinely under-advances.)
+            switch first.value {
+            case 0x3030, 0x303D, 0x3297, 0x3299:
+                return 2
+            default:
+                return 1
+            }
         }
 
         // Flag emoji — a pair of regional-indicator scalars

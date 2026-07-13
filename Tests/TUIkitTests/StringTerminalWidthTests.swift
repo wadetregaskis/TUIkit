@@ -188,6 +188,23 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(fist.terminalAppCursorAdvance == 4, "✊🏿 cursor advances 4")
     }
 
+    @Test("VS-16 on an East Asian Wide base: cursor advance is the full 2 (no compensation)")
+    func vs16EastAsianWideCursorAdvance() {
+        // 〰️ = U+3030 + U+FE0F: the BARE base is already East Asian Wide
+        // (2 cells), and Terminal.app advances it by 2 with or without the
+        // selector. Treating it as a VS-16 under-advancer injected a CUF(1)
+        // after the glyph, skipping a cell that was never painted — a
+        // third, always-default-background (black) cell after every 〰️.
+        // Same family: 〽️ U+303D, ㊗️ U+3297, ㊙️ U+3299.
+        for s in ["\u{3030}\u{FE0F}", "\u{303D}\u{FE0F}", "\u{3297}\u{FE0F}", "\u{3299}\u{FE0F}"] {
+            let ch = Character(s)
+            #expect(ch.terminalWidth == 2, "\(s) renders 2 cells")
+            #expect(
+                ch.terminalAppCursorAdvance == 2,
+                "\(s) advances its full width — no compensation gap")
+        }
+    }
+
     @Test("VS-16 pictographic emoji: cursor advance is 1 (Terminal.app under-advance bug)")
     func vs16EmojiCursorAdvance() {
         // 🖥️ = U+1F5A5 + U+FE0F — Terminal.app renders 2 cells but advances cursor by 1
