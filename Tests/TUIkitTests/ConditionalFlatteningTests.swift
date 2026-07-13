@@ -65,6 +65,26 @@ struct ConditionalFlatteningTests {
                 == ["HEAD", "", "TAIL"])
     }
 
+    @Test("`.offset` draws displaced without erasing the layer beneath")
+    func offsetFloatsWithoutErasing() {
+        // The vacated position paints NOTHING (the base text shows through),
+        // and the displaced glyph composites at (x, y) over the base.
+        let tree = ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("ABCDEF")
+                Text("GHIJKL")
+            }
+            Text("X").offset(x: 3, y: 1)
+        }
+        let context = makeRenderContext(width: 10, height: 4)
+        let buffer = renderToBuffer(tree, context: context)
+        let composited = buffer.compositingOverlays(
+            maxWidth: 10, maxHeight: 4, palette: context.environment.palette)
+        let lines = composited.lines.map(\.stripped)
+        #expect(lines[0].hasPrefix("ABCDEF"), "the vacated cells stay intact: \(lines)")
+        #expect(lines[1].hasPrefix("GHIXKL"), "the glyph lands at the offset: \(lines)")
+    }
+
     @Test("Same-typed children under sibling conditionals keep distinct identities")
     func siblingConditionalsDontCollide() {
         // Two TextFields under two separate `if`s: their auto-generated
