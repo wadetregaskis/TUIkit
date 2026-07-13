@@ -80,16 +80,16 @@ struct ImageRenderingControls: View {
                         Text(ImageDemoHelpers.colorModeLabel(index)).tag(index)
                     }
                 }
-                // Supersampling applies to the luminance-ramp renderers.
+                // Supersampling applies to every non-shape renderer: each
+                // sample (cell tone, half-cell pixel, braille dot) becomes
+                // an N×N area average.
                 Picker(L("component.imageControls.supersampling"), selection: $supersampling) {
                     Text(L("component.imageControls.auto")).tag(0)
                     ForEach(1...4, id: \.self) { Text("\($0)\u{D7}").tag($0) }
                 }
                 .disabled(
                     !ImageDemoHelpers.usesSupersampling(
-                        charsetIndex: charsetIndex,
-                        blockResolutionIndex: blockResolutionIndex,
-                        shapeAware: shapeAware))
+                        charsetIndex: charsetIndex, shapeAware: shapeAware))
                 rampField
                     .disabled(ImageDemoHelpers.Charset(rawValue: charsetIndex) != .custom)
             }

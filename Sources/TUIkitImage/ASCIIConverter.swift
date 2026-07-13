@@ -180,15 +180,16 @@ public struct ASCIIConverter: Sendable {
     /// The dithering algorithm (nil or .none means no dithering).
     let dithering: DitheringMode
 
-    /// Source-pixels-per-cell on each axis for the luminance-mapping
-    /// renderers (`.ascii` / `.unicode` / `.blocks(.coarse)` /
-    /// `.customRamp`, without shape-awareness): each output cell averages
-    /// an N×N block of source pixels, anti-aliasing the tone so a longer
-    /// ramp resolves smoother gradients. `nil` keeps the default (2 for
-    /// ramps longer than 12 levels, else 1). Clamped to 1...4; higher
-    /// factors cost quadratically more sampling for no visible gain.
-    /// Ignored by the sub-cell renderers (block subdivision, shape
-    /// matching), whose sampling grids are fixed by their glyphs.
+    /// The area-sampling factor for every non-shape renderer: each sample —
+    /// a ramp cell's tone, a solid/half-block pixel, a braille dot — is
+    /// averaged from an N×N block of source pixels instead of the bilinear
+    /// scaler's 2×2 point read, which aliases fine textures on heavy
+    /// downscales. `nil` keeps the default (2 for luminance ramps longer
+    /// than 12 levels, whose extra tonal levels only resolve with averaged
+    /// sampling; 1 otherwise). Clamped to 1...4; higher factors cost
+    /// quadratically more sampling for no visible gain. Ignored when
+    /// shape-aware — the shape matcher already reads 96 staggered samples
+    /// per cell.
     let supersampling: Int?
 
     /// The minimum Sobel gradient magnitude (in 0…1 region-darkness units,
@@ -273,36 +274,47 @@ extension ASCIIConverter {
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
         // Each rendering path has its own sub-cell pixel grid:
-        //   luminance ramps        : 1×1, scaled by the supersampling factor
+        //   luminance ramps        : 1×1  (one tone per cell)
         //   .blocks(.solid)        : 1×1  (one pixel per cell)
         //   .blocks(.half)         : 1×2  (two vertical pixels per cell)
         //   .blocks(.braille)      : 2×4  (eight dots per cell)
         //   shape-aware (any)      : 5×10 (sampled at six staggered circles)
+        // Every non-shape grid is scaled by the supersampling factor and then
+        // box-reduced, so each sample — a cell's tone, a half-cell pixel, a
+        // braille dot — is a true N×N area average rather than the bilinear
+        // scaler's 2×2 point read (which aliases fine textures on heavy
+        // downscales). The shape matcher needs no factor: it already reads
+        // 96 staggered samples per cell.
         let pixelWidth: Int
         let pixelHeight: Int
+        let factor: Int
         if isShapeMatched {
+            factor = 1
             pixelWidth = width * 5
             pixelHeight = height * 10
         } else {
+            let grid: (x: Int, y: Int)
             switch characterSet {
-            case .blocks(.solid):
-                pixelWidth = width
-                pixelHeight = height
             case .blocks(.half):
-                pixelWidth = width
-                pixelHeight = height * 2
+                grid = (1, 2)
             case .blocks(.braille):
-                pixelWidth = width * 2
-                pixelHeight = height * 4
-            case .ascii, .unicode, .blocks(.coarse), .customRamp:
-                let factor = rampSupersampling
-                pixelWidth = width * factor
-                pixelHeight = height * factor
+                grid = (2, 4)
+            case .blocks(.solid), .ascii, .unicode, .blocks(.coarse), .customRamp:
+                grid = (1, 1)
             }
+            factor = effectiveSupersampling
+            pixelWidth = width * grid.x * factor
+            pixelHeight = height * grid.y * factor
         }
 
-        // Scale image to target pixel dimensions
+        // Scale to the (supersampled) pixel grid, then area-average down to
+        // the render grid BEFORE dithering — error diffusion belongs at the
+        // resolution the glyphs actually quantise (dither-then-average would
+        // just smooth the pattern back out).
         var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight)
+        if factor > 1 {
+            scaled = scaled.boxReduced(by: factor)
+        }
 
         // Apply dithering if requested (only meaningful for non-trueColor modes)
         if dithering == .floydSteinberg, effectiveMode != .trueColor {
@@ -324,9 +336,7 @@ extension ASCIIConverter {
         case .blocks(.solid):
             return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .ascii, .unicode, .blocks(.coarse), .customRamp:
-            return convertCharacterBased(
-                scaled, width: width, height: height, mode: effectiveMode,
-                supersample: rampSupersampling)
+            return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
     }
 
@@ -369,11 +379,13 @@ extension ASCIIConverter {
         }
     }
 
-    /// The effective source-pixels-per-cell factor for the luminance
-    /// renderers: the explicit ``supersampling`` when given, else 2 for
-    /// ramps longer than 12 levels (whose extra tonal levels only resolve
-    /// with averaged sampling) and 1 otherwise.
-    private var rampSupersampling: Int {
+    /// The effective supersampling factor for the non-shape renderers: the
+    /// explicit ``supersampling`` when given, else 2 for luminance ramps
+    /// longer than 12 levels (whose extra tonal levels only resolve with
+    /// averaged sampling) and 1 otherwise (the sub-cell block modes'
+    /// ``characterRamp`` is empty, so they default to 1 — supersampling
+    /// there is opt-in).
+    private var effectiveSupersampling: Int {
         if let supersampling { return supersampling }
         return characterRamp.count > 12 ? 2 : 1
     }
@@ -383,17 +395,14 @@ extension ASCIIConverter {
 
 extension ASCIIConverter {
 
-    /// Converts using character brightness mapping (ascii, blocks).
-    ///
-    /// `supersample` is the source-pixels-per-cell factor on each axis: `1` reads
-    /// one pixel per cell (the classic ascii path); `2` averages a 2×2 block,
-    /// anti-aliasing the tone so a longer ramp resolves smoother gradients.
+    /// Converts using character brightness mapping: one (already
+    /// area-averaged, when supersampling) pixel per cell, mapped by
+    /// luminance onto the charset's density ramp.
     private func convertCharacterBased(
         _ image: RGBAImage,
         width: Int,
         height: Int,
-        mode: ASCIIColorMode,
-        supersample: Int
+        mode: ASCIIColorMode
     ) -> [String] {
         let ramp = characterRamp
 
@@ -406,7 +415,7 @@ extension ASCIIConverter {
             var lastColor = ""
 
             for x in 0..<width {
-                let pixel = averagedPixel(image, cellX: x, cellY: y, supersample: supersample)
+                let pixel = image.pixel(at: x, y)
 
                 // Map luminance to character
                 let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count - 1))
@@ -481,34 +490,6 @@ extension ASCIIConverter {
             lines.append(line)
         }
         return lines
-    }
-
-    /// Averages a `supersample × supersample` block of source pixels into one
-    /// representative pixel for the cell at `(cellX, cellY)`. `supersample == 1`
-    /// is the fast path — a single pixel read.
-    private func averagedPixel(
-        _ image: RGBAImage, cellX: Int, cellY: Int, supersample: Int
-    ) -> RGBA {
-        if supersample <= 1 { return image.pixel(at: cellX, cellY) }
-        var rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0
-        let baseX = cellX * supersample
-        let baseY = cellY * supersample
-        for dy in 0..<supersample {
-            for dx in 0..<supersample {
-                let sampleX = min(baseX + dx, image.width - 1)
-                let sampleY = min(baseY + dy, image.height - 1)
-                let pixel = image.pixel(at: sampleX, sampleY)
-                rSum += Int(pixel.r)
-                gSum += Int(pixel.g)
-                bSum += Int(pixel.b)
-                aSum += Int(pixel.a)
-                count += 1
-            }
-        }
-        guard count > 0 else { return image.pixel(at: cellX, cellY) }
-        return RGBA(
-            r: UInt8(rSum / count), g: UInt8(gSum / count),
-            b: UInt8(bSum / count), a: UInt8(aSum / count))
     }
 
     /// The luminance ramp for the current charset, ordered dark pixel →

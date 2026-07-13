@@ -97,20 +97,12 @@ enum ImageDemoHelpers {
         Charset(rawValue: charsetIndex) == .blocks && !shapeAware
     }
 
-    /// Whether the configuration consumes the supersampling factor — the
-    /// luminance-ramp renderers (see `ASCIIConverter.convert`).
-    static func usesSupersampling(
-        charsetIndex: Int, blockResolutionIndex: Int, shapeAware: Bool
-    ) -> Bool {
-        switch Charset(rawValue: charsetIndex) ?? .ascii {
-        case .ascii, .unicode:
-            return !shapeAware
-        case .custom:
-            return true
-        case .blocks:
-            return !shapeAware
-                && blockResolutions[min(blockResolutionIndex, blockResolutions.count - 1)] == .coarse
-        }
+    /// Whether the configuration consumes the supersampling factor — every
+    /// non-shape renderer (each sample becomes an N×N area average; the
+    /// shape matcher's 96-sample grid needs no factor). A custom ramp is
+    /// never shape-matched, so it always qualifies.
+    static func usesSupersampling(charsetIndex: Int, shapeAware: Bool) -> Bool {
+        Charset(rawValue: charsetIndex) == .custom || !shapeAware
     }
 
     /// Whether the configuration consumes the edge-tracing knobs — the

@@ -44,6 +44,21 @@ struct ImageFidelityConfigTests {
         .convert(img, width: w, height: h).joined()
     }
 
+    /// Like `render` but in true colour (pinned to a truecolor terminal), for
+    /// asserting the exact per-cell RGB the block modes emit.
+    private func renderColor(
+        _ img: RGBAImage, w: Int, h: Int, _ set: ASCIICharacterSet,
+        supersampling: Int? = nil
+    ) -> String {
+        withColorDepth(.truecolor) {
+            ASCIIConverter(
+                characterSet: set, colorMode: .trueColor, dithering: .none,
+                supersampling: supersampling
+            )
+            .convert(img, width: w, height: h).joined()
+        }
+    }
+
     // MARK: - Report (not an assertion; run with --filter to eyeball the modes)
 
     @Test("Report: synthetic scene through each shape-aware charset")
@@ -187,6 +202,48 @@ struct ImageFidelityConfigTests {
         #expect(
             twoX.contains(where: { interior.contains($0) }),
             "averaged cells land on interior ramp levels: \(twoX)")
+    }
+
+    @Test("Solid blocks supersample: point-sampled checkerboard becomes area-averaged grey")
+    func solidSupersamplingAverages() {
+        // A 1-px checkerboard downscaled 2:1. At 1× the bilinear scaler's
+        // sample points land exactly on even source coordinates — pure
+        // point sampling, every cell reads black. At 2× each cell averages
+        // its 2×2 source block to mid-grey.
+        let img = image(40, 8) { x, y in (x + y).isMultiple(of: 2) ? 0 : 255 }
+        let oneX = renderColor(img, w: 20, h: 4, .blocks(.solid), supersampling: 1)
+        let twoX = renderColor(img, w: 20, h: 4, .blocks(.solid), supersampling: 2)
+        #expect(oneX != twoX, "supersampling changes what the cells read")
+        #expect(oneX.contains("48;2;0;0;0"), "1× point-samples the black pixels: \(oneX)")
+        #expect(twoX.contains("48;2;127;127;127"), "2× area-averages to mid-grey: \(twoX)")
+        #expect(!twoX.contains("48;2;0;0;0"), "no aliased solid-black cells at 2×: \(twoX)")
+    }
+
+    @Test("Half blocks supersample: each sub-cell pixel is area-averaged")
+    func halfBlocksSupersamplingAverages() {
+        // Same checkerboard; the half-block mode reads two pixels per cell
+        // (top = background, bottom = foreground), each of which must be an
+        // area average at 2× rather than an aliased point read.
+        let img = image(40, 16) { x, y in (x + y).isMultiple(of: 2) ? 0 : 255 }
+        let oneX = renderColor(img, w: 20, h: 4, .blocks(.half), supersampling: 1)
+        let twoX = renderColor(img, w: 20, h: 4, .blocks(.half), supersampling: 2)
+        #expect(oneX != twoX, "supersampling changes what the sub-pixels read")
+        #expect(twoX.contains("2;127;127;127"), "2× sub-pixels average to mid-grey: \(twoX)")
+    }
+
+    @Test("Braille supersamples per dot: sparse texture thresholds from the average")
+    func brailleSupersamplingAverages() {
+        // One black pixel per 2×2 tile, sitting exactly on the even source
+        // coordinates the 1× scaler point-samples — so at 1× every braille
+        // dot reads black and switches OFF (dots mark bright pixels, like
+        // the ramp convention), while at 2× each dot averages its tile to
+        // 191 (light) and switches ON. The image is 75% white either way;
+        // only area averaging sees that.
+        let img = image(80, 32) { x, y in (x.isMultiple(of: 2) && y.isMultiple(of: 2)) ? 0 : 255 }
+        let oneX = render(img, w: 20, h: 4, .blocks(.braille), supersampling: 1)
+        let twoX = render(img, w: 20, h: 4, .blocks(.braille), supersampling: 2)
+        #expect(!oneX.contains("⣿"), "1× aliases every dot to the black point samples: \(oneX)")
+        #expect(twoX.contains("⣿"), "2× thresholds each dot from its area average: \(twoX)")
     }
 
     // MARK: - Edge threshold

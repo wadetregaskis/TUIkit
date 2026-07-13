@@ -207,6 +207,43 @@ extension RGBAImage {
 
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
     }
+
+    /// Returns a copy with each `factor × factor` block averaged into one
+    /// pixel — true area sampling.
+    ///
+    /// ``scaledBilinear(to:_:)`` reads only a 2×2 neighbourhood per output
+    /// pixel, so on heavy downscales it effectively point-samples and can
+    /// alias fine textures. Scaling to `factor`× the wanted grid and
+    /// box-reducing gives every output pixel a proper area average — this
+    /// is what backs the image renderers' supersampling. A `factor` of 1
+    /// (or an image too small to reduce) returns `self`.
+    public func boxReduced(by factor: Int) -> RGBAImage {
+        guard factor > 1, width >= factor, height >= factor else { return self }
+        let targetWidth = width / factor
+        let targetHeight = height / factor
+        let count = factor * factor
+        var result = [RGBA]()
+        result.reserveCapacity(targetWidth * targetHeight)
+        for y in 0..<targetHeight {
+            for x in 0..<targetWidth {
+                var r = 0, g = 0, b = 0, a = 0
+                for dy in 0..<factor {
+                    for dx in 0..<factor {
+                        let p = pixel(at: x * factor + dx, y * factor + dy)
+                        r += Int(p.r)
+                        g += Int(p.g)
+                        b += Int(p.b)
+                        a += Int(p.a)
+                    }
+                }
+                result.append(
+                    RGBA(
+                        r: UInt8(r / count), g: UInt8(g / count),
+                        b: UInt8(b / count), a: UInt8(a / count)))
+            }
+        }
+        return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
+    }
 }
 
 // MARK: - Private Helpers

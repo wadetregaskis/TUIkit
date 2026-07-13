@@ -310,15 +310,14 @@ extension View {
         environment(\.imageColorMode, colorMode)
     }
 
-    /// Sets the supersampling factor for the luminance-mapping renderers
-    /// (the `.ascii` / `.unicode` / `.blocks(.coarse)` /
-    /// ``ASCIICharacterSet/customRamp(_:)`` charsets without
-    /// shape-awareness): each output cell averages a factor×factor block of
-    /// source pixels, anti-aliasing the tone so a longer ramp resolves
-    /// smoother gradients. Clamped to 1...4. Pass `nil` to restore the
-    /// default (2 for ramps longer than 12 levels, else 1). Ignored by the
-    /// sub-cell renderers (block subdivision, shape matching), whose
-    /// sampling grids are fixed by their glyphs.
+    /// Sets the area-sampling factor for every non-shape renderer: each
+    /// sample — a ramp cell's tone, a solid or half-block pixel, a braille
+    /// dot — is averaged from a factor×factor block of source pixels
+    /// instead of the bilinear scaler's 2×2 point read, which aliases fine
+    /// textures on heavy downscales. Clamped to 1...4. Pass `nil` to
+    /// restore the default (2 for luminance ramps longer than 12 levels,
+    /// else 1). Ignored when ``imageShapeAware(_:)`` is on — the shape
+    /// matcher already reads 96 staggered samples per cell.
     public func imageSupersampling(_ factor: Int?) -> some View {
         environment(\.imageSupersampling, factor)
     }
