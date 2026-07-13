@@ -97,6 +97,30 @@ struct DividerRenderTests {
         #expect(buffer.lines[2].stripped.contains("Section 2"))
     }
 
+    // MARK: - Colour
+
+    @Test("Divider defaults to the palette's border colour")
+    func defaultBorderColour() {
+        let ctx = context(width: 8)
+        let raw = renderToBuffer(Divider(), context: ctx).lines[0]
+        let border = ctx.environment.palette.border.resolve(with: ctx.environment.palette)
+        if let c = border.rgbComponents {
+            #expect(
+                raw.contains("38;2;\(c.red);\(c.green);\(c.blue)"),
+                "separator chrome draws muted, not in the body-text colour: >>\(raw)<<")
+        } else {
+            #expect(raw != raw.stripped, "the rule carries a colour, not bare text")
+        }
+    }
+
+    @Test("An explicit foregroundStyle overrides the border default")
+    func foregroundStyleOverrides() {
+        let raw = renderToBuffer(
+            Divider().foregroundStyle(.rgb(10, 20, 30)), context: context(width: 8)
+        ).lines[0]
+        #expect(raw.contains("38;2;10;20;30"), ">>\(raw)<<")
+    }
+
     // MARK: - sizeThatFits contract
 
     @Test("Divider advertises flexible width and a single row of height")

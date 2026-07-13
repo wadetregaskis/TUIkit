@@ -55,7 +55,9 @@ public struct Spacer: View, Equatable {
 /// A visual separator between views.
 ///
 /// `Divider` creates a horizontal or vertical line,
-/// depending on the surrounding container.
+/// depending on the surrounding container. It draws in the palette's border
+/// colour by default — a separator is chrome, not content — and honours
+/// ``View/foregroundStyle(_:)`` when one is set.
 ///
 /// # Example
 ///
@@ -129,6 +131,12 @@ extension Divider: Renderable, Layoutable {
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let line = String(repeating: character, count: context.availableWidth)
-        return FrameBuffer(text: line)
+        // A separator is chrome, not content: it defaults to the palette's
+        // muted border colour (matching SwiftUI's grey rule and the rules
+        // containers draw), rather than shouting in the body-text colour. A
+        // `.foregroundStyle(_:)` on or above it takes precedence.
+        let palette = context.environment.palette
+        let color = (context.environment.foregroundStyle ?? palette.border).resolve(with: palette)
+        return FrameBuffer(text: ANSIRenderer.colorize(line, foreground: color))
     }
 }

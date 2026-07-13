@@ -186,6 +186,10 @@ type_name:
     - _MemoizedRow
     - _SplitDividerHandler
     - _DialogDragHandler
+    # The gradient editor's stop-chip button style + its pulse-reading
+    # centre cell (own file, so internal rather than file-private).
+    - _StopChipStyle
+    - _StopChipCentreCell
     - _RawTab
     - _Color256GridCore
     - _Palette256Editor

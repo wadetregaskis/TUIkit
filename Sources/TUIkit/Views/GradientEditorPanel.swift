@@ -96,6 +96,14 @@ public struct GradientEditorPanel: View {
                 stopStrip
                 actionRow
                 gradientChips(recents: recents)
+                // A rule between the gradient LIBRARY above (stops, actions,
+                // presets, recents) and the colour-editing panel below —
+                // without it the recents chips read as part of the editor.
+                // Fixed at the library column's width: an unconstrained
+                // Divider is width-flexible, which would stretch this
+                // content-hugging dialog to the whole screen (same reason the
+                // footer avoids a leading Spacer).
+                Divider().frame(width: Self.previewWidth)
                 _ColorPickerBody(selection: selectedStopBinding)
             }
             .onAppear { session.original = stops.wrappedValue }
@@ -160,53 +168,39 @@ public struct GradientEditorPanel: View {
 
     // MARK: Stop strip
 
-    /// One numbered swatch per stop — `● 3 ██` selected, `◯ 4 ██` otherwise —
-    /// wrapped onto as many rows as the preview width allows.
+    /// One bare 3-cell swatch per stop, in gradient order, wrapped onto as
+    /// many rows as the preview width allows (one row until it can't be).
     ///
-    /// Picking one-of-N stops is radio-button semantics, so each row IS a
-    /// horizontal ``RadioButtonGroup`` (all rows share the selection binding).
-    /// That gives the chips ONE indicator cell carrying both states the way
-    /// every radio button does — solid `●` when selected, pulsing when
-    /// focused, dim `◯` otherwise — instead of a plain button's focus bullet
-    /// sitting beside a separate selection marker. Chip geometry is
-    /// selection-independent, so moving the selection never shifts a swatch,
-    /// and each row is a single Tab stop with Left/Right moving inside it.
+    /// The stops aren't options to enumerate — the swatch colour IS the
+    /// label — so the chips carry no numbering and no chrome beside them.
+    /// The CENTRE cell doubles as the state indicator: a readable-contrast
+    /// bullet marks the stop the panel below is editing, pulsing while the
+    /// chip holds keyboard focus, dim as a hover hint (``_StopChipStyle``).
+    /// Every state re-colours that one cell in place, so nothing ever shifts.
     private var stopStrip: some View {
         let list = stops.wrappedValue
         let selection = clampedSelection
-        let widths = list.indices.map { Self.stopChipWidth(index: $0) }
         let rows = Self.wrappedRows(
-            itemWidths: widths,
-            spacing: RadioButtonGroupMetrics.horizontalSpacing,
-            budget: Self.previewWidth)
+            itemWidths: Array(repeating: Self.stopChipWidth, count: list.count),
+            spacing: 1, budget: Self.previewWidth)
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                RadioButtonGroup(
-                    selection: Binding(
-                        get: { clampedSelection },
-                        set: { selectedStop = $0 }),
-                    orientation: .horizontal,
-                    items: row.map { index in
-                        RadioButtonItem(index) {
-                            HStack(spacing: 1) {
-                                Text("\(index + 1)")
-                                    .foregroundStyle(
-                                        index == selection
-                                            ? Color.palette.accent
-                                            : Color.palette.foregroundSecondary)
-                                Text("██").foregroundStyle(list[index])
-                            }
-                        }
-                    })
+                HStack(spacing: 1) {
+                    ForEach(row, id: \.self) { index in
+                        Button("") { selectedStop = index }
+                            .buttonStyle(
+                                _StopChipStyle(
+                                    color: list[index], isSelected: index == selection))
+                    }
+                }
             }
         }
     }
 
-    /// The cell width of the stop chip at `index`: the radio indicator + the
-    /// 1-based number + a breathing space + the 2-cell swatch.
-    static func stopChipWidth(index: Int) -> Int {
-        RadioButtonGroupMetrics.indicatorWidth + String(index + 1).count + 1 + 2
-    }
+    /// The cell width of every stop chip: a 3-cell swatch — wide enough to
+    /// read as a block of colour, and odd so the state bullet has a true
+    /// centre.
+    static let stopChipWidth = 3
 
     /// Insert / remove / reorder controls for the selected stop.
     private var actionRow: some View {
@@ -248,7 +242,10 @@ public struct GradientEditorPanel: View {
     @ViewBuilder private func gradientChips(recents: [[Color]]) -> some View {
         chipRows(for: Self.presets)
         if !recents.isEmpty {
-            Text(String(repeating: "─", count: Self.previewWidth))
+            // Dashed: a SUB-division within the library, deliberately
+            // lighter than the solid rule that closes the whole library
+            // section below.
+            Text(String(repeating: "┄", count: Self.previewWidth))
                 .foregroundStyle(.palette.border)
             chipRows(for: recents)
         }

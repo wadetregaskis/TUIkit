@@ -76,9 +76,9 @@ struct GradientEditorPanelRenderTests {
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
 
         #expect(text.contains("Gradient"), "the default title: \(text.prefix(200))")
-        // The stop strip: one numbered radio chip per stop, the first selected.
-        #expect(text.contains("● 1"))
-        #expect(text.contains("◯ 2"))
+        // The stop strip: one bare swatch per stop, the first (selected)
+        // carrying the centre bullet.
+        #expect(text.contains("█●█"))
         // The action row.
         for glyph in ["+", "−", "◀", "▶"] {
             #expect(text.contains(glyph), "missing action '\(glyph)'")
@@ -148,9 +148,35 @@ struct GradientEditorPanelRenderTests {
             "no preview cell still shows the OLD endpoint colour")
     }
 
-    @Test("Stop chips have selection-independent geometry, numbers left of their swatch")
+    @Test("Stop chips are bare 3-cell swatches; the centre cell carries the selection bullet")
     func stopChipGeometry() {
         var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+        let buffer = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
+        let strip = buffer.lines.first { $0.stripped.contains("█●█") }
+        #expect(strip != nil, "the stop strip renders with the selected chip's bullet")
+        guard let strip else { return }
+        let stripped = strip.stripped
+
+        // Selected chip: a bullet dead-centre in its swatch. Unselected
+        // chips: unbroken colour. Single-space gaps, gradient order, and NO
+        // numbering, rings, or reserved indicator columns beside the swatch.
+        #expect(stripped.contains("█●█ ███ ███"), "|\(stripped)|")
+        #expect(stripped.filter { $0 == "●" }.count == 1, "exactly one selection bullet: |\(stripped)|")
+
+        // The raw line: the bullet sits ON the selected stop's colour (red
+        // backdrop), and the other chips draw in their own stop colours.
+        #expect(strip.contains("48;2;255;0;0"), "the bullet cell keeps stop 1's red behind it")
+        #expect(strip.contains("38;2;0;255;0"), "stop 2's swatch in green")
+        #expect(strip.contains("38;2;0;0;255"), "stop 3's swatch in blue")
+    }
+
+    @Test("A divider separates the gradient library from the colour editor")
+    func libraryDividerPresent() {
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
         var presented = true
         let panel = GradientEditorPanel(
             stops: Binding(get: { stops }, set: { stops = $0 }),
@@ -158,28 +184,19 @@ struct GradientEditorPanelRenderTests {
         let lines = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
             .lines.map(\.stripped)
 
-        let strip = lines.first { $0.contains("● 1") }
-        #expect(strip != nil, "the stop strip renders")
-        guard let strip else { return }
-
-        // Radio chips: ONE indicator cell per chip (selected `●`, unselected
-        // `◯` — never a focus bullet AND a selection bullet), then the number
-        // immediately LEFT of its own swatch with a breathing space between.
-        #expect(strip.contains("● 1 ██"), "selected chip: indicator + number + swatch: |\(strip)|")
-        #expect(strip.contains("◯ 2 ██"), "unselected chip: dim ring indicator: |\(strip)|")
-        #expect(strip.contains("◯ 3 ██"))
-
-        // Uniform pitch: the distance between consecutive chips equals the
-        // chip width + the group spacing, whichever chip is selected.
-        func column(of needle: String) -> Int? {
-            strip.range(of: needle).map { strip.distance(from: strip.startIndex, to: $0.lowerBound) }
+        // The section divider: a solid ─ rule at the library column's width,
+        // on a row of its own. (Dialog border rows never match: their runs
+        // terminate in corner/junction glyphs.)
+        let rules = lines.flatMap { line in
+            line.split(separator: " ").filter { $0.allSatisfy { $0 == "─" } }.map(\.count)
         }
-        let c1 = column(of: "1 ██"), c2 = column(of: "2 ██"), c3 = column(of: "3 ██")
-        #expect(c1 != nil && c2 != nil && c3 != nil)
-        if let c1, let c2, let c3 {
-            #expect(c2 - c1 == GradientEditorPanel.stopChipWidth(index: 0) + 2, "|\(strip)|")
-            #expect(c3 - c2 == GradientEditorPanel.stopChipWidth(index: 1) + 2, "|\(strip)|")
-        }
+        #expect(rules.contains(36), "the library-closing rule renders (runs: \(rules))")
+
+        // Regression: the divider must NOT stretch the content-hugging
+        // dialog — an unconstrained (width-flexible) Divider inflates it to
+        // the full proposed width.
+        let dialogWidth = lines.first { $0.contains("╭") }?.count ?? 0
+        #expect(dialogWidth < 70, "the dialog hugs its content (got \(dialogWidth) of 70)")
     }
 
     @Test("The footer offers Cancel alongside Done")

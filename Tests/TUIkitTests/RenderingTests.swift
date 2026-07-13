@@ -117,7 +117,9 @@ struct RenderingTests {
         let context = RenderContext(availableWidth: 20, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         let buffer = renderToBuffer(divider, context: context)
         #expect(buffer.height == 1)
-        #expect(buffer.lines[0] == String(repeating: "─", count: 20))
+        // Visible content only — the rule itself carries the palette's
+        // border colour (DividerRenderTests covers the colouring).
+        #expect(buffer.lines[0].stripped == String(repeating: "─", count: 20))
     }
 
     @Test("Spacer renders empty lines")
