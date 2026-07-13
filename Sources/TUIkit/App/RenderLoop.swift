@@ -505,6 +505,12 @@ extension RenderLoop {
         }
         environment.notificationService = NotificationService.current
 
+        // Terminal-adaptive defaults belong to the app run loop, where a real
+        // terminal exists — the bare EnvironmentValues defaults stay
+        // terminal-independent so headless renders and tests are
+        // deterministic. `.checkboxStyle(_:)` modifiers below still override.
+        environment.checkboxStyle = .automatic
+
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).
         environment.applyRuntimeServices(from: tuiContext)

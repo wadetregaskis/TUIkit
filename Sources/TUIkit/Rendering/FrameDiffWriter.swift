@@ -90,19 +90,8 @@ final class FrameDiffWriter {
     /// previous frame. Exposed for tests and profiling.
     private(set) var rowsBuiltInLastBuild = 0
 
-    init(isAppleTerminal: Bool = FrameDiffWriter.detectAppleTerminal()) {
+    init(isAppleTerminal: Bool = TerminalHost.isAppleTerminal) {
         self.isAppleTerminal = isAppleTerminal
-    }
-
-    /// `true` only when running under macOS Terminal.app
-    /// (`TERM_PROGRAM == "Apple_Terminal"`). Compile-time `false` off macOS,
-    /// where Terminal.app cannot run.
-    static func detectAppleTerminal() -> Bool {
-        #if os(macOS)
-        return ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "Apple_Terminal"
-        #else
-        return false
-        #endif
     }
 }
 

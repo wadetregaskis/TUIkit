@@ -68,9 +68,10 @@ struct ToggleRenderTests {
 
     @Test("The .switch style's knob is FULL BLOCKs on the side the switch points to")
     func switchStyleRendersBlockKnob() {
-        // The knob must be built from non-emoji, selector-free glyphs (██) so
-        // its SGR foreground applies and its width is stable — same class as
-        // the checkbox marks (issue #9).
+        // Under the terminal-independent default (.unicode) the knob is built
+        // from non-emoji, selector-free glyphs (██) so its SGR foreground
+        // applies and its width is stable everywhere — same class as the
+        // checkbox marks (issue #9).
         let offLine = lines(Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch)).first ?? ""
         let onLine = lines(Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch)).first ?? ""
         #expect(offLine.hasPrefix("██ "), "off: knob left, blank right — got: |\(offLine)|")
@@ -78,12 +79,35 @@ struct ToggleRenderTests {
         #expect(offLine.contains("Wifi") && onLine.contains("Wifi"))
     }
 
-    @Test("Built-in checkbox marks stay outside the emoji problem class")
+    @Test("Under .emoji the switch knob is the seamless two-cell large square")
+    func switchKnobFollowsEmojiStyle() {
+        // Terminal.app draws visible seams between adjacent FULL BLOCK cells
+        // but renders ⬛︎ as one seamless two-cell glyph, so the knob follows
+        // the checkbox style's glyph repertoire. Both knobs are two cells —
+        // the 3-cell track geometry is identical either way.
+        let knob = "\u{2B1B}\u{FE0E}"
+        let offLine = lines(
+            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).checkboxStyle(.emoji)
+        ).first ?? ""
+        let onLine = lines(
+            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).checkboxStyle(.emoji)
+        ).first ?? ""
+        #expect(offLine.hasPrefix(knob + " "), "off: knob left — got: |\(offLine)|")
+        #expect(onLine.hasPrefix(" " + knob), "on: knob right — got: |\(onLine)|")
+
+        #expect(SwitchIndicatorGlyphs.knob(for: .emoji) == knob)
+        #expect(SwitchIndicatorGlyphs.knob(for: .unicode) == "\u{2588}\u{2588}")
+        #expect(SwitchIndicatorGlyphs.knob(for: .ascii) == "\u{2588}\u{2588}")
+    }
+
+    @Test("The maximum-compatibility styles stay outside the emoji problem class")
     func checkboxMarksAreTerminalSafe() {
         // Emoji-presentation codepoints paint as fixed-colour emoji (ignoring
         // the theme tint), and variation selectors are mis-measured by some
-        // terminals, shearing the row (issue #9). Framework chrome must avoid
-        // both outright — pin it so a redesign can't reintroduce the class.
+        // terminals, shearing the row (issue #9). The .unicode and .ascii
+        // styles must avoid both outright — .emoji is the deliberate,
+        // documented exception, which is why `.automatic` gates it onto
+        // Terminal.app (whose output path carries the emoji workarounds).
         for style in [CheckboxStyle.unicode, .ascii] {
             for mark in [style.onMark, style.offMark, style.openBracket, style.closeBracket] {
                 for scalar in mark.unicodeScalars {
@@ -95,10 +119,35 @@ struct ToggleRenderTests {
                         "no emoji codepoints in '\(mark)' (U+\(String(scalar.value, radix: 16)))")
                 }
             }
-            #expect(
-                style.onMark.strippedLength == style.offMark.strippedLength,
-                "on/off marks are the same width, so toggling never shifts the label")
         }
+        // Every built-in's on/off marks are width-equal, so toggling never
+        // shifts the label — including the two-cell emoji pair.
+        for style in [CheckboxStyle.unicode, .emoji, .ascii] {
+            #expect(style.onMark.strippedLength == style.offMark.strippedLength)
+        }
+    }
+
+    @Test("The .emoji style is the large squares in text presentation, two cells wide")
+    func emojiStyleMarks() {
+        #expect(CheckboxStyle.emoji.onMark == "\u{2B1B}\u{FE0E}")
+        #expect(CheckboxStyle.emoji.offMark == "\u{2B1C}\u{FE0E}")
+        #expect(CheckboxStyle.emoji.onMark.strippedLength == 2)
+        let out = lines(Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.emoji))
+        #expect(out.first == "\u{2B1C}\u{FE0E} Wifi", "got: |\(out.first ?? "")|")
+    }
+
+    @Test(".automatic resolves to .emoji under Apple's Terminal.app, .unicode elsewhere")
+    func automaticStyleResolution() {
+        #expect(CheckboxStyle.automatic(isAppleTerminal: true) == .emoji)
+        #expect(CheckboxStyle.automatic(isAppleTerminal: false) == .unicode)
+        // The live property agrees with the live detection, whatever hosts
+        // the suite.
+        #expect(CheckboxStyle.automatic
+            == CheckboxStyle.automatic(isAppleTerminal: TerminalHost.isAppleTerminal))
+        // The bare environment default stays terminal-independent (.unicode),
+        // so headless renders and this suite are deterministic; the app run
+        // loop injects .automatic at its root instead.
+        #expect(EnvironmentValues().checkboxStyle == .unicode)
     }
 
     // MARK: - Empty / whitespace label (the "empty chrome" bug class)

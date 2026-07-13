@@ -63,18 +63,12 @@ struct TogglePage: View {
                     Text(L("page.toggle.checkboxNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("\(".unicode") (\(L("page.toggle.default")))").dim()
-                            Toggle(L("page.toggle.on"), isOn: .constant(true))
-                            Toggle(L("page.toggle.off"), isOn: .constant(false))
-                        }
-                        .checkboxStyle(.unicode)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(".ascii").dim()
-                            Toggle(L("page.toggle.on"), isOn: .constant(true))
-                            Toggle(L("page.toggle.off"), isOn: .constant(false))
-                        }
-                        .checkboxStyle(.ascii)
+                        // The "(default)" tag follows the terminal-adaptive
+                        // `.automatic`: emoji under Apple's Terminal.app,
+                        // unicode everywhere else.
+                        checkboxColumn(".unicode", style: .unicode)
+                        checkboxColumn(".emoji", style: .emoji)
+                        checkboxColumn(".ascii", style: .ascii)
                     }
                 }
             }
@@ -107,5 +101,17 @@ struct TogglePage: View {
         .appHeader {
             DemoAppHeader(L("page.toggle.header"))
         }
+    }
+
+    /// One column of the checkbox-glyph comparison: the style's name (tagged
+    /// "(default)" when it is what `.automatic` resolves to on this terminal)
+    /// over an on/off pair rendered in that style.
+    private func checkboxColumn(_ name: String, style: CheckboxStyle) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(style == .automatic ? "\(name) (\(L("page.toggle.default")))" : name).dim()
+            Toggle(L("page.toggle.on"), isOn: .constant(true))
+            Toggle(L("page.toggle.off"), isOn: .constant(false))
+        }
+        .checkboxStyle(style)
     }
 }

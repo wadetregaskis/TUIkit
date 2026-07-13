@@ -102,8 +102,20 @@ struct ThemePage: View {
             set: { name in styling.tint = Self.tintOptions.first { $0.name == name }?.color }
         )
         let checkboxSelection = Binding(
-            get: { styling.checkboxStyle == .ascii ? "ASCII" : "Unicode" },
-            set: { name in styling.checkboxStyle = (name == "ASCII") ? .ascii : .unicode }
+            get: {
+                switch styling.checkboxStyle {
+                case .ascii: "ASCII"
+                case .emoji: "Emoji"
+                default: "Unicode"
+                }
+            },
+            set: { name in
+                switch name {
+                case "ASCII": styling.checkboxStyle = .ascii
+                case "Emoji": styling.checkboxStyle = .emoji
+                default: styling.checkboxStyle = .unicode
+                }
+            }
         )
         let languageSelection = Binding(
             get: { LocalizationService.shared.currentLanguage.rawValue },
@@ -210,6 +222,7 @@ struct ThemePage: View {
 
                         Picker(L("page.theme.checkboxesLabel"), selection: checkboxSelection) {
                             Text("Unicode ■").tag("Unicode")
+                            Text("Emoji \u{2B1B}\u{FE0E}").tag("Emoji")
                             Text("ASCII [x]").tag("ASCII")
                         }
                         .pickerStyle(.radioGroup)

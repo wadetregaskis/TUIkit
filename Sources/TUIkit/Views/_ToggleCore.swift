@@ -14,6 +14,21 @@ private enum ToggleStateIndex {
     static let isHovered = 1
 }
 
+/// The switch style's knob glyphs, selected by the ambient ``CheckboxStyle``'s
+/// glyph repertoire (lifted out of the generic core for testability).
+enum SwitchIndicatorGlyphs {
+    /// Under ``CheckboxStyle/emoji``, the knob is the emoji-repertoire large
+    /// square in text presentation — ONE glyph spanning two cells, which
+    /// Terminal.app draws seamlessly where it shows visible seams between
+    /// adjacent FULL BLOCK cells. Every other style gets the two FULL BLOCKs:
+    /// universally one cell each, SGR-tintable, and with no variation
+    /// selector for a terminal to mis-measure (issue #9). Both knobs are two
+    /// cells, so the 3-cell track geometry never changes.
+    static func knob(for style: CheckboxStyle) -> String {
+        style == .emoji ? "\u{2B1B}\u{FE0E}" : "\u{2588}\u{2588}"  // ⬛︎ : ██
+    }
+}
+
 /// Internal view that handles the actual rendering of Toggle.
 struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     let isOn: Binding<Bool>
@@ -96,9 +111,10 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
     }
 
-    /// A switch track: a knob (██) on the side the switch points to —
-    /// left for off, right for on — over a coloured track so it reads as a
-    /// two-position switch rather than a checkbox, mirroring a macOS switch.
+    /// A switch track: a two-cell knob (██, or ⬛︎ under the `.emoji` checkbox
+    /// style) on the side the switch points to — left for off, right for on —
+    /// over a coloured track so it reads as a two-position switch rather than
+    /// a checkbox, mirroring a macOS switch.
     ///
     /// The track colour carries the state, distinctly in all three states:
     /// - **on**: the accent (highlight) colour, like macOS's blue;
@@ -115,11 +131,10 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         isOnValue: Bool, isDisabled: Bool, context: RenderContext
     ) -> String {
         let palette = context.environment.palette
-        // Two FULL BLOCKs, not the former large-square emoji codepoint: they
-        // fill their cells exactly, take the SGR foreground on every terminal
-        // (an emoji-presentation square ignores it), and carry no
-        // variation selector for a terminal to mis-measure (issue #9).
-        let knob = "\u{2588}\u{2588}"  // ██
+        // The knob follows the checkbox style's glyph repertoire (see
+        // ``SwitchIndicatorGlyphs/knob(for:)``): the seamless two-cell emoji
+        // square under `.emoji`, two FULL BLOCKs otherwise.
+        let knob = SwitchIndicatorGlyphs.knob(for: context.environment.checkboxStyle)
 
         let trackColor: Color
         let knobColor: Color

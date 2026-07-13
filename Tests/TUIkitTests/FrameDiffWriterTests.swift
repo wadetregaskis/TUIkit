@@ -294,16 +294,19 @@ struct FrameDiffWriterTerminalGatingTests {
         #expect(line.contains(underAdvancer))    // the emoji passes through verbatim
     }
 
-    @Test("detectAppleTerminal is false off Apple_Terminal")
+    @Test("Apple Terminal detection keys off TERM_PROGRAM, deterministically")
     func detectionMatchesTermProgram() {
-        // Whatever runs the suite, detection must equal the TERM_PROGRAM check
+        #expect(TerminalHost.detectAppleTerminal(environment: ["TERM_PROGRAM": "Apple_Terminal"]))
+        #expect(!TerminalHost.detectAppleTerminal(environment: ["TERM_PROGRAM": "iTerm.app"]))
+        #expect(!TerminalHost.detectAppleTerminal(environment: [:]))
+        // Whatever runs the suite, the cached answer must equal the live check
         // (and is compile-time false on non-macOS).
         #if os(macOS)
         let expected = ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "Apple_Terminal"
         #else
         let expected = false
         #endif
-        #expect(FrameDiffWriter.detectAppleTerminal() == expected)
+        #expect(TerminalHost.isAppleTerminal == expected)
     }
 }
 
