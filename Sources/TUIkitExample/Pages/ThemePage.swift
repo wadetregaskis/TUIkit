@@ -209,7 +209,7 @@ struct ThemePage: View {
                                 set: { styling.boldButtons = $0 }))
 
                         Picker(L("page.theme.checkboxesLabel"), selection: checkboxSelection) {
-                            Text("Unicode ⬛").tag("Unicode")
+                            Text("Unicode ■").tag("Unicode")
                             Text("ASCII [x]").tag("ASCII")
                         }
                         .pickerStyle(.radioGroup)

@@ -21,7 +21,7 @@
 ///
 /// > Note: The built-in `ToggleStyle`s render identically — a checkbox — due to
 /// > terminal constraints; the API matches SwiftUI for compatibility. The
-/// > *glyphs* of that checkbox (⬛/⬜ by default, or `[x]`/`[ ]`) are a separate,
+/// > *glyphs* of that checkbox (■/□ by default, or `[x]`/`[ ]`) are a separate,
 /// > TUI-specific choice — see ``CheckboxStyle`` and
 /// > ``SwiftUICore/View/checkboxStyle(_:)``.
 ///
@@ -92,7 +92,7 @@ public struct ToggleStyleConfiguration {
 
 /// The default toggle style.
 ///
-/// In TUIkit this is a checkbox; its glyphs come from ``CheckboxStyle`` (⬛/⬜
+/// In TUIkit this is a checkbox; its glyphs come from ``CheckboxStyle`` (■/□
 /// by default).
 public struct DefaultToggleStyle: ToggleStyle {
     public init() {}
@@ -101,8 +101,8 @@ public struct DefaultToggleStyle: ToggleStyle {
 /// A toggle style that displays a checkbox followed by its label.
 ///
 /// ```
-/// ⬜ Label     (OFF)
-/// ⬛ Label     (ON)
+/// □ Label     (OFF)
+/// ■ Label     (ON)
 /// ```
 ///
 /// The checkbox glyphs are configurable via ``CheckboxStyle`` (e.g.
@@ -113,7 +113,7 @@ public struct CheckboxToggleStyle: ToggleStyle {
 
 /// A toggle style that displays the toggle as a two-position switch.
 ///
-/// In TUIkit this renders a two-cell track with a knob (⬛︎) on the side the
+/// In TUIkit this renders a coloured track with a knob (██) on the side the
 /// switch points to — left for off, right for on — over a distinct background
 /// (the accent colour when on), so it reads as a switch rather than a checkbox.
 public struct SwitchToggleStyle: ToggleStyle {
@@ -205,8 +205,8 @@ extension View {
 /// ## Rendering
 ///
 /// ```
-/// ⬜ Label     (OFF - dimmed)
-/// ⬛ Label     (ON - accent color)
+/// □ Label     (OFF - dimmed)
+/// ■ Label     (ON - accent color)
 /// ```
 ///
 /// The checkbox glyphs are configurable — see ``CheckboxStyle``.

@@ -38,7 +38,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
     private typealias StateIndex = ToggleStateIndex
 
-    /// The styled checkbox indicator (⬛/⬜ by default, `[x]`/`[ ]` under
+    /// The styled checkbox indicator (■/□ by default, `[x]`/`[ ]` under
     /// `.checkboxStyle(.ascii)`) for the toggle's current state, themed for
     /// focus / hover / disabled.
     private func styledToggleIndicator(
@@ -67,7 +67,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             bracketColor = palette.foreground
         }
 
-        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (⬛/⬜
+        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (■/□
         // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
         let style = context.environment.checkboxStyle
         let mark = isOnValue ? style.onMark : style.offMark
@@ -96,7 +96,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
     }
 
-    /// A two-cell switch track: a knob (⬛︎) on the side the switch points to —
+    /// A switch track: a knob (██) on the side the switch points to —
     /// left for off, right for on — over a coloured track so it reads as a
     /// two-position switch rather than a checkbox, mirroring a macOS switch.
     ///
@@ -115,7 +115,11 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         isOnValue: Bool, isDisabled: Bool, context: RenderContext
     ) -> String {
         let palette = context.environment.palette
-        let knob = "\u{2B1B}\u{FE0E}"  // ⬛︎
+        // Two FULL BLOCKs, not the former large-square emoji codepoint: they
+        // fill their cells exactly, take the SGR foreground on every terminal
+        // (an emoji-presentation square ignores it), and carry no
+        // variation selector for a terminal to mis-measure (issue #9).
+        let knob = "\u{2588}\u{2588}"  // ██
 
         let trackColor: Color
         let knobColor: Color

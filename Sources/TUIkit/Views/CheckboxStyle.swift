@@ -12,7 +12,7 @@ import TUIkitCore
 /// choice, distinct from the SwiftUI-parity ``ToggleStyle`` (which selects
 /// checkbox vs switch *semantics*).
 ///
-/// The default ``unicode`` uses the large-square glyphs ⬛ / ⬜. Terminals or
+/// The default ``unicode`` uses the square glyphs ■ / □. Terminals or
 /// fonts that don't render those well can opt into the pure-ASCII ``ascii``
 /// style (`[x]` / `[ ]`) for a whole subtree with ``SwiftUICore/View/checkboxStyle(_:)``:
 ///
@@ -28,10 +28,10 @@ import TUIkitCore
 /// by focus while the inner mark is coloured by on/off — the classic two-tone
 /// `[x]`.
 public struct CheckboxStyle: Sendable, Equatable {
-    /// The mark shown when the toggle is **on** (e.g. `⬛` or `x`).
+    /// The mark shown when the toggle is **on** (e.g. `■` or `x`).
     public let onMark: String
 
-    /// The mark shown when the toggle is **off** (e.g. `⬜` or a space).
+    /// The mark shown when the toggle is **off** (e.g. `□` or a space).
     public let offMark: String
 
     /// The opening bracket drawn before the mark, or `""` for a self-contained
@@ -50,13 +50,16 @@ public struct CheckboxStyle: Sendable, Equatable {
         self.closeBracket = closeBracket
     }
 
-    /// The default: filled / empty large Unicode squares, ⬛ / ⬜.
+    /// The default: filled / empty Unicode squares, ■ / □ (U+25A0 / U+25A1).
     ///
-    /// The glyphs carry a text-presentation variation selector (U+FE0E) so they
-    /// render monochrome — letting the theme tint them for focus / checked /
-    /// disabled rather than appearing as a fixed-colour emoji. They occupy two
-    /// terminal cells.
-    public static let unicode = Self(onMark: "\u{2B1B}\u{FE0E}", offMark: "\u{2B1C}\u{FE0E}")
+    /// These are deliberately *outside* Unicode's emoji repertoire, so every
+    /// terminal renders them monochrome (theme-tintable for focus / checked /
+    /// disabled) and one cell wide. The former large squares (U+2B1B / U+2B1C)
+    /// are emoji-presentation codepoints: bare, terminals paint them as
+    /// fixed-colour emoji that ignore the theme tint, and their U+FE0E
+    /// text-presentation selector is mis-measured by some terminals, shearing
+    /// the row layout (issue #9).
+    public static let unicode = Self(onMark: "\u{25A0}", offMark: "\u{25A1}")
 
     /// A pure-ASCII style, `[x]` / `[ ]`, for terminals where the square glyphs
     /// don't render correctly. Three cells wide, two-tone (brackets show focus,

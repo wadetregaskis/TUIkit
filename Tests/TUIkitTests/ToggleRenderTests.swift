@@ -16,10 +16,11 @@ import Testing
 @MainActor
 @Suite("Toggle rendering")
 struct ToggleRenderTests {
-    /// The default checkbox marks: filled / empty large squares (with the
-    /// text-presentation selector), each one grapheme / two cells wide.
-    private let on = "\u{2B1B}\u{FE0E}"   // ⬛ checked
-    private let off = "\u{2B1C}\u{FE0E}"  // ⬜ unchecked
+    /// The default checkbox marks: filled / empty squares, one cell wide.
+    /// Deliberately non-emoji codepoints (no variation selector), so every
+    /// terminal renders them monochrome, tintable, and one cell wide.
+    private let on = "\u{25A0}"   // ■ checked
+    private let off = "\u{25A1}"  // □ unchecked
 
     /// Renders with a focus manager present (the first focusable auto-focuses).
     private func lines(_ v: some View, w: Int = 30, h: Int = 4) -> [String] {
@@ -33,14 +34,14 @@ struct ToggleRenderTests {
 
     // MARK: - On / off indicator
 
-    @Test("An OFF toggle renders ⬜ then the label, on a single line")
+    @Test("An OFF toggle renders □ then the label, on a single line")
     func offRendersEmptyBox() {
         let out = lines(Toggle("Wifi", isOn: .constant(false)))
         #expect(out.count == 1, "exactly one line, got: \(out)")
         #expect(out[0] == "\(off) Wifi", "got: |\(out[0])|")
     }
 
-    @Test("An ON toggle renders ⬛ then the label, on a single line")
+    @Test("An ON toggle renders ■ then the label, on a single line")
     func onRendersCheckedBox() {
         let out = lines(Toggle("Wifi", isOn: .constant(true)))
         #expect(out.count == 1, "exactly one line, got: \(out)")
@@ -63,6 +64,41 @@ struct ToggleRenderTests {
         let onLine = lines(Toggle("Wifi", isOn: .constant(true)).checkboxStyle(.ascii))
         #expect(offLine[0] == "[ ] Wifi", "got: |\(offLine[0])|")
         #expect(onLine[0] == "[x] Wifi", "got: |\(onLine[0])|")
+    }
+
+    @Test("The .switch style's knob is FULL BLOCKs on the side the switch points to")
+    func switchStyleRendersBlockKnob() {
+        // The knob must be built from non-emoji, selector-free glyphs (██) so
+        // its SGR foreground applies and its width is stable — same class as
+        // the checkbox marks (issue #9).
+        let offLine = lines(Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch)).first ?? ""
+        let onLine = lines(Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch)).first ?? ""
+        #expect(offLine.hasPrefix("██ "), "off: knob left, blank right — got: |\(offLine)|")
+        #expect(onLine.hasPrefix(" ██"), "on: blank left, knob right — got: |\(onLine)|")
+        #expect(offLine.contains("Wifi") && onLine.contains("Wifi"))
+    }
+
+    @Test("Built-in checkbox marks stay outside the emoji problem class")
+    func checkboxMarksAreTerminalSafe() {
+        // Emoji-presentation codepoints paint as fixed-colour emoji (ignoring
+        // the theme tint), and variation selectors are mis-measured by some
+        // terminals, shearing the row (issue #9). Framework chrome must avoid
+        // both outright — pin it so a redesign can't reintroduce the class.
+        for style in [CheckboxStyle.unicode, .ascii] {
+            for mark in [style.onMark, style.offMark, style.openBracket, style.closeBracket] {
+                for scalar in mark.unicodeScalars {
+                    #expect(
+                        !(0xFE00...0xFE0F).contains(scalar.value),
+                        "no variation selectors in '\(mark)' (U+\(String(scalar.value, radix: 16)))")
+                    #expect(
+                        !scalar.properties.isEmoji,
+                        "no emoji codepoints in '\(mark)' (U+\(String(scalar.value, radix: 16)))")
+                }
+            }
+            #expect(
+                style.onMark.strippedLength == style.offMark.strippedLength,
+                "on/off marks are the same width, so toggling never shifts the label")
+        }
     }
 
     // MARK: - Empty / whitespace label (the "empty chrome" bug class)

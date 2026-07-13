@@ -65,10 +65,10 @@ struct ToggleTests {
         let toggle = Toggle("Test", isOn: binding)
         let buffer = renderToBuffer(toggle, context: context)
 
-        // Single line with the empty (OFF) square indicator (⬜, default style).
+        // Single line with the empty (OFF) square indicator (□, default style).
         #expect(buffer.height == 1)
         let content = buffer.lines.joined()
-        #expect(content.contains("\u{2B1C}\u{FE0E}"))
+        #expect(content.contains("\u{25A1}"))
     }
 
     @Test("Toggle OFF renders the empty square")
@@ -85,7 +85,7 @@ struct ToggleTests {
         let buffer = renderToBuffer(toggle, context: context)
 
         let content = buffer.lines.joined().stripped
-        #expect(content.contains("\u{2B1C}\u{FE0E}"))
+        #expect(content.contains("\u{25A1}"))
     }
 
     @Test("Toggle ON renders the filled square")
@@ -102,7 +102,7 @@ struct ToggleTests {
         let buffer = renderToBuffer(toggle, context: context)
 
         let content = buffer.lines.joined().stripped
-        #expect(content.contains("\u{2B1B}\u{FE0E}"))
+        #expect(content.contains("\u{25A0}"))
     }
 
     @Test("Toggle renders focus indicator when focused")
@@ -192,7 +192,7 @@ struct ToggleTests {
         // Two toggles in a stack: the first registers focus, leaving the
         // second one genuinely unfocused (but still enabled).
         // This test is specifically about the two-tone bracket colouring, so it
-        // uses the ASCII checkbox style (the default ⬛/⬜ glyphs have no brackets).
+        // uses the ASCII checkbox style (the default ■/□ glyphs have no brackets).
         let stack = VStack(spacing: 0) {
             Toggle("First", isOn: bindingFirst)
             Toggle("Second", isOn: bindingSecond)
@@ -284,7 +284,7 @@ struct ToggleTests {
         #expect(titleCol != nil && titleCol == subtitleCol,
                 "subtitle aligns to the label column: title=\(titleCol as Int?) subtitle=\(subtitleCol as Int?)")
         #expect((subtitleCol ?? 0) > 0, "subtitle is indented past column 0")
-        #expect(!subtitle.contains("\u{2B1B}") && !subtitle.contains("\u{2B1C}"),
+        #expect(!subtitle.contains("\u{25A0}") && !subtitle.contains("\u{25A1}"),
                 "subtitle must not repeat the checkbox glyph")
     }
 
