@@ -172,16 +172,24 @@ enum _DragHandle {
         let scratch = DragScratch()
         let id = dispatcher.register { event in
             // Hover transitions land here (the handle's region is the
-            // innermost); ride them through to the child under the cursor
-            // so it keeps its hover affordance.
+            // innermost); ride them through to the children so they keep
+            // their hover affordance. STATELESSLY: the hover-on re-render
+            // replaces this closure (and its scratch) before the matching
+            // .exited arrives, so remembering "which child is hovered" in
+            // the closure loses the exit and strands the child hovered —
+            // the gradient chips' stuck hover bullet. Entering targets the
+            // child under the cursor; exiting broadcasts to every child (a
+            // child that isn't hovered treats it as a no-op).
             switch event.phase {
             case .entered:
-                scratch.hoveredChild = innermostChild(atX: event.x, y: event.y)
-                if let child = scratch.hoveredChild { forward(event, phase: .entered, to: child) }
+                if let child = innermostChild(atX: event.x, y: event.y) {
+                    forward(event, phase: .entered, to: child)
+                }
                 return true
             case .exited:
-                if let child = scratch.hoveredChild { forward(event, phase: .exited, to: child) }
-                scratch.hoveredChild = nil
+                for child in children {
+                    forward(event, phase: .exited, to: child)
+                }
                 return true
             default:
                 break
@@ -236,12 +244,13 @@ enum _DragHandle {
 }
 
 /// Per-handler scratch: whether the current press has turned into a drag,
-/// where it grabbed the surface, and which content child is hovered (to
-/// close its hover out on exit).
+/// and where it grabbed the surface. Press/drag/release all route through
+/// the dispatcher's press capture to the SAME closure, so this state is
+/// safe here; hover state is NOT (enter and exit straddle a re-render that
+/// replaces the closure), which is why hover is handled statelessly above.
 private final class DragScratch {
     var isDragging = false
     var grab: (x: Int, y: Int) = (0, 0)
-    var hoveredChild: (region: HitTestRegion, handler: (MouseEvent) -> Bool)?
 }
 
 // MARK: - Drop Destination

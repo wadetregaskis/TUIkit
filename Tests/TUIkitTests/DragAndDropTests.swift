@@ -371,23 +371,35 @@ struct DragAndDropTests {
     func hoverForwardsToChildren() {
         // The draggable's innermost region receives the synthetic
         // .entered / .exited transitions; they must forward to the content
-        // so a hoverable child keeps its affordance.
+        // so a hoverable child keeps its affordance — INCLUDING when the
+        // hover-on triggers a re-render before the exit arrives, which is
+        // what the live loop always does (the hover state change requests a
+        // frame). The first version of this test skipped that re-render and
+        // passed while the real app stranded the gradient chips' hover
+        // bullet: the exit was delivered to the NEW frame's handler, whose
+        // scratch no longer remembered the hovered child.
         final class HoverLog { var changes: [Bool] = [] }
         let log = HoverLog()
         let (context, tui) = makeContext()
         let dispatcher = tui.mouseEventDispatcher
         dispatcher.setActiveSupport(.full)  // hover needs motion
-        tui.dragAndDropSession.beginFrame()
 
         let tree = Text("CHIP")
             .onHover { log.changes.append($0) }
             .draggable("apple")
-        let buffer = renderToBuffer(tree, context: context)
-        dispatcher.setRegions(buffer.hitTestRegions)
+        func renderFrame() {
+            dispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let buffer = renderToBuffer(tree, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+        }
 
+        renderFrame()
         _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 0))
         #expect(log.changes == [true], "entering the chip hovers the child")
+
+        renderFrame()  // the hover-on re-render, exactly like the live loop
         _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 20, y: 5))
-        #expect(log.changes == [true, false], "leaving un-hovers it")
+        #expect(log.changes == [true, false], "leaving un-hovers it, across the re-render")
     }
 }
