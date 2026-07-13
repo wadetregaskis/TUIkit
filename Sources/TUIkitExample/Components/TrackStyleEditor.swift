@@ -47,17 +47,34 @@ struct TrackStyleEditor: View {
     @AppStorage("trackEditor.recentRamps") private var recentRampsJSON = "[]"
     @AppStorage("trackEditor.recentUnfilled") private var recentUnfilledJSON = "[]"
 
-    /// Pre-defined fill glyphs — one column each, chosen to look distinct.
-    private static let fullGlyphs = ["█", "▓", "▌", "■", "●", "━", "=", "#"]
+    /// Pre-defined fill glyphs — chosen to look distinct. The smiley combo
+    /// (fill 😃, ramp 🫥😶😐🙂, unfilled 〰️) is offered on both pages; the
+    /// Pac-Man combo (space fill — the eaten trail — with the ᗧ ramp head
+    /// chomping a • dot line) is progress-only, where the fraction only ever
+    /// advances. "␣" is the visible stand-in for a literal space fill, the
+    /// same convention as the unfilled field.
+    private var fullGlyphs: [String] {
+        var glyphs = ["█", "▓", "▌", "■", "●", "━", "=", "#", "😃"]
+        if preview == .progress { glyphs.append("␣") }
+        return glyphs
+    }
 
     /// Pre-defined fractional-boundary ramps. The field's text IS the ramp
     /// (darkest last), so free typing builds a custom ramp directly.
-    private static let ramps = ["▏▎▍▌▋▊▉", "░▒▓", "⣀⣄⣤⣦⣶⣷⣿"]
+    private var ramps: [String] {
+        var ramps = ["▏▎▍▌▋▊▉", "░▒▓", "⣀⣄⣤⣦⣶⣷⣿", "🫥😶😐🙂"]
+        if preview == .progress { ramps.append("ᗧ") }
+        return ramps
+    }
 
     /// Pre-defined unfilled glyphs; the solid-background mode is offered via
     /// an explicit completion so its label can be localized while the stored
     /// value stays the stable "background" token.
-    private static let unfilledGlyphs = ["░", "·", "─", "␣"]
+    private var unfilledGlyphs: [String] {
+        var glyphs = ["░", "·", "─", "␣", "〰️"]
+        if preview == .progress { glyphs.append("•") }
+        return glyphs
+    }
 
     /// The fallback gradient (red → amber → green) when the persisted stops
     /// don't decode to at least two colours.
@@ -89,8 +106,16 @@ struct TrackStyleEditor: View {
         case "": empty = .glyph("░")
         default: empty = .pattern(unfilledName)
         }
+        // "␣" is the menu's visible stand-in for a literal space fill (the
+        // Pac-Man eaten trail), mirroring the unfilled field's convention.
+        let fill: String
+        switch fullGlyph {
+        case "␣": fill = " "
+        case "": fill = "█"
+        default: fill = fullGlyph
+        }
         return TrackConfiguration(
-            fill: fullGlyph.isEmpty ? "█" : fullGlyph,
+            fill: fill,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
             fillGradient: gradientEnabled ? gradientStops : nil)
@@ -108,10 +133,10 @@ struct TrackStyleEditor: View {
             HStack(alignment: .top, spacing: 2) {
                 comboField(
                     L("component.trackEditor.fill"), text: $fullGlyph, width: 9,
-                    predefined: Self.fullGlyphs, recentsJSON: $recentFillsJSON)
+                    predefined: fullGlyphs, recentsJSON: $recentFillsJSON)
                 comboField(
                     L("component.trackEditor.ramp"), text: $rampText, width: 14,
-                    predefined: Self.ramps, recentsJSON: $recentRampsJSON,
+                    predefined: ramps, recentsJSON: $recentRampsJSON,
                     extraCompletions: [""]
                 ) {
                     // An explicit "no sub-cell ramp" choice: its completion is
@@ -120,7 +145,7 @@ struct TrackStyleEditor: View {
                 }
                 comboField(
                     L("component.trackEditor.unfilled"), text: $unfilledName, width: 9,
-                    predefined: Self.unfilledGlyphs, recentsJSON: $recentUnfilledJSON,
+                    predefined: unfilledGlyphs, recentsJSON: $recentUnfilledJSON,
                     extraCompletions: ["background"]
                 ) {
                     // The localized "solid background" option carries the
