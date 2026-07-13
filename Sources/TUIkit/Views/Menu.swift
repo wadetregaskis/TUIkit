@@ -240,8 +240,13 @@ private struct _MenuCore: View, Renderable, Layoutable {
 
         var lines: [String] = []
 
+        // The selection-indicator column: the indicator on the selected row,
+        // same-width spaces on every other row, so labels stay aligned. An
+        // empty indicator collapses the column entirely.
+        let indicatorWidth = selectionIndicator.strippedLength
+
         // Calculate the content width for full-width selection bar
-        let contentWidth = maxItemWidth + 2  // +2 for padding
+        let contentWidth = indicatorWidth + maxItemWidth + 2  // +2 for padding
 
         // Track divider line indices (for T-junction rendering): the rule
         // under the title, plus any `.divider` items.
@@ -287,8 +292,10 @@ private struct _MenuCore: View, Renderable, Layoutable {
                 labelText = "    \(item.label)"
             }
 
-            // Build the full text with padding
-            let fullText = " " + labelText
+            // Build the full text with padding: the indicator column, then the
+            // label. The indicator inherits the selected row's styling below.
+            let marker = isSelected ? selectionIndicator : String(repeating: " ", count: indicatorWidth)
+            let fullText = " " + marker + labelText
 
             // Pad to full width for selection bar
             let visibleLength = fullText.strippedLength

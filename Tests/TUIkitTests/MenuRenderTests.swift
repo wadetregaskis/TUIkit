@@ -221,6 +221,60 @@ struct MenuRenderTests {
         #expect(result[1].contains("One"))
     }
 
+    // MARK: - Selection indicator
+
+    @Test("The selected item carries the ▶ indicator; other rows align under it")
+    func selectionIndicatorOnSelectedRow() {
+        let menu = Menu(
+            title: "Main Menu",
+            items: [
+                MenuItem(label: "Text Styles", shortcut: "1"),
+                MenuItem(label: "Colors", shortcut: "2"),
+                MenuItem(label: "Dump", shortcut: "d"),
+            ],
+            selectedIndex: 1
+        )
+        let result = lines(renderToBuffer(menu, context: makeContext()))
+
+        #expect(!result[3].contains("▶") && result[3].contains("[1] Text Styles"))
+        #expect(result[4].contains("▶ [2] Colors"), "Indicator prefixes the selected item: \(result[4])")
+        #expect(!result[5].contains("▶") && result[5].contains("[d] Dump"))
+
+        // The indicator column keeps every label at the same x position.
+        let bracketColumns = Set(result[3...5].map(bracketColumn))
+        #expect(bracketColumns.count == 1, "Labels stay aligned across rows: \(result[3...5])")
+    }
+
+    @Test("The indicator follows the selection")
+    func selectionIndicatorFollowsSelection() {
+        let items = [MenuItem(label: "One", shortcut: "1"), MenuItem(label: "Two", shortcut: "2")]
+        let first = lines(renderToBuffer(Menu(items: items, selectedIndex: 0), context: makeContext()))
+        let second = lines(renderToBuffer(Menu(items: items, selectedIndex: 1), context: makeContext()))
+        #expect(first[1].contains("▶ [1] One") && !first[2].contains("▶"))
+        #expect(second[2].contains("▶ [2] Two") && !second[1].contains("▶"))
+    }
+
+    @Test("A custom indicator renders; an empty one collapses the column")
+    func customAndEmptyIndicators() {
+        let items = [MenuItem(label: "One", shortcut: "1"), MenuItem(label: "Two", shortcut: "2")]
+
+        let custom = lines(renderToBuffer(
+            Menu(items: items, selectedIndex: 0, selectionIndicator: "→ "), context: makeContext()))
+        #expect(custom[1].contains("→ [1] One"))
+
+        let none = lines(renderToBuffer(
+            Menu(items: items, selectedIndex: 0, selectionIndicator: ""), context: makeContext()))
+        #expect(none[1].contains(" [1] One") && !none[1].contains("▶"))
+        // No indicator column: the label sits right after the leading pad.
+        #expect(bracketColumn(none[1]) == 2, "border + 1 pad: \(none[1])")
+    }
+
+    /// The character column of the label's opening bracket in a stripped row
+    /// (all the glyphs before it — border, pad, indicator — are single-cell).
+    private func bracketColumn(_ row: String) -> Int {
+        row.firstIndex(of: "[").map { row.distance(from: row.startIndex, to: $0) } ?? -1
+    }
+
     // MARK: - Selection styling (visible in ANSI, not in stripped text)
 
     @Test("The selected row carries distinct ANSI styling from unselected rows")
