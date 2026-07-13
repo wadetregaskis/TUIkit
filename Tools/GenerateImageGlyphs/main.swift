@@ -134,26 +134,75 @@ func shapeVector(_ ink: [Double]) -> [Double] {
 /// The shape renderer's glyph set. This tool is the single author of it: the
 /// glyphs here become the keys of `generatedShapeCoverage`, which the runtime
 /// reads back — so there is no separate copy in the framework to keep in sync.
-let shapeGlyphs: [Character] = Array(" .,'`\":;-_~^|/\\+*=<>LJTVIO#%@")
+///
+/// Every printable ASCII character: the matcher picks by measured 6-region
+/// ink coverage, so a bigger vocabulary only ever improves the fit — a `y`
+/// really is the best rendering of some cells (heavy centre, tail
+/// lower-left), and the old hand-curated 29 left most of that shape space
+/// unreachable. Redundant near-duplicates cost a few comparisons per cell
+/// and nothing else.
+let shapeGlyphs: [Character] = (0x20...0x7E).map { Character(UnicodeScalar($0)!) }
 
-/// The additional glyphs of the WIDE Unicode set (`.unicodeDetailed`): block
-/// elements with strong spatial signatures — shades for even tone, half
-/// blocks, quadrants (a corner's worth of ink exactly where the image has
-/// it), and the vertical/horizontal eighth-block ladders for fine partial
-/// coverage. Combined with the ASCII shape glyphs above into
-/// `generatedUnicodeShapeCoverage`, so the matcher can pick whichever family
-/// fits a cell best.
-let unicodeExtraGlyphs: [Character] = Array("░▒▓█▀▄▌▐▁▂▃▅▆▇▉▊▋▍▎▏▘▝▖▗▚▞▛▜▙▟")
+/// The additional glyphs of the WIDE Unicode set (`.unicodeDetailed`),
+/// chosen for strong spatial signatures and near-universal terminal-font
+/// coverage (Block Elements, Box Drawing, and the common Geometric Shapes —
+/// all single-cell in terminal fonts; the width test in ImageTests pins
+/// that against TUIkit's own width tables):
+///
+/// - shades for even tone, half blocks, quadrants, and the FULL horizontal
+///   + vertical eighth-block ladders (including the often-forgotten upper
+///   `▔` and right `▕` eighths) for fine partial coverage;
+/// - box-drawing lines and corners in light, heavy, double and rounded
+///   weights — thin strokes with exact placement, a register the blocks
+///   can't express. Tees and crossings (`┼ ╬ ┳ …`) are deliberately
+///   EXCLUDED: at the 6-circle sampling resolution their vectors are
+///   indistinguishable from an even mid-tone, so they beat the shades for
+///   flat regions and render smooth areas as lattice;
+/// - box-drawing diagonals `╱ ╲ ╳`;
+/// - filled/outline geometric shapes (triangles, corner triangles,
+///   circles, squares, diamond) whose ink distributions cover curved and
+///   diagonal features.
+///
+/// Combined with the ASCII shape glyphs above into
+/// `generatedUnicodeShapeCoverage`, so the matcher can pick whichever
+/// family fits a cell best. Characters the reference font lacks natively
+/// are skipped at generation time (see `nativeGlyph`), so CoreText's
+/// font-fallback can't calibrate glyphs end-user fonts likely miss.
+let unicodeExtraGlyphs: [Character] = Array(
+    "░▒▓█▀▄▌▐▔▕▁▂▃▅▆▇▉▊▋▍▎▏▘▝▖▗▚▞▛▜▙▟"
+        + "─│┌┐└┘━┃┏┓┗┛═║╔╗╚╝╭╮╯╰╱╲╳"
+        + "▲▼◀▶◤◥◣◢●○◦■□▪▫◆◇")
 
 // MARK: - Generate
 
+/// Whether the reference font natively contains a glyph for `ch`.
+/// `CTLineDraw` silently falls back to another font for missing characters,
+/// which would calibrate a glyph most terminal fonts show as tofu (or with
+/// non-monospace metrics) — those are skipped and reported instead.
+func nativeGlyph(_ ch: Character) -> Bool {
+    let utf16 = Array(String(ch).utf16)
+    var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+    let mapped = CTFontGetGlyphsForCharacters(ctFont, utf16, &glyphs, utf16.count)
+    return mapped && glyphs.allSatisfy { $0 != 0 }
+}
+
+var skippedGlyphs: [Character] = []
+
 var shapeRows: [(Character, [Double])] = []
 for glyph in shapeGlyphs {
+    guard nativeGlyph(glyph) else {
+        skippedGlyphs.append(glyph)
+        continue
+    }
     shapeRows.append((glyph, shapeVector(rasterInk(glyph))))
 }
 
 var unicodeRows: [(Character, [Double])] = shapeRows
 for glyph in unicodeExtraGlyphs {
+    guard nativeGlyph(glyph) else {
+        skippedGlyphs.append(glyph)
+        continue
+    }
     unicodeRows.append((glyph, shapeVector(rasterInk(glyph))))
 }
 
@@ -256,6 +305,9 @@ let upperLeft = vec("▘")
 let lowerRight = vec("▗")
 print("Reference font : \(resolvedName) \(Int(pointSize))pt  →  cell \(pxW)×\(pxH)px")
 print("Shape glyphs   : \(shapeRows.count) ascii, \(unicodeRows.count) unicode")
+if !skippedGlyphs.isEmpty {
+    print("Skipped (font) : \(String(skippedGlyphs)) — not native to the reference font")
+}
 print("ASCII ramp     : \(rampGlyphs.count) levels  '\(String(rampGlyphs))'")
 print("sanity  'T'    : upper \(fmt(tVec[0]))/\(fmt(tVec[1]))  lower \(fmt(tVec[4]))/\(fmt(tVec[5]))")
 print("sanity  '_'    : upper \(fmt(underscore[0]))/\(fmt(underscore[1]))  lower \(fmt(underscore[4]))/\(fmt(underscore[5]))")

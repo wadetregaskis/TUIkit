@@ -43,6 +43,58 @@ struct ImageFidelityConfigTests {
         .convert(img, width: w, height: h).joined()
     }
 
+    // MARK: - Calibrated glyph tables
+
+    @Test("Every calibrated glyph is single-cell by TUIkit's width tables")
+    func calibratedGlyphsAreSingleCell() {
+        // The shape renderer appends exactly one glyph per output cell with
+        // no width validation at render time, so a double-width entry in the
+        // calibration tables would shear every row it appears on. This is
+        // the framework-side gate for glyphs added to the candidate sets in
+        // Tools/GenerateImageGlyphs.
+        for (glyph, _) in generatedShapeCoverage {
+            #expect(String(glyph).strippedLength == 1, "'\(glyph)' is not single-cell")
+        }
+        for (glyph, _) in generatedUnicodeShapeCoverage {
+            #expect(String(glyph).strippedLength == 1, "'\(glyph)' is not single-cell")
+        }
+    }
+
+    @Test("The wide-Unicode table strictly extends the ASCII shape table")
+    func unicodeTableExtendsAscii() {
+        let ascii = Set(generatedShapeCoverage.map(\.0))
+        let unicode = Set(generatedUnicodeShapeCoverage.map(\.0))
+        #expect(ascii.isSubset(of: unicode))
+        // "Much richer" pinned coarsely, so a regressed regeneration (wrong
+        // font, over-aggressive skip list) fails loudly rather than
+        // silently shipping a starved matcher.
+        #expect(ascii.count >= 90, "full printable ASCII: \(ascii.count)")
+        #expect(unicode.count >= 150, "blocks + lines + shapes: \(unicode.count)")
+    }
+
+    // MARK: - Report (not an assertion; run with --filter to eyeball the modes)
+
+    @Test("Report: synthetic scene through each shape mode")
+    func shapeModeReport() {
+        // A ball (curved edges), a diagonal bar, and a horizontal gradient —
+        // the three features the shape matcher exists for.
+        let img = image(240, 120) { x, y in
+            let dx = Double(x - 60) / 45.0
+            let dy = Double(y - 60) / 45.0
+            if dx * dx + dy * dy < 1.0 { return 0 }
+            if abs((x - 120) - (y * 2 - 120)) < 14 && x > 100 && x < 200 { return 40 }
+            return x > 160 ? UInt8(min(255, (x - 160) * 3)) : 255
+        }
+        for set in [ASCIICharacterSet.shapeBased, .shapeUnicode, .unicodeDetailed] {
+            print("== \(set) ==")
+            for line in ASCIIConverter(
+                characterSet: set, colorMode: .mono, dithering: .none
+            ).convert(img, width: 60, height: 15) {
+                print(line.stripped)
+            }
+        }
+    }
+
     // MARK: - .unicodeDetailed
 
     @Test("A solid dark image renders full blocks")
