@@ -191,3 +191,5 @@ type_name:
     - _Palette256Editor
     - _SwatchGridCore
     - _NamedSwatchGrid
+    # The colour panel's dialog-free body, shared with GradientEditorPanel.
+    - _ColorPickerBody

@@ -70,6 +70,8 @@ extension ExampleStrings {
             "page.progressView.working": "Working",
             "page.progressView.determinateStyles": "Determinate styles",
             "page.progressView.indeterminateAnimations": "Indeterminate animations",
+            "page.progressView.editGradient": "Edit gradient…",
+            "page.progressView.gradientTitle": "Gradient",
             "page.progressView.title": "Progress & Gauges",
             "page.progressView.styleLabel": "style",
             // Mouse
@@ -230,6 +232,8 @@ extension ExampleStrings {
             "page.progressView.working": "Arbeitet",
             "page.progressView.determinateStyles": "Bestimmte Stile",
             "page.progressView.indeterminateAnimations": "Unbestimmte Animationen",
+            "page.progressView.editGradient": "Verlauf bearbeiten…",
+            "page.progressView.gradientTitle": "Verlauf",
             "page.progressView.title": "Fortschritt & Anzeigen",
             "page.progressView.styleLabel": "Stil",
             // Mouse
@@ -390,6 +394,8 @@ extension ExampleStrings {
             "page.progressView.working": "En cours",
             "page.progressView.determinateStyles": "Styles déterminés",
             "page.progressView.indeterminateAnimations": "Animations indéterminées",
+            "page.progressView.editGradient": "Modifier le dégradé…",
+            "page.progressView.gradientTitle": "Dégradé",
             "page.progressView.title": "Progression et jauges",
             "page.progressView.styleLabel": "style",
             // Mouse
@@ -550,6 +556,8 @@ extension ExampleStrings {
             "page.progressView.working": "In corso",
             "page.progressView.determinateStyles": "Stili determinati",
             "page.progressView.indeterminateAnimations": "Animazioni indeterminate",
+            "page.progressView.editGradient": "Modifica gradiente…",
+            "page.progressView.gradientTitle": "Gradiente",
             "page.progressView.title": "Avanzamento e indicatori",
             "page.progressView.styleLabel": "stile",
             // Mouse
@@ -710,6 +718,8 @@ extension ExampleStrings {
             "page.progressView.working": "Trabajando",
             "page.progressView.determinateStyles": "Estilos determinados",
             "page.progressView.indeterminateAnimations": "Animaciones indeterminadas",
+            "page.progressView.editGradient": "Editar degradado…",
+            "page.progressView.gradientTitle": "Degradado",
             "page.progressView.title": "Progreso e indicadores",
             "page.progressView.styleLabel": "estilo",
             // Mouse
@@ -870,6 +880,8 @@ extension ExampleStrings {
             "page.progressView.working": "处理中",
             "page.progressView.determinateStyles": "确定样式",
             "page.progressView.indeterminateAnimations": "不确定动画",
+            "page.progressView.editGradient": "编辑渐变…",
+            "page.progressView.gradientTitle": "渐变",
             "page.progressView.title": "进度与仪表",
             "page.progressView.styleLabel": "样式",
             // Mouse
@@ -1030,6 +1042,8 @@ extension ExampleStrings {
             "page.progressView.working": "処理中",
             "page.progressView.determinateStyles": "確定スタイル",
             "page.progressView.indeterminateAnimations": "不確定アニメーション",
+            "page.progressView.editGradient": "グラデーションを編集…",
+            "page.progressView.gradientTitle": "グラデーション",
             "page.progressView.title": "進捗とゲージ",
             "page.progressView.styleLabel": "スタイル",
             // Mouse

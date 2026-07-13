@@ -95,6 +95,35 @@ public struct ColorPickerPanel: View {
 
     public var body: some View {
         Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
+            _ColorPickerBody(selection: selection)
+        } footer: {
+            // No leading Spacer: a Spacer is width-flexible, which would make the
+            // dialog claim the full available width instead of sizing to its
+            // content. The footer sizes to the button; the dialog fits its tabs.
+            Button("Done") { isPresented.wrappedValue = false }
+                .buttonStyle(.primary)
+        }
+    }
+}
+
+// MARK: - Embeddable panel body
+
+/// The colour panel's content — live preview plus the model tabs — free of
+/// dialog chrome, so it can be embedded inside other editors (the
+/// ``GradientEditorPanel`` hosts one to edit the selected gradient stop in
+/// place, instead of nesting dialogs).
+struct _ColorPickerBody: View {
+    let selection: Binding<Color>
+
+    private typealias Mode = ColorPickerPanel.Mode
+
+    /// Which tab is currently showing.
+    @State private var mode: ColorPickerPanel.Mode = .rgb
+
+    /// Resolves a semantic ``selection`` to concrete RGB for the read-out.
+    @Environment(\.palette) private var palette
+
+    var body: some View {
             // Centre the preview and the tab view relative to each other (the tab
             // view is the widest, so the preview centres within it).
             VStack(alignment: .center, spacing: 1) {
@@ -154,13 +183,6 @@ public struct ColorPickerPanel: View {
                 // would pad the slim slider tabs out to the 256-grid's height.
                 .tabViewContentSizing(.activeTab)
             }
-        } footer: {
-            // No leading Spacer: a Spacer is width-flexible, which would make the
-            // dialog claim the full available width instead of sizing to its
-            // content. The footer sizes to the button; the dialog fits its tabs.
-            Button("Done") { isPresented.wrappedValue = false }
-                .buttonStyle(.primary)
-        }
     }
 
     /// Wraps a tab's content in a ScrollView so a too-short terminal can scroll the
@@ -196,9 +218,13 @@ public struct ColorPickerPanel: View {
                 // colour. Free-form while focused; only valid hex moves the colour.
                 _EditableValueField(
                     focusID: "combined-hex", width: 10,
-                    format: { Self.hexString(selection.wrappedValue.resolve(with: palette).rgbComponents) },
+                    format: {
+                        ColorPickerPanel.hexString(
+                            selection.wrappedValue.resolve(with: palette).rgbComponents)
+                    },
                     commit: { if let color = Color.hex($0) { selection.wrappedValue = color } })
-                Text(Self.rgbString(components)).foregroundStyle(.palette.foregroundTertiary)
+                Text(ColorPickerPanel.rgbString(components))
+                    .foregroundStyle(.palette.foregroundTertiary)
             }
         }
     }
@@ -216,21 +242,9 @@ public struct ColorPickerPanel: View {
     /// palette must always yield concrete colours, so we resolve before storing.
     /// (`Color.palette.accent` already *is* `.semantic(.accent)`, so each entry
     /// still doubles as the swatch.)
-    static let semanticColors: [(name: String, color: Color)] = [
-        ("Foreground", .palette.foreground),
-        ("Secondary", .palette.foregroundSecondary),
-        ("Accent", .palette.accent),
-        ("Success", .palette.success),
-        ("Warning", .palette.warning),
-        ("Error", .palette.error),
-        ("Info", .palette.info),
-        ("Border", .palette.border),
-        ("Background", .palette.background),
-    ]
-
     private var semanticEditor: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Self.semanticColors, id: \.name) { entry in
+            ForEach(ColorPickerPanel.semanticColors, id: \.name) { entry in
                 semanticRow(entry.name, entry.color)
             }
         }
@@ -255,6 +269,25 @@ public struct ColorPickerPanel: View {
             }
         }
     }
+}
+
+// MARK: - Pure helpers (parsing, conversions, read-outs)
+
+extension ColorPickerPanel {
+    /// The palette roles offered on the semantic tab (see
+    /// ``_ColorPickerBody``'s semantic editor for why selections snapshot the
+    /// concrete colour rather than the semantic reference).
+    static let semanticColors: [(name: String, color: Color)] = [
+        ("Foreground", .palette.foreground),
+        ("Secondary", .palette.foregroundSecondary),
+        ("Accent", .palette.accent),
+        ("Success", .palette.success),
+        ("Warning", .palette.warning),
+        ("Error", .palette.error),
+        ("Info", .palette.info),
+        ("Border", .palette.border),
+        ("Background", .palette.background),
+    ]
 
     /// Parses a typed/pasted channel value: keeps the digits, clamps to `range`
     /// (empty → the lower bound; out-of-range → the nearer bound). Pure; tested.

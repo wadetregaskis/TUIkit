@@ -38,6 +38,34 @@ struct ProgressViewPage: View {
     /// Which style the top "Determinate" section is currently showing.
     @State private var determinateStyleIndex = 0
 
+    /// Whether the gradient-editor dialog is up.
+    @State private var editingGradient = false
+
+    /// The `gradient(c)` row's stops, persisted across sessions as
+    /// comma-separated hex (the editor's changes survive relaunch, like the
+    /// track-style editor's selections). Default: the teal → violet demo.
+    @AppStorage("progressDemo.gradientStops")
+    private var gradientStopsRaw = "3CC8BE,506EF0,AA46DC"
+
+    /// The persisted stops decoded to colours (invalid entries dropped; fewer
+    /// than two falls back to the default so the row always shows a gradient).
+    private var gradientStops: [Color] {
+        let parsed = gradientStopsRaw.split(separator: ",").compactMap { Color.hex(String($0)) }
+        return parsed.count >= 2 ? parsed : [.rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220)]
+    }
+
+    /// The editor's binding: decodes on read, re-encodes on write.
+    private var gradientStopsBinding: Binding<[Color]> {
+        Binding(
+            get: { gradientStops },
+            set: { gradientStopsRaw = $0.map(Self.hexString).joined(separator: ",") })
+    }
+
+    private static func hexString(_ color: Color) -> String {
+        guard let c = color.rgbComponents else { return "000000" }
+        return String(format: "%02X%02X%02X", c.red, c.green, c.blue)
+    }
+
     /// Decides whether the Determinate and Indeterminate sections sit
     /// side-by-side (wide terminals) or stack (narrow). An explicit width
     /// check rather than `ViewThatFits`: both sections hold width-flexible
@@ -141,13 +169,18 @@ struct ProgressViewPage: View {
                     indeterminateRow(label: "pulse        ", style: .pulse)
                     indeterminateRow(label: "knightRider  ", style: .knightRider)
                     indeterminateRow(label: "gradient     ", style: .gradient())
-                    // The same slide with caller-supplied stops (teal → violet):
-                    // any ≥2 RGB colours, cyclically wrapped.
+                    // The same slide with caller-supplied stops: any ≥2 RGB
+                    // colours, cyclically wrapped — editable via the gradient
+                    // editor below (teal → violet until you change it).
                     indeterminateRow(
                         label: "gradient(c)  ",
-                        style: .gradient(colors: [
-                            .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
-                        ]))
+                        style: .gradient(colors: gradientStops))
+                    HStack(spacing: 1) {
+                        ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
+                            Text("██").foregroundStyle(stop)
+                        }
+                        Button(L("page.progressView.editGradient")) { editingGradient = true }
+                    }
                 }
             }
 
@@ -207,6 +240,12 @@ struct ProgressViewPage: View {
             Spacer()
         }
         .scrollableDemoPage()
+        .modal(isPresented: $editingGradient) {
+            GradientEditorPanel(
+                L("page.progressView.gradientTitle"),
+                stops: gradientStopsBinding,
+                isPresented: $editingGradient)
+        }
         .appHeader {
             DemoAppHeader(L("page.progressView.title"))
         }
