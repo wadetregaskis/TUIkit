@@ -66,6 +66,17 @@ public struct AnyEquatableBox: Equatable {
 ///   - a subtree that reads a **per-frame-volatile** environment value
 ///     (`pulsePhase`) — detected via a ``VolatileReadTracker``.
 ///
+/// **Known hole — captured data.** The memo assumes a row is a pure function
+/// of its element. A row whose content *captures* mutable data from outside
+/// its own subtree (e.g. `ForEach(0..<2) { _ in row drawn from some outer
+/// state }`) serves a stale buffer when that data changes: the element key
+/// is unchanged and the changed state's identity is not a descendant of the
+/// row, so `clearAffected` never reaches it. Undetectable here (closures are
+/// opaque). Framework views must not build display-only rows from captured
+/// mutable data under an `Equatable`-element `ForEach` — iterate the data
+/// itself (so it IS the element), or drop the `ForEach`. The gradient
+/// editor's frozen preview strip was this exact shape.
+///
 /// For `List` the selection highlight is applied *outside* the cached row
 /// buffer, so selection/scroll never invalidate it — only the row's own content
 /// matters.

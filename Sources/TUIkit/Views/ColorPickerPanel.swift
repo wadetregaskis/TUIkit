@@ -17,7 +17,8 @@ import TUIkitStyling
 ///
 /// Like SwiftUI's colour panel it edits the bound ``Color`` **live** — every
 /// change writes straight through `selection`, so a preview elsewhere updates
-/// as you drag. "Done" (or `Esc`) dismisses it via `isPresented`.
+/// as you drag. **Done** keeps the result; **Cancel** — or any other
+/// dismissal, `Esc` included — restores the colour the dialog opened with.
 ///
 /// TUIkit modals are page-hosted (a `.modal` centres on the space available
 /// where it is attached), so present the panel from a full-screen subtree
@@ -46,6 +47,17 @@ public struct ColorPickerPanel: View {
 
     /// Which tab is currently showing.
     @State private var mode: Mode = .rgb
+
+    /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
+    /// the dismissal callback must read the values as they are when it fires,
+    /// not as they were when the closure's frame was rendered (a value capture
+    /// would miss "Done" setting `applied` in the same action that dismisses).
+    @State private var session = Session()
+
+    private final class Session {
+        var original: Color?
+        var applied = false
+    }
 
     /// Resolves a semantic ``selection`` to concrete RGB for the read-out.
     @Environment(\.palette) private var palette
@@ -81,8 +93,10 @@ public struct ColorPickerPanel: View {
     ///
     /// - Parameters:
     ///   - title: The dialog title (default `"Colour"`).
-    ///   - selection: The colour to edit. Rewritten live on every change.
-    ///   - isPresented: Bound to the presenting `.modal`; "Done" sets it false.
+    ///   - selection: The colour to edit. Rewritten live on every change;
+    ///     restored to the opening value on Cancel / `Esc`.
+    ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
+    ///     it false.
     public init(
         _ title: String = "Colour",
         selection: Binding<Color>,
@@ -96,12 +110,27 @@ public struct ColorPickerPanel: View {
     public var body: some View {
         Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
             _ColorPickerBody(selection: selection)
+                .onAppear { session.original = selection.wrappedValue }
+                .onDisappear {
+                    // ANY dismissal that isn't "Done" — Cancel, Esc, the page
+                    // going away — restores what the dialog opened with. Live
+                    // edits already wrote through `selection`; this is the undo.
+                    if !session.applied, let original = session.original {
+                        selection.wrappedValue = original
+                    }
+                }
         } footer: {
             // No leading Spacer: a Spacer is width-flexible, which would make the
             // dialog claim the full available width instead of sizing to its
-            // content. The footer sizes to the button; the dialog fits its tabs.
-            Button("Done") { isPresented.wrappedValue = false }
+            // content. The footer sizes to the buttons; the dialog fits its tabs.
+            HStack(spacing: 2) {
+                Button("Cancel") { isPresented.wrappedValue = false }
+                Button("Done") {
+                    session.applied = true
+                    isPresented.wrappedValue = false
+                }
                 .buttonStyle(.primary)
+            }
         }
     }
 }

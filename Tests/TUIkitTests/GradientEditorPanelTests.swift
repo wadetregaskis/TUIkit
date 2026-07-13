@@ -114,4 +114,187 @@ struct GradientEditorPanelRenderTests {
             text.contains("38;2;\(components.red);\(components.green);\(components.blue)"),
             "an interior cell matches TrackRenderer.gradientColor")
     }
+
+    @Test("The preview updates live when a stop's colour changes (no stale memo)")
+    func previewUpdatesLive() {
+        // Regression: the preview rows were built under a ForEach over row
+        // numbers, so the element-keyed render memo (keyed 0/1) served the old
+        // colours until something else invalidated the cache — edits through
+        // the embedded colour panel never showed until the selection moved.
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+
+        // ONE context (one render cache) across both renders, like the live
+        // render loop between frames.
+        let context = makeRenderContext(width: 70, height: 45)
+        _ = renderToBuffer(panel, context: context)
+        stops[0] = .rgb(0, 255, 0)  // the edit the colour panel would make
+        let after = renderToBuffer(panel, context: context)
+
+        // Scope to the PREVIEW rows (the only lines whose stripped content
+        // holds the full 36-cell block run) — the RGB sliders legitimately
+        // sweep through pure red whatever the stops are.
+        let fullRun = String(repeating: "█", count: 36)
+        let previewLines = after.lines.filter { $0.stripped.contains(fullRun) }
+        #expect(previewLines.count == 2, "both preview rows present")
+        #expect(
+            previewLines.allSatisfy { $0.contains("38;2;0;255;0") },
+            "the edited endpoint is drawn")
+        #expect(
+            previewLines.allSatisfy { !$0.contains("38;2;255;0;0") },
+            "no preview cell still shows the OLD endpoint colour")
+    }
+
+    @Test("Stop chips have selection-independent geometry, numbers left of their swatch")
+    func stopChipGeometry() {
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+        let lines = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
+            .lines.map(\.stripped)
+
+        let strip = lines.first { $0.contains("●1") }
+        #expect(strip != nil, "the stop strip renders")
+        guard let strip else { return }
+
+        // Each number sits immediately LEFT of its own swatch — the marker
+        // slot is always reserved (a no-break space when unselected, which
+        // survives label flattening), so selection never shifts a chip.
+        #expect(strip.contains("●1██"), "selected chip: marker + number + swatch: |\(strip)|")
+        #expect(strip.contains("\u{00A0}2██"), "unselected chip reserves the marker slot: |\(strip)|")
+        #expect(strip.contains("\u{00A0}3██"))
+
+        // Uniform pitch: the distance between consecutive chips equals the
+        // chip width + 1 spacing, whichever chip is selected.
+        func column(of needle: String) -> Int? {
+            strip.range(of: needle).map { strip.distance(from: strip.startIndex, to: $0.lowerBound) }
+        }
+        let c1 = column(of: "1██"), c2 = column(of: "2██"), c3 = column(of: "3██")
+        #expect(c1 != nil && c2 != nil && c3 != nil)
+        if let c1, let c2, let c3 {
+            #expect(c2 - c1 == GradientEditorPanel.stopChipWidth(index: 0) + 1, "|\(strip)|")
+            #expect(c3 - c2 == GradientEditorPanel.stopChipWidth(index: 1) + 1, "|\(strip)|")
+        }
+    }
+
+    @Test("The footer offers Cancel alongside Done")
+    func footerHasCancel() {
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+        let text = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
+            .lines.map(\.stripped).joined(separator: "\n")
+        #expect(text.contains("Cancel"))
+        #expect(text.components(separatedBy: "Done").count == 2, "exactly one Done")
+    }
+}
+
+@MainActor
+@Suite("GradientEditorPanel — chip wrapping")
+struct GradientEditorPanelWrappingTests {
+
+    typealias Panel = GradientEditorPanel
+
+    @Test("Items pack greedily into rows within the budget")
+    func greedyPacking() {
+        // 5 items of width 10, spacing 1, budget 36: 10+1+10+1+10 = 32 fits,
+        // adding a fourth (43) does not.
+        let rows = Panel.wrappedRows(itemWidths: Array(repeating: 10, count: 5), spacing: 1, budget: 36)
+        #expect(rows == [[0, 1, 2], [3, 4]])
+    }
+
+    @Test("Everything fits on one row when it can")
+    func singleRow() {
+        let rows = Panel.wrappedRows(itemWidths: [6, 6, 6], spacing: 1, budget: 36)
+        #expect(rows == [[0, 1, 2]])
+    }
+
+    @Test("An over-budget item still gets a row of its own")
+    func overBudgetItem() {
+        let rows = Panel.wrappedRows(itemWidths: [40, 6], spacing: 1, budget: 36)
+        #expect(rows == [[0], [1]], "never drop an item, however wide")
+    }
+
+    @Test("No items, no rows")
+    func empty() {
+        #expect(Panel.wrappedRows(itemWidths: [], spacing: 1, budget: 36).isEmpty)
+    }
+}
+
+@MainActor
+@Suite("GradientEditorPanel — presets & recents")
+struct GradientEditorPanelRecentsTests {
+
+    typealias Panel = GradientEditorPanel
+
+    private let a: [Color] = [.rgb(1, 1, 1), .rgb(2, 2, 2)]
+    private let b: [Color] = [.rgb(3, 3, 3), .rgb(4, 4, 4)]
+
+    @Test("Applying records at the front; re-applying moves to the front (MRU)")
+    func mruOrdering() {
+        var recents = Panel.recordingRecent(a, in: [])
+        recents = Panel.recordingRecent(b, in: recents)
+        #expect(recents == [b, a], "most recent first")
+        recents = Panel.recordingRecent(a, in: recents)
+        #expect(recents == [a, b], "re-applying moves to the front, no duplicate")
+    }
+
+    @Test("The list caps at the limit, evicting the least recently used")
+    func lruEviction() {
+        var recents: [[Color]] = []
+        let gradients = (0..<12).map { n -> [Color] in
+            [.rgb(UInt8(n), 0, 0), .rgb(0, UInt8(n), 0)]
+        }
+        for gradient in gradients {
+            recents = Panel.recordingRecent(gradient, in: recents)
+        }
+        #expect(recents.count == Panel.recentLimit)
+        #expect(recents.first == gradients.last, "newest at the front")
+        #expect(
+            !recents.contains(gradients[0]) && !recents.contains(gradients[1]),
+            "the two least recently used were evicted")
+    }
+
+    @Test("Presets and non-gradients are never recorded")
+    func exclusions() {
+        for preset in Panel.presets {
+            #expect(Panel.recordingRecent(preset, in: []).isEmpty,
+                    "presets already have a home above the rule")
+        }
+        #expect(Panel.recordingRecent([.rgb(1, 1, 1)], in: []).isEmpty,
+                "one stop is not a gradient")
+    }
+
+    @Test("Recents survive an encode/decode round trip; junk entries drop")
+    func codecRoundTrip() {
+        let recents = [a, b]
+        let decoded = Panel.decodeRecents(Panel.encodeRecents(recents))
+        #expect(decoded == recents)
+
+        // Junk: an empty entry, a single-stop entry, and a malformed hex.
+        let junk = Panel.decodeRecents(";010101;ZZZZZZ,010101;010101,020202")
+        #expect(junk == [[Color.rgb(1, 1, 1), Color.rgb(2, 2, 2)]])
+    }
+
+    @Test("The panel renders preset chips (and no rule while recents are empty)")
+    func presetsRender() {
+        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var presented = true
+        let panel = GradientEditorPanel(
+            stops: Binding(get: { stops }, set: { stops = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+        let raw = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 50))
+            .lines.joined(separator: "\n")
+        // A cell colour unique to each of two presets proves their chips drew:
+        // both endpoints of Heat and Ocean.
+        #expect(raw.contains("38;2;120;0;0"), "Heat's first stop is drawn")
+        #expect(raw.contains("38;2;0;40;120"), "Ocean's first stop is drawn")
+    }
 }
