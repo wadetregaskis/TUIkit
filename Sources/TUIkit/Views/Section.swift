@@ -316,10 +316,27 @@ extension Section: ListRowExtractor {
             return extractor.extractListRows(context: context)
         }
 
-        // Fallback: render content as a single row (rare case)
+        // Static children (a TupleView of rows): one row per child, each
+        // carrying the badge of its `.badge(_:)` wrapper, if any — matching
+        // the flat List's child extraction.
+        if let provider = content as? ChildViewProvider {
+            var rows: [ListRow<RowID>] = []
+            for child in provider.childViews(context: context) where !child.isSpacer {
+                guard let indexID = rows.count as? RowID else { continue }
+                let badge = extractBadgeValue(from: child.wrappedView)
+                let buffer = child.render(
+                    width: context.availableWidth, height: context.availableHeight,
+                    context: context)
+                rows.append(ListRow(id: indexID, buffer: buffer, badge: badge))
+            }
+            return rows
+        }
+
+        // Fallback: render content as a single row, carrying its badge.
+        let badge = extractBadgeValue(from: content)
         let buffer = TUIkit.renderToBuffer(content, context: context)
         if let indexID = 0 as? RowID {
-            return [ListRow(id: indexID, buffer: buffer, badge: nil)]
+            return [ListRow(id: indexID, buffer: buffer, badge: badge)]
         }
         return []
     }

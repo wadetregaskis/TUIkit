@@ -1052,35 +1052,45 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 rows.map { SelectableListRow(type: .content(id: $0.id), content: $0.content) })
         }
 
-        // ChildInfoProvider (TupleView with multiple children).
-        if let provider = content as? ChildInfoProvider {
+        // ChildViewProvider (TupleView with multiple children). The *view*
+        // provider, not the buffer-only ChildInfoProvider: each row's original
+        // view is needed to peel off its `.badge(_:)`, and a `ForEach` spliced
+        // between static rows only flattens on this path.
+        if let provider = content as? ChildViewProvider {
             return .eager(extractFromChildren(provider: provider, context: context))
         }
 
-        // Fallback: render as a single content row.
+        // Fallback: render as a single content row, carrying its badge
+        // (`List { Text("Notifications").badge(5) }`).
+        let badge = extractBadgeValue(from: content)
         let buffer = TUIkit.renderToBuffer(content, context: context)
         if let zeroID = 0 as? SelectionValue {
-            return .eager([SelectableListRow(type: .content(id: zeroID), buffer: buffer)])
+            return .eager([
+                SelectableListRow(
+                    type: .content(id: zeroID),
+                    content: LazyListRowContent(buffer: buffer, badge: badge))
+            ])
         }
         return .eager([])
     }
 
-    /// Extracts rows from a ChildInfoProvider, handling Sections specially.
+    /// Extracts one row per flattened child (TupleView content), each carrying
+    /// the badge of its `.badge(_:)` wrapper, if any.
     private func extractFromChildren(
-        provider: ChildInfoProvider,
+        provider: ChildViewProvider,
         context: RenderContext
     ) -> [SelectableListRow<SelectionValue>] {
         var result: [SelectableListRow<SelectionValue>] = []
-        let infos = provider.childInfos(context: context)
 
-        for (index, info) in infos.enumerated() {
-            guard let buffer = info.buffer else { continue }
-
-            // Try to extract original view for Section detection
-            // ChildInfo only has buffer, so we check the provider type
-            if let indexID = index as? SelectionValue {
-                result.append(SelectableListRow(type: .content(id: indexID), buffer: buffer))
-            }
+        for child in provider.childViews(context: context) where !child.isSpacer {
+            guard let indexID = result.count as? SelectionValue else { continue }
+            let badge = extractBadgeValue(from: child.wrappedView)
+            let buffer = child.render(
+                width: context.availableWidth, height: context.availableHeight, context: context)
+            result.append(
+                SelectableListRow(
+                    type: .content(id: indexID),
+                    content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 
         return result

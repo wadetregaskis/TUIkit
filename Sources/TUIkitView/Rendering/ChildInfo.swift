@@ -165,6 +165,11 @@ public struct ChildView {
         self.identityKey = key
     }
 
+    /// The wrapped child view itself, for containers that need to inspect the
+    /// original view value — e.g. `List` peeling a `.badge(_:)` wrapper off a
+    /// row — rather than measure or render it.
+    public var wrappedView: any View { view }
+
     /// Measures this child view without rendering.
     public func measure(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(view, proposal: proposal, context: childContext(context))

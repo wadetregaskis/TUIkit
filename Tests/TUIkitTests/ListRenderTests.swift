@@ -428,4 +428,77 @@ struct ListRenderTests {
             #expect(i2 == i1 + 1, "row lines should be consecutive: \(i1), \(i2)")
         }
     }
+
+    // MARK: Badges (issue #10)
+
+    @Test("A badge on a direct-child row renders right-aligned")
+    func badgeOnDirectChild() {
+        // The canonical SwiftUI form — no ForEach in sight.
+        let lines = strippedLines(
+            List {
+                Text("Notifications")
+                    .badge(5)
+            },
+            context: listContext(width: 30, height: 6)
+        )
+
+        let row = lines.first { $0.contains("Notifications") }
+        #expect(row != nil, "the row renders: \(lines)")
+        if let row {
+            #expect(row.contains("5"), "the badge count renders on the row: '\(row)'")
+            let text = row.firstRange(of: "Notifications")
+            let badge = row.firstRange(of: "5")
+            if let text, let badge {
+                #expect(text.upperBound < badge.lowerBound, "badge sits right of the label: '\(row)'")
+            }
+        }
+    }
+
+    @Test("Badges on several static rows each render; a zero count hides")
+    func badgesOnTupleChildren() {
+        let lines = strippedLines(
+            List {
+                Text("Inbox").badge(12)
+                Text("Drafts").badge("2 unread")
+                Text("Spam").badge(0)
+                Text("Trash")
+            },
+            context: listContext(width: 34, height: 8)
+        )
+
+        #expect(lines.first { $0.contains("Inbox") }?.contains("12") == true, "\(lines)")
+        #expect(lines.first { $0.contains("Drafts") }?.contains("2 unread") == true, "\(lines)")
+        #expect(lines.first { $0.contains("Spam") }?.contains("0") != true, "a 0 badge hides: \(lines)")
+        #expect(lines.contains { $0.contains("Trash") })
+    }
+
+    @Test("A badge on a ForEach row renders")
+    func badgeOnForEachRow() {
+        let lines = strippedLines(
+            List(selection: .constant(String?.none)) {
+                ForEach(["Alpha", "Bravo"], id: \.self) { name in
+                    Text(name).badge(7)
+                }
+            },
+            context: listContext(width: 30, height: 8)
+        )
+        #expect(lines.first { $0.contains("Alpha") }?.contains("7") == true, "\(lines)")
+        #expect(lines.first { $0.contains("Bravo") }?.contains("7") == true, "\(lines)")
+    }
+
+    @Test("A badge on a static row inside a Section renders")
+    func badgeInSection() {
+        let lines = strippedLines(
+            List {
+                Section("Mail") {
+                    Text("Junk").badge(3)
+                    Text("Outbox")
+                }
+            },
+            context: listContext(width: 30, height: 8)
+        )
+        #expect(lines.contains { $0.contains("Mail") })
+        #expect(lines.first { $0.contains("Junk") }?.contains("3") == true, "\(lines)")
+        #expect(lines.contains { $0.contains("Outbox") })
+    }
 }
