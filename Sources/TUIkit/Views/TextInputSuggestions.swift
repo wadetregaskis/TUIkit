@@ -397,7 +397,8 @@ enum TextFieldSuggestions {
             onActivate: { row in
                 guard let ordinal = ordinalByRow[row] else { return }
                 handler.acceptSuggestion(at: ordinal)
-            }
+            },
+            onDismiss: { handler.suggestionsOpen = false }
         )
         buffer.overlays.append(
             OverlayLayer(

@@ -264,6 +264,48 @@ struct PickerTests {
         #expect(box.value.isOpen == false, "clicking the control must close the open drop-down")
     }
 
+    @Test("Clicking OUTSIDE an open drop-down closes it and consumes the click")
+    func clickingOutsideClosesOpenDropDown() throws {
+        let context = createTestContext()
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
+
+        _ = renderToBuffer(core, context: context)
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummy = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker", selection: dummy, itemValues: [], canBeFocused: true))
+        box.value.isOpen = true
+
+        // The dismissal backdrop rides in the popup OVERLAY, so composite
+        // like the render loop does before extracting regions.
+        let open = renderToBuffer(core, context: context)
+            .compositingOverlays(maxWidth: 80, maxHeight: 24, palette: context.environment.palette)
+        #expect(box.value.isOpen, "precondition: drop-down open")
+
+        let dispatcher = try #require(context.environment.mouseEventDispatcher)
+        dispatcher.setRegions(open.hitTestRegions)
+
+        // A press well away from the control and its popup: macOS
+        // behaviour — the menu closes and the click goes nowhere else.
+        let consumed = dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 70, y: 20))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 70, y: 20))
+        #expect(box.value.isOpen == false, "an outside click closes the drop-down")
+        #expect(consumed, "the closing click is consumed, not delivered underneath")
+
+        // The selection is untouched — closing is all the click did.
+        #expect(choice == AnyHashable("a"))
+    }
+
     @Test("Clicking the collapsed control opens a closed drop-down")
     func clickingControlOpensClosedDropDown() throws {
         let context = createTestContext()

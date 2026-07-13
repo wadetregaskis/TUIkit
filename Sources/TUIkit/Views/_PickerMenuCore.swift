@@ -360,7 +360,8 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 captureSelection.wrappedValue = tag
                 handler.highlightedIndex = ordinal
                 handler.isOpen = false
-            }
+            },
+            onDismiss: { handler.isOpen = false }
         )
         // A disabled picker never opens (the handler closes it), but belt and
         // braces: drop the popup's interactivity if we got here disabled.

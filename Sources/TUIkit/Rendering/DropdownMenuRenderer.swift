@@ -114,12 +114,15 @@ enum DropdownMenu {
     ///     option row.
     ///   - onActivate: Called with the row index when an option row is
     ///     clicked.
+    ///   - onDismiss: Called when the user clicks OUTSIDE the popup — close
+    ///     the menu (the click itself is consumed, macOS-style).
     /// - Returns: The popup buffer, ready to attach as an ``OverlayLayer``.
     static func popup(
         _ config: Configuration,
         context: RenderContext,
         onHover: @escaping (Int) -> Void,
-        onActivate: @escaping (Int) -> Void
+        onActivate: @escaping (Int) -> Void,
+        onDismiss: @escaping () -> Void
     ) -> FrameBuffer {
         let rows = config.rows
         let scroll = config.scroll
@@ -175,6 +178,34 @@ enum DropdownMenu {
         if wantsBar {
             ScrollbarRenderer.driveAutoRepeat(
                 state: scroll, token: config.autoRepeatToken, context: context)
+        }
+
+        // macOS behaviour: a click OUTSIDE an open menu closes it, and does
+        // nothing else — the closing click is consumed. The popup carries a
+        // screen-covering backdrop region: inserted FIRST, so every region
+        // of the popup itself (rows, scrollbar) wins over it, while overlay
+        // regions composite after the page's, so it still beats everything
+        // underneath. The generous bounds cover any screen wherever the
+        // popup is anchored (region containment is pure arithmetic; nothing
+        // clips it to the buffer). Wheel events fall through — the page can
+        // still scroll behind an open menu.
+        if !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher {
+            let dismissID = dispatcher.register { event in
+                switch event.phase {
+                case .pressed where !event.button.isWheel:
+                    onDismiss()
+                    return true
+                case .released:
+                    return true  // the consumed press's matching release
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: -4096, offsetY: -4096, width: 8192, height: 8192,
+                    handlerID: dismissID),
+                at: 0)
         }
         return buffer
     }
