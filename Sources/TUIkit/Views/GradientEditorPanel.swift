@@ -16,7 +16,8 @@ import TUIkitStyling
 /// TUIkit gradients are evenly-spaced colour stops interpolated piecewise
 /// (`TrackRenderer.gradientColor`); the editor shows that exact interpolation
 /// live in its preview strip. Below it, the stop strip selects a stop (click
-/// its swatch) and reorders them (drag a swatch onto another), the action row
+/// its swatch) and reorders them (drag a swatch — the stop moves through the
+/// strip live, following the cursor), the action row
 /// inserts / removes / reorders stops, preset and
 /// recently-applied gradients offer one-click starting points, and an embedded
 /// colour panel — the same preview-plus-tabs body ``ColorPickerPanel`` wraps —
@@ -51,10 +52,6 @@ public struct GradientEditorPanel: View {
     /// The index of the stop the embedded colour panel is editing. Clamped on
     /// every read, so external shrinking of `stops` can't strand it.
     @State private var selectedStop = 0
-
-    /// The stop whose chip a dragged stop currently hovers, if any — drives
-    /// the drop cue in the strip.
-    @State private var dropTargetStop: Int?
 
     /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
     /// the dismissal callback must read the values as they are when it fires,
@@ -184,52 +181,39 @@ public struct GradientEditorPanel: View {
     /// (``_StopChipStyle``). Every state re-colours that one cell in place,
     /// so nothing ever shifts.
     ///
-    /// Chips also drag: dropping one on another moves the dragged stop to
-    /// that position (`movingStop(_:from:to:)`), an alternative to the ◀ ▶
-    /// single-step buttons. Click-to-select survives the `.draggable`
-    /// wrapper because a press released without movement forwards to the
-    /// button as an ordinary click.
+    /// Chips also reorder LIVE: dragging one moves its stop through the
+    /// strip immediately, following the cursor — X picks the nearest slot,
+    /// Y the nearest row when the strip wraps (`dragSlot(forX:y:count:)`) —
+    /// an alternative to the ◀ ▶ single-step buttons. Click-to-select
+    /// survives the drag handle because a press released without movement
+    /// forwards to the button as an ordinary click.
     private var stopStrip: some View {
         let list = stops.wrappedValue
         let selection = clampedSelection
-        let dropTarget = dropTargetStop
-        let rows = Self.wrappedRows(
-            itemWidths: Array(repeating: Self.stopChipWidth, count: list.count),
-            spacing: 1, budget: Self.previewWidth)
+        let rows = Self.chipRows(count: list.count)
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 1) {
                     ForEach(row, id: \.self) { index in
-                        stopChip(
-                            index: index, color: list[index],
-                            isSelected: index == selection,
-                            isDropTarget: index == dropTarget)
+                        stopChip(index: index, color: list[index], isSelected: index == selection)
                     }
                 }
             }
         }
     }
 
-    private func stopChip(
-        index: Int, color: Color, isSelected: Bool, isDropTarget: Bool
-    ) -> some View {
-        Button("") { selectedStop = index }
-            .buttonStyle(
-                _StopChipStyle(
-                    color: color, isSelected: isSelected, isDropTarget: isDropTarget))
-            .draggable(index)
-            .dropDestination(for: Int.self) { dropped, _ in
-                guard let source = dropped.first, source != index else { return false }
-                let (updated, selected) = Self.movingStop(
-                    stops.wrappedValue, from: source, to: index)
+    private func stopChip(index: Int, color: Color, isSelected: Bool) -> some View {
+        _StopChipDragHandle(
+            content: Button("") { selectedStop = index }
+                .buttonStyle(_StopChipStyle(color: color, isSelected: isSelected)),
+            index: index,
+            stopCount: stops.wrappedValue.count,
+            grab: { selectedStop = index },
+            moveStop: { from, to in
+                let (updated, selected) = Self.movingStop(stops.wrappedValue, from: from, to: to)
                 stops.wrappedValue = updated
                 selectedStop = selected
-                return true
-            } isTargeted: { targeted in
-                // The session untargets the old chip BEFORE targeting the
-                // new one, so plain assignment tracks the transition.
-                dropTargetStop = targeted ? index : nil
-            }
+            })
     }
 
     /// The cell width of every stop chip: a 3-cell swatch — wide enough to
@@ -402,6 +386,61 @@ extension GradientEditorPanel {
 // MARK: - Chip wrapping (pure; unit-tested)
 
 extension GradientEditorPanel {
+    /// The stop strip's row layout for `count` chips — `wrappedRows` over
+    /// uniform ``stopChipWidth`` items with 1-cell gaps in the preview-width
+    /// budget. Shared by rendering and the live-drag geometry, so the two
+    /// can never disagree about where a chip sits.
+    static func chipRows(count: Int) -> [[Int]] {
+        wrappedRows(
+            itemWidths: Array(repeating: stopChipWidth, count: count),
+            spacing: 1, budget: previewWidth)
+    }
+
+    /// The cell width of one strip row: its chips plus the gaps between them.
+    private static func chipRowWidth(_ row: [Int]) -> Int {
+        row.count * stopChipWidth + max(0, row.count - 1)
+    }
+
+    /// The (x, y) cell origin of the chip at `index` within the rendered
+    /// strip (rows are one cell tall and centred in the strip's width). The
+    /// live drag anchors its coordinate math here.
+    static func chipStripOrigin(of index: Int, count: Int) -> (x: Int, y: Int) {
+        let rows = chipRows(count: count)
+        let stripWidth = rows.map(chipRowWidth).max() ?? 0
+        for (rowIndex, row) in rows.enumerated() {
+            if let column = row.firstIndex(of: index) {
+                let rowOffset = (stripWidth - chipRowWidth(row)) / 2
+                return (rowOffset + column * (stopChipWidth + 1), rowIndex)
+            }
+        }
+        return (0, 0)
+    }
+
+    /// The stop index whose chip slot is NEAREST the given strip-relative
+    /// point — the live-drag mapping. Deliberately tolerant: with a single
+    /// row the Y coordinate is irrelevant (anything clamps to it), with
+    /// wrapped rows Y picks the nearest row, and within the row X picks the
+    /// nearest chip centre — dragging past either end holds the end slot.
+    static func dragSlot(forX x: Int, y: Int, count: Int) -> Int {
+        let rows = chipRows(count: count)
+        guard let firstRow = rows.first else { return 0 }
+        let stripWidth = rows.map(chipRowWidth).max() ?? 0
+        let row = rows[min(max(y, 0), rows.count - 1)]
+        guard !row.isEmpty else { return firstRow.first ?? 0 }
+        let rowOffset = (stripWidth - chipRowWidth(row)) / 2
+        var best = row[0]
+        var bestDistance = Int.max
+        for (column, index) in row.enumerated() {
+            let centre = rowOffset + column * (stopChipWidth + 1) + stopChipWidth / 2
+            let distance = abs(x - centre)
+            if distance < bestDistance {
+                best = index
+                bestDistance = distance
+            }
+        }
+        return best
+    }
+
     /// Greedily packs items into rows no wider than `budget` cells (each row's
     /// items plus `spacing` between them). Every row holds at least one item,
     /// so an over-budget single item still shows rather than vanishing.

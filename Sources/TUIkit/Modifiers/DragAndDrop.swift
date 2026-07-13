@@ -62,6 +62,44 @@ extension DraggableModifier: Renderable, Layoutable {
         previewBuffer.hitTestRegions = []
         previewBuffer.overlays = []
 
+        let payload = self.payload
+        let capturedPreview = previewBuffer
+        _DragHandle.install(
+            on: &buffer,
+            dispatcher: dispatcher,
+            onDragBegin: { _ in session.begin(payload: payload(), preview: capturedPreview) },
+            onDragMove: { _ in session.dragMoved() },
+            onDragEnd: { _ in
+                let dropped = session.performDrop()
+                debugFocusLog("draggable drop performed=\(dropped)")
+            })
+        return buffer
+    }
+}
+
+// MARK: - Drag Handle Core
+
+/// The shared plumbing of a drag-handle surface: claims left presses over a
+/// rendered buffer, reports genuine drags (press + movement) through
+/// callbacks, and keeps the buffer's interactive children working — a press
+/// released without movement forwards to the child under the cursor as an
+/// ordinary click, and hover transitions ride through likewise.
+///
+/// Used by ``DraggableModifier`` (drag-and-drop payloads) and the gradient
+/// editor's stop chips (live reordering while the drag moves).
+enum _DragHandle {
+    /// Registers the handle's handler and appends its whole-buffer region
+    /// (innermost, so it claims presses ahead of the children it forwards
+    /// to). Callback events are localized to the buffer's origin; a drag's
+    /// events stay localized to the ORIGINAL press region even when content
+    /// re-renders mid-drag (the dispatcher's press capture).
+    static func install(
+        on buffer: inout FrameBuffer,
+        dispatcher: MouseEventDispatcher,
+        onDragBegin: @escaping (MouseEvent) -> Void,
+        onDragMove: @escaping (MouseEvent) -> Void,
+        onDragEnd: @escaping (MouseEvent) -> Void
+    ) {
         // The content's interactive regions, captured WITH their handler
         // closures. Clicks and hover forward to them below — and that must
         // go through closures, never ids: handler ids reset every render
@@ -73,7 +111,7 @@ extension DraggableModifier: Renderable, Layoutable {
             buffer.hitTestRegions.compactMap { region in
                 dispatcher.handler(for: region.handlerID).map { (region, $0) }
             }
-        // Innermost child at a point (in this buffer's space, which is also
+        // Innermost child at a point (in the buffer's space, which is also
         // the space of the events this handler receives — its region sits at
         // the buffer's origin). Last-registered = innermost, as dispatched.
         func innermostChild(atX x: Int, y: Int) -> (region: HitTestRegion, handler: (MouseEvent) -> Bool)? {
@@ -91,11 +129,9 @@ extension DraggableModifier: Renderable, Layoutable {
             _ = child.handler(localized)
         }
 
-        let payload = self.payload
-        let capturedPreview = previewBuffer
         let scratch = DragScratch()
         let id = dispatcher.register { event in
-            // Hover transitions land here (the draggable's region is the
+            // Hover transitions land here (the handle's region is the
             // innermost); ride them through to the child under the cursor
             // so it keeps its hover affordance.
             switch event.phase {
@@ -118,24 +154,23 @@ extension DraggableModifier: Renderable, Layoutable {
             case .dragged:
                 if !scratch.isDragging {
                     scratch.isDragging = true
-                    session.begin(payload: payload(), preview: capturedPreview)
+                    onDragBegin(event)
                 } else {
-                    session.dragMoved()
+                    onDragMove(event)
                 }
                 return true
             case .released:
                 debugFocusLog(
-                    "draggable release: isDragging=\(scratch.isDragging) at (\(event.x), \(event.y))")
+                    "drag handle release: isDragging=\(scratch.isDragging) at (\(event.x), \(event.y))")
                 if scratch.isDragging {
-                    let dropped = session.performDrop()
-                    debugFocusLog("draggable drop performed=\(dropped)")
+                    onDragEnd(event)
                     scratch.isDragging = false
                 } else if let child = innermostChild(atX: event.x, y: event.y) {
                     // A press released without movement is a CLICK. The
                     // press itself was claimed (as a potential drag), so
                     // deliver the whole click — synthetic press, then the
                     // release — to the interactive child under the cursor:
-                    // a Button inside a draggable still clicks.
+                    // a Button inside a drag handle still clicks.
                     forward(event, phase: .pressed, to: child)
                     forward(event, phase: .released, to: child)
                 }
@@ -153,7 +188,6 @@ extension DraggableModifier: Renderable, Layoutable {
                 handlerID: id
             )
         )
-        return buffer
     }
 }
 

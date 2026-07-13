@@ -270,25 +270,66 @@ struct GradientEditorPanelRenderTests {
         let strip = renderToBuffer(panel, context: context).lines.map(\.stripped)[y]
         #expect(strip.contains("███ ███ █●█"), "click through .draggable selects: |\(strip)|")
 
-        // Drag the FIRST chip onto the THIRD: red moves to the end. Re-render
-        // between every event, exactly like the live loop (consumed events
-        // request a render) — handler ids and drop-target registrations reset
-        // each pass, and the drag must survive that.
+        // Drag the FIRST chip: the reorder is LIVE — the stop moves the
+        // moment the cursor reaches another slot, before any release.
+        // Re-render between events, exactly like the live loop (consumed
+        // events request a render); the drag's coordinates stay anchored to
+        // the pressed chip's original region (press capture) throughout.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: columns[0] + 1, y: y))
         (y, columns) = renderFrame()
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[1] + 1, y: y))
+        #expect(
+            stops == [.rgb(0, 255, 0), .rgb(255, 0, 0), .rgb(0, 0, 255)],
+            "reaching slot 2 moves the stop immediately, mid-drag")
         (y, columns) = renderFrame()
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[2] + 1, y: y))
+        #expect(
+            stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
+            "following the cursor to slot 3, still mid-drag")
         (y, columns) = renderFrame()
+        // Dragging far PAST the strip's right edge holds the end slot, and
+        // a wild Y is clamped to the (single) row — tolerance by design.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[2] + 30, y: y + 7))
+        #expect(stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)], "end slot held")
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: columns[2] + 1, y: y))
         #expect(
             stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
-            "the dragged stop moved to the drop position (insert semantics)")
+            "release keeps the live order")
 
-        // The drop cue cleared: no chip still claims to be a target.
+        // The selection followed the dragged stop to the end.
         (y, columns) = renderFrame()
         let after = renderToBuffer(panel, context: context).lines.map(\.stripped)[y]
-        #expect(after.filter { $0 == "●" }.count == 1, "one bullet (the selection): |\(after)|")
+        #expect(after.contains("███ ███ █●█"), "selection rides the dragged stop: |\(after)|")
+    }
+
+    @Test("Live-drag geometry: X picks the slot, Y the nearest row")
+    func dragSlotGeometry() {
+        // Single row (3 chips at origins 0/4/8, centres 1/5/9): X decides,
+        // Y is irrelevant however wild.
+        #expect(GradientEditorPanel.dragSlot(forX: 1, y: 0, count: 3) == 0)
+        #expect(GradientEditorPanel.dragSlot(forX: 4, y: -5, count: 3) == 1, "gap maps to nearest")
+        #expect(GradientEditorPanel.dragSlot(forX: 9, y: 12, count: 3) == 2)
+        #expect(GradientEditorPanel.dragSlot(forX: -10, y: 0, count: 3) == 0, "clamps left")
+        #expect(GradientEditorPanel.dragSlot(forX: 99, y: 0, count: 3) == 2, "clamps right")
+
+        // Ten chips wrap (9 per 36-cell row): row 0 holds 0-8, row 1 holds 9.
+        let rows = GradientEditorPanel.chipRows(count: 10)
+        #expect(rows == [[0, 1, 2, 3, 4, 5, 6, 7, 8], [9]])
+        // Y above the strip → row 0; below → row 1 (the nearest row).
+        #expect(GradientEditorPanel.dragSlot(forX: 0, y: -3, count: 10) == 0)
+        #expect(GradientEditorPanel.dragSlot(forX: 0, y: 9, count: 10) == 9)
+        // Row 1 is centred: its single chip is the answer at any X in row 1.
+        #expect(GradientEditorPanel.dragSlot(forX: 0, y: 1, count: 10) == 9)
+        #expect(GradientEditorPanel.dragSlot(forX: 34, y: 1, count: 10) == 9)
+
+        // chipStripOrigin agrees with the mapping: a chip's own centre maps
+        // back to itself.
+        for index in 0..<10 {
+            let origin = GradientEditorPanel.chipStripOrigin(of: index, count: 10)
+            #expect(
+                GradientEditorPanel.dragSlot(forX: origin.x + 1, y: origin.y, count: 10) == index,
+                "chip \(index) round-trips")
+        }
     }
 
     @Test("The footer offers Cancel alongside Done")
