@@ -673,7 +673,8 @@ where Value.ID: Hashable {
         let topClip = handler.scrollTopClipLines
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
-            contentHeight: contentHeight, topClip: topClip, height: heightOf)
+            contentHeight: contentHeight, topClip: topClip,
+            lineGranularity: context.environment.scrollGranularity == .line, height: heightOf)
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth,
@@ -755,7 +756,8 @@ where Value.ID: Hashable {
     /// the content area fills, reserving a line for each scroll indicator actually
     /// shown. Mirrors the single-line indicator reservation, height-aware.
     private func rowWindow(
-        scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0, height: (Int) -> Int
+        scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0,
+        lineGranularity: Bool = false, height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool) {
         guard count > 0 else { return (0..<0, false, false) }
         let offset = min(max(0, scrollOffset), count - 1)
@@ -768,7 +770,16 @@ where Value.ID: Hashable {
             var end = offset
             while end < count {
                 let rowH = height(end)
-                if used + rowH > budget && end > offset { break }
+                if used + rowH > budget && end > offset {
+                    // Line granularity fills the viewport EXACTLY: the row
+                    // that straddles the budget enters the window (the
+                    // renderer clips its tail), rather than leaving the
+                    // spare lines empty — a whole-row window underfills
+                    // whenever the visible rows don't sum to the budget,
+                    // which made the table's frame breathe as it scrolled.
+                    if lineGranularity && used < budget { end += 1 }
+                    break
+                }
                 used += rowH
                 end += 1
             }
@@ -839,6 +850,17 @@ where Value.ID: Hashable {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
                 width: contentWidth, palette: palette))
+        }
+        // A scrolled/overflowing table fills its content area EXACTLY,
+        // whatever the granularity: whole rows can underfill under row
+        // granularity, so pad the shortfall — a fixed-height table's frame
+        // must not breathe as rows of different heights scroll through.
+        // A non-overflowing table (no indicators, no clip) keeps its
+        // natural, content-sized height.
+        if window.showAbove || window.showBelow || handler.scrollTopClipLines > 0 {
+            while lines.count < contentHeight {
+                lines.append(String(repeating: " ", count: contentWidth))
+            }
         }
         return lines
     }

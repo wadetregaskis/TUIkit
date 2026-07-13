@@ -283,4 +283,145 @@ struct ScrollGranularityTests {
         #expect(body.contains("f-3"), "the last row's last line is reachable:\n\(body)")
         #expect(!body.contains("more below"), "nothing remains below at the bottom:\n\(body)")
     }
+
+    // MARK: - Table rendering
+
+    /// The Table Demo's fixed-height shape: variable-height rows (lineLimit
+    /// wraps them to 1-3 lines) in a fixed frame, driven by real wheel
+    /// events. Mirrors the List harness above — the Table line-granularity
+    /// path shipped with NO render coverage, and the demo's toggle silently
+    /// did nothing.
+    private struct NoteRow: Identifiable {
+        let id: Int
+        let index: String
+        let note: String
+    }
+
+    private func renderTableFrames(
+        granularity: ScrollGranularity = .line,
+        wheelTicks: Int = 0
+    ) -> [FrameBuffer] {
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.stateStorage = tui.stateStorage
+        env.lifecycle = tui.lifecycle
+        env.keyEventDispatcher = tui.keyEventDispatcher
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        env.renderCache = tui.renderCache
+        env.preferenceStorage = tui.preferences
+        // The page-level default deliberately DIFFERS from the demo's own
+        // .scrollGranularity modifier (applied on the table below), which
+        // must win for its subtree.
+        env.scrollGranularity = granularity == .line ? .row : .line
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+
+        // Rows n1…n9: the first is one line, the rest wrap to three — chosen
+        // so whole rows UNDERFILL the viewport at offset 0 (1+3+3 = 7 of 8
+        // budget lines), the exact phase where a row-granular window leaves
+        // line mode a hole and row mode a shrunken table.
+        let rows = (1...9).map { n in
+            NoteRow(
+                id: n, index: "n\(n)",
+                note: n == 1
+                    ? "w1x0"
+                    : (0...2).map { "w\(n)x\($0) word word" }.joined(separator: " "))
+        }
+        // The demo's exact wrapper: the table sits inside the page's outer
+        // ScrollView (content measured at natural height), in a VStack.
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("caption")
+                Table(rows, selection: .constant(Set<Int>())) {
+                    TableColumn("#", value: \NoteRow.index).width(.fixed(4))
+                    TableColumn("Note", value: \NoteRow.note).width(.flexible).lineLimit(3)
+                }
+                .frame(height: 12)
+                .scrollbarVisibility(.visible)
+                .scrollGranularity(granularity)
+            }
+        }
+
+        func renderOnce() -> FrameBuffer {
+            var context = RenderContext(
+                availableWidth: 30, availableHeight: 16, environment: env, tuiContext: tui)
+            context.hasExplicitWidth = true
+            context.hasExplicitHeight = true
+            return renderToBuffer(view, context: context)
+        }
+
+        var frames = [renderOnce()]
+        for _ in 0..<wheelTicks {
+            let buffer = frames[frames.count - 1]
+            dispatcher.setRegions(buffer.hitTestRegions)
+            guard let region = buffer.hitTestRegions.max(by: { $0.height < $1.height }) else {
+                Issue.record("expected the table's hit-test region")
+                break
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .scrollDown, phase: .scrolled,
+                    x: region.offsetX + 2, y: region.offsetY + 2))
+            frames.append(renderOnce())
+        }
+        return frames
+    }
+
+    /// The table's own bordered height (╭ to ╰) — the outer ScrollView pads
+    /// the buffer to a constant size, so `buffer.height` can NOT detect the
+    /// table's frame breathing; only the border box can.
+    private func tableBoxHeight(_ buffer: FrameBuffer) -> Int {
+        let stripped = buffer.lines.map(\.stripped)
+        guard let top = stripped.firstIndex(where: { $0.contains("╭") }),
+            let bottom = stripped.lastIndex(where: { $0.contains("╰") })
+        else { return 0 }
+        return bottom - top + 1
+    }
+
+    @Test("Table (line granularity): the height stays constant while scrolling")
+    func tableLineGranularityConstantHeight() {
+        let frames = renderTableFrames(wheelTicks: 6)
+        let heights = frames.map(tableBoxHeight)
+        #expect(Set(heights).count == 1, "the table's box never changes: \(heights)")
+    }
+
+    @Test("Table (row granularity): the height ALSO stays constant (padded)")
+    func tableRowGranularityConstantHeight() {
+        // Whole rows can't always fill the viewport exactly; the shortfall
+        // must be padded — a fixed-height table's frame never breathes as
+        // rows of different heights scroll through.
+        let frames = renderTableFrames(granularity: .row, wheelTicks: 6)
+        let heights = frames.map(tableBoxHeight)
+        #expect(Set(heights).count == 1, "the table's box never changes: \(heights)")
+    }
+
+    @Test("Table (line granularity): a wheel event moves LINES, not whole rows")
+    func tableLineGranularityMovesLines() {
+        let frames = renderTableFrames(wheelTicks: 1)
+        let before = frames[0].lines.map(\.stripped).joined(separator: "\n")
+        let after = frames[1].lines.map(\.stripped).joined(separator: "\n")
+        // n1 is one line, n2 is three: one wheel event (three fine steps)
+        // scrolls past n1 and clips into n2 — n2's later lines remain while
+        // its first wrapped line is gone.
+        #expect(before.contains("n1"), "precondition — top row visible:\n\(before)")
+        #expect(!after.contains("n1"), "the one-line first row scrolled off:\n\(after)")
+        // One wheel = three fine steps: past n1 (one line) and two lines
+        // into n2 — only n2's LAST wrapped line remains visible.
+        #expect(
+            after.contains("w2x2") && !after.contains("w2x0"),
+            "row n2 shows only its tail (first lines clipped):\n\(after)")
+    }
+
+    @Test("Table (row granularity): the same wheel event jumps whole rows")
+    func tableRowGranularityJumpsWholeRows() {
+        let frames = renderTableFrames(granularity: .row, wheelTicks: 1)
+        let after = frames[1].lines.map(\.stripped).joined(separator: "\n")
+        #expect(!after.contains("n1"), "row 1 gone:\n\(after)")
+        // Row granularity never clips: whichever row is now on top shows
+        // from its FIRST wrapped line.
+        if after.contains("w2x1") {
+            #expect(after.contains("w2x0"), "row-granularity rows are whole:\n\(after)")
+        }
+    }
 }

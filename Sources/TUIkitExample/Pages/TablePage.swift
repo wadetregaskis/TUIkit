@@ -145,7 +145,6 @@ struct TablePage: View {
     @State var multiSelection: Set<String> = []
     @State var ratioSelection: String?
     @State var notesSelection: Int?
-    @State var multiLineByLine = true
     @State var fixedHeightByLine = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
@@ -194,17 +193,16 @@ struct TablePage: View {
             .scrollbarVisibility(.visible)
 
             // Two multi-line tables side by side: the small original (12 rows,
-            // 2-line Details) on the left, and a fixed-height table of hundreds
-            // of rows with pseudo-random line counts on the right. Each has
-            // its OWN line/row scrolling toggle, so the two granularities can
-            // be compared side by side.
+            // 2-line Details) on the left demonstrates wrapping cells, and a
+            // fixed-height table of hundreds of rows with pseudo-random line
+            // counts on the right demonstrates scrolling — only the right one
+            // is height-constrained, so only it gets the line/row toggle.
             HStack(alignment: .top, spacing: 2) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(L("page.table.multiSelectionCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text(L("component.multiSelectHint"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
                     Table(
                         FileEntry.sampleFiles,
                         selection: $multiSelection
@@ -217,7 +215,6 @@ struct TablePage: View {
                             .width(.fixed(22))
                             .lineLimit(2)
                     }
-                    .scrollGranularity(multiLineByLine ? .line : .row)
                 }
                 .frame(maxWidth: .infinity)
 
