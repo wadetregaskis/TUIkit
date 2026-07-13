@@ -775,8 +775,24 @@ extension FrameBuffer {
 
         // Split the base into prefix (before overlay) and suffix (after overlay),
         // preserving all ANSI codes in both segments.
-        let prefix = base.ansiAwarePrefix(visibleCount: column)
-        let suffix = base.ansiAwareSuffix(droppingVisible: afterOverlayColumn)
+        //
+        // Either split point can land in the MIDDLE of a wide character
+        // (emoji, CJK): the splitters drop the straddling character whole, so
+        // the prefix comes back short and the suffix starts late. Pad each
+        // shortfall with spaces (a wide glyph can't be half-drawn — the gap is
+        // the standard treatment), otherwise every base row with a straddling
+        // wide character composites the overlay one cell left and pulls the
+        // rest of the row in behind it — ragged pop-up borders next to emoji.
+        let (rawPrefix, prefixWidth) = base.ansiAwarePrefixWithWidth(visibleCount: column)
+        let prefix = prefixWidth < column
+            ? rawPrefix + String(repeating: " ", count: column - prefixWidth)
+            : rawPrefix
+        var suffix = base.ansiAwareSuffix(droppingVisible: afterOverlayColumn)
+        let expectedSuffixWidth = max(0, base.strippedLength - afterOverlayColumn)
+        let suffixShortfall = expectedSuffixWidth - suffix.strippedLength
+        if suffixShortfall > 0 {
+            suffix = String(repeating: " ", count: suffixShortfall) + suffix
+        }
 
         // Restore the styling ACTIVE at the suffix's start column (not the line's
         // leading state). A uniform background set up at the leading is still in

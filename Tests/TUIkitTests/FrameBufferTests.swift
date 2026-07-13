@@ -153,6 +153,31 @@ struct OverlayTests {
         #expect(result.lines[0].stripped == "123XXX7890")
     }
 
+    @Test("Compositing over wide characters keeps every row's columns aligned")
+    func compositingOverWideCharacters() {
+        // Emoji are one Character but two cells. A base row whose wide
+        // character straddles either edge of the overlay must render the
+        // overlay at the SAME columns as every other row — the straddled
+        // glyph becomes a gap space, never a one-cell shift. (This was the
+        // ragged pop-up borders next to an emoji slider track.)
+        let base = FrameBuffer(lines: [
+            "0123456789ab",   // plain row: the alignment reference
+            "😀😀😀😀😀😀",   // wide row: cells 0-11, glyphs straddle x=3 and x=9
+        ])
+        let overlay = FrameBuffer(lines: ["││││", "││││"])
+
+        let result = base.composited(with: overlay, at: (x: 3, y: 0))
+        let plain = result.lines[0].stripped
+        let wide = result.lines[1].stripped
+
+        #expect(plain == "012││││789ab")
+        // Every row is still 12 cells wide…
+        #expect(wide.strippedLength == 12, "|\(wide)|")
+        // …and the overlay sits at cells 3..<7 in the wide row too: one whole
+        // emoji before it, a gap for the straddled one, then the overlay.
+        #expect(wide == "😀 ││││ 😀😀", "|\(wide)|")
+    }
+
     /// Whether the final visible cell of a line is left in the underline SGR
     /// state — scans the line's `ESC[…m` sequences, tracking `4` (on) / `24`,`0`
     /// (off). Self-contained (no TUIkitCore-internal helpers).
