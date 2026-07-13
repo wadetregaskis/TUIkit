@@ -208,6 +208,20 @@ public struct RadioButtonGroup<Value: Hashable>: View {
     }
 }
 
+// MARK: - Layout Metrics
+
+/// Cell-geometry constants of a rendered radio button group, for callers that
+/// plan layout around one (the gradient editor packs stop chips into rows of
+/// horizontal groups using these).
+enum RadioButtonGroupMetrics {
+    /// Cells the indicator and its trailing separator occupy before each
+    /// item's label (`● label`).
+    static let indicatorWidth = 2
+
+    /// Inter-item spacing, in cells, of a `.horizontal` group.
+    static let horizontalSpacing = 2
+}
+
 // MARK: - Internal Core View
 
 /// StateStorage property indices for ``_RadioButtonGroupCore``.
@@ -440,7 +454,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             )
         }
 
-        let spacingWidth = 2
+        let spacingWidth = RadioButtonGroupMetrics.horizontalSpacing
         var regions: [(x: Int, y: Int, width: Int)] = []
         var xCursor = 0
         for (i, text) in itemStrings.enumerated() {
@@ -524,7 +538,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         let labelBuffer = labelView.renderToBuffer(context: labelContext)
         let labelText = labelBuffer.lines.first ?? ""
 
-        // Combine: indicator + label
+        // Combine: indicator + label (the indicator glyph and its separator
+        // are RadioButtonGroupMetrics.indicatorWidth cells).
         return styledIndicator + " " + labelText
     }
 }

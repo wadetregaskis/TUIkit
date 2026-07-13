@@ -160,51 +160,52 @@ public struct GradientEditorPanel: View {
 
     // MARK: Stop strip
 
-    /// One numbered swatch button per stop — `●3██` when selected, ` 3██`
-    /// otherwise — wrapped onto as many rows as the preview width allows.
+    /// One numbered swatch per stop — `● 3 ██` selected, `◯ 4 ██` otherwise —
+    /// wrapped onto as many rows as the preview width allows.
     ///
-    /// Every chip has selection-independent geometry: one plain-style button
-    /// whose label always reserves the marker cell, so moving the selection
-    /// never shifts a swatch. The number sits LEFT of its own swatch (the gap
-    /// between chips then reads as the separator), and the selected chip is
-    /// additionally tinted with the accent.
+    /// Picking one-of-N stops is radio-button semantics, so each row IS a
+    /// horizontal ``RadioButtonGroup`` (all rows share the selection binding).
+    /// That gives the chips ONE indicator cell carrying both states the way
+    /// every radio button does — solid `●` when selected, pulsing when
+    /// focused, dim `◯` otherwise — instead of a plain button's focus bullet
+    /// sitting beside a separate selection marker. Chip geometry is
+    /// selection-independent, so moving the selection never shifts a swatch,
+    /// and each row is a single Tab stop with Left/Right moving inside it.
     private var stopStrip: some View {
         let list = stops.wrappedValue
+        let selection = clampedSelection
         let widths = list.indices.map { Self.stopChipWidth(index: $0) }
         let rows = Self.wrappedRows(
-            itemWidths: widths, spacing: 1, budget: Self.previewWidth)
+            itemWidths: widths,
+            spacing: RadioButtonGroupMetrics.horizontalSpacing,
+            budget: Self.previewWidth)
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 1) {
-                    ForEach(row, id: \.self) { index in
-                        stopChip(index: index, color: list[index])
-                    }
-                }
+                RadioButtonGroup(
+                    selection: Binding(
+                        get: { clampedSelection },
+                        set: { selectedStop = $0 }),
+                    orientation: .horizontal,
+                    items: row.map { index in
+                        RadioButtonItem(index) {
+                            HStack(spacing: 1) {
+                                Text("\(index + 1)")
+                                    .foregroundStyle(
+                                        index == selection
+                                            ? Color.palette.accent
+                                            : Color.palette.foregroundSecondary)
+                                Text("██").foregroundStyle(list[index])
+                            }
+                        }
+                    })
             }
         }
     }
 
-    /// The cell width of the stop chip at `index`: the plain button's 2-cell
-    /// focus prefix + the marker cell + the 1-based number + the 2-cell swatch.
+    /// The cell width of the stop chip at `index`: the radio indicator + the
+    /// 1-based number + a breathing space + the 2-cell swatch.
     static func stopChipWidth(index: Int) -> Int {
-        2 + 1 + String(index + 1).count + 2
-    }
-
-    private func stopChip(index: Int, color: Color) -> some View {
-        let isSelected = index == clampedSelection
-        // The unselected marker is a NO-BREAK space: a plain leading space is
-        // trimmed when the label flattens, which would shrink unselected chips
-        // by a cell and shift the strip as the selection moves.
-        return Button {
-            selectedStop = index
-        } label: {
-            HStack(spacing: 0) {
-                Text("\(isSelected ? "●" : "\u{00A0}")\(index + 1)")
-                    .foregroundStyle(isSelected ? .palette.accent : .palette.foregroundSecondary)
-                Text("██").foregroundStyle(color)
-            }
-        }
-        .buttonStyle(.plain)
+        RadioButtonGroupMetrics.indicatorWidth + String(index + 1).count + 1 + 2
     }
 
     /// Insert / remove / reorder controls for the selected stop.

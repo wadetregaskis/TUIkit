@@ -76,9 +76,9 @@ struct GradientEditorPanelRenderTests {
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
 
         #expect(text.contains("Gradient"), "the default title: \(text.prefix(200))")
-        // The stop strip: one numbered button per stop, the first selected.
-        #expect(text.contains("●1"))
-        #expect(text.contains(" 2"))
+        // The stop strip: one numbered radio chip per stop, the first selected.
+        #expect(text.contains("● 1"))
+        #expect(text.contains("◯ 2"))
         // The action row.
         for glyph in ["+", "−", "◀", "▶"] {
             #expect(text.contains(glyph), "missing action '\(glyph)'")
@@ -158,27 +158,27 @@ struct GradientEditorPanelRenderTests {
         let lines = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
             .lines.map(\.stripped)
 
-        let strip = lines.first { $0.contains("●1") }
+        let strip = lines.first { $0.contains("● 1") }
         #expect(strip != nil, "the stop strip renders")
         guard let strip else { return }
 
-        // Each number sits immediately LEFT of its own swatch — the marker
-        // slot is always reserved (a no-break space when unselected, which
-        // survives label flattening), so selection never shifts a chip.
-        #expect(strip.contains("●1██"), "selected chip: marker + number + swatch: |\(strip)|")
-        #expect(strip.contains("\u{00A0}2██"), "unselected chip reserves the marker slot: |\(strip)|")
-        #expect(strip.contains("\u{00A0}3██"))
+        // Radio chips: ONE indicator cell per chip (selected `●`, unselected
+        // `◯` — never a focus bullet AND a selection bullet), then the number
+        // immediately LEFT of its own swatch with a breathing space between.
+        #expect(strip.contains("● 1 ██"), "selected chip: indicator + number + swatch: |\(strip)|")
+        #expect(strip.contains("◯ 2 ██"), "unselected chip: dim ring indicator: |\(strip)|")
+        #expect(strip.contains("◯ 3 ██"))
 
         // Uniform pitch: the distance between consecutive chips equals the
-        // chip width + 1 spacing, whichever chip is selected.
+        // chip width + the group spacing, whichever chip is selected.
         func column(of needle: String) -> Int? {
             strip.range(of: needle).map { strip.distance(from: strip.startIndex, to: $0.lowerBound) }
         }
-        let c1 = column(of: "1██"), c2 = column(of: "2██"), c3 = column(of: "3██")
+        let c1 = column(of: "1 ██"), c2 = column(of: "2 ██"), c3 = column(of: "3 ██")
         #expect(c1 != nil && c2 != nil && c3 != nil)
         if let c1, let c2, let c3 {
-            #expect(c2 - c1 == GradientEditorPanel.stopChipWidth(index: 0) + 1, "|\(strip)|")
-            #expect(c3 - c2 == GradientEditorPanel.stopChipWidth(index: 1) + 1, "|\(strip)|")
+            #expect(c2 - c1 == GradientEditorPanel.stopChipWidth(index: 0) + 2, "|\(strip)|")
+            #expect(c3 - c2 == GradientEditorPanel.stopChipWidth(index: 1) + 2, "|\(strip)|")
         }
     }
 
