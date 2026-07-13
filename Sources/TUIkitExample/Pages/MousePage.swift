@@ -231,10 +231,14 @@ struct MousePage: View {
                 }
                 .dropDestination(for: BasketFruit.self) { items, info in
                     // The void: anywhere in the section that isn't the shelf
-                    // or the basket discards the fruit with a poof.
+                    // or the basket discards the fruit with a poof — puffing
+                    // from the CENTRE of the drag image, where the fruit
+                    // visually is, not from the cursor.
                     for item in items {
                         removeFromBasket(item)
-                        spawnPoof(x: info.x, y: info.y)
+                        spawnPoof(
+                            x: info.previewX + info.previewWidth / 2,
+                            y: info.previewY + info.previewHeight / 2)
                     }
                     return true
                 }

@@ -270,7 +270,7 @@ struct DragAndDropTests {
         #expect(tui.dragAndDropSession.active == nil)
     }
 
-    @Test("The floating preview composites at the cursor during a drag")
+    @Test("The floating preview keeps the grabbed cell under the cursor")
     func previewFollowsCursor() {
         let log = DropLog()
         let (context, tui) = makeContext()
@@ -282,20 +282,59 @@ struct DragAndDropTests {
         let buffer = renderToBuffer(tree, context: context)
         dispatcher.setRegions(buffer.hitTestRegions)
 
+        // Grab the chip one cell in from its left edge; the drag anchors
+        // there (.grabPoint default): preview origin = cursor − grab.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 8, y: 2))
 
-        // The root scene render draws the preview overlay at cursor+1.
+        let frame = tui.dragAndDropSession.previewFrame()
+        #expect(frame?.x == 7 && frame?.y == 2, "cursor (8,2) − grab (1,0): \(String(describing: frame))")
+
         let scene = WindowGroup { self.makeTree(log) }
         let composited = scene.renderScene(context: context)
             .compositingOverlays(maxWidth: 30, maxHeight: 8, palette: context.environment.palette)
         let lines = composited.lines.map(\.stripped)
         #expect(
-            lines.indices.contains(3) && lines[3].contains("CHIP"),
-            "the preview (the chip's own rendering) floats at cursor+1: \(lines)")
+            lines.indices.contains(2) && lines[2].contains("CHIP"),
+            "the preview rides so the grabbed cell stays under the cursor: \(lines)")
 
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 2))
         #expect(tui.dragAndDropSession.active == nil)
+    }
+
+    @Test("dragPreviewAnchor(.offset) trails the cursor; DropInfo reports the frame")
+    func offsetAnchorAndDropInfoFrame() {
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        // The pre-anchor behaviour, opted back in per-subtree.
+        let tree = VStack(alignment: .leading, spacing: 0) {
+            Text("CHIP").draggable("apple").dragPreviewAnchor(.offset(x: 1, y: 1))
+            Text("").frame(height: 3)
+            Text("ZONE========")
+                .dropDestination(for: String.self) { items, info in
+                    log.dropped.append(contentsOf: items)
+                    log.info = info
+                    return true
+                }
+        }
+        let buffer = renderToBuffer(tree, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: 4))
+        let frame = tui.dragAndDropSession.previewFrame()
+        #expect(frame?.x == 4 && frame?.y == 5, "cursor (3,4) + offset (1,1): \(String(describing: frame))")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 4))
+        #expect(log.dropped == ["apple"])
+        // The zone starts at y=4, so its local space subtracts 4 rows; the
+        // preview frame arrives in that same space, sized like the chip.
+        #expect(log.info?.previewX == 4 && log.info?.previewY == 1, "\(String(describing: log.info))")
+        #expect(log.info?.previewWidth == 4 && log.info?.previewHeight == 1)
     }
 
     @Test("A press released without movement clicks the interactive child")

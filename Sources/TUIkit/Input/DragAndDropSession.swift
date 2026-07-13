@@ -36,6 +36,22 @@ public struct DropInfo: Sendable, Equatable {
 
     /// Whether Meta / Alt / Option was held.
     public let meta: Bool
+
+    /// The floating drag preview's frame at the moment of the drop, in the
+    /// same destination-local space as ``x``/``y`` — for effects anchored to
+    /// the drag IMAGE rather than the cursor (a removal puff at its centre,
+    /// an insertion marker at its edge). Where the preview sits relative to
+    /// the cursor depends on the drag's ``DragPreviewAnchor``.
+    public let previewX: Int
+
+    /// The preview frame's top row (see ``previewX``).
+    public let previewY: Int
+
+    /// The preview's width in cells.
+    public let previewWidth: Int
+
+    /// The preview's height in cells.
+    public let previewHeight: Int
 }
 
 // MARK: - Session
@@ -81,6 +97,15 @@ final class DragAndDropSession: @unchecked Sendable {
 
         /// The floating preview drawn at the cursor by the root scene render.
         let preview: FrameBuffer
+
+        /// Where the press landed WITHIN the dragged view (its local space)
+        /// — the grab point ``DragPreviewAnchor/grabPoint`` keeps under the
+        /// cursor.
+        let grabX: Int
+        let grabY: Int
+
+        /// How the preview anchors to the cursor.
+        let anchor: DragPreviewAnchor
 
         /// The cursor's absolute position (content-area space).
         var cursorX: Int
@@ -128,12 +153,42 @@ final class DragAndDropSession: @unchecked Sendable {
 
     /// Starts a drag. The cursor position is taken from the triggering
     /// (absolute) event; targeting is resolved immediately.
-    func begin(payload: Any, preview: FrameBuffer) {
+    ///
+    /// - Parameters:
+    ///   - grabX: The press column within the dragged view (local space) —
+    ///     the grab point `.grabPoint` keeps under the cursor.
+    ///   - grabY: The press row within the dragged view.
+    ///   - anchor: How the preview anchors to the cursor.
+    func begin(
+        payload: Any, preview: FrameBuffer,
+        grabX: Int = 0, grabY: Int = 0,
+        anchor: DragPreviewAnchor = .grabPoint
+    ) {
         guard let event = lastAbsoluteEvent else { return }
         active = ActiveDrag(
             payload: payload, preview: preview,
+            grabX: grabX, grabY: grabY, anchor: anchor,
             cursorX: event.x, cursorY: event.y, targetedID: nil, targeted: nil)
         dragMoved()
+    }
+
+    /// The floating preview's frame for the drag in flight (absolute,
+    /// content-area space), or `nil` when nothing is dragging. The single
+    /// source of the anchor math: the root scene render draws the overlay
+    /// here, and drops report the same frame through ``DropInfo``.
+    func previewFrame() -> (x: Int, y: Int, width: Int, height: Int)? {
+        guard let drag = active else { return nil }
+        let originX: Int
+        let originY: Int
+        switch drag.anchor {
+        case .grabPoint:
+            originX = drag.cursorX - drag.grabX
+            originY = drag.cursorY - drag.grabY
+        case .offset(let dx, let dy):
+            originX = drag.cursorX + dx
+            originY = drag.cursorY + dy
+        }
+        return (originX, originY, drag.preview.width, drag.preview.height)
     }
 
     /// Advances the drag to the last stamped cursor position and updates

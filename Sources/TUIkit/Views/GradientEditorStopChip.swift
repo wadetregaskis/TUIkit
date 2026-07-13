@@ -144,7 +144,7 @@ extension _StopChipDragHandle: Renderable, Layoutable {
         _DragHandle.install(
             on: &buffer,
             dispatcher: dispatcher,
-            onDragBegin: { event in
+            onDragBegin: { event, _ in
                 dragged.current = index
                 grab()
                 follow(event)

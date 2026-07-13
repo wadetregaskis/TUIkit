@@ -14,6 +14,41 @@
 
 import TUIkitCore
 
+// MARK: - Drag Preview Anchor
+
+/// How the floating preview of a drag anchors to the cursor.
+public enum DragPreviewAnchor: Sendable, Equatable {
+    /// The cell that was pressed stays under the cursor — the preview sits
+    /// exactly where it would conceptually land, like macOS. The default.
+    case grabPoint
+
+    /// The preview's top-left corner rides at a fixed offset from the
+    /// cursor. `.offset(x: 1, y: 1)` trails below-right, keeping the
+    /// pointed-at cell itself uncovered — clearer, but the image no longer
+    /// shows the true drop position.
+    case offset(x: Int, y: Int)
+}
+
+private struct DragPreviewAnchorKey: EnvironmentKey {
+    static let defaultValue: DragPreviewAnchor = .grabPoint
+}
+
+extension EnvironmentValues {
+    /// How drag previews started in this scope anchor to the cursor.
+    var dragPreviewAnchor: DragPreviewAnchor {
+        get { self[DragPreviewAnchorKey.self] }
+        set { self[DragPreviewAnchorKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Sets how the floating preview of drags started in this view's
+    /// subtree anchors to the cursor (default: ``DragPreviewAnchor/grabPoint``).
+    public func dragPreviewAnchor(_ anchor: DragPreviewAnchor) -> some View {
+        environment(\.dragPreviewAnchor, anchor)
+    }
+}
+
 // MARK: - Draggable
 
 /// The view wrapper created by ``View/draggable(_:)``.
@@ -64,10 +99,15 @@ extension DraggableModifier: Renderable, Layoutable {
 
         let payload = self.payload
         let capturedPreview = previewBuffer
+        let anchor = context.environment.dragPreviewAnchor
         _DragHandle.install(
             on: &buffer,
             dispatcher: dispatcher,
-            onDragBegin: { _ in session.begin(payload: payload(), preview: capturedPreview) },
+            onDragBegin: { _, grab in
+                session.begin(
+                    payload: payload(), preview: capturedPreview,
+                    grabX: grab.x, grabY: grab.y, anchor: anchor)
+            },
             onDragMove: { _ in session.dragMoved() },
             onDragEnd: { _ in
                 let dropped = session.performDrop()
@@ -96,7 +136,7 @@ enum _DragHandle {
     static func install(
         on buffer: inout FrameBuffer,
         dispatcher: MouseEventDispatcher,
-        onDragBegin: @escaping (MouseEvent) -> Void,
+        onDragBegin: @escaping (MouseEvent, _ grab: (x: Int, y: Int)) -> Void,
         onDragMove: @escaping (MouseEvent) -> Void,
         onDragEnd: @escaping (MouseEvent) -> Void
     ) {
@@ -150,11 +190,15 @@ enum _DragHandle {
             switch event.phase {
             case .pressed:
                 scratch.isDragging = false
+                // The grab point: where the press landed within this
+                // surface. `.grabPoint`-anchored previews keep this cell
+                // under the cursor for the whole drag.
+                scratch.grab = (event.x, event.y)
                 return true
             case .dragged:
                 if !scratch.isDragging {
                     scratch.isDragging = true
-                    onDragBegin(event)
+                    onDragBegin(event, scratch.grab)
                 } else {
                     onDragMove(event)
                 }
@@ -192,9 +236,11 @@ enum _DragHandle {
 }
 
 /// Per-handler scratch: whether the current press has turned into a drag,
-/// and which content child is hovered (to close its hover out on exit).
+/// where it grabbed the surface, and which content child is hovered (to
+/// close its hover out on exit).
 private final class DragScratch {
     var isDragging = false
+    var grab: (x: Int, y: Int) = (0, 0)
     var hoveredChild: (region: HitTestRegion, handler: (MouseEvent) -> Bool)?
 }
 
@@ -263,11 +309,17 @@ extension DropDestinationModifier: Renderable, Layoutable {
                     // The drop location in the destination's local space:
                     // the event is absolute, the region offset is known here.
                     let (dx, dy) = dispatcher.regionOffset(for: id) ?? (0, 0)
+                    // The drag is still active while its drop performs, so
+                    // the preview frame is reportable — localized the same
+                    // way (effects anchor to the image, not the cursor).
+                    let frame = session.previewFrame() ?? (x: event.x, y: event.y, width: 0, height: 0)
                     return action(
                         [typed],
                         DropInfo(
                             x: event.x - dx, y: event.y - dy,
-                            shift: event.shift, ctrl: event.ctrl, meta: event.meta))
+                            shift: event.shift, ctrl: event.ctrl, meta: event.meta,
+                            previewX: frame.x - dx, previewY: frame.y - dy,
+                            previewWidth: frame.width, previewHeight: frame.height))
                 },
                 setTargeted: isTargeted
             )

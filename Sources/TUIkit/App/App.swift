@@ -515,15 +515,17 @@ extension WindowGroup: SceneRenderable {
         var centered = centerBuffer(
             buffer, inWidth: context.availableWidth, height: context.availableHeight)
 
-        // The floating drag preview rides above everything, at the cursor.
-        // Attached AFTER centering so its offsets are in the same absolute
-        // content-area space as the mouse events driving it; the +1/+1 keeps
-        // the pointed-at cell itself visible, macOS-style.
-        if let drag = dragSession?.active {
+        // The floating drag preview rides above everything. Attached AFTER
+        // centering so its offsets are in the same absolute content-area
+        // space as the mouse events driving it; where it sits relative to
+        // the cursor is the drag's ``DragPreviewAnchor`` (grab-point by
+        // default — the pressed cell stays under the cursor, macOS-style),
+        // resolved by the session so drops report the same frame.
+        if let drag = dragSession?.active, let frame = dragSession?.previewFrame() {
             centered.overlays.append(
                 OverlayLayer(
-                    offsetX: drag.cursorX + 1,
-                    offsetY: drag.cursorY + 1,
+                    offsetX: frame.x,
+                    offsetY: frame.y,
                     content: drag.preview,
                     level: .notification
                 )
