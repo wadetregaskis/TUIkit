@@ -148,8 +148,15 @@ private func eraseStepperValue<V: Strideable>(
     let makeHandler: (String, Bool) -> any StepperDriving = { focusID, canBeFocused in
         StepperHandler(focusID: focusID, value: value, bounds: bounds, step: step, canBeFocused: canBeFocused)
     }
+    // The handler persists across renders; EVERYTHING this render declared
+    // must be refreshed on it, not just the value binding — a stale bounds
+    // kept clamping increments to a range the view no longer declared
+    // (e.g. a ceiling that grew when a mode picker changed).
     let syncValue: (any StepperDriving) -> Void = { handler in
-        (handler as? StepperHandler<V>)?.value = value
+        guard let handler = handler as? StepperHandler<V> else { return }
+        handler.value = value
+        handler.bounds = bounds
+        handler.step = step
     }
     return (display, makeHandler, syncValue)
 }

@@ -440,8 +440,13 @@ extension ASCIIConverter {
             for x in 0..<width {
                 let pixel = image.pixel(at: x, y)
 
-                // Map luminance to character
-                let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count - 1))
+                // Map luminance to character: equal bands, one per ramp
+                // level. Scaling by `count - 1` and truncating (as this
+                // did) made the TOP level reachable only at luminance
+                // exactly 255 — invisible on a 15-level ramp, but a 2-level
+                // ramp rendered virtually everything as its dark level
+                // (space), i.e. a blank image.
+                let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count))
                 let clampedIndex = min(max(charIndex, 0), ramp.count - 1)
                 let char = ramp[clampedIndex]
 
