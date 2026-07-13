@@ -112,7 +112,7 @@ struct ContentView: View {
 
 - **7 languages built-in**: English, German, French, Italian, Spanish, Simplified Chinese, Japanese
 - **Type-safe string constants**: the compile-time-verified `LocalizationKey` namespace
-- **Persistent language selection**: stored per-app in the platform config dir (macOS `~/Library/Application Support/<App>`, Linux `$XDG_CONFIG_HOME/<App>`)
+- **Persistent language selection**: stored per-app in the platform config dir (macOS `~/Library/Application Support/<App>`, Linux `$XDG_CONFIG_HOME/<App>`); set `TUIKIT_CONFIG_DIR` to relocate ALL of an app's persisted state (`@AppStorage` included) — the isolation hook for test harnesses, since `UserDefaults` on macOS ignores `$HOME`
 - **Fallback chain**: current language → English → key itself
 - **Thread-safe operations**: safe language switching at runtime
 

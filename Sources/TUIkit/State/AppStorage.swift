@@ -62,6 +62,20 @@ func sanitizedProcessName(_ name: String) -> String {
 func appConfigDirectory() -> URL {
     let appName = sanitizedProcessName(ProcessInfo.processInfo.processName)
 
+    // Explicit override — the isolation hook for anything driving a TUIkit
+    // app that must not touch the real per-app state (a PTY test harness,
+    // CI). It matters most on Apple platforms, where BOTH the default
+    // storage (UserDefaults) and the idiomatic directory below resolve
+    // through the real user home and ignore a `$HOME` override — a
+    // "sandboxed" run would otherwise read and write the developer's own
+    // preferences. Setting it also switches `@AppStorage` to file-backed
+    // storage under this directory (see ``StorageDefaults/backend``).
+    if let override = ProcessInfo.processInfo.environment["TUIKIT_CONFIG_DIR"],
+        !override.isEmpty
+    {
+        return URL(fileURLWithPath: override).appendingPathComponent(appName)
+    }
+
     #if os(macOS)
         let base =
             FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -226,12 +240,27 @@ public enum StorageDefaults {
     ///   does not reliably persist there — written under `appConfigDirectory()`
     ///   (`$XDG_CONFIG_HOME/<app>/settings.json`, else `~/.config/<app>/…`).
     ///
+    /// Setting `TUIKIT_CONFIG_DIR` in the environment overrides both: storage
+    /// becomes file-backed under that directory on every platform. That is the
+    /// isolation hook for test harnesses — on Apple platforms `UserDefaults`
+    /// ignores a `$HOME` override, so without it a "sandboxed" run reads and
+    /// writes the developer's real preferences domain.
+    ///
     /// Override before creating any `@AppStorage` properties to use a custom backend.
-    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-        nonisolated(unsafe) public static var backend: StorageBackend = UserDefaultsStorage()
-    #else
-        nonisolated(unsafe) public static var backend: StorageBackend = JSONFileStorage()
-    #endif
+    nonisolated(unsafe) public static var backend: StorageBackend = {
+        if let override = ProcessInfo.processInfo.environment["TUIKIT_CONFIG_DIR"],
+            !override.isEmpty
+        {
+            // JSONFileStorage roots itself at appConfigDirectory(), which
+            // honours the same override.
+            return JSONFileStorage()
+        }
+        #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+            return UserDefaultsStorage()
+        #else
+            return JSONFileStorage()
+        #endif
+    }()
 }
 
 // MARK: - AppStorage Property Wrapper
