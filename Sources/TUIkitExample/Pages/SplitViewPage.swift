@@ -223,11 +223,19 @@ extension SplitViewPage {
     }
 
     fileprivate var detailColumn: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        // Top-aligned: subject, then From/Date on adjacent lines, one blank
+        // line, the body, and ALL the unused space at the bottom. (A
+        // `Spacer(minLength:)` would be wrong for the gaps — a Spacer
+        // EXPANDS, minLength is only its floor, so every one added here
+        // would take an equal share of the leftover space and scatter the
+        // message down the column.)
+        VStack(alignment: .leading, spacing: 0) {
             if let message = currentMessage {
                 // Header
-                Text(message.subject).bold().foregroundStyle(.palette.accent)
-                Spacer(minLength: 1)
+                Text(message.subject)
+                    .bold()
+                    .foregroundStyle(.palette.accent)
+                    .padding(.bottom, 1)
                 HStack(spacing: 1) {
                     Text(L("page.splitView.from")).foregroundStyle(.palette.foregroundSecondary)
                     Text(message.from)
@@ -236,10 +244,10 @@ extension SplitViewPage {
                     Text(L("page.splitView.date")).foregroundStyle(.palette.foregroundSecondary)
                     Text(message.date)
                 }
-                Spacer(minLength: 1)
 
                 // Message body
                 Text(message.body)
+                    .padding(.top, 1)
                 Spacer()
             } else {
                 Spacer()
