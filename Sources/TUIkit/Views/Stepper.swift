@@ -114,7 +114,7 @@ public struct Stepper<Label: View>: View {
         // composing HStack. `controlKind` lets the label resolve
         // `.stepperTextStyle` like the value.
         HStack(spacing: 0) {
-            _CollapsingLabel(label: label)
+            _CollapsingLabel(label: label, controlDisabled: isDisabled)
             _StepperCore(
                 display: display,
                 makeHandler: makeHandler,
@@ -154,12 +154,40 @@ private func eraseStepperValue<V: Strideable>(
     return (display, makeHandler, syncValue)
 }
 
+/// Shared treatment for a control's own label views.
+enum _ControlLabel {
+    /// A disabled control dims its label WITH it — the label is part of the
+    /// control, not adjacent content. The dim is the same recipe every
+    /// built-in control uses for its disabled chrome, applied as the
+    /// environment foreground so a label with its own explicit colour still
+    /// wins. Enabled controls get the label back untouched.
+    ///
+    /// - Parameter controlDisabled: The control's OWN `.disabled()` flag —
+    ///   the per-control method bypasses the `\.isEnabled` environment, so
+    ///   callers pass it explicitly; either source of disablement dims.
+    @MainActor
+    static func dimmingWhenDisabled<Label: View>(
+        _ label: Label, context: RenderContext, controlDisabled: Bool = false
+    ) -> AnyView {
+        guard controlDisabled || !context.environment.isEnabled else { return AnyView(label) }
+        let palette = context.environment.palette
+        return AnyView(
+            label.foregroundStyle(
+                palette.foregroundTertiary.opacity(
+                    ViewConstants.disabledForeground, over: palette.background)))
+    }
+}
+
 /// Renders an inline control label followed by one separating space — or
 /// nothing when the label is empty/blank/absent, so the control isn't preceded
 /// by a stray space. Used by ``Stepper`` (and reusable by other inline-labelled
 /// controls).
 private struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
     let label: Label?
+
+    /// The control's own `.disabled()` flag — it bypasses the environment,
+    /// so the label must be told explicitly.
+    let controlDisabled: Bool
 
     var body: Never { fatalError("_CollapsingLabel renders via Renderable") }
 
@@ -175,7 +203,10 @@ private struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         guard let label, !(label is EmptyView) else { return FrameBuffer() }
-        let buffer = TUIkit.renderToBuffer(label, context: context)
+        let buffer = TUIkit.renderToBuffer(
+            _ControlLabel.dimmingWhenDisabled(
+                label, context: context, controlDisabled: controlDisabled),
+            context: context)
         guard !buffer.isBlank else { return FrameBuffer() }
         return FrameBuffer(lines: buffer.lines.map { $0 + " " })
     }

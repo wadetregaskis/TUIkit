@@ -194,7 +194,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         let entries = resolvedEntries()
         if pickerStyle.resolvesToMenu {
             VStack(alignment: .leading, spacing: 0) {
-                _PickerLabel(label: label)
+                _PickerLabel(label: label, controlDisabled: isDisabled)
                 _PickerMenuCore(
                     entries: entries,
                     selection: selection,
@@ -204,7 +204,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                _PickerLabel(label: label)
+                _PickerLabel(label: label, controlDisabled: isDisabled)
                 radioGroup(entries: entries)
             }
         }
@@ -257,6 +257,10 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
 private struct _PickerLabel<Label: View>: View, Renderable, Layoutable {
     let label: Label
 
+    /// The picker's own `.disabled()` flag — it bypasses the environment,
+    /// so the label must be told explicitly.
+    let controlDisabled: Bool
+
     var body: Never { fatalError("_PickerLabel renders via Renderable") }
 
     /// The collapsed picker label sizes to its content (it does not fill), so a
@@ -266,7 +270,10 @@ private struct _PickerLabel<Label: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let buffer = TUIkit.renderToBuffer(label, context: context)
+        let buffer = TUIkit.renderToBuffer(
+            _ControlLabel.dimmingWhenDisabled(
+                label, context: context, controlDisabled: controlDisabled),
+            context: context)
         return buffer.isBlank ? FrameBuffer() : buffer
     }
 }

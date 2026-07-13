@@ -194,6 +194,8 @@ type_name:
     - _StopChipCentreCell
     - _StopChipDragHandle
     - _DragHandle
+    # Shared disabled-dimming for controls' own label views.
+    - _ControlLabel
     - _RawTab
     - _Color256GridCore
     - _Palette256Editor

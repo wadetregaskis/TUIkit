@@ -85,4 +85,39 @@ struct StepperOverflowTests {
             #expect(v.isFinite && (0.0...10.0).contains(v), "start \(start) -> \(v)")
         }
     }
+
+    @Test("A disabled control's label dims with it (Stepper and Picker)")
+    @MainActor
+    func disabledLabelDims() {
+        // The label is part of the control: `.disabled` must dim it along
+        // with the chrome, not leave it bright beside greyed arrows (the
+        // Image pages' "Glyphs" stepper read as enabled while inert).
+        func firstLine(_ view: some View) -> String {
+            renderToBuffer(view, context: makeRenderContext(width: 40, height: 4))
+                .lines.first ?? ""
+        }
+        let enabledStepper = firstLine(Stepper("Glyphs", value: .constant(3), in: 0...9))
+        let disabledStepper = firstLine(
+            Stepper("Glyphs", value: .constant(3), in: 0...9).disabled(true))
+        #expect(enabledStepper.stripped == disabledStepper.stripped, "same glyphs either way")
+        #expect(
+            labelColour(of: enabledStepper) != labelColour(of: disabledStepper),
+            "the disabled label carries a different (dimmed) colour")
+
+        let enabledPicker = firstLine(
+            Picker("Mode", selection: .constant(0)) { Text("A").tag(0) })
+        let disabledPicker = firstLine(
+            Picker("Mode", selection: .constant(0)) { Text("A").tag(0) }.disabled(true))
+        #expect(
+            labelColour(of: enabledPicker) != labelColour(of: disabledPicker),
+            "the picker's label dims too")
+    }
+
+    /// The first foreground SGR (38;…) sequence in the line — the label is
+    /// the first coloured run.
+    private func labelColour(of line: String) -> String {
+        guard let range = line.range(of: "\u{1B}\\[38;[0-9;]*m", options: .regularExpression)
+        else { return "" }
+        return String(line[range])
+    }
 }
