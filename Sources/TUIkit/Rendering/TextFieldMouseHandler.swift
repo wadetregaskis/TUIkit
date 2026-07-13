@@ -34,6 +34,10 @@ enum TextFieldMouseHandler {
     ///   - persistedFocusID: The field's stable focus identifier.
     ///   - hoverBox: Persisted hover flag, toggled on `.entered` / `.exited`.
     ///   - contentWidth: The width of the content area between the caps.
+    ///   - displayCharacter: The same index → display character mapping the
+    ///     field's ``TextFieldContentRenderer`` uses; the click-to-caret math
+    ///     needs the *display* cell widths (a `SecureField` bullet is one cell
+    ///     however wide the hidden character is).
     ///   - leadingCapWidth: Cells occupied by the opening cap (the click column
     ///     is measured from the buffer's left edge, so this is subtracted to get
     ///     the content-relative column). Defaults to 1.
@@ -47,6 +51,7 @@ enum TextFieldMouseHandler {
         persistedFocusID: String,
         hoverBox: StateBox<Bool>,
         contentWidth: Int,
+        displayCharacter: @escaping (_ index: Int, _ text: String) -> Character,
         leadingCapWidth: Int = 1,
         disclosureRange: Range<Int>? = nil
     ) {
@@ -63,9 +68,15 @@ enum TextFieldMouseHandler {
         let captureFocusID = persistedFocusID
         let captureHoverBox = hoverBox
 
-        // A buffer-local x → character index, discounting the leading cap.
+        // A buffer-local x → character index, discounting the leading cap. The
+        // display widths come from the handler's LIVE text (the click may
+        // arrive frames after this render).
         func index(atBufferX x: Int) -> Int {
-            handler.characterIndex(forColumn: x - leadingCapWidth, contentWidth: contentWidth)
+            let widths = TextFieldContentRenderer.displayCellWidths(
+                of: handler.text.wrappedValue, displayCharacter: displayCharacter)
+            return handler.characterIndex(
+                forColumn: x - leadingCapWidth, contentWidth: contentWidth,
+                displayWidths: widths)
         }
 
         let mouseHandlerID = mouseDispatcher.register { event in

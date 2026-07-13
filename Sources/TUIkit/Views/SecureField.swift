@@ -358,7 +358,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
                 handler: handler,
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
-                contentWidth: contentWidth)
+                contentWidth: contentWidth,
+                displayCharacter: { _, _ in TerminalSymbols.maskBullet })
         }
 
         return buffer

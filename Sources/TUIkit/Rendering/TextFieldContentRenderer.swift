@@ -84,6 +84,34 @@ struct TextFieldContentRenderer {
         }
     }
 
+    // MARK: - Cell Metrics
+
+    /// The per-character display widths, in terminal cells, for `text`.
+    ///
+    /// The *display* character decides the width — a `SecureField` bullet is
+    /// one cell however wide the hidden character is. Everything that lays the
+    /// field out (rendering, horizontal scroll, click-to-caret mapping) must
+    /// use these same widths, or a wide character (emoji, CJK) desynchronises
+    /// the field's width from its neighbours and its hit regions — the combo
+    /// disclosure drifting off its click target was exactly that.
+    nonisolated static func displayCellWidths(
+        of text: String, displayCharacter: (_ index: Int, _ text: String) -> Character
+    ) -> [Int] {
+        var widths: [Int] = []
+        widths.reserveCapacity(text.count)
+        for index in 0..<text.count {
+            widths.append(max(1, displayCharacter(index, text).terminalWidth))
+        }
+        return widths
+    }
+
+    /// The horizontal scroll offset, in cells, that keeps the caret visible:
+    /// end-anchored, reserving one cell for the caret itself. The inverse
+    /// lives in ``TextFieldHandler/characterIndex(forColumn:contentWidth:displayWidths:)``.
+    nonisolated static func scrollCells(cursorCellX: Int, width: Int) -> Int {
+        max(0, cursorCellX - (max(1, width) - 1))
+    }
+
     // MARK: - Prompt
 
     /// Builds the prompt content (shown when empty and unfocused).
@@ -95,21 +123,28 @@ struct TextFieldContentRenderer {
         } else {
             promptText = ""
         }
-        let truncated = String(promptText.prefix(width))
-        let paddedPrompt = truncated.padding(toLength: width, withPad: " ", startingAt: 0)
+        // Truncate and pad by CELLS, not characters — a wide glyph in the
+        // prompt must not push the field wider than its neighbours.
+        let (truncated, cells) = promptText.ansiAwarePrefixWithWidth(visibleCount: width)
+        let paddedPrompt = truncated + String(repeating: " ", count: width - cells)
         return ANSIRenderer.colorize(paddedPrompt, foreground: palette.foregroundTertiary, background: background)
     }
 
     // MARK: - Unfocused Text
 
-    /// Builds text content without cursor (unfocused state).
+    /// Builds text content without cursor (unfocused state), exactly `width`
+    /// cells: characters from the front while they fit whole, then padding.
     private func buildTextContent(text: String, palette: any Palette, background: Color, width: Int) -> String {
-        let visibleCount = min(text.count, width)
         var displayText = ""
-        for i in 0..<visibleCount {
-            displayText.append(displayCharacter(i, text))
+        var cells = 0
+        for index in 0..<text.count {
+            let character = displayCharacter(index, text)
+            let characterWidth = max(1, character.terminalWidth)
+            if cells + characterWidth > width { break }
+            displayText.append(character)
+            cells += characterWidth
         }
-        let paddedText = displayText.padding(toLength: width, withPad: " ", startingAt: 0)
+        let paddedText = displayText + String(repeating: " ", count: width - cells)
         let foreground =
             isDisabled ? palette.foregroundTertiary : resolvedContentForeground(palette)
         return ANSIRenderer.colorize(paddedText, foreground: foreground, background: background)
@@ -117,9 +152,16 @@ struct TextFieldContentRenderer {
 
     // MARK: - Focused Text with Cursor
 
-    /// Builds text content with cursor at the specified position (focused state).
-    /// Implements horizontal scrolling to keep cursor visible.
-    /// Selection is highlighted with accent background if present.
+    /// Builds text content with cursor at the specified position (focused state),
+    /// exactly `width` cells. Implements horizontal scrolling (in CELLS) to keep
+    /// the cursor visible. Selection is highlighted with accent background.
+    ///
+    /// All layout here is in terminal cells, not characters: a wide display
+    /// character (emoji, CJK) occupies its real width, the scroll window is a
+    /// cell range, and a wide character straddling either window edge renders
+    /// as spaces (it can't be shown half). The block caret is one cell; over a
+    /// wide character it covers the first cell and the remainder pads with
+    /// spaces, so the caret never changes the field's width.
     private func buildTextWithCursor(
         text: String,
         cursorPosition: Int,
@@ -130,18 +172,16 @@ struct TextFieldContentRenderer {
         background: Color,
         width: Int
     ) -> String {
-        let clampedPosition = max(0, min(cursorPosition, text.count))
+        let characterCount = text.count
+        let clampedPosition = max(0, min(cursorPosition, characterCount))
 
-        // Calculate scroll offset to keep cursor visible
-        let visibleTextWidth = width - 1  // Reserve 1 char for cursor
-        let scrollOffset: Int
-        if clampedPosition <= visibleTextWidth {
-            scrollOffset = 0
-        } else {
-            scrollOffset = clampedPosition - visibleTextWidth
-        }
-
-        let visibleStart = scrollOffset
+        // Cell metrics: per-character display widths, the caret's cell x, and
+        // the end-anchored scroll window [scrollStart, windowEnd). The click-
+        // to-caret inverse of this math lives in TextFieldHandler.
+        let widths = Self.displayCellWidths(of: text, displayCharacter: displayCharacter)
+        let cursorCellX = widths[0..<clampedPosition].reduce(0, +)
+        let scrollStart = Self.scrollCells(cursorCellX: cursorCellX, width: width)
+        let windowEnd = scrollStart + width
 
         // Compute cursor visibility and color based on animation style
         let (cursorVisible, cursorColor) = Self.computeCursorState(
@@ -190,40 +230,62 @@ struct TextFieldContentRenderer {
             runText.append(piece)
         }
 
-        var outputWidth = 0
-        for visibleIndex in 0..<width {
-            let textIndex = visibleStart + visibleIndex
-
-            if textIndex == clampedPosition {
-                if cursorVisible {
-                    emit(cursorStyle.shape.character, foreground: cursorColor, background: background)
-                } else if textIndex < text.count {
-                    // Cursor hidden (blink off): show the underlying character.
-                    emit(displayCharacter(textIndex, text), foreground: textForeground, background: background)
-                } else {
-                    emit(" ", foreground: textForeground, background: background)
+        // Walks the text in cell space, clipping each element (character or
+        // caret) against the scroll window: fully inside → emitted whole;
+        // straddling an edge → spaces for the visible part; outside → skipped.
+        var cellX = 0
+        var outputCells = 0
+        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color) {
+            let start = cellX
+            let end = cellX + cells
+            cellX = end
+            guard end > scrollStart, start < windowEnd else { return }
+            if start >= scrollStart && end <= windowEnd {
+                emit(character, foreground: foreground, background: background)
+                outputCells += cells
+            } else {
+                let visible = min(end, windowEnd) - max(start, scrollStart)
+                for _ in 0..<visible {
+                    emit(" ", foreground: foreground, background: background)
                 }
-                outputWidth += 1
-            } else if textIndex < text.count && visibleIndex < width - (textIndex >= clampedPosition ? 0 : 1) {
-                let char = displayCharacter(textIndex, text)
+                outputCells += visible
+            }
+        }
 
-                // Check if this character is in the selection
-                let isSelected = selectionRange.map { textIndex >= $0.lowerBound && textIndex < $0.upperBound } ?? false
-
-                if isSelected {
-                    emit(char, foreground: selectionForeground, background: selectionBackground)
-                } else {
-                    emit(char, foreground: textForeground, background: background)
+        for index in 0..<characterCount {
+            if index == clampedPosition && cursorVisible {
+                // The caret covers the character's first cell; the remainder of
+                // a wide character pads with spaces so nothing after it shifts.
+                emitClipped(
+                    cursorStyle.shape.character, cells: 1,
+                    foreground: cursorColor, background: background)
+                if widths[index] > 1 {
+                    emitClipped(
+                        " ", cells: widths[index] - 1,
+                        foreground: textForeground, background: background)
                 }
-                outputWidth += 1
-            } else if outputWidth < width {
-                emit(" ", foreground: textForeground, background: background)
-                outputWidth += 1
+                continue
             }
-
-            if outputWidth >= width {
-                break
-            }
+            // Blink-off at the caret shows the underlying character, styled
+            // like its neighbours.
+            let char = displayCharacter(index, text)
+            let isSelected =
+                selectionRange.map { index >= $0.lowerBound && index < $0.upperBound } ?? false
+            emitClipped(
+                char, cells: widths[index],
+                foreground: isSelected ? selectionForeground : textForeground,
+                background: isSelected ? selectionBackground : background)
+        }
+        // The caret past the last character sits on its own cell.
+        if clampedPosition == characterCount && cursorVisible {
+            emitClipped(
+                cursorStyle.shape.character, cells: 1,
+                foreground: cursorColor, background: background)
+        }
+        // Pad to exactly `width` cells.
+        while outputCells < width {
+            emit(" ", foreground: textForeground, background: background)
+            outputCells += 1
         }
         flushRun()
 

@@ -184,15 +184,24 @@ extension TextFieldHandler {
     /// left of the text clamp to the start of the visible window; columns past
     /// the end clamp to the text length.
     ///
-    /// The field renders one cell per character (wide characters are not given
-    /// extra cells), so this inverse is a straight column-to-index mapping,
-    /// matching what is on screen.
-    func characterIndex(forColumn column: Int, contentWidth: Int) -> Int {
-        let count = text.wrappedValue.count
+    /// The mapping is in CELLS: `displayWidths` carries each character's
+    /// display width (see ``TextFieldContentRenderer/displayCellWidths(of:displayCharacter:)``
+    /// — a `SecureField` bullet is one cell however wide the hidden character
+    /// is), so a click on either cell of a wide character lands on that
+    /// character.
+    func characterIndex(forColumn column: Int, contentWidth: Int, displayWidths: [Int]) -> Int {
+        let count = displayWidths.count
         let clamped = max(0, min(cursorPosition, count))
-        let visibleTextWidth = max(1, contentWidth - 1)  // renderer reserves 1 for the cursor
-        let scrollOffset = clamped <= visibleTextWidth ? 0 : clamped - visibleTextWidth
-        return max(0, min(scrollOffset + max(0, column), count))
+        let cursorCellX = displayWidths[0..<clamped].reduce(0, +)
+        let scrollStart = TextFieldContentRenderer.scrollCells(
+            cursorCellX: cursorCellX, width: contentWidth)
+        let targetCell = scrollStart + max(0, column)
+        var cellX = 0
+        for (index, cellWidth) in displayWidths.enumerated() {
+            if targetCell < cellX + cellWidth { return index }
+            cellX += cellWidth
+        }
+        return count
     }
 
     /// Deletes the text in the given range and positions cursor at start.

@@ -375,12 +375,13 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         // honours a `.control(.textField)` cascade foreground (`.textFieldTextStyle`).
         let cascaded = context.environment.styleCascade.resolve(
             for: [.all, .text, .control(.textField)])
+        let displayCharacter: (Int, String) -> Character = { index, text in
+            text[text.index(text.startIndex, offsetBy: index)]
+        }
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
             isDisabled: isDisabled,
-            displayCharacter: { index, text in
-                text[text.index(text.startIndex, offsetBy: index)]
-            },
+            displayCharacter: displayCharacter,
             contentForeground: cascaded.foreground
         )
 
@@ -441,6 +442,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
                 contentWidth: textWidth,
+                displayCharacter: displayCharacter,
                 disclosureRange: disclosureRange)
         }
 

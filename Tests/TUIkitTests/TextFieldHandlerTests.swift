@@ -504,6 +504,11 @@ struct TextFieldHandlerTests {
 
     // MARK: - Click column → character index
 
+    /// One display cell per character — the plain-ASCII case.
+    private func narrowWidths(_ count: Int) -> [Int] {
+        Array(repeating: 1, count: count)
+    }
+
     @Test("A click column maps to a character index (unscrolled field)")
     func clickColumnMapsToIndex() {
         var text = "hello"
@@ -511,11 +516,11 @@ struct TextFieldHandlerTests {
         let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
 
         // With the whole word visible, the click column is the character index.
-        #expect(handler.characterIndex(forColumn: 0, contentWidth: 20) == 0)
-        #expect(handler.characterIndex(forColumn: 3, contentWidth: 20) == 3)
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 20, displayWidths: narrowWidths(5)) == 0)
+        #expect(handler.characterIndex(forColumn: 3, contentWidth: 20, displayWidths: narrowWidths(5)) == 3)
         // Past the end clamps to the text length; negatives clamp to the start.
-        #expect(handler.characterIndex(forColumn: 40, contentWidth: 20) == 5)
-        #expect(handler.characterIndex(forColumn: -2, contentWidth: 20) == 0)
+        #expect(handler.characterIndex(forColumn: 40, contentWidth: 20, displayWidths: narrowWidths(5)) == 5)
+        #expect(handler.characterIndex(forColumn: -2, contentWidth: 20, displayWidths: narrowWidths(5)) == 0)
     }
 
     @Test("A click column maps through the horizontal scroll offset")
@@ -525,7 +530,36 @@ struct TextFieldHandlerTests {
         // Cursor at the end scrolls the field: contentWidth 5 → visibleTextWidth 4,
         // so scrollOffset = 10 - 4 = 6; visible window starts at index 6.
         let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 10)
-        #expect(handler.characterIndex(forColumn: 0, contentWidth: 5) == 6)
-        #expect(handler.characterIndex(forColumn: 2, contentWidth: 5) == 8)
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 5, displayWidths: narrowWidths(10)) == 6)
+        #expect(handler.characterIndex(forColumn: 2, contentWidth: 5, displayWidths: narrowWidths(10)) == 8)
+    }
+
+    @Test("A click on either cell of a wide character lands on that character")
+    func clickColumnMapsWideCharacters() {
+        var text = "😀😀ab"  // cells: [0,1]=😀 [2,3]=😀 [4]=a [5]=b
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+        let widths = [2, 2, 1, 1]
+
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 20, displayWidths: widths) == 0)
+        #expect(handler.characterIndex(forColumn: 1, contentWidth: 20, displayWidths: widths) == 0)
+        #expect(handler.characterIndex(forColumn: 2, contentWidth: 20, displayWidths: widths) == 1)
+        #expect(handler.characterIndex(forColumn: 3, contentWidth: 20, displayWidths: widths) == 1)
+        #expect(handler.characterIndex(forColumn: 4, contentWidth: 20, displayWidths: widths) == 2)
+        #expect(handler.characterIndex(forColumn: 5, contentWidth: 20, displayWidths: widths) == 3)
+        #expect(handler.characterIndex(forColumn: 6, contentWidth: 20, displayWidths: widths) == 4)
+    }
+
+    @Test("The click inverse mirrors the renderer's CELL-based scroll")
+    func clickColumnMapsThroughCellScroll() {
+        var text = "😀😀😀😀"  // 8 cells, 4 chars
+        let binding = Binding(get: { text }, set: { text = $0 })
+        // Caret at the end: cursorCellX = 8; contentWidth 5 → scroll starts at
+        // cell 8 - 4 = 4, i.e. the window opens on the third emoji.
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 4)
+        let widths = [2, 2, 2, 2]
+        #expect(handler.characterIndex(forColumn: 0, contentWidth: 5, displayWidths: widths) == 2)
+        #expect(handler.characterIndex(forColumn: 2, contentWidth: 5, displayWidths: widths) == 3)
+        #expect(handler.characterIndex(forColumn: 4, contentWidth: 5, displayWidths: widths) == 4)
     }
 }

@@ -97,6 +97,93 @@ struct TextFieldRenderTests {
         #expect(line == "\(openCap)\(cursor)" + String(repeating: " ", count: 27) + closeCap)
     }
 
+    // MARK: Wide characters (cell-exact layout)
+
+    @Test("Emoji content renders the field at exactly the available width, focused or not")
+    func emojiContentIsCellExact() {
+        // The field's contract is CELLS, not characters: an emoji is one
+        // Character but two cells, and the char-counting renderer used to
+        // emit one extra cell per visible emoji — the combo disclosure and
+        // its hit region drifted apart, and focusing (which scrolls) moved
+        // the field's right edge.
+        let text = "😃😃😃ab"
+
+        let focusedFM = FocusManager()
+        let focused = strippedLines(
+            TextField("Fill", text: .constant(text)).focusID("tf"),
+            context: fieldContext(width: 20, focusManager: focusedFM))[0]
+        #expect(focusedFM.currentFocusedID == "tf")
+        #expect(focused.strippedLength == 20, "focused: |\(focused)|")
+        #expect(focused.hasSuffix(closeCap))
+
+        let unfocusedFM = FocusManager()
+        let decoyCtx = fieldContext(width: 20, focusManager: unfocusedFM, identityPath: "decoy")
+        _ = renderToBuffer(TextField("Decoy", text: .constant("x")).focusID("decoy"), context: decoyCtx)
+        let unfocused = strippedLines(
+            TextField("Fill", text: .constant(text)).focusID("tf"),
+            context: fieldContext(width: 20, focusManager: unfocusedFM, identityPath: "real"))[0]
+        #expect(unfocused.strippedLength == 20, "unfocused: |\(unfocused)|")
+        #expect(unfocused.hasSuffix(closeCap))
+    }
+
+    @Test("A combo box's ▾ stays on the same cell column focused and unfocused, emoji included")
+    func comboDisclosureStaysPut() {
+        // The disclosure's hit region is computed from the content width; the
+        // rendered arrow must sit exactly there in both states, or clicks
+        // land one cell off (the reported must-click-left-of-the-arrow bug).
+        let text = "😃😃😃😃"
+        func arrowCell(focused: Bool) -> Int {
+            let fm = FocusManager()
+            if !focused {
+                let decoyCtx = fieldContext(width: 24, focusManager: fm, identityPath: "decoy")
+                _ = renderToBuffer(
+                    TextField("Decoy", text: .constant("x")).focusID("decoy"), context: decoyCtx)
+            }
+            let line = strippedLines(
+                TextField("Fill", text: .constant(text))
+                    .focusID("tf")
+                    .textInputSuggestions { Text("😃😃😃😃") },
+                context: fieldContext(
+                    width: 24, focusManager: fm, identityPath: focused ? "" : "real"))[0]
+            #expect(line.strippedLength == 24, "field is cell-exact: |\(line)|")
+            guard let index = line.firstIndex(of: "▾") else {
+                Issue.record("no disclosure in |\(line)|")
+                return -1
+            }
+            return String(line[line.startIndex..<index]).strippedLength
+        }
+        let focusedCell = arrowCell(focused: true)
+        let unfocusedCell = arrowCell(focused: false)
+        #expect(focusedCell == unfocusedCell, "▾ must not move on focus")
+        // …and exactly where the hit region is registered: the second cell of
+        // the two-cell disclosure, flush against the trailing cap.
+        #expect(focusedCell == 24 - 2, "▾ against the trailing cap")
+    }
+
+    @Test("The block caret over a wide character keeps the field's width")
+    func caretOverWideCharacter() {
+        // Caret ON the emoji (index 0): the caret covers its first cell and
+        // the second pads with a space — nothing after it may shift.
+        let renderer = TextFieldContentRenderer(
+            prompt: nil,
+            isDisabled: false,
+            displayCharacter: { index, text in text[text.index(text.startIndex, offsetBy: index)] },
+            contentForeground: nil
+        )
+        let content = renderer.buildContent(
+            text: "😃ab",
+            cursorPosition: 0,
+            selectionRange: nil,
+            isFocused: true,
+            palette: SystemPalette(.green),
+            cursorStyle: TextCursorStyle(),
+            cursorTimer: nil,
+            contentWidth: 10
+        ).stripped
+        #expect(content.strippedLength == 10, "|\(content)|")
+        #expect(content.hasPrefix("\(cursor) ab"), "caret + pad + following text: |\(content)|")
+    }
+
     // MARK: Unfocused
 
     @Test("Unfocused field with text shows the text, no cursor")
