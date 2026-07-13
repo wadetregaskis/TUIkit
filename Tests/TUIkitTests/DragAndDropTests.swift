@@ -131,6 +131,45 @@ struct DragAndDropTests {
         #expect(log.targetedChanges.isEmpty, "an incompatible zone is never targeted")
     }
 
+    @Test("A draggable inside a drop zone can still start its drag")
+    func draggableInsideZoneStillDrags() {
+        // The zone's inert region must not eat presses over its content —
+        // the dispatcher stops at the innermost matching region even when
+        // the handler declines, so the zone region fronts the list instead.
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        // The chip lives INSIDE a zone (a shelf); a second zone below takes
+        // the drop.
+        let shelved = VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("CHIP").draggable("apple")
+                Text("").frame(width: 4, height: 1)
+            }
+            .dropDestination(for: Int.self) { _, _ in true }
+            Text("").frame(height: 2)
+            Text("ZONE========")
+                .dropDestination(for: String.self) { items, info in
+                    log.dropped.append(contentsOf: items)
+                    log.info = info
+                    return true
+                } isTargeted: { log.targetedChanges.append($0) }
+        }
+        let buffer = renderToBuffer(shelved, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: 4))
+        #expect(
+            tui.dragAndDropSession.active != nil,
+            "the chip's press starts a drag despite the enclosing zone")
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 4))
+        #expect(log.dropped == ["apple"], "and the drop lands on the inner zone")
+    }
+
     @Test("A drop still lands after a re-render that shifts handler ids mid-drag")
     func dropSurvivesMidDragRerender() {
         // Handler ids reset to 0 every render pass and are only stable while

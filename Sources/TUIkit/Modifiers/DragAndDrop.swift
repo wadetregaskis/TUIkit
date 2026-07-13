@@ -139,15 +139,25 @@ extension DropDestinationModifier: Renderable, Layoutable {
 
         // An inert region: it never consumes events itself (so clicks reach
         // the content), but its composited rectangle is the drop zone.
+        // INSERTED AT THE FRONT, not appended: the dispatcher routes clicks
+        // to the innermost (last-registered) matching region and stops even
+        // when the handler declines, so an appended zone would eat every
+        // press over its content — a `.draggable` chip INSIDE a drop zone
+        // could never start its drag. Fronting the region keeps interactive
+        // children clickable (the same fallback-region pattern List and
+        // Picker containers use), while drop TARGETING is unaffected — it
+        // matches hit ids against the registered targets and skips
+        // non-targets, so the zone is still found at any depth.
         let id = dispatcher.register { _ in false }
-        buffer.hitTestRegions.append(
+        buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0,
                 offsetY: 0,
                 width: buffer.width,
                 height: buffer.height,
                 handlerID: id
-            )
+            ),
+            at: 0
         )
 
         let action = self.action
