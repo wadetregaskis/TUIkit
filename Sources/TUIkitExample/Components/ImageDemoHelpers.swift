@@ -116,6 +116,63 @@ enum ImageDemoHelpers {
         }
     }
 
+    /// The largest useful glyph count for the current configuration (the
+    /// stepper's upper bound), or 0 when the axis doesn't apply.
+    static func maximumGlyphs(charsetIndex: Int, shapeAware: Bool) -> Int {
+        effectiveCharSet(
+            charsetIndex: charsetIndex, glyphCount: 0,
+            blockResolutionIndex: 0, customRamp: ""
+        ).maximumGlyphs(shapeAware: shapeAware) ?? 0
+    }
+
+    // MARK: - State snapping
+
+    /// Snaps every dependent knob to a value the current configuration
+    /// actually renders with, so a disabled control never displays a
+    /// setting that differs from what is being drawn:
+    ///
+    /// - shape-awareness turns off for a custom ramp (which is always
+    ///   luminance-mapped);
+    /// - the supersampling picker returns to Auto while shape matching
+    ///   ignores it;
+    /// - the edge-lines toggle turns off while no edges can be traced;
+    /// - the block resolution returns to its default while the block
+    ///   subdivision path isn't in use;
+    /// - the glyph count clamps to the charset's real ceiling (pool size
+    ///   for shape matching, distinct density levels for luminance), and
+    ///   resets to 0 (= full) when the axis doesn't apply.
+    ///
+    /// Deliberately lossy: a preference does not survive a round-trip
+    /// through a mode that doesn't support it — coherence of what's on
+    /// screen wins over remembering hidden state.
+    static func snap(
+        charsetIndex: Int,
+        glyphCount: inout Int,
+        blockResolutionIndex: inout Int,
+        shapeAware: inout Bool,
+        supersampling: inout Int,
+        edgeLines: inout Bool
+    ) {
+        if !usesShape(charsetIndex: charsetIndex) {
+            shapeAware = false
+        }
+        if !usesSupersampling(charsetIndex: charsetIndex, shapeAware: shapeAware) {
+            supersampling = 0
+        }
+        if !usesEdgeTracing(charsetIndex: charsetIndex, shapeAware: shapeAware) {
+            edgeLines = false
+        }
+        if !usesBlockResolution(charsetIndex: charsetIndex, shapeAware: shapeAware) {
+            blockResolutionIndex = 0
+        }
+        if usesGlyphCount(charsetIndex: charsetIndex) {
+            glyphCount = min(
+                glyphCount, maximumGlyphs(charsetIndex: charsetIndex, shapeAware: shapeAware))
+        } else {
+            glyphCount = 0
+        }
+    }
+
     // MARK: - Zoom
 
     /// `1` = fit the viewport exactly. Above 1× we step linearly up to a sane

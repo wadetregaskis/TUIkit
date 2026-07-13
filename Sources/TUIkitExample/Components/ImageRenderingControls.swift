@@ -100,10 +100,12 @@ struct ImageRenderingControls: View {
                 Toggle(L("component.imageControls.shapeAware"), isOn: $shapeAware)
                     .disabled(!ImageDemoHelpers.usesShape(charsetIndex: charsetIndex))
                 // Charset size: how many glyphs the ideal subset keeps
-                // (0 = the full repertoire). Applies to ascii / unicode.
+                // (0 = the full repertoire). Applies to ascii / unicode;
+                // the range tracks the charset's real ceiling.
                 Stepper(
                     L("component.imageControls.glyphs"), value: $glyphCount,
-                    in: 0...200
+                    in: 0...max(2, ImageDemoHelpers.maximumGlyphs(
+                        charsetIndex: charsetIndex, shapeAware: shapeAware))
                 )
                 .disabled(!ImageDemoHelpers.usesGlyphCount(charsetIndex: charsetIndex))
                 if glyphCount == 0, ImageDemoHelpers.usesGlyphCount(charsetIndex: charsetIndex) {
@@ -131,6 +133,32 @@ struct ImageRenderingControls: View {
                 }
             }
         }
+        // A disabled control still ASSERTS the value it displays, so every
+        // dependent knob snaps to what the configuration actually renders
+        // with whenever a driver changes (see ImageDemoHelpers.snap) — a
+        // greyed-out "3×" supersampling under shape matching would claim a
+        // sampling factor that isn't applied.
+        .onAppear(perform: snap)
+        .onChange(of: charsetIndex) { _, _ in snap() }
+        .onChange(of: shapeAware) { _, _ in snap() }
+        // The engine's minimum sized subset is 2 glyphs (fewer isn't a
+        // ramp/vocabulary), so 1 is unreachable: stepping up from 0 lands
+        // on 2, stepping down from 2 lands on 0 (= the full repertoire).
+        .onChange(of: glyphCount) { old, new in
+            if new == 1 { glyphCount = new > old ? 2 : 0 }
+        }
+    }
+
+    /// Applies ``ImageDemoHelpers/snap(charsetIndex:glyphCount:blockResolutionIndex:shapeAware:supersampling:edgeLines:)``
+    /// to this control strip's bindings.
+    private func snap() {
+        ImageDemoHelpers.snap(
+            charsetIndex: charsetIndex,
+            glyphCount: &glyphCount,
+            blockResolutionIndex: &blockResolutionIndex,
+            shapeAware: &shapeAware,
+            supersampling: &supersampling,
+            edgeLines: &edgeLines)
     }
 
     /// The custom-ramp combo field: type any ramp (darkest character first),

@@ -82,6 +82,12 @@ enum GlyphRepertoire {
         $0.glyph == " " || isBlockElement($0.glyph) || cornerTriangles.contains($0.glyph)
     }
 
+    /// How many usefully-distinct density levels each sizeable pool offers
+    /// a luminance ramp (its full-ramp length) — the effective ceiling for
+    /// a non-shape `glyphs:` count. Cached: the full ramp is deterministic.
+    static let asciiDensityLevels = densityRamp(from: ascii).count
+    static let unicodeDensityLevels = densityRamp(from: unicode).count
+
     // MARK: - Density ramps (non-shape rendering)
 
     /// Near-equal coverages add banding, not tonal levels; within a group

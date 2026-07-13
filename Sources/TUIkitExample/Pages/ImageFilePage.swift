@@ -20,7 +20,7 @@ struct ImageFilePage: View {
     @State var ditheringOn: Bool = false
     @State var zoom: Double = 1.0
     @State var supersampling: Int = 0
-    @State var edgeLines: Bool = true
+    @State var edgeLines: Bool = false
     @State var edgeThreshold: Double = 0.9
     @State var customRamp: String = ""
 

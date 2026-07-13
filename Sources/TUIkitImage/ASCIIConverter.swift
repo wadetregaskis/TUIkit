@@ -115,6 +115,29 @@ public enum ASCIICharacterSet: Sendable, Equatable {
 
     /// The full non-block Unicode repertoire (`.unicode(glyphs: nil)`).
     public static var unicode: Self { .unicode(glyphs: nil) }
+
+    /// The largest `glyphs:` count this charset can usefully honour under
+    /// the given rendering algorithm — the calibrated pool size for
+    /// shape-aware matching, or the number of usefully-distinct density
+    /// levels for luminance mapping (near-equal ink coverages add banding,
+    /// not levels, so they collapse). Counts above this are equivalent to
+    /// `nil` (the full repertoire). `nil` for charsets without a
+    /// glyph-count axis (``blocks(_:)``, ``customRamp(_:)``).
+    ///
+    /// Configuration UIs can use this to keep a glyph-count control's
+    /// range — and its displayed value — matching what actually renders.
+    public func maximumGlyphs(shapeAware: Bool) -> Int? {
+        switch self {
+        case .ascii:
+            return shapeAware
+                ? GlyphRepertoire.ascii.count : GlyphRepertoire.asciiDensityLevels
+        case .unicode:
+            return shapeAware
+                ? GlyphRepertoire.unicode.count : GlyphRepertoire.unicodeDensityLevels
+        case .blocks, .customRamp:
+            return nil
+        }
+    }
 }
 
 // MARK: - Color Mode

@@ -68,6 +68,35 @@ struct GlyphRepertoireTests {
             "nothing else sneaks into the block shapes")
     }
 
+    @Test("maximumGlyphs reports the real ceiling per charset and algorithm")
+    func maximumGlyphsCeilings() {
+        // Shape matching can use the whole pool; luminance mapping only its
+        // usefully-distinct density levels.
+        #expect(
+            ASCIICharacterSet.ascii.maximumGlyphs(shapeAware: true)
+                == GlyphRepertoire.ascii.count)
+        #expect(
+            ASCIICharacterSet.ascii.maximumGlyphs(shapeAware: false)
+                == GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii).count)
+        #expect(
+            ASCIICharacterSet.unicode.maximumGlyphs(shapeAware: true)
+                == GlyphRepertoire.unicode.count)
+        #expect(
+            ASCIICharacterSet.unicode.maximumGlyphs(shapeAware: false)
+                == GlyphRepertoire.densityRamp(from: GlyphRepertoire.unicode).count)
+        // No glyph-count axis on the block or custom charsets.
+        #expect(ASCIICharacterSet.blocks(.half).maximumGlyphs(shapeAware: true) == nil)
+        #expect(ASCIICharacterSet.blocks(.coarse).maximumGlyphs(shapeAware: false) == nil)
+        #expect(ASCIICharacterSet.customRamp(" .#").maximumGlyphs(shapeAware: false) == nil)
+
+        // Asking for the ceiling is exactly the full repertoire — counts
+        // above it are equivalent to nil (pinned so UIs can clamp to it).
+        let ceiling = ASCIICharacterSet.ascii.maximumGlyphs(shapeAware: false)!
+        #expect(
+            GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: ceiling)
+                == GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii))
+    }
+
     // MARK: - Density ramps
 
     @Test("A density ramp is space-anchored, monotonic, and sized as asked")
