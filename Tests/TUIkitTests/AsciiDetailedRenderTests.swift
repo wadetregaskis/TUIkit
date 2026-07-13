@@ -1,8 +1,10 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  AsciiDetailedRenderTests.swift
 //
-//  `.asciiDetailed` uses a longer, ink-ordered ramp with 2× supersampling for
-//  finer tonal gradation than `.ascii`, while staying pure ASCII.
+//  The ASCII charset's configurable size: the full repertoire uses a long,
+//  ink-ordered ramp with 2× supersampling for fine tonal gradation, while a
+//  small glyph count reproduces the classic coarse ASCII-art look — both
+//  pure ASCII.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -13,7 +15,7 @@ import Testing
 @testable import TUIkitImage
 
 @MainActor
-@Suite("asciiDetailed rendering")
+@Suite("ASCII charset sizing")
 struct AsciiDetailedRenderTests {
     /// A left→right greyscale ramp (luminance 0…255 across the width).
     private func horizontalGradient(_ width: Int, _ height: Int) -> RGBAImage {
@@ -35,29 +37,28 @@ struct AsciiDetailedRenderTests {
         return Set(line)
     }
 
-    @Test("asciiDetailed resolves more tonal levels than ascii across a gradient")
+    @Test("the full ASCII repertoire resolves more tonal levels than a 10-glyph ramp")
     func finerGradation() {
-        let plain = distinctGlyphs(.ascii, width: 60)
-        let detailed = distinctGlyphs(.asciiDetailed, width: 60)
+        let plain = distinctGlyphs(.ascii(glyphs: 10), width: 60)
+        let detailed = distinctGlyphs(.ascii, width: 60)
         #expect(
             detailed.count > plain.count,
-            "detailed (\(detailed.count) glyphs) should out-resolve ascii (\(plain.count))")
-        // ascii tops out at its 10-glyph ramp; detailed reaches well past that.
+            "full (\(detailed.count) glyphs) should out-resolve 10-glyph (\(plain.count))")
         #expect(plain.count <= 10)
-        #expect(detailed.count >= 14, "the long ramp uses many levels: \(detailed.sorted())")
+        #expect(detailed.count >= 14, "the full ramp uses many levels: \(detailed.sorted())")
     }
 
-    @Test("asciiDetailed stays pure ASCII (renders on any terminal)")
+    @Test("the ASCII charset stays pure ASCII (renders on any terminal)")
     func pureAscii() {
-        let glyphs = distinctGlyphs(.asciiDetailed, width: 80)
+        let glyphs = distinctGlyphs(.ascii, width: 80)
         #expect(
             glyphs.allSatisfy { $0.isASCII },
             "no non-ASCII glyphs leaked in: \(glyphs.filter { !$0.isASCII })")
     }
 
-    @Test("asciiDetailed renders the requested cell grid (supersampling is internal)")
+    @Test("the full ramp renders the requested cell grid (supersampling is internal)")
     func cellGridUnchanged() {
-        let converter = ASCIIConverter(characterSet: .asciiDetailed, colorMode: .mono, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .mono, dithering: .none)
         let lines = converter.convert(horizontalGradient(24, 6), width: 24, height: 6)
         #expect(lines.count == 6, "one line per requested cell row")
         #expect(lines.allSatisfy { $0.stripped.count == 24 }, "one glyph per requested cell column")

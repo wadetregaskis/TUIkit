@@ -1,11 +1,11 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  ImageFidelityConfigTests.swift
 //
-//  The configurable image-fidelity surface: the wide-Unicode shape set
-//  (`.unicodeDetailed` — blocks/quadrants/shades matched by measured ink
-//  coverage), caller-supplied luminance ramps (`.customRamp`), the
-//  brightness-mapping supersampling factor, and the shape-mode edge-glyph
-//  threshold (including disabling edges entirely).
+//  The configurable image-fidelity surface: the fundamental charsets under
+//  shape-aware matching (blocks/quadrants/shades matched by measured ink
+//  coverage; unicode's box-drawing edges), caller-supplied luminance ramps
+//  (`.customRamp`), the luminance-renderer supersampling factor, and the
+//  shape-mode edge-glyph threshold (including disabling edges entirely).
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -34,47 +34,19 @@ struct ImageFidelityConfigTests {
 
     private func render(
         _ img: RGBAImage, w: Int, h: Int, _ set: ASCIICharacterSet,
+        shapeAware: Bool = false,
         supersampling: Int? = nil, edgeThreshold: Double? = 0.9
     ) -> String {
         ASCIIConverter(
-            characterSet: set, colorMode: .mono, dithering: .none,
+            characterSet: set, shapeAware: shapeAware, colorMode: .mono, dithering: .none,
             supersampling: supersampling, edgeThreshold: edgeThreshold
         )
         .convert(img, width: w, height: h).joined()
     }
 
-    // MARK: - Calibrated glyph tables
-
-    @Test("Every calibrated glyph is single-cell by TUIkit's width tables")
-    func calibratedGlyphsAreSingleCell() {
-        // The shape renderer appends exactly one glyph per output cell with
-        // no width validation at render time, so a double-width entry in the
-        // calibration tables would shear every row it appears on. This is
-        // the framework-side gate for glyphs added to the candidate sets in
-        // Tools/GenerateImageGlyphs.
-        for (glyph, _) in generatedShapeCoverage {
-            #expect(String(glyph).strippedLength == 1, "'\(glyph)' is not single-cell")
-        }
-        for (glyph, _) in generatedUnicodeShapeCoverage {
-            #expect(String(glyph).strippedLength == 1, "'\(glyph)' is not single-cell")
-        }
-    }
-
-    @Test("The wide-Unicode table strictly extends the ASCII shape table")
-    func unicodeTableExtendsAscii() {
-        let ascii = Set(generatedShapeCoverage.map(\.0))
-        let unicode = Set(generatedUnicodeShapeCoverage.map(\.0))
-        #expect(ascii.isSubset(of: unicode))
-        // "Much richer" pinned coarsely, so a regressed regeneration (wrong
-        // font, over-aggressive skip list) fails loudly rather than
-        // silently shipping a starved matcher.
-        #expect(ascii.count >= 90, "full printable ASCII: \(ascii.count)")
-        #expect(unicode.count >= 150, "blocks + lines + shapes: \(unicode.count)")
-    }
-
     // MARK: - Report (not an assertion; run with --filter to eyeball the modes)
 
-    @Test("Report: synthetic scene through each shape mode")
+    @Test("Report: synthetic scene through each shape-aware charset")
     func shapeModeReport() {
         // A ball (curved edges), a diagonal bar, and a horizontal gradient —
         // the three features the shape matcher exists for.
@@ -85,57 +57,80 @@ struct ImageFidelityConfigTests {
             if abs((x - 120) - (y * 2 - 120)) < 14 && x > 100 && x < 200 { return 40 }
             return x > 160 ? UInt8(min(255, (x - 160) * 3)) : 255
         }
-        for set in [ASCIICharacterSet.shapeBased, .shapeUnicode, .unicodeDetailed] {
-            print("== \(set) ==")
+        for set in [ASCIICharacterSet.ascii, .unicode, .blocks(.half)] {
+            print("== \(set) shape-aware ==")
             for line in ASCIIConverter(
-                characterSet: set, colorMode: .mono, dithering: .none
+                characterSet: set, shapeAware: true, colorMode: .mono, dithering: .none
             ).convert(img, width: 60, height: 15) {
                 print(line.stripped)
             }
         }
     }
 
-    // MARK: - .unicodeDetailed
+    // MARK: - Shape-aware blocks
 
     @Test("A solid dark image renders full blocks")
-    func unicodeDetailedSolid() {
+    func blocksShapeSolid() {
         let img = image(50, 30) { _, _ in 0 }
-        let out = render(img, w: 10, h: 3, .unicodeDetailed, edgeThreshold: nil)
-        #expect(out.contains("█"), "solid ink is a full block, not an ASCII glyph: \(out)")
+        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true, edgeThreshold: nil)
+        #expect(out.contains("█"), "solid ink is a full block: \(out)")
     }
 
     @Test("Corner-weighted ink picks quadrant-family glyphs")
-    func unicodeDetailedQuadrants() {
+    func blocksShapeQuadrants() {
         // Dark only in each cell's top-left quadrant (cells are 5×10 px in
-        // shape modes). Edge detection off so the coverage match is what's
-        // being tested.
+        // shape modes). Edge detection is moot for blocks (the repertoire
+        // carries its own directional glyphs).
         let img = image(50, 30) { x, y in (x % 5 < 2 && y % 10 < 5) ? 0 : 255 }
-        let out = render(img, w: 10, h: 3, .unicodeDetailed, edgeThreshold: nil)
-        let quadrantFamily = Set("▘▝▖▗▚▞▛▜▙▟▀▄▌▐▍▎▏▉▊▋")
+        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
+        let quadrantFamily = Set("▘▝▖▗▚▞▛▜▙▟▀▄▌▐▍▎▏▉▊▋◢◣◤◥")
         #expect(
             out.contains(where: { quadrantFamily.contains($0) }),
             "corner-weighted cells pick from the block/quadrant family: \(out)")
     }
 
-    @Test("An even mid-tone picks a mid-coverage glyph, never blank or solid")
-    func unicodeDetailedMidTone() {
-        // The measured coverages of '▒' and dense ASCII textures like '#'
-        // sit close together, so either family is a correct match — what
-        // must never happen is the extremes.
+    @Test("An even mid-tone picks a shade, never blank or solid")
+    func blocksShapeMidTone() {
         let img = image(50, 30) { _, _ in 128 }
-        let out = render(img, w: 10, h: 3, .unicodeDetailed, edgeThreshold: nil)
+        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
         #expect(!out.contains(" "), "an even mid-tone is never blank: \(out)")
         #expect(!out.contains("█"), "an even mid-tone is never solid: \(out)")
-        let midFamilies = Set("░▒▓#%@*+=")
         #expect(
-            out.contains(where: { midFamilies.contains($0) }),
-            "an even mid-tone reads as a mid-coverage texture: \(out)")
+            out.contains(where: { Set("░▒▓").contains($0) }),
+            "an even mid-tone reads as a shade: \(out)")
     }
 
-    @Test("unicodeDetailed edges use box-drawing lines")
-    func unicodeDetailedEdges() {
+    @Test("Shape-aware blocks differ from luminance blocks (the resolution is unused)")
+    func blocksShapeIgnoresResolution() {
+        // A corner-weighted image: the shape matcher picks quadrants; the
+        // luminance `.coarse` path can only pick shades — so the two must
+        // differ, and every `.blocks(_)` resolution shape-matches identically.
+        let img = image(50, 30) { x, y in (x % 5 < 2 && y % 10 < 5) ? 0 : 255 }
+        let shaped = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
+        let shapedCoarse = render(img, w: 10, h: 3, .blocks(.coarse), shapeAware: true)
+        let luminance = render(img, w: 10, h: 3, .blocks(.coarse))
+        #expect(shaped == shapedCoarse, "shape-aware blocks ignore the resolution")
+        #expect(shaped != luminance, "shape matching is not the luminance path")
+    }
+
+    // MARK: - Shape-aware unicode
+
+    @Test("The unicode charset excludes Block Elements even when shape-aware")
+    func unicodeExcludesBlocks() {
+        // Solid ink: the blocks charset answers with █; unicode must answer
+        // with its own densest non-block glyph instead.
+        let img = image(50, 30) { _, _ in 0 }
+        let out = render(img, w: 10, h: 3, .unicode, shapeAware: true, edgeThreshold: nil)
+        #expect(!out.isEmpty)
+        #expect(
+            !out.contains(where: { GlyphRepertoire.isBlockElement($0) }),
+            "no Block Elements in the unicode charset: \(out)")
+    }
+
+    @Test("Shape-aware unicode edges use box-drawing lines")
+    func unicodeShapeEdges() {
         let img = image(100, 30) { x, _ in x < 47 ? 0 : 255 }
-        let out = render(img, w: 20, h: 3, .unicodeDetailed)
+        let out = render(img, w: 20, h: 3, .unicode, shapeAware: true)
         #expect(out.contains("│"), "a vertical edge uses '│': \(out)")
     }
 
@@ -157,12 +152,23 @@ struct ImageFidelityConfigTests {
             "no glyphs outside the supplied ramp: \(out)")
     }
 
-    @Test("An empty custom ramp falls back to the classic ascii levels")
+    @Test("An empty custom ramp falls back to a 10-level calibrated ASCII ramp")
     func customRampEmpty() {
         // A white image: the fallback ramp's brightest (densest) glyph.
         let img = image(20, 4) { _, _ in 255 }
         let out = render(img, w: 20, h: 4, .customRamp(""))
-        #expect(out.contains("@"), "empty ramp falls back to ascii's brightest glyph: \(out)")
+        let fallback = GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: 10)
+        #expect(
+            out.contains(fallback.last!),
+            "empty ramp falls back to the calibrated ramp's brightest glyph: \(out)")
+    }
+
+    @Test("A custom ramp is always luminance-mapped — shape-awareness does not apply")
+    func customRampIgnoresShape() {
+        let img = image(50, 30) { x, y in (x % 5 < 2 && y % 10 < 5) ? 0 : 255 }
+        let plain = render(img, w: 10, h: 3, .customRamp(" .oO@"))
+        let shaped = render(img, w: 10, h: 3, .customRamp(" .oO@"), shapeAware: true)
+        #expect(plain == shaped, "shapeAware is a no-op for custom ramps")
     }
 
     // MARK: - Supersampling
@@ -173,10 +179,11 @@ struct ImageFidelityConfigTests {
         // or white); at 2× each cell averages four pixels to mid-grey — so the
         // two renders MUST differ, and the 2× one must use interior ramp levels.
         let img = image(40, 8) { x, y in (x + y).isMultiple(of: 2) ? 0 : 255 }
-        let oneX = render(img, w: 20, h: 4, .ascii, supersampling: 1)
-        let twoX = render(img, w: 20, h: 4, .ascii, supersampling: 2)
+        let ramp = GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: 10)
+        let oneX = render(img, w: 20, h: 4, .ascii(glyphs: 10), supersampling: 1)
+        let twoX = render(img, w: 20, h: 4, .ascii(glyphs: 10), supersampling: 2)
         #expect(oneX != twoX, "supersampling changes what the cells read")
-        let interior = Set(".:;+=xX$")  // everything between the ramp's ends
+        let interior = Set(ramp.dropFirst().dropLast())
         #expect(
             twoX.contains(where: { interior.contains($0) }),
             "averaged cells land on interior ramp levels: \(twoX)")
@@ -187,8 +194,9 @@ struct ImageFidelityConfigTests {
     @Test("edgeThreshold nil disables line glyphs (pure coverage matching)")
     func edgeThresholdDisables() {
         let img = image(100, 30) { x, _ in x < 47 ? 0 : 255 }
-        let withEdges = render(img, w: 20, h: 3, .shapeUnicode)
-        let withoutEdges = render(img, w: 20, h: 3, .shapeUnicode, edgeThreshold: nil)
+        let withEdges = render(img, w: 20, h: 3, .unicode, shapeAware: true)
+        let withoutEdges = render(
+            img, w: 20, h: 3, .unicode, shapeAware: true, edgeThreshold: nil)
         #expect(withEdges.contains("│"), "default threshold draws the edge: \(withEdges)")
         #expect(!withoutEdges.contains("│"), "nil threshold never draws line glyphs: \(withoutEdges)")
     }

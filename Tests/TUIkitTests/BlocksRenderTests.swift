@@ -34,7 +34,7 @@ struct BlocksRenderTests {
 
     @Test("Every cell is a background-filled space — no glyphs, no gaps")
     func backgroundFilledNoGlyphs() {
-        let converter = ASCIIConverter(characterSet: .blocks, colorMode: .trueColor, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .blocks(.solid), colorMode: .trueColor, dithering: .none)
         withColorDepth(.palette256) {
             let lines = converter.convert(gradient(20, 12), width: 20, height: 12)
             #expect(lines.count == 12)
@@ -56,7 +56,7 @@ struct BlocksRenderTests {
 
     @Test("Mono blocks fall back to a █ / space threshold with no colour codes")
     func monoFallback() {
-        let converter = ASCIIConverter(characterSet: .blocks, colorMode: .mono, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .blocks(.solid), colorMode: .mono, dithering: .none)
         withColorDepth(.noColor) {
             let joined = converter.convert(gradient(10, 4), width: 10, height: 4).joined(separator: "\n")
             #expect(!joined.contains("\u{1B}["), "mono emits no colour escape codes")

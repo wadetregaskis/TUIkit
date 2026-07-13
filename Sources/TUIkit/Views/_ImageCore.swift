@@ -38,6 +38,7 @@ private struct ImageRenderCache: Equatable {
     var width: Int
     var height: Int
     var characterSet: ASCIICharacterSet
+    var shapeAware: Bool
     var colorMode: ASCIIColorMode
     var dithering: DitheringMode
     var supersampling: Int?
@@ -51,7 +52,7 @@ private struct ImageRenderCache: Equatable {
     func matches(  // swiftlint:disable:this function_parameter_count
         rawImageWidth: Int, rawImageHeight: Int,
         width: Int, height: Int,
-        characterSet: ASCIICharacterSet, colorMode: ASCIIColorMode,
+        characterSet: ASCIICharacterSet, shapeAware: Bool, colorMode: ASCIIColorMode,
         dithering: DitheringMode,
         supersampling: Int?, edgeThreshold: Double?,
         contentMode: ContentMode,
@@ -62,6 +63,7 @@ private struct ImageRenderCache: Equatable {
             && self.width == width
             && self.height == height
             && self.characterSet == characterSet
+            && self.shapeAware == shapeAware
             && self.colorMode == colorMode
             && self.dithering == dithering
             && self.supersampling == supersampling
@@ -158,6 +160,7 @@ struct _ImageCore: View, Renderable, Layoutable {
 
         // Read environment values
         let characterSet = context.environment.imageCharacterSet
+        let shapeAware = context.environment.imageShapeAware
         let colorMode = context.environment.imageColorMode
         let dithering = context.environment.imageDithering
         let contentMode = context.environment.imageContentMode
@@ -263,6 +266,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                 width: renderWidth,
                 height: renderHeight,
                 characterSet: characterSet,
+                shapeAware: shapeAware,
                 colorMode: colorMode,
                 dithering: dithering,
                 supersampling: context.environment.imageSupersampling,
@@ -289,7 +293,7 @@ extension _ImageCore {
     /// passed the same image at the same target size with the same
     /// styling, the previous conversion's `[String]` is returned without
     /// re-running `ASCIIConverter.convert`. That converter is the
-    /// hot spot of the renderer (especially in the `.shapeBased` and
+    /// hot spot of the renderer (especially in the shape-aware and
     /// `.braille` modes), and the typical TUIkit redraw cadence —
     /// spinner pulses, focus animations — re-renders an unchanged image
     /// many times per second.
@@ -298,6 +302,7 @@ extension _ImageCore {
         width: Int,
         height: Int,
         characterSet: ASCIICharacterSet,
+        shapeAware: Bool,
         colorMode: ASCIIColorMode,
         dithering: DitheringMode,
         supersampling: Int?,
@@ -330,6 +335,7 @@ extension _ImageCore {
             width: targetSize.width,
             height: targetSize.height,
             characterSet: characterSet,
+            shapeAware: shapeAware,
             colorMode: colorMode,
             dithering: dithering,
             supersampling: supersampling,
@@ -342,6 +348,7 @@ extension _ImageCore {
 
         let converter = ASCIIConverter(
             characterSet: characterSet,
+            shapeAware: shapeAware,
             colorMode: colorMode,
             dithering: dithering,
             supersampling: supersampling,
@@ -355,6 +362,7 @@ extension _ImageCore {
             width: targetSize.width,
             height: targetSize.height,
             characterSet: characterSet,
+            shapeAware: shapeAware,
             colorMode: colorMode,
             dithering: dithering,
             supersampling: supersampling,

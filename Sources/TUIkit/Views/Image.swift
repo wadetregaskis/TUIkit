@@ -88,9 +88,14 @@ extension Image: @preconcurrency Equatable {
 
 // MARK: - Environment Keys
 
-/// Environment key for the ASCII character set used by Image.
+/// Environment key for the glyph charset used by Image.
 private struct ImageCharacterSetKey: EnvironmentKey {
-    static let defaultValue: ASCIICharacterSet = .fineBlocks
+    static let defaultValue: ASCIICharacterSet = .blocks(.half)
+}
+
+/// Environment key for shape-aware glyph matching.
+private struct ImageShapeAwareKey: EnvironmentKey {
+    static let defaultValue: Bool = false
 }
 
 /// Environment key for the color mode used by Image.
@@ -179,6 +184,13 @@ extension EnvironmentValues {
         set { self[ImageCharacterSetKey.self] = newValue }
     }
 
+    /// Whether image glyphs are shape-matched — see
+    /// ``SwiftUICore/View/imageShapeAware(_:)``.
+    var imageShapeAware: Bool {
+        get { self[ImageShapeAwareKey.self] }
+        set { self[ImageShapeAwareKey.self] = newValue }
+    }
+
     /// The color mode for ASCII art rendering.
     var imageColorMode: ASCIIColorMode {
         get { self[ImageColorModeKey.self] }
@@ -265,12 +277,29 @@ extension EnvironmentValues {
 
 extension View {
 
-    /// Sets the character set for ASCII art image rendering.
+    /// Sets the glyph charset for image rendering — the fundamental
+    /// repertoire (``ASCIICharacterSet/ascii(glyphs:)`` /
+    /// ``ASCIICharacterSet/unicode(glyphs:)`` /
+    /// ``ASCIICharacterSet/blocks(_:)`` /
+    /// ``ASCIICharacterSet/customRamp(_:)``) and its size. Combine with
+    /// ``imageShapeAware(_:)`` to choose the rendering algorithm.
     ///
-    /// - Parameter characterSet: The character set to use.
+    /// - Parameter characterSet: The charset to use.
     /// - Returns: A modified view.
     public func imageCharacterSet(_ characterSet: ASCIICharacterSet) -> some View {
         environment(\.imageCharacterSet, characterSet)
+    }
+
+    /// Sets whether image glyphs are SHAPE-matched — each glyph chosen for
+    /// how its measured in-cell ink distribution fits the cell (a corner of
+    /// darkness picks a corner-heavy glyph; curved edges follow) — rather
+    /// than mapped from the cell's overall luminance alone.
+    ///
+    /// Applies to the `.ascii`, `.unicode`, and `.blocks` charsets (blocks
+    /// shape-match over quadrants / halves / shades / corner triangles
+    /// `◢◣◤◥`); a `.customRamp` is always luminance-mapped.
+    public func imageShapeAware(_ shapeAware: Bool = true) -> some View {
+        environment(\.imageShapeAware, shapeAware)
     }
 
     /// Sets the color mode for ASCII art image rendering.
@@ -281,27 +310,28 @@ extension View {
         environment(\.imageColorMode, colorMode)
     }
 
-    /// Sets the supersampling factor for the brightness-mapping character
-    /// sets (``ASCIICharacterSet/ascii`` / ``ASCIICharacterSet/asciiDetailed``
-    /// / ``ASCIICharacterSet/coarseBlocks`` /
-    /// ``ASCIICharacterSet/customRamp(_:)``): each output cell averages a
-    /// factor×factor block of source pixels, anti-aliasing the tone so a
-    /// longer ramp resolves smoother gradients. Clamped to 1...4. Pass `nil`
-    /// to restore each set's own default (1, except 2 for `.asciiDetailed`
-    /// and long custom ramps). Ignored by the sub-cell sets (blocks / shape /
-    /// braille), whose sampling grids are fixed by their glyphs.
+    /// Sets the supersampling factor for the luminance-mapping renderers
+    /// (the `.ascii` / `.unicode` / `.blocks(.coarse)` /
+    /// ``ASCIICharacterSet/customRamp(_:)`` charsets without
+    /// shape-awareness): each output cell averages a factor×factor block of
+    /// source pixels, anti-aliasing the tone so a longer ramp resolves
+    /// smoother gradients. Clamped to 1...4. Pass `nil` to restore the
+    /// default (2 for ramps longer than 12 levels, else 1). Ignored by the
+    /// sub-cell renderers (block subdivision, shape matching), whose
+    /// sampling grids are fixed by their glyphs.
     public func imageSupersampling(_ factor: Int?) -> some View {
         environment(\.imageSupersampling, factor)
     }
 
-    /// Sets the minimum Sobel gradient magnitude for a shape-mode cell
-    /// (``ASCIICharacterSet/shapeBased`` / ``ASCIICharacterSet/shapeUnicode``
-    /// / ``ASCIICharacterSet/unicodeDetailed``) to be drawn as a directional
-    /// line glyph (`─ │ ╱ ╲`) instead of its nearest coverage match. Lower
-    /// values trace more edges; the default `0.9` (in 0…1 region-darkness
-    /// units, practical range roughly 0.3…2) triggers on a clean light/dark
-    /// boundary across a cell. Pass `nil` to disable line glyphs entirely
-    /// (pure coverage matching).
+    /// Sets the minimum Sobel gradient magnitude for a shape-aware cell
+    /// (see ``imageShapeAware(_:)``) to be drawn as a directional line
+    /// glyph (`- | / \` for the ASCII charset, `─ │ ╱ ╲` for Unicode)
+    /// instead of its nearest coverage match. Lower values trace more
+    /// edges; the default `0.9` (in 0…1 region-darkness units, practical
+    /// range roughly 0.3…2) triggers on a clean light/dark boundary across
+    /// a cell. Pass `nil` to disable line glyphs entirely (pure coverage
+    /// matching). The shape-aware block repertoire carries its own
+    /// directional glyphs, so it does not trace edges.
     public func imageEdgeThreshold(_ threshold: Double?) -> some View {
         environment(\.imageEdgeThreshold, threshold)
     }

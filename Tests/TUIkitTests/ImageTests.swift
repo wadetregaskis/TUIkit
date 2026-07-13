@@ -194,7 +194,7 @@ struct ASCIIConverterTests {
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 100, b: 50), count: 100)
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
-        let converter = ASCIIConverter(characterSet: .coarseBlocks, colorMode: .trueColor, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .blocks(.coarse), colorMode: .trueColor, dithering: .none)
         let lines = converter.convert(image, width: 10, height: 5)
 
         #expect(lines.count == 5)
@@ -202,13 +202,13 @@ struct ASCIIConverterTests {
 
     @Test("Fine-block conversion uses two vertical pixels per cell")
     func fineBlocksUsesTwoPixelsPerCell() {
-        // Solid red image. With .fineBlocks the converter scales to
+        // Solid red image. With .blocks(.half) the converter scales to
         // (width, height*2) pixels and emits ▄ with a foreground = bottom
         // pixel and a background = top pixel for each cell.
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
         let image = RGBAImage(width: 8, height: 8, pixels: pixels)
         let converter = ASCIIConverter(
-            characterSet: .fineBlocks, colorMode: .trueColor, dithering: .none)
+            characterSet: .blocks(.half), colorMode: .trueColor, dithering: .none)
 
         withColorDepth(.truecolor) {
             let lines = converter.convert(image, width: 8, height: 4)
@@ -231,7 +231,7 @@ struct ASCIIConverterTests {
         for index in 50..<100 { pixels[index] = RGBA(r: 255, g: 255, b: 255) }
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
         let converter = ASCIIConverter(
-            characterSet: .shapeBased, colorMode: .mono, dithering: .none)
+            characterSet: .ascii, shapeAware: true, colorMode: .mono, dithering: .none)
         let stripped = converter.convert(image, width: 1, height: 1).first?.stripped ?? ""
         #expect(stripped.first == "-", "a top/bottom split is a horizontal edge: '\(stripped)'")
     }
@@ -243,7 +243,7 @@ struct ASCIIConverterTests {
         for index in 50..<100 { pixels[index] = RGBA(r: 0, g: 0, b: 0) }
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
         let converter = ASCIIConverter(
-            characterSet: .shapeBased, colorMode: .mono, dithering: .none)
+            characterSet: .ascii, shapeAware: true, colorMode: .mono, dithering: .none)
         let stripped = converter.convert(image, width: 1, height: 1).first?.stripped ?? ""
         #expect(stripped.first == "-", "a bottom/top split is a horizontal edge: '\(stripped)'")
     }
@@ -257,7 +257,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 4, height: 4, pixels: pixels)
 
         let converter = ASCIIConverter(
-            characterSet: .fineBlocks, colorMode: .mono, dithering: .none)
+            characterSet: .blocks(.half), colorMode: .mono, dithering: .none)
         let lines = converter.convert(image, width: 4, height: 2)
 
         #expect(lines.count == 2)
@@ -276,7 +276,7 @@ struct ASCIIConverterTests {
         let pixels = [RGBA](repeating: RGBA(r: 255, g: 255, b: 255), count: 400)
         let image = RGBAImage(width: 20, height: 20, pixels: pixels)
 
-        let converter = ASCIIConverter(characterSet: .braille, colorMode: .trueColor, dithering: .none)
+        let converter = ASCIIConverter(characterSet: .blocks(.braille), colorMode: .trueColor, dithering: .none)
         let lines = converter.convert(image, width: 10, height: 5)
 
         #expect(lines.count == 5)
@@ -321,7 +321,7 @@ struct ASCIIConverterTests {
         }
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
-        let converter = ASCIIConverter(characterSet: .coarseBlocks, colorMode: .ansi256, dithering: .floydSteinberg)
+        let converter = ASCIIConverter(characterSet: .blocks(.coarse), colorMode: .ansi256, dithering: .floydSteinberg)
         let lines = converter.convert(image, width: 10, height: 5)
 
         #expect(lines.count == 5)

@@ -12,7 +12,10 @@ import TUIkit
 /// Displays a bundled demo image and provides status bar items to
 /// cycle through character set, color mode, and dithering settings.
 struct ImageFilePage: View {
-    @State var charSetIndex: Int = 0
+    @State var charsetIndex: Int = ImageDemoHelpers.Charset.blocks.rawValue
+    @State var glyphCount: Int = 0
+    @State var blockResolutionIndex: Int = 0
+    @State var shapeAware: Bool = false
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
     @State var zoom: Double = 1.0
@@ -23,7 +26,8 @@ struct ImageFilePage: View {
 
     var body: some View {
         let charSet = ImageDemoHelpers.effectiveCharSet(
-            index: charSetIndex, customRamp: customRamp)
+            charsetIndex: charsetIndex, glyphCount: glyphCount,
+            blockResolutionIndex: blockResolutionIndex, customRamp: customRamp)
         let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
         let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
 
@@ -34,7 +38,10 @@ struct ImageFilePage: View {
         // changes the rendering knobs.
         VStack(alignment: .leading, spacing: 1) {
             ImageRenderingControls(
-                charSetIndex: $charSetIndex,
+                charsetIndex: $charsetIndex,
+                glyphCount: $glyphCount,
+                blockResolutionIndex: $blockResolutionIndex,
+                shapeAware: $shapeAware,
                 colorModeIndex: $colorModeIndex,
                 supersampling: $supersampling,
                 edgeLines: $edgeLines,
@@ -42,6 +49,7 @@ struct ImageFilePage: View {
                 customRamp: $customRamp)
             imageContent
                 .imageCharacterSet(charSet)
+                .imageShapeAware(shapeAware)
                 .imageColorMode(colorMode)
                 .imageDithering(dithering)
                 .imageSupersampling(supersampling == 0 ? nil : supersampling)
@@ -66,7 +74,7 @@ struct ImageFilePage: View {
     }
 
     private var statusBarItems: [any StatusBarItemProtocol] {
-        let charSetCount = ImageDemoHelpers.charSets.count
+        let charsetCount = ImageDemoHelpers.Charset.allCases.count
         let colorModeCount = ImageDemoHelpers.colorModes.count
         return [
             StatusBarItem(shortcut: Shortcut.escape, label: L("page.imageFile.back")),
@@ -75,10 +83,10 @@ struct ImageFilePage: View {
             // a single entry with the dual-key indicator.
             StatusBarItem(
                 shortcut: "c|C",
-                label: ImageDemoHelpers.charSetLabel(charSetIndex),
+                label: ImageDemoHelpers.charsetLabel(charsetIndex),
                 key: .character("c")
             ) {
-                charSetIndex = (charSetIndex + 1) % charSetCount
+                charsetIndex = (charsetIndex + 1) % charsetCount
             },
             StatusBarItem(
                 shortcut: "C",
@@ -86,7 +94,14 @@ struct ImageFilePage: View {
                 key: .character("C"),
                 displayInStatusBar: false
             ) {
-                charSetIndex = (charSetIndex - 1 + charSetCount) % charSetCount
+                charsetIndex = (charsetIndex - 1 + charsetCount) % charsetCount
+            },
+            // s toggles shape-aware glyph matching (no-op for custom ramps,
+            // which carry no shape calibration).
+            StatusBarItem(shortcut: "s", label: shapeAware ? "shape:on" : "shape:off") {
+                if ImageDemoHelpers.usesShape(charsetIndex: charsetIndex) {
+                    shapeAware.toggle()
+                }
             },
             StatusBarItem(
                 shortcut: "m|M",

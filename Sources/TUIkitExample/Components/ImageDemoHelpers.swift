@@ -9,27 +9,39 @@ import TUIkit
 
 /// Shared image demo configuration used by both `ImageFilePage` and `ImageURLPage`.
 enum ImageDemoHelpers {
-    static let charSets: [ASCIICharacterSet] = [
-        .fineBlocks, .blocks, .coarseBlocks, .ascii, .asciiDetailed,
-        .shapeBased, .shapeUnicode, .unicodeDetailed, .braille,
+    /// The fundamental charsets the demo exposes — the picker mirrors
+    /// ``ASCIICharacterSet``'s cases directly rather than a list of
+    /// pre-combined modes; size and shape-awareness are separate knobs.
+    enum Charset: Int, CaseIterable {
+        case ascii
+        case blocks
+        case unicode
+        case custom
+    }
+
+    /// The block charset's discrete resolutions, in demo cycling order
+    /// (the framework default `.half` first).
+    static let blockResolutions: [ASCIICharacterSet.BlockResolution] = [
+        .half, .solid, .coarse, .braille,
     ]
+
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
 
-    static func charSetLabel(_ index: Int) -> String {
-        // One past the built-in sets is the explicit "custom ramp" mode
-        // (see ImageRenderingControls / customCharSetIndex).
-        guard index < charSets.count else { return "chars:custom" }
-        switch charSets[index] {
+    static func charsetLabel(_ index: Int) -> String {
+        switch Charset(rawValue: index) ?? .ascii {
         case .ascii: return "chars:ascii"
-        case .asciiDetailed: return "chars:ascii+"
-        case .coarseBlocks: return "chars:coarseBlocks"
         case .blocks: return "chars:blocks"
-        case .fineBlocks: return "chars:fineBlocks"
-        case .shapeBased: return "chars:shape"
-        case .shapeUnicode: return "chars:shape+uni"
-        case .unicodeDetailed: return "chars:unicode+"
-        case .customRamp: return "chars:custom"
-        case .braille: return "chars:braille"
+        case .unicode: return "chars:unicode"
+        case .custom: return "chars:custom"
+        }
+    }
+
+    static func blockResolutionLabel(_ index: Int) -> String {
+        switch blockResolutions[min(index, blockResolutions.count - 1)] {
+        case .half: return "half"
+        case .solid: return "solid"
+        case .coarse: return "coarse"
+        case .braille: return "braille"
         }
     }
 
@@ -39,6 +51,76 @@ enum ImageDemoHelpers {
         case .ansi256: return "color:256"
         case .grayscale: return "color:gray"
         case .mono: return "color:mono"
+        }
+    }
+
+    // MARK: - The effective configuration
+
+    /// The ``ASCIICharacterSet`` the controls currently describe.
+    /// `glyphCount` 0 means the full repertoire; an empty custom ramp falls
+    /// back to a 10-glyph ASCII ramp so the demo never renders blank.
+    static func effectiveCharSet(
+        charsetIndex: Int, glyphCount: Int, blockResolutionIndex: Int, customRamp: String
+    ) -> ASCIICharacterSet {
+        let glyphs = glyphCount > 0 ? glyphCount : nil
+        switch Charset(rawValue: charsetIndex) ?? .ascii {
+        case .ascii:
+            return .ascii(glyphs: glyphs)
+        case .unicode:
+            return .unicode(glyphs: glyphs)
+        case .blocks:
+            return .blocks(blockResolutions[min(blockResolutionIndex, blockResolutions.count - 1)])
+        case .custom:
+            return customRamp.isEmpty ? .ascii(glyphs: 10) : .customRamp(customRamp)
+        }
+    }
+
+    // MARK: - Knob applicability
+
+    /// Shape-awareness applies to every charset except a custom ramp
+    /// (which carries no shape calibration).
+    static func usesShape(charsetIndex: Int) -> Bool {
+        Charset(rawValue: charsetIndex) != .custom
+    }
+
+    /// The glyph-count knob applies to the sizeable charsets.
+    static func usesGlyphCount(charsetIndex: Int) -> Bool {
+        switch Charset(rawValue: charsetIndex) ?? .ascii {
+        case .ascii, .unicode: return true
+        case .blocks, .custom: return false
+        }
+    }
+
+    /// The block-resolution knob applies to non-shape blocks (shape-aware
+    /// blocks match over the block glyph repertoire instead).
+    static func usesBlockResolution(charsetIndex: Int, shapeAware: Bool) -> Bool {
+        Charset(rawValue: charsetIndex) == .blocks && !shapeAware
+    }
+
+    /// Whether the configuration consumes the supersampling factor — the
+    /// luminance-ramp renderers (see `ASCIIConverter.convert`).
+    static func usesSupersampling(
+        charsetIndex: Int, blockResolutionIndex: Int, shapeAware: Bool
+    ) -> Bool {
+        switch Charset(rawValue: charsetIndex) ?? .ascii {
+        case .ascii, .unicode:
+            return !shapeAware
+        case .custom:
+            return true
+        case .blocks:
+            return !shapeAware
+                && blockResolutions[min(blockResolutionIndex, blockResolutions.count - 1)] == .coarse
+        }
+    }
+
+    /// Whether the configuration consumes the edge-tracing knobs — the
+    /// shape-aware ascii/unicode renderers (the block repertoire carries
+    /// its own directional glyphs).
+    static func usesEdgeTracing(charsetIndex: Int, shapeAware: Bool) -> Bool {
+        guard shapeAware else { return false }
+        switch Charset(rawValue: charsetIndex) ?? .ascii {
+        case .ascii, .unicode: return true
+        case .blocks, .custom: return false
         }
     }
 

@@ -4,7 +4,7 @@
 //  Pins the shape-sampling geometry shared by the runtime renderer and the
 //  offline calibration tool (Tools/GenerateImageGlyphs). `swift test` never runs
 //  that macOS/CoreText-only tool, so an edit to `ShapeSampling.swift` would
-//  silently desync the live runtime from the committed `generatedShapeCoverage`
+//  silently desync the live runtime from the committed `generatedGlyphCalibration`
 //  until someone regenerated on a Mac. These goldens are the cross-platform
 //  tripwire: change the geometry deliberately and they fail here (on macOS *and*
 //  Linux CI), reminding you to re-run `generate.sh` and update the goldens.

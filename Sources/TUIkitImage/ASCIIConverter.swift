@@ -18,120 +18,130 @@ enum ANSIEscape {
 
 // MARK: - Character Set
 
-/// The set of characters used for ASCII art rendering.
+/// The fundamental glyph charset used for image rendering.
 ///
-/// Each set trades off between compatibility and visual quality.
+/// Image rendering is the product of three orthogonal choices:
+///
+/// - **Charset** — which glyph repertoire: ``ascii(glyphs:)``,
+///   ``unicode(glyphs:)`` (which excludes the Block Elements — those belong
+///   to the dedicated block modes — and anything that won't respect the
+///   foreground colour), ``blocks(_:)``, or a ``customRamp(_:)``.
+/// - **Size** — how many glyphs. For `ascii` / `unicode` the `glyphs` count
+///   picks the IDEAL subset of the calibrated repertoire (density levels
+///   spread as evenly as possible, flattest glyph per level for luminance
+///   rendering; widest shape-space spread for shape-aware rendering);
+///   `nil` uses the full repertoire. For `blocks`, size is the discrete
+///   ``BlockResolution``.
+/// - **Shape-awareness** — on ``ASCIIConverter`` (and
+///   `View.imageShapeAware(_:)`): whether glyphs are matched by their
+///   measured in-cell ink DISTRIBUTION (a corner of darkness picks a
+///   corner-heavy glyph) rather than mapped from the cell's overall
+///   luminance alone. Applies to every charset except a custom ramp —
+///   including `blocks`, which shape-matches over the quadrant / half /
+///   shade / corner-triangle (`◢◣◤◥`) repertoire.
 public enum ASCIICharacterSet: Sendable, Equatable {
-    /// Standard ASCII characters (10 levels). Works in every terminal.
-    case ascii
 
-    /// A longer, perceptually-ordered ASCII ramp (~70 ink levels) rendered with
-    /// 2× per-cell supersampling (each cell averages a 2×2 block of source
-    /// pixels), for markedly finer tonal gradation than ``ascii`` at the same
-    /// cell resolution. Still pure ASCII, so it renders anywhere — but opt in,
-    /// since a very long ramp can band or reverse on fonts whose glyph ink
-    /// coverage isn't monotonic; ``ascii`` stays the safe universal default.
-    case asciiDetailed
+    /// The pixel-subdivision resolutions of the (non-shape-aware) block
+    /// modes — the block charset's discrete "size" axis.
+    public enum BlockResolution: Sendable, Equatable {
+        /// Shade glyphs (`" ░▒▓█"`) mapped from luminance, one image pixel
+        /// per cell. The lowest-resolution block mode, and the only one
+        /// whose tone survives a colourless terminal.
+        case coarse
 
-    /// Unicode block elements (5 shading levels), one glyph per cell.
-    /// Requires Unicode support.
+        /// Solid full-cell colour: each cell is one image pixel painted as
+        /// the cell **background** (a space, no glyph). Half the vertical
+        /// resolution of ``half`` but **gap-free**: with no block glyph it
+        /// never shows the inter-row seams some fonts leave when their
+        /// blocks rasterise a hair short of the cell (notably SF Mono in
+        /// macOS Terminal.app). On a colourless terminal there is no
+        /// background to fill, so it falls back to a `█` / space threshold.
+        case solid
+
+        /// Half-block cells (`▄`) with independent foreground / background
+        /// colours — two image pixels per cell, whose sub-cells are very
+        /// nearly square. The default block resolution.
+        ///
+        /// > Note: this paints pixels into BOTH the cell foreground and
+        /// > background, so a faithful image depends on the terminal drawing
+        /// > `▄` cleanly across the whole cell. The emitted grid is itself
+        /// > gap-free (pinned by `FineBlocksRenderTests`); seams come from
+        /// > the terminal's glyph rendering (e.g. Terminal.app + SF Mono).
+        /// > When a terminal bands, use ``solid``.
+        case half
+
+        /// Unicode Braille patterns: 2×4 dots per cell, 256 patterns.
+        /// The highest spatial resolution.
+        case braille
+    }
+
+    /// Printable ASCII. Works in every terminal.
     ///
-    /// This is the lowest-resolution block mode — each terminal cell encodes
-    /// a single image pixel by luminance, drawn with one of `" ░▒▓█"`. For
-    /// colour, prefer ``blocks`` (one solid-colour pixel per cell) or
-    /// ``fineBlocks`` (two per cell).
-    case coarseBlocks
+    /// - Parameter glyphs: How many glyphs to use — the ideal subset is
+    ///   chosen from the calibrated repertoire (95 glyphs; ~19 distinct
+    ///   density levels for luminance rendering). `nil` uses them all.
+    ///   `10` approximates the classic ASCII-art ramp.
+    case ascii(glyphs: Int?)
 
-    /// Solid full-cell colour: each terminal cell is one image pixel, painted
-    /// as the cell **background** (a space, no glyph). One pixel per cell — half
-    /// the vertical resolution of ``fineBlocks`` — but **gap-free**: because it
-    /// draws no block glyph, it never shows the thin inter-row seams that some
-    /// fonts leave when their block glyphs (`▄`, `█`, …) are rasterised a hair
-    /// short of the cell (notably SF Mono in macOS Terminal.app). Use this when
-    /// ``fineBlocks`` bands on the target terminal and you'd rather have a clean
-    /// image than the extra vertical detail.
+    /// ASCII plus non-block Unicode: box-drawing lines and corners,
+    /// geometric shapes, and every other calibrated glyph that is a single
+    /// cell wide and respects the foreground colour. Block Elements are
+    /// excluded — they belong to ``blocks(_:)``.
     ///
-    /// On a colourless terminal (``ASCIIColorMode/mono``) there is no background
-    /// to fill, so it falls back to a `█` / space luminance threshold.
-    case blocks
+    /// - Parameter glyphs: How many glyphs, as for ``ascii(glyphs:)``;
+    ///   `nil` uses the full repertoire.
+    case unicode(glyphs: Int?)
 
-    /// Half-block cells (`▄`) with independent foreground / background colours,
-    /// doubling the effective vertical resolution compared with
-    /// ``coarseBlocks``. This is the default character set.
-    ///
-    /// Each terminal cell encodes two image pixels — the top one is painted
-    /// as the cell's background, the bottom one as the foreground of the
-    /// lower-half block glyph. Because terminal characters are roughly twice
-    /// as tall as they are wide, the resulting sub-cell pixels are very
-    /// nearly square — vertical and horizontal resolutions match.
-    ///
-    /// Falls back gracefully on monochrome terminals: the two pixels are
-    /// thresholded against mid-luminance and drawn with space / `▀` / `▄` / `█`.
-    ///
-    /// > Note: `.fineBlocks` paints pixel data into BOTH the cell foreground
-    /// > and background, so a faithful image depends on the terminal drawing
-    /// > the block glyph (`▄`) cleanly across the whole cell. The emitted cell
-    /// > grid is itself gap-free — every cell carries a real foreground and
-    /// > background (pinned by `FineBlocksRenderTests`) — so thin seams between
-    /// > cells come from the terminal's glyph rendering, not the output. (One
-    /// > observed case: macOS Terminal.app + SF Mono rasterises the block
-    /// > glyphs a hair short of the cell, banding every row boundary — a
-    /// > terminal/font limitation no glyph choice fixes.) When a terminal bands,
-    /// > switch to ``blocks``, which fills the whole cell via the background
-    /// > colour and so has no glyph seams (at half the vertical resolution).
-    case fineBlocks
+    /// Unicode Block Elements, rendered by pixel subdivision at the given
+    /// ``BlockResolution`` — or, when the converter is shape-aware, by
+    /// shape-matching over the block repertoire (quadrants, halves,
+    /// shades, eighth ladders, and the corner triangles `◢◣◤◥`), in which
+    /// case the resolution is not used.
+    case blocks(BlockResolution)
 
-    /// Shape-based character lookup, after Alex Harri's "ASCII characters
-    /// are not pixels" (https://alexharri.com/blog/ascii-rendering).
-    ///
-    /// Each ASCII character carries a 6-dimensional shape vector that
-    /// quantifies how much of its cell's six staggered sampling circles
-    /// the glyph occupies. For each output cell the converter samples the
-    /// image at the same six points and picks the character whose shape
-    /// vector is closest by Euclidean distance — the result follows
-    /// curved edges far better than the per-cell-luminance approach
-    /// because the picked character itself carries directional shape
-    /// information.
-    ///
-    /// A cell carrying a strong directional edge (detected from a Sobel-style
-    /// gradient over its six sampling regions) is drawn with the orientation-
-    /// matched line glyph (`-`, `|`, `/`, `\`) rather than the nearest coverage
-    /// match, so edges read as clean lines; flat / textured cells still use the
-    /// coverage match.
-    case shapeBased
-
-    /// Like ``shapeBased`` but edges are drawn with Unicode box-drawing line
-    /// glyphs (`─ │ ╱ ╲`) instead of ASCII slashes, for noticeably cleaner
-    /// diagonals — at the cost of requiring a terminal/font with box-drawing
-    /// support. Non-edge cells use the same coverage glyphs as ``shapeBased``.
-    case shapeUnicode
-
-    /// Shape matching over a much WIDER Unicode glyph set: the ASCII shape
-    /// glyphs plus shades (`░▒▓█`), half blocks, quadrants (`▘▝▖▗▚▞…`), and
-    /// the eighth-block ladders (`▁▂▃…`, `▏▎▍…`) — every glyph's spatial ink
-    /// signature measured from the reference font by the calibration tool.
-    /// A cell whose darkness sits in one corner gets that corner's quadrant,
-    /// a bottom-heavy cell a partial block, an even mid-tone a shade — the
-    /// highest structural fidelity short of ``braille``, while keeping real
-    /// per-glyph tone. Edges use box-drawing lines like ``shapeUnicode``.
-    /// Requires a terminal/font with block-element support.
-    case unicodeDetailed
-
-    /// A caller-supplied luminance ramp for the brightness-mapping renderer,
-    /// ordered darkest pixel → brightest pixel: the FIRST character renders
-    /// black pixels (usually a space, so dark regions stay blank on a dark
-    /// terminal) and the LAST renders white ones (usually the densest glyph
-    /// — its ink carries the bright colour). Use this to tune the output to
-    /// a specific font or aesthetic (e.g. `" ·∘●"`, or a ramp measured for
-    /// your terminal's font) without waiting for a built-in preset. Long
-    /// ramps (over 20 levels) are rendered with the same 2× per-cell
-    /// supersampling as ``asciiDetailed``, unless ``ASCIIConverter`` is given
-    /// an explicit supersampling factor. An empty ramp falls back to
-    /// ``ascii``.
+    /// A caller-supplied luminance ramp, ordered darkest pixel → brightest
+    /// pixel: the FIRST character renders black pixels (usually a space,
+    /// so dark regions stay blank on a dark terminal) and the LAST renders
+    /// white ones. Use this to tune the output to a specific font or
+    /// aesthetic (e.g. `" ·∘●"`). Long ramps (over 12 levels) default to
+    /// 2× per-cell supersampling unless ``ASCIIConverter`` is given an
+    /// explicit factor. An empty ramp falls back to a 10-glyph ASCII ramp.
+    /// Always luminance-mapped — custom ramps carry no shape calibration,
+    /// so the converter's shape-awareness does not apply.
     case customRamp(String)
 
-    /// Unicode Braille patterns (2x4 pixel cells, 256 patterns). Highest resolution.
-    case braille
+    /// The full ASCII repertoire (`.ascii(glyphs: nil)`).
+    public static var ascii: Self { .ascii(glyphs: nil) }
+
+    /// The full non-block Unicode repertoire (`.unicode(glyphs: nil)`).
+    public static var unicode: Self { .unicode(glyphs: nil) }
+
+    /// Solid full-cell colour (`.blocks(.solid)`) — the historical meaning
+    /// of the bare `blocks` spelling.
+    public static var blocks: Self { .blocks(.solid) }
+
+    // MARK: Historical spellings
+
+    @available(*, deprecated, renamed: "ascii(glyphs:)", message: "the full ASCII repertoire is .ascii (or .ascii(glyphs: nil))")
+    public static var asciiDetailed: Self { .ascii(glyphs: nil) }
+
+    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.coarse)")
+    public static var coarseBlocks: Self { .blocks(.coarse) }
+
+    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.half)")
+    public static var fineBlocks: Self { .blocks(.half) }
+
+    @available(*, deprecated, renamed: "blocks(_:)", message: "use .blocks(.braille)")
+    public static var braille: Self { .blocks(.braille) }
+
+    @available(*, unavailable, message: "shape-awareness is a converter option now: use .ascii with ASCIIConverter(shapeAware: true) or .imageShapeAware(true)")
+    public static var shapeBased: Self { .ascii(glyphs: nil) }
+
+    @available(*, unavailable, message: "edge-line style follows the charset now: use .ascii or .unicode with shapeAware")
+    public static var shapeUnicode: Self { .unicode(glyphs: nil) }
+
+    @available(*, unavailable, message: "use .unicode with shapeAware (block glyphs moved to the shape-aware .blocks charset)")
+    public static var unicodeDetailed: Self { .unicode(glyphs: nil) }
 }
 
 // MARK: - Color Mode
@@ -174,8 +184,22 @@ public enum DitheringMode: Sendable, Equatable {
 /// 5. Colorize each character using the selected color mode
 public struct ASCIIConverter: Sendable {
 
-    /// The character set to use for brightness mapping.
+    /// The fundamental glyph charset (and its size).
     let characterSet: ASCIICharacterSet
+
+    /// Whether glyphs are matched by their measured in-cell ink
+    /// DISTRIBUTION (after Alex Harri's "ASCII characters are not pixels",
+    /// https://alexharri.com/blog/ascii-rendering) rather than mapped from
+    /// each cell's overall luminance. Each glyph carries a 6-region shape
+    /// vector measured from the reference font; each cell samples the image
+    /// at the same six staggered circles and picks the nearest glyph — so
+    /// the picked character itself carries directional information, and
+    /// curved edges read far better than a straight luminance map.
+    ///
+    /// Applies to the `.ascii`, `.unicode`, and `.blocks` charsets (the
+    /// block repertoire shape-matches over quadrants / halves / shades /
+    /// corner triangles); a `.customRamp` is always luminance-mapped.
+    let shapeAware: Bool
 
     /// The color mode for output.
     let colorMode: ASCIIColorMode
@@ -183,35 +207,40 @@ public struct ASCIIConverter: Sendable {
     /// The dithering algorithm (nil or .none means no dithering).
     let dithering: DitheringMode
 
-    /// Source-pixels-per-cell on each axis for the brightness-mapping
-    /// character sets (`.ascii` / `.asciiDetailed` / `.coarseBlocks` /
-    /// `.customRamp`): each output cell averages an N×N block of source
-    /// pixels, anti-aliasing the tone so a longer ramp resolves smoother
-    /// gradients. `nil` keeps each set's own default (1, except 2 for
-    /// `.asciiDetailed` and long custom ramps). Clamped to 1...4; higher
-    /// factors cost quadratically more sampling for no visible gain. Ignored
-    /// by the sub-cell sets (blocks / shape / braille), whose sampling grids
-    /// are fixed by their glyphs.
+    /// Source-pixels-per-cell on each axis for the luminance-mapping
+    /// renderers (`.ascii` / `.unicode` / `.blocks(.coarse)` /
+    /// `.customRamp`, without shape-awareness): each output cell averages
+    /// an N×N block of source pixels, anti-aliasing the tone so a longer
+    /// ramp resolves smoother gradients. `nil` keeps the default (2 for
+    /// ramps longer than 12 levels, else 1). Clamped to 1...4; higher
+    /// factors cost quadratically more sampling for no visible gain.
+    /// Ignored by the sub-cell renderers (block subdivision, shape
+    /// matching), whose sampling grids are fixed by their glyphs.
     let supersampling: Int?
 
     /// The minimum Sobel gradient magnitude (in 0…1 region-darkness units,
-    /// practical range roughly 0.3…2) for a shape-mode cell (`.shapeBased` /
-    /// `.shapeUnicode` / `.unicodeDetailed`) to be drawn as a directional
-    /// line glyph instead of its nearest coverage match. Lower values trace
-    /// more edges; `nil` disables line glyphs entirely (pure coverage
-    /// matching). The default 0.9 triggers on a clean light/dark boundary
-    /// across a cell while flat or lightly-textured cells fall through.
+    /// practical range roughly 0.3…2) for a shape-aware cell to be drawn
+    /// as a directional line glyph instead of its nearest coverage match.
+    /// Lower values trace more edges; `nil` disables line glyphs entirely
+    /// (pure coverage matching). The default 0.9 triggers on a clean
+    /// light/dark boundary across a cell while flat or lightly-textured
+    /// cells fall through. The line glyphs follow the charset — ASCII uses
+    /// `- | / \`, Unicode the box-drawing `─ │ ╱ ╲`; the shape-aware block
+    /// repertoire carries its own directional glyphs (halves, corner
+    /// triangles), so it does not trace edges.
     let edgeThreshold: Double?
 
     /// Creates a converter with the specified options.
     public init(
-        characterSet: ASCIICharacterSet = .fineBlocks,
+        characterSet: ASCIICharacterSet = .blocks(.half),
+        shapeAware: Bool = false,
         colorMode: ASCIIColorMode = .trueColor,
         dithering: DitheringMode = .none,
         supersampling: Int? = nil,
         edgeThreshold: Double? = 0.9
     ) {
         self.characterSet = characterSet
+        self.shapeAware = shapeAware
         self.colorMode = colorMode
         self.dithering = dithering
         self.supersampling = supersampling.map { min(4, max(1, $0)) }
@@ -270,32 +299,33 @@ extension ASCIIConverter {
         // terminal produces garbled output.
         let effectiveMode = colorMode.effective(for: ColorDepth.current)
 
-        // Each character set has its own sub-cell pixel grid.
-        //   .ascii / .coarseBlocks / .blocks : 1×1  (one pixel per cell)
-        //   .fineBlocks            : 1×2  (two vertical pixels per cell)
-        //   .shapeBased       : 5×10 (sampled at six staggered circles per cell)
-        //   .braille          : 2×4  (eight dots per cell)
-        // The brightness-mapping sets scale by the (configurable)
-        // supersampling factor instead.
+        // Each rendering path has its own sub-cell pixel grid:
+        //   luminance ramps        : 1×1, scaled by the supersampling factor
+        //   .blocks(.solid)        : 1×1  (one pixel per cell)
+        //   .blocks(.half)         : 1×2  (two vertical pixels per cell)
+        //   .blocks(.braille)      : 2×4  (eight dots per cell)
+        //   shape-aware (any)      : 5×10 (sampled at six staggered circles)
         let pixelWidth: Int
         let pixelHeight: Int
-        switch characterSet {
-        case .blocks:
-            pixelWidth = width
-            pixelHeight = height
-        case .ascii, .coarseBlocks, .asciiDetailed, .customRamp:
-            let factor = rampSupersampling
-            pixelWidth = width * factor
-            pixelHeight = height * factor
-        case .fineBlocks:
-            pixelWidth = width
-            pixelHeight = height * 2
-        case .shapeBased, .shapeUnicode, .unicodeDetailed:
+        if isShapeMatched {
             pixelWidth = width * 5
             pixelHeight = height * 10
-        case .braille:
-            pixelWidth = width * 2
-            pixelHeight = height * 4
+        } else {
+            switch characterSet {
+            case .blocks(.solid):
+                pixelWidth = width
+                pixelHeight = height
+            case .blocks(.half):
+                pixelWidth = width
+                pixelHeight = height * 2
+            case .blocks(.braille):
+                pixelWidth = width * 2
+                pixelHeight = height * 4
+            case .ascii, .unicode, .blocks(.coarse), .customRamp:
+                let factor = rampSupersampling
+                pixelWidth = width * factor
+                pixelHeight = height * factor
+            }
         }
 
         // Scale image to target pixel dimensions
@@ -306,45 +336,73 @@ extension ASCIIConverter {
             scaled = applyFloydSteinbergDithering(scaled, mode: effectiveMode)
         }
 
-        // Convert to ASCII lines
-        switch characterSet {
-        case .braille:
-            return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
-        case .fineBlocks:
-            return convertFineBlocks(scaled, width: width, height: height, mode: effectiveMode)
-        case .blocks:
-            return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
-        case .shapeBased:
-            return convertShapeBased(
-                scaled, width: width, height: height, mode: effectiveMode, unicodeEdges: false)
-        case .shapeUnicode:
-            return convertShapeBased(
-                scaled, width: width, height: height, mode: effectiveMode, unicodeEdges: true)
-        case .unicodeDetailed:
+        // Convert to lines.
+        if isShapeMatched {
+            let (columns, edge) = shapeConfiguration
             return convertShapeBased(
                 scaled, width: width, height: height, mode: effectiveMode,
-                unicodeEdges: true, wideUnicode: true)
-        case .ascii, .coarseBlocks, .asciiDetailed, .customRamp:
+                columns: columns, edge: edge)
+        }
+        switch characterSet {
+        case .blocks(.braille):
+            return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
+        case .blocks(.half):
+            return convertFineBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .blocks(.solid):
+            return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
+        case .ascii, .unicode, .blocks(.coarse), .customRamp:
             return convertCharacterBased(
                 scaled, width: width, height: height, mode: effectiveMode,
                 supersample: rampSupersampling)
         }
     }
 
-    /// The effective source-pixels-per-cell factor for the brightness-mapping
-    /// sets: the explicit ``supersampling`` when given, else the set's own
-    /// default — 2 for `.asciiDetailed` and long custom ramps (whose extra
-    /// tonal levels only resolve with averaged sampling), 1 otherwise.
+    /// Whether this conversion shape-matches: ``shapeAware`` requested AND
+    /// the charset carries shape calibration (a custom ramp does not).
+    var isShapeMatched: Bool {
+        guard shapeAware else { return false }
+        switch characterSet {
+        case .ascii, .unicode, .blocks:
+            return true
+        case .customRamp:
+            return false
+        }
+    }
+
+    /// The shape vocabulary and edge-line glyphs for the current charset:
+    /// the ideal `glyphs`-sized subset of its calibrated repertoire, and
+    /// charset-appropriate line glyphs (ASCII slashes, Unicode box drawing;
+    /// the block repertoire carries its own directional glyphs, so it does
+    /// not trace edges).
+    private var shapeConfiguration:
+        (ShapeTableColumns, (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?)
+    {
+        switch characterSet {
+        case .ascii(let glyphs):
+            return (
+                ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.ascii, count: glyphs)),
+                ("-", "|", "\\", "/"))
+        case .unicode(let glyphs):
+            return (
+                ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.unicode, count: glyphs)),
+                ("─", "│", "╲", "╱"))
+        case .blocks:
+            return (
+                ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.blockShapes)),
+                nil)
+        case .customRamp:
+            // Unreachable: `isShapeMatched` is false for custom ramps.
+            return (ShapeTableColumns([]), nil)
+        }
+    }
+
+    /// The effective source-pixels-per-cell factor for the luminance
+    /// renderers: the explicit ``supersampling`` when given, else 2 for
+    /// ramps longer than 12 levels (whose extra tonal levels only resolve
+    /// with averaged sampling) and 1 otherwise.
     private var rampSupersampling: Int {
         if let supersampling { return supersampling }
-        switch characterSet {
-        case .asciiDetailed:
-            return 2
-        case .customRamp(let ramp):
-            return ramp.count > 20 ? 2 : 1
-        default:
-            return 1
-        }
+        return characterRamp.count > 12 ? 2 : 1
     }
 }
 
@@ -480,26 +538,26 @@ extension ASCIIConverter {
             b: UInt8(bSum / count), a: UInt8(aSum / count))
     }
 
-    /// The character ramp for the current character set, from darkest to brightest.
+    /// The luminance ramp for the current charset, ordered dark pixel →
+    /// bright pixel — the ideal `glyphs`-level subset of the calibrated
+    /// repertoire (density levels spread as evenly as possible, flattest
+    /// glyph per level; see ``GlyphRepertoire/densityRamp(from:count:)``).
     private var characterRamp: [Character] {
         switch characterSet {
-        case .ascii:
-            return Array(" .:;+=xX$@")
-        case .asciiDetailed:
-            // A coverage-ordered, gap-free pure-ASCII ramp (light → dense),
-            // calibrated to the reference font's measured ink coverage by
-            // `Tools/GenerateImageGlyphs` (see ImageGlyphCalibration.generated.swift).
-            // Fewer but correctly ordered levels beat a longer ramp whose
-            // hand-picked ordering doesn't match this font's actual tones.
-            return generatedAsciiDetailedRamp
-        case .coarseBlocks:
+        case .ascii(let glyphs):
+            return GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: glyphs)
+        case .unicode(let glyphs):
+            return GlyphRepertoire.densityRamp(from: GlyphRepertoire.unicode, count: glyphs)
+        case .blocks(.coarse):
             return Array(" ░▒▓█")
         case .customRamp(let ramp):
             // Caller-supplied, ordered light → dense by contract; an empty
-            // ramp falls back to the classic ascii levels.
-            return ramp.isEmpty ? Array(" .:;+=xX$@") : Array(ramp)
-        case .blocks, .fineBlocks, .shapeBased, .shapeUnicode, .unicodeDetailed, .braille:
-            // Unused — these character sets have their own rendering paths.
+            // ramp falls back to a 10-level calibrated ASCII ramp.
+            return ramp.isEmpty
+                ? GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: 10)
+                : Array(ramp)
+        case .blocks:
+            // Unused — the other block resolutions have their own paths.
             return []
         }
     }

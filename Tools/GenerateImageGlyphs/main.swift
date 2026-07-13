@@ -167,11 +167,21 @@ let shapeGlyphs: [Character] = (0x20...0x7E).map { Character(UnicodeScalar($0)!)
 /// `generatedUnicodeShapeCoverage`, so the matcher can pick whichever
 /// family fits a cell best. Characters the reference font lacks natively
 /// are skipped at generation time (see `nativeGlyph`), so CoreText's
-/// font-fallback can't calibrate glyphs end-user fonts likely miss.
+/// font-fallback can't calibrate glyphs end-user fonts likely miss —
+/// except the `fallbackAllowedGlyphs`, measured through the fallback
+/// deliberately.
 let unicodeExtraGlyphs: [Character] = Array(
     "░▒▓█▀▄▌▐▔▕▁▂▃▅▆▇▉▊▋▍▎▏▘▝▖▗▚▞▛▜▙▟"
         + "─│┌┐└┘━┃┏┓┗┛═║╔╗╚╝╭╮╯╰╱╲╳"
         + "▲▼◀▶◤◥◣◢●○◦■□▪▫◆◇")
+
+/// Glyphs measured even when the reference font lacks them natively: the
+/// corner triangles are essential to the shape-aware BLOCKS repertoire
+/// (diagonal edges the quadrants can't express), ship in the common
+/// terminal fallback fonts (Menlo, Apple Symbols, DejaVu Sans Mono), and
+/// render correctly in Terminal.app via CoreText's own fallback — the very
+/// mechanism this raster path uses to measure them.
+let fallbackAllowedGlyphs: Set<Character> = ["◢", "◣", "◤", "◥"]
 
 // MARK: - Generate
 
@@ -188,39 +198,23 @@ func nativeGlyph(_ ch: Character) -> Bool {
 
 var skippedGlyphs: [Character] = []
 
-var shapeRows: [(Character, [Double])] = []
-for glyph in shapeGlyphs {
-    guard nativeGlyph(glyph) else {
+/// One calibrated row: the glyph, its TOTAL ink coverage over the whole
+/// cell (for density-ramp selection), and its 6-region shape vector (for
+/// shape matching and flatness scoring).
+typealias CalibratedRow = (glyph: Character, total: Double, regions: [Double])
+
+func calibrate(_ glyph: Character) -> CalibratedRow {
+    let ink = rasterInk(glyph)
+    return (glyph, totalCoverage(ink), shapeVector(ink))
+}
+
+var rows: [CalibratedRow] = []
+for glyph in shapeGlyphs + unicodeExtraGlyphs {
+    guard nativeGlyph(glyph) || fallbackAllowedGlyphs.contains(glyph) else {
         skippedGlyphs.append(glyph)
         continue
     }
-    shapeRows.append((glyph, shapeVector(rasterInk(glyph))))
-}
-
-var unicodeRows: [(Character, [Double])] = shapeRows
-for glyph in unicodeExtraGlyphs {
-    guard nativeGlyph(glyph) else {
-        skippedGlyphs.append(glyph)
-        continue
-    }
-    unicodeRows.append((glyph, shapeVector(rasterInk(glyph))))
-}
-
-// Coverage-ordered ASCII ramp: measure every printable ASCII glyph, sort by
-// coverage, drop near-duplicate coverages (they add banding, not levels), and
-// anchor with a leading space (zero ink).
-let epsilon = 0.010
-var ramp: [(Character, Double)] = []
-for code in 0x21...0x7E {  // '!'…'~'
-    let ch = Character(UnicodeScalar(code)!)
-    ramp.append((ch, totalCoverage(rasterInk(ch))))
-}
-ramp.sort { $0.1 < $1.1 }
-var rampGlyphs: [Character] = [" "]
-var lastCoverage = 0.0
-for (ch, coverage) in ramp where coverage - lastCoverage >= epsilon {
-    rampGlyphs.append(ch)
-    lastCoverage = coverage
+    rows.append(calibrate(glyph))
 }
 
 // MARK: - Emit
@@ -240,36 +234,21 @@ var out = """
 //  \(resolvedName) at \(Int(pointSize))pt (cell \(pxW)×\(pxH)px supersampled)
 //  and measuring ink coverage. See that tool for how and why.
 
-/// Per-glyph raw 6-region ink-coverage vectors for the shape renderer, measured
-/// from the reference font. Normalised at load by `computeShapeTable`.
-let generatedShapeCoverage: [(Character, [Double])] = [
+/// Every calibrated glyph: its TOTAL ink coverage over the whole cell (0…1,
+/// for density-ramp selection) and its raw 6-region coverage vector (for
+/// shape matching and flatness scoring; normalised at load). The runtime
+/// partitions this one table into the fundamental charsets by Unicode range
+/// — see `GlyphRepertoire`.
+let generatedGlyphCalibration: [(Character, Double, [Double])] = [
 
 """
-for (ch, vector) in shapeRows {
-    let literal = escaped(ch)
-    let values = vector.map(fmt).joined(separator: ", ")
-    out += "    (\(literal), [\(values)]),\n"
+for row in rows {
+    let literal = escaped(row.glyph)
+    let values = row.regions.map(fmt).joined(separator: ", ")
+    out += "    (\(literal), \(fmt(row.total)), [\(values)]),\n"
 }
 out += """
 ]
-
-/// Like `generatedShapeCoverage` but over the WIDE Unicode set backing
-/// `.unicodeDetailed`: the ASCII shape glyphs plus shades, half blocks,
-/// quadrants, and the eighth-block ladders.
-let generatedUnicodeShapeCoverage: [(Character, [Double])] = [
-
-"""
-for (ch, vector) in unicodeRows {
-    let literal = escaped(ch)
-    let values = vector.map(fmt).joined(separator: ", ")
-    out += "    (\(literal), [\(values)]),\n"
-}
-out += """
-]
-
-/// A coverage-ordered, gap-free pure-ASCII ramp (light → dense) calibrated to
-/// the reference font, backing `.asciiDetailed`.
-let generatedAsciiDetailedRamp: [Character] = Array(\(swiftStringLiteral(rampGlyphs)))
 
 """
 
@@ -281,36 +260,25 @@ func escaped(_ ch: Character) -> String {
     }
 }
 
-func swiftStringLiteral(_ chars: [Character]) -> String {
-    var s = "\""
-    for ch in chars {
-        switch ch {
-        case "\\": s += "\\\\"
-        case "\"": s += "\\\""
-        default: s += String(ch)
-        }
-    }
-    return s + "\""
-}
-
 let outputPath = "Sources/TUIkitImage/ImageGlyphCalibration.generated.swift"
 try! out.write(toFile: outputPath, atomically: true, encoding: .utf8)
 
-// Summary + sanity checks (T upper-heavy, _ lower-heavy; the quadrants must
-// put their ink in their own corner).
-func vec(_ ch: Character) -> [Double] { unicodeRows.first { $0.0 == ch }?.1 ?? [] }
+// Summary + sanity checks (T upper-heavy, _ lower-heavy; the quadrants and
+// corner triangles must put their ink in their own corner).
+func vec(_ ch: Character) -> [Double] { rows.first { $0.glyph == ch }?.regions ?? [] }
 let tVec = vec("T")
 let underscore = vec("_")
 let upperLeft = vec("▘")
 let lowerRight = vec("▗")
+let lowerRightTriangle = vec("◢")
 print("Reference font : \(resolvedName) \(Int(pointSize))pt  →  cell \(pxW)×\(pxH)px")
-print("Shape glyphs   : \(shapeRows.count) ascii, \(unicodeRows.count) unicode")
+print("Glyphs         : \(rows.count) calibrated")
 if !skippedGlyphs.isEmpty {
     print("Skipped (font) : \(String(skippedGlyphs)) — not native to the reference font")
 }
-print("ASCII ramp     : \(rampGlyphs.count) levels  '\(String(rampGlyphs))'")
 print("sanity  'T'    : upper \(fmt(tVec[0]))/\(fmt(tVec[1]))  lower \(fmt(tVec[4]))/\(fmt(tVec[5]))")
 print("sanity  '_'    : upper \(fmt(underscore[0]))/\(fmt(underscore[1]))  lower \(fmt(underscore[4]))/\(fmt(underscore[5]))")
 print("sanity  '▘'    : upper-L \(fmt(upperLeft[0])) vs upper-R \(fmt(upperLeft[1]))  lower-L \(fmt(upperLeft[4])) lower-R \(fmt(upperLeft[5]))")
+print("sanity  '◢'    : upper-L \(fmt(lowerRightTriangle[0])) vs lower-R \(fmt(lowerRightTriangle[5]))")
 print("sanity  '▗'    : upper-L \(fmt(lowerRight[0])) vs lower-R \(fmt(lowerRight[5]))")
 print("wrote \(outputPath)")

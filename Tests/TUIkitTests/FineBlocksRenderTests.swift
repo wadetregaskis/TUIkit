@@ -11,7 +11,7 @@ import Testing
 
 // MARK: - Fine-Block Grid Integrity
 //
-// `.fineBlocks` is the only image mode that encodes pixel data in the cell
+// `.blocks(.half)` is the only image mode that encodes pixel data in the cell
 // *background*: each cell is `▄` (Lower Half Block) painted with the bottom
 // pixel as foreground and the TOP pixel as the cell's background. The cell is
 // therefore filled edge-to-edge — top half = bg = top pixel, bottom half =
@@ -95,7 +95,7 @@ struct FineBlocksRenderTests {
     @Test("Converter paints every fine-block cell's background (no source gaps)")
     func converterPaintsEveryCell() {
         let converter = ASCIIConverter(
-            characterSet: .fineBlocks, colorMode: .trueColor, dithering: .none)
+            characterSet: .blocks(.half), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
             let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10)
             for (row, line) in lines.enumerated() {
@@ -110,7 +110,7 @@ struct FineBlocksRenderTests {
     @Test("Frame-diff line builder preserves every cell's background")
     func frameDiffPreservesBackgrounds() {
         let converter = ASCIIConverter(
-            characterSet: .fineBlocks, colorMode: .trueColor, dithering: .none)
+            characterSet: .blocks(.half), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
             let raw = converter.convert(gradientImage(40, 40), width: 20, height: 10)
             let buffer = FrameBuffer(lines: raw)
@@ -141,7 +141,7 @@ struct FineBlocksRenderTests {
         // Scrolling/zooming an image drops leading columns; the slice must replay
         // the SGR state so the first visible cell still has its background.
         let converter = ASCIIConverter(
-            characterSet: .fineBlocks, colorMode: .trueColor, dithering: .none)
+            characterSet: .blocks(.half), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
             let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10)
             for offset in [1, 3, 7, 13] {

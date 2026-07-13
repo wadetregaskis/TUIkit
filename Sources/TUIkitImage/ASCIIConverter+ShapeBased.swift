@@ -21,69 +21,33 @@
 
 // MARK: - Shape Vectors
 
-/// One pre-computed entry — a character paired with the 6D shape vector
-/// derived from its bitmap.
-private struct ShapeEntry {
-    let character: Character
-    let vector: [Double]  // length 6
-}
-
-/// Parallel-array view of a shape table: each of the six shape dimensions
-/// laid out contiguously, plus the characters themselves.
+/// Parallel-array view of a shape vocabulary: each of the six shape
+/// dimensions laid out contiguously, plus the characters themselves.
 ///
 /// The hot ``pickCharacter`` loop reads each dimension separately, so a
 /// per-dimension flat array gives better locality than indirecting through
 /// a struct-of-arrays.
+///
+/// Built from the pool-normalised `(glyph, vector)` entries
+/// ``GlyphRepertoire/shapeVocabulary(from:count:)`` selects — normalisation
+/// (each component divided by the pool's maximum, expanding the cluster to
+/// fill the unit cube, per the article's plot) happens there, against the
+/// WHOLE pool, so a sized-down vocabulary's vectors mean the same thing at
+/// every size.
 struct ShapeTableColumns {
     let t0: [Double], t1: [Double], t2: [Double]
     let t3: [Double], t4: [Double], t5: [Double]
     let characters: [Character]
 
-    fileprivate init(_ table: [ShapeEntry]) {
-        t0 = table.map { $0.vector[0] }
-        t1 = table.map { $0.vector[1] }
-        t2 = table.map { $0.vector[2] }
-        t3 = table.map { $0.vector[3] }
-        t4 = table.map { $0.vector[4] }
-        t5 = table.map { $0.vector[5] }
-        characters = table.map { $0.character }
+    init(_ entries: [(Character, [Double])]) {
+        t0 = entries.map { $0.1[0] }
+        t1 = entries.map { $0.1[1] }
+        t2 = entries.map { $0.1[2] }
+        t3 = entries.map { $0.1[3] }
+        t4 = entries.map { $0.1[4] }
+        t5 = entries.map { $0.1[5] }
+        characters = entries.map { $0.0 }
     }
-}
-
-// The pre-computed (and normalised) shape tables — the ASCII set behind
-// `.shapeBased` / `.shapeUnicode`, and the wide Unicode set (blocks,
-// quadrants, shades, eighth-block ladders + the ASCII glyphs) behind
-// `.unicodeDetailed`. Built once on first access and reused across every
-// conversion call; materialising the column views up front spares seven
-// allocations per convert call.
-let asciiShapeColumns = ShapeTableColumns(computeShapeTable(raw: generatedShapeCoverage))
-let unicodeShapeColumns = ShapeTableColumns(computeShapeTable(raw: generatedUnicodeShapeCoverage))
-
-private func computeShapeTable(raw: [(Character, [Double])]) -> [ShapeEntry] {
-    // Raw per-region coverage vectors measured from the reference font by
-    // `Tools/GenerateImageGlyphs` (see ImageGlyphCalibration.generated.swift),
-    // sampled at the same six circles the runtime uses.
-
-    // Normalise each component by the maximum value across all characters,
-    // so the cluster of vectors expands to fill the unit cube — without
-    // this step every sample lookup would gravitate to a small handful of
-    // characters in one corner of the space (per the article's plot).
-    var maxima = [Double](repeating: 0, count: ShapeRegion.centres.count)
-    for (_, vector) in raw {
-        for index in vector.indices where vector[index] > maxima[index] {
-            maxima[index] = vector[index]
-        }
-    }
-    var entries: [ShapeEntry] = []
-    entries.reserveCapacity(raw.count)
-    for (character, vector) in raw {
-        let normalised = vector.enumerated().map { index, value -> Double in
-            let max = maxima[index]
-            return max > 0 ? value / max : 0
-        }
-        entries.append(ShapeEntry(character: character, vector: normalised))
-    }
-    return entries
 }
 
 // MARK: - Conversion
@@ -105,24 +69,23 @@ extension ASCIIConverter {
     /// 96 trig calls per cell, which made larger images visibly slow.
     /// Foreground colour is averaged from the same sampled pixels rather
     /// than from a second full-cell scan.
+    ///
+    /// - Parameters:
+    ///   - columns: The shape vocabulary (pool-normalised, from
+    ///     ``GlyphRepertoire/shapeVocabulary(from:count:)``).
+    ///   - edge: The line glyphs for strongly-directional (edge) cells, or
+    ///     `nil` when the vocabulary carries its own directional glyphs
+    ///     (the block repertoire's halves and corner triangles) and edges
+    ///     should fall through to the coverage match.
     func convertShapeBased(
         _ image: RGBAImage,
         width: Int,
         height: Int,
         mode: ASCIIColorMode,
-        unicodeEdges: Bool = false,
-        wideUnicode: Bool = false
+        columns: ShapeTableColumns,
+        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?
     ) -> [String] {
-        // The glyph table: the ASCII shape set, or the wide Unicode set
-        // (blocks/quadrants/shades + the ASCII glyphs) for `.unicodeDetailed`.
-        let columns = wideUnicode ? unicodeShapeColumns : asciiShapeColumns
         guard !columns.characters.isEmpty else { return [] }
-
-        // The line glyphs used for a strongly-directional (edge) cell: ASCII
-        // slashes, or Unicode box-drawing for the `.shapeUnicode` /
-        // `.unicodeDetailed` modes.
-        let edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character) =
-            unicodeEdges ? ("─", "│", "╲", "╱") : ("-", "|", "\\", "/")
 
         // Each cell of the output covers `cellPixelWidth × cellPixelHeight`
         // pixels of the (pre-scaled) source image.
@@ -281,7 +244,7 @@ extension ASCIIConverter {
 
     /// Returns the line glyph matching a cell's dominant edge orientation, or
     /// `nil` when the cell carries no strong directional edge (or edge glyphs
-    /// are disabled: `threshold` `nil`).
+    /// are disabled: `threshold` or `edge` `nil`).
     ///
     /// The gradient is a Sobel-style difference over the six staggered darkness
     /// regions (`[0][1]` top / `[2][3]` middle / `[4][5]` bottom): `gx` is the
@@ -291,10 +254,10 @@ extension ASCIIConverter {
     /// vector already sampled for the coverage match, so it adds no image reads.
     fileprivate static func orientationGlyph(
         sampling: [Double],
-        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character),
+        edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?,
         threshold: Double?
     ) -> Character? {
-        guard let threshold else { return nil }
+        guard let threshold, let edge else { return nil }
         let gx = (sampling[0] + sampling[2] + sampling[4]) - (sampling[1] + sampling[3] + sampling[5])
         let gy = (sampling[0] + sampling[1]) - (sampling[4] + sampling[5])
         guard (gx * gx + gy * gy).squareRoot() >= threshold else { return nil }

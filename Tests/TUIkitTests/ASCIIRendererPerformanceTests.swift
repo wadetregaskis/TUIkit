@@ -50,10 +50,10 @@ struct ASCIIRendererPerformanceTests {
         // 160 × 80 source pixels → 80 × 40 cells (2:1 cell ratio is typical
         // for fixed-width terminal cells).
         let image = makeSyntheticImage(width: 320, height: 160)
-        let converter = ASCIIConverter()
+        let converter = ASCIIConverter(characterSet: .ascii, shapeAware: true)
 
         let perCall = measure(10) {
-            _ = converter.convertShapeBased(image, width: 80, height: 40, mode: .grayscale)
+            _ = converter.convert(image, width: 80, height: 40)
         }
         let label = String(format: "%.3fms", perCall * 1000)
         print("=== Shape-vector ASCII Performance ===")
