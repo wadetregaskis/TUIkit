@@ -125,7 +125,32 @@ public struct OverlayLayer: Sendable, Equatable {
     /// *above* its anchor (when ``anchorHeight`` allows); otherwise it is nudged
     /// back up. The same nudge keeps it within the right edge.
     public func placed(maxWidth: Int, maxHeight: Int) -> (content: FrameBuffer, x: Int, y: Int) {
-        let clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
+        var clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
+        // `clamped(toWidth:height:)` deliberately keeps ALL hit-test regions —
+        // in-flow clamping must never discard them, because the root compositor
+        // re-places them. Here the clip is FINAL: rows/columns beyond it are
+        // never drawn, so their regions must not stay clickable (a click below
+        // a short terminal's too-tall dialog — e.g. on the status bar, whose
+        // events arrive with y >= contentHeight — would activate an invisible
+        // row). Trim every region to the clip, dropping the fully clipped.
+        if content.height > maxHeight || content.width > maxWidth {
+            clamped.hitTestRegions = clamped.hitTestRegions.compactMap { region -> HitTestRegion? in
+                let right = min(region.offsetX + region.width, maxWidth)
+                let bottom = min(region.offsetY + region.height, maxHeight)
+                guard right > region.offsetX, bottom > region.offsetY else { return nil }
+                if right == region.offsetX + region.width,
+                    bottom == region.offsetY + region.height {
+                    return region
+                }
+                return HitTestRegion(
+                    offsetX: region.offsetX,
+                    offsetY: region.offsetY,
+                    width: right - region.offsetX,
+                    height: bottom - region.offsetY,
+                    handlerID: region.handlerID,
+                    focusID: region.focusID)
+            }
+        }
         let height = clamped.height
         let width = clamped.width
 
