@@ -128,6 +128,7 @@ struct SplitViewPage: View {
     @State private var selectedMessage: String? = "1"
     @State private var visibility: NavigationSplitViewVisibility = .all
     @State private var styleName: String = "balanced"
+    @State private var resizable: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -144,6 +145,13 @@ struct SplitViewPage: View {
             .pickerStyle(.radioGroup)
             .padding(.horizontal, 1)
 
+            // Divider resizing is a configurable option. Size-to-fit recomputes
+            // its widths from content every frame, so it is inherently
+            // non-resizable — the toggle is disabled there to reflect that.
+            Toggle(L("page.splitView.resizable"), isOn: $resizable)
+                .disabled(styleName == "sizeToFit")
+                .padding(.horizontal, 1)
+
             styledSplitView
         }
         .appHeader {
@@ -154,6 +162,11 @@ struct SplitViewPage: View {
     /// The shared three-column split view with the currently-selected
     /// ``NavigationSplitViewStyle`` applied.
     @ViewBuilder private var styledSplitView: some View {
+        styledSplitViewCore
+            .navigationSplitViewResizable(resizable)
+    }
+
+    @ViewBuilder private var styledSplitViewCore: some View {
         switch styleName {
         case "automatic":
             splitView.navigationSplitViewStyle(.automatic)

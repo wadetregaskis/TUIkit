@@ -230,8 +230,15 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
 
         // Resizable columns (the default) persist a user-chosen width per
         // non-trailing column and expose a draggable / focusable divider.
+        // A size-to-fit style recomputes its widths from content every frame, so
+        // there is no persisted width for a drag to act on — a resizable
+        // size-to-fit split is contradictory. Force it non-resizable so the
+        // divider draws no grip dots and takes no focus (the wireDivider /
+        // buildDividerColumn guards below already do this once `resizable` is
+        // false).
         let resizable =
             context.environment.navigationSplitViewResizable
+            && !style.sizesToFit
             && context.environment.stateStorage != nil
         let widths: SplitViewWidths? = resizable
             ? context.environment.stateStorage!.storage(
