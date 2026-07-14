@@ -310,6 +310,66 @@ struct FrameDiffWriterTerminalGatingTests {
     }
 }
 
+@Suite("Cursor-advance models (DSR-measured)")
+@MainActor
+struct CursorAdvanceModelTests {
+    // All values below were measured by DSR cursor-position queries in the
+    // real terminals (Terminal.app 455.1, iTerm2 3.6.11, macOS 15.7) — see
+    // Documentation/Terminal-compatibility.md.
+
+    @Test("Terminal.app: a flag PAIR advances its full width (no CUF)")
+    func appleFlagPairAdvancesFullWidth() {
+        let pair = Character("\u{1F1FA}\u{1F1F8}")  // 🇺🇸
+        #expect(pair.terminalAppCursorAdvance == 2)
+        #expect(pair.terminalWidth == 2)
+        // A LONE regional indicator still under-advances.
+        let lone = Character("\u{1F1E6}")
+        #expect(lone.terminalAppCursorAdvance == 1)
+        #expect(lone.terminalWidth == 2)
+        // So a compensated line CUFs after the lone indicator but NOT after
+        // the pair (the old model CUF'd both, shoving content after a flag
+        // one cell right).
+        let line = "\u{1F1FA}\u{1F1F8}x".withTerminalAppCursorCompensation()
+        #expect(!line.contains("\u{1B}[1C"), "|\(line)|")
+    }
+
+    @Test("iTerm2: keycaps and Plane-16 PUA under-advance; VS-16 emoji do not")
+    func iTerm2AdvanceModel() {
+        #expect(Character("1\u{FE0F}\u{20E3}").iTerm2CursorAdvance == 1)  // 1️⃣
+        #expect(Character("#\u{FE0F}\u{20E3}").iTerm2CursorAdvance == 1)
+        #expect(Character("1\u{20E3}").iTerm2CursorAdvance == 1)          // bare keycap
+        #expect(Character("\u{100038}").iTerm2CursorAdvance == 1)         // SF symbol
+        #expect(Character("\u{2764}\u{FE0F}").iTerm2CursorAdvance == 2)  // ❤️
+        #expect(Character("\u{270F}\u{FE0F}").iTerm2CursorAdvance == 2)  // ✏️
+        #expect(Character("\u{1F1FA}\u{1F1F8}").iTerm2CursorAdvance == 2)  // 🇺🇸
+        #expect(Character("\u{1F44D}").iTerm2CursorAdvance == 2)          // 👍
+    }
+
+    @Test("iTerm2 compensation CUFs keycaps and PUA, leaves VS-16 alone")
+    func iTerm2CompensationWalk() {
+        let keycap = "a1\u{FE0F}\u{20E3}b".withITerm2CursorCompensation()
+        #expect(keycap == "a1\u{FE0F}\u{20E3}\u{1B}[1Cb", "|\(keycap)|")
+        let pua = "[\u{100038}]".withITerm2CursorCompensation()
+        #expect(pua == "[\u{100038}\u{1B}[1C]", "|\(pua)|")
+        let heart = "[\u{2764}\u{FE0F}]".withITerm2CursorCompensation()
+        #expect(heart == "[\u{2764}\u{FE0F}]", "no CUF for VS-16 on iTerm2: |\(heart)|")
+        // ANSI escapes pass through; pure ASCII is the identity fast path.
+        let styled = "\u{1B}[31m\u{100038}\u{1B}[0m".withITerm2CursorCompensation()
+        #expect(styled == "\u{1B}[31m\u{100038}\u{1B}[1C\u{1B}[0m", "|\(styled)|")
+        #expect("plain".withITerm2CursorCompensation() == "plain")
+    }
+
+    @Test("The writer's iTerm2 path applies strip THEN compensation")
+    func writerITerm2PathComposes() {
+        let line = FrameDiffWriter(isAppleTerminal: false, isITerm2: true).buildOutputLines(
+            buffer: FrameBuffer(text: "\u{1F44D}\u{1F3FD} \u{100038} x"),
+            terminalWidth: 30, terminalHeight: 1, bgCode: "", reset: ""
+        )[0]
+        #expect(!line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
+        #expect(line.contains("\u{100038}\u{1B}[1C"), "PUA compensated: |\(line)|")
+    }
+}
+
 @Suite("FrameDiffWriter iTerm2 skin-tone fallback")
 @MainActor
 struct FrameDiffWriterITerm2GatingTests {

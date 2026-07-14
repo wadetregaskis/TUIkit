@@ -255,15 +255,19 @@ extension FrameDiffWriter {
         let (clipped, clippedWidth) = isAppleTerminal
             ? sanitized.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: terminalWidth)
             : sanitized.ansiAwarePrefixWithWidth(visibleCount: terminalWidth)
-        // iTerm2 needs no cursor compensation, but it draws a Fitzpatrick
-        // skin-tone modifier as a SEPARATE swatch beside the base — 4 painted
-        // cells against the 2 the layout allocated — so its path strips the
-        // modifiers (generic-yellow fallback) to restore the 2-cell claim.
+        // iTerm2 draws a Fitzpatrick skin-tone modifier as a SEPARATE swatch
+        // beside the base — 4 painted cells against the 2 the layout
+        // allocated — so its path strips the modifiers (generic-yellow
+        // fallback) to restore the 2-cell claim; it then compensates its own
+        // (small) set of under-advancers — keycaps and SF-Symbol PUA glyphs —
+        // with CUF, exactly as the Apple path does for Terminal.app's larger
+        // set. Both advance models are DSR-measured; see
+        // Documentation/Terminal-compatibility.md.
         let compensated =
             if isAppleTerminal {
                 clipped.withTerminalAppCursorCompensation()
             } else if isITerm2 {
-                clipped.withSkinToneFallback()
+                clipped.withSkinToneFallback().withITerm2CursorCompensation()
             } else {
                 clipped
             }

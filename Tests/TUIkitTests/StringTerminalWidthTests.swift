@@ -220,18 +220,20 @@ struct CharacterTerminalAppCursorAdvanceTests {
         #expect(ch.terminalAppCursorAdvance == ch.terminalWidth)
     }
 
-    @Test("Flag emoji (regional-indicator pair): cursor advance is 1")
+    @Test("Flag emoji (regional-indicator pair): cursor advance equals width")
     func flagEmojiCursorAdvance() {
         // Flag emoji are formed by two regional-indicator scalars
-        // (U+1F1E6…U+1F1FF). Terminal.app paints the flag as a 2-cell
-        // glyph but only advances the cursor by 1, so subsequent
-        // characters on the row would otherwise land one cell to the left.
+        // (U+1F1E6…U+1F1FF). Terminal.app paints the flag as a 2-cell glyph
+        // AND advances the cursor by 2 — DSR-measured on Terminal.app 455.1
+        // (macOS 15.7); see Documentation/Terminal-compatibility.md. An
+        // earlier model treated the pair like a LONE indicator (advance 1),
+        // and the spurious CUF shoved everything after a flag a cell right.
         for flag in ["🇺🇸", "🇬🇧", "🇩🇪", "🇯🇵", "🇫🇷"] {
             let ch = Character(flag)
             #expect(ch.terminalWidth == 2, "\(flag) paints 2 cells")
             #expect(
-                ch.terminalAppCursorAdvance == 1,
-                "\(flag) cursor advances by only 1 in Terminal.app")
+                ch.terminalAppCursorAdvance == 2,
+                "\(flag) advances its full width in Terminal.app 455.1")
         }
     }
 
@@ -279,18 +281,18 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
     }
 
-    @Test("Flag emoji followed by content: CUF(1) emitted")
-    func flagFollowedByContentEmitsCUF() {
-        // 🇺🇸 paints 2 cells but advances Terminal.app's cursor by only 1,
-        // so a CUF(1) must be injected after the cluster to push the cursor
-        // to the visual right edge of the flag — otherwise the next
-        // character on the row sits one cell to the left of where the
-        // column accounting expects it.
+    @Test("Flag emoji followed by content: no CUF (pair advances its full width)")
+    func flagFollowedByContentEmitsNoCUF() {
+        // 🇺🇸 paints 2 cells AND advances 2 — DSR-measured on Terminal.app
+        // 455.1 (see Documentation/Terminal-compatibility.md). The old model
+        // treated the pair like a LONE regional indicator (advance 1), and
+        // the spurious CUF shoved everything after a flag one cell right.
         let s = "from 🇺🇸 today"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(
-            result.contains("\u{1B}[1C"),
-            "CUF(1) emitted after a flag emoji to compensate for the under-advance")
+        #expect(result == s, "no compensation for a full-width-advancing flag pair: |\(result)|")
+        // A LONE indicator still under-advances and still gets its CUF.
+        let lone = "at \u{1F1E6} end".withTerminalAppCursorCompensation()
+        #expect(lone.contains("\u{1B}[1C"), "|\(lone)|")
     }
 
     @Test("Skin-tone emoji followed by content: Fitzpatrick scalar stripped")
