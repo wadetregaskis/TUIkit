@@ -216,18 +216,30 @@ non-default setup.
 - **Cell aspect ratio (image distortion):** iTerm2's cell height:width
   ratio differs from Apple Terminal's (font + line-spacing dependent), so
   an `Image` sized for a fixed 2:1 assumption looked horizontally squished
-  here (user-reported; exact ratio **not yet measured** — run
-  `cell_aspect_probe.py` in each terminal to capture it). **Defence:**
-  `ASCIIConverter.targetSize` now takes a `cellAspect` parameter (default
-  `2.0` ≈ Apple Terminal), threaded from `environment.imageCellAspect`.
-  The render root auto-detects the real ratio from `TIOCGWINSZ`
-  `ws_xpixel`/`ws_ypixel` (`Terminal.cellPixelAspect()`) when the terminal
-  reports them; whether iTerm2/Terminal.app populate those pixel fields on
-  macOS is **unverified** (historically 0). If they don't, the
-  `.imageCellAspect(_:)` modifier sets it explicitly. *Verify with
-  `cell_aspect_probe.py`: it prints both the ioctl-pixel and CSI-14t/18t
-  derived ratios; record iTerm2's and Apple Terminal's measured values
-  here once captured.*
+  here (user-reported). **Measured** with `cell_aspect_probe.py`
+  (2026-07-14, default fonts/profiles):
+
+  | Terminal | ioctl `TIOCGWINSZ` px fields | CSI `14t`/`18t` | aspect (ioctl / CSI) |
+  |---|---|---|---|
+  | Apple_Terminal 455.1 | 215×54 ch, 1505×756 px → 7.00×14.00 px/cell | 1515×763 px → 7.05×14.13 | **2.000** / 2.005 |
+  | iTerm.app 3.6.11 | 80×25 ch, 1120×850 px → 14.00×34.00 px/cell | 570×458 px → 7.12×18.32 | **2.429** / 2.571 |
+
+  Both terminals DO populate the `ws_xpixel`/`ws_ypixel` fields (the
+  historical-zero concern did not reproduce), so the render root's
+  auto-detection is live on both. Apple Terminal's two reports agree
+  (2.000 ≈ 2.005) and match the framework's 2.0 default exactly. iTerm2's
+  two reports **disagree by ~6%** (ioctl 2.429 vs CSI 2.571): the CSI
+  report is self-consistent in points, while the ioctl fields look like a
+  differently-rounded (retina-scaled) cell metric — either confirms iTerm2
+  is meaningfully taller than 2:1, and the ~6% residual between them is
+  visually minor. **Defence:** `ASCIIConverter.targetSize` takes a
+  `cellAspect` parameter (default `2.0` ≈ Apple Terminal), threaded from
+  `environment.imageCellAspect`; the render root auto-detects via
+  `Terminal.cellPixelAspect()` (ioctl-based → 2.43 on this iTerm2, within
+  the 1.0…4.0 sanity band), and `.imageCellAspect(_:)` overrides
+  explicitly. *Residual: if circles still look slightly tall on iTerm2,
+  the CSI-derived 2.57 is the candidate correction — verify by eye with a
+  known-square image before switching sources.*
 
 ---
 

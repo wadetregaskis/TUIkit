@@ -54,9 +54,6 @@ extension Color {
 // MARK: - Private Helpers
 
 extension Color {
-    /// The 6 channel levels used by the 256-color RGB cube (indices 16–231).
-    fileprivate static let cubeChannelLevels: [UInt8] = [0, 95, 135, 175, 215, 255]
-
     /// Finds the nearest 256-color palette index for an RGB color.
     ///
     /// "Nearest" is perceptual, not per-channel: candidates (the whole 6×6×6

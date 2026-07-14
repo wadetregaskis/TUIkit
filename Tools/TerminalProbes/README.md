@@ -2,7 +2,8 @@
 
 Reproducible measurement tools behind `Documentation/Terminal-compatibility.md`.
 Run each INSIDE the terminal under test; the recording probes (advance,
-mouse) write to `$PROBE_OUT`, the visual/aspect probes print to the terminal.
+mouse) write to `$PROBE_OUT` (mouse falls back to `./mouse_probe.log`
+when unset), the visual/aspect probes print to the terminal.
 
 - `advance_probe.py` — DSR (`ESC[6n`) cursor-advance measurement of a
   grapheme-cluster battery + terminal-relevant environment dump (JSON).

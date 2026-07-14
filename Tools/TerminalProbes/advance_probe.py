@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Terminal output-behaviour probe: measures the CURSOR ADVANCE of a battery
 of grapheme clusters using DSR (ESC[6n), and dumps the environment.
-Writes JSON to $PROBE_OUT. Run INSIDE the terminal under test."""
+Writes JSON to $PROBE_OUT (default: ./advance_probe.json). Run INSIDE the
+terminal under test."""
 import json, os, sys, termios, tty
 
 BATTERY = {
@@ -81,7 +82,7 @@ def cursor_col(fd):
     return int(col)
 
 def main():
-    out_path = os.environ["PROBE_OUT"]
+    out_path = os.environ.get("PROBE_OUT", "advance_probe.json")
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     results = {}

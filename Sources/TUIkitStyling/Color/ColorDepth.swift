@@ -62,16 +62,56 @@ public enum ColorDepth: Int, Sendable, Comparable {
 // MARK: - Detection
 
 extension ColorDepth {
-    /// The color depth to use for rendering.
-    ///
-    /// Automatically detected from environment variables at launch.
-    /// Assign a value to override detection.
+    /// The process-wide colour depth, before any task-local pin.
     ///
     /// `nonisolated(unsafe)` is intentional: the value is set once during
     /// initialization (from environment variables that don't change) and
     /// read from the render path. Any override is expected before rendering
     /// starts.
-    nonisolated(unsafe) public static var current: ColorDepth = detect()
+    nonisolated(unsafe) private static var processCurrent: ColorDepth = detect()
+
+    /// A task-scoped pin of ``current``, bound by ``withCurrent(_:operation:)``.
+    ///
+    /// Task-local rather than a plain global so a scoped pin — a test
+    /// asserting on rendered colour, a subtree deliberately rendered at a
+    /// different depth — is visible ONLY to work on the pinning task.
+    /// Parallel tasks (notably Swift Testing's parallel test runner) keep
+    /// seeing the process value; a global mutate-and-restore would bleed a
+    /// pinned depth into every concurrently-rendering test.
+    @TaskLocal private static var taskCurrent: ColorDepth?
+
+    /// The color depth to use for rendering.
+    ///
+    /// Automatically detected from environment variables at launch.
+    /// Assign a value to override detection process-wide (expected before
+    /// rendering starts); use ``withCurrent(_:operation:)`` for a scoped,
+    /// task-local pin.
+    public static var current: ColorDepth {
+        get { taskCurrent ?? processCurrent }
+        set { processCurrent = newValue }
+    }
+
+    /// Runs `operation` with ``current`` pinned to `depth` on the current
+    /// task, restoring the previous behaviour afterwards.
+    ///
+    /// The pin is task-local: concurrent tasks are unaffected, so parallel
+    /// test runs can each pin their own depth without serialization.
+    @discardableResult
+    public static func withCurrent<T>(
+        _ depth: ColorDepth, operation: () throws -> T
+    ) rethrows -> T {
+        try $taskCurrent.withValue(depth, operation: operation)
+    }
+
+    /// Async variant of ``withCurrent(_:operation:)`` — the pin covers the
+    /// whole async operation, including its suspensions (task-locals are
+    /// inherited across awaits and by child tasks, but not by detached ones).
+    @discardableResult
+    public static func withCurrent<T>(
+        _ depth: ColorDepth, operation: () async throws -> T
+    ) async rethrows -> T {
+        try await $taskCurrent.withValue(depth, operation: operation)
+    }
 
     /// Detects the terminal's color depth from environment variables.
     ///

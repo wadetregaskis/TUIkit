@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Mouse byte-capture probe with heartbeat. No alternate screen."""
+"""Mouse byte-capture probe with heartbeat. No alternate screen.
+
+Writes captured bytes to $PROBE_OUT if set, else to ./mouse_probe.log
+(stdout is unusable: the probe holds the tty in raw mode).
+"""
 import os, sys, termios, tty, signal, select, time
 
-out = open(os.environ["PROBE_OUT"], "a", buffering=1)
+out_path = os.environ.get("PROBE_OUT", "mouse_probe.log")
+out = open(out_path, "a", buffering=1)
+sys.stderr.write(f"logging to {os.path.abspath(out_path)}\n")
 fd = sys.stdin.fileno()
 old = termios.tcgetattr(fd)
 
