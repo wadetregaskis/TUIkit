@@ -123,14 +123,19 @@ extension ModalPresentationModifier: Renderable {
         var baseBuffer = TUIkit.renderToBuffer(
             content, context: contentContext.isolatedForBackground())
 
-        // Render the modal content against the FULL screen (not the attachment's
-        // local area, which may be a tiny leaf) so it isn't clipped, in the modal
-        // section so its focusables register there. The root compositor then
-        // centres and clamps it.
+        // Render the modal content against the CONTENT AREA (screen minus app
+        // header and status bar), not the full terminal height, in the modal
+        // section so its focusables register there. The compositor clamps
+        // overlays to that same content area (top-biased), so a dialog built
+        // against the full height would have its bottom rows — the footer with
+        // Done/Cancel and the bottom border — sliced off, reading as "sliding
+        // under the status bar". Building against `overlayContentHeight` makes
+        // the container reserve its footer within the visible area instead. Width
+        // is still the full terminal width (the horizontal clamp already works).
         var modalContext = context
             .withChildIdentity(type: Modal.self, index: 1)
             .withAvailableWidth(context.environment.terminalWidth)
-            .withAvailableHeight(context.environment.terminalHeight)
+            .withAvailableHeight(context.environment.overlayContentHeight)
         modalContext.environment.activeFocusSectionID = sectionID
         var modalBuffer = TUIkit.renderToBuffer(modal, context: modalContext)
 

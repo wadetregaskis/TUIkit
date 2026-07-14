@@ -145,12 +145,16 @@ extension AlertPresentationModifier: Renderable {
         var baseBuffer = TUIkit.renderToBuffer(
             content, context: contentContext.isolatedForBackground())
 
-        // Render the alert against the FULL screen (not the attachment's local
-        // area) so it isn't clipped, in the alert section.
+        // Render the alert against the CONTENT AREA (screen minus app header and
+        // status bar), not the full terminal height, in the alert section. The
+        // compositor clamps overlays to that content area top-biased, so a tall
+        // alert (a long message) built against the full height would lose its
+        // bottom rows — the action buttons and bottom border — under the status
+        // bar. Building against `overlayContentHeight` keeps the footer visible.
         var alertContext = context
             .withChildIdentity(erasedType: Alert<Actions>.self, index: 1)
             .withAvailableWidth(context.environment.terminalWidth)
-            .withAvailableHeight(context.environment.terminalHeight)
+            .withAvailableHeight(context.environment.overlayContentHeight)
         alertContext.environment.activeFocusSectionID = sectionID
         var alertBuffer = TUIkit.renderToBuffer(alert, context: alertContext)
 
