@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Mouse demo page.
@@ -251,6 +252,15 @@ struct MousePage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.mouse.rawEventsInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    // iTerm2 keeps right-clicks for its own context menu by
+                    // default, and its pointer settings aren't queryable
+                    // (no escape sequence reports them), so the best we can
+                    // do is warn statically on the affected host.
+                    if ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "iTerm.app" {
+                        Text(L("page.mouse.iTerm2RightClickNote"))
+                            .foregroundStyle(.palette.foregroundTertiary)
+                            .dim()
+                    }
                     Text(L("page.mouse.rightOrModifiedClick"))
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(color: .palette.border)
