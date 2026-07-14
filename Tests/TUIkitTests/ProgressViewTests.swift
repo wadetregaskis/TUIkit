@@ -68,18 +68,22 @@ struct ProgressViewTests {
         #expect(buffer.lines[0].contains("50%"))
     }
 
-    @Test("Default line style contains filled and empty block characters")
+    @Test("Default (block) style shows a filled run and a background-painted empty run")
     func lineStyleContainsBlockCharacters() {
         let view = ProgressView(value: 0.5)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
+        // The default `.block` style fills with `█` and paints the unfilled
+        // remainder as a solid background (spaces after stripping ANSI) — NOT a
+        // `░` shade glyph, which read taller than `█` on some terminals.
         let barLine = buffer.lines[0].stripped
         #expect(barLine.contains("█"))
-        #expect(barLine.contains("░"))
+        #expect(barLine.contains(" "), "unfilled region is a background fill, not ░")
+        #expect(!barLine.contains("░"), "block no longer mixes in a shade glyph")
     }
 
-    @Test("0% progress shows all empty blocks")
+    @Test("0% progress shows no filled blocks (all background)")
     func zeroProgressAllEmpty() {
         let view = ProgressView(value: 0.0)
         let context = testContext()
@@ -87,7 +91,8 @@ struct ProgressViewTests {
 
         let barLine = buffer.lines[0].stripped
         #expect(!barLine.contains("█"))
-        #expect(barLine.contains("░"))
+        #expect(!barLine.contains("░"))
+        #expect(barLine.allSatisfy { $0 == " " }, "empty bar is all background: '\(barLine)'")
     }
 
     @Test("100% progress shows all filled blocks")
@@ -119,7 +124,7 @@ struct ProgressViewTests {
 
         let barLine = buffer.lines[0].stripped
         let filledCount = barLine.filter { $0 == "█" }.count
-        let emptyCount = barLine.filter { $0 == "░" }.count
+        let emptyCount = barLine.filter { $0 == " " }.count  // unfilled = background spaces
 
         #expect(filledCount == 10)
         #expect(emptyCount == 10)
@@ -132,15 +137,19 @@ struct ProgressViewTests {
 @Suite("ProgressView Style Tests")
 struct ProgressViewStyleTests {
 
-    @Test("Block style uses only █ and ░ characters")
+    @Test("Block style uses █ fill and a background-painted (space) empty run")
     func blockStyleWholeBlocks() {
         let view = ProgressView(value: 0.33).progressViewStyle(.block)
         let context = testContext(width: 10)
         let buffer = renderToBuffer(view, context: context)
 
+        // `.block` no longer mixes a `░` shade glyph with the `█` fill (the
+        // shade drew taller than the block on some terminals); the unfilled
+        // remainder is a solid background, so the stripped bar is `█`s + spaces.
         let barLine = buffer.lines[0].stripped
-        let allExpected = barLine.allSatisfy { $0 == "█" || $0 == "░" }
+        let allExpected = barLine.allSatisfy { $0 == "█" || $0 == " " }
         #expect(allExpected)
+        #expect(!barLine.contains("░"), "no shade glyph in the block bar: '\(barLine)'")
     }
 
     @Test("BlockFine style uses fractional blocks for sub-character precision")
@@ -179,11 +188,13 @@ struct ProgressViewStyleTests {
         #expect(barLine.count == 20)
     }
 
-    @Test("BlockFine paints the whole track on the empty colour as a background")
+    @Test("Both block and blockFine paint the empty region on the empty colour as a background")
     func blockFinePaintsBackground() {
         // Rendering the fill family directly lets us inspect the raw ANSI. Under
-        // basic-16, using the empty colour (red) as a BACKGROUND emits SGR 41;
-        // `.block` uses the same colour only as a foreground (SGR 31 via ░).
+        // basic-16, using the empty colour (red) as a BACKGROUND emits SGR 41.
+        // `.block` now paints the unfilled remainder as a background too (like
+        // `.blockFine`), instead of a `░` shade foreground — so the filled and
+        // empty runs read at a uniform height on every terminal.
         withColorDepth(.basic16) {
             let blockFine = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .blockFine,
@@ -192,7 +203,8 @@ struct ProgressViewStyleTests {
                 fraction: 0.4, width: 10, style: .block,
                 filledColor: .green, emptyColor: .red, accentColor: .blue)
             #expect(blockFine.contains("41"), "blockFine paints a background: \(blockFine.debugDescription)")
-            #expect(!block.contains("41"), "block keeps the unfilled colour a foreground: \(block.debugDescription)")
+            #expect(block.contains("41"), "block paints the empty region as a background: \(block.debugDescription)")
+            #expect(!block.contains("░"), "block draws no shade glyph: \(block.debugDescription)")
         }
     }
 

@@ -12,7 +12,7 @@
 ///
 /// ```
 /// bar:       ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌────────────────
-/// block:     ████████████████░░░░░░░░░░░░░░░░
+/// block:     ████████████████                 (empty run is a solid bg)
 /// blockFine: ████████████████▍                (sub-cell precision; solid bg)
 /// dot:       ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬●────────────────
 /// knob:      ━━━━━━━━━━━━━━━●────────────────   (Slider default)
@@ -30,7 +30,10 @@ public enum TrackStyle: Sendable, Equatable {
 
     /// Full block characters (default).
     ///
-    /// Uses `█` for filled cells and `░` for empty cells.
+    /// Uses `█` for filled cells and a solid background for the empty run —
+    /// NOT a `░` shade glyph, which reads taller than `█` on terminals whose
+    /// font draws the shades as a sparse crosshatch (iTerm2). The result is a
+    /// uniform-height two-tone bar. See ``TrackConfiguration/block``.
     case block
 
     /// Full block characters with sub-character fractional precision.

@@ -117,8 +117,14 @@ public struct TrackConfiguration: Sendable, Equatable {
 // MARK: - Built-in Presets
 
 extension TrackConfiguration {
-    /// `█` full cells, `░` empty — whole-cell quantized. Backs ``TrackStyle/block``.
-    public static let block = TrackConfiguration(fullGlyph: "█", emptyStyle: .glyph("░"))
+    /// `█` full cells, solid-background empty — whole-cell quantized. Backs
+    /// ``TrackStyle/block``. The unfilled region is a background fill, not a `░`
+    /// shade glyph: mixing a full-cell solid block with a dithered shade makes
+    /// the filled run read TALLER than the empty run on terminals whose font
+    /// draws `░▒▓` as a sparse crosshatch (iTerm2) — see Terminal-compatibility.md.
+    /// A uniform two-tone bar reads at a consistent height everywhere (same
+    /// reasoning as ``blockFine``).
+    public static let block = TrackConfiguration(fullGlyph: "█", emptyStyle: .background)
 
     /// `▓` (dark shade) full cells, `░` empty — whole-cell quantized. Backs
     /// ``TrackStyle/shade``. (Differs from ``block`` only in the fill glyph, so

@@ -174,7 +174,12 @@ non-default setup.
 - **Block Elements:** gap-free full-cell coverage — `██` contiguous, no
   seams; shades ░▒▓ draw as a dotted crosshatch texture (font flavour,
   cosmetically different from Terminal.app's stipple). Half-block images
-  (▀) and background-fill images render seamlessly.
+  (▀) and background-fill images render seamlessly. Because the crosshatch
+  covers less of the cell than a solid `█`, a bar that mixes the two — a
+  `█` fill against a `░` empty run — reads with the filled part visibly
+  TALLER than the empty part here. So `TrackStyle.block` (and `.blockFine`)
+  paint the empty run as a solid *background* instead of a `░` glyph,
+  giving a uniform-height two-tone bar on every terminal.
 
 ### Input behaviour
 

@@ -18,7 +18,7 @@ import Foundation
 ///
 /// ```
 /// Downloading                  50%
-/// ████████████████▌░░░░░░░░░░░░░░░
+/// ███████████████                 (default .block: █ fill, solid-bg empty)
 /// ```
 ///
 /// - **Line 1** (optional): Label (left-aligned) + CurrentValueLabel (right-aligned)
