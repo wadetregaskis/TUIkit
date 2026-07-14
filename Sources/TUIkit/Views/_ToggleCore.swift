@@ -20,12 +20,20 @@ enum SwitchIndicatorGlyphs {
     /// Under ``CheckboxStyle/emoji``, the knob is the emoji-repertoire large
     /// square in text presentation — ONE glyph spanning two cells, which
     /// Terminal.app draws seamlessly where it shows visible seams between
-    /// adjacent FULL BLOCK cells. Every other style gets the two FULL BLOCKs:
-    /// universally one cell each, SGR-tintable, and with no variation
-    /// selector for a terminal to mis-measure (issue #9). Both knobs are two
-    /// cells, so the 3-cell track geometry never changes.
+    /// adjacent FULL BLOCK cells. Every other style gets ▐▌ (right + left
+    /// half blocks): a one-cell-wide knob centred across its two cells, with
+    /// half a cell of TRACK showing on either side. The visible track margin
+    /// is what makes the knob read at all — the knob is drawn in the page
+    /// background colour, so an edge-to-edge ██ knob melts into the page
+    /// beside the switch and the whole control collapses to a bare colour
+    /// chip (found evaluating iTerm2, where `automatic` falls back to this
+    /// repertoire; the emoji square gets the same effect for free from its
+    /// glyph's intrinsic inset). Both knobs are two cells, so the 3-cell
+    /// track geometry never changes; the half blocks are plain Block
+    /// Elements — SGR-tintable, no variation selector to mis-measure
+    /// (issue #9).
     static func knob(for style: CheckboxStyle) -> String {
-        style == .emoji ? "\u{2B1B}\u{FE0E}" : "\u{2588}\u{2588}"  // ⬛︎ : ██
+        style == .emoji ? "\u{2B1B}\u{FE0E}" : "\u{2590}\u{258C}"  // ⬛︎ : ▐▌
     }
 }
 

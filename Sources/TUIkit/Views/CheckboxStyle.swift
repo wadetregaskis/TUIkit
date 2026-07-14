@@ -84,25 +84,28 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// the inner mark shows on/off).
     public static let ascii = Self(onMark: "x", offMark: " ", openBracket: "[", closeBracket: "]")
 
-    /// The terminal-adaptive default: ``emoji`` under Apple's Terminal.app,
-    /// ``unicode`` everywhere else.
+    /// The terminal-adaptive default: ``emoji`` on terminals verified to
+    /// draw the emoji-repertoire squares correctly (Apple's Terminal.app
+    /// and iTerm2 — see `TerminalHost.supportsEmojiChrome`), ``unicode``
+    /// everywhere else.
     ///
-    /// Terminal.app draws the emoji-repertoire squares as single seamless
-    /// glyphs (and TUIkit's output path carries its emoji advance
-    /// workarounds), so the bolder two-cell style is both safe and prettier
-    /// there. No such guarantee holds for other terminals, so they get the
-    /// universally-correct ``unicode`` squares.
+    /// On the allowlisted hosts the ⬛︎ / ⬜︎ text-presentation squares render
+    /// as single seamless glyphs, monochrome and theme-tintable, so the
+    /// bolder two-cell style is both safe and prettier there. No such
+    /// guarantee holds for other terminals — mis-measuring the selector
+    /// shears the row (issue #9) — so they get the universally-correct
+    /// ``unicode`` squares.
     ///
     /// This is what a running app uses when no ``SwiftUICore/View/checkboxStyle(_:)``
     /// modifier applies. (The bare `EnvironmentValues` default — what headless
     /// renders and tests see — is the terminal-independent ``unicode``.)
     public static var automatic: Self {
-        automatic(isAppleTerminal: TerminalHost.isAppleTerminal)
+        automatic(emojiChrome: TerminalHost.supportsEmojiChrome)
     }
 
     /// Testable core of ``automatic``.
-    static func automatic(isAppleTerminal: Bool) -> Self {
-        isAppleTerminal ? .emoji : .unicode
+    static func automatic(emojiChrome: Bool) -> Self {
+        emojiChrome ? .emoji : .unicode
     }
 }
 

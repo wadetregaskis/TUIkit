@@ -21,6 +21,20 @@ enum TerminalHost {
     static let isAppleTerminal: Bool =
         detectAppleTerminal(environment: ProcessInfo.processInfo.environment)
 
+    /// Whether the host terminal is iTerm2, detected once from the process
+    /// environment.
+    static let isITerm2: Bool =
+        detectITerm2(environment: ProcessInfo.processInfo.environment)
+
+    /// Whether the host draws the emoji-repertoire chrome glyphs (⬛︎ / ⬜︎
+    /// with the U+FE0E text-presentation selector) correctly: monochrome,
+    /// theme-tintable, two cells, no row shear. Verified by eye on both
+    /// hosts (iTerm2 evaluated 2026-07-13); terminals not on this allowlist
+    /// get the universally-safe non-emoji glyphs instead — mis-measuring
+    /// the selector shears the whole row (issue #9), so membership is
+    /// earned by inspection, not assumed.
+    static var supportsEmojiChrome: Bool { isAppleTerminal || isITerm2 }
+
     /// `true` only for macOS Terminal.app (`TERM_PROGRAM == "Apple_Terminal"`).
     /// Compile-time `false` off macOS, where Terminal.app cannot run.
     /// Parameterised over the environment so tests exercise both answers
@@ -31,5 +45,12 @@ enum TerminalHost {
         #else
         return false
         #endif
+    }
+
+    /// `true` for iTerm2 (`TERM_PROGRAM == "iTerm.app"`), on any platform it
+    /// reports itself on (macOS natively; also over ssh with iTerm2's shell
+    /// integration propagating the variable).
+    static func detectITerm2(environment: [String: String]) -> Bool {
+        environment["TERM_PROGRAM"] == "iTerm.app"
     }
 }

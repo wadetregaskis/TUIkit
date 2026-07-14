@@ -66,16 +66,20 @@ struct ToggleRenderTests {
         #expect(onLine[0] == "[x] Wifi", "got: |\(onLine[0])|")
     }
 
-    @Test("The .switch style's knob is FULL BLOCKs on the side the switch points to")
+    @Test("The .switch style's knob is inset half blocks on the side the switch points to")
     func switchStyleRendersBlockKnob() {
         // Under the terminal-independent default (.unicode) the knob is built
-        // from non-emoji, selector-free glyphs (██) so its SGR foreground
-        // applies and its width is stable everywhere — same class as the
-        // checkbox marks (issue #9).
+        // from non-emoji, selector-free glyphs (▐▌: a one-cell knob centred
+        // across two cells) so its SGR foreground applies and its width is
+        // stable everywhere — same class as the checkbox marks (issue #9).
+        // The half-cell of visible TRACK on each side of the knob is what
+        // makes it read: the knob is drawn in the page-background colour,
+        // and an edge-to-edge ██ knob melted into the page beside the
+        // switch (found evaluating iTerm2).
         let offLine = lines(Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch)).first ?? ""
         let onLine = lines(Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch)).first ?? ""
-        #expect(offLine.hasPrefix("██ "), "off: knob left, blank right — got: |\(offLine)|")
-        #expect(onLine.hasPrefix(" ██"), "on: blank left, knob right — got: |\(onLine)|")
+        #expect(offLine.hasPrefix("▐▌ "), "off: knob left, blank right — got: |\(offLine)|")
+        #expect(onLine.hasPrefix(" ▐▌"), "on: blank left, knob right — got: |\(onLine)|")
         #expect(offLine.contains("Wifi") && onLine.contains("Wifi"))
     }
 
@@ -96,8 +100,14 @@ struct ToggleRenderTests {
         #expect(onLine.hasPrefix(" " + knob), "on: knob right — got: |\(onLine)|")
 
         #expect(SwitchIndicatorGlyphs.knob(for: .emoji) == knob)
-        #expect(SwitchIndicatorGlyphs.knob(for: .unicode) == "\u{2588}\u{2588}")
-        #expect(SwitchIndicatorGlyphs.knob(for: .ascii) == "\u{2588}\u{2588}")
+        // Non-emoji knobs are the half-block pair ▐▌ — a one-cell knob
+        // centred across two cells, leaving half a cell of TRACK visible on
+        // each side. The knob is drawn in the page-background colour, so
+        // without that visible track margin (as with edge-to-edge ██) it
+        // melts into the page and the switch reads as a bare colour chip.
+        #expect(SwitchIndicatorGlyphs.knob(for: .unicode) == "\u{2590}\u{258C}")
+        #expect(SwitchIndicatorGlyphs.knob(for: .ascii) == "\u{2590}\u{258C}")
+        #expect(SwitchIndicatorGlyphs.knob(for: .unicode).strippedLength == 2)
     }
 
     @Test("The maximum-compatibility styles stay outside the emoji problem class")
@@ -106,8 +116,8 @@ struct ToggleRenderTests {
         // the theme tint), and variation selectors are mis-measured by some
         // terminals, shearing the row (issue #9). The .unicode and .ascii
         // styles must avoid both outright — .emoji is the deliberate,
-        // documented exception, which is why `.automatic` gates it onto
-        // Terminal.app (whose output path carries the emoji workarounds).
+        // documented exception, which is why `.automatic` gates it onto the
+        // hosts verified to draw it correctly (Terminal.app and iTerm2).
         for style in [CheckboxStyle.unicode, .ascii] {
             for mark in [style.onMark, style.offMark, style.openBracket, style.closeBracket] {
                 for scalar in mark.unicodeScalars {
@@ -136,14 +146,21 @@ struct ToggleRenderTests {
         #expect(out.first == "\u{2B1C}\u{FE0E} Wifi", "got: |\(out.first ?? "")|")
     }
 
-    @Test(".automatic resolves to .emoji under Apple's Terminal.app, .unicode elsewhere")
+    @Test(".automatic resolves to .emoji on emoji-chrome hosts, .unicode elsewhere")
     func automaticStyleResolution() {
-        #expect(CheckboxStyle.automatic(isAppleTerminal: true) == .emoji)
-        #expect(CheckboxStyle.automatic(isAppleTerminal: false) == .unicode)
+        #expect(CheckboxStyle.automatic(emojiChrome: true) == .emoji)
+        #expect(CheckboxStyle.automatic(emojiChrome: false) == .unicode)
+        // Both allowlisted hosts qualify: Terminal.app and iTerm2 (verified
+        // by eye — see TerminalHost.supportsEmojiChrome).
+        #expect(TerminalHost.detectAppleTerminal(
+            environment: ["TERM_PROGRAM": "Apple_Terminal"]))
+        #expect(TerminalHost.detectITerm2(environment: ["TERM_PROGRAM": "iTerm.app"]))
+        #expect(!TerminalHost.detectITerm2(environment: ["TERM_PROGRAM": "Apple_Terminal"]))
+        #expect(!TerminalHost.detectITerm2(environment: [:]))
         // The live property agrees with the live detection, whatever hosts
         // the suite.
         #expect(CheckboxStyle.automatic
-            == CheckboxStyle.automatic(isAppleTerminal: TerminalHost.isAppleTerminal))
+            == CheckboxStyle.automatic(emojiChrome: TerminalHost.supportsEmojiChrome))
         // The bare environment default stays terminal-independent (.unicode),
         // so headless renders and this suite are deterministic; the app run
         // loop injects .automatic at its root instead.
