@@ -865,12 +865,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         let focusManager = context.environment.focusManager
-        // The bordered container places content at y = 1 (top
-        // border) plus the configured top padding. The captured
-        // row y-ranges are already relative to the content (they
-        // include the scroll-indicator's own row when present),
-        // so this single inset is the entire translation needed.
-        let topInset = 1 + paddingTop
+        // A bordered container places content at y = 1 (below the top border);
+        // a borderless (`.plain`) list has NO top border row, so its content
+        // starts at y = 0. Add the configured top padding. The captured row
+        // y-ranges are already relative to the content (they include the
+        // scroll-indicator's own row when present), so this inset is the
+        // entire translation needed. (Hardcoding `1` here shifted every
+        // borderless click up a row — clicking row 2 selected row 1.)
+        let topInset = (context.environment.listStyle.showsBorder ? 1 : 0) + paddingTop
 
         // The scrollbar's own handler goes in first so the container's later
         // insert(at: 0) pushes it to a higher index — hit-tested ahead of the
@@ -1376,7 +1378,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let paddedLine =
             " " + fittedLine + String(repeating: " ", count: fillPadding) + styledBadge + " "
 
-        return paddedLine.withPersistentBackground(backgroundColor)
+        return terminatedBackground(paddedLine, backgroundColor)
     }
 
     /// Renders a plain line without badge.
@@ -1391,7 +1393,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let rightPadding = max(1, rowWidth - usedWidth)
         let paddedLine = " " + line + String(repeating: " ", count: rightPadding)
 
-        return paddedLine.withPersistentBackground(backgroundColor)
+        return terminatedBackground(paddedLine, backgroundColor)
+    }
+
+    /// Applies `backgroundColor` as a persistent row background and TERMINATES
+    /// it with a reset at the row's right edge.
+    ///
+    /// The reset matters: `withPersistentBackground` leaves the background
+    /// active at the end of the string, and a borderless list has no right
+    /// border to cap it — so a selected row's highlight bled rightward into
+    /// whatever was composited beside the list (in the styles demo, across
+    /// the whole screen / into the neighbouring list's border). A bordered
+    /// list's own right border happened to reset it, masking the bug there.
+    /// Matches the self-contained pattern `BackgroundModifier` already uses.
+    private func terminatedBackground(_ line: String, _ backgroundColor: Color?) -> String {
+        guard backgroundColor != nil else { return line }
+        return line.withPersistentBackground(backgroundColor) + ANSIRenderer.reset
     }
 }
 

@@ -195,4 +195,74 @@ struct ListRowMouseRegionTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 4, y: rowY))
         #expect(selection == "Row-1", "content clicks still select")
     }
+
+    @Test("A borderless (.plain) list maps each click to its own row (no off-by-one)")
+    func plainListRowHitAlignment() {
+        // The .plain style has NO top border row, so content starts at buffer
+        // y = 0. The container-handler's y→row translation once hardcoded a
+        // 1-row inset (assuming a top border), shifting every click up a row:
+        // clicking row 2 selected row 1. This drives a click at each row's
+        // actual rendered y and checks the RIGHT item is selected.
+        var selection: String?
+        let items = ["alpha", "bravo", "charlie"]
+        let view = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .listStyle(.plain)
+        .frame(height: 5)
+
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var env = EnvironmentValues()
+        env.mouseEventDispatcher = dispatcher
+        env.focusManager = FocusManager()
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 8, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        for item in items {
+            guard let y = buffer.lines.firstIndex(where: { $0.stripped.contains(item) }) else {
+                Issue.record("\(item) not rendered")
+                continue
+            }
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: y))
+            #expect(selection == item, "clicking the '\(item)' row (y=\(y)) selects it, not a neighbour")
+        }
+    }
+
+    @Test("A selected .plain row terminates its background (no rightward bleed)")
+    func plainSelectionBackgroundIsBounded() {
+        // The selection highlight is a persistent background; without a
+        // trailing reset it bled past the borderless list's right edge into
+        // whatever was composited beside it. Every rendered row line must end
+        // with a reset when it carries a background.
+        var selection: String? = "one"
+        let view = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            ForEach(["one", "two"], id: \.self) { Text($0) }
+        }
+        .listStyle(.plain)
+        .frame(height: 4)
+
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let context = RenderContext(
+            availableWidth: 24, availableHeight: 6, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+        let selectedLine = buffer.lines.first { $0.stripped.contains("one") }
+        #expect(selectedLine != nil)
+        if let line = selectedLine {
+            #expect(
+                line.contains("\u{1B}["),  // it IS styled (has the selection bg)
+                "the selected row carries a background: \(line.debugDescription)")
+            #expect(
+                line.hasSuffix(ANSIRenderer.reset),
+                "the row's background is terminated at its edge: \(line.debugDescription)")
+        }
+    }
 }
