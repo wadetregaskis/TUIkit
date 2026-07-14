@@ -238,8 +238,6 @@ private struct _MenuCore: View, Renderable, Layoutable {
             registerKeyHandlers(binding: binding, context: context)
         }
 
-        var lines: [String] = []
-
         // The selection-indicator column: the indicator on the selected row,
         // same-width spaces on every other row, so labels stay aligned. An
         // empty indicator collapses the column entirely.
@@ -248,82 +246,78 @@ private struct _MenuCore: View, Renderable, Layoutable {
         // Calculate the content width for full-width selection bar
         let contentWidth = indicatorWidth + maxItemWidth + 2  // +2 for padding
 
-        // Track divider line indices (for T-junction rendering): the rule
-        // under the title, plus any `.divider` items.
-        var dividerLineIndices: Set<Int> = []
-
-        // Title if present (a blank/whitespace title is treated as no title —
-        // otherwise it would reserve an empty title row plus a divider).
-        if let menuTitle = title, !menuTitle.allSatisfy(\.isWhitespace) {
-            let titleStyled = ANSIRenderer.render(
-                menuTitle,
-                with: {
-                    var style = TextStyle()
-                    style.isBold = true
-                    style.foregroundColor = selectedColor?.resolve(with: palette) ?? palette.accent
-                    return style
-                }()
-            )
-            lines.append(" " + titleStyled)
-
-            // Mark divider position - actual divider will be rendered by applyBorder
-            dividerLineIndices.insert(lines.count)
-            lines.append("")  // Placeholder for divider
-        }
-
-        // Menu items
         let currentSelection = selectionBinding?.wrappedValue ?? selectedIndex
 
+        // The title block (title + divider) is fixed at the top and never
+        // scrolls. A blank/whitespace title is treated as no title.
+        var titleLines: [String] = []
+        if let menuTitle = title, !menuTitle.allSatisfy(\.isWhitespace) {
+            var titleStyle = TextStyle()
+            titleStyle.isBold = true
+            titleStyle.foregroundColor = selectedColor?.resolve(with: palette) ?? palette.accent
+            titleLines.append(" " + ANSIRenderer.render(menuTitle, with: titleStyle))
+            titleLines.append("")  // divider placeholder
+        }
+
+        // One styled row per menu item (a `.divider` becomes a blank placeholder
+        // the border turns into a rule); `item` is the item index, `nil` for a
+        // divider, so a click / the window can map a row back to its item.
+        var itemRows: [(item: Int?, line: String)] = []
         for (index, item) in items.enumerated() {
             if item.isDivider {
-                // A separator rule between item groups — rendered by
-                // applyBorder with T-junctions, skipped by navigation.
-                dividerLineIndices.insert(lines.count)
-                lines.append("")  // Placeholder for divider
+                itemRows.append((nil, ""))
                 continue
             }
             let isSelected = index == currentSelection
-
-            // Build the label with optional shortcut
-            let labelText: String
-            if let shortcut = item.shortcut {
-                labelText = "[\(shortcut)] \(item.label)"
-            } else {
-                labelText = "    \(item.label)"
-            }
-
-            // Build the full text with padding: the indicator column, then the
-            // label. The indicator inherits the selected row's styling below.
+            let labelText = item.shortcut.map { "[\($0)] \(item.label)" } ?? "    \(item.label)"
             let marker = isSelected ? selectionIndicator : String(repeating: " ", count: indicatorWidth)
             let fullText = " " + marker + labelText
-
-            // Pad to full width for selection bar
-            let visibleLength = fullText.strippedLength
-            let padding = max(0, contentWidth - visibleLength)
+            let padding = max(0, contentWidth - fullText.strippedLength)
             let paddedText = fullText + String(repeating: " ", count: padding)
 
-            // Apply styling
             var style = TextStyle()
             if isSelected {
-                // Selected: bold text with dimmed background, highlighted foreground
                 style.isBold = true
                 style.foregroundColor = selectedColor?.resolve(with: palette) ?? palette.accent
-                // Selected items have no special background — bold + accent is enough
             } else {
-                // Use palette foreground color if no custom itemColor is set
                 style.foregroundColor = itemColor?.resolve(with: palette) ?? palette.foreground
             }
-
-            let styledLine = ANSIRenderer.render(paddedText, with: style)
-            lines.append(styledLine)
+            itemRows.append((index, ANSIRenderer.render(paddedText, with: style)))
         }
 
-        // Create content buffer
+        // Window the item rows to the available height, keeping the selected row
+        // visible. A menu taller than its viewport shows ▲/▼ overflow markers and
+        // scrolls as the selection moves — so every item is reachable on a short
+        // terminal. The border eats 2 rows and the title block eats its own.
+        let itemBudget = max(1, context.availableHeight - 2 - titleLines.count)
+        let window = Self.windowedRows(itemRows, budget: itemBudget, selection: currentSelection)
+
+        // Assemble the content lines plus a parallel item-index map (for clicks):
+        // title lines, an optional ▲, the visible item rows, an optional ▼.
+        var lines: [String] = []
+        var lineItemIndex: [Int?] = []
+        var dividerLineIndices: Set<Int> = []
+        for (offset, tline) in titleLines.enumerated() {
+            if offset == 1 { dividerLineIndices.insert(lines.count) }  // title divider
+            lines.append(tline)
+            lineItemIndex.append(nil)
+        }
+        if window.hasAbove {
+            lines.append(Self.overflowMarker("▲", width: contentWidth, palette: palette))
+            lineItemIndex.append(nil)
+        }
+        for row in window.rows {
+            if row.item == nil { dividerLineIndices.insert(lines.count) }
+            lines.append(row.line)
+            lineItemIndex.append(row.item)
+        }
+        if window.hasBelow {
+            lines.append(Self.overflowMarker("▼", width: contentWidth, palette: palette))
+            lineItemIndex.append(nil)
+        }
+
         var contentBuffer = FrameBuffer(lines: lines)
-
-        // Apply border — use explicit style, or fall back to appearance default
         let effectiveBorderStyle = borderStyle ?? context.environment.appearance.borderStyle
-
         contentBuffer = applyBorder(
             to: contentBuffer,
             style: effectiveBorderStyle,
@@ -332,17 +326,55 @@ private struct _MenuCore: View, Renderable, Layoutable {
             palette: palette
         )
 
-        registerMouseHandlers(on: &contentBuffer, context: context)
+        registerMouseHandlers(on: &contentBuffer, context: context, lineItemIndex: lineItemIndex)
 
         return contentBuffer
     }
 
-    /// Mouse: scroll-wheel anywhere on the menu changes selection; a
-    /// left-click on an item row selects it. Item rows live inside the border
-    /// (top border + title/divider if present), so the buffer-relative y is
-    /// translated back to an item index before forwarding the event.
+    /// A centred ▲ / ▼ overflow marker line (tertiary colour), padded to the
+    /// menu's content width so it aligns with the item rows.
+    private static func overflowMarker(_ glyph: String, width: Int, palette: any Palette)
+        -> String
+    {
+        let leftPad = max(0, (width - 1) / 2)
+        let rightPad = max(0, width - 1 - leftPad)
+        var style = TextStyle()
+        style.foregroundColor = palette.foregroundTertiary
+        return ANSIRenderer.render(
+            String(repeating: " ", count: leftPad) + glyph + String(repeating: " ", count: rightPad),
+            with: style)
+    }
+
+    /// The slice of `rows` to show for a `budget`-row viewport, keeping the
+    /// `selection` row visible. Returns the full list (no markers) when it fits;
+    /// otherwise a window centred on the selection with `hasAbove`/`hasBelow`
+    /// flags for the ▲/▼ markers (each marker consumes one budget row).
+    private static func windowedRows(
+        _ rows: [(item: Int?, line: String)], budget: Int, selection: Int
+    ) -> (rows: ArraySlice<(item: Int?, line: String)>, hasAbove: Bool, hasBelow: Bool) {
+        guard rows.count > budget else { return (rows[...], false, false) }
+        let selRow = rows.firstIndex { $0.item == selection } ?? 0
+        func clampStart(_ visible: Int) -> Int {
+            max(0, min(selRow - visible / 2, rows.count - visible))
+        }
+        // First pass with the full budget tells us which edges overflow; the
+        // second reclaims the rows the markers that WILL show would occupy.
+        var start = clampStart(budget)
+        var hasAbove = start > 0
+        var hasBelow = start + budget < rows.count
+        let visible = max(1, budget - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0))
+        start = clampStart(visible)
+        hasAbove = start > 0
+        hasBelow = start + visible < rows.count
+        return (rows[start..<start + visible], hasAbove, hasBelow)
+    }
+
+    /// Mouse: scroll-wheel anywhere on the menu changes selection (which
+    /// re-windows a tall menu to follow it); a left-click on an item row selects
+    /// it. `lineItemIndex` maps each content line (title / ▲ / item / ▼) back to
+    /// its item index, so windowing and dividers can't misroute a click.
     private func registerMouseHandlers(
-        on contentBuffer: inout FrameBuffer, context: RenderContext
+        on contentBuffer: inout FrameBuffer, context: RenderContext, lineItemIndex: [Int?]
     ) {
         guard !context.isMeasuring,
             let binding = selectionBinding,
@@ -350,7 +382,12 @@ private struct _MenuCore: View, Renderable, Layoutable {
         else { return }
         let menuItems = items
         let selectCallback = onSelect
-        let itemsStartRow = 1 + (title != nil ? 2 : 0)  // top border + (title + divider)
+        // The border adds a top row, so content line `n` sits at buffer y `n+1`.
+        func itemAt(_ y: Int) -> Int? {
+            let line = y - 1
+            guard line >= 0, line < lineItemIndex.count else { return nil }
+            return lineItemIndex[line]
+        }
         let mouseHandlerID = mouseDispatcher.register { event in
             switch event.button {
             case .scrollUp:
@@ -362,22 +399,16 @@ private struct _MenuCore: View, Renderable, Layoutable {
                     from: binding.wrappedValue, by: 1, in: menuItems)
                 return true
             case .left where event.phase == .released:
-                let itemIndex = event.y - itemsStartRow
-                if itemIndex >= 0 && itemIndex < menuItems.count,
-                    !menuItems[itemIndex].isDivider
-                {
+                if let itemIndex = itemAt(event.y) {
                     binding.wrappedValue = itemIndex
                     selectCallback?(itemIndex)
                     return true
                 }
                 return false
             case .left where event.phase == .pressed:
-                // Claim presses inside item rows so the matching
-                // release routes back here for the activation above.
-                // (Divider rows are inert, so their presses fall through.)
-                let itemIndex = event.y - itemsStartRow
-                return itemIndex >= 0 && itemIndex < menuItems.count
-                    && !menuItems[itemIndex].isDivider
+                // Claim presses on item rows so the matching release routes back
+                // here for the activation above. (Marker / divider rows are inert.)
+                return itemAt(event.y) != nil
             default:
                 return false
             }
