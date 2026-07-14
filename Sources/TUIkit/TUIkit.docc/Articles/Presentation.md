@@ -38,9 +38,10 @@ terminal-specific styling.
 
 ## Modals and Sheets
 
-`modal(isPresented:content:)` presents arbitrary content with the same
-centred, screen-dimming treatment. `sheet(isPresented:content:)` is a
-SwiftUI-compatible alias that forwards to `modal`:
+`modal(isPresented:onDismiss:content:)` presents arbitrary content with the
+same centred, screen-dimming treatment.
+`sheet(isPresented:onDismiss:content:)` is a SwiftUI-compatible alias that
+forwards to `modal`:
 
 ```swift
 struct ContentView: View {
@@ -53,6 +54,24 @@ struct ContentView: View {
             }
     }
 }
+```
+
+The optional `onDismiss:` closure runs on the presented → dismissed
+transition, whatever cleared the binding — a Close button, a key press, or a
+programmatic change.
+
+As in SwiftUI, there is also an item-driven overload,
+`sheet(item:onDismiss:content:)`: a non-`nil` `Identifiable` value presents
+the sheet, built from the unwrapped item, and clearing the binding dismisses
+it:
+
+```swift
+@State private var editing: Row?
+
+List(rows, selection: $selection) { ... }
+    .sheet(item: $editing) { row in
+        EditView(row)
+    }
 ```
 
 There is also an always-on `modal { … }` overload (bound to a constant `true`)

@@ -43,7 +43,10 @@ A default extension provides sensible defaults for `canBeFocused` (`true`), `onF
 ``FocusState`` is the user-facing API for checking and requesting focus inside a view:
 
 ```swift
-let focusState = FocusState(id: "my-button", focusManager: context.environment.focusManager)
+// The environment's focusManager is Optional: it is nil in isolated/measure
+// renders and in tests that don't install a focus system.
+guard let focusManager = context.environment.focusManager else { return }
+let focusState = FocusState(id: "my-button", focusManager: focusManager)
 
 // Check if this element is currently focused
 if focusState.isFocused {
@@ -79,7 +82,7 @@ Custom views that implement ``Focusable`` typically do not need `FocusRegistrati
 
 ## Focus Indicator
 
-The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields use **pulsing vertical bars** (caps) around the input area. Lists and tables use a **highlight background** for the focused row, with a **pulsing accent background** when the row is both focused and selected.
+The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields render as a bracketed field (`[ text ]`) and show a **visible text cursor** inside it when focused — block, bar, underscore, or I-beam, with configurable pulsing, via the `.textCursor(_:)` modifier. Lists and tables use a **highlight background** for the focused row, with a **pulsing accent background** when the row is both focused and selected.
 
 ## Focus in the Event Loop
 

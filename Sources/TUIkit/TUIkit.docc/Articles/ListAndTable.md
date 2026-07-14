@@ -166,6 +166,19 @@ TableColumn("Path", value: \.path)
     .truncationMode(.head)   // Keep the end, drop the start
 ```
 
+### Scroll Granularity
+
+When rows span multiple lines, ``ScrollGranularity`` controls how finely the
+content scrolls. The default is `.line`: tall rows scroll into view gradually
+and may rest partially clipped at the top edge, keeping the overall height
+constant. Opt into `.row` for the classic TUI behaviour, where the top row is
+always fully visible:
+
+```swift
+List("Notes", selection: $selected) { ... }
+    .scrollGranularity(.row)
+```
+
 ## Keyboard Navigation
 
 Both List and Table support the same keyboard shortcuts:
@@ -178,11 +191,20 @@ Both List and Table support the same keyboard shortcuts:
 | End | Jump to last item |
 | Page Up | Move up by viewport height |
 | Page Down | Move down by viewport height |
-| Enter / Space | Toggle selection |
+| Space | Toggle selection |
+| Enter | Activate the row (primary action) when one is set, otherwise toggle selection |
 
 Hold Shift with Up/Down to move the cursor by several rows at once (clamping at
 the ends rather than wrapping). The step count is the `.shiftStepMultiplier(_:)`
 environment value (default 5).
+
+With a `Set` selection binding, the macOS multi-selection keyboard model is
+also available: **Shift+Up/Down** extends an anchored selection span
+(clamping at the ends, like macOS), **v** toggles a sticky extend mode in
+which plain Up/Down keep extending (Shift then reapplies the accelerated
+step), **Ctrl+A** selects all, and **Escape** acts one stage per press —
+exit extend mode, then clear the selection — falling through to page
+navigation when there is neither to do.
 
 ## Scroll Indicators
 
@@ -199,9 +221,12 @@ top and bottom, reporting the number of rows hidden in each direction:
 └──────────────────────────────┘
 ```
 
-In addition to these indicators, List and Table can draw an interactive
-scrollbar (hidden by default). Opt in and customize it with the shared
-scrollbar modifiers, which also apply to ScrollView:
+Instead of the text indicators, List and Table can draw an interactive
+scrollbar (hidden by default). When the bar is visible it replaces the
+"N more" lines — the bar marks the off-screen rows itself, so the rows
+fill the full content area with no reserved indicator line. Opt in and
+customize it with the shared scrollbar modifiers, which also apply to
+ScrollView:
 
 ```swift
 List("Items", selection: $selected) { ... }

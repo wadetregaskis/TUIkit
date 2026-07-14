@@ -4,7 +4,7 @@ A visual reference for all built-in color palettes with their exact color values
 
 ## Overview
 
-TUIkit ships with **6 palettes**: all generated from hand-tuned HSL parameters via ``SystemPalette``. Each palette defines semantic color tokens that the framework resolves at render time.
+TUIkit ships with **16 palettes**: 6 classic-phosphor presets generated from hand-tuned HSL parameters via ``SystemPalette``, plus 10 ``TerminalProfilePalette`` recreations of the built-in macOS Terminal.app profiles. Each palette defines semantic color tokens that the framework resolves at render time.
 
 Users access palette colors via `Color.palette.*`:
 
@@ -14,7 +14,7 @@ Text("Hello")
     .background(.palette.background)
 ```
 
-Cycle through palettes at runtime by pressing `t` (default binding), or set a specific palette programmatically:
+Cycle through palettes at runtime by pressing `t` (when theme cycling is enabled via `statusBarSystemItems(theme: true)` — it is off by default), or set a specific palette programmatically:
 
 ```swift
 environment.paletteManager.setCurrent(SystemPalette(.amber))
@@ -24,27 +24,28 @@ environment.paletteManager.setCurrent(SystemPalette(.amber))
 
 TUIkit uses a single palette protocol:
 
-- **``Palette``**: 13 essential color tokens (8 required, 5 with defaults)
+- **``Palette``**: 17 essential color tokens (8 required, 9 with defaults)
 
 ```
-Palette (13 properties)
+Palette (17 properties)
 ├── Required: background, foreground, accent, border,
 │             success, warning, error, info
 └── Defaults: statusBarBackground, appHeaderBackground, overlayBackground,
-              foregroundSecondary, foregroundTertiary
+              foregroundSecondary, foregroundTertiary, foregroundQuaternary,
+              focusBackground, cursorColor, fieldBackground
 ```
 
-All 6 built-in palettes are instances of ``SystemPalette``, which conforms to ``Palette``. Custom palettes can conform to ``Palette`` directly.
+The 16 built-in palettes are instances of ``SystemPalette`` (the 6 phosphor presets) and ``TerminalProfilePalette`` (the 10 Terminal.app profiles), both of which conform to ``Palette``. Custom palettes can conform to ``Palette`` directly.
 
 ## Color Token Categories
 
 | Category | Tokens | Purpose |
 |----------|--------|---------|
 | **Background** | `background`, `statusBarBackground`, `appHeaderBackground`, `overlayBackground` | App background, status bar, overlays |
-| **Foreground** | `foreground`, `foregroundSecondary`, `foregroundTertiary` | Primary, secondary, and tertiary text |
+| **Foreground** | `foreground`, `foregroundSecondary`, `foregroundTertiary`, `foregroundQuaternary` | Primary through quaternary (dimmest) text |
 | **Accent** | `accent` | Interactive elements, highlights |
 | **Semantic** | `success`, `warning`, `error`, `info` | Status indicators |
-| **UI Elements** | `border` | Borders |
+| **UI Elements** | `border`, `focusBackground`, `cursorColor`, `fieldBackground` | Borders, focused-row highlight, text cursor, editable-field surface |
 
 Only 8 tokens are required: the remaining have sensible defaults. See <doc:ThemingGuide> for details on creating custom palettes.
 
@@ -215,18 +216,49 @@ Inspired by vintage vacuum fluorescent displays (VFDs). The characteristic brigh
 | `error` | Orange-red contrast |
 | `info` | Pale blue |
 
+## Terminal.app Profiles
+
+``TerminalProfilePalette`` recreates the ten profiles that ship with macOS Terminal.app. The defining colours — background, text, bold text, cursor and selection — are the exact sRGB values from Terminal.app's bundled profile files; TUIkit derives the remaining semantic roles from them (the foreground ladder steps toward the background, `accent` comes from the bold/cursor/selection colours, `focusBackground` is the profile's selection colour, and `success`/`warning`/`error`/`info` are readable green/amber/red/blue tuned to the background's lightness).
+
+| Profile | Case | ID |
+|---------|------|----|
+| Basic | ``TerminalProfilePalette/Profile/basic`` | `"terminal.basic"` |
+| Grass | ``TerminalProfilePalette/Profile/grass`` | `"terminal.grass"` |
+| Homebrew | ``TerminalProfilePalette/Profile/homebrew`` | `"terminal.homebrew"` |
+| Man Page | ``TerminalProfilePalette/Profile/manPage`` | `"terminal.manPage"` |
+| Novel | ``TerminalProfilePalette/Profile/novel`` | `"terminal.novel"` |
+| Ocean | ``TerminalProfilePalette/Profile/ocean`` | `"terminal.ocean"` |
+| Pro | ``TerminalProfilePalette/Profile/pro`` | `"terminal.pro"` |
+| Red Sands | ``TerminalProfilePalette/Profile/redSands`` | `"terminal.redSands"` |
+| Silver Aerogel | ``TerminalProfilePalette/Profile/silverAerogel`` | `"terminal.silverAerogel"` |
+| Solid Colors | ``TerminalProfilePalette/Profile/solidColors`` | `"terminal.solidColors"` |
+
+```swift
+environment.paletteManager.setCurrent(TerminalProfilePalette(.homebrew))
+```
+
 ## Palette Cycling Order
 
-When pressing `t` to cycle themes, palettes rotate in this order:
+When pressing `t` to cycle themes (opt-in — see above), palettes rotate in this order: the phosphor presets first, then the Terminal.app profiles.
 
-| # | Palette | Preset |
-|---|---------|--------|
+| # | Palette | Preset / Profile |
+|---|---------|------------------|
 | 1 | Green (default) | `.green` |
 | 2 | Amber | `.amber` |
 | 3 | Red | `.red` |
 | 4 | Violet | `.violet` |
 | 5 | Blue | `.blue` |
 | 6 | White | `.white` |
+| 7 | Basic | `.basic` |
+| 8 | Grass | `.grass` |
+| 9 | Homebrew | `.homebrew` |
+| 10 | Man Page | `.manPage` |
+| 11 | Novel | `.novel` |
+| 12 | Ocean | `.ocean` |
+| 13 | Pro | `.pro` |
+| 14 | Red Sands | `.redSands` |
+| 15 | Silver Aerogel | `.silverAerogel` |
+| 16 | Solid Colors | `.solidColors` |
 
 ## Color Resolution Flow
 
@@ -248,6 +280,7 @@ This means the same view code produces different colors depending on the active 
 ### Palettes
 
 - ``SystemPalette``
+- ``TerminalProfilePalette``
 
 ### Color System
 

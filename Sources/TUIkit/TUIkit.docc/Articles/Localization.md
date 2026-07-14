@@ -4,7 +4,7 @@ Build multilingual terminal applications with TUIkit's comprehensive internation
 
 ## Overview
 
-TUIkit provides built-in support for 5 languages: English, German, French, Italian, and Spanish. All framework strings use a type-safe, dot-notation based localization system with persistent language preferences and automatic fallback chains.
+TUIkit provides built-in support for 7 languages: English, German, French, Italian, Spanish, Simplified Chinese, and Japanese. All framework strings use a type-safe, dot-notation based localization system with persistent language preferences and automatic fallback chains.
 
 ### Key Features
 
@@ -51,6 +51,8 @@ AppState.shared.setLanguage(.german)
 - `.french` - Français
 - `.italian` - Italiano
 - `.spanish` - Español
+- `.simplifiedChinese` - 简体中文
+- `.japanese` - 日本語
 
 ## Type-Safe Keys
 
@@ -128,6 +130,16 @@ LocalizationKey.Validation.passwordTooShort
 LocalizationKey.Validation.usernameTaken
 ```
 
+#### Status Bar Keys
+
+3 status bar strings for the built-in system items: quit, appearance, theme
+
+```swift
+LocalizationKey.StatusBar.quit
+LocalizationKey.StatusBar.appearance
+LocalizationKey.StatusBar.theme
+```
+
 ## Using Localized Strings
 
 ### LocalizedString View
@@ -191,8 +203,8 @@ LocalizationService.shared.setLanguage(.french)
 
 ### Language Persistence
 
-Language preferences are automatically saved per-app, in the same
-platform-idiomatic configuration directory `@AppStorage` uses:
+Language preferences are automatically saved per-app, in the
+platform-idiomatic configuration directory:
 - **macOS**: `~/Library/Application Support/<App>/language`
 - **Linux**: `$XDG_CONFIG_HOME/<App>/language` (else `~/.config/<App>/language`)
 
@@ -210,18 +222,26 @@ String resolution uses a fallback chain:
 
 This ensures the UI always has something to display, even with incomplete translations.
 
-## Environment Access
+## Direct Access
 
-`LocalizationService` is available in the view environment:
+`LocalizationService` is a shared service:
 
 ```swift
 struct MyView: View {
-    @Environment(\.localizationService) var localization
-
     var body: some View {
-        Text(localization.string(for: LocalizationKey.Button.ok))
+        Text(LocalizationService.shared.string(for: LocalizationKey.Button.ok))
     }
 }
+```
+
+Applications can also register their own translations, which win over the
+framework's for matching keys:
+
+```swift
+LocalizationService.shared.register(translations: [
+    "en": ["greeting.hello": "Hello"],
+    "de": ["greeting.hello": "Hallo"],
+])
 ```
 
 ## Adding New Keys
@@ -265,7 +285,7 @@ extension LocalizationService {
 
 ### 2. Add to All Translation Files
 
-Add the same key to all 5 translation JSON files:
+Add the same key to all 7 translation JSON files:
 
 **en.json**:
 ```json
@@ -283,7 +303,7 @@ Add the same key to all 5 translation JSON files:
 }
 ```
 
-Similar for `fr.json`, `it.json`, `es.json`.
+Similar for `fr.json`, `it.json`, `es.json`, `zh.json`, `ja.json`.
 
 ### 3. Update Tests
 
@@ -488,7 +508,7 @@ swift test --filter LocalizationKeyConsistencyTests
 ### Wrong Language Showing
 
 - Verify language was set: `AppState.shared.currentLanguage`
-- Confirm language is supported (en, de, fr, it, es)
+- Confirm language is supported (en, de, fr, it, es, zh, ja)
 - Check translation file exists for that language
 
 ### JSON Syntax Errors

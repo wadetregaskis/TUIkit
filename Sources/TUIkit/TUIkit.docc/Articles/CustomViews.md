@@ -46,7 +46,7 @@ struct UserCard: View {
     let role: String?
 
     var body: some View {
-        Panel(title: name) {
+        Panel(name) {
             Text(name).bold()
             if let role {
                 Text(role)
@@ -122,25 +122,24 @@ SettingsGroup("Network") {
 A ``ViewModifier`` transforms an already-rendered ``FrameBuffer``. Use this when your transformation operates on the output of any view:
 
 ```swift
-struct HighlightModifier: ViewModifier {
-    let color: Color
-
+struct QuoteModifier: ViewModifier {
     func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
-        // Transform each line in the buffer
-        var result = FrameBuffer()
-        for line in buffer.lines {
-            result.appendLine(ANSIRenderer.applyPersistentBackground(to: line, color: color))
-        }
-        return result
+        // Transform each line in the buffer: prefix a gutter marker.
+        // replacingLines(_:) keeps the buffer's overlays and hit-test
+        // regions, shifted by however far the content moved.
+        let quoted = buffer.lines.map { "▌ " + $0 }
+        return buffer.replacingLines(quoted, overlayShiftX: 2)
     }
 }
 ```
+
+(For colour and background changes, prefer composing the built-in modifiers — `.background(_:)`, `.foregroundStyle(_:)` — over rewriting escape codes by hand.)
 
 Apply it using `.modifier(_:)`:
 
 ```swift
 Text("Important!")
-    .modifier(HighlightModifier(color: .red))
+    .modifier(QuoteModifier())
 ```
 
 ### Convenience Extensions
@@ -149,13 +148,13 @@ For a cleaner API, add a `View` extension:
 
 ```swift
 extension View {
-    func highlighted(_ color: Color = .red) -> some View {
-        modifier(HighlightModifier(color: color))
+    func quoted() -> some View {
+        modifier(QuoteModifier())
     }
 }
 
 // Usage
-Text("Important!").highlighted(.yellow)
+Text("Important!").quoted()
 ```
 
 ### When to Use ViewModifier

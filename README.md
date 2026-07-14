@@ -65,13 +65,13 @@ struct ContentView: View {
 
 ### Views & components
 
-- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image`
+- **Primitive views**: `Text`, `EmptyView`, `Spacer`, `Divider`, `Image`, and `Label(_:systemImage:)` (SF Symbols, on terminals using Apple's fonts)
   - **`Image`** renders raster images (PNG/JPEG, decoded by AppKit's `NSImage` on Apple platforms and the bundled `stb_image` elsewhere) as terminal art, configured by three orthogonal choices. The **charset** via `.imageCharacterSet(_:)` — `.ascii(glyphs:)`, `.unicode(glyphs:)` (adds box-drawing and geometric shapes; excludes block characters), `.blocks(_:)` at a discrete resolution (`.half` half-block `▄` cells, the default; `.solid` gap-free background fill; `.coarse` shades; `.braille` 2×4 dots), or `.customRamp(_:)`. The charset **size** — the `glyphs` count picks the ideal calibrated subset (density levels spread evenly, flattest glyph per level). And **shape-awareness** via `.imageShapeAware(_:)` — glyphs matched by their measured in-cell ink distribution (with Sobel edge-orientation lines for ascii/unicode; blocks shape-match over quadrants, halves, shades, and corner triangles `◢◣◤◥`). Four colour modes via `.imageColorMode(_:)` — `trueColor` (default), `ansi256`, `grayscale`, `mono` — auto-downgraded to the terminal's capability, with optional Floyd–Steinberg dithering. Loads asynchronously from a file path or URL (session-cached) behind a placeholder spinner, and supports aspect-fit/fill, zoom including sub-1× (`.imageZoom(_:)`), and fit targets (`.imageFitTarget(.proposedSize | .viewport)`).
 - **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack`, `Group`, `ViewThatFits`, and `TabView` / `Tab`
-- **Interactive controls**: `Button`, `ButtonRow`, `Toggle`, `Menu`, `Picker`, `TextField`, `SecureField`, `Slider`, `Stepper`, `RadioButtonGroup`, and `ColorPicker` (with a rich `ColorPickerPanel` offering RGB/HSL/HSB/CMYK editing, a 256-colour grid, and named / web-safe / crayon palettes) — all with keyboard navigation and focus
+- **Interactive controls**: `Button`, `ButtonRow`, `Toggle`, `Menu`, `Picker`, `TextField` (with combo-box-style suggestion menus via `.textInputSuggestions(_:)`), `SecureField`, `TextEditor`, `DatePicker`, `Slider`, `Stepper`, `RadioButtonGroup`, `Link` (with the `openURL` environment action), and `ColorPicker` (with a rich `ColorPickerPanel` offering RGB/HSL/HSB/CMYK editing, a 256-colour grid, and named / web-safe / crayon palettes) — all with keyboard navigation and focus
   - `Picker` styles: `.automatic` (default), `.menu`, `.inline`, `.radioGroup`
-  - `Toggle` styles: `.automatic`, `.checkbox` (a checkbox; customise its glyphs with `CheckboxStyle` — `.unicode` (■/□), `.emoji` (⬛︎/⬜︎), or `.ascii` (`[x]`/`[ ]`) — via `.checkboxStyle(_:)`; the default adapts to the terminal: emoji under Apple's Terminal.app, unicode elsewhere), and `.switch` (a two-position switch — a knob over a coloured track, following the same glyph repertoire)
-- **Data views**: `List`, `Table`, `Section`, `ForEach`, `NavigationSplitView`, `ContentUnavailableView`
+  - `Toggle` styles: `.automatic`, `.checkbox` (a checkbox; customise its glyphs with `CheckboxStyle` — `.unicode` (■/□), `.emoji` (⬛︎/⬜︎), or `.ascii` (`[x]`/`[ ]`) — via `.checkboxStyle(_:)`; the default adapts to the terminal: emoji under Apple's Terminal.app and iTerm2, unicode elsewhere), and `.switch` (a two-position switch — a knob over a coloured track, following the same glyph repertoire)
+- **Data views**: `List`, `Table`, `Section`, `ForEach`, `Form` (with `LabeledContent` rows and columns / grouped layouts via `.formStyle(_:)`), `NavigationSplitView`, `ContentUnavailableView`
   - `List` rows render lazily — only the visible window is materialised, so very large lists stay O(visible) — with `.plain` / `.insetGrouped` styles and `.badge()` rows
   - `Table` supports per-column sizing (`.width(.fixed(n) | .flexible | .ratio(r) | .fit)`, where `.fit` sizes to the widest header/cell value), multi-line wrapping cells (`.lineLimit(_:)`), per-column alignment and truncation, and row selection
   - `Set`-bound selections follow the macOS model: plain / shift- / ctrl-click for sole / range / toggle selection, Shift+arrows extend the range where the terminal reports Shift, `v` toggles an extend mode so plain arrows extend in any terminal, Ctrl+A selects all, and Escape clears — consuming the key only when there is something to clear, so it never blocks app navigation
@@ -79,7 +79,8 @@ struct ContentView: View {
 - **Containers & chrome**: `Alert`, `Dialog`, `Panel`, `Card`
 - **Feedback**:
   - **`ProgressView`** — determinate or indeterminate. Determinate look via `.progressViewStyle(_:)` (`TrackStyle`): `block` (default), `bar`, `blockFine`, `dot`, `shade`, `braille`, `shadeRamp(gradient:)`, `threeSegment(...)`, or `custom(TrackConfiguration)` — the named fill styles are presets of one configurable renderer (fill glyph, sub-cell ramp, solid-background unfilled, gradient). Indeterminate animation via `.indeterminateStyle(_:)`: `sweep` (default), `barberPole`, `pulse`, `knightRider`, `gradient`.
-  - **`Spinner`** — animated, in three styles: `dots` (default), `line`, `bouncing` (a Knight-Rider scanner with a fading trail), with an optional label and colour.
+  - **`Gauge`** — a labelled value read-out with min/max bounds, styled via `.gaugeStyle(_:)`: `linearCapacity` (default), `accessoryLinear` (position marker), `accessoryLinearCapacity`, `accessoryCircular` / `accessoryCircularCapacity` (ring dials), or the compact `accessoryCircularTiny` pie glyph.
+  - **`Spinner`** — animated, in eleven built-in styles (`dots` (default), `line`, `bouncing` (a Knight-Rider scanner with a fading trail), `pie`, `beachball`, `box`, `bars`, `blockWedge`, `moon`, `earth`, `clock`) plus `.custom(_:)` frame sequences, with an optional label and colour.
 - **`StatusBar`**: context-sensitive keyboard shortcuts with `.compact` and `.bordered` styles
 
 ### Scrolling & scrollbars
@@ -91,6 +92,7 @@ struct ContentView: View {
 
 - Left / middle / right clicks, vertical scroll-wheel, and horizontal + vertical trackpad scrolling, with drag tracking and enter/exit hit-testing. Both SGR and legacy X10 mouse-report encodings are parsed.
 - Gesture modifiers: `.onTapGesture` (including `count:` for double/triple-click, via synthesised `MouseEvent.clickCount`), `.onScrollGesture`, `.onDragGesture`, `.onHover`, and the raw `.onMouseEvent`.
+- Drag and drop: `.draggable(_:)` (with an optional custom preview and grab-point anchoring) and `.dropDestination(for:action:)`, in the style of SwiftUI's Transferable API.
 - Enable the level you want with `.mouseSupport(.disabled | .scrollOnly | .standard | .full)` on a `View` or a `Scene`.
 
 ### Presentation
@@ -105,7 +107,7 @@ struct ContentView: View {
 - **Text styling**: `.bold()`, `.italic()`, `.underline()`, `.strikethrough()`, `.fontWeight(_:)`, `.textCase(_:)` on any view; plus `.dim()`, `.blink()`, and `.inverted()` on `Text`.
 - **Colour**: `.foregroundStyle(_:)` and `.background(_:)`. `Color` supports the 8 standard + 8 bright ANSI colours, the 256-colour palette (`Color.palette(_:)`), 24-bit RGB (`Color.rgb(_:_:_:)`), hex (`Color.hex(0xFF5500)` / `Color.hex("#FF5500")`), and the HSL / HSB / CMYK colour spaces. Palette-aware semantic colours resolve against the active palette at render time.
 - **Border styles** (`BorderStyle`): `.line`, `.rounded`, `.doubleLine`, `.heavy`, `.none`, plus a public initialiser for fully custom border characters; applied with `.border(_:color:)`.
-- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.checkboxStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, plus per-control text-style builders.
+- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.checkboxStyle`, `.listStyle`, `.formStyle`, `.gaugeStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, plus per-control text-style builders.
 - **Badges**: `.badge(_ count: Int)` (0 hides) or `.badge(_ label:)` on list rows.
 
 ### Internationalization (i18n)
@@ -242,7 +244,7 @@ LocalizationService.shared.register(translations: [
 LocalizationService.shared.string(for: "app.greeting")  // honours the current language
 ```
 
-The `LocalizationKey` namespace groups all framework strings into `Button`, `Label`, `Error`, `Placeholder`, `Menu`, `Dialog`, and `Validation`, with typed-key overloads for `Text(localized:)`, `LocalizedString(_:)`, and `LocalizationService.string(for:)`. The fallback chain is current language → English → the key itself, and the selection is persisted per-app in the platform config directory alongside `@AppStorage` (macOS: `~/Library/Application Support/<App>/language`; Linux: `$XDG_CONFIG_HOME/<App>/language`, else `~/.config/<App>/language`).
+The `LocalizationKey` namespace groups all framework strings into `Button`, `Label`, `Error`, `Placeholder`, `Menu`, `Dialog`, `Validation`, and `StatusBar`, with typed-key overloads for `Text(localized:)`, `LocalizedString(_:)`, and `LocalizationService.string(for:)`. The fallback chain is current language → English → the key itself, and the selection is persisted per-app in the platform config directory alongside `@AppStorage` (macOS: `~/Library/Application Support/<App>/language`; Linux: `$XDG_CONFIG_HOME/<App>/language`, else `~/.config/<App>/language`).
 
 For complete documentation, see the [Localization Guide](https://github.com/wadetregaskis/TUIkit/blob/main/Sources/TUIkit/TUIkit.docc/Articles/Localization.md) in the DocC documentation.
 
@@ -279,11 +281,14 @@ Sources/
 │   ├── Environment/      Environment keys, service configuration
 │   ├── Extensions/       View modifiers and convenience APIs
 │   ├── Focus/            Focus system and keyboard navigation
-│   ├── Localization/     i18n service, type-safe keys, translations (5 languages)
+│   ├── Input/            Drag-and-drop session tracking
+│   ├── Localization/     i18n service, type-safe keys, translations (7 languages)
 │   ├── Modifiers/        Border, Frame, Padding, Overlay, Lifecycle, KeyPress, Mouse, ...
 │   ├── Notification/     Toast-style notification system
 │   ├── Rendering/        Terminal, ANSIRenderer, ViewRenderer
+│   ├── SFSymbols/        SF Symbols name → codepoint table and resolver
 │   ├── State/            @State / @AppStorage / binding storage
+│   ├── StatusBar/        Status bar model, shortcuts, system items
 │   ├── Styles/, Styling/ Control and visual styles
 │   ├── Utility/          Misc helpers
 │   ├── TUIkit.docc/      DocC documentation catalog
@@ -292,15 +297,20 @@ Sources/
 └── TUIkitStress/         Performance stress harness, also a complex-TUI demo (executable)
 
 Tests/
-└── TUIkitTests/          ~2,275 tests across 316 suites in 186 files
+└── TUIkitTests/          ~2,850 tests across ~410 suites in 256 files
                           (incl. i18n consistency, localization & golden-snapshot tests)
 
 Tools/
-├── EmojiBugScanner/      Probes Terminal.app for emoji cursor-advance quirks
+├── Diagrams/             Generates the DocC architecture / lifecycle diagrams from source
 ├── EmojiBenchmark/       Benchmarks emoji classification strategies
-└── Profiling/            Instruments Time Profiler tooling (record.sh, drive.py,
-                          analyze_timeprofile.py, idle_cpu.py) and the RenderHarness
-                          executable (no-PTY render loop for `xctrace --launch`)
+├── EmojiBugScanner/      Probes Terminal.app for emoji cursor-advance quirks
+├── GenerateImageGlyphs/  Font-rasterisation calibration tables for the Image glyph renderers
+├── GenerateSFSymbols/    Regenerates the baked SF Symbol name → codepoint table
+├── Profiling/            Instruments Time Profiler tooling (record.sh, drive.py,
+│                         analyze_timeprofile.py, idle_cpu.py) and the RenderHarness
+│                         executable (no-PTY render loop for `xctrace --launch`)
+└── TerminalProbes/       Reproducible terminal-behaviour probes backing
+                          Documentation/Terminal-compatibility.md
 
 Benchmarks/
 └── TUIkitBenchmarks/     ordo-one/package-benchmark suite (color, frame buffer, image,
@@ -317,7 +327,7 @@ The package also vends each library as an individual product. `import TUIkit` re
 
 ## Developer notes
 
-- Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~2,275 tests across 316 suites in 186 files.
+- Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~2,850 tests across ~410 suites in 256 files.
 - Most tests run in parallel; a small subset that mutates global state is serialised, so the whole suite runs in a few seconds.
 - Benchmarks: `TUIKIT_BENCHMARKS=1 swift package benchmark` (full suite) — see `Benchmarks/TUIkitBenchmarks`. The `TUIKIT_BENCHMARKS` flag opts the `ordo-one/benchmark` dependency into the graph; without it the default build/test stays benchmark-free (no jemalloc requirement, no plugin deprecation warnings).
 - Profiling: see [Tools/Profiling/README.md](Tools/Profiling/README.md) (Instruments Time Profiler via a PTY, plus the no-PTY `RenderHarness` for `xctrace --launch`).

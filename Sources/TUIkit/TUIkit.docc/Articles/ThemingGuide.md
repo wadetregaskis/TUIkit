@@ -96,17 +96,18 @@ struct MyCustomPalette: Palette {
 
     // Optional: override defaults for statusBarBackground,
     // appHeaderBackground, overlayBackground,
-    // foregroundSecondary, foregroundTertiary
+    // foregroundSecondary, foregroundTertiary, foregroundQuaternary,
+    // focusBackground, cursorColor, fieldBackground
 }
 ```
 
 ## Palette Color Properties
 
 - **Backgrounds**: `background`, `statusBarBackground`, `appHeaderBackground`, `overlayBackground`
-- **Foregrounds**: `foreground`, `foregroundSecondary`, `foregroundTertiary`
+- **Foregrounds**: `foreground`, `foregroundSecondary`, `foregroundTertiary`, `foregroundQuaternary`
 - **Accent**: `accent`
 - **Semantic**: `success`, `warning`, `error`, `info`
-- **UI Elements**: `border`
+- **UI Elements**: `border`, `focusBackground` (focused list/table rows), `cursorColor` (text cursor), `fieldBackground` (editable-field surface)
 
 Only 8 properties are required (`background`, `foreground`, `accent`, `border`, `success`, `warning`, `error`, `info`). All others have default implementations that derive from these.
 

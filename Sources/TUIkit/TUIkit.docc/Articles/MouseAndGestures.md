@@ -35,8 +35,8 @@ struct MyApp: App {
 |--------|-----------------|
 | `.disabled` | No mouse reporting (the default) |
 | `.scrollOnly` | Wheel / trackpad scrolling only |
-| `.standard` | Clicks and scrolling |
-| `.full` | Clicks, scrolling, motion, and drag tracking |
+| `.standard` | Clicks, scrolling, and drag tracking |
+| `.full` | Everything, including cursor-motion reporting (hover) |
 
 ## Gestures
 
@@ -46,6 +46,11 @@ High-level gesture modifiers cover the common cases:
 Text("Click me")
     .onTapGesture { x, y in
         // a left-click release at terminal cell (x, y)
+    }
+
+Text("Double-click me")
+    .onTapGesture(count: 2) {
+        // fires on the second click of a double-click
     }
 
 content
@@ -68,6 +73,32 @@ content
 
 Horizontal scrolling (`.left` / `.right`) is produced by a trackpad swipe or a
 shifted mouse wheel.
+
+## Drag and Drop
+
+Views can act as drag sources and drop targets, in the style of SwiftUI's
+`Transferable` modifiers. Mark a source with `draggable(_:)` — optionally with
+a custom preview that floats at the cursor — and a target with
+`dropDestination(for:action:isTargeted:)`:
+
+```swift
+Text("🍎 Apple")
+    .draggable(Fruit.apple)
+
+Text("🧺 Basket")
+    .dropDestination(for: Fruit.self) { fruits, info in
+        // info is a DropInfo: the drop cell in local space plus the
+        // modifiers held at release
+        basket.append(contentsOf: fruits)
+        return true
+    } isTargeted: { over in
+        isHighlighted = over   // highlight while a compatible drag hovers
+    }
+```
+
+Dragging requires drag tracking (`.standard` or `.full`). The floating
+preview's grab-point anchoring is configurable via
+`dragPreviewAnchor(_:)`.
 
 ## Raw Events
 
@@ -99,6 +130,11 @@ the frame.
 - ``MouseSupport``
 - ``ScrollDirection``
 - ``DragGestureEvent``
+
+### Drag and Drop
+
+- ``DropInfo``
+- ``DragPreviewAnchor``
 
 The raw event types (`MouseEvent`, `MouseButton`, `MousePhase`) live in the
 re-exported `TUIkitCore` module.

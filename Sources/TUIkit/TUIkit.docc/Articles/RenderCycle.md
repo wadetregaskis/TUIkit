@@ -76,7 +76,7 @@ A ``RenderContext`` bundles everything a view needs to render:
 | Property | What |
 |----------|------|
 | `availableWidth` | Terminal width (mutable: containers reduce this for children) |
-| `availableHeight` | Terminal height minus status bar (mutable) |
+| `availableHeight` | Terminal height minus status bar and app header (mutable) |
 | `environment` | The ``EnvironmentValues`` from step 3 |
 | `tuiContext` | The `TUIContext` (lifecycle, key dispatch, preferences, state storage) |
 | `identity` | The current view's structural identity (`ViewIdentity`) |
@@ -154,16 +154,17 @@ Views that conform to `Renderable` implement `renderToBuffer(context:)` and prod
 
 This path is used by:
 - **Leaf views**: ``Text``, ``Spacer``, `Divider`, ``EmptyView``
-- **Layout containers**: `VStack`, `HStack`, `ZStack`
-- **Interactive views**: ``Button``, ``ButtonRow``, ``Menu``
-- **Container views**: ``Panel``, ``Card``, ``Alert``, ``Dialog``
+- **Private `_*Core` views**: `_VStackCore`, `_HStackCore`, `_ButtonCore`, `_CardCore`, `_ListCore`, and friends — the procedural rendering behind the public controls
 - **Modifier wrappers**: `ModifiedView`, `DimmedModifier`, `OverlayModifier`, `EnvironmentModifier`, ``EquatableView``, and all lifecycle modifiers
+
+Public controls are **not** directly `Renderable`: per the project's view-architecture rule, every public control has a real `body` that delegates to a private `_*Core` type (Path 2 below), so modifiers and environment values flow through the whole hierarchy.
 
 ### Path 2: Composition (body)
 
 Views that are **not** `Renderable` declare their content through `body`. The rendering system recursively renders the body until it hits a `Renderable` leaf.
 
 This path is used by:
+- **Public controls**: ``VStack``, ``Button``, ``Card``, ``List``, ``Panel``, ``Alert``, ``Dialog``, ... — each wraps its private `Renderable` `_*Core`
 - **Composite views**: ``Card`` returns `content.padding().border(...)`, which wraps in a `ContainerView` (whose `_ContainerViewCore` is `Renderable`)
 - **User-defined views**: Your custom views compose other views in `body`
 
@@ -239,7 +240,10 @@ offset by however far the underlying lines moved, so by the time the root
 ``FrameBuffer`` reaches `RenderLoop.render()` every layer's offset is
 absolute on the content area. `RenderLoop` then composites the layers in
 ascending `(level, zIndex)` order, flipping a layer above its anchor when
-it would overflow the bottom edge. ``Picker``'s drop-down menu uses this
+it would overflow the bottom edge. Overlays are clamped and centred
+against the `overlayContentHeight` environment value — the content-area
+height (terminal minus status bar and app header) — so a layer never
+extends behind the status bar. ``Picker``'s drop-down menu uses this
 mechanism — its in-flow control stays a single line whether the menu is
 open or closed.
 
@@ -337,7 +341,7 @@ The `OnDisappearModifier` does two things during rendering:
 1. Registers its callback with `lifecycle.registerDisappear(token, action)`
 2. Marks itself as visible with `lifecycle.recordAppear(token, {})` (empty action)
 
-The actual `onDisappear` callback fires in step 7 (end lifecycle tracking), **after** the entire view tree has rendered.
+The actual `onDisappear` callback fires in step 12 (end lifecycle tracking), **after** the entire view tree has rendered.
 
 ### Task Lifecycle
 
@@ -405,11 +409,12 @@ FeatureBox("Pure Swift", "No ncurses").equatable()
 
 ### Cache Invalidation
 
-The `RenderCache` is **fully cleared** in two situations:
+Cache invalidation is **identity-scoped** where possible, with full clears as the fallback:
 
 | Trigger | Mechanism |
 |---------|-----------|
-| Any `@State` change | `StateBox.value.didSet` calls `renderCache.clearAll()` |
+| A `@State` change | `StateBox.value.didSet` calls `renderCache.clearAffected(by: identity)` — only the affected subtree's cached buffers are invalidated. `clearAll()` is the fallback when the box has no identity yet |
+| An `@Observable` change | `AppState.setNeedsRenderWithCacheClear()`; `RenderLoop` consumes the flag (`consumeNeedsCacheClear`) and calls `clearAll()` |
 | Environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
 
 Between these events — for example during ``Spinner`` animation frames — the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame (the run loop renders only when a frame is actually due, capped at `App.maxFrameRate`).

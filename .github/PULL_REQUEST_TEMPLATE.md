@@ -4,7 +4,7 @@
 
 ## Checklist
 
-- [ ] **Swift 6.0 compatible** (no features requiring a newer compiler)
+- [ ] **Swift 6.2 compatible** (no features requiring a newer compiler)
 - [ ] **Builds on macOS and Linux** (`swift build` succeeds on both)
 - [ ] **All tests pass** (`swift test`)
 - [ ] **No new SwiftLint warnings** (`swiftlint`)

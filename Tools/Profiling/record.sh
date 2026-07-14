@@ -6,7 +6,7 @@
 # This is the end-to-end ("Mode B") profiling flow: it profiles the real
 # app the way a user exercises it (input -> dispatch -> render -> diff ->
 # write). For deterministic micro-profiling of the render pipeline alone,
-# see the (proposed) headless harness in README.md.
+# see the headless harness (`RenderHarness`) in README.md.
 #
 # Usage:
 #   Tools/Profiling/record.sh [scenario] [seconds] [rows] [cols]

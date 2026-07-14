@@ -118,8 +118,8 @@ The following is preserved as historical context; all items are done.
 - [x] `ASCIIConverter` tests — **done** (in `Tests/TUIkitTests/ImageTests.swift`, not the separate `Image/` path originally proposed)
 - [x] `RGBAImage` tests — **done** (in `Tests/TUIkitTests/ImageTests.swift`)
 - [x] `Notification/` subsystem tests — **done** (`Tests/TUIkitTests/NotificationModifierTests.swift`)
-- [ ] `Extensions/` view extension tests — **still open** (no dedicated test file; some behaviour is exercised indirectly by View tests, but the targeted coverage called for here doesn't exist yet)
-- [ ] `App/` subsystem coverage — **partial**: `RenderLoop` has `RenderLoopRegionMergeTests` + `RenderLoopPaletteIntegrationTests`; `InputHandler` still has **no dedicated test** (only indirect integration coverage). Remaining: add `InputHandler` tests (mockable via `TerminalProtocol`/synthesised events) and write the coverage rationale.
+- [x] `Extensions/` view extension tests — **done** (`OnTapGestureModifierTests`, `OnScrollGestureModifierTests`, `OnMouseEventModifierTests`, `DragGestureModifierTests`, `StringPersistentBackgroundTests`, `SignalFlagsTests`)
+- [x] `App/` subsystem coverage — **done**: `RenderLoop` has `RenderLoopRegionMergeTests` + `RenderLoopPaletteIntegrationTests`; `InputHandler` now has `InputHandlerTests.swift` (layer precedence, layer-4 defaults, modal-Escape).
 - [x] `project-template/` organization decision + action (keep / move / fold) — **done**: decided **keep inline**; rationale documented in `CONTRIBUTING.md`.
 
 ### Verification
@@ -137,13 +137,13 @@ The following is preserved as historical context; all items are done.
 | P2       | 5     | 5         | 0         |
 | P3       | 5     | 5         | 0         |
 | P4       | 5     | 5         | 0         |
-| Additional | 9   | 7         | 2         |
-| **Total** | **29** | **27**  | **2**     |
+| Additional | 9   | 9         | 0         |
+| **Total** | **29** | **29**  | **0**     |
 
-Remaining two: View-extension tests and the `App/`-subsystem
-(`InputHandler` tests + coverage rationale). The
-`project-template/` decision is resolved (kept inline; see
-`CONTRIBUTING.md`).
+All items are now closed: the View-extension tests and the
+`App/`-subsystem coverage (`InputHandlerTests.swift`) landed
+after the original snapshot. The `project-template/` decision
+is resolved (kept inline; see `CONTRIBUTING.md`).
 
 ---
 

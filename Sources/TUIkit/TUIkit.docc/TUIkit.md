@@ -64,6 +64,7 @@ struct MyApp: App {
 - <doc:PaletteReference>
 - <doc:ListAndTable>
 - <doc:LayoutSystem>
+- <doc:Localization>
 
 ### App Structure
 
@@ -78,6 +79,7 @@ struct MyApp: App {
 - ``Text``
 - ``Image``
 - ``ImageSource``
+- ``Label``
 - ``EmptyView``
 - ``AnyView``
 - ``Spinner``
@@ -91,16 +93,20 @@ struct MyApp: App {
 - ``ButtonRow``
 - ``TextField``
 - ``SecureField``
+- ``TextEditor``
 - ``Toggle``
 - ``Slider``
 - ``Stepper``
 - ``RadioButtonGroup``
 - ``Picker``
 - ``RadioButtonItem``
+- ``DatePicker``
 - ``ColorPicker``
 - ``Menu``
 - ``MenuItem``
+- ``Link``
 - ``ProgressView``
+- ``Gauge``
 
 ### Layout
 
@@ -130,6 +136,8 @@ struct MyApp: App {
 - ``TabView``
 - ``Tab``
 - ``ScrollView``
+- ``Form``
+- ``LabeledContent``
 
 ### Data Collections
 

@@ -31,6 +31,9 @@ The two handlers differ in exactly one place: their `extent`.
 ``ItemListHandler.extent`` returns `itemCount` (rows). Every
 formula above is written in terms of `extent`, so the math
 works for both shapes without forcing them into a common unit.
+(Line-granularity scrolling has since landed in List/Table as
+internal ``ItemListHandler`` state without changing this
+contract — its `extent` is still row-based.)
 
 What used to be three places where a wheel handler's
 `switch event.button` case-`.scrollUp`-and-case-`.scrollDown`
@@ -76,10 +79,12 @@ realistic scrolling list.
 canvas:
 
 ```swift
-let measureHeight = max(viewportHeight * 64, 4096)
-var measureContext = context
-measureContext.availableWidth = viewportWidth
-measureContext.availableHeight = measureHeight
+var measureContext = context.withChildIdentity(type: Content.self)
+measureContext.availableHeight = max(viewportHeight * 64, 4096)
+if horizontal {
+    // Horizontal scrolling inflates the width axis the same way.
+    measureContext.availableWidth = max(contentWidth * 64, 4096)
+}
 let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
 ```
 

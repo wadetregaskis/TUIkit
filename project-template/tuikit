@@ -44,7 +44,7 @@ check_linux_swift() {
     echo "╚════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""
-    echo -e "TUIkit requires Swift 6.0 or later to create projects."
+    echo -e "TUIkit requires Swift 6.2 or later to create projects."
     echo ""
     echo -e "${YELLOW}Would you like to install Swift and its dependencies?${NC}"
     echo -e "This will install: Swift, clang, libcurl, and other required packages."
@@ -247,8 +247,8 @@ install_swift_tarball() {
         UBUNTU_VERSION="22.04"
     fi
 
-    # Download and install (using Swift 6.0.2 as stable version)
-    SWIFT_VERSION="6.0.2"
+    # Download and install (using Swift 6.2 as stable version)
+    SWIFT_VERSION="6.2"
     SWIFT_RELEASE="swift-${SWIFT_VERSION}-RELEASE"
     SWIFT_PLATFORM="ubuntu${UBUNTU_VERSION}"
 

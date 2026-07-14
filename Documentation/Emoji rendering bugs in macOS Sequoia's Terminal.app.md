@@ -1,5 +1,10 @@
 # Emoji rendering bugs in macOS Sequoia's Terminal.app
 
+> **Status.** The #18/#19 fix described below has shipped; the helpers
+> live in `Sources/TUIkitCore/Extensions/String+CursorCompensation.swift`
+> and `String+TerminalWidth.swift`. References to the "working tree"
+> below reflect the state during the investigation.
+
 This document catalogues the Terminal.app rendering quirks that TUIkit has
 to work around in macOS 15 (Sequoia), the approaches that were tried during
 the investigation in this branch (12 commits on top of `a95d7164`), and why
@@ -87,7 +92,7 @@ in chronological order, and the failure mode that drove the next attempt.
 | 16 | (working tree, abandoned) | `+2` bump to `repaintRightEdge` CUP target on skin-tone rows                                  | ✅                  | partial         | `│` appeared at the right column in some screenshots; rightmost 2 cells still left at default bg |
 | 17 | (working tree, abandoned) | Append 2 overdraw `bg`-spaces past the line's logical end on skin-tone rows                  | ✅                  | ❌               | Bytes past terminal width either wrap or clamp; right-edge cells stay at default bg |
 | 18 | (superseded by #19 for text-default bases) | Combine **cursor-aware clip** (Bug B3) + **followed-by-content strip** (Bug B2)         | ✅ when last on row | ✅ for emoji-default bases; ❌ for text-default bases | Worked for emoji-default-presentation bases (🤙 ✊ 👍 etc.) — base emoji renders at the cluster's 2-cell width.  Broke for **text-default-presentation** bases (☝ ✌ ✍ ⛹ 🏋 🏌 🕴 🕵 🖐): their bare base is a 1-cell text glyph, so stripping the Fitzpatrick shrank the cluster from 2 cells to 1 and pushed every following cell on the row 1 column LEFT.  A row of 4 such clusters (the EmojiPage `BugCaseRow`) left its rightmost 4 cells at default bg. |
-| 19 | **Shipping fix** (working tree) | Same as #18, plus: when the stripped base is `isEmoji && !isEmojiPresentation`, append U+FE0F (VS-16) and inject CUF(1)         | ✅ when last on row | ✅              | VS-16 promotes the base back to a 2-cell coloured-emoji glyph so the row layout is preserved.  The resulting `<base>+FE0F` cluster is a VS-16 under-advancer (Bug A) but the existing CUF(1)-after-the-cluster compensation handles that.  Also: `terminalAppCursorAdvance` now returns **3** (not 4) for text-default-base + Fitzpatrick clusters — the empirical over-advance is +2 from the 1-cell baseline, not the 4 we previously assumed.  Skin tone is still lost in the followed-by-content case; the layout never breaks. |
+| 19 | **Shipping fix** (shipped) | Same as #18, plus: when the stripped base is `isEmoji && !isEmojiPresentation`, append U+FE0F (VS-16) and inject CUF(1)         | ✅ when last on row | ✅              | VS-16 promotes the base back to a 2-cell coloured-emoji glyph so the row layout is preserved.  The resulting `<base>+FE0F` cluster is a VS-16 under-advancer (Bug A) but the existing CUF(1)-after-the-cluster compensation handles that.  Also: `terminalAppCursorAdvance` now returns **3** (not 4) for text-default-base + Fitzpatrick clusters — the empirical over-advance is +2 from the 1-cell baseline, not the 4 we previously assumed.  Skin tone is still lost in the followed-by-content case; the layout never breaks. |
 
 ## Detail on selected approaches
 
@@ -165,7 +170,7 @@ inconsistent — Terminal.app sometimes clamps `CUP` to `terminalWidth`,
 sometimes wraps inline writes that overflow, and either way the
 rightmost 2 cells stayed at the default terminal background.
 
-### Shipping fix (#18/#19, current working tree)
+### Shipping fix (#18/#19, shipped)
 
 Three coordinated changes that *don't* try to undo the bug, only avoid
 provoking it:

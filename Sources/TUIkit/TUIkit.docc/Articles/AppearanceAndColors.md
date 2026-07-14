@@ -118,12 +118,16 @@ Available semantic tokens include:
 | `.palette.foreground` | Primary text |
 | `.palette.foregroundSecondary` | Secondary / dimmed text |
 | `.palette.foregroundTertiary` | Disabled / muted text |
+| `.palette.foregroundQuaternary` | Dimmest foreground (subtle UI, e.g. spinner tracks) |
 | `.palette.accent` | Highlighted elements, titles |
 | `.palette.border` | Container borders |
 | `.palette.background` | App background |
 | `.palette.statusBarBackground` | Status bar background |
 | `.palette.appHeaderBackground` | App header background |
 | `.palette.overlayBackground` | Overlay / dimmed background |
+| `.palette.focusBackground` | Focused list/table row background |
+| `.palette.cursorColor` | Text cursor in text fields |
+| `.palette.fieldBackground` | Editable-field surface (TextField, TextEditor) |
 | `.palette.success` / `.warning` / `.error` / `.info` | Status indicators |
 
 ### In renderToBuffer (with RenderContext)
@@ -134,7 +138,7 @@ Use `context.environment.palette.*` directly: these return concrete colors:
 func renderToBuffer(context: RenderContext) -> FrameBuffer {
     let accent = context.environment.palette.accent
     let border = context.environment.palette.border
-    // use directly with ANSIRenderer
+    // use directly in rendering code
 }
 ```
 

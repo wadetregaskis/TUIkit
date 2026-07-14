@@ -80,6 +80,7 @@ extension Color {
         let target = oklab(red: red, green: green, blue: blue)
         var bestIndex = 16
         var bestDistance = Double.infinity
+        // Deliberate linear scan: n=240, memoised below, and OKLab distance has no ordering to exploit — don't "optimise".
         for index in 16...255 {
             let candidate = palette256Lab[index - 16]
             let distance = hueWeightedDistanceSquared(target, candidate)
@@ -199,6 +200,7 @@ extension Color {
         var bestColor = Color.white
         var bestDistance = Int.max
 
+        // Deliberate linear scan: n=16 is trivially cheap and beats anything cleverer — don't "optimise".
         for entry in ansi16Table {
             let distance = rgbDistanceSquared(
                 (red, green, blue),

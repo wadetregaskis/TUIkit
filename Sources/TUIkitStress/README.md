@@ -55,6 +55,7 @@ scale live · `a` toggle autopilot.
 |---|---|
 | `megalist` | `List`/`ForEach` windowing, row-id resolution, lazy row content, per-row memo |
 | `table` | `Table` column-width computation, row windowing, per-cell value closures |
+| `table-multiline` | multi-line cell wrapping, lazy row sizing (visible window + bottom suffix only), variable-height windowing |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
 | `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
@@ -63,6 +64,7 @@ scale live · `a` toggle autopilot.
 | `textwall` | text width measurement, word wrapping, glyph throughput |
 | `anyview` | type-erasure fallback (render-to-measure), lost concrete dispatch |
 | `dashboard` | `Panel`/`Card` container measure + flexible-width row sharing (also the showy demo) |
+| `framedcolumns` | non-infinity `.frame` measure, frames-in-stacks-in-frames cascade, uncacheable interactive rows |
 | `churn` | full re-render per frame, cache invalidation, measure with no memo hits |
 | `kitchensink` | split-view + list windowing + container grid simultaneously |
 

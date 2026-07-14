@@ -51,12 +51,12 @@ let binding = Binding.constant(42)
 
 ```swift
 struct MyView: View {
-    @Environment(\.theme) var theme
+    @Environment(\.palette) var palette
     @Environment(\.statusBar) var statusBar
 
     var body: some View {
         Text("Themed text")
-            .foregroundStyle(theme.foreground)
+            .foregroundStyle(palette.foreground)
     }
 }
 ```
@@ -124,7 +124,7 @@ exists for this position. If it does, the existing value is used instead of the 
 
 When a ``State`` value changes:
 
-1. The `StateBox` triggers `RenderNotifier.current` -> `AppState.setNeedsRender()`
+1. `StateBox.value.didSet` calls `renderCache?.clearAffected(by: identity)` (invalidating the affected subtree's cached buffers) then `AppState.shared.setNeedsRender()`
 2. The observer registered by `AppRunner` requests a re-render
 3. The main loop re-evaluates `app.body` fresh: reconstructing all views
 4. Each `@State.init` self-hydrates from `StateStorage`, recovering persisted values

@@ -41,7 +41,7 @@ These are the cases that come up in real layouts and that the current API either
 The flexible form of `.frame(...)` takes `min`/`ideal`/`max` per axis, but the user has to remember which combination yields which behaviour (e.g. "if I pass `maxWidth: .infinity` does that override `idealWidth`?"). There's no labelled enum that says "this axis is fixed at N", "this axis is fixed but with a minimum", "this axis fills available space within a range" — the user has to encode the intent through the combinations.
 
 **2. Aspect-ratio constraints.**
-There is no `.aspectRatio(_:contentMode:)`. Views with intrinsic aspect ratios (Image is the obvious one, but also a square Canvas, a 16:9 video placeholder, etc.) currently have to either pick a fixed size or accept whatever the parent proposes and live with distortion. SwiftUI's `aspectRatio` modifier deserves a parallel.
+A View-level `.aspectRatio(_:contentMode:)` exists, but it only drives `Image` rendering via environment values (`\.imageAspectRatio`/`\.imageContentMode`); there is no general layout aspect-ratio constraint participating in `sizeThatFits`. Other views with intrinsic aspect ratios (a square Canvas, a 16:9 video placeholder, etc.) currently have to either pick a fixed size or accept whatever the parent proposes and live with distortion. SwiftUI's layout-level `aspectRatio` behaviour deserves a parallel.
 
 **3. Relative-to-parent fractions.**
 "Take 30% of the available width." There is no way to express this without computing it explicitly outside the layout. SwiftUI has `.containerRelativeFrame(...)`. A TUI variant — `.frame(width: .fraction(0.30))` or `.relativeFrame(width: 0.30)` — would clean up split views, dashboards, header strips, etc.

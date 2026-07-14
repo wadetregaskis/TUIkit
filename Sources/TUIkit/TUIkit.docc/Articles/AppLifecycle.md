@@ -122,7 +122,7 @@ terminal in alternate-screen / raw mode.
 
 ## Key Event Dispatch
 
-When the terminal delivers a key event, the `InputHandler` dispatches it through five layers. Layer 0 and Layer 3 are mutually exclusive based on `focusManager.hasTextInputFocus`:
+When the terminal delivers a key event, the `InputHandler` dispatches it through five layers (plus two refinements: an ESC pre-route before Layer 1 when an open drop-down has claimed Escape, and a semantic-shortcut stage — Layer 3.5 — between Layers 3 and 4). Layer 0 and Layer 3 are mutually exclusive based on `focusManager.hasTextInputFocus`:
 
 ### Layer 0: Text Input (conditional)
 
@@ -139,6 +139,10 @@ The `KeyEventDispatcher` iterates handlers registered via `onKeyPress()` modifie
 ### Layer 3: Focus System (conditional)
 
 Skipped when text input has focus (Layer 0 already ran). Otherwise, `focusManager.dispatchKeyEvent()` first delegates to the focused element's `handleKeyEvent()`, then handles Tab/Shift+Tab for focus cycling, then arrow keys as section navigation fallback.
+
+### Layer 3.5: Semantic Shortcut Actions
+
+If the focused control let the key fall through, Return fires the default button and Escape fires the cancel button — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
 
 ### Layer 4: Default Bindings
 

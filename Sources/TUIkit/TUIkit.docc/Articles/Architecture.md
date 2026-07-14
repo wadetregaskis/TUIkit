@@ -26,8 +26,8 @@ Every UI component conforms to the ``View`` protocol. Views are composed declara
 
 Built-in views include:
 
-- **Content**: ``Text``, ``Image``, ``Spinner``, ``Divider``, ``EmptyView``, ``LocalizedString``
-- **Interactive controls**: ``Button``, ``ButtonRow``, ``TextField``, ``SecureField``, ``Toggle``, ``Slider``, ``Stepper``, ``RadioButtonGroup``, ``Menu``, ``Picker``, ``ColorPicker``, ``ProgressView``
+- **Content**: ``Text``, ``Image``, ``Label``, ``Spinner``, ``Divider``, ``EmptyView``, ``LocalizedString``, ``ProgressView``, ``Gauge``
+- **Interactive controls**: ``Button``, ``ButtonRow``, ``TextField``, ``SecureField``, ``TextEditor``, ``Toggle``, ``Slider``, ``Stepper``, ``RadioButtonGroup``, ``Menu``, ``Picker``, ``DatePicker``, ``ColorPicker``, ``Link`` (plus combo-box behaviour via `.textInputSuggestions` on ``TextField``)
 - **Containers**: ``Card``, ``Panel``, ``Alert``, ``Dialog``, ``NavigationSplitView``, ``TabView``, ``ContentUnavailableView``, ``StatusBar``, ``Form``, ``LabeledContent``
 - **Data collections**: ``List``, ``Table``, ``Section``
 - **Layout & scrolling**: ``VStack``, ``HStack``, ``ZStack``, ``LazyVStack``, ``LazyHStack``, ``Group``, ``ViewThatFits``, ``Spacer``, ``ForEach``, ``ScrollView``
@@ -43,7 +43,7 @@ This enables spacers, flexible text fields, and proportional sizing. See <doc:La
 
 ### 4. Modifier Layer
 
-View modifiers implement the ``ViewModifier`` protocol. They operate in two phases: `adjustContext(_:)` modifies the ``RenderContext`` before children render (e.g. setting environment values), and `apply(to:context:)` transforms the rendered ``FrameBuffer`` (e.g. adding padding, borders, backgrounds).
+View modifiers implement the ``ViewModifier`` protocol. They operate in two phases: `adjustContext(_:)` modifies the ``RenderContext`` before children render (e.g. setting environment values), and `modify(buffer:context:)` transforms the rendered ``FrameBuffer`` (e.g. adding padding, borders, backgrounds).
 
 ```swift
 Text("Hello")
@@ -76,7 +76,7 @@ Rendering is **demand-driven and frame-capped**, not a fixed-rate poll. With not
 
 @Image(source: "architecture-event-loop.svg", alt: "Flowchart of the TUIkit demand-driven event loop: after subsystems are initialised the loop checks shouldShutdown; if not shutting down it consumes the resize flag (invalidating the diff cache on SIGWINCH), drains up to 128 key and mouse events per frame and dispatches them (keys through five layers, mouse through hit-testing), renders at most once per App.maxFrameRate when a frame is due, then blocks until woken by input, a render request, or a signal before looping again. When shouldShutdown is true it cleans up and exits.")
 
-Input dispatch uses a first-consumer-wins model. Layer 0 and Layer 3 are mutually exclusive: when a text input element (TextField/SecureField) is focused, Layer 0 runs and Layer 3 is skipped; otherwise Layer 0 is skipped and Layer 3 runs. Both use `focusManager.dispatchKeyEvent()`, which first delegates to the focused element, then handles Tab/Shift+Tab navigation, then arrow key fallback.
+Input dispatch uses a first-consumer-wins model. Layer 0 and Layer 3 are mutually exclusive: when a text input element (TextField/SecureField) is focused, Layer 0 runs and Layer 3 is skipped; otherwise Layer 0 is skipped and Layer 3 runs. Both use `focusManager.dispatchKeyEvent()`, which first delegates to the focused element, then handles Tab/Shift+Tab navigation, then arrow key fallback. Two additional stages refine this: when an open drop-down has claimed Escape, ESC is pre-routed through the focus system before Layer 1 so the surface closes instead of a page-level handler firing; and between Layer 3 and Layer 4 a semantic-shortcut stage (Layer 3.5) fires the default button on Return and the cancel button on Escape, à la SwiftUI's `.keyboardShortcut(.defaultAction / .cancelAction)`.
 
 @Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the 5-layer input dispatch: A hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 4 Default Bindings (q quit, t theme, a appearance). Unmatched events are dropped.")
 

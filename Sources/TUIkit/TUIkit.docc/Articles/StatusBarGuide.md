@@ -51,7 +51,7 @@ Use ``Shortcut`` to keep displayed shortcut symbols consistent:
 | `Shortcut.arrowUp` | `↑` | Arrow up |
 | `Shortcut.arrowDown` | `↓` | Arrow down |
 | `Shortcut.arrowsUpDown` | `↑↓` | Vertical navigation |
-| `Shortcut.ctrl("q")` | `⌃q` | Ctrl+Q display |
+| `Shortcut.ctrl("q")` | `^q` | Ctrl+Q display (use `Shortcut.combine(Shortcut.control, "q")` for `⌃q`) |
 
 `Shortcut` defines how the item is displayed. If you do not pass `key:`, `StatusBarItem` derives a trigger key from the shortcut string where possible.
 
@@ -108,17 +108,14 @@ This works because status bar items with actions are handled before the default 
 Change the built-in quit key through ``StatusBarState/quitShortcut``:
 
 ```swift
-@main
-struct MyApp: App {
+struct ContentView: View {
     @Environment(\.statusBar) private var statusBar
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-        .task {
-            statusBar.quitShortcut = .escape
-        }
+    var body: some View {
+        MainView()
+            .task {
+                statusBar.quitShortcut = .escape
+            }
     }
 }
 ```

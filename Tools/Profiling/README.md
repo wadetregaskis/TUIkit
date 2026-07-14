@@ -52,7 +52,7 @@ malloc/CPU counters for regression guards (benchmarks are opt-in behind the
 Tools/Profiling/record.sh                 # 'tour', 15s, 50x160
 Tools/Profiling/record.sh emoji 20        # hammer the 1212-row emoji list
 Tools/Profiling/record.sh idle 12         # steady-state per-frame cost
-Tools/Profiling/record.sh list 15 80 24   # List page in an 80x24 terminal
+Tools/Profiling/record.sh list 15 24 80   # List page in an 80x24 terminal
 ```
 
 Traces land in `profiling-traces/` (git-ignored).
@@ -68,7 +68,7 @@ under the Time Profiler, then analyzes the trace.
 Launches a binary inside a pseudo-terminal (so raw mode + `TIOCGWINSZ`
 work), feeds it scripted keyboard/mouse input, and drains output so the
 child never stalls. Scenarios: `tour`, `list`, `table`, `emoji`,
-`scroll`, `mouse`, `idle`.
+`scroll`, `mouse`, `idle`, `progress`.
 
 ```bash
 # Drive without profiling — a fast sanity check that the app responds:
@@ -107,6 +107,18 @@ common DuckDB exporter) drop the name on every repeat, which silently
 inclusive roll-up. This parser resolves them, so the inclusive view
 correctly attributes ~85% to `RenderLoop.renderScene → renderToBuffer`.
 
+### `idle_cpu.py` — idle-cost probe
+Launches the app in a PTY, waits a settle period (optionally sending keys
+to reach another screen first), then measures CPU time and render output
+bytes over a no-input window. A static screen must approach 0% CPU and
+0 bytes/s; an animating one (spinner, focused pulse, text cursor) is
+non-zero continuously. This is the probe behind the demand-driven
+animation-clocks work.
+
+```bash
+python3 Tools/Profiling/idle_cpu.py BIN [settle_s] [window_s] [keys]
+```
+
 ## Interpreting a run
 
 A driven `tour` trace typically shows (on this hardware):
@@ -144,9 +156,15 @@ reflects the real `measureChild` / `Layoutable` dispatch.
 
 Trees (`--tree`): `alignment` (three flexible bordered boxes — heavy on the
 measure pass), `nested` (a Panel column beside that row), `frames` (bare
-`.frame`s where each `FlexibleFrameView` is itself the measured child), and
-`form` (a settings page of interactive controls). Seeds: the shapes in
-`Benchmarks/TUIkitBenchmarks/RenderBenchmarks.swift` and the layout tests.
+`.frame`s where each `FlexibleFrameView` is itself the measured child),
+`paneled` (a Panel and a Card wrapping multi-line content — the
+labeled-container measure path), `memoRows` (a column of `.equatable()`
+bordered rows — the value-based measure memo), `stackRows` (plain
+`ForEach` rows in a `VStack` — the automatic `Equatable`-element row
+memo), `list` (a long `List` of `ForEach` rows — the lazy visible-window
+row rendering), and `form` (a settings page of interactive controls).
+Seeds: the shapes in `Benchmarks/TUIkitBenchmarks/RenderBenchmarks.swift`
+and the layout tests.
 
 ```bash
 swift build -c release --product RenderHarness -Xswiftc -g
@@ -165,5 +183,4 @@ sampling is impractical (e.g. a VM where the Time Profiler runs slowly).
 Build it with `--product RenderHarness` (or set `BENCHMARK_DISABLE_JEMALLOC=1`)
 so the build does not pull the `jemalloc`-backed benchmark target.
 
-Future trees worth adding: a long `List`, a `Table`, a `ScrollView`
-mid-scroll.
+Future trees worth adding: a `Table`, a `ScrollView` mid-scroll.

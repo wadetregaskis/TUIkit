@@ -13,10 +13,12 @@ This installs the `tuikit` command globally on your system.
 ## Usage
 
 ```bash
-tuikit init MyApp                   # Basic app
-tuikit init sqlite MyApp            # With SQLite database
-tuikit init testing MyApp           # With Swift Testing
-tuikit init sqlite testing MyApp    # All features
+tuikit init MyApp                     # Basic app
+tuikit init git MyApp                 # With Git repository (initial commit)
+tuikit init sqlite MyApp              # With SQLite database
+tuikit init testing MyApp             # With Swift Testing
+tuikit init xctest MyApp              # With XCTest
+tuikit init git sqlite testing MyApp  # With Git, SQLite and Testing
 ```
 
 ## What Gets Created
@@ -29,7 +31,6 @@ MyApp/
 │   ├── ContentView.swift   # Root view
 │   └── Database.swift      # (if sqlite option used)
 ├── Tests/                  # (if testing/xctest option used)
-├── .swiftpm/               # Pre-configured Xcode scheme
 ├── README.md
 └── .gitignore
 ```
@@ -39,7 +40,7 @@ MyApp/
 - Creates native Swift Packages (not .xcodeproj)
 - Optional GRDB (SQLite) integration
 - Optional Swift Testing or XCTest
-- Pre-configured Xcode scheme
+- Xcode-ready Swift Package (Xcode generates the scheme on first open)
 - Cross-platform (macOS, Linux)
 - XDG Base Directory compliant
 
@@ -67,7 +68,7 @@ tuikit-uninstall
 
 ## Requirements
 
-- macOS 15+ or Linux
+- macOS 15+ or Linux (generated projects target macOS 15; the TUIkit library itself needs only macOS 14+)
 - Swift 6.2+ (TUIkit requires a Swift 6.2 toolchain)
 - Bash shell
 

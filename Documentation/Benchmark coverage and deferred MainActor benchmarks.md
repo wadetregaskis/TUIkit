@@ -5,7 +5,8 @@ suite, what is measured now, and the detailed list of
 benchmarks that are **blocked** until the package-benchmark /
 `@MainActor` deadlock has a workaround. Read it alongside
 `Actor isolation and the input-reader loop.md` (the actor
-refactor, #31, is the eventual unblock).
+refactor — hybrid option 3 in that document — is the eventual
+unblock).
 
 ## Why some benchmarks are blocked
 
@@ -90,7 +91,7 @@ unmeasured at the integration level today.
   (e.g. `VStack(HStack(Text×3))×50`) to catch quadratic blowups.
 - `NavigationSplitView` column distribution.
 
-### 3. List / Table (the regression-watch that motivated #26)
+### 3. List / Table (the regression-watch that motivated the List/Section A/B measuring work)
 
 - `list/1900 rows, single-select (emoji-list-sized)` — the
   flagship regression guard. Exercises lazy windowing
@@ -146,7 +147,8 @@ the benchmark harness). Flagged for the broad-review pass.
 
 ## Pointer
 
-When the actor refactor (#31, hybrid option 3) lands — render
+When the actor refactor (hybrid option 3 in `Actor isolation
+and the input-reader loop.md`) lands — render
 pipeline on `@TUIkitActor`, view construction `nonisolated` —
 the `skipViewBenchmarks` gate can be removed and the four
 existing skipped suites enabled, then the new entries above

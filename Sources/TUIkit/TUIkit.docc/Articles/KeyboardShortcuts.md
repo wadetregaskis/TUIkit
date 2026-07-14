@@ -6,6 +6,8 @@ How keyboard input flows through TUIkit: from raw terminal bytes to your view ha
 
 TUIkit uses a layered event dispatch system. When a key is pressed, it passes through up to five layers. The first layer that consumes the event wins: remaining layers are skipped. Layer 0 (text input) and Layer 3 (focus system) are mutually exclusive: when a text input element is focused, Layer 0 runs and Layer 3 is skipped.
 
+Two additional stages refine the layer sequence. When an open drop-down (e.g. a ``Picker`` menu) has claimed Escape for the frame, ESC is pre-routed through the focus system *before* Layer 1, so the surface closes instead of a page-level handler firing. And between Layer 3 and Layer 4, a semantic-shortcut stage (Layer 3.5) fires the default button on Return and the cancel button on Escape — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)` — when the focused control let the key fall through.
+
 @Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart showing keyboard event dispatch through five layers: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField). Layer 1: Status Bar Items (shortcut-triggered actions). Layer 2: View Handlers (.onKeyPress modifiers, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3: Focus System (focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 4: Default Bindings (quit, theme, appearance). Unmatched events are dropped.")
 
 Additionally, `Ctrl+C` (SIGINT) is handled at the OS signal level **before** any of these layers: it always terminates the application.
@@ -35,6 +37,8 @@ Uppercase detection: when a capital letter is typed, the resulting ``KeyEvent`` 
 | `.tab` | Tab |
 | `.backspace` | Backspace / Delete backward |
 | `.delete` | Forward delete |
+| `.space` | Space |
+| `.paste(String)` | Bulk text from a bracketed terminal paste |
 
 ### Arrow Keys
 
@@ -53,6 +57,12 @@ Uppercase detection: when a capital letter is typed, the resulting ``KeyEvent`` 
 | `.end` | End |
 | `.pageUp` | Page Up |
 | `.pageDown` | Page Down |
+
+### Function Keys
+
+| Key | Description |
+|-----|-------------|
+| `.f1` … `.f12` | Function keys F1 through F12 |
 
 ## Key Events and Modifiers
 
@@ -152,13 +162,13 @@ For more details, see <doc:FocusSystem>.
 
 ## Default Bindings
 
-Layer 4 provides three built-in key bindings that work without any configuration:
+Layer 4 provides three built-in key bindings, but only quit is enabled without configuration:
 
 | Key | Action | Condition |
 |-----|--------|-----------|
-| `q` / `Q` | Quit application | Only when ``QuitBehavior`` allows it |
-| `t` / `T` | Cycle to next color theme | Only when theme cycling is enabled |
-| `a` / `A` | Cycle to next appearance | Always active |
+| `q` / `Q` | Quit application | Enabled by default; gated by ``QuitBehavior`` |
+| `t` / `T` | Cycle to next color theme | Opt-in: requires `statusBarSystemItems(theme: true)` (or `showThemeItem = true`) |
+| `a` / `A` | Cycle to next appearance | Active unless a modal surface has grabbed input (its status bar item is hidden by default) |
 
 ### Quit Behavior
 
@@ -320,21 +330,25 @@ When a context is pushed, its items replace the global items in the display. Sys
 
 ### System Items
 
-Three system items are shown by default:
+There are three system items; only quit is shown by default:
 
-| Shortcut | Label | Order | Description |
-|----------|-------|-------|-------------|
-| `q` | quit | 900 | Quit the application |
-| `a` | appearance | 910 | Cycle border appearance |
-| `t` | theme | 920 | Cycle color theme |
+| Shortcut | Label | Order | Shown by default | Description |
+|----------|-------|-------|------------------|-------------|
+| `q` | quit | 900 | Yes | Quit the application |
+| `a` | appearance | 910 | No (opt-in) | Cycle border appearance |
+| `t` | theme | 920 | No (opt-in) | Cycle color theme |
 
-System items appear on the right side of the status bar. They can be disabled individually:
+System items appear on the right side of the status bar. Opt in to the theme and appearance items with the `statusBarSystemItems(theme:appearance:)` modifier, or toggle them individually:
 
 ```swift
-// In your App
+// As a modifier
+ContentView()
+    .statusBarSystemItems(theme: true, appearance: true)
+
+// Or directly on the state
 statusBar.showSystemItems = false       // Hide all system items
-statusBar.showThemeItem = false         // Hide only theme cycling
-statusBar.showAppearanceItem = false    // Hide only appearance cycling
+statusBar.showThemeItem = true          // Show theme cycling (also enables the `t` binding)
+statusBar.showAppearanceItem = true     // Show appearance cycling
 ```
 
 When all system items are hidden and there are no active user items, the status bar is hidden completely.

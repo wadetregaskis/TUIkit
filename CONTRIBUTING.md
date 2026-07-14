@@ -16,7 +16,7 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 # Build
 swift build
 
-# Run all tests (~2,275 tests, Swift Testing framework)
+# Run all tests (~2,850 tests, Swift Testing framework)
 swift test
 
 # Run a single test suite
@@ -56,7 +56,7 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 
 - Every **public** control must be a `View` with a real `body: some View`
 - The `body` must return actual Views (not `Never`, not `fatalError()`)
-- `Renderable` is only for leaf nodes (`Text`, `Spacer`, `Divider`) and private `_*Core` views
+- `Renderable` is only for leaf nodes (`Text`, `Spacer`, `Divider`), private `_*Core` views, layout primitives, and modifier infrastructure — never public controls
 - All modifiers must propagate through the entire View hierarchy
 - Environment values must flow down automatically
 

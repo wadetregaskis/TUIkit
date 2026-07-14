@@ -1,5 +1,13 @@
 # Actor isolation and the input-reader loop
 
+> **Status.** The input-reader recommendation (option A, DispatchSource)
+> shipped as `StdinArrivalNotifier` in
+> `Sources/TUIkit/App/StdinArrivalStream.swift` — a demand-driven
+> continuation on the main queue rather than the `AsyncStream` sketched
+> below; see that file's doc comment for why. The actor question
+> (options 1–4) remains open; the status quo (option 1) is the current
+> state.
+
 This document is a design discussion, not yet a specification. It catalogues
 two coupled questions that came up while adopting `ordo-one/benchmark`
 (task #26) and revisiting input responsiveness:
