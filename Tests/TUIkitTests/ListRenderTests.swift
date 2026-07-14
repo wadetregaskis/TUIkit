@@ -555,4 +555,33 @@ struct ListRenderTests {
         #expect(lines.first { $0.contains("Junk") }?.contains("3") == true, "\(lines)")
         #expect(lines.contains { $0.contains("Outbox") })
     }
+
+    @Test("listFooterSeparator(false) removes the rule above the footer")
+    func footerSeparatorToggle() {
+        func render(showSeparator: Bool) -> [String] {
+            var sel: String?
+            let binding = Binding(get: { sel }, set: { sel = $0 })
+            let list = List("Title", selection: binding) {
+                Text("Row A")
+            } footer: {
+                Text("FOOT")
+            }
+            return strippedLines(
+                list.listFooterSeparator(showSeparator),
+                context: listContext(width: 24, height: 12))
+        }
+
+        let withRule = render(showSeparator: true)
+        #expect(
+            withRule.contains { $0.hasPrefix("├") && $0.hasSuffix("┤") },
+            "the default draws a T-junction rule above the footer: \(withRule)")
+
+        let withoutRule = render(showSeparator: false)
+        #expect(
+            !withoutRule.contains { $0.hasPrefix("├") },
+            "listFooterSeparator(false) removes the rule: \(withoutRule)")
+        #expect(
+            withoutRule.contains { $0.contains("FOOT") },
+            "the footer itself survives: \(withoutRule)")
+    }
 }

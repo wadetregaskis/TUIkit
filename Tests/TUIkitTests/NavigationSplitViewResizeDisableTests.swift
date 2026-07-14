@@ -67,4 +67,32 @@ struct NavigationSplitViewResizeDisableTests {
             fm.section(id: "nav-split-divider-0") != nil,
             "a resizable split registers a divider focus section")
     }
+
+    @Test("navigationSplitViewResizable(false) disables a resizable style's divider")
+    func resizableFalseDisablesBalancedDivider() {
+        // The DIRECT modifier, not the style gate: .balanced is resizable by
+        // default, so the modifier alone must remove the grip and the focus
+        // section — and flipping it back to true must restore both.
+        let offContext = resizeContext()
+        let offFM = offContext.environment.focusManager!
+        let off = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .navigationSplitViewStyle(.balanced)
+            .navigationSplitViewResizable(false)
+        let offBuffer = renderToBuffer(off, context: offContext)
+        #expect(gripX(offBuffer) == nil, "resizable(false) draws no grip handle")
+        #expect(
+            offFM.section(id: "nav-split-divider-0") == nil,
+            "resizable(false) registers no divider focus section")
+
+        let onContext = resizeContext()
+        let onFM = onContext.environment.focusManager!
+        let on = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .navigationSplitViewStyle(.balanced)
+            .navigationSplitViewResizable(true)
+        let onBuffer = renderToBuffer(on, context: onContext)
+        #expect(gripX(onBuffer) != nil, "resizable(true) restores the grip handle")
+        #expect(
+            onFM.section(id: "nav-split-divider-0") != nil,
+            "resizable(true) restores the divider focus section")
+    }
 }

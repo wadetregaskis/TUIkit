@@ -155,3 +155,105 @@ struct DispatcherHoverTransitionTests {
         #expect(dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 50, y: 50)))
     }
 }
+
+// MARK: - .onHover public modifier
+
+/// The modifier's own contract, end-to-end through render → regions →
+/// dispatcher (the tests above drive the dispatcher directly; this is the
+/// public-API seam).
+@MainActor
+@Suite(".onHover modifier contract")
+struct OnHoverModifierContractTests {
+
+    private func makeContext(tui: TUIContext) -> RenderContext {
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        return RenderContext(
+            availableWidth: 30, availableHeight: 6, environment: env, tuiContext: tui
+        ).isolatingRenderCache()
+    }
+
+    @Test("Enter fires true, exit fires false, in order")
+    func enterThenExit() {
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var log: [Bool] = []
+        let view = Text("hover me").onHover { log.append($0) }
+
+        let buffer = renderToBuffer(view, context: makeContext(tui: tui))
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("onHover registered no region")
+            return
+        }
+
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 29, y: 5))
+        #expect(log == [true, false], "enter then exit, got \(log)")
+    }
+
+    @Test("Hover fires on a disabled view (current contract: no isEnabled gate)")
+    func disabledStillHovers() {
+        // Pins CURRENT behaviour: `.disabled(true)` does not suppress
+        // `.onHover` — the modifier registers its region and callback
+        // regardless of the enabled state (useful for tooltips on disabled
+        // controls; also what a hit-region-based hover naturally does). If the
+        // contract is ever changed to gate on `isEnabled`, this test is the
+        // one to flip.
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var log: [Bool] = []
+        let view = Text("hover me").onHover { log.append($0) }.disabled(true)
+
+        let buffer = renderToBuffer(view, context: makeContext(tui: tui))
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("no hover region on the disabled view")
+            return
+        }
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 29, y: 5))
+        #expect(log == [true, false], "hover fires on the disabled view: \(log)")
+    }
+
+    @Test("The region disappearing mid-hover fires the trailing exit (same-frame handlers)")
+    func regionRemovedMidHoverFiresExit() {
+        // The dispatcher's documented window: between an event and the next
+        // render pass, the previous frame's HANDLERS are still registered even
+        // when the REGIONS have been replaced — so a region that vanishes
+        // (layout change, view moved) still delivers its exit. (A view that
+        // leaves the tree entirely loses its closure at the next
+        // beginRenderPass; no callback is possible then, by design.)
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var log: [Bool] = []
+        let view = Text("hover me").onHover { log.append($0) }
+
+        let buffer = renderToBuffer(view, context: makeContext(tui: tui))
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let region = buffer.hitTestRegions.first else {
+            Issue.record("onHover registered no region")
+            return
+        }
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
+        #expect(log == [true], "entered")
+
+        // The regions are replaced (view gone from this frame's layout) while
+        // the handler registration survives: the exit must still fire, or the
+        // hover state sticks.
+        dispatcher.setRegions([])
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
+        #expect(log == [true, false], "the trailing exit fires when the region vanishes: \(log)")
+    }
+}

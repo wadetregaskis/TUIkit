@@ -76,4 +76,42 @@ struct ModalContentHeightTests {
             buffer.lines.count <= 12,
             "the composited alert stays within the content area, got \(buffer.lines.count)")
     }
+
+    @Test("Extreme content heights: the composited overlay never overflows (down to 1 row)")
+    func extremeContentHeightSweep() {
+        // Terminals can get pathologically short mid-resize; every content
+        // height down to a single row must clamp cleanly (no crash, no
+        // overflow) — including heights below the drop-down renderer's 4-row
+        // floor, where the popup deliberately exceeds the area and relies on
+        // this clamp. The exact-fit boundary (natural height == contentH) is
+        // crossed somewhere in the sweep for each dialog shape.
+        let alert = Text("base")
+            .alert("Heads up", isPresented: .constant(true)) {
+                Button("OK") {}
+            } message: {
+                Text(String(repeating: "A long alert message. ", count: 12))
+            }
+        let modal = Text("base")
+            .modal(isPresented: .constant(true)) {
+                VStack {
+                    ForEach(1...12, id: \.self) { Text("row \($0)") }
+                }
+            }
+
+        for contentH in 1...10 {
+            for view in [AnyView(alert), AnyView(modal)] {
+                let buffer = renderShort(view, terminalH: contentH + 4, contentH: contentH)
+                #expect(
+                    buffer.lines.count <= contentH,
+                    "contentH \(contentH): overlay overflows, got \(buffer.lines.count)")
+                // The clip is final: no hit region may outlive it either
+                // (the invisible-click bug class).
+                for region in buffer.hitTestRegions {
+                    #expect(
+                        region.offsetY + region.height <= contentH,
+                        "contentH \(contentH): region rows \(region.offsetY)..<\(region.offsetY + region.height) escape the clip")
+                }
+            }
+        }
+    }
 }

@@ -536,4 +536,33 @@ struct TabViewTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: r.offsetY))
         #expect(on.value, "clicking the toggle inside the bordered tab flipped it")
     }
+
+    // MARK: - Content padding
+
+    @Test("tabViewContentPadding insets the content; Int and EdgeInsets overloads agree")
+    func contentPaddingOverloadsAgree() {
+        func tabs() -> some View {
+            TabView(selection: .constant(0)) {
+                Tab("One", value: 0) { Text("Content") }
+            }
+        }
+        let bare = lines(tabs(), w: 30, h: 12)
+        let padInt = lines(tabs().tabViewContentPadding(3), w: 30, h: 12)
+        let padInsets = lines(
+            tabs().tabViewContentPadding(EdgeInsets(top: 3, leading: 3, bottom: 3, trailing: 3)),
+            w: 30, h: 12)
+
+        // The padding moves the content down relative to the unpadded render.
+        func contentRow(_ out: [String]) -> Int? {
+            out.firstIndex { $0.contains("Content") }
+        }
+        guard let bareRow = contentRow(bare), let paddedRow = contentRow(padInt) else {
+            Issue.record("content not rendered: bare \(bare), padded \(padInt)")
+            return
+        }
+        #expect(paddedRow == bareRow + 3, "3 rows of top padding: \(padInt)")
+
+        // The Int convenience is exactly the uniform-EdgeInsets overload.
+        #expect(padInt == padInsets, "the two overloads render identically")
+    }
 }
