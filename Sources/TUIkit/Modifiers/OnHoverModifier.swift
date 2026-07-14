@@ -45,7 +45,14 @@ extension OnHoverModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var buffer = TUIkit.renderToBuffer(content, context: context)
 
+        // SwiftUI parity (verified empirically on macOS 15): a hover callback
+        // registered INSIDE a `.disabled(true)` scope never fires, while one
+        // attached outside the disabled subtree (`.disabled(true).onHover`)
+        // still does. Gating on the environment's `isEnabled` reproduces that
+        // scoping exactly — the outer-attachment case renders this modifier
+        // with an enabled environment.
         guard !context.isMeasuring,
+              context.environment.isEnabled,
               let dispatcher = context.environment.mouseEventDispatcher
         else {
             return buffer

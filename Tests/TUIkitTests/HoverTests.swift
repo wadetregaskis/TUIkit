@@ -196,14 +196,11 @@ struct OnHoverModifierContractTests {
         #expect(log == [true, false], "enter then exit, got \(log)")
     }
 
-    @Test("Hover fires on a disabled view (current contract: no isEnabled gate)")
-    func disabledStillHovers() {
-        // Pins CURRENT behaviour: `.disabled(true)` does not suppress
-        // `.onHover` — the modifier registers its region and callback
-        // regardless of the enabled state (useful for tooltips on disabled
-        // controls; also what a hit-region-based hover naturally does). If the
-        // contract is ever changed to gate on `isEnabled`, this test is the
-        // one to flip.
+    @Test("onHover inside .disabled(true) never fires (SwiftUI parity)")
+    func disabledSuppressesHover() {
+        // SwiftUI parity, verified empirically on macOS 15: a hover callback
+        // registered INSIDE a disabled scope is silent — no region, no
+        // callbacks.
         let tui = TUIContext()
         let dispatcher = tui.mouseEventDispatcher
         dispatcher.setActiveSupport(.full)
@@ -213,14 +210,37 @@ struct OnHoverModifierContractTests {
 
         let buffer = renderToBuffer(view, context: makeContext(tui: tui))
         dispatcher.setRegions(buffer.hitTestRegions)
+        #expect(buffer.hitTestRegions.isEmpty, "no hover region inside a disabled scope")
+
+        // Sweep across where the text sits: nothing may fire.
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 29, y: 5))
+        #expect(log.isEmpty, "no hover callbacks inside a disabled scope: \(log)")
+    }
+
+    @Test("onHover OUTSIDE a .disabled subtree still fires (SwiftUI's scoping)")
+    func hoverOutsideDisabledScopeFires() {
+        // The scoping nuance: `.disabled(true).onHover { }` attaches the hover
+        // outside the disabled scope, so it still fires over the same
+        // geometry — `.disabled` deactivates interaction declared within it,
+        // not the geometry's hover-ability.
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var log: [Bool] = []
+        let view = Text("hover me").disabled(true).onHover { log.append($0) }
+
+        let buffer = renderToBuffer(view, context: makeContext(tui: tui))
+        dispatcher.setRegions(buffer.hitTestRegions)
         guard let region = buffer.hitTestRegions.first else {
-            Issue.record("no hover region on the disabled view")
+            Issue.record("hover outside the disabled scope registers its region")
             return
         }
         _ = dispatcher.dispatch(
             MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
         _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 29, y: 5))
-        #expect(log == [true, false], "hover fires on the disabled view: \(log)")
+        #expect(log == [true, false], "outer hover fires over a disabled subtree: \(log)")
     }
 
     @Test("The region disappearing mid-hover fires the trailing exit (same-frame handlers)")
