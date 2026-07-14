@@ -939,6 +939,9 @@ where Value.ID: Hashable {
         let handler = handlerBox.value
         handler.itemCount = data.count
         handler.contentHeight = contentHeight
+        // A scrollbar reserves no indicator line, so the focus-reveal / offset
+        // arithmetic must claim the full content height (matches the List path).
+        handler.showsScrollbar = showsScrollbar
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction

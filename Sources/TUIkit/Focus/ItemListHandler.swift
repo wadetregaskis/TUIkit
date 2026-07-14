@@ -115,6 +115,18 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// handler's own unit tests).
     var contentHeight: Int?
 
+    /// Whether the owning view draws a scrollbar instead of the "N more
+    /// above/below" text indicators.
+    ///
+    /// A scrollbar marks the off-screen rows in its own gutter column, so the
+    /// rows fill the *whole* ``contentHeight`` — there is no reserved indicator
+    /// line. The scroll-bound arithmetic (``maxOffset``,
+    /// ``ensureFocusedItemVisible()``) otherwise reserves a line for an
+    /// indicator that a scrollbar list never draws, which over-scrolls the
+    /// bottom by one row and leaves a blank remainder (one blank line per
+    /// row-height). With this set, that reservation is skipped.
+    var showsScrollbar = false
+
     /// A closure giving the height in lines of row `i`, for rows that can span
     /// multiple lines — `List` rows are arbitrary views and `Table` cells can
     /// wrap, so both wire this. `nil` (single-line tables, plus the handler's
@@ -154,7 +166,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         var used = 0
         var top = itemCount
         while top > 0 {
-            let budget = (top - 1 == 0) ? contentHeight : contentHeight - 1
+            // Reserve the "above" indicator's line only when there IS one — a
+            // scrollbar draws no such line, so its rows fill the full height.
+            let budget =
+                (showsScrollbar || top - 1 == 0) ? contentHeight : contentHeight - 1
             let height = max(1, rowHeight(top - 1))
             if used + height > budget { break }
             used += height
@@ -699,7 +714,8 @@ extension ItemListHandler {
             // Multi-line rows: pull the top down only as far as needed for the
             // focused row to fit as the last visible row, accumulating heights.
             // The top row's height counts net of any line-granularity clip.
-            let budget = max(1, contentHeight - 2)
+            // A scrollbar reserves no indicator lines, so it gets the full area.
+            let budget = max(1, showsScrollbar ? contentHeight : contentHeight - 2)
             var top = focusedIndex
             var used = rowHeight(focusedIndex)
             while top > 0, used + rowHeight(top - 1) <= budget {
@@ -715,7 +731,7 @@ extension ItemListHandler {
             }
         } else {
             let safeRows =
-                itemCount <= contentHeight
+                (showsScrollbar || itemCount <= contentHeight)
                 ? contentHeight
                 : max(1, contentHeight - 2)
             if focusedIndex >= scrollOffset + safeRows {

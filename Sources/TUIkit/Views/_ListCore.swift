@@ -553,6 +553,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let handler = handlerBox.value
         handler.itemCount = source.count
         handler.contentHeight = contentHeight
+        // A scrollbar draws no "N more" indicator line, so the scroll-bound
+        // arithmetic must not reserve one (else the bottom over-scrolls, leaving
+        // a blank row-height remainder). Threaded from `wantsScrollbar`.
+        handler.showsScrollbar = showsScrollbar
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         // Captured at render so Shift+arrow can accelerate the focus cursor at
