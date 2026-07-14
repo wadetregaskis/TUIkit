@@ -111,15 +111,20 @@ the emoji-class clusters below unless noted.
   horizontal scroll instead). Trackpad horizontal scroll reports the
   standard horizontal wheel buttons 66/67. Right-click is reported to
   apps.
-- **Mouse modifiers: none reach the app** (byte-captured 2026-07-14,
-  targeted run with deliberate ⌘- and ⌥-clicks): eight press/release
-  pairs, ALL bare button code 0 — no `+4`/`+8`/`+16` bit anywhere,
-  press and release symmetric. Modifier-clicks either arrive stripped
-  to plain clicks or are consumed by the terminal outright; the capture
-  can only show that no modifier bit ever arrived. Either way,
-  **⌘-click multi-select toggling cannot work here** — the app receives
-  a plain click, which replaces the selection. This is the pointer
-  mirror of the Up/Down key modifier stripping above; not an app bug.
+- **Mouse modifiers (byte-captured 2026-07-14, one run per modifier):**
+  - **⌘-click: stripped to a plain click.** Eight deliberate ⌘-click
+    press/release pairs ALL arrived as bare button code 0, symmetric —
+    the app cannot tell a ⌘-click from a plain click, so **⌘-click
+    multi-select toggling cannot work here** (the plain click replaces
+    the selection). The pointer mirror of the Up/Down key modifier
+    stripping above; not an app bug.
+  - **⌥-click: forwarded as +8 (meta), symmetric** — the bit is present
+    on both the press (`M`) and the release (`m`), and identically
+    whether the profile's keyboard **"Use Option as Meta key"** setting
+    is off or on (captured under both). TUIkit maps +8 to
+    `MouseEvent.meta`, so **⌥-click** toggles rows in a multi-selection
+    here. Note this is the *opposite* forwarding choice from iTerm2,
+    which delivers ⌘ as +8 and swallows ⌥ (see its Input section).
 
 ---
 
@@ -205,25 +210,28 @@ non-default setup.
   (user-reported). There is no escape sequence or variable that exposes
   the pointer configuration, so TUIkit cannot detect the setting; the
   example's Mouse page shows a static note under iTerm2 instead.
-- **Modifier-clicks (byte-captured 2026-07-14, targeted ⌘/⌥ run):**
-  modifier-clicks arrive as SGR button code **8** (the meta bit), and the
-  bit is present on **both** the press (`M`) **and** the matching release
-  (`m`) — six modifier-clicks captured, every pair fully symmetric
-  (`ESC[<8;x;yM` … `ESC[<8;x;ym`). Two conclusions:
-  - The earlier **release-drops-meta hypothesis is refuted** for iTerm2
-    3.6.11: the release keeps the modifier, so release-acting handlers
-    (List/Table selection, tap gestures) see the decorated click intact.
-    `MouseEventDispatcher.stampClickCount` still unions the press's
-    modifier bits onto the matching release as defence-in-depth for
-    unmeasured terminals; on iTerm2 it is a no-op.
-  - ⌘ and ⌥ surface as the **same** +8 bit — byte-level confirmation of
-    the user-reported "⌘-click is reported as ⌥-click". Apps cannot
-    distinguish the two keys; TUIkit's decoder maps +8 to
-    `MouseEvent.meta`, and multi-select toggling accepts `ctrl || meta`,
-    so both ⌘-click and ⌥-click toggle rows in/out of a multi-selection
-    here. (The run mixed deliberate ⌘- and ⌥-clicks and every event
-    arrived as +8; the log cannot attribute individual events to a
-    specific key.)
+- **Modifier-clicks (byte-captured 2026-07-14, one run per modifier):**
+  - **⌘-click → +8 (meta), symmetric.** Six deliberate ⌘-clicks arrived
+    as SGR button code **8** with the meta bit present on **both** the
+    press (`M`) **and** the matching release (`m`) — every pair fully
+    symmetric (`ESC[<8;x;yM` … `ESC[<8;x;ym`). The earlier
+    **release-drops-meta hypothesis is refuted** for iTerm2 3.6.11:
+    release-acting handlers (List/Table selection, tap gestures) see the
+    decorated click intact. `MouseEventDispatcher.stampClickCount` still
+    unions the press's modifier bits onto the matching release as
+    defence-in-depth for unmeasured terminals; on iTerm2 it is a no-op.
+    This is also the byte-level substance of the user-reported "⌘-click
+    reads as ⌥-click": ⌘ is delivered as the protocol's meta (alt) bit,
+    which apps decode as an option-click.
+  - **⌥-click → nothing.** A dedicated ⌥-click run produced **no report
+    at all** — the default pointer bindings consume ⌥-clicks (cursor
+    placement / rectangular selection), so apps never see them.
+  - Net: iTerm2 forwards **⌘** and swallows **⌥** — the *opposite* of
+    Apple Terminal (which forwards ⌥ as +8 and strips ⌘; see its Input
+    section). Both deliver the surviving key as the same +8 bit, so
+    TUIkit's `ctrl || meta` multi-select toggle works on both — but any
+    user-facing hint must name a different physical key per terminal:
+    **⌘-click here, ⌥-click in Apple Terminal**.
 
   *Earlier general captures (2026-07-14, before the probe logged
   `TERM_PROGRAM`):* plain clicks are **symmetric** (press `M` and
