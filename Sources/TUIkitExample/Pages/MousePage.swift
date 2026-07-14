@@ -252,14 +252,24 @@ struct MousePage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.mouse.rawEventsInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    // iTerm2 keeps right-clicks for its own context menu by
-                    // default, and its pointer settings aren't queryable
-                    // (no escape sequence reports them), so the best we can
-                    // do is warn statically on the affected host.
-                    if ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "iTerm.app" {
+                    // Modifier-click forwarding is terminal-specific and not
+                    // queryable (no escape sequence reports it), so the best
+                    // we can do is a static note per host. Byte-captured
+                    // (Terminal-compatibility.md): iTerm2 forwards ⌘ as the
+                    // meta bit and swallows ⌥; Apple Terminal strips ⌘ and
+                    // forwards ⌥. iTerm2 also keeps right-clicks for its own
+                    // context menu by default.
+                    switch ProcessInfo.processInfo.environment["TERM_PROGRAM"] {
+                    case "iTerm.app":
                         Text(L("page.mouse.iTerm2RightClickNote"))
                             .foregroundStyle(.palette.foregroundTertiary)
                             .dim()
+                    case "Apple_Terminal":
+                        Text(L("page.mouse.appleTerminalModifierNote"))
+                            .foregroundStyle(.palette.foregroundTertiary)
+                            .dim()
+                    default:
+                        EmptyView()
                     }
                     Text(L("page.mouse.rightOrModifiedClick"))
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
