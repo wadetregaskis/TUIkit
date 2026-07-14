@@ -840,7 +840,15 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 offsetY: region.offsetY - scrollOffset,
                 width: region.width,
                 height: region.height,
-                handlerID: region.handlerID
+                handlerID: region.handlerID,
+                // MUST be carried: reveal-on-focus finds its target by
+                // focusID, so dropping it here (the parameter defaults to
+                // nil, so the omission was silent) made an ENCLOSING
+                // ScrollView unable to ever locate a focused control that
+                // lives inside THIS one — nested scroll views could not
+                // reveal. `OverlayLayer.placed()` carries it for the same
+                // reason.
+                focusID: region.focusID
             )
         }
 
