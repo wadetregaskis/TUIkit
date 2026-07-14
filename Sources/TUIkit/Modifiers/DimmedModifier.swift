@@ -82,12 +82,21 @@ extension FrameBuffer {
         let width = self.width
         let dimmed = lines.map { line -> String in
             let cleaned = String(line.stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
-            let paddedText = cleaned.padding(toLength: width, withPad: " ", startingAt: 0)
+            // Pad in CELLS, not code units: `padding(toLength:)` counts UTF-16
+            // units, so a line with CJK (1 unit, 2 cells) came out too wide and
+            // NFD combining sequences (2 units, 1 cell) too narrow — the
+            // backdrop's right edge then drifted behind every modal over such
+            // content. `padToVisibleWidth` measures like the rest of the layout.
+            let paddedText = cleaned.padToVisibleWidth(width)
             var style = TextStyle()
             style.foregroundColor = foreground
             style.backgroundColor = background
             style.isDim = true
-            return ANSIRenderer.render(paddedText, with: style).withPersistentBackground(background)
+            // Terminate the persistent background at the line's edge — left
+            // active it bleeds into whatever is composited to the right (the
+            // same class as the List `.plain` selection bleed).
+            return ANSIRenderer.render(paddedText, with: style)
+                .withPersistentBackground(background) + ANSIRenderer.reset
         }
         return FrameBuffer(lines: dimmed)
     }

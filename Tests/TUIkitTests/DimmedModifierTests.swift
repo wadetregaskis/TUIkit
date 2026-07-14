@@ -70,4 +70,45 @@ struct DimmedModifierTests {
         // The dimmed line should be padded to the buffer width
         #expect(visibleWidth == buffer.width)
     }
+
+    @Test(
+        "Dimming pads in CELLS, not code units (CJK/emoji/NFD lines keep the buffer width)",
+        arguments: [
+            "中文标题",  // CJK: 1 UTF-16 unit but 2 cells each — over-padded before
+            "hi 🥳 wide",  // SMP emoji: 2 units = 2 cells (the coincidence that hid the bug)
+            "caf\u{65}\u{301} narrow",  // NFD é: 2 units but 1 cell — under-padded before
+            "⌚ watch",  // BMP wide: 1 unit, 2 cells
+        ])
+    func dimmedPadsWideContentInCells(text: String) {
+        // The backdrop behind a modal is `dimmedAsBackdrop` over the page
+        // buffer. Its padding used Foundation's `padding(toLength:)` — UTF-16
+        // code units — so CJK lines came out wider than the buffer (and NFD
+        // narrower), drifting the backdrop's right edge. Padding must be in
+        // terminal CELLS like the rest of the layout.
+        let view = VStack(alignment: .leading) {
+            Text(text)
+            Text("plain second line that is longer")
+        }
+        .dimmed()
+        let buffer = render(view)
+        for (i, line) in buffer.lines.enumerated() {
+            #expect(
+                line.strippedLength == buffer.width,
+                "dimmed line \(i) is exactly the buffer width: '\(line.stripped)'")
+        }
+    }
+
+    @Test("A dimmed line terminates its persistent background (no rightward bleed)")
+    func dimmedBackgroundIsTerminated() {
+        // The backdrop's persistent background left ACTIVE at the line end
+        // bleeds into whatever is composited to the right — the same class as
+        // the List `.plain` selection bleed. Every dimmed line must end reset.
+        let view = Text("backdrop").dimmed()
+        let buffer = render(view)
+        for (i, line) in buffer.lines.enumerated() {
+            #expect(
+                line.hasSuffix(ANSIRenderer.reset),
+                "dimmed line \(i) ends with a reset: \(line.debugDescription)")
+        }
+    }
 }
