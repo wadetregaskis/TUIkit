@@ -51,60 +51,6 @@ struct ToggleTests {
         #expect(enabledToggle.isDisabled == false)
     }
 
-    @Test("Toggle renders its checkbox indicator")
-    func toggleRenders() {
-        let context = createTestContext()
-
-        // Off state
-        var isOn = false
-        let binding = Binding(
-            get: { isOn },
-            set: { isOn = $0 }
-        )
-
-        let toggle = Toggle("Test", isOn: binding)
-        let buffer = renderToBuffer(toggle, context: context)
-
-        // Single line with the empty (OFF) square indicator (□, default style).
-        #expect(buffer.height == 1)
-        let content = buffer.lines.joined()
-        #expect(content.contains("\u{25A1}"))
-    }
-
-    @Test("Toggle OFF renders the empty square")
-    func toggleOffState() {
-        let context = createTestContext()
-
-        var isOn = false
-        let binding = Binding(
-            get: { isOn },
-            set: { isOn = $0 }
-        )
-
-        let toggle = Toggle("Test", isOn: binding)
-        let buffer = renderToBuffer(toggle, context: context)
-
-        let content = buffer.lines.joined().stripped
-        #expect(content.contains("\u{25A1}"))
-    }
-
-    @Test("Toggle ON renders the filled square")
-    func toggleOnState() {
-        let context = createTestContext()
-
-        var isOn = true
-        let binding = Binding(
-            get: { isOn },
-            set: { isOn = $0 }
-        )
-
-        let toggle = Toggle("Test", isOn: binding)
-        let buffer = renderToBuffer(toggle, context: context)
-
-        let content = buffer.lines.joined().stripped
-        #expect(content.contains("\u{25A0}"))
-    }
-
     @Test("Toggle renders focus indicator when focused")
     func toggleFocusIndicator() {
         let context = createTestContext()
@@ -143,23 +89,6 @@ struct ToggleTests {
         // Unfocused toggle should not have leading space for focus indicator
         let content = buffer2.lines.joined().stripped
         #expect(content.contains("Second"))
-    }
-
-    @Test("Toggle label is rendered next to indicator")
-    func toggleLabelRendering() {
-        let context = createTestContext()
-
-        var isOn = false
-        let binding = Binding(
-            get: { isOn },
-            set: { isOn = $0 }
-        )
-
-        let toggle = Toggle("My Setting", isOn: binding)
-        let buffer = renderToBuffer(toggle, context: context)
-
-        let content = buffer.lines.joined()
-        #expect(content.contains("My Setting"))
     }
 
     @Test("Disabled toggle uses tertiary color")

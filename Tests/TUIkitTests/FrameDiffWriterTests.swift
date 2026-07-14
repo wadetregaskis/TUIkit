@@ -132,130 +132,32 @@ struct BuildOutputLinesTests {
 @MainActor
 struct DiffLogicTests {
 
-    @Test("computeChangedRows returns all rows when previous is empty")
-    func allRowsChangedOnFirstFrame() {
+    @Test(
+        "computeChangedRows returns exactly the changed row indices",
+        arguments: [
+            // (new, previous, expected changed rows)
+            (["A", "B", "C"], [String](), [0, 1, 2]),  // first frame: everything
+            (["A", "B", "C"], ["A", "B", "C"], []),  // identical: nothing
+            (["A", "X", "C"], ["A", "B", "C"], [1]),  // single change
+            (["A", "X", "C", "Y"], ["A", "B", "C", "D"], [1, 3]),  // multiple changes
+            (["A", "B", "C", "D"], ["A", "B"], [2, 3]),  // grown: new tail rows
+            // ANSI-coded strings: only CONTENT-differing lines count as changed.
+            (
+                ["\u{1B}[31mRed\u{1B}[0m", "\u{1B}[32mGreen\u{1B}[0m"],
+                ["\u{1B}[31mRed\u{1B}[0m", "\u{1B}[31mRed\u{1B}[0m"],
+                [1]
+            ),
+            // Content vs status-bar shapes (from the retired integration suite —
+            // both cache paths compare through this same pure function).
+            (["Content1", "Content2"], [String](), [0, 1]),
+            (["Status1"], [String](), [0]),
+            (["Content1", "Content2"], ["Content1", "Content2"], []),
+            (["NEW Status"], ["Status1"], [0]),
+        ])
+    func changedRows(new: [String], previous: [String], expected: [Int]) {
         let changed = FrameDiffWriter.computeChangedRows(
-            newLines: ["A", "B", "C"],
-            previousLines: []
-        )
-
-        #expect(changed == [0, 1, 2])
-    }
-
-    @Test("computeChangedRows returns empty when frames are identical")
-    func noChangesForIdenticalFrames() {
-        let lines = ["A", "B", "C"]
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: lines,
-            previousLines: lines
-        )
-
-        #expect(changed.isEmpty)
-    }
-
-    @Test("computeChangedRows detects single changed line")
-    func singleLineChanged() {
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: ["A", "X", "C"],
-            previousLines: ["A", "B", "C"]
-        )
-
-        #expect(changed == [1])
-    }
-
-    @Test("computeChangedRows detects multiple changed lines")
-    func multipleLinesChanged() {
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: ["A", "X", "C", "Y"],
-            previousLines: ["A", "B", "C", "D"]
-        )
-
-        #expect(changed == [1, 3])
-    }
-
-    @Test("computeChangedRows handles new lines longer than previous")
-    func newLinesLongerThanPrevious() {
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: ["A", "B", "C", "D"],
-            previousLines: ["A", "B"]
-        )
-
-        // C and D are new (indices 2, 3)
-        #expect(changed == [2, 3])
-    }
-
-    @Test("computeChangedRows handles ANSI-coded strings correctly")
-    func ansiStringComparison() {
-        let styledA = "\u{1B}[31mRed\u{1B}[0m"
-        let styledB = "\u{1B}[32mGreen\u{1B}[0m"
-
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: [styledA, styledB],
-            previousLines: [styledA, styledA]
-        )
-
-        // Only the second line changed (red → green)
-        #expect(changed == [1])
-    }
-}
-
-// MARK: - Integration Tests
-
-@Suite("FrameDiffWriter Integration Tests")
-@MainActor
-struct DiffIntegrationTests {
-
-    @Test("Content and status bar caches are independent")
-    func independentCaches() {
-        // Simulate writing content + status bar (using internal state check)
-        let contentLines = ["Content1", "Content2"]
-        let statusLines = ["Status1"]
-
-        // After writeContentDiff, content cache is set
-        // After writeStatusBarDiff, status cache is set
-        // We verify via computeChangedRows that each cache tracks independently
-
-        // First: content has all changed (empty previous)
-        let contentChanged1 = FrameDiffWriter.computeChangedRows(
-            newLines: contentLines,
-            previousLines: []
-        )
-        #expect(contentChanged1 == [0, 1])
-
-        // Status also has all changed (different previous)
-        let statusChanged1 = FrameDiffWriter.computeChangedRows(
-            newLines: statusLines,
-            previousLines: []
-        )
-        #expect(statusChanged1 == [0])
-
-        // Same content → no changes
-        let contentChanged2 = FrameDiffWriter.computeChangedRows(
-            newLines: contentLines,
-            previousLines: contentLines
-        )
-        #expect(contentChanged2.isEmpty)
-
-        // Status changed → only status
-        let statusChanged2 = FrameDiffWriter.computeChangedRows(
-            newLines: ["NEW Status"],
-            previousLines: statusLines
-        )
-        #expect(statusChanged2 == [0])
-    }
-
-    @Test("invalidate clears both content and status bar caches")
-    func invalidateClearsBothCaches() {
-        let writer = FrameDiffWriter()
-
-        // After invalidate, previous lines are empty → all rows changed
-        writer.invalidate()
-
-        let changed = FrameDiffWriter.computeChangedRows(
-            newLines: ["A", "B"],
-            previousLines: []
-        )
-        #expect(changed == [0, 1])
+            newLines: new, previousLines: previous)
+        #expect(changed == expected)
     }
 }
 

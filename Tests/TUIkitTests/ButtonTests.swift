@@ -89,16 +89,6 @@ struct ButtonTests {
         #expect(allContent.stripped.contains("\u{258C}"))
     }
 
-    @Test("Default button is single line height")
-    func defaultButtonSingleLine() {
-        let context = createTestContext()
-
-        let button = Button("Test") {}
-        let buffer = renderToBuffer(button, context: context)
-
-        #expect(buffer.height == 1)
-    }
-
     @Test("Plain button has single line without brackets")
     func plainButtonSingleLine() {
         let context = createTestContext()

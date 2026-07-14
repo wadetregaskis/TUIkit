@@ -4,8 +4,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 //
-//  Buffer-level render audit for `Text`. Complements the wrapping /
-//  truncation focused tests in `TextTests.swift` by asserting on the
+//  Buffer-level render audit for `Text`. Complements `TextTests.swift`
+//  (which owns the wrapping / truncation coverage) by asserting on the
 //  rendered FrameBuffer for the default, empty, multi-line, wide, narrow,
 //  and styled configurations: exact stripped content, line counts (no
 //  stray blank lines), width clamping, and that styling / inherited colour
@@ -98,22 +98,8 @@ struct TextRenderTests {
 
     // MARK: - Narrow width / truncation
 
-    @Test("A word longer than the width is truncated with a tail ellipsis")
-    func longWordTruncates() {
-        let buffer = renderToBuffer(Text("Supercalifragilistic"), context: context(width: 10))
-        let line = buffer.lines[0].stripped
-        #expect(line.strippedLength == 10, "Truncated line must exactly fill the width, got \(line.strippedLength)")
-        #expect(line.hasSuffix("…"), "Tail truncation must end with an ellipsis, got >>\(line)<<")
-        #expect(line == "Supercali…")
-    }
-
-    @Test("Head truncation keeps the tail of the content")
-    func headTruncation() {
-        let buffer = renderToBuffer(Text("Supercalifragilistic").truncationMode(.head), context: context(width: 10))
-        let line = buffer.lines[0].stripped
-        #expect(line.hasPrefix("…"), "Head truncation must start with an ellipsis, got >>\(line)<<")
-        #expect(line.strippedLength == 10)
-    }
+    // (Tail/head truncation coverage lives in TextTests' TextTruncationTests —
+    // byte-identical duplicates were removed from here.)
 
     // MARK: - CJK / wide characters
 

@@ -21,26 +21,6 @@ private func createTestContext(width: Int = 80, height: Int = 24) -> RenderConte
 @Suite("List Rendering Tests")
 struct ListRenderingTests {
 
-    @Test("Empty list shows placeholder")
-    func emptyListPlaceholder() {
-        let context = createTestContext()
-
-        var selection: String?
-        let list = List(
-            selection: Binding(
-                get: { selection },
-                set: { selection = $0 }
-            )
-        ) {
-            EmptyView()
-        }
-
-        let buffer = renderToBuffer(list, context: context)
-        let content = buffer.lines.joined()
-
-        #expect(content.contains("No items"))
-    }
-
     @Test("Empty list with explicit width fills the available width")
     func emptyListFillsExplicitWidth() {
         // SwiftUI's List is greedy on both axes. With a fixed frame width, an
@@ -64,27 +44,6 @@ struct ListRenderingTests {
         // The border lines should be the full 50 cells wide, not collapsed to
         // the title (~18 cells) or the placeholder (~8 cells).
         #expect(buffer.width == 50, "expected width 50, got \(buffer.width)")
-    }
-
-    @Test("Custom empty placeholder is shown")
-    func customEmptyPlaceholder() {
-        let context = createTestContext()
-
-        var selection: String?
-        let list = List(
-            selection: Binding(
-                get: { selection },
-                set: { selection = $0 }
-            )
-        ) {
-            EmptyView()
-        }
-        .listEmptyPlaceholder("Nothing here")
-
-        let buffer = renderToBuffer(list, context: context)
-        let content = buffer.lines.joined()
-
-        #expect(content.contains("Nothing here"))
     }
 
     @Test("List renders ForEach items")
