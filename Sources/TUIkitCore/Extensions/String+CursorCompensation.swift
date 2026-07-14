@@ -318,6 +318,48 @@ extension String {
     /// by the time this runs: skin-tone clusters are stripped first by
     /// ``withSkinToneFallback()``. ANSI escape sequences are preserved.
     public func withITerm2CursorCompensation() -> String {
+        withCursorForwardCompensation { $0.iTerm2CursorAdvance }
+    }
+
+    /// Returns a copy of this string with Ghostty's two cursor-advance quirks
+    /// worked around, by the same CUF injection
+    /// ``withITerm2CursorCompensation()`` uses: the VS-15 chrome glyphs
+    /// (⬛︎ ⬜︎ — painted 2 cells, advanced 1, so an uncompensated label
+    /// collides with the glyph) and Plane-16 PUA SF Symbols (rendered
+    /// grid-strictly at 1 cell against a 2-cell claim). Ghostty has no
+    /// over-advancers in any class TUIkit emits — it is the only measured
+    /// terminal that advances VS-16, ZWJ, keycaps, flags and skin tones
+    /// exactly as claimed, so nothing is stripped on this path.
+    /// ANSI escape sequences are preserved.
+    public func withGhosttyCursorCompensation() -> String {
+        withCursorForwardCompensation { $0.ghosttyCursorAdvance }
+    }
+
+    /// Returns a copy of this string with Warp's lone-regional-indicator
+    /// under-advance worked around by CUF injection, as
+    /// ``withITerm2CursorCompensation()`` does for iTerm2. Warp's other
+    /// divergences are OVER-advances (keycaps, 〰️/〽️, ZWJ) which no CUF can
+    /// correct, or skin-tone clusters — stripped first by
+    /// ``withSkinToneFallback()``, exactly as on iTerm2.
+    /// ANSI escape sequences are preserved.
+    public func withWarpCursorCompensation() -> String {
+        withCursorForwardCompensation { $0.warpCursorAdvance }
+    }
+
+    /// Shared CUF-injection walk: appends each character, then pushes the
+    /// cursor forward by the shortfall whenever the host advances it less
+    /// than the character's painted ``Character/terminalWidth``.
+    ///
+    /// One walk serves every host whose quirks are pure under-advances
+    /// (iTerm2, Ghostty, Warp); only the per-host advance model differs, so
+    /// it is the parameter. Terminal.app keeps its own walk — it must also
+    /// rewrite content (stripping mid-line skin tones), which this cannot
+    /// express. ANSI escape sequences are copied through untouched.
+    ///
+    /// - Parameter advance: The host's cursor advance for a character.
+    private func withCursorForwardCompensation(
+        advance: (Character) -> Int
+    ) -> String {
         // Fast path: every quirk cluster is non-ASCII (same reasoning and
         // same gate as the Terminal.app walk).
         guard utf8ContainsNonASCII else { return self }
@@ -347,7 +389,7 @@ extension String {
 
             result.append(c)
             let claimed = c.terminalWidth
-            let actual = c.iTerm2CursorAdvance
+            let actual = advance(c)
             if claimed > actual {
                 result += "\u{1B}[\(claimed - actual)C"
             }

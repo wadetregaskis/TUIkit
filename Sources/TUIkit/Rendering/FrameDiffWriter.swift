@@ -56,6 +56,22 @@ final class FrameDiffWriter {
     /// `isAppleTerminal`.
     private let isITerm2: Bool
 
+    /// Whether the host terminal is Ghostty, which advances every composed
+    /// emoji class exactly as claimed (alone among the measured terminals)
+    /// but under-advances the VS-15 chrome glyphs ⬛︎ / ⬜︎ and Plane-16 PUA
+    /// SF Symbols. Its build path injects CUF for just those two —
+    /// `String.withGhosttyCursorCompensation()`; no skin-tone strip, which
+    /// would needlessly discard the correct merged rendering. Same
+    /// detection/injection story as `isAppleTerminal`.
+    private let isGhostty: Bool
+
+    /// Whether the host terminal is Warp, which draws Fitzpatrick skin-tone
+    /// clusters as base + swatch exactly as iTerm2 does (so it takes the same
+    /// `String.withSkinToneFallback()` strip) and under-advances a lone
+    /// regional indicator as Terminal.app does (so it takes a CUF). Same
+    /// detection/injection story as `isAppleTerminal`.
+    private let isWarp: Bool
+
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
 
@@ -101,10 +117,14 @@ final class FrameDiffWriter {
 
     init(
         isAppleTerminal: Bool = TerminalHost.isAppleTerminal,
-        isITerm2: Bool = TerminalHost.isITerm2
+        isITerm2: Bool = TerminalHost.isITerm2,
+        isGhostty: Bool = TerminalHost.isGhostty,
+        isWarp: Bool = TerminalHost.isWarp
     ) {
         self.isAppleTerminal = isAppleTerminal
         self.isITerm2 = isITerm2
+        self.isGhostty = isGhostty
+        self.isWarp = isWarp
     }
 }
 
@@ -154,7 +174,9 @@ extension FrameDiffWriter {
     /// parameters (width, background, reset) — are unchanged.
     ///
     /// A built line is a pure function of `(rawLine, width, bgCode, reset,
-    /// isAppleTerminal, isITerm2)`, so when all of those match the previous frame the
+    /// isAppleTerminal, isITerm2, isGhostty, isWarp)` — the host flags are
+    /// fixed for the writer's lifetime, so the reuse key need not carry them.
+    /// When the rest match the previous frame the
     /// previously-built line IS exactly what the builder would produce: output
     /// is byte-identical to ``buildOutputLines(buffer:terminalWidth:terminalHeight:bgCode:reset:)``.
     /// The downstream `writeXxxDiff` still compares the built lines to decide
@@ -263,11 +285,22 @@ extension FrameDiffWriter {
         // with CUF, exactly as the Apple path does for Terminal.app's larger
         // set. Both advance models are DSR-measured; see
         // Documentation/Terminal-compatibility.md.
+        // Ghostty needs no skin-tone strip — it is the only measured terminal
+        // that merges Fitzpatrick clusters into the 2 cells the layout claims
+        // — but under-advances its VS-15 chrome glyphs and SF Symbols. Warp
+        // draws skin tones as base + swatch exactly like iTerm2, so it takes
+        // the same strip, then a CUF for its lone-regional-indicator
+        // under-advance. All models are DSR-measured; see
+        // Documentation/Terminal-compatibility.md.
         let compensated =
             if isAppleTerminal {
                 clipped.withTerminalAppCursorCompensation()
             } else if isITerm2 {
                 clipped.withSkinToneFallback().withITerm2CursorCompensation()
+            } else if isGhostty {
+                clipped.withGhosttyCursorCompensation()
+            } else if isWarp {
+                clipped.withSkinToneFallback().withWarpCursorCompensation()
             } else {
                 clipped
             }

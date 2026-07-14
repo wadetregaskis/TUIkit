@@ -10,8 +10,19 @@ Reports the cell's height:width ratio two ways:
 The ratio is what `Image` needs to render undistorted; the default is 2.0
 (≈ Apple Terminal). Feed a measured value with `.imageCellAspect(_:)` if a
 terminal neither fills ws_*pixel nor answers the escape queries.
+
+Report goes to $PROBE_OUT (default: ./cell_aspect_probe.txt), matching the
+sibling probes: stdout must stay attached to the terminal (it carries the
+CSI queries and the ioctl target), so redirecting it breaks the probe.
 """
 import os, sys, termios, tty, struct, fcntl, select
+
+_out = open(os.environ.get("PROBE_OUT", "cell_aspect_probe.txt"), "w", buffering=1)
+sys.stderr.write(f"writing report to {os.path.abspath(_out.name)}\n")
+
+def report(*args):
+    _out.write(" ".join(str(a) for a in args) + "\n")
+
 
 def ioctl_pixels():
     buf = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, b"\x00" * 8)
@@ -42,16 +53,16 @@ def parse_t(reply):
     parts = body.split(";")
     return [int(p) for p in parts if p.isdigit()]
 
-print("TERM_PROGRAM =", os.environ.get("TERM_PROGRAM"),
+report("TERM_PROGRAM =", os.environ.get("TERM_PROGRAM"),
       os.environ.get("TERM_PROGRAM_VERSION", ""))
 
 rows, cols, xpix, ypix = ioctl_pixels()
-print(f"ioctl winsize: {cols}x{rows} chars, {xpix}x{ypix} px")
+report(f"ioctl winsize: {cols}x{rows} chars, {xpix}x{ypix} px")
 if xpix > 0 and ypix > 0 and cols > 0 and rows > 0:
     cw, ch = xpix / cols, ypix / rows
-    print(f"  cell = {cw:.2f}x{ch:.2f} px  ->  aspect (h/w) = {ch/cw:.3f}")
+    report(f"  cell = {cw:.2f}x{ch:.2f} px  ->  aspect (h/w) = {ch/cw:.3f}")
 else:
-    print("  ws_xpixel/ws_ypixel are 0 — ioctl path unavailable here")
+    report("  ws_xpixel/ws_ypixel are 0 — ioctl path unavailable here")
 
 try:
     area = parse_t(query("\x1b[14t"))   # text-area pixels: ESC[4;H;Wt
@@ -60,9 +71,9 @@ try:
         _, ph, pw = area[:3]
         _, cr, cc = chars[:3]
         cw, ch = pw / cc, ph / cr
-        print(f"CSI 14t/18t: area {pw}x{ph} px, {cc}x{cr} chars")
-        print(f"  cell = {cw:.2f}x{ch:.2f} px  ->  aspect (h/w) = {ch/cw:.3f}")
+        report(f"CSI 14t/18t: area {pw}x{ph} px, {cc}x{cr} chars")
+        report(f"  cell = {cw:.2f}x{ch:.2f} px  ->  aspect (h/w) = {ch/cw:.3f}")
     else:
-        print("CSI 14t/18t: no usable reply")
+        report("CSI 14t/18t: no usable reply")
 except Exception as exc:  # noqa: BLE001
-    print("CSI 14t/18t query failed:", exc)
+    report("CSI 14t/18t query failed:", exc)

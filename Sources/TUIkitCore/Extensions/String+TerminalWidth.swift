@@ -200,9 +200,7 @@ extension Character {
         // one cell too far left. (Terminal.app additionally mis-paints the
         // lone glyph itself — clipped/offset — which no escape sequence can
         // fix; this only corrects the cursor accounting so the layout aligns.)
-        if scalars.count == 1, let only = scalars.first,
-            (0x1F1E6...0x1F1FF).contains(only.value)
-        {
+        if isLoneRegionalIndicator {
             return 1
         }
 
@@ -301,6 +299,97 @@ extension Character {
             return 1
         }
         return terminalWidth
+    }
+
+    /// The number of columns Ghostty advances the text cursor by when this
+    /// character is printed (DSR-measured on the alternate screen, Ghostty
+    /// 1.3.1, 2026-07-14).
+    ///
+    /// Ghostty is by far the most Unicode-correct terminal TUIkit has
+    /// measured: VS-16 clusters, keycaps, flags, lone regional indicators,
+    /// ZWJ sequences and Fitzpatrick skin tones ALL advance exactly the 2
+    /// cells ``terminalWidth`` claims — no compensation needed for any of the
+    /// classes Terminal.app and iTerm2 get wrong. Only two under-advance:
+    ///
+    /// - **VS-15 chrome glyphs** (⬛︎ ⬜︎ — an emoji-presentation base plus
+    ///   U+FE0E): painted 2 cells, cursor advances 1, so an uncompensated
+    ///   label lands on the glyph's right half (`■On` instead of `■ On` —
+    ///   observed on the Toggle demo's `.emoji` checkbox column).
+    /// - **Plane-16 Private Use Area** (SF Symbols): Ghostty renders these
+    ///   grid-strictly at ONE cell and advances 1, where Terminal.app and
+    ///   iTerm2 paint 2 and advance 1. The CUF still restores the 2-cell
+    ///   claim the layout allocated — the glyph is simply narrower here, so
+    ///   a symbol is followed by one blank cell rather than shearing every
+    ///   later column on the row left by one.
+    public var ghosttyCursorAdvance: Int {
+        let scalars = unicodeScalars
+        if scalars.count == 1, let only = scalars.first,
+            (0x100000...0x10FFFD).contains(only.value)
+        {
+            return 1
+        }
+        if isVS15ChromeUnderAdvancer {
+            return 1
+        }
+        return terminalWidth
+    }
+
+    /// The number of columns Warp advances the text cursor by when this
+    /// character is printed (DSR-measured on the alternate screen, Warp
+    /// v0.2026.07.08, 2026-07-14).
+    ///
+    /// Warp gets VS-16 clusters and VS-15 chrome right (unlike Terminal.app
+    /// and Ghostty respectively) but mishandles the composed-emoji classes:
+    ///
+    /// - **Fitzpatrick skin tones** paint base + a separate swatch at 4 cells
+    ///   (3 for BMP bases) — the same shape as Terminal.app's Bug B, and
+    ///   handled the same way: the output path strips the modifiers via
+    ///   ``String/withSkinToneFallback()`` BEFORE this model is consulted, so
+    ///   they never reach the compensation walk.
+    /// - **Lone regional indicators** (🇦 alone) advance 1 against a claim of
+    ///   2 — same as Terminal.app; CUF fixes it.
+    /// - **Keycaps** (1️⃣, advance 3), **〰️/〽️** (advance 3) and **ZWJ
+    ///   sequences** (👩‍🚀 advances 5, 👩🏽‍🚀 7) OVER-advance. CUF cannot
+    ///   claw a cursor back and these paint wider than any claim, so they are
+    ///   left alone and documented, exactly as ZWJ is on Terminal.app.
+    ///   Warp additionally disagrees with itself across screen buffers (its
+    ///   primary screen advances VS-16 by 1, the alternate by 2); the model
+    ///   uses the alternate screen, where TUIkit apps run.
+    public var warpCursorAdvance: Int {
+        if isLoneRegionalIndicator {
+            return 1
+        }
+        return terminalWidth
+    }
+
+    /// Whether this character is a single regional-indicator scalar with no
+    /// partner (🇦 alone rather than the 🇺🇸 pair).
+    ///
+    /// Terminal.app and Warp both paint it 2 cells but advance 1; iTerm2 and
+    /// Ghostty advance the full 2. Shared by the per-host advance models.
+    var isLoneRegionalIndicator: Bool {
+        let scalars = unicodeScalars
+        guard scalars.count == 1, let only = scalars.first else { return false }
+        return (0x1F1E6...0x1F1FF).contains(only.value)
+    }
+
+    /// Whether this character is an emoji-presentation base carrying the
+    /// U+FE0E TEXT-presentation selector (⬛︎ ⬜︎ — TUIkit's emoji chrome
+    /// glyphs), which Ghostty paints 2 cells wide but advances by only 1.
+    ///
+    /// The mirror image of ``isVS16UnderAdvancer``: there a text-presentation
+    /// base is forced to emoji and under-advances; here an emoji-presentation
+    /// base is forced to text and under-advances. Measured on U+2B1B/U+2B1C;
+    /// Terminal.app, iTerm2 and Warp all advance these by the full 2.
+    var isVS15ChromeUnderAdvancer: Bool {
+        let scalars = unicodeScalars
+        guard scalars.count > 1, let first = scalars.first else { return false }
+        guard scalars.contains(where: { $0.value == 0xFE0E }) else { return false }
+        let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
+            let sv = scalar.value
+            return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
+        }
+        return !hasNonVariationExtras && first.properties.isEmojiPresentation
     }
 
     /// Whether this character is a `<base>+U+FE0F` pictographic cluster

@@ -11,8 +11,14 @@ about any terminal's behaviour — a new quirk, a version that changes one,
 a new terminal evaluated — record it here, with the version and the method
 of observation. Consult this document before making or reviewing any
 change that relies on terminal-specific behaviour (`TerminalHost`,
-`Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance`, the
-`FrameDiffWriter` compensation paths, `CheckboxStyle.automatic`, …).
+`Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance` /
+`.ghosttyCursorAdvance` / `.warpCursorAdvance`, the `FrameDiffWriter`
+compensation paths, `CheckboxStyle.automatic`, …).
+
+**Terminals covered:** Apple Terminal.app, iTerm2, Ghostty, Warp
+(measured); tmux (documented, unverified). Jump to the
+[measured advance table](#measured-advance-table-divergences-and-key-rows)
+for the one-screen comparison.
 
 ## Methodology
 
@@ -271,6 +277,122 @@ non-default setup.
 
 ---
 
+## Ghostty
+
+**Tested:** 1.3.1 (`TERM_PROGRAM_VERSION`), macOS 15.7, default config,
+2026-07-14.
+
+### Environment
+
+| Variable | Value |
+|---|---|
+| `TERM` | `xterm-ghostty` (ships its own terminfo; often overridden to `xterm-256color` for remote hosts, so **do not detect on `TERM`**) |
+| `TERM_PROGRAM` | `ghostty` |
+| `TERM_PROGRAM_VERSION` | `1.3.1` |
+| `COLORTERM` | `truecolor` |
+| `TERMINFO` | app bundle terminfo |
+| `GHOSTTY_BIN_DIR` / `GHOSTTY_RESOURCES_DIR` / `GHOSTTY_SHELL_FEATURES` | set |
+| `__CFBundleIdentifier` | `com.mitchellh.ghostty` |
+
+### Output behaviour
+
+**Ghostty is the most Unicode-correct terminal measured.** Every class that
+Terminal.app and iTerm2 get wrong — VS-16 pictographs, ZWJ sequences,
+Fitzpatrick skin tones, keycaps, flags, lone regional indicators — advances
+by exactly the 2 cells `terminalWidth` claims, on BOTH screen buffers
+(primary and alternate agree on every row of the battery). Skin-toned emoji
+render as one merged glyph (👍🏽 = 2 cells), so the iTerm2/Warp swatch strip
+is deliberately NOT applied here — it would discard a correct rendering.
+
+- **Colour:** truecolor.
+- **Two under-advancers** (the only compensation Ghostty needs —
+  `withGhosttyCursorCompensation()`):
+  - **VS-15 chrome glyphs** (⬛︎ ⬜︎ = emoji-presentation base + U+FE0E):
+    paints 2, **advances 1**. Uncompensated this collides the following
+    label with the glyph — observed on the Toggle demo as `■On` where
+    `.unicode` correctly showed `■ On`. CUF(1) fixes it, which is what
+    earns Ghostty its place on the `supportsEmojiChrome` allowlist.
+  - **SF Symbols (Plane-16 PUA):** unlike Terminal.app/iTerm2 (which paint
+    2 and advance 1), Ghostty renders these grid-strictly at **1 cell** and
+    advances 1. The claim of 2 is therefore an over-claim here; CUF(1)
+    keeps the row aligned at the cost of one blank cell after each symbol.
+    *A tighter fix would be a host-dependent width claim, but the claim is
+    deliberately host-independent (layout must be identical headless).*
+- **`☝🏽` / `☝️🏽`** (BMP text-presentation base + skin tone) advance 1 and
+  **4** respectively against a claim of 2 — the only over-advance measured
+  on Ghostty. Unhandled, as ZWJ is on Terminal.app; these clusters do not
+  appear in TUIkit's own chrome.
+- **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
+  14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
+  font). Slightly taller than the 2.0 default; auto-detection handles it.
+
+### Input behaviour
+
+Mouse SGR (1006) reporting works; not yet byte-captured for the
+modifier-symmetry question (see the Apple Terminal / iTerm2 sections).
+
+---
+
+## Warp
+
+**Tested:** `v0.2026.07.08.17.54.stable_02`, macOS 15.7, default config,
+2026-07-14.
+
+### Environment
+
+| Variable | Value |
+|---|---|
+| `TERM` | `xterm-256color` (**not** a Warp-specific value — detect on `TERM_PROGRAM`) |
+| `TERM_PROGRAM` | `WarpTerminal` |
+| `TERM_PROGRAM_VERSION` | `v0.2026.07.08.17.54.stable_02` |
+| `COLORTERM` | `truecolor` |
+| `WARP_TERMINAL_SESSION_UUID` / `WARP_IS_LOCAL_SHELL_SESSION` / `WARP_HONOR_PS1` … | set |
+| `__CFBundleIdentifier` | `dev.warp.Warp-Stable` |
+
+### Output behaviour
+
+Warp is the mirror image of Ghostty: it gets the *selector* classes right
+and the *composed* classes wrong.
+
+- **Colour:** truecolor.
+- **VS-16 pictographs** (❤️ ✏️ 🖥️) advance 2 ✓ — no Bug-A compensation
+  (unlike Terminal.app and iTerm2).
+- **VS-15 chrome** (⬛︎ ⬜︎) advances 2 ✓ and paints clean squares → Warp is
+  on the `supportsEmojiChrome` allowlist with no help at all.
+- **Fitzpatrick skin tones paint base + a separate swatch at 4 cells**
+  (3 for BMP bases) against a claim of 2 — the same shape as Terminal.app's
+  Bug B and iTerm2's. **Observed** in the demo's "Unicode compatible"
+  feature box: the skin-toned 👍🏽 sheared the box's right border two cells
+  out of place. Handled by the shared `withSkinToneFallback()` strip.
+- **Lone regional indicator** (🇦) advances 1 against a claim of 2 — same as
+  Terminal.app; CUF via `withWarpCursorCompensation()`.
+- **OVER-advancers, unhandled** (no escape can pull a cursor back to a
+  column the glyph has already painted over):
+  keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**; ZWJ 👩‍🚀
+  advances **5**, ❤️‍🔥 **5**, 👩🏽‍🚀 **7**. ZWJ is equally unhandled on
+  Terminal.app (5/4/7), so this is the established limitation, not a new
+  one — but keycaps and 〰️ are Warp-specific and DO shear rows.
+- ⚠️ **Warp disagrees with itself across screen buffers** — more than any
+  other terminal measured. Primary advances VS-16 by 1, alternate by 2;
+  keycaps 1 vs 3; ZWJ 4/3/6 vs 5/5/7. The models use the **alternate**
+  screen, where TUIkit apps run. Probe with `PROBE_ALT=1`.
+- **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
+  14t/18t, agreeing within ~2% (ioctl **1.956**, CSI 2.000) — essentially
+  the 2.0 default, so images need no correction here.
+
+### Input behaviour
+
+Mouse SGR (1006) reporting works. Warp defaults to `default_session_mode =
+"agent"` in `~/.warp/settings.toml`, and its own UI overlays (tab switcher,
+command palette) sit above the app — neither affects the app's byte stream.
+
+**Driving Warp non-interactively** (it has no `-e`): write a launch
+configuration to `~/.warp/launch_configurations/NAME.yaml` with a
+`commands: - exec: …` entry and open `warp://launch/NAME`. Ghostty by
+contrast takes `open -na Ghostty.app --args -e <cmd>`.
+
+---
+
 ## tmux
 
 **Status: NOT yet locally verified** — tmux is not installed on the
@@ -311,38 +433,73 @@ skin-tone / PUA advances against TUIkit's width claims; record
 
 ## Measured advance table (divergences and key rows)
 
-DSR-measured on the ALTERNATE screen (the app's buffer), 2026-07-13.
-Full battery in `Tools/TerminalProbes/` (`PROBE_ALT=1`). Claim =
-`Character.terminalWidth`. Terminal.app measures identically in both
-screen modes; iTerm2 does NOT (its primary screen advances VS-16
-clusters and ❤️‍🔥-style ZWJ by 2).
+DSR-measured on the ALTERNATE screen (the app's buffer). Terminal.app +
+iTerm2 2026-07-13; Ghostty + Warp 2026-07-14 (Terminal.app re-measured the
+same day — identical, so the harness is cross-validated). Full battery in
+`Tools/TerminalProbes/` (`PROBE_ALT=1`). Claim = `Character.terminalWidth`.
+Terminal.app and Ghostty measure identically in both screen modes; iTerm2
+and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 
-| Cluster | Claim | Terminal.app 455.1 | iTerm2 3.6.11 |
-|---|---|---|---|
-| `a`, `─`, `▒`, `■`, `⣿`, NFD `é` | 1 | 1 | 1 |
-| CJK 中, `██`(2), `▐▌`(2), ⬛︎ ⬜︎ (VS-15) | 2 | 2 | 2 |
-| ⌚ ⌛ ⏩ ⏰ 👍 ✊ (emoji presentation) | 2 | 2 | 2 |
-| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ (VS-16) | 2 | **1** | **1** |
-| 〰️ 〽️ (EAW base + VS-16) | 2 | 2 | 2 |
-| 🇺🇸 (flag pair) | 2 | 2 | 2 |
-| 🇦 (lone regional indicator) | 2 | **1** | 2 |
-| 1️⃣ #️⃣ *️⃣ 1⃣ (keycaps) | 2 | 2 | **1** |
-| 👍🏽 (SMP base + skin) | 2 | **4** | 2 (merged) |
-| ✊🏻 (BMP emoji-pres. + skin) | 2 | **4** | **4** (swatch) |
-| ☝🏽 (BMP text-pres. + skin) | 2 | **3** | **3** (swatch) |
-| 👩‍🚀 / ❤️‍🔥 / 👩🏽‍🚀 (ZWJ) | 2 | **5 / 4 / 7** | 2 / **1** / 2 |
-| U+100038 etc. (SF Symbols PUA) | 2 | **1** | **1** |
-| 🏽 (standalone modifier) | 2 | 2 | 2 |
+**Bold = diverges from the claim** (i.e. needs compensation, or shears).
+
+| Cluster | Claim | Terminal.app 455.1 | iTerm2 3.6.11 | Ghostty 1.3.1 | Warp 2026.07.08 |
+|---|---|---|---|---|---|
+| `a`, `─`, `▒`, `■`, `⣿`, NFD `é` | 1 | 1 | 1 | 1 | 1 |
+| CJK 中, `██`(2), `▐▌`(2) | 2 | 2 | 2 | 2 | 2 |
+| ⬛︎ ⬜︎ (VS-15 chrome) | 2 | 2 | 2 | **1** | 2 |
+| ⌚ ⌛ ⏩ ⏰ 👍 ✊ (emoji presentation) | 2 | 2 | 2 | 2 | 2 |
+| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ (VS-16) | 2 | **1** | **1** | 2 | 2 |
+| 〰️ 〽️ (EAW base + VS-16) | 2 | 2 | 2 | 2 | **3** |
+| 🇺🇸 (flag pair) | 2 | 2 | 2 | 2 | 2 |
+| 🇦 (lone regional indicator) | 2 | **1** | 2 | 2 | **1** |
+| 1️⃣ #️⃣ *️⃣ (keycaps) | 2 | 2 | **1** | 2 | **3** |
+| 1⃣ (bare keycap, no VS-16) | 1 | **2** | 1 | 1 | 1 |
+| 👍🏽 (SMP base + skin) | 2 | **4** | 2 (merged) | 2 (merged) | **4** |
+| ✊🏻 (BMP emoji-pres. + skin) | 2 | **4** | **4** (swatch) | 2 (merged) | **4** |
+| ☝🏽 (BMP text-pres. + skin) | 2 | **3** | **3** (swatch) | **1** | **3** |
+| ☝️🏽 (…+ VS-16) | 2 | **3** | **3** | **4** | **4** |
+| 👩‍🚀 / ❤️‍🔥 / 👩🏽‍🚀 (ZWJ) | 2 | **5 / 4 / 7** | 2 / **1** / 2 | 2 / 2 / 2 | **5 / 5 / 7** |
+| U+100038 etc. (SF Symbols PUA) | 2 | **1** (paints 2) | **1** (paints 2) | **1** (paints 1) | **1** |
+| 🏽 (standalone modifier) | 2 | 2 | 2 | 2 | 2 |
+| 🖥 🛡 (bare SMP pictograph, no VS-16) | 2 | **1** | **1** | **1** | **1** |
+
+Two rows are **claim bugs, not terminal bugs** — every terminal agrees and
+the claim is the outlier:
+
+- **`🖥` / `🛡` bare** (SMP pictograph, `Emoji=Yes, EPres=No`): claimed 2,
+  advanced 1 everywhere, and Ghostty paints 1. Their BMP twins ✏ ❤ ☝ claim
+  1 correctly, so the claim is inconsistent by plane. Unfixed — changing
+  `terminalWidth` moves every golden snapshot, so it wants its own change.
+- **SF Symbols PUA**: no terminal advances 2. Apple/iTerm2 *paint* 2 so the
+  claim is right there and CUF is the correct fix; Ghostty paints 1, so its
+  CUF buys alignment at the cost of a blank cell.
 
 ## Where the adaptations live
 
 - `TerminalHost` — `TERM_PROGRAM` detection (`Apple_Terminal`,
-  `iTerm.app`) + the `supportsEmojiChrome` allowlist.
-- `Character.terminalAppCursorAdvance` / `Character.iTerm2CursorAdvance`
-  — the per-host advance models (TUIkitCore).
-- `String+CursorCompensation.swift` — the per-host line rewriters
-  (CUF injection; Apple also strips mid-line skin tones);
-  `String.withSkinToneFallback()` (iTerm2 skin-tone strip).
+  `iTerm.app`, `ghostty`, `WarpTerminal`) + the `supportsEmojiChrome`
+  allowlist (all four; Ghostty only because its CUF fixes the VS-15
+  under-advance).
+- `Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance` /
+  `.ghosttyCursorAdvance` / `.warpCursorAdvance` — the per-host advance
+  models (TUIkitCore), each pinned to the table above by
+  `GhosttyWarpCompatibilityTests` / `StringTerminalWidthTests`.
+- `String+CursorCompensation.swift` — the per-host line rewriters.
+  `withCursorForwardCompensation(advance:)` is the shared CUF walk for
+  every host whose quirks are pure under-advances (iTerm2, Ghostty, Warp);
+  Terminal.app keeps its own walk because it must also rewrite content.
+  `String.withSkinToneFallback()` — the swatch strip, used by iTerm2 AND
+  Warp (NOT Ghostty, which merges skin tones correctly).
+
+### Per-host output pipeline (FrameDiffWriter)
+
+| Host | Clip | Then |
+|---|---|---|
+| Apple Terminal | cursor-aware | `withTerminalAppCursorCompensation()` |
+| iTerm2 | plain | `withSkinToneFallback()` → `withITerm2CursorCompensation()` |
+| Ghostty | plain | `withGhosttyCursorCompensation()` |
+| Warp | plain | `withSkinToneFallback()` → `withWarpCursorCompensation()` |
+| anything else | plain | **untouched** (compensation would corrupt a correct terminal) |
 - `FrameDiffWriter` — applies the rewriters on its build path; Apple-only
   right-edge repaint.
 - `CheckboxStyle.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
