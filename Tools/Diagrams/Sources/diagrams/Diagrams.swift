@@ -32,7 +32,7 @@ let lifecycleMainLoop = Diagram(
         Node(id: "resize", title: "Consume resize flag",
              detail: ["SIGWINCH → invalidate diff cache"]),
         Node(id: "input", title: "Drain & dispatch input",
-             detail: ["≤128/frame · keys: 5 layers · mouse: hit-test"]),
+             detail: ["≤128/frame · keys: 5 layers + 2 stages · mouse: hit-test"]),
         Node(id: "render", title: "Render if a frame is due",
              detail: ["at most once per App.maxFrameRate"]),
         Node(id: "block", title: "Block until woken",
@@ -66,7 +66,7 @@ let architectureEventLoop = Diagram(
         Node(id: "resize", title: "Consume resize flag",
              detail: ["SIGWINCH → invalidate diff cache"]),
         Node(id: "input", title: "Drain & dispatch input",
-             detail: ["≤128/frame · keys → 5 layers · mouse → hit-test"]),
+             detail: ["≤128/frame · keys → 5 layers + 2 stages · mouse → hit-test"]),
         Node(id: "render", title: "Render if a frame is due",
              detail: ["coalesce requests · ≤ App.maxFrameRate"]),
         Node(id: "block", title: "Block until woken",
@@ -137,34 +137,50 @@ let lifecycleRunCreates = Diagram(
     ]
 )
 
-/// KeyboardShortcuts.md + Architecture.md — the five-layer keyboard dispatch,
-/// with the two `hasTextInputFocus` gates that switch Layer 0 on and Layer 3 off.
+/// KeyboardShortcuts.md + Architecture.md + AppLifecycle.md — the five-layer
+/// keyboard dispatch with its two refinement stages: the modal-claimed ESC
+/// pre-route (before Layer 1) and the semantic-shortcut Layer 3.5 (default /
+/// cancel action, between Layers 3 and 4) — plus the two `hasTextInputFocus`
+/// gates that switch Layer 0 on and Layer 3 off. Mirrors
+/// `InputHandler.handle(_:)`.
 let keyboardEventDispatch = Diagram(
     name: "keyboard-event-dispatch",
-    title: "Five-layer keyboard event dispatch",
+    title: "Keyboard event dispatch — five layers + two refinement stages",
     nodes: [
         Node(id: "ev", title: "KeyEvent", kind: .terminal),
         Node(id: "g0", title: "text input focused?", kind: .decision),
         Node(id: "l0", title: "Layer 0 · Text input",
-             detail: ["focusManager.dispatchKeyEvent", "TextField / SecureField"]),
+             detail: ["focusManager.dispatchKeyEvent", "TextField / SecureField / TextEditor"]),
+        Node(id: "gesc", title: "ESC claimed by an open surface?", kind: .decision),
+        Node(id: "pre", title: "ESC pre-route · Focus system",
+             detail: ["open drop-down closes FIRST", "before any page-level handler"]),
         Node(id: "l1", title: "Layer 1 · Status bar items", detail: ["shortcut-triggered actions"]),
         Node(id: "l2", title: "Layer 2 · View handlers", detail: [".onKeyPress · deepest view first"]),
         Node(id: "g3", title: "still has text focus?", kind: .decision),
         Node(id: "l3", title: "Layer 3 · Focus system",
              detail: ["focused element · Tab / Shift+Tab", "arrow-key fallback"]),
-        Node(id: "l4", title: "Layer 4 · Default bindings", detail: ["quit · theme · appearance"]),
+        Node(id: "l35", title: "Layer 3.5 · Semantic shortcuts",
+             detail: ["Return → default button", "Escape → cancel button"]),
+        Node(id: "l4", title: "Layer 4 · Default bindings",
+             detail: ["quit (always) · theme · appearance", "chrome gated while a modal grabs input"]),
         Node(id: "drop", title: "Unmatched → dropped", kind: .terminal),
     ],
     edges: [
         Edge("ev", "g0"),
         Edge("g0", "l0", label: "yes"),
-        Edge("g0", "l1", label: "no"),
+        Edge("g0", "gesc", label: "no"),
+        // With text focus, the ESC pre-route is skipped (Layer 0 already
+        // routed through the focus system).
         Edge("l0", "l1"),
+        Edge("gesc", "pre", label: "yes"),
+        Edge("gesc", "l1", label: "no"),
+        Edge("pre", "l1"),
         Edge("l1", "l2"),
         Edge("l2", "g3"),
-        Edge("g3", "l4", label: "yes — skip L3"),
+        Edge("g3", "l35", label: "yes — skip L3"),
         Edge("g3", "l3", label: "no"),
-        Edge("l3", "l4"),
+        Edge("l3", "l35"),
+        Edge("l35", "l4"),
         Edge("l4", "drop"),
     ]
 )
