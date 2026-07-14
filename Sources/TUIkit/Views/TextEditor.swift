@@ -238,7 +238,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 : nil
             output.append(
                 styledRow(
-                    TabLayout.expand(lineChars, tabWidth: tabWidth),
+                    lineChars, tabWidth: tabWidth,
                     scrollColumn: handler.scrollColumn, width: contentWidth,
                     caret: rowCaret, selection: selection,
                     palette: palette, isDisabled: isDisabled, background: fieldBackground))
@@ -314,12 +314,19 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         handler.scrollColumn = max(0, handler.scrollColumn)
     }
 
-    /// Renders one visible row: the line clipped to `[scrollColumn, +width)`,
-    /// padded to `width`. Selected cells (columns in `selection`) get a palette
-    /// highlight and the cursor cell a block caret — both set explicit palette
-    /// colours rather than SGR 7 reverse-video (which inverts the terminal's
-    /// *default* colours and collapses to dark-on-dark on a mid-tone palette).
-    /// Consecutive cells that share a colour coalesce into one ANSI run.
+    /// Renders one visible row: the line clipped to the cell window
+    /// `[scrollColumn, +width)`, padded to exactly `width` cells. Selected
+    /// spans (display columns in `selection`) get a palette highlight and the
+    /// cursor cell a caret — both set explicit palette colours rather than
+    /// SGR 7 reverse-video (which inverts the terminal's *default* colours
+    /// and collapses to dark-on-dark on a mid-tone palette). Consecutive
+    /// cells that share a colour coalesce into one ANSI run.
+    ///
+    /// The walk is in terminal CELLS over the line's characters — the same
+    /// model as ``TextFieldContentRenderer``: a tab spans to its stop, a wide
+    /// character (emoji, CJK) spans its real width, and an element straddling
+    /// either window edge renders as spaces for its visible cells (it can't
+    /// be shown half), so the row is always exactly `width` cells.
     /// The caret's resolved per-frame appearance: the configured shape plus
     /// the animation's current visibility/colour (see
     /// ``TextFieldContentRenderer/computeCursorState(baseColor:animation:speed:cursorTimer:)``).
@@ -336,21 +343,21 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let appearance: CaretAppearance
     }
 
+    // The row walk is one coherent cell-clipping pass; splitting it would
+    // scatter the window arithmetic its closures share.
+    // swiftlint:disable:next function_body_length
     private func styledRow(
-        _ chars: [Character], scrollColumn: Int, width: Int,
+        _ chars: [Character], tabWidth: TabWidth, scrollColumn: Int, width: Int,
         caret: RowCaret?, selection: Range<Int>?,
         palette: any Palette, isDisabled: Bool, background: Color?
     ) -> String {
-        let start = scrollColumn
-        let end = min(chars.count, scrollColumn + width)
-        var visible: [Character] = start < end ? Array(chars[start..<end]) : []
-        while visible.count < width { visible.append(" ") }
+        let windowStart = scrollColumn
+        let windowEnd = scrollColumn + width
 
         let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
         let selectionBackground = palette.accent.opacity(
             ViewConstants.selectionIndicator, over: background ?? palette.background)
         let selectionForeground = palette.readableText(on: selectionBackground)
-        let cursorCell = caret.map { $0.column - scrollColumn }
 
         var result = ""
         var runText = ""
@@ -379,45 +386,112 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             runText.append(character)
         }
 
-        for cell in 0..<width {
-            let column = scrollColumn + cell
-            if let caret, cell == cursorCell, caret.appearance.visible {
-                switch caret.appearance.shape {
-                case .block:
-                    // The block caret keeps the character legible: glyph in
-                    // the background colour on a caret-coloured block (the
-                    // pulse animation modulates the block's colour).
-                    emit(
-                        visible[cell], foreground: palette.background,
-                        background: caret.appearance.color)
-                case .underscore where visible[cell] != " ":
-                    // The character itself, underlined, in the caret colour
-                    // — the insertion point stays readable.
-                    flush()
-                    var style = TextStyle()
-                    style.foregroundColor = caret.appearance.color
-                    style.backgroundColor = background
-                    style.isUnderlined = true
-                    result += ANSIRenderer.render(
-                        String(visible[cell]), with: style.resolved(with: palette))
-                case .bar, .underscore:
-                    // The shape's standalone glyph replaces the cell. A bar
-                    // caret reads as sitting BEFORE the character, so it
-                    // deliberately draws the same left-edge glyph for every
-                    // character — a combining-overlay approach was tried and
-                    // rejected: terminals compose the overlay differently
-                    // per base glyph, often near-invisibly. (`.underscore`
-                    // reaches here only over a space, where there is nothing
-                    // to underline.)
-                    emit(
-                        caret.appearance.shape.character,
-                        foreground: caret.appearance.color, background: background)
-                }
-            } else if let selection, selection.contains(column) {
-                emit(visible[cell], foreground: selectionForeground, background: selectionBackground)
+        // Walks the line in cell space, clipping each element against the
+        // window: fully inside → emitted whole; straddling an edge → spaces
+        // for its visible cells; outside → skipped.
+        var cellX = 0
+        var outputCells = 0
+        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?) {
+            let start = cellX
+            let end = cellX + cells
+            cellX = end
+            guard end > windowStart, start < windowEnd else { return }
+            if start >= windowStart, end <= windowEnd {
+                emit(character, foreground: foreground, background: background)
+                outputCells += cells
             } else {
-                emit(visible[cell], foreground: textForeground, background: background)
+                let visible = min(end, windowEnd) - max(start, windowStart)
+                for _ in 0..<visible {
+                    emit(" ", foreground: foreground, background: background)
+                }
+                outputCells += visible
             }
+        }
+
+        // Draws the caret over a character spanning `cells`:
+        // - `.block`: the character itself, in the field's background colour
+        //   on a caret-coloured block (covering a wide character whole) —
+        //   explicit palette colours, never SGR 7.
+        // - `.underscore` over a single-cell non-space: the character itself,
+        //   underlined, in the caret colour.
+        // - `.bar` (and `.underscore` over a space or a WIDE character,
+        //   whose underline support is poor): the shape's standalone glyph
+        //   replaces the first cell; the remainder pads with spaces so
+        //   nothing after it shifts. A bar caret reads as sitting BEFORE the
+        //   character, so it deliberately draws the same left-edge glyph for
+        //   every character — a combining-overlay approach was tried and
+        //   rejected: terminals compose the overlay differently per base
+        //   glyph, often near-invisibly.
+        func emitCaret(_ underlying: Character, cells: Int, appearance: CaretAppearance) {
+            switch appearance.shape {
+            case .block:
+                emitClipped(
+                    underlying, cells: cells,
+                    foreground: palette.background, background: appearance.color)
+            case .underscore where cells == 1 && underlying != " ":
+                flush()
+                var style = TextStyle()
+                style.foregroundColor = appearance.color
+                style.backgroundColor = background
+                style.isUnderlined = true
+                result += ANSIRenderer.render(
+                    String(underlying), with: style.resolved(with: palette))
+                cellX += 1
+                outputCells += 1
+            case .bar, .underscore:
+                emitClipped(
+                    appearance.shape.character, cells: 1,
+                    foreground: appearance.color, background: background)
+                if cells > 1 {
+                    emitClipped(
+                        " ", cells: cells - 1,
+                        foreground: textForeground, background: background)
+                }
+            }
+        }
+
+        for character in chars {
+            let cells = TabLayout.advance(from: cellX, over: character, tabWidth: tabWidth) - cellX
+            // The caret sits at a character's start cell (its column is
+            // derived from a character index), so at most one element
+            // matches. Blink-off falls through to normal rendering.
+            if let caret, caret.appearance.visible, caret.column == cellX {
+                if character == "\t" {
+                    // Caret on a tab: the caret occupies the stop run's first
+                    // cell, the rest of the run pads.
+                    emitCaret(" ", cells: 1, appearance: caret.appearance)
+                    if cells > 1 {
+                        emitClipped(
+                            " ", cells: cells - 1,
+                            foreground: textForeground, background: background)
+                    }
+                } else {
+                    emitCaret(character, cells: cells, appearance: caret.appearance)
+                }
+                continue
+            }
+            let isSelected = selection.map { $0.contains(cellX) } ?? false
+            let foreground = isSelected ? selectionForeground : textForeground
+            let cellBackground = isSelected ? selectionBackground : background
+            if character == "\t" {
+                // A tab is its stop run of spaces — emitted cell by cell so
+                // the window clips it naturally (and a selected tab
+                // highlights its whole span, as in any editor).
+                for _ in 0..<cells {
+                    emitClipped(" ", cells: 1, foreground: foreground, background: cellBackground)
+                }
+            } else {
+                emitClipped(character, cells: cells, foreground: foreground, background: cellBackground)
+            }
+        }
+        // The caret past the last character sits on its own cell.
+        if let caret, caret.appearance.visible, caret.column == cellX {
+            emitCaret(" ", cells: 1, appearance: caret.appearance)
+        }
+        // Pad to exactly `width` cells.
+        while outputCells < width {
+            emit(" ", foreground: textForeground, background: background)
+            outputCells += 1
         }
         flush()
         return result

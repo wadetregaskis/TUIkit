@@ -25,7 +25,6 @@ struct TabLayoutTests {
         let line = Array("ab\tX")
         // Tab starts at column 2 → next multiple of 4 is 4 → X at column 4.
         #expect(TabLayout.displayColumn(ofCharIndex: 3, in: line, tabWidth: .periodic(4)) == 4)
-        #expect(String(TabLayout.expand(line, tabWidth: .periodic(4))) == "ab  X")
     }
 
     @Test("A tab starting exactly on a stop advances a full interval")
@@ -33,7 +32,6 @@ struct TabLayoutTests {
         let line = Array("abcd\tX")
         // Tab starts at column 4 (a stop) → advances to 8, not 4.
         #expect(TabLayout.displayColumn(ofCharIndex: 5, in: line, tabWidth: .periodic(4)) == 8)
-        #expect(String(TabLayout.expand(line, tabWidth: .periodic(4))) == "abcd    X")
     }
 
     @Test("Fixed tabs always advance the same number of cells")
@@ -42,7 +40,6 @@ struct TabLayoutTests {
         // ab(2) + tab(2) → X at 4; X(1) + tab(2) → Y at 7.
         #expect(TabLayout.displayColumn(ofCharIndex: 3, in: line, tabWidth: .fixed(2)) == 4)
         #expect(TabLayout.displayColumn(ofCharIndex: 5, in: line, tabWidth: .fixed(2)) == 7)
-        #expect(String(TabLayout.expand(line, tabWidth: .fixed(2))) == "ab  X  Y")
     }
 
     @Test("Any display column within a tab's span maps to the tab character")
@@ -63,7 +60,6 @@ struct TabLayoutTests {
         let line = Array("hello")
         #expect(TabLayout.displayColumn(ofCharIndex: 3, in: line, tabWidth: .periodic(4)) == 3)
         #expect(TabLayout.charIndex(forDisplayColumn: 3, in: line, tabWidth: .periodic(4)) == 3)
-        #expect(TabLayout.expand(line, tabWidth: .periodic(4)) == line)
     }
 
     @Test("Degenerate widths are clamped to at least one cell")

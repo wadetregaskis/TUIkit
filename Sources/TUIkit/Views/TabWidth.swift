@@ -4,6 +4,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import TUIkitCore
+
 // MARK: - TabWidth
 
 /// How a literal tab character advances the column in text-editing views
@@ -47,60 +49,64 @@ public enum TabWidth: Sendable, Equatable, Hashable {
 // MARK: - TabLayout
 
 /// Character-index ↔ display-column arithmetic for a line that may contain
-/// tabs, shared by ``TextEditor``'s renderer (expansion, caret and selection
-/// placement, click mapping) and ``TextEditorHandler`` (vertical motion's
-/// visual-column preservation) so the two can never disagree about where a
-/// tab puts things.
+/// tabs or multi-cell characters (emoji, CJK), shared by ``TextEditor``'s
+/// renderer (caret and selection placement, click mapping, the row walk) and
+/// ``TextEditorHandler`` (vertical motion's visual-column preservation) so
+/// the two can never disagree about where a character puts the columns after
+/// it.
 ///
 /// The editor's model stays character-indexed — these helpers translate at
-/// the display boundary only. Lines without a tab take an O(1) fast path, so
-/// tab-free editing pays nothing.
+/// the display boundary only, in terminal CELLS: a tab advances to its stop,
+/// and a wide character advances by its real cell width. Plain lines (no tab,
+/// every character one cell) take an O(1) fast path, so ASCII editing pays
+/// nothing.
 enum TabLayout {
+    /// Whether every character in `chars` occupies exactly one display cell
+    /// (no tabs, no wide characters) — the fast-path predicate under which
+    /// character index and display column coincide.
+    private static func isPlain(_ chars: [Character]) -> Bool {
+        !chars.contains { $0 == "\t" || $0.terminalWidth != 1 }
+    }
+
+    /// The display column after `character` when it begins at `column`: the
+    /// next tab stop for a tab, `column` + the character's cell width
+    /// otherwise (floored at one cell so a zero-width oddity can't stall a
+    /// layout walk).
+    static func advance(from column: Int, over character: Character, tabWidth: TabWidth) -> Int {
+        character == "\t"
+            ? tabWidth.advance(from: column)
+            : column + max(1, character.terminalWidth)
+    }
+
     /// The display column at which the character at `charIndex` begins
     /// (`charIndex == chars.count` gives the line's total display width).
     static func displayColumn(
         ofCharIndex charIndex: Int, in chars: [Character], tabWidth: TabWidth
     ) -> Int {
-        guard chars.contains("\t") else { return min(charIndex, chars.count) }
+        guard !isPlain(chars) else { return min(charIndex, chars.count) }
         var column = 0
         for index in 0..<min(charIndex, chars.count) {
-            column = chars[index] == "\t" ? tabWidth.advance(from: column) : column + 1
+            column = advance(from: column, over: chars[index], tabWidth: tabWidth)
         }
         return column
     }
 
     /// The character index containing display column `displayColumn` — any
-    /// column within a tab's span maps to the tab itself. Columns at or past
-    /// the end of the line map to the end-of-line insertion point
-    /// (`chars.count`), matching a click beyond the last character.
+    /// column within a character's span (a tab's stop run, a wide character's
+    /// cells) maps to that character. Columns at or past the end of the line
+    /// map to the end-of-line insertion point (`chars.count`), matching a
+    /// click beyond the last character.
     static func charIndex(
         forDisplayColumn displayColumn: Int, in chars: [Character], tabWidth: TabWidth
     ) -> Int {
-        guard chars.contains("\t") else { return min(max(0, displayColumn), chars.count) }
+        guard !isPlain(chars) else { return min(max(0, displayColumn), chars.count) }
         var column = 0
         for (index, character) in chars.enumerated() {
-            let next = character == "\t" ? tabWidth.advance(from: column) : column + 1
+            let next = advance(from: column, over: character, tabWidth: tabWidth)
             if displayColumn < next { return index }
             column = next
         }
         return chars.count
-    }
-
-    /// The line as display cells: every tab replaced by the spaces needed to
-    /// reach its stop. All other characters pass through unchanged.
-    static func expand(_ chars: [Character], tabWidth: TabWidth) -> [Character] {
-        guard chars.contains("\t") else { return chars }
-        var cells: [Character] = []
-        cells.reserveCapacity(chars.count + 8)
-        for character in chars {
-            if character == "\t" {
-                let stop = tabWidth.advance(from: cells.count)
-                cells.append(contentsOf: repeatElement(" ", count: stop - cells.count))
-            } else {
-                cells.append(character)
-            }
-        }
-        return cells
     }
 }
 
