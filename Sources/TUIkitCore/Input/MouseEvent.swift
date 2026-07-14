@@ -154,6 +154,21 @@ public struct MouseEvent: Sendable, Equatable {
             button: button, phase: phase, x: x, y: y,
             shift: shift, ctrl: ctrl, meta: meta, clickCount: count)
     }
+
+    /// Returns a copy with the ``clickCount`` and modifier flags replaced.
+    ///
+    /// Used by ``MouseEventDispatcher`` to stamp a button-*release* with the
+    /// count and modifier state carried forward from the press it completes.
+    /// A click gesture's modifiers are defined at press time; some terminals
+    /// report the SGR modifier bits only on the press report (`M`) and drop
+    /// them on the release (`m`), so a handler acting on release (the tap
+    /// convention) would otherwise see a bare click. Carrying the press's
+    /// modifiers keeps the gesture whole regardless of the terminal.
+    public func withClick(count: Int, shift: Bool, ctrl: Bool, meta: Bool) -> Self {
+        Self(
+            button: button, phase: phase, x: x, y: y,
+            shift: shift, ctrl: ctrl, meta: meta, clickCount: count)
+    }
 }
 
 // MARK: - SGR Parsing

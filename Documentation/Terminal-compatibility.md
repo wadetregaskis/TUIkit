@@ -191,6 +191,21 @@ non-default setup.
   (user-reported). There is no escape sequence or variable that exposes
   the pointer configuration, so TUIkit cannot detect the setting; the
   example's Mouse page shows a static note under iTerm2 instead.
+- **Modifier on release (`m`):** a ⌘/⌥-click reaches the app with the SGR
+  meta bit (+8) set on the button-**press** (`M`), but the matching
+  **release** (`m`) is reported with the modifier bits **cleared**
+  (inferred, not yet byte-captured — the only explanation consistent with
+  "⌘-click reads as ⌥-click" AND "⌘-click still collapses a
+  multi-selection", since a release that carried the meta bit toggles
+  correctly in the pipeline test). Views that select on release (List /
+  Table / tap gestures) would therefore see a bare click and replace the
+  whole selection instead of toggling one row in. **Defence:**
+  `MouseEventDispatcher.stampClickCount` remembers the press's modifier
+  bits and unions them onto the matching release, so the gesture stays
+  whole regardless of which report the terminal decorates. No-op where
+  press and release agree (Terminal.app). *Verify with `mouse_probe.py`:
+  capture a ⌘-click and confirm the `m` report's button code drops the +8
+  the `M` report carried.*
 - iTerm2 honours a large proprietary escape set (OSC 1337) — unused by
   TUIkit so far.
 

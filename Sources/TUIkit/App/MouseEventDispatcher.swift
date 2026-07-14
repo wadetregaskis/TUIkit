@@ -124,10 +124,24 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// terminal are silently dropped.
     private var activeSupport: MouseSupport = .standard
 
-    /// The most recent button click, used to synthesise ``MouseEvent/clickCount``.
-    /// A press within ``multiClickWindowNanos`` of the previous one, on the same
-    /// button and (near) the same cell, increments the count.
-    private var lastClick: (button: MouseButton, x: Int, y: Int, timeNanos: UInt64, count: Int)?
+    /// A recorded button press, used to synthesise ``MouseEvent/clickCount``
+    /// for the matching release and to carry the press's modifier state onto
+    /// it (some terminals drop the SGR modifier bits on the release report).
+    private struct LastClick {
+        var button: MouseButton
+        var x: Int
+        var y: Int
+        var timeNanos: UInt64
+        var count: Int
+        var shift: Bool
+        var ctrl: Bool
+        var meta: Bool
+    }
+
+    /// The most recent button press. A press within ``multiClickWindowNanos``
+    /// of the previous one, on the same button and (near) the same cell,
+    /// increments the count.
+    private var lastClick: LastClick?
 
     /// The maximum gap between successive clicks for them to count as one
     /// multi-click sequence (400 ms — a common desktop double-click threshold).
@@ -473,13 +487,23 @@ extension MouseEventDispatcher {
         )
     }
 
-    /// Stamps a button press/release with the synthesised ``MouseEvent/clickCount``.
+    /// Stamps a button press/release with the synthesised ``MouseEvent/clickCount``
+    /// and carries the press's modifier state onto its matching release.
     ///
     /// A `.pressed` within the multi-click window of the previous press, on the
     /// same button and within one cell of it, advances the count; anything else
     /// resets it to 1. The matching `.released` carries the same count so a
     /// handler acting on release (the tap convention) sees the double-click.
     /// Motion / drag / wheel events are left at count 1.
+    ///
+    /// The release also inherits the modifier bits the press was reported with
+    /// (unioned with its own). A click gesture's modifiers are fixed at press
+    /// time, but some terminals report the SGR modifier bits only on the press
+    /// (`M`) and drop them on the release (`m`) — so a handler that acts on
+    /// release (List/Table selection, tap gestures) would otherwise see a bare
+    /// click and, for example, replace a multi-selection instead of toggling
+    /// one row into it. Unioning keeps the gesture whole on every terminal and
+    /// is a no-op where both reports agree.
     private func stampClickCount(_ event: MouseEvent) -> MouseEvent {
         switch event.phase {
         case .pressed:
@@ -495,12 +519,20 @@ extension MouseEventDispatcher {
             } else {
                 count = 1
             }
-            lastClick = (event.button, event.x, event.y, now, count)
+            lastClick = LastClick(
+                button: event.button, x: event.x, y: event.y, timeNanos: now,
+                count: count, shift: event.shift, ctrl: event.ctrl, meta: event.meta)
             return event.withClickCount(count)
         case .released:
-            // Carry the in-flight press's count (if this release matches it).
+            // Carry the in-flight press's count AND modifiers (if this release
+            // matches it), so a terminal that drops modifier bits on the
+            // release report doesn't strip the gesture's Shift/Ctrl/Option.
             if let last = lastClick, last.button == event.button {
-                return event.withClickCount(last.count)
+                return event.withClick(
+                    count: last.count,
+                    shift: event.shift || last.shift,
+                    ctrl: event.ctrl || last.ctrl,
+                    meta: event.meta || last.meta)
             }
             return event
         default:
