@@ -208,9 +208,23 @@ non-default setup.
   `MouseEventDispatcher.stampClickCount` remembers the press's modifier
   bits and unions them onto the matching release, so the gesture stays
   whole regardless of which report the terminal decorates. No-op where
-  press and release agree (Terminal.app). *Verify with `mouse_probe.py`:
-  capture a ⌘-click and confirm the `m` report's button code drops the +8
-  the `M` report carried.*
+  press and release agree (Terminal.app).
+
+  *`mouse_probe.py` captures (2026-07-15, two sessions, terminal
+  identities not recorded — the probe now logs `TERM_PROGRAM` for future
+  runs):* plain clicks are **symmetric** (press `M` and release `m`
+  carry the same button code, all SGR — no X10 "any release" fallback
+  seen); shift+horizontal wheel arrives as **70/71** (66/67 + shift),
+  confirming the Shift-wheel decoding above; drags report `+32` motion
+  codes with clean SGR releases. **No `+8` (meta) button code appears
+  anywhere in either capture** — so the release-drops-meta hypothesis
+  remains unconfirmed, and it is possible these terminals (in default
+  configuration) never forward ⌘ to the app at all: both bind ⌘-click
+  themselves (iTerm2: semantic click/URL open; Terminal.app: URL on
+  ⌘-double-click). *Still to capture: a deliberate ⌘-click (and
+  ⌥-click, which iTerm2 reportedly substitutes) in each terminal,
+  checking first whether any `+8`/`+4` press arrives, then whether the
+  matching release keeps it.*
 - iTerm2 honours a large proprietary escape set (OSC 1337) — unused by
   TUIkit so far.
 - **Cell aspect ratio (image distortion):** iTerm2's cell height:width

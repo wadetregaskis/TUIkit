@@ -22,7 +22,9 @@ signal.signal(signal.SIGTERM, cleanup)
 tty.setraw(fd)
 os.write(1, b"\x1b[42;30m\x1b[2J\x1b[H  MOUSE PROBE READY - aim events here ('q' quits)\r\n")
 os.write(1, b"\x1b[?1000h\x1b[?1002h\x1b[?1006h")
-out.write(f"--- start tty={os.ttyname(fd)} ---\n")
+term = os.environ.get("TERM_PROGRAM", "?")
+version = os.environ.get("TERM_PROGRAM_VERSION", "?")
+out.write(f"--- start tty={os.ttyname(fd)} term={term} {version} ---\n")
 last_beat = time.time()
 try:
     while True:

@@ -50,3 +50,7 @@ WHATS-NEXT.md
 papers/
 .gource/
 .remember
+
+# Terminal-probe default outputs (Tools/TerminalProbes — run from anywhere)
+mouse_probe.log
+advance_probe.json
