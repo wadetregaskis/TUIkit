@@ -57,6 +57,37 @@ struct MouseEventSGRParsingTests {
     }
 
     /// Shift modifier: button code 0 + shift bit 4 → `ESC [ < 4 ; 1 ; 1 M`.
+    @Test(
+        "Horizontal wheel buttons 66/67 decode as left/right (xterm axis-in-button encoding)",
+        arguments: [
+            // macOS translates Shift+wheel into horizontal wheel deltas, so
+            // iTerm2 reports Shift+wheel as 66/67 (+4 for the Shift flag).
+            // Decoding these as vertical collapsed both directions into
+            // .scrollDown, and the shift-scrolls-horizontally convention
+            // then scrolled RIGHT for every tick.
+            (Array("\u{1B}[<66;10;5M".utf8), MouseButton.scrollLeft, false),
+            (Array("\u{1B}[<67;10;5M".utf8), MouseButton.scrollRight, false),
+            (Array("\u{1B}[<70;10;5M".utf8), MouseButton.scrollLeft, true),   // 66+4 shift
+            (Array("\u{1B}[<71;10;5M".utf8), MouseButton.scrollRight, true),  // 67+4 shift
+            (Array("\u{1B}[<68;10;5M".utf8), MouseButton.scrollUp, true),     // 64+4 shift
+            (Array("\u{1B}[<69;10;5M".utf8), MouseButton.scrollDown, true),   // 65+4 shift
+        ])
+    func parsesHorizontalWheel(_ bytes: [UInt8], _ button: MouseButton, _ shift: Bool) {
+        let event = MouseEvent.parseSGR(bytes)
+        #expect(event?.button == button)
+        #expect(event?.phase == .scrolled)
+        #expect(event?.shift == shift)
+    }
+
+    @Test("Legacy X10 horizontal wheel buttons decode as left/right too")
+    func parsesLegacyHorizontalWheel() {
+        // ESC [ M <button+32> <x+32> <y+32>; wheel-left = 66, wheel-right = 67.
+        let left = MouseEvent.parseLegacy([0x1B, 0x5B, 0x4D, UInt8(66 + 32), 42, 38])
+        let right = MouseEvent.parseLegacy([0x1B, 0x5B, 0x4D, UInt8(67 + 32), 42, 38])
+        #expect(left?.button == .scrollLeft)
+        #expect(right?.button == .scrollRight)
+    }
+
     @Test("Shift modifier flag is decoded")
     func shiftModifier() {
         let bytes: [UInt8] = [0x1B, 0x5B, 0x3C, 0x34, 0x3B, 0x31, 0x3B, 0x31, 0x4D]

@@ -251,13 +251,32 @@ extension MouseEvent {
 
     /// Wheel events split four ways: vertical / horizontal, up
     /// / down (or left / right).
+    ///
+    /// In the standard xterm encoding the wheel AXIS lives in the low
+    /// button bits alongside the direction: within the wheel group
+    /// (bit 6), buttons 0/1 are vertical up/down and buttons 2/3 are
+    /// horizontal left/right — `64`…`67` unshifted. iTerm2 and
+    /// Terminal.app both use this form (measured: macOS translates
+    /// Shift+wheel into horizontal wheel deltas, so iTerm2 reports
+    /// Shift+wheel as `66`/`67` (+4 for Shift)). Decoding buttons 2/3
+    /// as vertical (as this once did) collapsed BOTH horizontal
+    /// directions into `.scrollDown`, which the shift-scrolls-
+    /// horizontally convention then mapped to "right" — every
+    /// Shift+wheel tick scrolled right regardless of direction.
+    /// The bit-7 (`+128`) horizontal form some terminals use is
+    /// still honoured.
     private static func decodeSGRWheel(
         buttonNumber: Int, horizontal: Bool
     ) -> MouseButton {
         if horizontal {
             return buttonNumber == 0 ? .scrollLeft : .scrollRight
         }
-        return buttonNumber == 0 ? .scrollUp : .scrollDown
+        switch buttonNumber {
+        case 0: return .scrollUp
+        case 1: return .scrollDown
+        case 2: return .scrollLeft
+        default: return .scrollRight
+        }
     }
 
     /// Bare-cursor motion or drag — same button-index mapping as
@@ -335,11 +354,10 @@ extension MouseEvent {
 
         if isWheel {
             phase = .scrolled
-            if horizontalWheel {
-                button = (buttonNumber == 0) ? .scrollLeft : .scrollRight
-            } else {
-                button = (buttonNumber == 0) ? .scrollUp : .scrollDown
-            }
+            // Same axis-in-the-button-bits layout as the SGR form: see
+            // `decodeSGRWheel` — buttons 2/3 within the wheel group are
+            // the standard horizontal left/right.
+            button = decodeSGRWheel(buttonNumber: buttonNumber, horizontal: horizontalWheel)
         } else if isMotion {
             switch buttonNumber {
             case 0: button = .left
