@@ -1,5 +1,5 @@
-<svg width="427pt" height="637pt"
- viewBox="0.00 0.00 427.00 637.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="454pt" height="637pt"
+ viewBox="0.00 0.00 454.00 637.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
 .edge path { fill: none; stroke: #8a8a8a; }
 .edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
@@ -17,133 +17,133 @@
 <!-- setup -->
 <g id="node1" class="node">
 <title>setup</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M324.66,-629.41C324.66,-629.41 108.87,-629.41 108.87,-629.41 102.88,-629.41 96.87,-623.41 96.87,-617.41 96.87,-617.41 96.87,-605.41 96.87,-605.41 96.87,-599.41 102.87,-593.41 108.87,-593.41 108.87,-593.41 324.66,-593.41 324.66,-593.41 330.66,-593.41 336.66,-599.41 336.66,-605.41 336.66,-605.41 336.66,-617.41 336.66,-617.41 336.66,-623.41 330.66,-629.41 324.66,-629.41"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-612.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal setup</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-600.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">install signals · alt screen · raw mode · mouse</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M351.29,-629.41C351.29,-629.41 135.5,-629.41 135.5,-629.41 129.5,-629.41 123.5,-623.41 123.5,-617.41 123.5,-617.41 123.5,-605.41 123.5,-605.41 123.5,-599.41 129.5,-593.41 135.5,-593.41 135.5,-593.41 351.29,-593.41 351.29,-593.41 357.29,-593.41 363.29,-599.41 363.29,-605.41 363.29,-605.41 363.29,-617.41 363.29,-617.41 363.29,-623.41 357.29,-629.41 351.29,-629.41"/>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-612.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Terminal setup</text>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-600.96" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">install signals · alt screen · raw mode · mouse</text>
 </g>
 <!-- observers -->
 <g id="node2" class="node">
 <title>observers</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M330.66,-556.41C330.66,-556.41 102.88,-556.41 102.88,-556.41 96.88,-556.41 90.87,-550.41 90.87,-544.41 90.87,-544.41 90.87,-532.08 90.87,-532.08 90.87,-526.08 96.87,-520.08 102.87,-520.08 102.87,-520.08 330.66,-520.08 330.66,-520.08 336.66,-520.08 342.66,-526.08 342.66,-532.08 342.66,-532.08 342.66,-544.41 342.66,-544.41 342.66,-550.41 336.66,-556.41 330.66,-556.41"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-540.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-528.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M357.29,-556.41C357.29,-556.41 129.5,-556.41 129.5,-556.41 123.5,-556.41 117.5,-550.41 117.5,-544.41 117.5,-544.41 117.5,-532.08 117.5,-532.08 117.5,-526.08 123.5,-520.08 129.5,-520.08 129.5,-520.08 357.29,-520.08 357.29,-520.08 363.29,-520.08 369.29,-526.08 369.29,-532.08 369.29,-532.08 369.29,-544.41 369.29,-544.41 369.29,-550.41 363.29,-556.41 357.29,-556.41"/>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-540.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-528.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
 </g>
 <!-- setup&#45;&gt;observers -->
 <g id="edge1" class="edge">
 <title>setup&#45;&gt;observers</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.77,-593.54C216.77,-584.95 216.77,-574.31 216.77,-564.74"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="219.22,-564.81 216.77,-557.81 214.32,-564.81 219.22,-564.81"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M243.39,-593.54C243.39,-584.95 243.39,-574.31 243.39,-564.74"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="245.85,-564.81 243.4,-557.81 240.95,-564.81 245.85,-564.81"/>
 </g>
 <!-- timers -->
 <g id="node3" class="node">
 <title>timers</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M304.41,-483.08C304.41,-483.08 129.12,-483.08 129.12,-483.08 123.12,-483.08 117.12,-477.08 117.12,-471.08 117.12,-471.08 117.12,-459.08 117.12,-459.08 117.12,-453.08 123.12,-447.08 129.12,-447.08 129.12,-447.08 304.41,-447.08 304.41,-447.08 310.41,-447.08 316.41,-453.08 316.41,-459.08 316.41,-459.08 316.41,-471.08 316.41,-471.08 316.41,-477.08 310.41,-483.08 304.41,-483.08"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-466.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Prepare animation timers</text>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-454.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Pulse · Cursor — started on demand</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M331.04,-483.08C331.04,-483.08 155.75,-483.08 155.75,-483.08 149.75,-483.08 143.75,-477.08 143.75,-471.08 143.75,-471.08 143.75,-459.08 143.75,-459.08 143.75,-453.08 149.75,-447.08 155.75,-447.08 155.75,-447.08 331.04,-447.08 331.04,-447.08 337.04,-447.08 343.04,-453.08 343.04,-459.08 343.04,-459.08 343.04,-471.08 343.04,-471.08 343.04,-477.08 337.04,-483.08 331.04,-483.08"/>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-466.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Prepare animation timers</text>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-454.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Pulse · Cursor — started on demand</text>
 </g>
 <!-- observers&#45;&gt;timers -->
 <g id="edge2" class="edge">
 <title>observers&#45;&gt;timers</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.77,-520.38C216.77,-511.78 216.77,-501.15 216.77,-491.58"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="219.22,-491.64 216.77,-484.64 214.32,-491.64 219.22,-491.64"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M243.39,-520.38C243.39,-511.78 243.39,-501.15 243.39,-491.58"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="245.85,-491.64 243.4,-484.64 240.95,-491.64 245.85,-491.64"/>
 </g>
 <!-- initial -->
 <g id="node4" class="node">
 <title>initial</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M259.79,-410.08C259.79,-410.08 173.75,-410.08 173.75,-410.08 167.75,-410.08 161.75,-404.08 161.75,-398.08 161.75,-398.08 161.75,-386.08 161.75,-386.08 161.75,-380.08 167.75,-374.08 173.75,-374.08 173.75,-374.08 259.79,-374.08 259.79,-374.08 265.79,-374.08 271.79,-380.08 271.79,-386.08 271.79,-386.08 271.79,-398.08 271.79,-398.08 271.79,-404.08 265.79,-410.08 259.79,-410.08"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-387.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render first frame</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M286.41,-410.08C286.41,-410.08 200.38,-410.08 200.38,-410.08 194.38,-410.08 188.38,-404.08 188.38,-398.08 188.38,-398.08 188.38,-386.08 188.38,-386.08 188.38,-380.08 194.38,-374.08 200.38,-374.08 200.38,-374.08 286.41,-374.08 286.41,-374.08 292.41,-374.08 298.41,-380.08 298.41,-386.08 298.41,-386.08 298.41,-398.08 298.41,-398.08 298.41,-404.08 292.41,-410.08 286.41,-410.08"/>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-387.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render first frame</text>
 </g>
 <!-- timers&#45;&gt;initial -->
 <g id="edge3" class="edge">
 <title>timers&#45;&gt;initial</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.77,-447.25C216.77,-438.68 216.77,-428.07 216.77,-418.52"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="219.22,-418.6 216.77,-411.6 214.32,-418.6 219.22,-418.6"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M243.39,-447.25C243.39,-438.68 243.39,-428.07 243.39,-418.52"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="245.85,-418.6 243.4,-411.6 240.95,-418.6 245.85,-418.6"/>
 </g>
 <!-- shutdown -->
 <g id="node5" class="node">
 <title>shutdown</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.16,-334.05C205.16,-334.05 159.37,-322.11 159.37,-322.11 153.57,-320.59 153.57,-317.57 159.37,-316.05 159.37,-316.05 205.16,-304.11 205.16,-304.11 210.96,-302.59 222.58,-302.59 228.38,-304.11 228.38,-304.11 274.17,-316.05 274.17,-316.05 279.97,-317.57 279.97,-320.59 274.17,-322.11 274.17,-322.11 228.38,-334.05 228.38,-334.05 222.58,-335.57 210.96,-335.57 205.16,-334.05"/>
-<text xml:space="preserve" text-anchor="middle" x="216.77" y="-314.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M231.78,-334.05C231.78,-334.05 186,-322.11 186,-322.11 180.19,-320.59 180.19,-317.57 186,-316.05 186,-316.05 231.78,-304.11 231.78,-304.11 237.59,-302.59 249.2,-302.59 255.01,-304.11 255.01,-304.11 300.79,-316.05 300.79,-316.05 306.6,-317.57 306.6,-320.59 300.79,-322.11 300.79,-322.11 255.01,-334.05 255.01,-334.05 249.2,-335.57 237.59,-335.57 231.78,-334.05"/>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-314.63" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shouldShutdown?</text>
 </g>
 <!-- initial&#45;&gt;shutdown -->
 <g id="edge4" class="edge">
 <title>initial&#45;&gt;shutdown</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.77,-374.25C216.77,-365.68 216.77,-355.07 216.77,-345.52"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="219.22,-345.6 216.77,-338.6 214.32,-345.6 219.22,-345.6"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M243.39,-374.25C243.39,-365.68 243.39,-355.07 243.39,-345.52"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="245.85,-345.6 243.4,-338.6 240.95,-345.6 245.85,-345.6"/>
 </g>
 <!-- resize -->
 <g id="node6" class="node">
 <title>resize</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M199.29,-255.33C199.29,-255.33 32.25,-255.33 32.25,-255.33 26.25,-255.33 20.25,-249.33 20.25,-243.33 20.25,-243.33 20.25,-231 20.25,-231 20.25,-225 26.25,-219 32.25,-219 32.25,-219 199.29,-219 199.29,-219 205.29,-219 211.29,-225 211.29,-231 211.29,-231 211.29,-243.33 211.29,-243.33 211.29,-249.33 205.29,-255.33 199.29,-255.33"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-239.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-227.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M225.91,-255.33C225.91,-255.33 58.88,-255.33 58.88,-255.33 52.88,-255.33 46.87,-249.33 46.87,-243.33 46.87,-243.33 46.87,-231 46.87,-231 46.87,-225 52.87,-219 58.87,-219 58.87,-219 225.91,-219 225.91,-219 231.91,-219 237.91,-225 237.91,-231 237.91,-231 237.91,-243.33 237.91,-243.33 237.91,-249.33 231.91,-255.33 225.91,-255.33"/>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-239.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Consume resize flag</text>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-227.84" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">SIGWINCH → invalidate diff cache</text>
 </g>
 <!-- shutdown&#45;&gt;resize -->
 <g id="edge5" class="edge">
 <title>shutdown&#45;&gt;resize</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M200.99,-305.59C185.77,-293.55 162.4,-275.06 143.98,-260.48"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="145.87,-258.86 138.86,-256.44 142.83,-262.7 145.87,-258.86"/>
-<text xml:space="preserve" text-anchor="middle" x="177.57" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M227.61,-305.59C212.39,-293.55 189.02,-275.06 170.6,-260.48"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="172.5,-258.86 165.49,-256.44 169.46,-262.7 172.5,-258.86"/>
+<text xml:space="preserve" text-anchor="middle" x="204.19" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- cleanup -->
 <g id="node10" class="node">
 <title>cleanup</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M389.54,-255.16C389.54,-255.16 248,-255.16 248,-255.16 242,-255.16 236,-249.16 236,-243.16 236,-243.16 236,-231.16 236,-231.16 236,-225.16 242,-219.16 248,-219.16 248,-219.16 389.54,-219.16 389.54,-219.16 395.54,-219.16 401.54,-225.16 401.54,-231.16 401.54,-231.16 401.54,-243.16 401.54,-243.16 401.54,-249.16 395.54,-255.16 389.54,-255.16"/>
-<text xml:space="preserve" text-anchor="middle" x="318.77" y="-238.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
-<text xml:space="preserve" text-anchor="middle" x="318.77" y="-226.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore terminal · show cursor</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M416.16,-255.16C416.16,-255.16 274.62,-255.16 274.62,-255.16 268.62,-255.16 262.62,-249.16 262.62,-243.16 262.62,-243.16 262.62,-231.16 262.62,-231.16 262.62,-225.16 268.62,-219.16 274.62,-219.16 274.62,-219.16 416.16,-219.16 416.16,-219.16 422.16,-219.16 428.16,-225.16 428.16,-231.16 428.16,-231.16 428.16,-243.16 428.16,-243.16 428.16,-249.16 422.16,-255.16 416.16,-255.16"/>
+<text xml:space="preserve" text-anchor="middle" x="345.39" y="-238.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Cleanup &amp; exit</text>
+<text xml:space="preserve" text-anchor="middle" x="345.39" y="-226.72" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">restore terminal · show cursor</text>
 </g>
 <!-- shutdown&#45;&gt;cleanup -->
 <g id="edge6" class="edge">
 <title>shutdown&#45;&gt;cleanup</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M232.71,-305.59C248.18,-293.47 271.99,-274.82 290.65,-260.2"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.83,-262.38 295.83,-256.14 288.81,-258.52 291.83,-262.38"/>
-<text xml:space="preserve" text-anchor="middle" x="281" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M259.33,-305.59C274.8,-293.47 298.61,-274.82 317.27,-260.2"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="318.46,-262.38 322.46,-256.14 315.44,-258.52 318.46,-262.38"/>
+<text xml:space="preserve" text-anchor="middle" x="307.63" y="-274.53" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- input -->
 <g id="node7" class="node">
 <title>input</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M219.54,-182C219.54,-182 12,-182 12,-182 6,-182 0,-176 0,-170 0,-170 0,-158 0,-158 0,-152 6,-146 12,-146 12,-146 219.54,-146 219.54,-146 225.54,-146 231.54,-152 231.54,-158 231.54,-158 231.54,-170 231.54,-170 231.54,-176 225.54,-182 219.54,-182"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-165.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-153.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys: 5 layers · mouse: hit&#45;test</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M272.79,-182C272.79,-182 12,-182 12,-182 6,-182 0,-176 0,-170 0,-170 0,-158 0,-158 0,-152 6,-146 12,-146 12,-146 272.79,-146 272.79,-146 278.79,-146 284.79,-152 284.79,-158 284.79,-158 284.79,-170 284.79,-170 284.79,-176 278.79,-182 272.79,-182"/>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-165.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Drain &amp; dispatch input</text>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-153.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">≤128/frame · keys: 5 layers + 2 stages · mouse: hit&#45;test</text>
 </g>
 <!-- resize&#45;&gt;input -->
 <g id="edge7" class="edge">
 <title>resize&#45;&gt;input</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M115.77,-219.3C115.77,-210.7 115.77,-200.07 115.77,-190.5"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="118.22,-190.56 115.77,-183.56 113.32,-190.56 118.22,-190.56"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M142.39,-219.3C142.39,-210.7 142.39,-200.07 142.39,-190.5"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="144.85,-190.56 142.4,-183.56 139.95,-190.56 144.85,-190.56"/>
 </g>
 <!-- render -->
 <g id="node8" class="node">
 <title>render</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M205.29,-109C205.29,-109 26.25,-109 26.25,-109 20.25,-109 14.25,-103 14.25,-97 14.25,-97 14.25,-85 14.25,-85 14.25,-79 20.25,-73 26.25,-73 26.25,-73 205.29,-73 205.29,-73 211.29,-73 217.29,-79 217.29,-85 217.29,-85 217.29,-97 217.29,-97 217.29,-103 211.29,-109 205.29,-109"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-92.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-80.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">at most once per App.maxFrameRate</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M231.91,-109C231.91,-109 52.87,-109 52.87,-109 46.87,-109 40.87,-103 40.87,-97 40.87,-97 40.87,-85 40.87,-85 40.87,-79 46.87,-73 52.87,-73 52.87,-73 231.91,-73 231.91,-73 237.91,-73 243.91,-79 243.91,-85 243.91,-85 243.91,-97 243.91,-97 243.91,-103 237.91,-109 231.91,-109"/>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-92.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Render if a frame is due</text>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-80.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">at most once per App.maxFrameRate</text>
 </g>
 <!-- input&#45;&gt;render -->
 <g id="edge8" class="edge">
 <title>input&#45;&gt;render</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M115.77,-146.17C115.77,-137.6 115.77,-126.99 115.77,-117.44"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="118.22,-117.52 115.77,-110.52 113.32,-117.52 118.22,-117.52"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M142.39,-146.17C142.39,-137.6 142.39,-126.99 142.39,-117.44"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="144.85,-117.52 142.4,-110.52 139.95,-117.52 144.85,-117.52"/>
 </g>
 <!-- block -->
 <g id="node9" class="node">
 <title>block</title>
-<path fill="#13795b" stroke="black" stroke-width="0" d="M185.04,-36C185.04,-36 46.5,-36 46.5,-36 40.5,-36 34.5,-30 34.5,-24 34.5,-24 34.5,-12 34.5,-12 34.5,-6 40.5,0 46.5,0 46.5,0 185.04,0 185.04,0 191.04,0 197.04,-6 197.04,-12 197.04,-12 197.04,-24 197.04,-24 197.04,-30 191.04,-36 185.04,-36"/>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Block until woken</text>
-<text xml:space="preserve" text-anchor="middle" x="115.77" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">input · render request · signal</text>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M211.66,-36C211.66,-36 73.12,-36 73.12,-36 67.12,-36 61.12,-30 61.12,-24 61.12,-24 61.12,-12 61.12,-12 61.12,-6 67.12,0 73.12,0 73.12,0 211.66,0 211.66,0 217.66,0 223.66,-6 223.66,-12 223.66,-12 223.66,-24 223.66,-24 223.66,-30 217.66,-36 211.66,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Block until woken</text>
+<text xml:space="preserve" text-anchor="middle" x="142.39" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">input · render request · signal</text>
 </g>
 <!-- render&#45;&gt;block -->
 <g id="edge9" class="edge">
 <title>render&#45;&gt;block</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M115.77,-73.17C115.77,-64.6 115.77,-53.99 115.77,-44.44"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="118.22,-44.52 115.77,-37.52 113.32,-44.52 118.22,-44.52"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M142.39,-73.17C142.39,-64.6 142.39,-53.99 142.39,-44.44"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="144.85,-44.52 142.4,-37.52 139.95,-44.52 144.85,-44.52"/>
 </g>
 <!-- block&#45;&gt;shutdown -->
 <g id="edge10" class="edge">
 <title>block&#45;&gt;shutdown</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M169.38,-35.9C241.35,-61.94 365.73,-119.56 413.77,-219 442.76,-279 341.26,-303.21 273.31,-312.57"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="273.21,-310.11 266.59,-313.45 273.85,-314.97 273.21,-310.11"/>
-<text xml:space="preserve" text-anchor="middle" x="400.11" y="-160.32" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M196.01,-35.9C267.98,-61.94 392.35,-119.56 440.39,-219 469.38,-279 367.88,-303.21 299.94,-312.57"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="299.84,-310.11 293.22,-313.45 300.48,-314.97 299.84,-310.11"/>
+<text xml:space="preserve" text-anchor="middle" x="426.74" y="-160.32" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">loop</text>
 </g>
 </g>
 </svg>
