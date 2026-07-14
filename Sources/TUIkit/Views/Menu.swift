@@ -349,24 +349,60 @@ private struct _MenuCore: View, Renderable, Layoutable {
     /// `selection` row visible. Returns the full list (no markers) when it fits;
     /// otherwise a window centred on the selection with `hasAbove`/`hasBelow`
     /// flags for the ▲/▼ markers (each marker consumes one budget row).
+    ///
+    /// The window plus its markers NEVER exceeds `budget` lines. A naive
+    /// two-pass shape (measure markers at full budget, then shrink) let a
+    /// marker switch ON after the budget was spent — a menu of `budget + 1`
+    /// items with a mid-list selection emitted one line too many (e.g. 7 items
+    /// in a 6-line budget rendered 7). Instead the window shrinks until it and
+    /// its markers fit: shrinking pushes MORE rows outside, so markers never
+    /// turn off as `visible` decreases and the first fit scanning downward is
+    /// the largest. Tiny budgets (1–2 lines) can't fit the row and both
+    /// markers — the selected row wins and the markers are dropped.
     private static func windowedRows(
         _ rows: [(item: Int?, line: String)], budget: Int, selection: Int
     ) -> (rows: ArraySlice<(item: Int?, line: String)>, hasAbove: Bool, hasBelow: Bool) {
         guard rows.count > budget else { return (rows[...], false, false) }
-        let selRow = rows.firstIndex { $0.item == selection } ?? 0
-        func clampStart(_ visible: Int) -> Int {
-            max(0, min(selRow - visible / 2, rows.count - visible))
+        let selRow = nearestItemRow(to: selection, in: rows)
+        func place(_ visible: Int) -> (start: Int, above: Bool, below: Bool) {
+            let start = max(0, min(selRow - visible / 2, rows.count - visible))
+            return (start, start > 0, start + visible < rows.count)
         }
-        // First pass with the full budget tells us which edges overflow; the
-        // second reclaims the rows the markers that WILL show would occupy.
-        var start = clampStart(budget)
-        var hasAbove = start > 0
-        var hasBelow = start + budget < rows.count
-        let visible = max(1, budget - (hasAbove ? 1 : 0) - (hasBelow ? 1 : 0))
-        start = clampStart(visible)
-        hasAbove = start > 0
-        hasBelow = start + visible < rows.count
-        return (rows[start..<start + visible], hasAbove, hasBelow)
+        var visible = max(1, budget)
+        var placed = place(visible)
+        while visible > 1 {
+            let markers = (placed.above ? 1 : 0) + (placed.below ? 1 : 0)
+            if visible + markers <= budget { break }
+            visible -= 1
+            placed = place(visible)
+        }
+        var hasAbove = placed.above
+        var hasBelow = placed.below
+        var emitted = visible + (hasAbove ? 1 : 0) + (hasBelow ? 1 : 0)
+        if emitted > budget, hasAbove {
+            hasAbove = false
+            emitted -= 1
+        }
+        if emitted > budget, hasBelow { hasBelow = false }
+        return (rows[placed.start..<placed.start + visible], hasAbove, hasBelow)
+    }
+
+    /// The row index the window anchors on: the row showing `selection`, or —
+    /// when the selection isn't an item row (a divider index, or a stale
+    /// out-of-range binding value) — the ITEM row with the nearest index, so
+    /// the window stays in the selection's neighbourhood instead of snapping
+    /// to the top.
+    private static func nearestItemRow(
+        to selection: Int, in rows: [(item: Int?, line: String)]
+    ) -> Int {
+        if let exact = rows.firstIndex(where: { $0.item == selection }) { return exact }
+        var best: (row: Int, distance: Int)?
+        for (row, entry) in rows.enumerated() {
+            guard let item = entry.item else { continue }
+            let distance = abs(item - selection)
+            if best == nil || distance < best!.distance { best = (row, distance) }
+        }
+        return best?.row ?? 0
     }
 
     /// Mouse: scroll-wheel anywhere on the menu changes selection (which

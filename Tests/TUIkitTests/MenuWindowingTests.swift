@@ -74,6 +74,92 @@ struct MenuWindowingTests {
         #expect(!out.contains { $0.contains("▼") }, "no ▼ marker at the bottom")
     }
 
+    @Test("A menu of budget+1 items with a mid selection still fits the height")
+    func budgetPlusOneMidSelection() {
+        // The regression shape: rows.count == budget + 1 with the selection in
+        // the middle. The old two-pass windowing measured its markers at the
+        // full budget, shrank the window, and then re-derived the markers — at
+        // which point BOTH switched on and the emitted lines exceeded the
+        // budget (7 items at height 8 → 6-line budget → 7 lines → 9-row menu).
+        let menu = Menu(items: items(7), selectedIndex: 3)
+        let buffer = render(menu, height: 8)
+        #expect(buffer.height <= 8, "menu fits its offered height, got \(buffer.height)")
+        #expect(
+            stripped(buffer).contains { $0.contains("Item 4") },
+            "the selected item stays visible")
+        // The over-emission was MASKED by a parent clamp truncating the buffer
+        // to the available height — slicing off the bottom border. The menu
+        // must stay a closed box.
+        #expect(
+            stripped(buffer).last?.hasPrefix("╰") == true,
+            "the bottom border survives: \(stripped(buffer))")
+    }
+
+    @Test("Windowing NEVER exceeds the height, keeps the selection visible, and markers are truthful")
+    func windowingInvariantSweep() {
+        // Deterministic sweep over the count × height × selection space that
+        // includes every count≈budget boundary and the tiny-budget floors.
+        for count in 1...25 {
+            for height in 3...14 {
+                for sel in 0..<count {
+                    let buffer = render(Menu(items: items(count), selectedIndex: sel), height: height)
+                    let out = stripped(buffer)
+                    #expect(
+                        buffer.height <= max(3, height),
+                        "count=\(count) height=\(height) sel=\(sel): rendered \(buffer.height)")
+                    // The box must be CLOSED — over-emission gets masked by the
+                    // parent clamp slicing off the bottom border, so border
+                    // integrity is the true no-overflow assertion.
+                    #expect(
+                        out.first?.hasPrefix("╭") == true && out.last?.hasPrefix("╰") == true,
+                        "count=\(count) height=\(height) sel=\(sel): borders intact: \(out)")
+                    // The selected item is always visible (it's the window anchor)…
+                    let selVisible = out.contains { $0.contains("Item \(sel + 1)") }
+                    // …except at budgets too small for even one row + chrome.
+                    if height >= 4 {
+                        #expect(
+                            selVisible,
+                            "count=\(count) height=\(height) sel=\(sel): selection visible")
+                    }
+                    // Markers only when there IS content beyond that edge.
+                    let hasAbove = out.contains { $0.contains("▲") }
+                    let hasBelow = out.contains { $0.contains("▼") }
+                    let firstVisible = out.contains { $0.contains("Item 1 ") || $0.hasSuffix("Item 1") }
+                    let lastVisible = out.contains { $0.contains("Item \(count)") }
+                    if hasAbove {
+                        #expect(
+                            !firstVisible || count > 9,  // "Item 1" is a prefix of "Item 1N" past 9
+                            "count=\(count) height=\(height) sel=\(sel): ▲ implies item 1 is off-screen")
+                    }
+                    if hasBelow {
+                        #expect(
+                            !lastVisible,
+                            "count=\(count) height=\(height) sel=\(sel): ▼ implies the last item is off-screen")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("A divider or out-of-range selection anchors near the value, not the top")
+    func dividerSelectionAnchorsNearby() {
+        // A stale binding can hold a divider's index or an out-of-range value;
+        // the window must stay in that neighbourhood (nearest ITEM row), not
+        // snap to the top of the menu.
+        var menuItems = items(20)
+        menuItems.insert(.divider, at: 10)
+        let onDivider = render(Menu(items: menuItems, selectedIndex: 10), height: 8)
+        let out = stripped(onDivider)
+        #expect(onDivider.height <= 8)
+        #expect(
+            out.contains { $0.contains("Item 10") || $0.contains("Item 11") },
+            "window stays near the divider's neighbourhood: \(out)")
+        #expect(!out.contains { $0.contains("Item 1 ") }, "not snapped to the top")
+
+        let outOfRange = render(Menu(items: items(20), selectedIndex: 19), height: 8)
+        #expect(outOfRange.height <= 8, "out-of-range-safe (init clamps; render must too)")
+    }
+
     @Test("Clicking a windowed item selects that item, not an off-by-window neighbour")
     func clickMapsThroughWindow() {
         final class Box { var sel = 15 }
