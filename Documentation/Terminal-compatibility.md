@@ -111,6 +111,15 @@ the emoji-class clusters below unless noted.
   horizontal scroll instead). Trackpad horizontal scroll reports the
   standard horizontal wheel buttons 66/67. Right-click is reported to
   apps.
+- **Mouse modifiers: none reach the app** (byte-captured 2026-07-14,
+  targeted run with deliberate ⌘- and ⌥-clicks): eight press/release
+  pairs, ALL bare button code 0 — no `+4`/`+8`/`+16` bit anywhere,
+  press and release symmetric. Modifier-clicks either arrive stripped
+  to plain clicks or are consumed by the terminal outright; the capture
+  can only show that no modifier bit ever arrived. Either way,
+  **⌘-click multi-select toggling cannot work here** — the app receives
+  a plain click, which replaces the selection. This is the pointer
+  mirror of the Up/Down key modifier stripping above; not an app bug.
 
 ---
 
@@ -196,35 +205,32 @@ non-default setup.
   (user-reported). There is no escape sequence or variable that exposes
   the pointer configuration, so TUIkit cannot detect the setting; the
   example's Mouse page shows a static note under iTerm2 instead.
-- **Modifier on release (`m`):** a ⌘/⌥-click reaches the app with the SGR
-  meta bit (+8) set on the button-**press** (`M`), but the matching
-  **release** (`m`) is reported with the modifier bits **cleared**
-  (inferred, not yet byte-captured — the only explanation consistent with
-  "⌘-click reads as ⌥-click" AND "⌘-click still collapses a
-  multi-selection", since a release that carried the meta bit toggles
-  correctly in the pipeline test). Views that select on release (List /
-  Table / tap gestures) would therefore see a bare click and replace the
-  whole selection instead of toggling one row in. **Defence:**
-  `MouseEventDispatcher.stampClickCount` remembers the press's modifier
-  bits and unions them onto the matching release, so the gesture stays
-  whole regardless of which report the terminal decorates. No-op where
-  press and release agree (Terminal.app).
+- **Modifier-clicks (byte-captured 2026-07-14, targeted ⌘/⌥ run):**
+  modifier-clicks arrive as SGR button code **8** (the meta bit), and the
+  bit is present on **both** the press (`M`) **and** the matching release
+  (`m`) — six modifier-clicks captured, every pair fully symmetric
+  (`ESC[<8;x;yM` … `ESC[<8;x;ym`). Two conclusions:
+  - The earlier **release-drops-meta hypothesis is refuted** for iTerm2
+    3.6.11: the release keeps the modifier, so release-acting handlers
+    (List/Table selection, tap gestures) see the decorated click intact.
+    `MouseEventDispatcher.stampClickCount` still unions the press's
+    modifier bits onto the matching release as defence-in-depth for
+    unmeasured terminals; on iTerm2 it is a no-op.
+  - ⌘ and ⌥ surface as the **same** +8 bit — byte-level confirmation of
+    the user-reported "⌘-click is reported as ⌥-click". Apps cannot
+    distinguish the two keys; TUIkit's decoder maps +8 to
+    `MouseEvent.meta`, and multi-select toggling accepts `ctrl || meta`,
+    so both ⌘-click and ⌥-click toggle rows in/out of a multi-selection
+    here. (The run mixed deliberate ⌘- and ⌥-clicks and every event
+    arrived as +8; the log cannot attribute individual events to a
+    specific key.)
 
-  *`mouse_probe.py` captures (2026-07-15, two sessions, terminal
-  identities not recorded — the probe now logs `TERM_PROGRAM` for future
-  runs):* plain clicks are **symmetric** (press `M` and release `m`
-  carry the same button code, all SGR — no X10 "any release" fallback
-  seen); shift+horizontal wheel arrives as **70/71** (66/67 + shift),
-  confirming the Shift-wheel decoding above; drags report `+32` motion
-  codes with clean SGR releases. **No `+8` (meta) button code appears
-  anywhere in either capture** — so the release-drops-meta hypothesis
-  remains unconfirmed, and it is possible these terminals (in default
-  configuration) never forward ⌘ to the app at all: both bind ⌘-click
-  themselves (iTerm2: semantic click/URL open; Terminal.app: URL on
-  ⌘-double-click). *Still to capture: a deliberate ⌘-click (and
-  ⌥-click, which iTerm2 reportedly substitutes) in each terminal,
-  checking first whether any `+8`/`+4` press arrives, then whether the
-  matching release keeps it.*
+  *Earlier general captures (2026-07-14, before the probe logged
+  `TERM_PROGRAM`):* plain clicks are **symmetric** (press `M` and
+  release `m` carry the same button code, all SGR — no X10 "any
+  release" fallback seen); shift+horizontal wheel arrives as **70/71**
+  (66/67 + shift), confirming the Shift-wheel decoding above; drags
+  report `+32` motion codes with clean SGR releases.
 - iTerm2 honours a large proprietary escape set (OSC 1337) — unused by
   TUIkit so far.
 - **Cell aspect ratio (image distortion):** iTerm2's cell height:width

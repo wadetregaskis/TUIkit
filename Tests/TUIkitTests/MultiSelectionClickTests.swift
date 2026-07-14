@@ -145,14 +145,16 @@ struct MultiSelectionClickTests {
     @Test("A modifier dropped on the RELEASE report is recovered from the press")
     @MainActor
     func modifierOnlyOnPressStillToggles() {
-        // The real-world failure behind "⌘-click clears my other selections":
-        // the terminal reports the SGR modifier bit on the button-press (`M`)
-        // but NOT on the release (`m`). List/Table select on RELEASE, so the
-        // release must inherit the press's modifier or the click reads as a
-        // bare click — replacing the whole selection instead of toggling one
-        // row into it. The dispatcher carries the press's modifiers onto the
-        // matching release; without that carry this test fails (selection
-        // collapses to just the clicked row).
+        // Defensive contract: a terminal that reports the SGR modifier bit on
+        // the button-press (`M`) but NOT on the release (`m`) must not break
+        // multi-select. List/Table select on RELEASE, so the release must
+        // inherit the press's modifier or the click reads as a bare click —
+        // replacing the whole selection instead of toggling one row into it.
+        // (Byte captures show both macOS terminals report symmetrically — see
+        // Terminal-compatibility.md — so this guards unmeasured terminals.)
+        // The dispatcher carries the press's modifiers onto the matching
+        // release; without that carry this test fails (selection collapses
+        // to just the clicked row).
         var selection: Set<String> = ["Row-1", "Row-3"]
         let items = (1...6).map { "Row-\($0)" }
         let view = List(selection: Binding(get: { selection }, set: { selection = $0 })) {

@@ -524,12 +524,14 @@ extension MouseEventDispatcher {
     ///
     /// The release also inherits the modifier bits the press was reported with
     /// (unioned with its own). A click gesture's modifiers are fixed at press
-    /// time, but some terminals report the SGR modifier bits only on the press
-    /// (`M`) and drop them on the release (`m`) — so a handler that acts on
-    /// release (List/Table selection, tap gestures) would otherwise see a bare
+    /// time, but a terminal could report the SGR modifier bits only on the
+    /// press (`M`) and drop them on the release (`m`) — a handler that acts on
+    /// release (List/Table selection, tap gestures) would then see a bare
     /// click and, for example, replace a multi-selection instead of toggling
-    /// one row into it. Unioning keeps the gesture whole on every terminal and
-    /// is a no-op where both reports agree.
+    /// one row into it. Both macOS terminals byte-captured so far report
+    /// symmetrically (see `Documentation/Terminal-compatibility.md`), making
+    /// this a no-op there; the union stays as free defence-in-depth for
+    /// unmeasured terminals.
     private func stampClickCount(_ event: MouseEvent) -> MouseEvent {
         switch event.phase {
         case .pressed:
