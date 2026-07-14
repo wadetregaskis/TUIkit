@@ -45,6 +45,7 @@ private struct ImageRenderCache: Equatable {
     var edgeThreshold: Double?
     var contentMode: ContentMode
     var aspectRatioOverride: Double?
+    var cellAspect: Double
     var lines: [String]
 
     /// Returns whether `self` was built from the same inputs as the
@@ -56,7 +57,8 @@ private struct ImageRenderCache: Equatable {
         dithering: DitheringMode,
         supersampling: Int?, edgeThreshold: Double?,
         contentMode: ContentMode,
-        aspectRatioOverride: Double?
+        aspectRatioOverride: Double?,
+        cellAspect: Double
     ) -> Bool {
         self.rawImageWidth == rawImageWidth
             && self.rawImageHeight == rawImageHeight
@@ -70,6 +72,7 @@ private struct ImageRenderCache: Equatable {
             && self.edgeThreshold == edgeThreshold
             && self.contentMode == contentMode
             && self.aspectRatioOverride == aspectRatioOverride
+            && self.cellAspect == cellAspect
     }
 }
 
@@ -127,15 +130,18 @@ struct _ImageCore: View, Renderable, Layoutable {
                     imageWidth: rawImage.width, imageHeight: rawImage.height,
                     maxWidth: fitWidth, maxHeight: fitHeight,
                     contentMode: environment.imageContentMode,
-                    overrideAspectRatio: environment.imageAspectRatio)
+                    overrideAspectRatio: environment.imageAspectRatio,
+                    cellAspect: environment.imageCellAspect)
                 return .fixed(Self.zoomed(fitted.width, zoom), Self.zoomed(fitted.height, zoom))
             }
         }
 
         // Before it loads, the aspect ratio is unknown — reserve a bounded
-        // placeholder box (assume a ~2:1 cell aspect) rather than the full offered
-        // height, so an unbounded offer can't balloon to thousands of lines.
-        let placeholderHeight = min(fitHeight, max(1, fitWidth / 2))
+        // placeholder box (the terminal's cell aspect) rather than the full
+        // offered height, so an unbounded offer can't balloon to thousands of
+        // lines.
+        let cellAspect = environment.imageCellAspect > 0 ? environment.imageCellAspect : 2.0
+        let placeholderHeight = min(fitHeight, max(1, Int(Double(fitWidth) / cellAspect)))
         return .fixed(Self.zoomed(fitWidth, zoom), Self.zoomed(placeholderHeight, zoom))
     }
 
@@ -151,8 +157,7 @@ struct _ImageCore: View, Renderable, Layoutable {
         let lifecycle = context.environment.lifecycle!
         let identity = context.identity
 
-        let width = context.availableWidth
-        let height = context.availableHeight
+        let (width, height) = (context.availableWidth, context.availableHeight)
 
         guard width > 0, height > 0 else {
             return FrameBuffer()
@@ -273,6 +278,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                 edgeThreshold: context.environment.imageEdgeThreshold,
                 contentMode: contentMode,
                 aspectRatioOverride: aspectRatioOverride,
+                cellAspect: context.environment.imageCellAspect,
                 stateStorage: stateStorage,
                 identity: identity
             )
@@ -309,6 +315,7 @@ extension _ImageCore {
         edgeThreshold: Double?,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
+        cellAspect: Double,
         stateStorage: StateStorage,
         identity: ViewIdentity
     ) -> FrameBuffer {
@@ -318,7 +325,8 @@ extension _ImageCore {
             maxWidth: width,
             maxHeight: height,
             contentMode: contentMode,
-            overrideAspectRatio: aspectRatioOverride
+            overrideAspectRatio: aspectRatioOverride,
+            cellAspect: cellAspect
         )
 
         guard targetSize.width > 0, targetSize.height > 0 else {
@@ -341,7 +349,8 @@ extension _ImageCore {
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
             contentMode: contentMode,
-            aspectRatioOverride: aspectRatioOverride
+            aspectRatioOverride: aspectRatioOverride,
+            cellAspect: cellAspect
         ) {
             return FrameBuffer(lines: cache.lines)
         }
@@ -369,6 +378,7 @@ extension _ImageCore {
             edgeThreshold: edgeThreshold,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
+            cellAspect: cellAspect,
             lines: lines
         )
 

@@ -192,6 +192,37 @@ extension Terminal {
         return (cols, rows)
     }
 
+    /// The terminal cell's height-to-width ratio, derived from the window's
+    /// reported pixel size, or `nil` when the terminal doesn't report it.
+    ///
+    /// `TIOCGWINSZ` also carries the drawable area in pixels (`ws_xpixel`,
+    /// `ws_ypixel`); dividing by the cell grid gives each cell's pixel size, and
+    /// their ratio is the aspect an undistorted image needs (see
+    /// ``View/imageCellAspect(_:)``). Not every terminal fills these fields —
+    /// some report `0` — in which case this returns `nil` and callers keep their
+    /// default. This self-corrects for the terminal + font + line spacing on the
+    /// terminals that do report it, without any escape-sequence round trip.
+    func cellPixelAspect() -> Double? {
+        var windowSize = winsize()
+        #if canImport(Glibc) || canImport(Musl)
+            let result = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &windowSize)
+        #else
+            let result = ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize)
+        #endif
+        guard result == 0,
+            windowSize.ws_col > 0, windowSize.ws_row > 0,
+            windowSize.ws_xpixel > 0, windowSize.ws_ypixel > 0
+        else { return nil }
+
+        let cellWidth = Double(windowSize.ws_xpixel) / Double(windowSize.ws_col)
+        let cellHeight = Double(windowSize.ws_ypixel) / Double(windowSize.ws_row)
+        guard cellWidth > 0 else { return nil }
+        let aspect = cellHeight / cellWidth
+        // Guard against nonsense (a cell that's wider than tall, or absurdly
+        // tall) so a misreporting terminal can't distort worse than the default.
+        return (aspect >= 1.0 && aspect <= 4.0) ? aspect : nil
+    }
+
     /// Enables raw mode for direct character handling.
     ///
     /// In raw mode:

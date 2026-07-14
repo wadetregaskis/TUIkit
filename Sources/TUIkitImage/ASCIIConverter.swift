@@ -562,6 +562,14 @@ extension ASCIIConverter {
     ///   - contentMode: Whether to fit within or fill the available bounds.
     ///   - overrideAspectRatio: An explicit width/height ratio. When `nil`,
     ///     the source image's natural ratio is used.
+    ///   - cellAspect: The terminal cell's height-to-width ratio (a cell is
+    ///     taller than it is wide). Governs how many columns a row of the image
+    ///     needs to look undistorted: a taller/narrower cell (larger value)
+    ///     wants more columns. Defaults to `2.0` (Apple Terminal's typical
+    ///     cell); iTerm2 and other terminals differ with the font/line spacing,
+    ///     which is why the image looked horizontally squished when this was
+    ///     hard-coded. Supply the real ratio (measured, or via
+    ///     ``TUIkitView/View/imageCellAspect(_:)``) to correct it.
     /// - Returns: The target width and height in characters.
     public static func targetSize(
         imageWidth: Int,
@@ -569,9 +577,11 @@ extension ASCIIConverter {
         maxWidth: Int,
         maxHeight: Int? = nil,
         contentMode: ContentMode = .fit,
-        overrideAspectRatio: Double? = nil
+        overrideAspectRatio: Double? = nil,
+        cellAspect: Double = 2.0
     ) -> (width: Int, height: Int) {
-        let terminalAspect = 2.0  // Terminal chars are ~2x taller than wide
+        // The terminal cell's height:width ratio — cells are taller than wide.
+        let terminalAspect = cellAspect > 0 ? cellAspect : 2.0
 
         // Use override ratio or compute from source dimensions.
         let sourceRatio =

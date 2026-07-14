@@ -213,6 +213,21 @@ non-default setup.
   the `M` report carried.*
 - iTerm2 honours a large proprietary escape set (OSC 1337) — unused by
   TUIkit so far.
+- **Cell aspect ratio (image distortion):** iTerm2's cell height:width
+  ratio differs from Apple Terminal's (font + line-spacing dependent), so
+  an `Image` sized for a fixed 2:1 assumption looked horizontally squished
+  here (user-reported; exact ratio **not yet measured** — run
+  `cell_aspect_probe.py` in each terminal to capture it). **Defence:**
+  `ASCIIConverter.targetSize` now takes a `cellAspect` parameter (default
+  `2.0` ≈ Apple Terminal), threaded from `environment.imageCellAspect`.
+  The render root auto-detects the real ratio from `TIOCGWINSZ`
+  `ws_xpixel`/`ws_ypixel` (`Terminal.cellPixelAspect()`) when the terminal
+  reports them; whether iTerm2/Terminal.app populate those pixel fields on
+  macOS is **unverified** (historically 0). If they don't, the
+  `.imageCellAspect(_:)` modifier sets it explicitly. *Verify with
+  `cell_aspect_probe.py`: it prints both the ioctl-pixel and CSI-14t/18t
+  derived ratios; record iTerm2's and Apple Terminal's measured values
+  here once captured.*
 
 ---
 

@@ -411,6 +411,12 @@ extension RenderLoop {
         var environment = environment
         environment.terminalHeight = terminalHeight
         environment.terminalWidth = terminalWidth
+        // Auto-detect the terminal cell's pixel aspect for undistorted images;
+        // terminals that don't report their pixel size keep the 2.0 default (or
+        // a `.imageCellAspect(_:)` override deeper in the tree).
+        if let cellAspect = terminal.cellPixelAspect() {
+            environment.imageCellAspect = cellAspect
+        }
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.

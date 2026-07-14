@@ -154,6 +154,28 @@ struct ASCIIConverterTests {
         #expect(size.height == 25)
     }
 
+    @Test("Target size corrects for the terminal cell aspect (fewer rows as cells grow taller)")
+    func targetSizeCellAspect() {
+        func height(_ cellAspect: Double) -> Int {
+            ASCIIConverter.targetSize(
+                imageWidth: 100, imageHeight: 100, maxWidth: 50, cellAspect: cellAspect
+            ).height
+        }
+        // A square image at 50 columns: the taller/narrower the cell, the fewer
+        // rows it takes (so the on-screen image stays square instead of being
+        // squished). This is the whole point — a hard-coded 2.0 distorts images
+        // on terminals whose real cell aspect differs (e.g. iTerm2).
+        #expect(height(1.0) == 50, "square cell → square char grid")
+        #expect(height(2.0) == 25, "2:1 cell (default) → 2:1 grid")
+        #expect(height(4.0) == 13, "4:1 cell → ~4:1 grid")
+        // Strictly monotonic: more vertically-stretched cells need fewer rows.
+        #expect(height(1.0) > height(2.0))
+        #expect(height(2.0) > height(4.0))
+        // A non-positive value is ignored (falls back to the 2.0 default).
+        #expect(height(0) == 25)
+        #expect(height(-1) == 25)
+    }
+
     @Test("Target size respects max height")
     func targetSizeMaxHeight() {
         let size = ASCIIConverter.targetSize(

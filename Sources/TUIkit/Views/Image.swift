@@ -138,6 +138,14 @@ private struct ImageAspectRatioKey: EnvironmentKey {
     static let defaultValue: Double? = nil
 }
 
+/// Environment key for the terminal cell's height:width ratio (see
+/// ``View/imageCellAspect(_:)``). Defaults to `2.0` — Apple Terminal's typical
+/// cell — and is republished at the render root from the terminal's reported
+/// pixel size when available.
+private struct ImageCellAspectKey: EnvironmentKey {
+    static let defaultValue: Double = 2.0
+}
+
 /// Environment key for the maximum allowed image pixel count.
 private struct ImageMaxPixelCountKey: EnvironmentKey {
     static let defaultValue: Int? = nil
@@ -270,6 +278,13 @@ extension EnvironmentValues {
     var imageZoom: Double {
         get { self[ImageZoomKey.self] }
         set { self[ImageZoomKey.self] = newValue }
+    }
+
+    /// The terminal cell's height:width ratio, used to size an image so it isn't
+    /// distorted. See ``View/imageCellAspect(_:)``.
+    public var imageCellAspect: Double {
+        get { self[ImageCellAspectKey.self] }
+        set { self[ImageCellAspectKey.self] = newValue }
     }
 }
 
@@ -437,6 +452,26 @@ extension View {
     /// - Returns: A modified view.
     public func imageZoom(_ factor: Double) -> some View {
         environment(\.imageZoom, factor)
+    }
+
+    /// Sets the terminal cell's height-to-width ratio for image sizing.
+    ///
+    /// A terminal cell is taller than it is wide, so an image needs more columns
+    /// than rows to look undistorted. This ratio governs by how much: `2.0` (the
+    /// default, ~Apple Terminal) means cells are twice as tall as wide, so a
+    /// square image is laid out roughly 2 columns per row. The real ratio depends
+    /// on the terminal, font, and line spacing — iTerm2's differs from Apple
+    /// Terminal's, which is why an image tuned for one looks horizontally
+    /// squished or stretched on the other.
+    ///
+    /// TUIkit auto-detects the ratio from the terminal's reported pixel cell size
+    /// where available; set this explicitly to override it (e.g. to match a
+    /// custom font or a terminal that doesn't report its cell size).
+    ///
+    /// - Parameter ratio: Cell height ÷ cell width (values ≤ 0 are ignored).
+    /// - Returns: A modified view.
+    public func imageCellAspect(_ ratio: Double) -> some View {
+        environment(\.imageCellAspect, ratio > 0 ? ratio : 2.0)
     }
 
     /// Sets the maximum allowed pixel count for image loading.
