@@ -445,8 +445,10 @@ skin-tone / PUA advances against TUIkit's width claims; record
 ## Measured advance table (divergences and key rows)
 
 DSR-measured on the ALTERNATE screen (the app's buffer). Terminal.app +
-iTerm2 2026-07-13; Ghostty + Warp 2026-07-14 (Terminal.app re-measured the
-same day — identical, so the harness is cross-validated). Full battery in
+iTerm2 2026-07-13; Ghostty + Warp 2026-07-14; the bare-pictograph and
+non-emoji rows re-measured across ALL FOUR on 2026-07-14 (Terminal.app
+re-measured the same day too — identical, so the harness is
+cross-validated). Every cell here is measured; none is inferred. Full battery in
 `Tools/TerminalProbes/` (`PROBE_ALT=1`). Claim = `Character.terminalWidth`.
 Terminal.app and Ghostty measure identically in both screen modes; iTerm2
 and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
@@ -473,56 +475,61 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 | U+100038 etc. (SF Symbols PUA) | 2 | **1** (paints 2) | **1** (paints 2) | **1** (paints 1) | **1** |
 | 🏽 (standalone modifier) | 2 | 2 | 2 | 2 | 2 |
 | 🖥 🛡 🕹 🕷 🎞 🏙 (bare SMP pictograph) | 2 | **1** | **1** | **1** | **1** |
-| 🁠 🂡 (domino / card — in-block non-emoji) | 2 | **1** | — | **1** | **1** |
+| ⤷ *(compensated since 2026-07-14 — all four CUF)* | | ✓ | ✓ | ✓ | ✓ |
+| 🁠 🂡 (domino / card — in-block non-emoji) | 2 | **1** | **1** | **1** | **1** |
 
-### The blanket-range over-claim (a CLAIM bug, not a terminal bug)
+### Bare (selector-less) pictographs — FIXED 2026-07-14
 
 **Not to be confused with `🖥️`** (U+1F5A5 **+ U+FE0F**) — the form the demo
-app and virtually all real text uses. That one is correct on all four
-terminals today: Apple/iTerm2 under-advance it and the CUF fixes it,
-Ghostty/Warp advance it correctly. **The rows below are the BARE form**, no
-variation selector, which is a different grapheme cluster.
+app and virtually all real text uses, and which has always been correct on
+all four terminals (Apple/iTerm2 under-advance it and the CUF fixes it;
+Ghostty/Warp advance it natively). **This section is the BARE form**, no
+variation selector: a different grapheme cluster.
 
-`terminalWidth` ends with a blanket `0x1F000...0x1FBFF → 2` range rule. That
-block is not uniformly wide: it also holds **text**-presentation pictographs
-(`Emoji=Yes, Emoji_Presentation=No`) and non-emoji symbols. Measured
-2026-07-14 (Apple 455.1 / Ghostty 1.3.1 / Warp 2026.07.08 — all three
-identical):
+`terminalWidth` ends with a blanket `0x1F000...0x1FBFF → 2` rule, so a bare
+🖥 claims 2. Advance is 1 on **every** terminal, and no model said so — a
+single scalar cannot trip `isVS16UnderAdvancer`, so each model fell through
+to `terminalWidth` and reported 2, contradicting its own probe data. Model
+== claim ⇒ no CUF ⇒ the row sheared one cell left.
 
-| Class | Example | `isEmojiPresentation` | Claim | Advance (all terminals) |
-|---|---|---|---|---|
-| BMP text-presentation | ✏ ❤ ☝ ☂ ✔ ☎ | false | **1** ✓ | 1 |
-| SMP text-presentation | 🖥 🛡 🕹 🕷 🎞 🏙 | false | **2** ✗ | 1 |
-| SMP emoji-presentation | 👍 🀄 | true | 2 ✓ | 2 |
-| In-block non-emoji | 🁠 🂡 | false | **2** ✗ | 1 |
+**Both halves measured 2026-07-14** — advance by DSR (`advance_probe.py`),
+paint by eye (`paintcard.py`, a `|<glyph>|X` row: if the closing pipe
+survives the glyph painted 1):
 
-The first two rows are the same Unicode class and differ only by plane, so
-the claim is internally inconsistent: the blanket rule fires for the SMP
-ones and not their BMP twins. The emoji-presentation ones are already caught
-by the earlier `isEmojiPresentation` check, so the blanket rule is not
-load-bearing for them.
+| Class | Example | `isEmojiPresentation` | Claim | Advance | Paint (Apple) |
+|---|---|---|---|---|---|
+| BMP text-presentation | ✏ ❤ ☝ ☂ ✔ ☎ | false | 1 ✓ | 1 | 1 ✓ |
+| SMP text-presentation | 🖥 🛡 🕹 🕷 🎞 🏙 | false | 2 | 1 | **2** |
+| SMP emoji-presentation | 👍 🀄 | true | 2 ✓ | 2 | 2 ✓ |
+| In-block non-emoji | 🁠 🂡 | false | **2** ✗ | 1 | **1** |
 
-The defect does not depend on knowing the painted width, because the
-**models contradict their own measurements**: for bare 🖥,
-`terminalAppCursorAdvance` returns 2 (it inherits `terminalWidth` — the
-cluster is a single scalar, so `isVS16UnderAdvancer` cannot fire) while the
-probe measures 1. Model == claim ⇒ no CUF is emitted ⇒ any row containing
-one shears left by a cell and its container over-reserves by one.
+The paint row is what decides the fix, and it overturned the first guess.
+The claim of **2 is correct** for the SMP pictographs: macOS has no text
+glyph for them, so font fallback reaches Apple Color Emoji and paints 2
+cells — the glyph eats the closing `|` exactly as a VS-16 cluster does,
+while its BMP twins leave it intact. So this was never a claim bug: it is a
+**model** bug, and the fix is `Character.isBarePictographUnderAdvancer`,
+which all four models now consult. Verified end-to-end in Apple Terminal:
+`|🖥X` (pipe eaten) became `|🖥|X` (pipe restored), with 👍 unaffected.
+A claim of 1 would have been actively wrong — Apple would then paint over
+the following cell. Ghostty, the one host that paints these at 1 cell, takes
+a blank cell instead of a shear — the same trade already accepted for its SF
+Symbols, and the right one, since a host-independent claim must cover the
+widest painter.
 
-**Unfixed, deliberately.** The fix direction is NOT yet decided, because it
-turns on the *painted* width, which is eyeball-only and has been checked on
-Ghostty alone (paints 1 — so there, claim should be 1). If Apple Terminal
-paints these 2 and advances 1 — the same shape as its VS-16 Bug A — then
-Apple would want claim 2 + CUF while Ghostty wants claim 1, and a
-host-independent claim cannot satisfy both. Resolve that first. Changing
-`terminalWidth` also moves golden snapshots. **Reach:** unreachable from
-TUIkit's own chrome and from the demo app (every 🖥️ there carries VS-16) —
-it needs user content holding a bare text-presentation pictograph.
+**Still open — the in-block non-emoji row.** 🁠 🂡 (dominoes, playing cards)
+claim 2 but paint 1 and advance 1 *everywhere*, so for them the claim really
+is wrong and 1 is right; they shear today. Fixing that means narrowing the
+blanket rule, which is riskier than it looks: the same range holds
+U+1F200–1F2FF (Enclosed Ideographic Supplement, 🈁 🈚), which IS East Asian
+Wide and mostly NOT emoji — so gating the rule on `isEmoji` would wrongly
+drop those to 1. Any narrowing must be range-precise (Mahjong/Dominoes/Cards
+are U+1F000–1F0FF) and re-measured, and it moves golden snapshots. Reach is
+negligible: playing-card and domino codepoints in TUI content.
 
-**SF Symbols PUA** is the other claim-vs-advance mismatch (no terminal
-advances 2), but it is NOT the same bug: Apple/iTerm2 genuinely *paint* 2,
-so the claim is right there and CUF is the correct fix. Only Ghostty paints
-1, and its CUF buys alignment at the cost of a blank cell.
+**SF Symbols PUA** is a third claim-vs-advance mismatch (no terminal advances
+2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is
+right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
 
 ## Where the adaptations live
 

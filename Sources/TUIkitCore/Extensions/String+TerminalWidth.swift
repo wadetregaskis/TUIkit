@@ -204,6 +204,13 @@ extension Character {
             return 1
         }
 
+        // A bare (selector-less) text-presentation SMP pictograph — 🖥 🛡 🕹 —
+        // paints 2 via Apple Color Emoji fallback but advances 1, exactly like
+        // its VS-16 form. See ``isBarePictographUnderAdvancer``.
+        if isBarePictographUnderAdvancer {
+            return 1
+        }
+
         // SF Symbols occupy the Plane-16 Private Use Area (U+100000…U+10FFFD).
         // Terminal.app (SF Mono) paints the glyph 2 cells wide — see
         // ``terminalWidth`` — but advances the cursor by only 1, the same
@@ -295,7 +302,7 @@ extension Character {
         {
             return 1
         }
-        if isVS16UnderAdvancer {
+        if isVS16UnderAdvancer || isBarePictographUnderAdvancer {
             return 1
         }
         return terminalWidth
@@ -328,7 +335,7 @@ extension Character {
         {
             return 1
         }
-        if isVS15ChromeUnderAdvancer {
+        if isVS15ChromeUnderAdvancer || isBarePictographUnderAdvancer {
             return 1
         }
         return terminalWidth
@@ -356,10 +363,47 @@ extension Character {
     ///   primary screen advances VS-16 by 1, the alternate by 2); the model
     ///   uses the alternate screen, where TUIkit apps run.
     public var warpCursorAdvance: Int {
-        if isLoneRegionalIndicator {
+        if isLoneRegionalIndicator || isBarePictographUnderAdvancer {
             return 1
         }
         return terminalWidth
+    }
+
+    /// Whether this character is a **bare** SMP pictograph — an emoji-capable
+    /// scalar whose default presentation is TEXT (`Emoji=Yes`,
+    /// `Emoji_Presentation=No`), carrying no variation selector — such as
+    /// 🖥 🛡 🕹 🕷 🎞 🏙 (U+1F5A5, U+1F6E1, …).
+    ///
+    /// Not to be confused with `🖥️`, the same base **plus U+FE0F**, which is
+    /// what real text (and TUIkit's own demo app) overwhelmingly uses and
+    /// which is handled by ``isVS16UnderAdvancer``. This predicate is for the
+    /// selector-less form only, which is a different grapheme cluster.
+    ///
+    /// ``terminalWidth`` claims 2 for these, via its closing
+    /// `0x1F000…0x1FBFF` range rule — and that claim is CORRECT: macOS font
+    /// fallback has no text glyph for them, so it reaches Apple Color Emoji
+    /// and paints 2 cells. Measured 2026-07-14 with `paintcard.py`: on Apple
+    /// Terminal the glyph overwrites the closing `|` of a `|<glyph>|X`
+    /// probe row, exactly as a VS-16 cluster does, while the BMP members of
+    /// the same Unicode class (✏ ❤ ☝ — correctly claimed 1) leave it intact.
+    ///
+    /// But **every** terminal measured advances the cursor by only 1
+    /// (Apple 455.1, iTerm2 3.6.11, Ghostty 1.3.1, Warp 2026.07.08 — all
+    /// four agree). Without this predicate the per-host models fall through
+    /// to ``terminalWidth`` and report 2, contradicting the measurement, so
+    /// no CUF is emitted and the rest of the row shears one cell left.
+    ///
+    /// Ghostty is the one host that paints these at 1 cell (grid-strict), so
+    /// its CUF buys alignment at the cost of a blank cell — the same trade
+    /// already accepted for SF Symbols there, and strictly better than the
+    /// shear, since a claim is host-independent and must cover the widest
+    /// painter (Apple) or content would be overwritten.
+    var isBarePictographUnderAdvancer: Bool {
+        let scalars = unicodeScalars
+        guard scalars.count == 1, let only = scalars.first else { return false }
+        guard (0x1F000...0x1FBFF).contains(only.value) else { return false }
+        let properties = only.properties
+        return properties.isEmoji && !properties.isEmojiPresentation
     }
 
     /// Whether this character is a single regional-indicator scalar with no

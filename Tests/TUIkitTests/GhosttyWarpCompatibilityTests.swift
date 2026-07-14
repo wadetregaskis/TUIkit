@@ -97,6 +97,82 @@ struct GhosttyWarpCompatibilityTests {
         #expect(char.warpCursorAdvance == advance, "Warp advance for \(cluster.debugDescription)")
     }
 
+    // MARK: - Bare SMP pictographs (the selector-less form)
+
+    /// Every terminal measured advances these by 1 against a claim of 2, so
+    /// EVERY host model must report 1 or no CUF is emitted and the row shears.
+    /// Apple/iTerm2 paint 2 (Apple Color Emoji fallback — `paintcard.py`
+    /// 2026-07-14), which is why the claim of 2 is right and this is a model
+    /// fix, not a claim fix.
+    @Test(
+        "A bare SMP pictograph under-advances on every host",
+        arguments: [
+            "\u{1F5A5}",  // 🖥 desktop computer
+            "\u{1F6E1}",  // 🛡 shield
+            "\u{1F579}",  // 🕹 joystick
+            "\u{1F577}",  // 🕷 spider
+            "\u{1F39E}",  // 🎞 film frames
+            "\u{1F3D9}",  // 🏙 cityscape
+        ])
+    func barePictographUnderAdvancesEverywhere(cluster: String) {
+        let char = Character(cluster)
+        #expect(char.terminalWidth == 2, "claim (Apple paints 2 via emoji fallback)")
+        #expect(char.terminalAppCursorAdvance == 1, "Apple measured 1")
+        #expect(char.iTerm2CursorAdvance == 1, "iTerm2 measured 1")
+        #expect(char.ghosttyCursorAdvance == 1, "Ghostty measured 1")
+        #expect(char.warpCursorAdvance == 1, "Warp measured 1")
+    }
+
+    @Test("Each host's walk emits the CUF that keeps the row aligned")
+    func barePictographIsCompensated() {
+        // Without the model fix every one of these is a no-op and the "|"
+        // lands a cell early — the shear this whole class is about.
+        let raw = "\u{1F5A5}|"
+        #expect(raw.withTerminalAppCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withITerm2CursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withGhosttyCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withWarpCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+    }
+
+    @Test(
+        "The VS-16 form and the BMP twins are untouched by the bare-form fix",
+        arguments: [
+            // 🖥️ — the form the demo app actually uses. Already correct:
+            // Apple/iTerm2 under-advance it (isVS16UnderAdvancer), Ghostty and
+            // Warp advance it properly. Must not double-compensate.
+            ("\u{1F5A5}\u{FE0F}", 2, 1, 2),
+            ("\u{1F6E1}\u{FE0F}", 2, 1, 2),
+            // BMP text-presentation twins: claim 1, advance 1 — nothing to do.
+            ("\u{270F}", 1, 1, 1),
+            ("\u{2764}", 1, 1, 1),
+            ("\u{261D}", 1, 1, 1),
+        ])
+    func neighbouringFormsUnaffected(
+        cluster: String, claim: Int, appleAdvance: Int, ghosttyAdvance: Int
+    ) {
+        let char = Character(cluster)
+        #expect(char.terminalWidth == claim)
+        #expect(char.terminalAppCursorAdvance == appleAdvance)
+        #expect(char.ghosttyCursorAdvance == ghosttyAdvance)
+    }
+
+    @Test(
+        "Emoji-presentation neighbours keep advancing their full 2",
+        arguments: ["\u{1F44D}", "\u{1F004}"])  // 👍 thumbs, 🀄 mahjong red dragon
+    func emojiPresentationUnaffected(cluster: String) {
+        // These live in the same 0x1F000–0x1FBFF block but are
+        // Emoji_Presentation=Yes: they paint AND advance 2 everywhere, so a
+        // CUF here would shove the rest of the row a cell right.
+        let char = Character(cluster)
+        #expect(char.terminalWidth == 2)
+        for advance in [
+            char.terminalAppCursorAdvance, char.iTerm2CursorAdvance,
+            char.ghosttyCursorAdvance, char.warpCursorAdvance,
+        ] {
+            #expect(advance == 2, "must not be treated as an under-advancer")
+        }
+    }
+
     // MARK: - Compensation walks
 
     @Test("Ghostty compensation pushes the cursor past an under-advanced ⬛︎")
