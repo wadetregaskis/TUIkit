@@ -57,6 +57,22 @@ BATTERY = {
 }
 
 BATTERY.update({
+    # SMP text-presentation pictographs (Emoji=Yes, Emoji_Presentation=No),
+    # BARE — no VS-16. Same Unicode class as the BMP ✏ ❤ ☝ above, which
+    # terminalWidth claims 1; these it claims 2 (via its blanket
+    # 0x1F000–0x1FBFF range rule), so the whole family is a claim-vs-advance
+    # discrepancy worth tracking per terminal.
+    "bare_smp_shield": "\U0001F6E1",
+    "bare_smp_joystick": "\U0001F579",
+    "bare_smp_spider": "\U0001F577",
+    "bare_smp_film": "\U0001F39E",
+    "bare_smp_cityscape": "\U0001F3D9",
+    # And the same six WITH VS-16, which must stay 2 — the contrast row.
+    "vs16_smp_shield": "\U0001F6E1️",
+    "vs16_smp_joystick": "\U0001F579️",
+    # Non-emoji symbols inside that same blanket range (EAW Neutral).
+    "domino": "\U0001F060",
+    "playing_card": "\U0001F0A1",
     "lone_ri": "\U0001F1E6",                    # lone regional indicator
     "keycap_hash": "#\uFE0F\u20E3",
     "keycap_star": "*\uFE0F\u20E3",
