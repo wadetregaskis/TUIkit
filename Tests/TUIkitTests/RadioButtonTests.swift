@@ -418,6 +418,38 @@ struct RadioButtonGroupHandlerTests {
         #expect(handler.focusedIndex == 0)
     }
 
+    @Test("A cross-axis arrow relinquishes focus (out of the group)")
+    func crossAxisRelinquishes() {
+        // A HORIZONTAL group: Up/Down are cross-axis, so they must return
+        // false — FocusManager then moves to the control above/below. The
+        // bug was that Up on a horizontal group was a consumed no-op, so you
+        // could never arrow back to the group above it.
+        let selectionBox = { () -> RadioButtonGroupHandler in
+            var sel = AnyHashable("a")
+            return RadioButtonGroupHandler(
+                focusID: "h", selection: Binding(get: { sel }, set: { sel = $0 }),
+                itemValues: [AnyHashable("a"), AnyHashable("b"), AnyHashable("c")],
+                orientation: .horizontal, canBeFocused: true)
+        }
+        let h = selectionBox()
+        h.focusedIndex = 1  // an interior item — proving it's the AXIS, not the edge
+        #expect(h.handleKeyEvent(KeyEvent(key: .up)) == false, "Up relinquishes on a horizontal group")
+        #expect(h.handleKeyEvent(KeyEvent(key: .down)) == false, "Down relinquishes on a horizontal group")
+        #expect(h.focusedIndex == 1, "focus index untouched by a cross-axis press")
+        // On-axis arrows still navigate within it.
+        #expect(h.handleKeyEvent(KeyEvent(key: .left)) == true)
+        #expect(h.focusedIndex == 0)
+
+        // And symmetrically: Left/Right are cross-axis on a VERTICAL group.
+        var vsel = AnyHashable("a")
+        let v = RadioButtonGroupHandler(
+            focusID: "v", selection: Binding(get: { vsel }, set: { vsel = $0 }),
+            itemValues: [AnyHashable("a"), AnyHashable("b")],
+            orientation: .vertical, canBeFocused: true)
+        #expect(v.handleKeyEvent(KeyEvent(key: .left)) == false)
+        #expect(v.handleKeyEvent(KeyEvent(key: .right)) == false)
+    }
+
     @Test("wrapsAtEdge restores wrap-around at the boundaries")
     func boundaryWrapsWhenOptedIn() {
         let handler = boundaryHandler()

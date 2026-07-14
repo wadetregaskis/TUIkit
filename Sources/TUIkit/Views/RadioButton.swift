@@ -622,14 +622,19 @@ extension RadioButtonGroupHandler {
 
     /// Handles an arrow press along `axis` (`forward` = down / right).
     ///
-    /// A cross-axis press (the group's orientation differs from `axis`) is a
-    /// consumed no-op, matching the previous behaviour. On the movement axis an
-    /// interior press steps `focusedIndex` and consumes the event; a press past
-    /// the first/last item wraps and consumes when ``wrapsAtEdge`` is set,
-    /// otherwise returns `false` so `FocusManager` relinquishes focus to the
-    /// neighbouring control in that direction.
+    /// A cross-axis press (the group's orientation differs from `axis`)
+    /// relinquishes focus — returning `false` lets `FocusManager` move to the
+    /// neighbouring control in that direction. This is what makes Up/Down step
+    /// OUT of a horizontal group (to the control above / below) and Left/Right
+    /// step out of a vertical one, mirroring how the on-axis arrows already
+    /// relinquish past the group's edge. (It was previously a consumed no-op,
+    /// which swallowed Up on a horizontal group so you could never arrow back
+    /// to the control above it.) On the movement axis an interior press steps
+    /// `focusedIndex` and consumes the event; a press past the first/last item
+    /// wraps and consumes when ``wrapsAtEdge`` is set, otherwise returns
+    /// `false` to relinquish likewise.
     private func moveOnAxis(_ axis: RadioButtonOrientation, forward: Bool) -> Bool {
-        guard orientation == axis else { return true }  // cross-axis: consumed no-op
+        guard orientation == axis else { return false }  // cross-axis: relinquish focus
         let lastIndex = itemValues.count - 1
         if forward {
             if focusedIndex < lastIndex {
