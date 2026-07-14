@@ -59,15 +59,22 @@ struct MouseHitTestPropagationTests {
         #expect(!buffer.hitTestRegions.isEmpty)
     }
 
-    /// End-to-end: render → click second TextField → dispatch a
-    /// character key through `FocusManager` → verify it lands in
-    /// the field that was clicked, not its sibling. Exercises the
-    /// full hit-test region → focus switch → key-dispatch → binding
-    /// write chain. Originally written while chasing a reported
-    /// "I clicked Search but Z showed up in Input" bug; that bug
-    /// turned out to be regions being dropped in
-    /// `WindowGroup.centerBuffer` (fixed in 7fabfb01), which this
-    /// test does NOT exercise because it bypasses WindowGroup. The
+    /// End-to-end: render the TextFieldPage-shaped tree (HStack-wrapped
+    /// TextFields inside nested VStacks with `.padding(.horizontal:)` on
+    /// top — the layout shape the real example app uses, not just a
+    /// trivial flat stack) → click the second TextField → verify the
+    /// click landed there two ways:
+    ///
+    /// 1. dispatch a character key through `FocusManager` (the same path
+    ///    InputHandler.handle uses for the text-input layer) and check it
+    ///    lands in the clicked field, not its sibling;
+    /// 2. mutate through the focused handler's binding and check the
+    ///    pointer identity (only the second field's state changes).
+    ///
+    /// Originally written while chasing a reported "I clicked Search but
+    /// Z showed up in Input" bug; that bug turned out to be regions being
+    /// dropped in `WindowGroup.centerBuffer` (fixed in 7fabfb01), which
+    /// this test does NOT exercise because it bypasses WindowGroup. The
     /// regression test for the actual fix lives in `RenderingTests`
     /// (`windowGroupCenteringPreservesHitTestRegions`). Kept as a
     /// useful integration test for the lower-level chain.
@@ -78,6 +85,8 @@ struct MouseHitTestPropagationTests {
         let view = VStack(alignment: .leading, spacing: 1) {
             VStack(alignment: .leading) {
                 Text("Cursor Demo")
+                    .bold()
+                    .underline()
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
                         Text("Input:")
@@ -100,11 +109,11 @@ struct MouseHitTestPropagationTests {
         let buffer = renderToBuffer(view, context: context)
         dispatcher.setRegions(buffer.hitTestRegions)
 
+        // We expect exactly two hit-test regions, one per TextField
+        // (Text views don't emit regions).
         let regions = buffer.hitTestRegions
-        guard regions.count >= 2 else {
-            Issue.record("expected 2 TextField regions, got \(regions.count)")
-            return
-        }
+        #expect(regions.count == 2, "expected 2 TextField regions, got \(regions.count)")
+        guard regions.count >= 2 else { return }
         // Click the *second* region (Search field — bigger y).
         let secondRegion = regions.max(by: { $0.offsetY < $1.offsetY })!
         let x = secondRegion.offsetX + 2
@@ -112,7 +121,7 @@ struct MouseHitTestPropagationTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 
-        // Now route a character through FocusManager.dispatchKeyEvent —
+        // 1) Route a character through FocusManager.dispatchKeyEvent —
         // same path InputHandler.handle uses for the text-input layer.
         let typed = KeyEvent(key: .character("Z"))
         _ = context.environment.focusManager!.dispatchKeyEvent(typed)
@@ -125,6 +134,19 @@ struct MouseHitTestPropagationTests {
             inputState=\(inputState.wrappedValue)
             """
         )
+        #expect(inputState.wrappedValue.isEmpty)
+
+        // 2) Binding identity: mutate through the focused handler —
+        // only the second field's binding reflects the change. (Runs
+        // second so the wholesale write can't mask the typing check.)
+        guard let focused = context.environment.focusManager!.currentFocused as? TextFieldHandler else {
+            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager!.currentFocused))")
+            return
+        }
+        focused.text.wrappedValue = "marker"
+        #expect(
+            searchState.wrappedValue == "marker",
+            "expected the second field to be focused; search=\(searchState.wrappedValue), input=\(inputState.wrappedValue)")
         #expect(inputState.wrappedValue.isEmpty)
     }
 
@@ -177,63 +199,6 @@ struct MouseHitTestPropagationTests {
         }
         focused.text.wrappedValue = "marker"
         #expect(b.wrappedValue == "marker")
-        #expect(a.wrappedValue.isEmpty)
-    }
-
-    /// A minimal replica of TextFieldPage's structure — HStack-
-    /// wrapped TextFields inside nested VStacks with
-    /// `.padding(.horizontal:)` at the top — to make sure the
-    /// click-routing chain handles the layout shapes the real
-    /// example app uses, not just the trivial flat-stack case.
-    @Test("Click on TextField inside the TextFieldPage-shaped tree moves focus")
-    func clickInPageShapedTreeMovesFocus() {
-        let a = State<String>(wrappedValue: "")
-        let b = State<String>(wrappedValue: "")
-        let view = VStack(alignment: .leading, spacing: 1) {
-            VStack(alignment: .leading) {
-                Text("Cursor Demo")
-                    .bold()
-                    .underline()
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text("Input:")
-                        TextField("Input", text: a.projectedValue, prompt: Text("Type…"))
-                    }
-                    HStack(spacing: 1) {
-                        Text("Search:")
-                        TextField("Search", text: b.projectedValue, prompt: Text("Search…"))
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 1)
-
-        let context = makeContext()
-        let buffer = renderToBuffer(view, context: context)
-        let dispatcher = context.environment.mouseEventDispatcher!
-        dispatcher.setActiveSupport(.standard)
-        dispatcher.setRegions(buffer.hitTestRegions)
-
-        // We expect two hit-test regions, one per TextField. Click the
-        // *second* one — the field bound to `b` — and verify focus
-        // lands there.
-        let regions = buffer.hitTestRegions
-        #expect(regions.count == 2, "expected 2 TextField regions, got \(regions.count)")
-        guard regions.count >= 2 else { return }
-        let second = regions.max(by: { $0.offsetY < $1.offsetY })!
-        let x = second.offsetX + 2
-        let y = second.offsetY
-        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
-        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
-
-        guard let focused = context.environment.focusManager!.currentFocused as? TextFieldHandler else {
-            Issue.record("expected TextFieldHandler in focus, got \(String(describing: context.environment.focusManager!.currentFocused))")
-            return
-        }
-        // Mutate through the focused handler — only the second field's
-        // binding should reflect the change.
-        focused.text.wrappedValue = "marker"
-        #expect(b.wrappedValue == "marker", "expected second field to be focused; b=\(b.wrappedValue), a=\(a.wrappedValue)")
         #expect(a.wrappedValue.isEmpty)
     }
 
@@ -341,55 +306,6 @@ struct MouseHitTestPropagationTests {
         #expect(dispatcher.effectiveSupport(baseConfig: .standard) == .standard)
     }
 
-    @Test("Click on TextField actually moves focus to it (end-to-end)")
-    func clickMovesFocusToTextField() {
-        let binding = State<String>(wrappedValue: "")
-        // Build the page-like wrapping that TextFieldPage has: VStack →
-        // VStack (DemoSection-style) → HStack → TextField.
-        let view = VStack(alignment: .leading, spacing: 1) {
-            VStack(alignment: .leading) {
-                Text("Cursor Demo")
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text("Input:")
-                        TextField("Input", text: binding.projectedValue)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 1)
-
-        let context = makeContext()
-        let buffer = renderToBuffer(view, context: context)
-
-        // Make the dispatcher use what was rendered.
-        let dispatcher = context.environment.mouseEventDispatcher!
-        dispatcher.setActiveSupport(.standard)
-        dispatcher.setRegions(buffer.hitTestRegions)
-
-        // Find a region with non-zero width that looks like the
-        // TextField (the TextField is the only registered region
-        // here; Text views don't emit regions).
-        guard let region = buffer.hitTestRegions.first else {
-            Issue.record("No hit-test region found")
-            return
-        }
-
-        // Click the middle of the region. The TextField handler should
-        // claim the press and then focus on release.
-        let centerX = region.offsetX + region.width / 2
-        let centerY = region.offsetY + region.height / 2
-        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: centerX, y: centerY))
-        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: centerX, y: centerY))
-
-        // The focus manager should now have *some* element focused —
-        // specifically the TextField. We don't know its exact id (it's
-        // auto-generated from view identity) but we can verify the
-        // focused element is a TextFieldHandler.
-        let focused = context.environment.focusManager!.currentFocused
-        #expect(focused != nil)
-        #expect(focused is TextFieldHandler)
-    }
 }
 
 // MARK: - HitTestRegion
@@ -414,8 +330,18 @@ struct HitTestRegionTests {
 @Suite("MouseEventDispatcher")
 struct MouseEventDispatcherTests {
 
-    @Test("Dispatch routes event to handler at hit location")
-    func dispatchRoutes() {
+    @Test(
+        "Dispatch routes to the handler at the hit location with region-local coordinates",
+        arguments: [
+            // (regionOffsetX, regionOffsetY, clickX, clickY, expectedLocalX, expectedLocalY)
+            (0, 0, 3, 2, 3, 2),  // region at origin: local == absolute
+            (10, 5, 12, 6, 2, 1),  // offset region: absolute (12, 6) arrives local (2, 1)
+        ])
+    func dispatchRoutesAndLocalizes(
+        regionOffsetX: Int, regionOffsetY: Int,
+        clickX: Int, clickY: Int,
+        expectedLocalX: Int, expectedLocalY: Int
+    ) {
         let dispatcher = MouseEventDispatcher()
         dispatcher.beginRenderPass()
 
@@ -425,36 +351,15 @@ struct MouseEventDispatcherTests {
             return true
         }
         dispatcher.setRegions([
-            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 5, handlerID: id)
+            HitTestRegion(
+                offsetX: regionOffsetX, offsetY: regionOffsetY,
+                width: 20, height: 5, handlerID: id)
         ])
 
-        let event = MouseEvent(button: .left, phase: .pressed, x: 3, y: 2)
+        let event = MouseEvent(button: .left, phase: .pressed, x: clickX, y: clickY)
         #expect(dispatcher.dispatch(event) == true)
-        // Region offset is (0, 0) — localised coords equal absolute.
-        #expect(receivedAt?.0 == 3)
-        #expect(receivedAt?.1 == 2)
-    }
-
-    @Test("Handler receives coordinates local to the region")
-    func dispatchLocalizes() {
-        let dispatcher = MouseEventDispatcher()
-        dispatcher.beginRenderPass()
-
-        var receivedAt: (Int, Int)?
-        let id = dispatcher.register { event in
-            receivedAt = (event.x, event.y)
-            return true
-        }
-        // Region at screen offset (10, 5).
-        dispatcher.setRegions([
-            HitTestRegion(offsetX: 10, offsetY: 5, width: 20, height: 3, handlerID: id)
-        ])
-
-        // Click at absolute (12, 6) — should arrive as local (2, 1).
-        let event = MouseEvent(button: .left, phase: .pressed, x: 12, y: 6)
-        #expect(dispatcher.dispatch(event) == true)
-        #expect(receivedAt?.0 == 2)
-        #expect(receivedAt?.1 == 1)
+        #expect(receivedAt?.0 == expectedLocalX)
+        #expect(receivedAt?.1 == expectedLocalY)
     }
 
     @Test("Dispatch ignores events outside any region")

@@ -12,15 +12,7 @@ import Testing
 
 @MainActor
 private func createTestContext(width: Int = 30, height: Int = 8) -> RenderContext {
-    let focusManager = FocusManager()
-    var environment = EnvironmentValues()
-    environment.focusManager = focusManager
-    return RenderContext(
-        availableWidth: width,
-        availableHeight: height,
-        environment: environment,
-        tuiContext: TUIContext()
-    ).isolatingRenderCache()
+    makeRenderContext(width: width, height: height)
 }
 
 @MainActor

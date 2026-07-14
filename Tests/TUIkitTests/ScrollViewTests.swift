@@ -36,49 +36,28 @@ private func makeContext(width: Int = 40, height: Int = 8) -> RenderContext {
 @Suite("ScrollViewHandler")
 struct ScrollViewHandlerTests {
 
-    @Test("scroll(by:) moves scrollOffset within bounds")
-    func scrollMovesWithinBounds() {
+    // NOTE: deliberately symmetric with ItemListHandlerScrollTests.scrollClamps —
+    // the List/ScrollView handler pair is sibling coverage of two distinct classes.
+    @Test(
+        "scroll(by:) moves within bounds and clamps at the edges",
+        arguments: [
+            // (contentHeight, viewportHeight, initialOffset, delta, expectedOffset)
+            (100, 10, 0, 5, 5),  // moves within bounds…
+            (100, 10, 5, 3, 8),  // …from any current offset
+            (100, 10, 3, -10, 0),  // clamps at the top
+            (100, 10, 80, 100, 90),  // clamps at the bottom (maxOffset = 100 − 10)
+            (5, 10, 0, 5, 0),  // no-op when content fits the viewport
+        ])
+    func scrollClamps(
+        contentHeight: Int, viewportHeight: Int, initialOffset: Int, delta: Int, expectedOffset: Int
+    ) {
         let handler = ScrollViewHandler(focusID: "sv")
-        handler.contentHeight = 100
-        handler.viewportHeight = 10
+        handler.contentHeight = contentHeight
+        handler.viewportHeight = viewportHeight
+        handler.scrollOffset = initialOffset
 
-        handler.scroll(by: 5)
-        #expect(handler.scrollOffset == 5)
-        handler.scroll(by: 3)
-        #expect(handler.scrollOffset == 8)
-    }
-
-    @Test("scroll(by:) clamps at the top")
-    func scrollClampsAtTop() {
-        let handler = ScrollViewHandler(focusID: "sv")
-        handler.contentHeight = 100
-        handler.viewportHeight = 10
-        handler.scrollOffset = 3
-
-        handler.scroll(by: -10)
-        #expect(handler.scrollOffset == 0)
-    }
-
-    @Test("scroll(by:) clamps at the bottom")
-    func scrollClampsAtBottom() {
-        let handler = ScrollViewHandler(focusID: "sv")
-        handler.contentHeight = 100
-        handler.viewportHeight = 10
-        // maxOffset = 100 - 10 = 90
-        handler.scrollOffset = 80
-
-        handler.scroll(by: 100)
-        #expect(handler.scrollOffset == 90)
-    }
-
-    @Test("scroll(by:) is a no-op when content fits viewport")
-    func scrollNoOpWhenContentFits() {
-        let handler = ScrollViewHandler(focusID: "sv")
-        handler.contentHeight = 5
-        handler.viewportHeight = 10
-
-        handler.scroll(by: 5)
-        #expect(handler.scrollOffset == 0)
+        handler.scroll(by: delta)
+        #expect(handler.scrollOffset == expectedOffset)
     }
 
     @Test("PageDown scrolls by one viewport")

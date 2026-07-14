@@ -19,69 +19,38 @@ import Testing
 @Suite("ItemListHandler Navigation Tests")
 struct ItemListHandlerNavigationTests {
 
-    @Test("Down arrow moves focus forward")
-    func moveDownSimple() {
+    @Test(
+        "A movement key moves focus to the expected index",
+        arguments: [
+            // (key, itemCount, viewportHeight, startIndex, expectedHandled, expectedIndex)
+            (Key.down, 5, 3, 0, true, 1),  // down moves forward
+            (.up, 5, 3, 2, true, 1),  // up moves backward
+            (.down, 3, 3, 2, true, 0),  // down wraps to start at the end
+            (.up, 3, 3, 0, true, 2),  // up wraps to the end at the start
+            (.home, 10, 5, 7, true, 0),  // home jumps to first
+            (.end, 10, 5, 2, true, 9),  // end jumps to last
+            (.pageDown, 20, 5, 2, true, 7),  // pageDown moves by viewport height
+            (.pageUp, 20, 5, 10, true, 5),  // pageUp moves by viewport height
+            (.pageDown, 10, 5, 8, true, 9),  // pageDown clamps at the end (no wrap)
+            (.pageUp, 10, 5, 2, true, 0),  // pageUp clamps at the start (no wrap)
+            (.down, 0, 5, 0, false, 0),  // empty list: unhandled, index pinned
+        ])
+    func movementKey(
+        key: Key, itemCount: Int, viewportHeight: Int,
+        startIndex: Int, expectedHandled: Bool, expectedIndex: Int
+    ) {
         let handler = ItemListHandler<String>(
             focusID: "test",
-            itemCount: 5,
-            viewportHeight: 3,
+            itemCount: itemCount,
+            viewportHeight: viewportHeight,
             selectionMode: .single
         )
+        handler.focusedIndex = startIndex
 
-        let event = KeyEvent(key: .down)
-        let handled = handler.handleKeyEvent(event)
+        let handled = handler.handleKeyEvent(KeyEvent(key: key))
 
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 1)
-    }
-
-    @Test("Up arrow moves focus backward")
-    func moveUpSimple() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 5,
-            viewportHeight: 3,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 2
-
-        let event = KeyEvent(key: .up)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 1)
-    }
-
-    @Test("Down arrow wraps to start at end")
-    func wrapDownToStart() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 3,
-            viewportHeight: 3,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 2  // Last item
-
-        let event = KeyEvent(key: .down)
-        _ = handler.handleKeyEvent(event)
-
-        #expect(handler.focusedIndex == 0)  // Wrapped to first
-    }
-
-    @Test("Up arrow wraps to end at start")
-    func wrapUpToEnd() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 3,
-            viewportHeight: 3,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 0  // First item
-
-        let event = KeyEvent(key: .up)
-        _ = handler.handleKeyEvent(event)
-
-        #expect(handler.focusedIndex == 2)  // Wrapped to last
+        #expect(handled == expectedHandled)
+        #expect(handler.focusedIndex == expectedIndex)
     }
 
     @Test("Shift+Down moves by the step multiplier and clamps at the end")
@@ -111,106 +80,6 @@ struct ItemListHandlerNavigationTests {
         handler.focusedIndex = 2
         _ = handler.handleKeyEvent(KeyEvent(key: .up, ctrl: false, alt: false, shift: true))
         #expect(handler.focusedIndex == 0, "clamps at the top instead of wrapping: \(handler.focusedIndex)")
-    }
-
-    @Test("Home key jumps to first item")
-    func homeJumpsToFirst() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 10,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 7
-
-        let event = KeyEvent(key: .home)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 0)
-    }
-
-    @Test("End key jumps to last item")
-    func endJumpsToLast() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 10,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 2
-
-        let event = KeyEvent(key: .end)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 9)
-    }
-
-    @Test("PageDown moves by viewport height")
-    func pageDownMovesViewport() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 20,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 2
-
-        let event = KeyEvent(key: .pageDown)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 7)  // 2 + 5
-    }
-
-    @Test("PageUp moves by viewport height")
-    func pageUpMovesViewport() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 20,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 10
-
-        let event = KeyEvent(key: .pageUp)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 5)  // 10 - 5
-    }
-
-    @Test("PageDown clamps at end without wrapping")
-    func pageDownClampsAtEnd() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 10,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 8
-
-        let event = KeyEvent(key: .pageDown)
-        _ = handler.handleKeyEvent(event)
-
-        #expect(handler.focusedIndex == 9)  // Clamped to last
-    }
-
-    @Test("PageUp clamps at start without wrapping")
-    func pageUpClampsAtStart() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 10,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        handler.focusedIndex = 2
-
-        let event = KeyEvent(key: .pageUp)
-        _ = handler.handleKeyEvent(event)
-
-        #expect(handler.focusedIndex == 0)  // Clamped to first
     }
 
     @Test("PageDown with selectableIndices lands on nearest selectable index")
@@ -330,21 +199,6 @@ struct ItemListHandlerNavigationTests {
         #expect(handler.focusedIndex == 9)
     }
 
-    @Test("Empty list handles navigation gracefully")
-    func emptyListNavigation() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 0,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-
-        let event = KeyEvent(key: .down)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == false)
-        #expect(handler.focusedIndex == 0)
-    }
 }
 
 // MARK: - Item List Handler Selection Tests
@@ -662,103 +516,53 @@ struct ItemListHandlerScrollTests {
             "focus should now be outside the visible range — that's the expected, documented behaviour")
     }
 
-    @Test("scroll(by:) clamps to top")
-    func scrollClampsToTop() {
+    @Test(
+        "scroll(by:) clamps to the scrollable bounds",
+        arguments: [
+            // (itemCount, viewportHeight, initialOffset, delta, expectedOffset)
+            (20, 5, 2, -10, 0),  // clamps to top
+            (20, 5, 10, 20, 15),  // clamps to bottom (maxOffset = 20 − 5)
+            (3, 10, 0, 5, 0),  // no-op when content fits in the viewport
+        ])
+    func scrollClamps(
+        itemCount: Int, viewportHeight: Int, initialOffset: Int, delta: Int, expectedOffset: Int
+    ) {
         let handler = ItemListHandler<String>(
             focusID: "test",
-            itemCount: 20,
-            viewportHeight: 5,
+            itemCount: itemCount,
+            viewportHeight: viewportHeight,
             selectionMode: .single
         )
-        handler.scrollOffset = 2
+        handler.scrollOffset = initialOffset
 
-        handler.scroll(by: -10)
+        handler.scroll(by: delta)
 
-        #expect(handler.scrollOffset == 0)
-    }
-
-    @Test("scroll(by:) clamps to bottom")
-    func scrollClampsToBottom() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 20,
-            viewportHeight: 5,
-            selectionMode: .single
-        )
-        // maxOffset = 20 - 5 = 15
-        handler.scrollOffset = 10
-
-        handler.scroll(by: 20)
-
-        #expect(handler.scrollOffset == 15)
-    }
-
-    @Test("scroll(by:) is a no-op when content fits in viewport")
-    func scrollNoOpWhenAllContentVisible() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 3,
-            viewportHeight: 10,
-            selectionMode: .single
-        )
-
-        handler.scroll(by: 5)
-
-        #expect(handler.scrollOffset == 0, "nothing to scroll when content fits")
+        #expect(handler.scrollOffset == expectedOffset)
     }
 
     // MARK: - clampScrollOffset() — bounds check after data changes
 
-    @Test("clampScrollOffset() snaps to maxOffset when itemCount drops")
-    func clampScrollOffsetSnapsWhenItemCountDrops() {
+    @Test(
+        "clampScrollOffset() snaps to the new maxOffset after itemCount changes",
+        arguments: [
+            // (initialOffset, newItemCount, expectedOffset) — itemCount 100, viewport 10
+            (50, 5, 0),  // filter narrows to fewer than a viewport: everything fits
+            (80, 30, 20),  // still overflows: snaps to max(0, 30 − 10)
+            (5, 100, 5),  // still-valid offset left alone
+        ])
+    func clampScrollOffset(initialOffset: Int, newItemCount: Int, expectedOffset: Int) {
         let handler = ItemListHandler<String>(
             focusID: "test",
             itemCount: 100,
             viewportHeight: 10,
             selectionMode: .single
         )
-        handler.scrollOffset = 50
+        handler.scrollOffset = initialOffset
 
-        // Simulate a filter narrowing the list to 5 items.
-        // maxOffset becomes max(0, 5 - 10) = 0 — everything fits.
-        handler.itemCount = 5
+        handler.itemCount = newItemCount
         handler.clampScrollOffset()
 
-        #expect(handler.scrollOffset == 0)
-    }
-
-    @Test("clampScrollOffset() snaps to new maxOffset when content still overflows")
-    func clampScrollOffsetSnapsToNewMax() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 100,
-            viewportHeight: 10,
-            selectionMode: .single
-        )
-        handler.scrollOffset = 80
-
-        // Filter narrows to 30 — still overflows, but the max is
-        // lower than the existing offset. Clamp should bring it to
-        // max(0, 30 - 10) = 20.
-        handler.itemCount = 30
-        handler.clampScrollOffset()
-
-        #expect(handler.scrollOffset == 20)
-    }
-
-    @Test("clampScrollOffset() leaves a still-valid scrollOffset alone")
-    func clampScrollOffsetLeavesValidOffsetAlone() {
-        let handler = ItemListHandler<String>(
-            focusID: "test",
-            itemCount: 100,
-            viewportHeight: 10,
-            selectionMode: .single
-        )
-        handler.scrollOffset = 5
-
-        handler.clampScrollOffset()
-
-        #expect(handler.scrollOffset == 5)
+        #expect(handler.scrollOffset == expectedOffset)
     }
 
     @Test("clampScrollOffset() does NOT change focusedIndex")

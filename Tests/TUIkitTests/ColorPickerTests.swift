@@ -13,11 +13,7 @@ import Testing
 struct ColorPickerTests {
 
     private func makeContext(width: Int = 80, height: Int = 5) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
+        makeRenderContext(width: width, height: height)
     }
 
     @Test("Renders its title and a swatch in the bound colour")

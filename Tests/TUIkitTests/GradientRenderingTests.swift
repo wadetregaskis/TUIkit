@@ -13,14 +13,7 @@ import Testing
 struct GradientRenderingTests {
 
     private func makeContext() -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: 80,
-            availableHeight: 5,
-            environment: environment,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeRenderContext(width: 80, height: 5)
     }
 
     @Test("ForEach<Range, id: \\.self> inside HStack renders its glyphs")

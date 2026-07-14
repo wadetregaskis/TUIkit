@@ -13,11 +13,7 @@ import Testing
 struct TextTerminalWidthTests {
 
     private func testContext(width: Int = 80) -> RenderContext {
-        RenderContext(
-            availableWidth: width,
-            availableHeight: 24,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeBareRenderContext(width: width, height: 24)
     }
 
     @Test("Text with CJK characters reports correct terminal width")
@@ -65,7 +61,7 @@ struct TextTerminalWidthTests {
 struct TextLineBreakTests {
 
     private func context(width: Int, height: Int = 24) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
+        makeBareRenderContext(width: width, height: height)
     }
 
     @Test("Embedded newlines split into separate buffer lines")
@@ -116,7 +112,7 @@ struct TextLineBreakTests {
 struct TextTruncationTests {
 
     private func context(width: Int, height: Int = 24) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
+        makeBareRenderContext(width: width, height: height)
     }
 
     @Test("A word longer than the width truncates with a tail ellipsis")

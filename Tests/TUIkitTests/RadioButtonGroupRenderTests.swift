@@ -17,14 +17,7 @@ struct RadioButtonGroupRenderTests {
     /// A render context with a real focus manager and state storage so the
     /// group can register, auto-focus, and persist its handler across renders.
     private func makeContext(width: Int = 30, height: Int = 8) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: width,
-            availableHeight: height,
-            environment: environment,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeRenderContext(width: width, height: height)
     }
 
     /// A throwaway focusable used to occupy auto-focus so that a

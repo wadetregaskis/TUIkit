@@ -17,14 +17,7 @@ struct AlertRenderTests {
     /// Alert buttons emit hit-test regions, so the context needs a focus
     /// manager and the full TUIContext services for a faithful render.
     private func makeContext(width: Int = 80, height: Int = 16) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: width,
-            availableHeight: height,
-            environment: environment,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeRenderContext(width: width, height: height)
     }
 
     private func lines(_ buffer: FrameBuffer) -> [String] {

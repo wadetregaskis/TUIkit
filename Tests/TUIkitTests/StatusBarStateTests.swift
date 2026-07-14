@@ -31,7 +31,7 @@ struct StatusBarStateTests {
         #expect(state.hasItems == false)
     }
 
-    @Test("Set global items merges with system items")
+    @Test("Set global items (array and builder) merges with system items")
     func setGlobalItems() {
         let state = StatusBarState()
 
@@ -46,22 +46,21 @@ struct StatusBarStateTests {
         #expect(state.currentItems.contains { $0.shortcut == "q" })  // system quit
         #expect(state.currentItems.contains { $0.shortcut == "s" })  // user save
         #expect(state.currentItems.contains { $0.shortcut == "x" })  // user extra
-    }
 
-    @Test("Set global items with builder merges with system items")
-    func setGlobalItemsBuilder() {
-        let state = StatusBarState()
-
-        state.setItems {
+        // The @resultBuilder overload routes through the same plumbing:
+        // the same two items produce the same shortcut set.
+        let builderState = StatusBarState()
+        builderState.setItems {
             StatusBarItem(shortcut: "s", label: "save")
             StatusBarItem(shortcut: "x", label: "extra")
         }
-
-        // User items (s, x) + system item (q) = 3 total (appearance/theme off by default)
-        #expect(state.currentItems.count == 3)
+        #expect(builderState.currentItems.count == 3)
+        #expect(
+            Set(builderState.currentItems.map(\.shortcut)) == Set(state.currentItems.map(\.shortcut)),
+            "builder-built items match the array-built state")
     }
 
-    @Test("Push context overrides global items but keeps system items")
+    @Test("Push context (array and builder) overrides global items but keeps system items")
     func pushContextOverrides() {
         let state = StatusBarState()
 
@@ -82,20 +81,16 @@ struct StatusBarStateTests {
         #expect(state.currentItems.contains { $0.shortcut == "q" })  // system quit
         #expect(state.currentItems.contains { $0.shortcut == Shortcut.escape })
         #expect(state.currentItems.contains { $0.shortcut == Shortcut.enter })
-    }
 
-    @Test("Push context with builder merges with system items")
-    func pushContextBuilder() {
-        let state = StatusBarState()
-
-        state.push(context: "test") {
+        // The @resultBuilder overload of push(context:) shares the plumbing.
+        let builderState = StatusBarState()
+        builderState.push(context: "test") {
             StatusBarItem(shortcut: "x", label: "action")  // Use 'x' to not conflict with 'a' (appearance)
         }
-
         // Context item (x) + system item (q) = 2 total (appearance/theme off by default)
-        #expect(state.currentItems.count == 2)
-        #expect(state.currentItems.contains { $0.label == "action" })
-        #expect(state.currentItems.contains { $0.shortcut == "q" })
+        #expect(builderState.currentItems.count == 2)
+        #expect(builderState.currentItems.contains { $0.label == "action" })
+        #expect(builderState.currentItems.contains { $0.shortcut == "q" })
     }
 
     @Test("Pop context returns to global items with system items")

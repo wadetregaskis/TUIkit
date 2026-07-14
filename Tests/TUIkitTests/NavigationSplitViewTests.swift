@@ -25,32 +25,14 @@ private func testContext(width: Int = 80, height: Int = 24) -> RenderContext {
 
 @Suite("NavigationSplitViewVisibility Tests")
 struct NavigationSplitViewVisibilityTests {
-    @Test("automatic visibility equals automatic")
-    func automaticEqualsAutomatic() {
-        let visibility1 = NavigationSplitViewVisibility.automatic
-        let visibility2 = NavigationSplitViewVisibility.automatic
-        #expect(visibility1 == visibility2)
-    }
-
-    @Test("all visibility equals all")
-    func allEqualsAll() {
-        let visibility1 = NavigationSplitViewVisibility.all
-        let visibility2 = NavigationSplitViewVisibility.all
-        #expect(visibility1 == visibility2)
-    }
-
-    @Test("doubleColumn visibility equals doubleColumn")
-    func doubleColumnEqualsDoubleColumn() {
-        let visibility1 = NavigationSplitViewVisibility.doubleColumn
-        let visibility2 = NavigationSplitViewVisibility.doubleColumn
-        #expect(visibility1 == visibility2)
-    }
-
-    @Test("detailOnly visibility equals detailOnly")
-    func detailOnlyEqualsDetailOnly() {
-        let visibility1 = NavigationSplitViewVisibility.detailOnly
-        let visibility2 = NavigationSplitViewVisibility.detailOnly
-        #expect(visibility1 == visibility2)
+    @Test(
+        "every visibility equals itself",
+        arguments: [
+            NavigationSplitViewVisibility.automatic, .all, .doubleColumn, .detailOnly,
+        ])
+    func visibilityReflexiveEquality(visibility: NavigationSplitViewVisibility) {
+        let other = visibility
+        #expect(visibility == other)
     }
 
     @Test("different visibilities are not equal")
@@ -82,25 +64,12 @@ struct NavigationSplitViewVisibilityTests {
 
 @Suite("NavigationSplitViewColumn Tests")
 struct NavigationSplitViewColumnTests {
-    @Test("sidebar column equals sidebar")
-    func sidebarEqualsSidebar() {
-        let column1 = NavigationSplitViewColumn.sidebar
-        let column2 = NavigationSplitViewColumn.sidebar
-        #expect(column1 == column2)
-    }
-
-    @Test("content column equals content")
-    func contentEqualsContent() {
-        let column1 = NavigationSplitViewColumn.content
-        let column2 = NavigationSplitViewColumn.content
-        #expect(column1 == column2)
-    }
-
-    @Test("detail column equals detail")
-    func detailEqualsDetail() {
-        let column1 = NavigationSplitViewColumn.detail
-        let column2 = NavigationSplitViewColumn.detail
-        #expect(column1 == column2)
+    @Test(
+        "every column equals itself",
+        arguments: [NavigationSplitViewColumn.sidebar, .content, .detail])
+    func columnReflexiveEquality(column: NavigationSplitViewColumn) {
+        let other = column
+        #expect(column == other)
     }
 
     @Test("different columns are not equal")
@@ -510,34 +479,13 @@ struct NavigationSplitViewStyleEnvironmentTests {
 @Suite("NavigationSplitView Column Width Tests")
 @MainActor
 struct NavigationSplitViewColumnWidthTests {
-    @Test("Fixed column width preference can be set")
-    func fixedColumnWidthPreference() {
-        let view = Text("Sidebar").navigationSplitViewColumnWidth(25)
-
-        // The modifier should compile and wrap the view
-        _ = view
-    }
-
-    @Test("Flexible column width preference can be set")
-    func flexibleColumnWidthPreference() {
-        let view = Text("Sidebar").navigationSplitViewColumnWidth(min: 20, ideal: 30, max: 50)
-
-        // The modifier should compile and wrap the view
-        _ = view
-    }
-
-    @Test("Column width with only min constraint")
-    func columnWidthMinOnly() {
-        let view = Text("Sidebar").navigationSplitViewColumnWidth(min: 15)
-
-        _ = view
-    }
-
-    @Test("Column width with only max constraint")
-    func columnWidthMaxOnly() {
-        let view = Text("Sidebar").navigationSplitViewColumnWidth(max: 40)
-
-        _ = view
+    @Test("All column-width modifier spellings compile and wrap the view")
+    func columnWidthModifierSpellings() {
+        // Compile-only: every overload of navigationSplitViewColumnWidth.
+        _ = Text("Sidebar").navigationSplitViewColumnWidth(25)  // fixed
+        _ = Text("Sidebar").navigationSplitViewColumnWidth(min: 20, ideal: 30, max: 50)  // flexible
+        _ = Text("Sidebar").navigationSplitViewColumnWidth(min: 15)  // min only
+        _ = Text("Sidebar").navigationSplitViewColumnWidth(max: 40)  // max only
     }
 }
 

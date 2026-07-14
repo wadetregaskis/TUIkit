@@ -13,14 +13,11 @@ import Testing
 struct AuthDialogTabTests {
 
     private func makeContext(focusManager: FocusManager) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = focusManager
-        return RenderContext(
-            availableWidth: 80,
-            availableHeight: 24,
-            environment: environment,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        // Same as makeRenderContext, but injecting the caller-held FocusManager
+        // (the tests drive focus across renders through it).
+        makeRenderContext { environment, _ in
+            environment.focusManager = focusManager
+        }
     }
 
     @Test("Tab advances focus through every auth-dialog control in order")

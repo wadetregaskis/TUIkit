@@ -496,33 +496,6 @@ struct RenderingTests {
         )
     }
 
-    @Test("HStack with Spacer inside border respects available width")
-    func hstackWithSpacerInsideBorder() {
-        let view = HStack {
-            Text("Start")
-            Spacer()
-            Text("End")
-        }.border()
-
-        var context = RenderContext(availableWidth: 80, availableHeight: 10, tuiContext: TUIContext()).isolatingRenderCache()
-        context.hasExplicitWidth = true
-        let buffer = renderToBuffer(view, context: context)
-
-        // Buffer width should be exactly 80 (terminal width)
-        #expect(buffer.width == 80, "Buffer width should be 80, got \(buffer.width)")
-
-        // Content line (middle line with Start...End) should have strippedLength <= 80
-        let contentLine = buffer.lines[1]  // Middle line (borders are top and bottom)
-        #expect(contentLine.strippedLength <= 80, "Content line should not exceed 80 chars, got \(contentLine.strippedLength)")
-
-        // "End" should be near the right edge
-        let stripped = contentLine.stripped
-        #expect(
-            stripped.hasSuffix("End│") || stripped.hasSuffix("End ") || stripped.contains("End"),
-            "End should be at right side: '\(stripped)'"
-        )
-    }
-
     @Test("HStack with Spacer inside VStack with border respects width")
     func hstackWithSpacerInVStackWithBorder() {
         // This mirrors the LayoutPage structure more closely
@@ -577,17 +550,22 @@ struct RenderingTests {
         context.hasExplicitWidth = true
         let buffer = renderToBuffer(view, context: context)
 
-        // All lines should be exactly 80 chars (fills terminal width)
+        // Buffer width should be exactly 80 (terminal width)…
+        #expect(buffer.width == 80, "Buffer width should be 80, got \(buffer.width)")
+        // …and all lines exactly 80 cells (fills terminal width).
         for (index, line) in buffer.lines.enumerated() {
             #expect(line.strippedLength == 80, "Line \(index) should be exactly 80, got \(line.strippedLength)")
         }
 
-        // Verify content structure: │ Start ... End │
+        // Verify content structure: │ Start ... End │ (the Spacer pushes
+        // End to the right edge).
         let contentLine = buffer.lines[1]
         let stripped = contentLine.stripped
         #expect(stripped.hasPrefix("│"), "Should start with left border")
         #expect(stripped.hasSuffix("│"), "Should end with right border")
         #expect(stripped.contains("Start"), "Should contain Start")
         #expect(stripped.contains("End"), "Should contain End")
+        #expect(stripped.hasSuffix("End │") || stripped.hasSuffix("End│"),
+            "End should sit at the right edge: '\(stripped)'")
     }
 }

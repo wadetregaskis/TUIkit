@@ -243,31 +243,23 @@ struct ASCIIConverterTests {
         }
     }
 
-    @Test("Shape-based conversion picks a horizontal line for a clean top/bottom split")
-    func shapeAwarePicksHorizontalEdgeForTopDarkImage() {
-        // Top half black, bottom half white — a clean HORIZONTAL edge across the
-        // cell. Edge detection now recognises it and draws the orientation-
-        // matched line glyph `-`, rather than a top-heavy coverage char (which
-        // was the pre-Sobel approximation).
-        var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 100)
-        for index in 50..<100 { pixels[index] = RGBA(r: 255, g: 255, b: 255) }
+    @Test(
+        "Shape-based conversion picks a horizontal line for a clean top/bottom split",
+        arguments: [true, false])
+    func shapeAwarePicksHorizontalEdge(darkTopHalf: Bool) {
+        // One half black, the other white — a clean HORIZONTAL edge across the
+        // cell (in either polarity). Edge detection recognises it and draws the
+        // orientation-matched line glyph `-`, rather than a top-heavy coverage
+        // char (which was the pre-Sobel approximation).
+        let dark = RGBA(r: 0, g: 0, b: 0)
+        let light = RGBA(r: 255, g: 255, b: 255)
+        var pixels = [RGBA](repeating: darkTopHalf ? dark : light, count: 100)
+        for index in 50..<100 { pixels[index] = darkTopHalf ? light : dark }
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
         let converter = ASCIIConverter(
             characterSet: .ascii, shapeAware: true, colorMode: .mono, dithering: .none)
         let stripped = converter.convert(image, width: 1, height: 1).first?.stripped ?? ""
-        #expect(stripped.first == "-", "a top/bottom split is a horizontal edge: '\(stripped)'")
-    }
-
-    @Test("Shape-based conversion picks a horizontal line for a clean bottom/top split")
-    func shapeAwarePicksHorizontalEdgeForBottomDarkImage() {
-        // Top half white, bottom half black — also a clean horizontal edge → `-`.
-        var pixels = [RGBA](repeating: RGBA(r: 255, g: 255, b: 255), count: 100)
-        for index in 50..<100 { pixels[index] = RGBA(r: 0, g: 0, b: 0) }
-        let image = RGBAImage(width: 10, height: 10, pixels: pixels)
-        let converter = ASCIIConverter(
-            characterSet: .ascii, shapeAware: true, colorMode: .mono, dithering: .none)
-        let stripped = converter.convert(image, width: 1, height: 1).first?.stripped ?? ""
-        #expect(stripped.first == "-", "a bottom/top split is a horizontal edge: '\(stripped)'")
+        #expect(stripped.first == "-", "a half/half split is a horizontal edge: '\(stripped)'")
     }
 
     @Test("Fine-block conversion in mono mode uses block glyphs only")
@@ -304,17 +296,38 @@ struct ASCIIConverterTests {
         #expect(lines.count == 5)
     }
 
-    @Test("True color output contains ANSI RGB codes")
-    func trueColorOutput() {
-        let pixels = [RGBA(r: 255, g: 0, b: 0)]
-        let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
+    @Test(
+        "Colour mode × terminal depth emits exactly the right escape family",
+        arguments: [
+            // (pixel, mode, depth, mustContain, mustNotContain)
+            // True colour on a truecolor terminal → 24-bit codes.
+            (RGBA(r: 255, g: 0, b: 0), ASCIIColorMode.trueColor, ColorDepth.truecolor, ["38;2;"], [String]()),
+            // ANSI 256 on a palette256 terminal → palette codes.
+            (RGBA(r: 255, g: 0, b: 0), .ansi256, .palette256, ["38;5;"], []),
+            // Grayscale on a palette256 terminal → palette codes.
+            (RGBA(r: 128, g: 128, b: 128), .grayscale, .palette256, ["38;5;"], []),
+            // True colour on a 256-color terminal falls back to palette codes —
+            // 24-bit codes would corrupt 256-color terminals.
+            (RGBA(r: 255, g: 0, b: 0), .trueColor, .palette256, ["38;5;"], ["38;2;"]),
+            // True colour on a basic16 terminal falls back to mono.
+            (RGBA(r: 255, g: 0, b: 0), .trueColor, .basic16, [], ["38;2;", "38;5;"]),
+        ])
+    func colorModeEscapeCodes(
+        pixel: RGBA, mode: ASCIIColorMode, depth: ColorDepth,
+        mustContain: [String], mustNotContain: [String]
+    ) {
+        let image = RGBAImage(width: 1, height: 1, pixels: [pixel])
+        let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
 
-        withColorDepth(.truecolor) {
+        withColorDepth(depth) {
             let lines = converter.convert(image, width: 1, height: 1)
             #expect(lines.count == 1)
-            // Should contain 38;2; (foreground true color escape)
-            #expect(lines[0].contains("38;2;"))
+            for needle in mustContain {
+                #expect(lines[0].contains(needle), "expected \(needle) in '\(lines[0])'")
+            }
+            for needle in mustNotContain {
+                #expect(!lines[0].contains(needle), "unexpected \(needle) in '\(lines[0])'")
+            }
         }
     }
 
@@ -357,63 +370,6 @@ struct ASCIIConverterTests {
         #expect(lines.isEmpty)
     }
 
-    @Test("ANSI 256 output contains palette codes")
-    func ansi256Output() {
-        let pixels = [RGBA(r: 255, g: 0, b: 0)]
-        let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .ansi256, dithering: .none)
-
-        withColorDepth(.palette256) {
-            let lines = converter.convert(image, width: 1, height: 1)
-            #expect(lines.count == 1)
-            // Should contain 38;5; (256-color escape)
-            #expect(lines[0].contains("38;5;"))
-        }
-    }
-
-    @Test("Grayscale output contains palette codes")
-    func grayscaleOutput() {
-        let pixels = [RGBA(r: 128, g: 128, b: 128)]
-        let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .grayscale, dithering: .none)
-
-        withColorDepth(.palette256) {
-            let lines = converter.convert(image, width: 1, height: 1)
-            #expect(lines.count == 1)
-            #expect(lines[0].contains("38;5;"))
-        }
-    }
-
-    @Test("True color requested on 256-color terminal falls back to palette codes")
-    func trueColorDownsamplesOnPalette256() {
-        let pixels = [RGBA(r: 255, g: 0, b: 0)]
-        let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
-
-        withColorDepth(.palette256) {
-            let lines = converter.convert(image, width: 1, height: 1)
-            #expect(lines.count == 1)
-            // Must NOT emit 24-bit codes — they corrupt 256-color terminals.
-            #expect(!lines[0].contains("38;2;"))
-            // Should emit 256-color codes instead.
-            #expect(lines[0].contains("38;5;"))
-        }
-    }
-
-    @Test("True color requested on basic16 terminal falls back to mono")
-    func trueColorDownsamplesOnBasic16() {
-        let pixels = [RGBA(r: 255, g: 0, b: 0)]
-        let image = RGBAImage(width: 1, height: 1, pixels: pixels)
-        let converter = ASCIIConverter(characterSet: .ascii, colorMode: .trueColor, dithering: .none)
-
-        withColorDepth(.basic16) {
-            let lines = converter.convert(image, width: 1, height: 1)
-            #expect(lines.count == 1)
-            #expect(!lines[0].contains("38;2;"))
-            #expect(!lines[0].contains("38;5;"))
-        }
-    }
-
     @Test("All color modes emit no color codes on noColor terminal")
     func noColorTerminalSuppressesEscapes() {
         let pixels = [RGBA(r: 200, g: 100, b: 50)]
@@ -437,36 +393,33 @@ struct ASCIIConverterTests {
 @Suite("ASCIIColorMode.effective(for:)")
 struct ASCIIColorModeEffectiveTests {
 
-    @Test("True color stays true color only on truecolor terminals")
-    func trueColorMapping() {
-        #expect(ASCIIColorMode.trueColor.effective(for: .truecolor) == .trueColor)
-        #expect(ASCIIColorMode.trueColor.effective(for: .palette256) == .ansi256)
-        #expect(ASCIIColorMode.trueColor.effective(for: .basic16) == .mono)
-        #expect(ASCIIColorMode.trueColor.effective(for: .noColor) == .mono)
-    }
-
-    @Test("ANSI 256 stays through palette256 terminals, drops to mono below")
-    func ansi256Mapping() {
-        #expect(ASCIIColorMode.ansi256.effective(for: .truecolor) == .ansi256)
-        #expect(ASCIIColorMode.ansi256.effective(for: .palette256) == .ansi256)
-        #expect(ASCIIColorMode.ansi256.effective(for: .basic16) == .mono)
-        #expect(ASCIIColorMode.ansi256.effective(for: .noColor) == .mono)
-    }
-
-    @Test("Grayscale stays through palette256 terminals, drops to mono below")
-    func grayscaleMapping() {
-        #expect(ASCIIColorMode.grayscale.effective(for: .truecolor) == .grayscale)
-        #expect(ASCIIColorMode.grayscale.effective(for: .palette256) == .grayscale)
-        #expect(ASCIIColorMode.grayscale.effective(for: .basic16) == .mono)
-        #expect(ASCIIColorMode.grayscale.effective(for: .noColor) == .mono)
-    }
-
-    @Test("Mono stays mono everywhere")
-    func monoMapping() {
-        #expect(ASCIIColorMode.mono.effective(for: .truecolor) == .mono)
-        #expect(ASCIIColorMode.mono.effective(for: .palette256) == .mono)
-        #expect(ASCIIColorMode.mono.effective(for: .basic16) == .mono)
-        #expect(ASCIIColorMode.mono.effective(for: .noColor) == .mono)
+    @Test(
+        "Requested mode × terminal depth resolves to the effective mode",
+        arguments: [
+            // (requested, depth, effective)
+            // True color survives only truecolor terminals; 256 → ansi256, below → mono.
+            (ASCIIColorMode.trueColor, ColorDepth.truecolor, ASCIIColorMode.trueColor),
+            (.trueColor, .palette256, .ansi256),
+            (.trueColor, .basic16, .mono),
+            (.trueColor, .noColor, .mono),
+            // ANSI 256 stays through palette256 terminals, drops to mono below.
+            (.ansi256, .truecolor, .ansi256),
+            (.ansi256, .palette256, .ansi256),
+            (.ansi256, .basic16, .mono),
+            (.ansi256, .noColor, .mono),
+            // Grayscale stays through palette256 terminals, drops to mono below.
+            (.grayscale, .truecolor, .grayscale),
+            (.grayscale, .palette256, .grayscale),
+            (.grayscale, .basic16, .mono),
+            (.grayscale, .noColor, .mono),
+            // Mono stays mono everywhere.
+            (.mono, .truecolor, .mono),
+            (.mono, .palette256, .mono),
+            (.mono, .basic16, .mono),
+            (.mono, .noColor, .mono),
+        ])
+    func effectiveMode(requested: ASCIIColorMode, depth: ColorDepth, expected: ASCIIColorMode) {
+        #expect(requested.effective(for: depth) == expected)
     }
 }
 

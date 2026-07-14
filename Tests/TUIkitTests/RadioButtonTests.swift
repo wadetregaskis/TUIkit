@@ -230,9 +230,20 @@ struct RadioButtonGroupTests {
 @Suite("RadioButtonGroupHandler Tests")
 struct RadioButtonGroupHandlerTests {
 
-    @Test("Handler handles arrow down to navigate focus (not selection)")
-    func handleArrowDown() {
-        var selection = AnyHashable("opt1")
+    @Test(
+        "An on-axis arrow navigates focus, not selection",
+        arguments: [
+            // (key, orientation, startIndex, expectedIndex) — 3 items, selection on the start item
+            (Key.down, RadioButtonOrientation.vertical, 0, 1),
+            (.up, .vertical, 1, 0),
+            (.right, .horizontal, 0, 1),
+            (.left, .horizontal, 1, 0),
+        ])
+    func onAxisArrowNavigatesFocus(
+        key: Key, orientation: RadioButtonOrientation, startIndex: Int, expectedIndex: Int
+    ) {
+        let startValue = AnyHashable("opt\(startIndex + 1)")
+        var selection = startValue
         let binding = Binding(
             get: { selection },
             set: { selection = $0 }
@@ -243,97 +254,20 @@ struct RadioButtonGroupHandlerTests {
             focusID: "test",
             selection: binding,
             itemValues: itemValues,
-            orientation: .vertical,
+            orientation: orientation,
             canBeFocused: true
         )
+        handler.focusedIndex = startIndex
 
-        let event = KeyEvent(key: .down)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 1)  // Focus moved
-        #expect(selection == AnyHashable("opt1"))  // Selection unchanged
-    }
-
-    @Test("Handler handles arrow up to navigate focus (not selection)")
-    func handleArrowUp() {
-        var selection = AnyHashable("opt2")
-        let binding = Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )
-
-        let itemValues = [AnyHashable("opt1"), AnyHashable("opt2"), AnyHashable("opt3")]
-        let handler = RadioButtonGroupHandler(
-            focusID: "test",
-            selection: binding,
-            itemValues: itemValues,
-            orientation: .vertical,
-            canBeFocused: true
-        )
-        handler.focusedIndex = 1
-
-        let event = KeyEvent(key: .up)
-        let handled = handler.handleKeyEvent(event)
+        let handled = handler.handleKeyEvent(KeyEvent(key: key))
 
         #expect(handled == true)
-        #expect(handler.focusedIndex == 0)  // Focus moved
-        #expect(selection == AnyHashable("opt2"))  // Selection unchanged
+        #expect(handler.focusedIndex == expectedIndex)  // Focus moved
+        #expect(selection == startValue)  // Selection unchanged
     }
 
-    @Test("Handler handles arrow right to navigate focus (not selection)")
-    func handleArrowRight() {
-        var selection = AnyHashable("a")
-        let binding = Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )
-
-        let itemValues = [AnyHashable("a"), AnyHashable("b"), AnyHashable("c")]
-        let handler = RadioButtonGroupHandler(
-            focusID: "test",
-            selection: binding,
-            itemValues: itemValues,
-            orientation: .horizontal,
-            canBeFocused: true
-        )
-
-        let event = KeyEvent(key: .right)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 1)  // Focus moved
-        #expect(selection == AnyHashable("a"))  // Selection unchanged
-    }
-
-    @Test("Handler handles arrow left to navigate focus (not selection)")
-    func handleArrowLeft() {
-        var selection = AnyHashable("b")
-        let binding = Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )
-
-        let itemValues = [AnyHashable("a"), AnyHashable("b"), AnyHashable("c")]
-        let handler = RadioButtonGroupHandler(
-            focusID: "test",
-            selection: binding,
-            itemValues: itemValues,
-            orientation: .horizontal,
-            canBeFocused: true
-        )
-        handler.focusedIndex = 1
-
-        let event = KeyEvent(key: .left)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(handler.focusedIndex == 0)  // Focus moved
-        #expect(selection == AnyHashable("b"))  // Selection unchanged
-    }
-
-    @Test("Handler handles Enter to select")
-    func handleEnter() {
+    @Test("Enter and Space select the focused item", arguments: [Key.enter, .space])
+    func selectionKeySelectsFocusedItem(key: Key) {
         var selection = AnyHashable("opt1")
         let binding = Binding(
             get: { selection },
@@ -350,36 +284,10 @@ struct RadioButtonGroupHandlerTests {
         )
         handler.focusedIndex = 1
 
-        let event = KeyEvent(key: .enter)
-        let handled = handler.handleKeyEvent(event)
+        let handled = handler.handleKeyEvent(KeyEvent(key: key))
 
         #expect(handled == true)
         #expect(selection == AnyHashable("opt2"))
-    }
-
-    @Test("Handler handles Space to select")
-    func handleSpace() {
-        var selection = AnyHashable("x")
-        let binding = Binding(
-            get: { selection },
-            set: { selection = $0 }
-        )
-
-        let itemValues = [AnyHashable("x"), AnyHashable("y")]
-        let handler = RadioButtonGroupHandler(
-            focusID: "test",
-            selection: binding,
-            itemValues: itemValues,
-            orientation: .vertical,
-            canBeFocused: true
-        )
-        handler.focusedIndex = 1
-
-        let event = KeyEvent(key: .space)
-        let handled = handler.handleKeyEvent(event)
-
-        #expect(handled == true)
-        #expect(selection == AnyHashable("y"))
     }
 
     /// Builds a 2-item vertical handler for the boundary tests.

@@ -50,128 +50,68 @@ struct TextFieldHandlerTests {
 
     // MARK: - Character Insertion
 
-    @Test("Insert character at end")
-    func insertCharacterAtEnd() {
-        var text = "Hello"
+    @Test(
+        "insertCharacter splices at the cursor and advances it",
+        arguments: [
+            // (initialText, cursor, char, expectedText, expectedCursor)
+            ("Hello", 5, "!", "Hello!", 6),  // at end
+            ("Hllo", 1, "e", "Hello", 2),  // in the middle
+            ("ello", 0, "H", "Hello", 1),  // at the start
+            ("HelloWorld", 5, " ", "Hello World", 6),  // space
+        ])
+    func insertCharacter(
+        initialText: String, cursor: Int, char: Character, expectedText: String, expectedCursor: Int
+    ) {
+        var text = initialText
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: cursor)
 
-        handler.insertCharacter("!")
+        handler.insertCharacter(char)
 
-        #expect(text == "Hello!")
-        #expect(handler.cursorPosition == 6)
-    }
-
-    @Test("Insert character in middle")
-    func insertCharacterInMiddle() {
-        var text = "Hllo"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 1)
-
-        handler.insertCharacter("e")
-
-        #expect(text == "Hello")
-        #expect(handler.cursorPosition == 2)
-    }
-
-    @Test("Insert character at start")
-    func insertCharacterAtStart() {
-        var text = "ello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
-
-        handler.insertCharacter("H")
-
-        #expect(text == "Hello")
-        #expect(handler.cursorPosition == 1)
-    }
-
-    @Test("Insert space character")
-    func insertSpaceCharacter() {
-        var text = "HelloWorld"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 5)
-
-        handler.insertCharacter(" ")
-
-        #expect(text == "Hello World")
-        #expect(handler.cursorPosition == 6)
+        #expect(text == expectedText)
+        #expect(handler.cursorPosition == expectedCursor)
     }
 
     // MARK: - Delete Backward (Backspace)
 
-    @Test("Delete backward removes character before cursor")
-    func deleteBackward() {
+    @Test(
+        "deleteBackward removes the character before the cursor (no-op at the start)",
+        arguments: [
+            // (cursor, expectedText, expectedCursor) on "Hello"
+            (5, "Hell", 4),  // at end
+            (3, "Helo", 2),  // in the middle
+            (0, "Hello", 0),  // at the start: nothing to delete
+        ])
+    func deleteBackward(cursor: Int, expectedText: String, expectedCursor: Int) {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: cursor)
 
         handler.deleteBackward()
 
-        #expect(text == "Hell")
-        #expect(handler.cursorPosition == 4)
-    }
-
-    @Test("Delete backward in middle of text")
-    func deleteBackwardMiddle() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
-
-        handler.deleteBackward()
-
-        #expect(text == "Helo")
-        #expect(handler.cursorPosition == 2)
-    }
-
-    @Test("Delete backward at start does nothing")
-    func deleteBackwardAtStart() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
-
-        handler.deleteBackward()
-
-        #expect(text == "Hello")
-        #expect(handler.cursorPosition == 0)
+        #expect(text == expectedText)
+        #expect(handler.cursorPosition == expectedCursor)
     }
 
     // MARK: - Delete Forward (Delete Key)
 
-    @Test("Delete forward removes character at cursor")
-    func deleteForward() {
+    @Test(
+        "deleteForward removes the character at the cursor (no-op at the end)",
+        arguments: [
+            // (cursor, expectedText, expectedCursor) on "Hello"
+            (0, "ello", 0),  // at the start
+            (2, "Helo", 2),  // in the middle
+            (5, "Hello", 5),  // at the end: nothing to delete
+        ])
+    func deleteForward(cursor: Int, expectedText: String, expectedCursor: Int) {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: cursor)
 
         handler.deleteForward()
 
-        #expect(text == "ello")
-        #expect(handler.cursorPosition == 0)
-    }
-
-    @Test("Delete forward in middle of text")
-    func deleteForwardMiddle() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
-
-        handler.deleteForward()
-
-        #expect(text == "Helo")
-        #expect(handler.cursorPosition == 2)
-    }
-
-    @Test("Delete forward at end does nothing")
-    func deleteForwardAtEnd() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding)  // Cursor at end
-
-        handler.deleteForward()
-
-        #expect(text == "Hello")
-        #expect(handler.cursorPosition == 5)
+        #expect(text == expectedText)
+        #expect(handler.cursorPosition == expectedCursor)
     }
 
     // MARK: - Cursor Movement
@@ -258,52 +198,24 @@ struct TextFieldHandlerTests {
         #expect(text == "B")
     }
 
-    @Test("Left arrow key event moves cursor left")
-    func handleLeftArrowKeyEvent() {
-        var text = "AB"
+    @Test(
+        "A movement key event routes to the cursor",
+        arguments: [
+            // (key, text, startCursor, expectedCursor)
+            (Key.left, "AB", 2, 1),
+            (.right, "AB", 0, 1),
+            (.home, "Hello", 5, 0),
+            (.end, "Hello", 0, 5),
+        ])
+    func movementKeyEvent(key: Key, text initialText: String, startCursor: Int, expectedCursor: Int) {
+        var text = initialText
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: startCursor)
 
-        let handled = handler.handleKeyEvent(KeyEvent(key: .left))
+        let handled = handler.handleKeyEvent(KeyEvent(key: key))
 
         #expect(handled == true)
-        #expect(handler.cursorPosition == 1)
-    }
-
-    @Test("Right arrow key event moves cursor right")
-    func handleRightArrowKeyEvent() {
-        var text = "AB"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .right))
-
-        #expect(handled == true)
-        #expect(handler.cursorPosition == 1)
-    }
-
-    @Test("Home key event moves cursor to start")
-    func handleHomeKeyEvent() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .home))
-
-        #expect(handled == true)
-        #expect(handler.cursorPosition == 0)
-    }
-
-    @Test("End key event moves cursor to end")
-    func handleEndKeyEvent() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 0)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .end))
-
-        #expect(handled == true)
-        #expect(handler.cursorPosition == 5)
+        #expect(handler.cursorPosition == expectedCursor)
     }
 
     @Test("Enter key event triggers onSubmit")

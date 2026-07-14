@@ -138,154 +138,53 @@ struct TextFieldSelectionTests {
 
     // MARK: - Selection Keyboard Handling
 
-    @Test("Shift+Left extends selection left")
-    func shiftLeftExtendsSelectionLeft() {
+    @Test(
+        "A shifted movement key anchors at the start cursor and extends the selection",
+        arguments: [
+            // (key, startCursor, expectedCursor, expectedRange) on "Hello"
+            (Key.left, 3, 2, 2..<3),  // Shift+Left extends left
+            (.right, 2, 3, 2..<3),  // Shift+Right extends right
+            (.up, 3, 0, 0..<3),  // Shift+Up selects to start
+            (.down, 2, 5, 2..<5),  // Shift+Down selects to end
+            (.home, 4, 0, 0..<4),  // Shift+Home selects to start
+            (.end, 1, 5, 1..<5),  // Shift+End selects to end
+        ])
+    func shiftedMovementExtendsSelection(
+        key: Key, startCursor: Int, expectedCursor: Int, expectedRange: Range<Int>
+    ) {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: startCursor)
 
-        let handled = handler.handleKeyEvent(KeyEvent(key: .left, shift: true))
+        let handled = handler.handleKeyEvent(KeyEvent(key: key, shift: true))
 
         #expect(handled == true)
-        #expect(handler.selectionAnchor == 3)
-        #expect(handler.cursorPosition == 2)
-        #expect(handler.selectionRange == 2..<3)
+        #expect(handler.selectionAnchor == startCursor)
+        #expect(handler.cursorPosition == expectedCursor)
+        #expect(handler.selectionRange == expectedRange)
     }
 
-    @Test("Shift+Right extends selection right")
-    func shiftRightExtendsSelectionRight() {
+    @Test(
+        "An unshifted movement key clears the selection and moves the cursor",
+        arguments: [
+            // (key, startCursor, expectedCursor) on "Hello" with anchor 1
+            (Key.right, 3, 4),
+            (.home, 3, 0),
+            (.end, 2, 5),
+            (.up, 3, 0),  // up moves to start
+            (.down, 2, 5),  // down moves to end
+        ])
+    func unshiftedMovementClearsSelection(key: Key, startCursor: Int, expectedCursor: Int) {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .right, shift: true))
-
-        #expect(handled == true)
-        #expect(handler.selectionAnchor == 2)
-        #expect(handler.cursorPosition == 3)
-        #expect(handler.selectionRange == 2..<3)
-    }
-
-    @Test("Shift+Up selects to start")
-    func shiftUpSelectsToStart() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .up, shift: true))
-
-        #expect(handled == true)
-        #expect(handler.selectionAnchor == 3)
-        #expect(handler.cursorPosition == 0)
-        #expect(handler.selectionRange == 0..<3)
-    }
-
-    @Test("Shift+Down selects to end")
-    func shiftDownSelectsToEnd() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .down, shift: true))
-
-        #expect(handled == true)
-        #expect(handler.selectionAnchor == 2)
-        #expect(handler.cursorPosition == 5)
-        #expect(handler.selectionRange == 2..<5)
-    }
-
-    @Test("Shift+Home selects to start")
-    func shiftHomeSelectsToStart() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 4)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .home, shift: true))
-
-        #expect(handled == true)
-        #expect(handler.selectionAnchor == 4)
-        #expect(handler.cursorPosition == 0)
-        #expect(handler.selectionRange == 0..<4)
-    }
-
-    @Test("Shift+End selects to end")
-    func shiftEndSelectsToEnd() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 1)
-
-        let handled = handler.handleKeyEvent(KeyEvent(key: .end, shift: true))
-
-        #expect(handled == true)
-        #expect(handler.selectionAnchor == 1)
-        #expect(handler.cursorPosition == 5)
-        #expect(handler.selectionRange == 1..<5)
-    }
-
-    @Test("Arrow without shift clears selection")
-    func arrowWithoutShiftClearsSelection() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: startCursor)
         handler.selectionAnchor = 1
 
-        _ = handler.handleKeyEvent(KeyEvent(key: .right))
+        _ = handler.handleKeyEvent(KeyEvent(key: key))
 
         #expect(handler.selectionAnchor == nil)
         #expect(handler.hasSelection == false)
-        #expect(handler.cursorPosition == 4)
-    }
-
-    @Test("Home without shift clears selection")
-    func homeWithoutShiftClearsSelection() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
-        handler.selectionAnchor = 1
-
-        _ = handler.handleKeyEvent(KeyEvent(key: .home))
-
-        #expect(handler.selectionAnchor == nil)
-        #expect(handler.cursorPosition == 0)
-    }
-
-    @Test("End without shift clears selection")
-    func endWithoutShiftClearsSelection() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
-        handler.selectionAnchor = 1
-
-        _ = handler.handleKeyEvent(KeyEvent(key: .end))
-
-        #expect(handler.selectionAnchor == nil)
-        #expect(handler.cursorPosition == 5)
-    }
-
-    @Test("Up without shift clears selection and moves to start")
-    func upWithoutShiftClearsSelectionAndMovesToStart() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
-        handler.selectionAnchor = 1
-
-        _ = handler.handleKeyEvent(KeyEvent(key: .up))
-
-        #expect(handler.selectionAnchor == nil)
-        #expect(handler.cursorPosition == 0)
-    }
-
-    @Test("Down without shift clears selection and moves to end")
-    func downWithoutShiftClearsSelectionAndMovesToEnd() {
-        var text = "Hello"
-        let binding = Binding(get: { text }, set: { text = $0 })
-        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
-        handler.selectionAnchor = 1
-
-        _ = handler.handleKeyEvent(KeyEvent(key: .down))
-
-        #expect(handler.selectionAnchor == nil)
-        #expect(handler.cursorPosition == 5)
+        #expect(handler.cursorPosition == expectedCursor)
     }
 
     @Test("Multiple Shift+Left extends selection progressively")

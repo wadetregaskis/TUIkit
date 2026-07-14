@@ -15,11 +15,7 @@ struct MenuRenderTests {
     // MARK: - Helpers
 
     private func makeContext(width: Int = 40, height: Int = 12) -> RenderContext {
-        RenderContext(
-            availableWidth: width,
-            availableHeight: height,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeBareRenderContext(width: width, height: height)
     }
 
     private func lines(_ buffer: FrameBuffer) -> [String] {

@@ -12,15 +12,7 @@ import Testing
 
 /// Creates a render context with a fresh FocusManager for isolated testing.
 private func makeContext(width: Int = 80, height: Int = 24) -> RenderContext {
-    let focusManager = FocusManager()
-    var environment = EnvironmentValues()
-    environment.focusManager = focusManager
-    return RenderContext(
-        availableWidth: width,
-        availableHeight: height,
-        environment: environment,
-        tuiContext: TUIContext()
-    ).isolatingRenderCache()
+    makeRenderContext(width: width, height: height)
 }
 
 /// A leaf test view that renders one visible line and emits one overlay layer

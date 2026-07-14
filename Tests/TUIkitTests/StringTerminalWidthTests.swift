@@ -17,44 +17,25 @@ import Testing
 @Suite("Character.terminalWidth")
 struct CharacterTerminalWidthTests {
 
-    @Test("ASCII letters are 1 cell wide")
-    func asciiLetters() {
-        #expect(Character("A").terminalWidth == 1)
-        #expect(Character("z").terminalWidth == 1)
-        #expect(Character("0").terminalWidth == 1)
-        #expect(Character(" ").terminalWidth == 1)
-    }
-
-    @Test("Base emoji without modifier are 2 cells wide")
-    func baseEmoji() {
-        #expect(Character("🤙").terminalWidth == 2)
-        #expect(Character("🎉").terminalWidth == 2)
-        #expect(Character("💫").terminalWidth == 2)
-    }
-
-    @Test("Skin-tone emoji are 2 cells wide (modifier is zero-width)")
-    func skinToneEmoji() {
-        // The Fitzpatrick modifier is zero-width on its own, but when
-        // combined with a base emoji the grapheme cluster is still 2 cells.
-        let tones = ["🤙🏻", "🤙🏼", "🤙🏽", "🤙🏾", "🤙🏿"]
-        for s in tones {
-            let ch = Character(s)
-            #expect(ch.terminalWidth == 2, "\(s) should be 2 cells wide")
-        }
-    }
-
-    @Test("VS-16 emoji in pictographic block are 2 cells wide")
-    func vs16PictographicEmoji() {
-        // 🖥️ = U+1F5A5 + U+FE0F — renders 2 cells wide
-        let ch = Character("🖥️")
-        #expect(ch.terminalWidth == 2)
-    }
-
-    @Test("CJK characters are 2 cells wide")
-    func cjkCharacters() {
-        #expect(Character("中").terminalWidth == 2)
-        #expect(Character("日").terminalWidth == 2)
-        #expect(Character("한").terminalWidth == 2)
+    @Test(
+        "Character.terminalWidth measures cells, not scalars",
+        arguments: [
+            // ASCII: 1 cell.
+            ("A", 1), ("z", 1), ("0", 1), (" ", 1),
+            // Base emoji: 2 cells.
+            ("🤙", 2), ("🎉", 2), ("💫", 2),
+            // Skin-tone emoji: the Fitzpatrick modifier is zero-width on its
+            // own, but combined with a base the grapheme cluster is still 2 cells.
+            ("🤙🏻", 2), ("🤙🏼", 2), ("🤙🏽", 2), ("🤙🏾", 2), ("🤙🏿", 2),
+            // VS-16 emoji in the pictographic block: 🖥️ = U+1F5A5 + U+FE0F → 2 cells.
+            ("🖥️", 2),
+            // CJK: 2 cells.
+            ("中", 2), ("日", 2), ("한", 2),
+            // Variation selector U+FE0F alone: 0 cells.
+            ("\u{FE0F}", 0),
+        ])
+    func characterWidth(cluster: String, expected: Int) {
+        #expect(Character(cluster).terminalWidth == expected, "'\(cluster)'")
     }
 
     @Test("Standalone Fitzpatrick skin-tone modifier is 2 cells wide")
@@ -84,12 +65,6 @@ struct CharacterTerminalWidthTests {
         }
     }
 
-    @Test("Variation selector U+FE0F alone is 0 cells wide")
-    func variationSelectorAlone() {
-        let scalar = Unicode.Scalar(0xFE0F)!
-        let ch = Character(scalar)
-        #expect(ch.terminalWidth == 0)
-    }
 }
 
 // MARK: - String.strippedLength

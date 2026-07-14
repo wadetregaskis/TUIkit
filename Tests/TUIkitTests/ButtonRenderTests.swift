@@ -23,11 +23,7 @@ struct ButtonRenderTests {
     /// focused element) — the very Button under test, unless a sentinel claims
     /// focus first.
     private func makeContext(width: Int = 30, height: Int = 8) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
+        makeRenderContext(width: width, height: height)
     }
 
     /// Renders `view` and returns its visible (ANSI-stripped) lines.

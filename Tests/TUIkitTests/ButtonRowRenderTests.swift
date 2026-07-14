@@ -19,11 +19,7 @@ import Testing
 struct ButtonRowRenderTests {
 
     private func makeContext(width: Int = 40, height: Int = 8) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
-        return RenderContext(
-            availableWidth: width, availableHeight: height,
-            environment: environment, tuiContext: TUIContext()).isolatingRenderCache()
+        makeRenderContext(width: width, height: height)
     }
 
     private func lines(_ view: some View, width: Int = 40, height: Int = 8) -> [String] {

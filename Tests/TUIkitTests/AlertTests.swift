@@ -15,15 +15,7 @@ import Testing
 struct AlertSizingTests {
 
     private func context() -> RenderContext {
-        let focusManager = FocusManager()
-        var environment = EnvironmentValues()
-        environment.focusManager = focusManager
-        return RenderContext(
-            availableWidth: 120,
-            availableHeight: 30,
-            environment: environment,
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
+        makeRenderContext(width: 120, height: 30)
     }
 
     private let sampleMessage = "This is a standard alert with default theme colors."

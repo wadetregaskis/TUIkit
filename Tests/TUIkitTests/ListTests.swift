@@ -163,34 +163,30 @@ struct ListRenderingTests {
         #expect(list.isDisabled == true)
     }
 
-    @Test("Multi-selection list can be created")
-    func multiSelectionListCreation() {
-        var selection: Set<String> = []
-        let list = List(
+    @Test("Selection binding type selects the selection mode")
+    func selectionBindingTypeSelectsMode() {
+        // Not parameterisable: the binding types differ (Set<String> vs String?).
+        var multiSelection: Set<String> = []
+        let multiList = List(
             selection: Binding(
-                get: { selection },
-                set: { selection = $0 }
+                get: { multiSelection },
+                set: { multiSelection = $0 }
             )
         ) {
             Text("Item")
         }
+        #expect(multiList.selectionMode == .multi)
 
-        #expect(list.selectionMode == .multi)
-    }
-
-    @Test("Single-selection list can be created")
-    func singleSelectionListCreation() {
-        var selection: String?
-        let list = List(
+        var singleSelection: String?
+        let singleList = List(
             selection: Binding(
-                get: { selection },
-                set: { selection = $0 }
+                get: { singleSelection },
+                set: { singleSelection = $0 }
             )
         ) {
             Text("Item")
         }
-
-        #expect(list.selectionMode == .single)
+        #expect(singleList.selectionMode == .single)
     }
 
     @Test("List respects frame width constraint")
