@@ -328,8 +328,17 @@ is deliberately NOT applied here — it would discard a correct rendering.
 
 ### Input behaviour
 
-Mouse SGR (1006) reporting works; not yet byte-captured for the
-modifier-symmetry question (see the Apple Terminal / iTerm2 sections).
+- **Mouse (byte-captured 2026-07-14):** textbook SGR (1006). Plain clicks
+  are symmetric (`ESC[<0;13;6M` press / `ESC[<0;13;6m` release); wheel is
+  64 (up) / 65 (down); **horizontal wheel reports 66/67**, which is
+  exactly what TUIkit's decoder maps to `.scrollLeft`/`.scrollRight`. No
+  quirk found — nothing to work around.
+- *Not yet captured:* modifier-clicks (⌘/⌥). Ghostty is expected to
+  forward more than the Apple terminals do (it has no ⌘-click binding of
+  its own by default), but that is a hypothesis until byte-captured —
+  run `mouse_probe.py` and ⌘-click, then ⌥-click, in separate runs. The
+  key-encoding side (arrows + modifiers, Fn keys, Escape timing) is also
+  uncaptured.
 
 ---
 
@@ -382,9 +391,11 @@ and the *composed* classes wrong.
 
 ### Input behaviour
 
-Mouse SGR (1006) reporting works. Warp defaults to `default_session_mode =
-"agent"` in `~/.warp/settings.toml`, and its own UI overlays (tab switcher,
-command palette) sit above the app — neither affects the app's byte stream.
+Mouse SGR (1006) reporting works; **not yet byte-captured** (clicks, wheel,
+modifiers, key encodings all remain to be measured — do not assume they
+match Ghostty's). Warp defaults to `default_session_mode = "agent"` in
+`~/.warp/settings.toml`, and its own UI overlays (tab switcher, command
+palette) sit above the app — neither affects the app's byte stream.
 
 **Driving Warp non-interactively** (it has no `-e`): write a launch
 configuration to `~/.warp/launch_configurations/NAME.yaml` with a
