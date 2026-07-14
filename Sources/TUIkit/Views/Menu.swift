@@ -233,8 +233,13 @@ private struct _MenuCore: View, Renderable, Layoutable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
 
-        // Register key handlers if this is an interactive menu
-        if let binding = selectionBinding {
+        // Register key handlers if this is an interactive menu — but never
+        // during a MEASURE pass (measureFixedByRendering renders with
+        // isMeasuring set): a menu that is measured but never shown (a
+        // ViewThatFits rejected candidate, a hidden size-to-largest tab) must
+        // not leave a phantom handler eating arrows/shortcuts against an
+        // invisible menu. The mouse path below is gated the same way.
+        if let binding = selectionBinding, !context.isMeasuring {
             registerKeyHandlers(binding: binding, context: context)
         }
 

@@ -305,6 +305,13 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let focusID = handler.focusID
         let handlerID = mouseDispatcher.register { event in
             switch event.phase {
+            case .pressed where event.button == .left:
+                // Claim the press so the dispatcher's drag capture pins the
+                // matching release to this handler — without it, a press here
+                // released over a neighbouring control acts as a click the
+                // other control's handler never saw the press for (every
+                // sibling control claims its press; see Menu's rationale).
+                return true
             case .released where event.button == .left:
                 focusManager?.focus(id: focusID)
                 // Select the component whose columns contain the click.

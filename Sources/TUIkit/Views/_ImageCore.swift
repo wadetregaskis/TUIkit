@@ -187,53 +187,19 @@ struct _ImageCore: View, Renderable, Layoutable {
         // Build a unique token for this image source
         let token = "image-\(identity.path)"
 
-        // Detect source change and force reload
-        if let lastSource = lastSourceBox.value, lastSource != source {
-            lifecycle.cancelTask(token: token)
-            lifecycle.resetAppearance(token: token)
-            phaseBox.value = .loading
-        }
-        lastSourceBox.value = source
-
-        // Start loading on first appearance
-        if !lifecycle.hasAppeared(token: token) {
-            _ = lifecycle.recordAppear(token: token) {}
-
-            let src = source
-            lifecycle.startTask(token: token, priority: .userInitiated) {
-                let loader = PlatformImageLoader()
-
-                do {
-                    let rawImage: RGBAImage
-                    switch src {
-                    case .file(let path):
-                        rawImage = try loader.loadImage(from: path, maxPixelCount: maxPixelCount)
-                    case .url(let urlString):
-                        rawImage = try loader.loadImage(
-                            from: urlString,
-                            cache: .shared,
-                            timeout: urlTimeout,
-                            maxPixelCount: maxPixelCount
-                        )
-                    }
-
-                    // Store the raw image; conversion happens per render pass.
-                    // StateBox.didSet triggers setNeedsRender() automatically,
-                    // so there is no need to hop to the main actor here.
-                    phaseBox.value = .success(rawImage)
-                } catch let loadError as ImageLoadError {
-                    phaseBox.value = .failure(loadError.description)
-                } catch {
-                    phaseBox.value = .failure(error.localizedDescription)
-                }
-            }
-        } else {
-            _ = lifecycle.recordAppear(token: token) {}
-        }
-
-        // Cancel loading task on disappear
-        lifecycle.registerDisappear(token: token) { [lifecycle] in
-            lifecycle.cancelTask(token: token)
+        // Lifecycle and phase mutations are RENDER-pass side effects. An
+        // ancestor that measures by rendering (a Card's container measure, a
+        // multi-line Table cell probe) runs this body with `isMeasuring` set —
+        // it must not reset a loaded image back to `.loading` on a source
+        // change, start a load for a measured-but-never-shown branch (a
+        // ViewThatFits rejected candidate), or register appear/disappear
+        // handlers for it. The measure pass still reads the current phase below
+        // so what's measured is what's drawn.
+        if !context.isMeasuring {
+            manageLoadLifecycle(
+                lifecycle: lifecycle, token: token,
+                phaseBox: phaseBox, lastSourceBox: lastSourceBox,
+                maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
         }
 
         // The image renders into the fit box scaled by zoom — mirroring
@@ -285,6 +251,74 @@ struct _ImageCore: View, Renderable, Layoutable {
 
         case .failure(let message):
             return renderError(message, width: renderWidth, height: renderHeight, context: context)
+        }
+    }
+}
+
+// MARK: - Load Lifecycle
+
+extension _ImageCore {
+
+    /// Render-pass-only load management: resets the phase on a source change,
+    /// starts the load task on first appearance, and registers the
+    /// cancel-on-disappear handler. Split from `renderToBuffer` so the
+    /// `!isMeasuring` gate wraps one call (and the body stays within the
+    /// function-length limit).
+    private func manageLoadLifecycle(
+        lifecycle: LifecycleManager,
+        token: String,
+        phaseBox: StateBox<ImageLoadingPhase>,
+        lastSourceBox: StateBox<ImageSource?>,
+        maxPixelCount: Int?,
+        urlTimeout: Double
+    ) {
+        // Detect source change and force reload
+        if let lastSource = lastSourceBox.value, lastSource != source {
+            lifecycle.cancelTask(token: token)
+            lifecycle.resetAppearance(token: token)
+            phaseBox.value = .loading
+        }
+        lastSourceBox.value = source
+
+        // Start loading on first appearance
+        if !lifecycle.hasAppeared(token: token) {
+            _ = lifecycle.recordAppear(token: token) {}
+
+            let src = source
+            lifecycle.startTask(token: token, priority: .userInitiated) {
+                let loader = PlatformImageLoader()
+
+                do {
+                    let rawImage: RGBAImage
+                    switch src {
+                    case .file(let path):
+                        rawImage = try loader.loadImage(from: path, maxPixelCount: maxPixelCount)
+                    case .url(let urlString):
+                        rawImage = try loader.loadImage(
+                            from: urlString,
+                            cache: .shared,
+                            timeout: urlTimeout,
+                            maxPixelCount: maxPixelCount
+                        )
+                    }
+
+                    // Store the raw image; conversion happens per render pass.
+                    // StateBox.didSet triggers setNeedsRender() automatically,
+                    // so there is no need to hop to the main actor here.
+                    phaseBox.value = .success(rawImage)
+                } catch let loadError as ImageLoadError {
+                    phaseBox.value = .failure(loadError.description)
+                } catch {
+                    phaseBox.value = .failure(error.localizedDescription)
+                }
+            }
+        } else {
+            _ = lifecycle.recordAppear(token: token) {}
+        }
+
+        // Cancel loading task on disappear
+        lifecycle.registerDisappear(token: token) { [lifecycle] in
+            lifecycle.cancelTask(token: token)
         }
     }
 }

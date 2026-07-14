@@ -291,7 +291,11 @@ extension BorderRenderer {
         let width = knownWidth ?? content.strippedLength
         let fittedLine: String
         if width > innerWidth {
+            // A wide char straddling the clip column is excluded, leaving the
+            // prefix up to a cell short — pad the shortfall so the right border
+            // stays aligned (same pattern as _ListCore's row clipping).
             fittedLine = content.ansiAwarePrefix(visibleCount: innerWidth)
+                .padToVisibleWidth(innerWidth)
         } else if width == innerWidth {
             fittedLine = content
         } else {

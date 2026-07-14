@@ -380,9 +380,15 @@ enum DropdownMenu {
     }
 
     /// Truncates or pads a plain string to exactly `width` visible columns.
+    ///
+    /// A wide character straddling the clip column is excluded by
+    /// `ansiAwarePrefix`, leaving the prefix up to a cell SHORT — the shortfall
+    /// is padded so the "exactly `width`" promise holds (otherwise the row's
+    /// scrollbar cell and right border shift a column left; same pattern as
+    /// `_ListCore`'s row clipping).
     static func fit(_ text: String, to width: Int) -> String {
         text.strippedLength > width
-            ? text.ansiAwarePrefix(visibleCount: width)
+            ? text.ansiAwarePrefix(visibleCount: width).padToVisibleWidth(width)
             : text.padToVisibleWidth(width)
     }
 }

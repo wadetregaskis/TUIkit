@@ -123,14 +123,19 @@ extension AlertPresentationModifier: Renderable {
         }
 
         // Register ESC handler to dismiss the alert (on the real dispatcher; the
-        // page beneath renders with a throwaway one, so only the alert's ESC fires).
-        let isPresentedBinding = isPresented
-        context.environment.keyEventDispatcher!.addHandler { event in
-            if event.key == .escape {
-                isPresentedBinding.wrappedValue = false
-                return true
+        // page beneath renders with a throwaway one, so only the alert's ESC
+        // fires). Render-pass only: an ancestor measuring by rendering (a Card's
+        // container measure, say) must not register a phantom duplicate — same
+        // gate as the focus-section side effects above.
+        if !context.isMeasuring {
+            let isPresentedBinding = isPresented
+            context.environment.keyEventDispatcher!.addHandler { event in
+                if event.key == .escape {
+                    isPresentedBinding.wrappedValue = false
+                    return true
+                }
+                return false
             }
-            return false
         }
 
         // Render the page beneath as an inert backdrop, isolated from the live

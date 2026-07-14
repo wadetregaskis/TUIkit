@@ -136,6 +136,12 @@ final class MouseEventDispatcher: @unchecked Sendable {
         var shift: Bool
         var ctrl: Bool
         var meta: Bool
+        /// Whether the press is still awaiting its matching release. Only an
+        /// in-flight press donates its count/modifiers to a release — a stray
+        /// release arriving long after (terminal quirk, or a press filtered by
+        /// a mid-click config change) must not inherit stale state and read as
+        /// a phantom modifier-click.
+        var inFlight = true
     }
 
     /// The most recent button press. A press within ``multiClickWindowNanos``
@@ -342,6 +348,26 @@ extension MouseEventDispatcher {
                 }
                 return true
             }
+            // X10 legacy releases don't identify the button — the parser
+            // defaults them to `.left`. If the press arrived as an SGR
+            // right/middle report but its release fell back to legacy (which
+            // Terminal.app does on some events), the capture for the REAL
+            // button would never clear, routing every later event for that
+            // button to a stale closure from an old frame. When a left
+            // release has no left capture and exactly ONE other capture is in
+            // flight, treat it as that press's release. (A stray left release
+            // while another button is genuinely held is far rarer than the
+            // legacy fallback.)
+            if event.phase == .released, event.button == .left,
+                pressedHandlers.count == 1,
+                let (capturedButton, capture) = pressedHandlers.first
+            {
+                let localized = localize(
+                    event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
+                _ = capture.handler(localized)
+                pressedHandlers[capturedButton] = nil
+                return true
+            }
         }
 
         // Find the matching regions outside-in (innermost first
@@ -527,7 +553,11 @@ extension MouseEventDispatcher {
             // Carry the in-flight press's count AND modifiers (if this release
             // matches it), so a terminal that drops modifier bits on the
             // release report doesn't strip the gesture's Shift/Ctrl/Option.
-            if let last = lastClick, last.button == event.button {
+            // Only ONE release inherits per press: after it, the press is no
+            // longer in flight, so a stray duplicate release can't pick up
+            // stale modifiers from a long-finished click.
+            if let last = lastClick, last.button == event.button, last.inFlight {
+                lastClick?.inFlight = false
                 return event.withClick(
                     count: last.count,
                     shift: event.shift || last.shift,

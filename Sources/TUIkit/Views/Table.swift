@@ -1115,11 +1115,17 @@ where Value.ID: Hashable {
                 token: "table-scrollbar-repeat-\(context.identity.path)", context: context)
         }
 
+        // The border columns are chrome: a click there (however row-aligned its
+        // y) must not select — see the x-guard in the handler. Tables always
+        // render inside a bordered container, so one column each side. (The
+        // List sibling got this guard in a6ba424d; this is its Table mirror.)
+        let contentColumns = 1..<max(1, buffer.width - 1)
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,
-                firstRowY: firstRowY
+                firstRowY: firstRowY,
+                contentColumns: contentColumns
             )
         )
         // Insert at the back so interactive children inside a
@@ -1142,7 +1148,8 @@ where Value.ID: Hashable {
     private func containerMouseHandler(
         state: PopulatedRenderState,
         focusManager: FocusManager?,
-        firstRowY: Int
+        firstRowY: Int,
+        contentColumns: Range<Int>
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
@@ -1161,6 +1168,13 @@ where Value.ID: Hashable {
             if event.button == .left {
                 guard event.phase == .released else {
                     return event.phase == .pressed
+                }
+                // Border columns are chrome: a click there shares a row's y but
+                // nobody clicking the frame means "select that row" — focus the
+                // table (below) and stop. Mirrors _ListCore's x-guard.
+                guard contentColumns.contains(event.x) else {
+                    focusManager?.focus(id: captureFocusID)
+                    return true
                 }
                 // Map the clicked line to its data row. Single-line tables leave
                 // `visibleRowHeights` empty (no per-frame array) — the line offset

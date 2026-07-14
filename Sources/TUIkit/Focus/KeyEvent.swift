@@ -30,6 +30,10 @@ extension KeyEventDispatcher {
         handlers.append(handler)
     }
 
+    /// The number of currently-registered handlers. Used by tests to assert
+    /// that measure passes register nothing.
+    var handlerCount: Int { handlers.count }
+
     /// Clears all handlers.
     func clearHandlers() {
         handlers.removeAll()
