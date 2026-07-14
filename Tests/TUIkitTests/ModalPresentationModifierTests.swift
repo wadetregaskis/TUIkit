@@ -224,8 +224,7 @@ struct ModalIsolationTests {
         let fm = FocusManager()
         var env = EnvironmentValues()
         env.focusManager = fm
-        env.stateStorage = tui.stateStorage
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        env.applyRuntimeServices(from: tui)
         let ctx = RenderContext(
             availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
         fm.beginRenderPass()
@@ -324,8 +323,7 @@ struct ModalIsolationTests {
         let fm = FocusManager()
         var env = EnvironmentValues()
         env.focusManager = fm
-        env.stateStorage = tui.stateStorage
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        env.applyRuntimeServices(from: tui)
         let width = 60, height = 24
         let context = RenderContext(
             availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)

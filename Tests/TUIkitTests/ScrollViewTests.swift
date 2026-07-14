@@ -16,12 +16,7 @@ private func makeContext(width: Int = 40, height: Int = 8) -> RenderContext {
     let tuiContext = TUIContext()
     var environment = EnvironmentValues()
     environment.focusManager = FocusManager()
-    environment.stateStorage = tuiContext.stateStorage
-    environment.lifecycle = tuiContext.lifecycle
-    environment.keyEventDispatcher = tuiContext.keyEventDispatcher
-    environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-    environment.renderCache = tuiContext.renderCache
-    environment.preferenceStorage = tuiContext.preferences
+    environment.applyRuntimeServices(from: tuiContext)
     return RenderContext(
         availableWidth: width,
         availableHeight: height,
@@ -614,8 +609,7 @@ struct ScrollViewContentStateTests {
         func click() {
             var env = EnvironmentValues()
             env.focusManager = fm
-            env.stateStorage = tui.stateStorage
-            env.mouseEventDispatcher = tui.mouseEventDispatcher
+            env.applyRuntimeServices(from: tui)
             let ctx = RenderContext(
                 availableWidth: 24, availableHeight: 6, environment: env, tuiContext: tui)
             fm.beginRenderPass()

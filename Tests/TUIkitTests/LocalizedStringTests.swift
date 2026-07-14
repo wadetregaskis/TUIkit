@@ -24,12 +24,7 @@ struct LocalizedStringTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
-        env.renderCache = tui.renderCache
-        env.preferenceStorage = tui.preferences
+        env.applyRuntimeServices(from: tui)
         return RenderContext(
             availableWidth: width, availableHeight: height, environment: env, tuiContext: tui)
     }

@@ -151,12 +151,7 @@ struct ScrollGranularityTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
-        env.renderCache = tui.renderCache
-        env.preferenceStorage = tui.preferences
+        env.applyRuntimeServices(from: tui)
         env.scrollGranularity = granularity
         let dispatcher = tui.mouseEventDispatcher
         dispatcher.setActiveSupport(.standard)
@@ -201,12 +196,7 @@ struct ScrollGranularityTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
-        env.renderCache = tui.renderCache
-        env.preferenceStorage = tui.preferences
+        env.applyRuntimeServices(from: tui)
         env.scrollGranularity = granularity
         let dispatcher = tui.mouseEventDispatcher
         dispatcher.setActiveSupport(.standard)
@@ -304,12 +294,7 @@ struct ScrollGranularityTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
-        env.renderCache = tui.renderCache
-        env.preferenceStorage = tui.preferences
+        env.applyRuntimeServices(from: tui)
         // The page-level default deliberately DIFFERS from the demo's own
         // .scrollGranularity modifier (applied on the table below), which
         // must win for its subtree.

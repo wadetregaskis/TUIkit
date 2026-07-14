@@ -46,12 +46,8 @@ struct MemoizedRowGateTests {
     private func makeContext(cache: RenderCache, width: Int = 80, height: Int = 24) -> RenderContext {
         let tui = TUIContext()
         var env = EnvironmentValues()
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.renderCache = cache
-        env.preferenceStorage = tui.preferences
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        env.applyRuntimeServices(from: tui)
+        env.renderCache = cache  // the test-local cache under inspection, NOT tui's
         return RenderContext(
             availableWidth: width, availableHeight: height,
             environment: env, identity: ViewIdentity(path: "Root"))

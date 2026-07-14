@@ -29,9 +29,7 @@ struct EquatableViewTests {
     ) -> RenderContext {
         let tuiContext = TUIContext()
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
+        env.applyRuntimeServices(from: tuiContext)
         // A fresh, test-local cache: these tests assert an absolute entry
         // count, so it must be touched only by this test's renders. The env is
         // built by hand here (not via RenderContext(tuiContext:)), so the cache
@@ -104,9 +102,7 @@ struct EquatableViewTests {
         let cache = RenderCache()  // fresh, test-local (see testContext)
 
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
+        env.applyRuntimeServices(from: tuiContext)
         env.renderCache = cache
         env.preferenceStorage = tuiContext.preferences
 

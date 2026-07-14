@@ -246,12 +246,7 @@ struct TextSuggestionMenuTests {
     private func makeEnvironment(tui: TUIContext, focus: FocusManager) -> EnvironmentValues {
         var env = EnvironmentValues()
         env.focusManager = focus
-        env.stateStorage = tui.stateStorage
-        env.lifecycle = tui.lifecycle
-        env.keyEventDispatcher = tui.keyEventDispatcher
-        env.mouseEventDispatcher = tui.mouseEventDispatcher
-        env.renderCache = tui.renderCache
-        env.preferenceStorage = tui.preferences
+        env.applyRuntimeServices(from: tui)
         env.terminalWidth = 60
         env.terminalHeight = 20
         return env

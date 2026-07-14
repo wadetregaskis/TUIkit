@@ -23,12 +23,7 @@ struct OnScrollGestureModifierTests {
 
     private func context(width: Int = 40, height: Int = 10) -> RenderContext {
         makeRenderContext(width: width, height: height) { environment, tui in
-            environment.stateStorage = tui.stateStorage
-            environment.lifecycle = tui.lifecycle
-            environment.keyEventDispatcher = tui.keyEventDispatcher
-            environment.mouseEventDispatcher = tui.mouseEventDispatcher
-            environment.renderCache = tui.renderCache
-            environment.preferenceStorage = tui.preferences
+            environment.applyRuntimeServices(from: tui)
         }
     }
 

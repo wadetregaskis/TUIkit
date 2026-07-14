@@ -28,11 +28,7 @@ struct TupleViewEquatableTests {
             renderCache: isolatedCache
         )
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
-        env.preferenceStorage = tuiContext.preferences
+        env.applyRuntimeServices(from: tuiContext)
         return RenderContext(
             availableWidth: width,
             availableHeight: height,
@@ -170,11 +166,7 @@ struct TupleViewEquatableTests {
         let cache = tuiContext.renderCache
 
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
-        env.preferenceStorage = tuiContext.preferences
+        env.applyRuntimeServices(from: tuiContext)
 
         let innerIdentity = ViewIdentity(path: "Root/Inner")
         let outerIdentity = ViewIdentity(path: "Root/Outer")

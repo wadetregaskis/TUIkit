@@ -33,12 +33,7 @@ struct LifecycleModifierTests {
         let tuiContext = TUIContext()
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
-        environment.stateStorage = tuiContext.stateStorage
-        environment.lifecycle = tuiContext.lifecycle
-        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
-        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-        environment.renderCache = tuiContext.renderCache
-        environment.preferenceStorage = tuiContext.preferences
+        environment.applyRuntimeServices(from: tuiContext)
         return RenderContext(
             availableWidth: width,
             availableHeight: height,

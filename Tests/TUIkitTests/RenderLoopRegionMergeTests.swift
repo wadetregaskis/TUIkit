@@ -38,12 +38,7 @@ struct RenderLoopRegionMergeTests {
         let tuiContext = TUIContext()
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
-        environment.stateStorage = tuiContext.stateStorage
-        environment.lifecycle = tuiContext.lifecycle
-        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
-        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-        environment.renderCache = tuiContext.renderCache
-        environment.preferenceStorage = tuiContext.preferences
+        environment.applyRuntimeServices(from: tuiContext)
         return RenderContext(
             availableWidth: width,
             availableHeight: height,
@@ -329,12 +324,7 @@ struct RenderLoopRegionMergeTests {
         var environment = EnvironmentValues()
         let tuiContext = TUIContext()
         environment.focusManager = FocusManager()
-        environment.stateStorage = tuiContext.stateStorage
-        environment.lifecycle = tuiContext.lifecycle
-        environment.keyEventDispatcher = tuiContext.keyEventDispatcher
-        environment.mouseEventDispatcher = tuiContext.mouseEventDispatcher
-        environment.renderCache = tuiContext.renderCache
-        environment.preferenceStorage = tuiContext.preferences
+        environment.applyRuntimeServices(from: tuiContext)
         // Inject a synthesis recorder so the test can observe
         // which key the click produced.
         environment.synthesizeKeyEvent = { event in

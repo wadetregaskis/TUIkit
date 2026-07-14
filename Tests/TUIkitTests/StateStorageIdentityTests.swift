@@ -197,11 +197,7 @@ struct StateStorageIdentityTests {
     func stateSurvivesRenderToBuffer() {
         let tuiContext = TUIContext()
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
-        env.preferenceStorage = tuiContext.preferences
+        env.applyRuntimeServices(from: tuiContext)
         let context = RenderContext(
             availableWidth: 80,
             availableHeight: 24,
@@ -222,11 +218,7 @@ struct StateStorageIdentityTests {
     func nestedViewsIndependentState() {
         let tuiContext = TUIContext()
         var env = EnvironmentValues()
-        env.stateStorage = tuiContext.stateStorage
-        env.lifecycle = tuiContext.lifecycle
-        env.keyEventDispatcher = tuiContext.keyEventDispatcher
-        env.renderCache = tuiContext.renderCache
-        env.preferenceStorage = tuiContext.preferences
+        env.applyRuntimeServices(from: tuiContext)
         let context = RenderContext(
             availableWidth: 80,
             availableHeight: 24,

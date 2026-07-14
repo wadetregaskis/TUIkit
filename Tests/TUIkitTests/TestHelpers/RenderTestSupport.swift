@@ -64,7 +64,12 @@ func makeBareRenderContext(width: Int = 40, height: Int = 24) -> RenderContext {
 ///   - height: The available height for layout. Defaults to 24.
 ///   - configure: A closure that receives the `EnvironmentValues` (with the
 ///     focus manager already set) and the backing `TUIContext`, and may set
-///     further environment values.
+///     further environment values. For the FULL runtime service set, call
+///     `environment.applyRuntimeServices(from: tuiContext)` here — but note
+///     the returned context still swaps in an isolated render cache, which
+///     diverges from `tuiContext.renderCache` (and so from `@State`-driven
+///     invalidation). Suites that exercise state-change re-render coherence
+///     build their context by hand instead, keeping the caches unified.
 /// - Returns: A render context using the configured environment.
 func makeRenderContext(
     width: Int = 80,
