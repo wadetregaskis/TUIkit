@@ -219,36 +219,13 @@ extension Character {
 
         guard scalars.count > 1, let first = scalars.first else { return terminalWidth }
 
-        let hasVS16 = scalars.contains { $0.value == 0xFE0F }
-        let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
-            let sv = scalar.value
-            return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
-        }
-
         // `<base>+U+FE0F` where the base is a default-text-presentation
         // emoji (e.g. ❤️ = U+2764+FE0F, ✏️ = U+270F+FE0F, 🖥️ = U+1F5A5+FE0F):
-        // Terminal.app paints the glyph 2 cells wide (matching `terminalWidth`)
-        // but only advances the cursor by 1.  Using `Unicode.Scalar.Properties`
-        // catches BMP bases too, not just the `0x1F000-0x1FBFF` block.
-        if hasVS16 && !hasNonVariationExtras
-            && first.properties.isEmoji
-            && !first.properties.isEmojiPresentation
-        {
-            // …EXCEPT the BMP East Asian Wide emoji bases — 〰 U+3030,
-            // 〽 U+303D, ㊗ U+3297, ㊙ U+3299. Their CJK width is 2 with or
-            // without VS16, and Terminal.app advances them by that full
-            // width (observed with 〰️); "compensating" pushed the cursor a
-            // third cell along, and the skipped cell is never painted, so
-            // it showed the terminal's default background — a black hole
-            // after every 〰️, whatever the palette. (Framework width tables
-            // are NOT the discriminator here: a pictographic base like
-            // U+1F5A5 also measures 2 yet genuinely under-advances.)
-            switch first.value {
-            case 0x3030, 0x303D, 0x3297, 0x3299:
-                return 2
-            default:
-                return 1
-            }
+        // paints the glyph 2 cells wide (matching `terminalWidth`) but only
+        // advances the cursor by 1 — on Terminal.app AND on iTerm2's
+        // alternate screen (see ``isVS16UnderAdvancer``).
+        if isVS16UnderAdvancer {
+            return 1
         }
 
         // Flag emoji — a pair of regional-indicator scalars
@@ -285,16 +262,27 @@ extension Character {
     /// The number of terminal cells iTerm2's cursor actually moves after
     /// printing this character — its analogue of ``terminalAppCursorAdvance``.
     ///
-    /// iTerm2 (3.6.11, default profile, measured by DSR) advances almost
-    /// everything by its painted width — including the VS-16 pictographic
-    /// emoji and flag pairs Terminal.app under-advances — with two
-    /// exceptions, both paint-2 / advance-1:
+    /// **Measured on the ALTERNATE screen** (iTerm2 3.6.11, default
+    /// profile, DSR) — the buffer TUIkit apps actually run in, which
+    /// matters: on its PRIMARY screen iTerm2 advances VS-16 pictographic
+    /// clusters by their full 2 cells, but on the alternate screen it
+    /// under-advances them by 1, exactly like Terminal.app. An earlier
+    /// model here was built from primary-screen measurements and declared
+    /// iTerm2 free of the VS-16 quirk — the demo's Bug A row promptly
+    /// painted its closing brackets into the glyphs. Probe in the same
+    /// screen mode as the app.
     ///
-    /// - **Keycap sequences** (base + U+20E3, with or without U+FE0F):
-    ///   1️⃣ paints a 2-cell glyph but the cursor moves 1.
-    /// - **Plane-16 Private Use Area** (U+100000…U+10FFFD — SF Symbols):
-    ///   same under-advance as Terminal.app.
+    /// Paint-2 / advance-1 under-advancers on iTerm2 (alternate screen):
     ///
+    /// - **VS-16 pictographic clusters** (❤️ ✏️ 🖥️ …), with the same
+    ///   East-Asian-Wide exceptions as Terminal.app (〰️ 〽️ ㊗️ ㊙️
+    ///   advance their full 2) — see ``isVS16UnderAdvancer``.
+    /// - **Keycap sequences** (base + U+20E3, with or without U+FE0F).
+    /// - **Plane-16 Private Use Area** (U+100000…U+10FFFD — SF Symbols).
+    ///
+    /// Unlike Terminal.app: flag pairs AND lone regional indicators
+    /// advance 2, and ZWJ sequences mostly advance 2 (except VS-16-leading
+    /// ones like ❤️‍🔥, advance 1 — unhandled, as ZWJ is on both hosts).
     /// Fitzpatrick skin-tone clusters also mis-advance on iTerm2 (SMP
     /// bases merge to 2, BMP bases draw base + swatch at 4/3), but the
     /// iTerm2 output path strips them first (``withSkinToneFallback()``),
@@ -309,7 +297,45 @@ extension Character {
         {
             return 1
         }
+        if isVS16UnderAdvancer {
+            return 1
+        }
         return terminalWidth
+    }
+
+    /// Whether this character is a `<base>+U+FE0F` pictographic cluster
+    /// that paints 2 cells but advances the cursor by only 1 — on
+    /// Terminal.app (both screen buffers) and on iTerm2's ALTERNATE screen
+    /// (its primary screen advances these correctly; TUIkit apps run on
+    /// the alternate screen, so the models use the alternate behaviour).
+    ///
+    /// The BMP East Asian Wide emoji bases — 〰 U+3030, 〽 U+303D,
+    /// ㊗ U+3297, ㊙ U+3299 — are excluded: their CJK width is 2 with or
+    /// without VS16 and BOTH terminals advance them by that full width
+    /// (measured); "compensating" pushed the cursor a third cell along,
+    /// and the skipped cell was never painted — a black hole after every
+    /// 〰️, whatever the palette. (Framework width tables are NOT the
+    /// discriminator: a pictographic base like U+1F5A5 also measures 2 yet
+    /// genuinely under-advances.) `Unicode.Scalar.Properties` catches BMP
+    /// bases too, not just the `0x1F000–0x1FBFF` block.
+    var isVS16UnderAdvancer: Bool {
+        let scalars = unicodeScalars
+        guard scalars.count > 1, let first = scalars.first else { return false }
+        let hasVS16 = scalars.contains { $0.value == 0xFE0F }
+        let hasNonVariationExtras = scalars.dropFirst().contains { scalar in
+            let sv = scalar.value
+            return !(0xFE00...0xFE0F).contains(sv) && !(0xE0100...0xE01EF).contains(sv)
+        }
+        guard hasVS16 && !hasNonVariationExtras
+            && first.properties.isEmoji
+            && !first.properties.isEmojiPresentation
+        else { return false }
+        switch first.value {
+        case 0x3030, 0x303D, 0x3297, 0x3299:
+            return false
+        default:
+            return true
+        }
     }
 }
 

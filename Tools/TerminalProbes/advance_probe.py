@@ -85,8 +85,11 @@ def main():
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     results = {}
+    use_alt = os.environ.get("PROBE_ALT") == "1"
     try:
         tty.setraw(fd)
+        if use_alt:
+            os.write(1, b"\x1b[?1049h\x1b[2J\x1b[H")
         for name, cluster in BATTERY.items():
             os.write(1, b"\r\x1b[2K")           # column 1, clear line
             start = cursor_col(fd)
@@ -97,6 +100,8 @@ def main():
                 "advance": end - start,
             }
         os.write(1, b"\r\x1b[2K")
+        if use_alt:
+            os.write(1, b"\x1b[?1049l")
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
@@ -107,6 +112,7 @@ def main():
         "COLORFGBG", "TERMINFO_DIRS", "__CFBundleIdentifier",
     ]
     env = {k: os.environ.get(k) for k in env_keys if os.environ.get(k) is not None}
+    env["_PROBE_SCREEN"] = "alternate" if use_alt else "primary"
     with open(out_path, "w") as f:
         json.dump({"env": env, "advances": results}, f, indent=1, sort_keys=True)
 

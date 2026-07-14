@@ -333,26 +333,42 @@ struct CursorAdvanceModelTests {
         #expect(!line.contains("\u{1B}[1C"), "|\(line)|")
     }
 
-    @Test("iTerm2: keycaps and Plane-16 PUA under-advance; VS-16 emoji do not")
+    @Test("iTerm2 (alternate screen): keycaps, PUA, and VS-16 emoji under-advance")
     func iTerm2AdvanceModel() {
+        // All measured on the ALTERNATE screen — the buffer apps run in.
+        // iTerm2's PRIMARY screen advances VS-16 clusters by 2; a model
+        // built from primary-screen probes declared iTerm2 quirk-free and
+        // the demo's Bug A row painted its brackets into the glyphs.
         #expect(Character("1\u{FE0F}\u{20E3}").iTerm2CursorAdvance == 1)  // 1️⃣
         #expect(Character("#\u{FE0F}\u{20E3}").iTerm2CursorAdvance == 1)
         #expect(Character("1\u{20E3}").iTerm2CursorAdvance == 1)          // bare keycap
         #expect(Character("\u{100038}").iTerm2CursorAdvance == 1)         // SF symbol
-        #expect(Character("\u{2764}\u{FE0F}").iTerm2CursorAdvance == 2)  // ❤️
-        #expect(Character("\u{270F}\u{FE0F}").iTerm2CursorAdvance == 2)  // ✏️
+        #expect(Character("\u{2764}\u{FE0F}").iTerm2CursorAdvance == 1)  // ❤️
+        #expect(Character("\u{270F}\u{FE0F}").iTerm2CursorAdvance == 1)  // ✏️
+        #expect(Character("\u{1F5A5}\u{FE0F}").iTerm2CursorAdvance == 1)  // 🖥️
+        // The EAW bases advance their full width — same exception as
+        // Terminal.app; a CUF here left an unpainted hole after every 〰️.
+        #expect(Character("\u{3030}\u{FE0F}").iTerm2CursorAdvance == 2)  // 〰️
+        #expect(Character("\u{303D}\u{FE0F}").iTerm2CursorAdvance == 2)  // 〽️
+        // Correct advancers stay uncompensated.
         #expect(Character("\u{1F1FA}\u{1F1F8}").iTerm2CursorAdvance == 2)  // 🇺🇸
+        #expect(Character("\u{1F1E6}").iTerm2CursorAdvance == 2)          // lone RI
         #expect(Character("\u{1F44D}").iTerm2CursorAdvance == 2)          // 👍
+        #expect(Character("\u{2B1B}\u{FE0E}").iTerm2CursorAdvance == 2)  // ⬛︎ (VS-15)
     }
 
-    @Test("iTerm2 compensation CUFs keycaps and PUA, leaves VS-16 alone")
+    @Test("iTerm2 compensation CUFs keycaps, PUA, and VS-16 clusters")
     func iTerm2CompensationWalk() {
         let keycap = "a1\u{FE0F}\u{20E3}b".withITerm2CursorCompensation()
         #expect(keycap == "a1\u{FE0F}\u{20E3}\u{1B}[1Cb", "|\(keycap)|")
         let pua = "[\u{100038}]".withITerm2CursorCompensation()
         #expect(pua == "[\u{100038}\u{1B}[1C]", "|\(pua)|")
+        // The demo's Bug A shape: the CUF pushes the closing bracket clear
+        // of the glyph's second cell (alternate-screen under-advance).
         let heart = "[\u{2764}\u{FE0F}]".withITerm2CursorCompensation()
-        #expect(heart == "[\u{2764}\u{FE0F}]", "no CUF for VS-16 on iTerm2: |\(heart)|")
+        #expect(heart == "[\u{2764}\u{FE0F}\u{1B}[1C]", "|\(heart)|")
+        let wavy = "[\u{3030}\u{FE0F}]".withITerm2CursorCompensation()
+        #expect(wavy == "[\u{3030}\u{FE0F}]", "EAW exception, no CUF: |\(wavy)|")
         // ANSI escapes pass through; pure ASCII is the identity fast path.
         let styled = "\u{1B}[31m\u{100038}\u{1B}[0m".withITerm2CursorCompensation()
         #expect(styled == "\u{1B}[31m\u{100038}\u{1B}[1C\u{1B}[0m", "|\(styled)|")

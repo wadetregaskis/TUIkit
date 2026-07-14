@@ -24,6 +24,14 @@ the terminal under test:
   terminal-relevant environment. Writes JSON to `$PROBE_OUT`. Advance is
   the ground truth for layout: a glyph whose advance differs from the
   width TUIkit's tables claim shifts everything after it on the row.
+  **Set `PROBE_ALT=1` and use those numbers**: TUIkit apps run on the
+  ALTERNATE screen buffer, and advance can differ between buffers —
+  iTerm2 advances VS-16 clusters by 2 on its primary screen but by 1 on
+  the alternate screen. A first pass probed the primary screen only,
+  concluded iTerm2 had no VS-16 quirk, and shipped a wrong model. iTerm2
+  is also sensitive to write boundaries on the primary screen: a VS-16
+  selector flushed ~100 ms after its base retro-colours the glyph without
+  advancing the cursor.
 - `visual_card.py` — prints a static `|<cluster>|X` alignment card with a
   column ruler; screenshot + zoom shows **painted width** (which DSR
   cannot see) and glyph appearance: merged vs split clusters, seams,
@@ -134,9 +142,15 @@ measure differently — re-run `advance_probe.py` before trusting a
 non-default setup.
 
 - **Colour:** truecolor (24-bit) — gradients render smoothly.
-- **VS-16 pictographic emoji:** paints 2, **advances 2** — correct, no
-  compensation. (Pixel-verified with the alignment card: ✏️ ❤️ 🖥️ all
-  land their trailing content on the ruler column.)
+- **VS-16 pictographic emoji — SCREEN-MODE DEPENDENT:** on the primary
+  screen paints 2 / advances 2; on the **alternate screen** (where TUIkit
+  apps run) paints 2 / **advances 1** — the same under-advance as
+  Terminal.app, with the same EAW exceptions (〰️ 〽️ advance 2).
+  Compensated with CUF(1) by `withITerm2CursorCompensation()`. (The
+  primary-screen alignment card renders correctly; the app misrendered
+  until the model was rebuilt from alternate-screen measurements —
+  user-reported, byte-capture confirmed identical output bytes, and the
+  `context_probe` isolated the screen mode as the variable.)
 - **Fitzpatrick skin tones — split by plane:**
   - SMP bases (👍🏽): render MERGED (one skin-toned glyph), advance 2 ✓.
   - BMP bases (✊🏻 ☝🏽): render **base + separate 2-cell colour swatch**,
@@ -148,11 +162,12 @@ non-default setup.
 - **Flag pairs:** advance 2 ✓. **Lone regional indicator: advance 2**
   (differs from Terminal.app's 1) — width claim 2 ✓, nothing needed.
 - **Keycaps** (1️⃣ #️⃣ *️⃣, bare or with VS-16): paints 2, **advances 1**
-  → CUF(1) via `withITerm2CursorCompensation()`.
+  (both screen modes) → CUF(1) via `withITerm2CursorCompensation()`.
 - **SF Symbols (Plane-16 PUA):** paints 2 (monochrome, SGR-tintable),
   **advances 1** → CUF(1). Same under-advance as Terminal.app.
-- **ZWJ sequences:** advance 2 — handled correctly ✓ (unlike
-  Terminal.app).
+- **ZWJ sequences:** advance 2 ✓ (unlike Terminal.app) — EXCEPT
+  VS-16-leading ones (❤️‍🔥) which advance 1 on the alternate screen;
+  unhandled (ZWJ is unhandled on both hosts).
 - **Emoji chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): monochrome, tintable,
   2 cells, no shear — on the `supportsEmojiChrome` allowlist, so
   `CheckboxStyle.automatic` = `.emoji` here too.
@@ -221,15 +236,18 @@ skin-tone / PUA advances against TUIkit's width claims; record
 
 ## Measured advance table (divergences and key rows)
 
-DSR-measured, 2026-07-13. Full battery in `Tools/TerminalProbes/`.
-Claim = `Character.terminalWidth`.
+DSR-measured on the ALTERNATE screen (the app's buffer), 2026-07-13.
+Full battery in `Tools/TerminalProbes/` (`PROBE_ALT=1`). Claim =
+`Character.terminalWidth`. Terminal.app measures identically in both
+screen modes; iTerm2 does NOT (its primary screen advances VS-16
+clusters and ❤️‍🔥-style ZWJ by 2).
 
 | Cluster | Claim | Terminal.app 455.1 | iTerm2 3.6.11 |
 |---|---|---|---|
 | `a`, `─`, `▒`, `■`, `⣿`, NFD `é` | 1 | 1 | 1 |
 | CJK 中, `██`(2), `▐▌`(2), ⬛︎ ⬜︎ (VS-15) | 2 | 2 | 2 |
 | ⌚ ⌛ ⏩ ⏰ 👍 ✊ (emoji presentation) | 2 | 2 | 2 |
-| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ (VS-16) | 2 | **1** | 2 |
+| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ (VS-16) | 2 | **1** | **1** |
 | 〰️ 〽️ (EAW base + VS-16) | 2 | 2 | 2 |
 | 🇺🇸 (flag pair) | 2 | 2 | 2 |
 | 🇦 (lone regional indicator) | 2 | **1** | 2 |
@@ -237,7 +255,7 @@ Claim = `Character.terminalWidth`.
 | 👍🏽 (SMP base + skin) | 2 | **4** | 2 (merged) |
 | ✊🏻 (BMP emoji-pres. + skin) | 2 | **4** | **4** (swatch) |
 | ☝🏽 (BMP text-pres. + skin) | 2 | **3** | **3** (swatch) |
-| 👩‍🚀 / ❤️‍🔥 / 👩🏽‍🚀 (ZWJ) | 2 | **5 / 4 / 7** | 2 |
+| 👩‍🚀 / ❤️‍🔥 / 👩🏽‍🚀 (ZWJ) | 2 | **5 / 4 / 7** | 2 / **1** / 2 |
 | U+100038 etc. (SF Symbols PUA) | 2 | **1** | **1** |
 | 🏽 (standalone modifier) | 2 | 2 | 2 |
 
