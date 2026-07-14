@@ -41,11 +41,20 @@ final class FrameDiffWriter {
     /// WezTerm, VS Code's terminal, and all Linux/BSD consoles — advances the
     /// cursor correctly, so applying those workarounds there does not merely
     /// waste time, it CORRUPTS output: it injects spurious `CUF` cursor moves
-    /// (shifting everything after an emoji one cell right) and strips
-    /// Fitzpatrick skin-tone modifiers. Detected once from `TERM_PROGRAM`;
-    /// injectable so tests exercise both paths deterministically regardless of
-    /// which terminal runs them.
+    /// (shifting everything after an emoji one cell right). Detected once from
+    /// `TERM_PROGRAM`; injectable so tests exercise both paths
+    /// deterministically regardless of which terminal runs them.
     private let isAppleTerminal: Bool
+
+    /// Whether the host terminal is iTerm2, which (in its default width
+    /// configuration) renders a Fitzpatrick skin-tone cluster as the base
+    /// emoji PLUS a separate 2-cell colour swatch — 4 cells painted where
+    /// the column accounting claims 2, shifting the rest of the row right.
+    /// Its build path strips the modifiers (falling back to the
+    /// generic-yellow base — `String.withSkinToneFallback()`), which
+    /// restores the 2-cell claim exactly. Same detection/injection story as
+    /// `isAppleTerminal`.
+    private let isITerm2: Bool
 
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
@@ -90,8 +99,12 @@ final class FrameDiffWriter {
     /// previous frame. Exposed for tests and profiling.
     private(set) var rowsBuiltInLastBuild = 0
 
-    init(isAppleTerminal: Bool = TerminalHost.isAppleTerminal) {
+    init(
+        isAppleTerminal: Bool = TerminalHost.isAppleTerminal,
+        isITerm2: Bool = TerminalHost.isITerm2
+    ) {
         self.isAppleTerminal = isAppleTerminal
+        self.isITerm2 = isITerm2
     }
 }
 
@@ -141,7 +154,7 @@ extension FrameDiffWriter {
     /// parameters (width, background, reset) — are unchanged.
     ///
     /// A built line is a pure function of `(rawLine, width, bgCode, reset,
-    /// isAppleTerminal)`, so when all of those match the previous frame the
+    /// isAppleTerminal, isITerm2)`, so when all of those match the previous frame the
     /// previously-built line IS exactly what the builder would produce: output
     /// is byte-identical to ``buildOutputLines(buffer:terminalWidth:terminalHeight:bgCode:reset:)``.
     /// The downstream `writeXxxDiff` still compares the built lines to decide
@@ -242,9 +255,18 @@ extension FrameDiffWriter {
         let (clipped, clippedWidth) = isAppleTerminal
             ? sanitized.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: terminalWidth)
             : sanitized.ansiAwarePrefixWithWidth(visibleCount: terminalWidth)
-        let compensated = isAppleTerminal
-            ? clipped.withTerminalAppCursorCompensation()
-            : clipped
+        // iTerm2 needs no cursor compensation, but it draws a Fitzpatrick
+        // skin-tone modifier as a SEPARATE swatch beside the base — 4 painted
+        // cells against the 2 the layout allocated — so its path strips the
+        // modifiers (generic-yellow fallback) to restore the 2-cell claim.
+        let compensated =
+            if isAppleTerminal {
+                clipped.withTerminalAppCursorCompensation()
+            } else if isITerm2 {
+                clipped.withSkinToneFallback()
+            } else {
+                clipped
+            }
         // Native Swift `replacing(_:with:)` — NOT Foundation's
         // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
         // render loop in a Mode-B (live-app) profile.

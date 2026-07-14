@@ -499,6 +499,83 @@ extension String {
         return result
     }
 
+    /// Returns a copy of this string with every Fitzpatrick skin-tone
+    /// modifier stripped from its cluster — falling back to the
+    /// generic-yellow base emoji.
+    ///
+    /// For terminals that render the modifier as a SEPARATE colour swatch
+    /// beside the base instead of merging it into one glyph (iTerm2 in its
+    /// default width configuration): the cluster then paints 4 cells where
+    /// the column accounting (``terminalWidth``, which claims 2) allocated
+    /// 2, shifting the rest of the row right by two cells per cluster.
+    /// Stripping restores the 2-cell claim exactly, and makes the output's
+    /// advance independent of the terminal's Unicode-version width setting
+    /// (the ambiguous base+modifier cluster no longer reaches it):
+    ///
+    /// - an emoji-presentation base (👍) renders 2 cells bare;
+    /// - a text-presentation base (☝) gets U+FE0F appended so it keeps the
+    ///   2-cell colour-emoji rendering. No cursor compensation follows —
+    ///   unlike Terminal.app, these terminals advance VS-16 clusters by
+    ///   their painted width.
+    ///
+    /// STANDALONE modifiers (a bare U+1F3FB…U+1F3FF with no base) are
+    /// intentional content — a 2-cell swatch, correctly claimed — and pass
+    /// through untouched, as do ANSI escape sequences.
+    public func withSkinToneFallback() -> String {
+        // Fast path: a skin-tone cluster is always non-ASCII, so a line whose
+        // bytes are all < 0x80 cannot need the fallback (same gate as
+        // `withTerminalAppCursorCompensation` — this too runs on every
+        // (re)built output line on the terminals it applies to).
+        guard utf8ContainsNonASCII else { return self }
+
+        var result = ""
+        result.reserveCapacity(self.count)
+        var index = startIndex
+
+        while index < endIndex {
+            let c = self[index]
+
+            if c == "\u{1B}" {
+                // Preserve an entire ANSI escape sequence: ESC [ params letter
+                let seqStart = index
+                index = self.index(after: index)
+                if index < endIndex && self[index] == "[" {
+                    index = self.index(after: index)
+                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
+                        index = self.index(after: index)
+                    }
+                    if index < endIndex && self[index].isLetter {
+                        index = self.index(after: index)
+                    }
+                }
+                result += self[seqStart..<index]
+                continue
+            }
+
+            let scalars = c.unicodeScalars
+            let isModifiedCluster =
+                scalars.count > 1
+                && scalars.first!.properties.isEmojiModifierBase
+                && scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+            if isModifiedCluster {
+                var keptVS16 = false
+                for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
+                    if scalar.value == 0xFE0F { keptVS16 = true }
+                    result.unicodeScalars.append(scalar)
+                }
+                let base = scalars.first!
+                if !keptVS16 && base.properties.isEmoji && !base.properties.isEmojiPresentation {
+                    result.unicodeScalars.append(Unicode.Scalar(0xFE0F)!)
+                }
+            } else {
+                result.append(c)
+            }
+            index = self.index(after: index)
+        }
+
+        return result
+    }
+
     /// Returns `true` if any character at or after `start` in `string`
     /// occupies a terminal cell.  Plain ASCII, CJK, emoji etc. all
     /// count; ANSI escape sequences and zero-width characters do not.

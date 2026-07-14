@@ -310,6 +310,78 @@ struct FrameDiffWriterTerminalGatingTests {
     }
 }
 
+@Suite("FrameDiffWriter iTerm2 skin-tone fallback")
+@MainActor
+struct FrameDiffWriterITerm2GatingTests {
+    private func firstLine(text: String, isITerm2: Bool) -> String {
+        FrameDiffWriter(isAppleTerminal: false, isITerm2: isITerm2).buildOutputLines(
+            buffer: FrameBuffer(text: text),
+            terminalWidth: 30, terminalHeight: 1, bgCode: "", reset: ""
+        )[0]
+    }
+
+    /// A Fitzpatrick scalar anywhere in the built line.
+    private func containsSkinTone(_ line: String) -> Bool {
+        line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+    }
+
+    @Test("iTerm2 strips skin-tone modifiers, falling back to the generic base")
+    func iTerm2StripsModifiers() {
+        // iTerm2 (default width configuration) draws the modifier as a
+        // SEPARATE 2-cell swatch beside the base — 4 painted cells where the
+        // column accounting claims 2 — shifting the rest of the row right.
+        let line = firstLine(text: "a\u{1F44D}\u{1F3FD}b", isITerm2: true)  // a👍🏽b
+        #expect(!containsSkinTone(line), "modifier stripped: |\(line)|")
+        #expect(line.contains("\u{1F44D}"), "the base emoji survives: |\(line)|")
+        #expect(line.contains("b"), "trailing content survives: |\(line)|")
+        #expect(!line.contains("\u{1B}[1C"), "no cursor compensation on iTerm2")
+    }
+
+    @Test("A text-presentation base keeps its 2-cell claim via VS-16")
+    func textPresentationBaseGainsVS16() {
+        // ☝ renders 1 cell bare; the original cluster claimed 2 — the
+        // fallback appends U+FE0F so the emoji rendering (2 cells) is kept.
+        let line = firstLine(text: "\u{261D}\u{1F3FD}x", isITerm2: true)  // ☝🏽x
+        #expect(!containsSkinTone(line))
+        #expect(line.contains("\u{261D}\u{FE0F}"), "VS-16 restores the 2-cell claim: |\(line)|")
+    }
+
+    @Test("A standalone modifier is intentional content and passes through")
+    func standaloneModifierUntouched() {
+        // The emoji-corpus list deliberately shows bare U+1F3FB…U+1F3FF rows
+        // as 2-cell swatches — correctly claimed, so never stripped.
+        let line = firstLine(text: "[\u{1F3FD}]", isITerm2: true)
+        #expect(containsSkinTone(line), "standalone swatch kept: |\(line)|")
+    }
+
+    @Test("Non-iTerm2 terminals pass skin-tone clusters through verbatim")
+    func otherTerminalsUntouched() {
+        let line = firstLine(text: "a\u{1F44D}\u{1F3FD}b", isITerm2: false)
+        #expect(containsSkinTone(line), "no stripping off the allowlisted host: |\(line)|")
+    }
+
+    @Test("The fallback preserves each cluster's claimed width and ANSI runs")
+    func fallbackPreservesClaimedWidthAndEscapes() {
+        // The stripped cluster must claim exactly what the original claimed
+        // (2 cells), or the layout that positioned the rest of the row would
+        // be wrong — for both an emoji-presentation base and a
+        // text-presentation base, styled with surrounding escapes.
+        for cluster in ["\u{1F44D}\u{1F3FD}", "\u{261D}\u{1F3FB}", "\u{270A}\u{1F3FF}"] {
+            let original = "\u{1B}[31m\(cluster)\u{1B}[0m"
+            let stripped = original.withSkinToneFallback()
+            #expect(stripped.strippedLength == original.strippedLength,
+                    "claimed width unchanged for \(cluster): |\(stripped)|")
+            #expect(stripped.hasPrefix("\u{1B}[31m") && stripped.hasSuffix("\u{1B}[0m"),
+                    "escape runs preserved: |\(stripped)|")
+        }
+        // Already-selectored cluster (base + VS16 + modifier): no double VS16.
+        let doubled = "\u{261D}\u{FE0F}\u{1F3FD}".withSkinToneFallback()
+        #expect(doubled == "\u{261D}\u{FE0F}", "|\(doubled)|")
+        // Pure-ASCII fast path is the identity.
+        #expect("plain text".withSkinToneFallback() == "plain text")
+    }
+}
+
 // MARK: - Incremental Build Reuse
 
 /// `buildOutputLines(…reusingFor:)` reuses the previous frame's built line for
