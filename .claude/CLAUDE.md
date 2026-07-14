@@ -44,6 +44,14 @@
   discoverable via `git log` / `git blame`, at zero repo cost. (Commits
   not motivated by profiling — tooling, unrelated fixes — are exempt.)
 
+### Terminal-specific behaviour (non-negotiable)
+- **Consult and update `Documentation/Terminal-compatibility.md`** for any
+  change that relies on terminal-specific behaviour (`TerminalHost`, cursor
+  advance models, `FrameDiffWriter` compensation, chrome glyph selection).
+  It is the canonical, version-stamped record of measured terminal
+  behaviour; new observations about any terminal go there, measured with
+  the probes in `Tools/TerminalProbes/` where possible.
+
 ### SwiftUI API Parity (non-negotiable)
 Public APIs MUST match SwiftUI signatures exactly unless terminal constraints require deviation (document why in comments).
 
