@@ -185,11 +185,30 @@ extension Terminal {
             return (Int(windowSize.ws_col), Int(windowSize.ws_row))
         }
 
-        // Fallback to environment variables
-        let cols = ProcessInfo.processInfo.environment["COLUMNS"].flatMap(Int.init) ?? 80
-        let rows = ProcessInfo.processInfo.environment["LINES"].flatMap(Int.init) ?? 24
+        // Fallback to environment variables.
+        //
+        // Validated, not just parsed: `COLUMNS` / `LINES` are ordinary
+        // environment variables that anything may set — a shell's
+        // `checkwinsize`, a multiplexer, a CI runner, a stale export inherited
+        // from a since-resized window. `Int("0")` succeeds, so an unvalidated
+        // parse hands back a 0-row terminal from a *fallback* path that exists
+        // precisely because the real size was unavailable. Only a positive
+        // value is a size; anything else means "unknown", which is what the
+        // 80x24 default is for.
+        let cols = terminalDimension(fromEnvironment: "COLUMNS") ?? 80
+        let rows = terminalDimension(fromEnvironment: "LINES") ?? 24
 
         return (cols, rows)
+    }
+
+    /// Parses an environment variable as a terminal dimension, accepting only a
+    /// positive count; `nil` when unset, unparseable, or non-positive.
+    func terminalDimension(fromEnvironment name: String) -> Int? {
+        guard let raw = ProcessInfo.processInfo.environment[name],
+            let value = Int(raw),
+            value > 0
+        else { return nil }
+        return value
     }
 
     /// The terminal cell's height-to-width ratio, derived from the window's
