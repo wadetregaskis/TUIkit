@@ -116,6 +116,27 @@ struct RenderActivity {
     let usesCursor: Bool
 }
 
+/// The height of the content area: whatever the terminal has left after the
+/// chrome laid out around it (the status bar, and the app header if any).
+///
+/// **Never negative.** A terminal can be shorter than its own chrome — the
+/// status bar and header are laid out first and keep their full height — which
+/// makes the raw subtraction negative. A negative height is not a size: it
+/// reached `WindowGroup.centerBuffer` and `FrameDiffWriter.buildOutputLines` as
+/// `0..<negative` and trapped ("Range requires lowerBound <= upperBound"), so
+/// the app died on launch in a short terminal rather than drawing a squeezed
+/// frame. Zero means "no room": the content renders empty, the chrome still shows.
+///
+/// This exists as one function because the subtraction was open-coded at four
+/// sites and only some of them clamped — fixing three of four just moved the
+/// crash from `centerBuffer` to `FrameDiffWriter`. One definition, one clamp.
+@inline(__always)
+internal func contentAreaHeight(
+    terminalHeight: Int, statusBarHeight: Int, headerHeight: Int = 0
+) -> Int {
+    max(0, terminalHeight - statusBarHeight - headerHeight)
+}
+
 @MainActor
 internal final class RenderLoop<A: App> {
     /// The user's app instance (provides `body`).
@@ -310,7 +331,9 @@ extension RenderLoop {
         // Composite any free-floating overlay layers (Picker drop-downs,
         // popovers, …) emitted during rendering onto the content buffer.
         if !buffer.overlays.isEmpty {
-            let overlayContentHeight = terminalHeight - statusBarHeight - appHeader.height
+            let overlayContentHeight = contentAreaHeight(
+                terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
+                headerHeight: appHeader.height)
             buffer = compositeOverlays(
                 buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight,
                 palette: environment.palette)
@@ -426,7 +449,12 @@ extension RenderLoop {
         if isFirstFrame {
             let measureContext = RenderContext(
                 availableWidth: terminalWidth,
-                availableHeight: terminalHeight - statusBarHeight,
+                // Clamped: a terminal shorter than its own chrome makes this
+                // subtraction negative, and a negative available height is not a
+                // size any view can be asked for — it reaches `centerBuffer` as
+                // `0..<negative` and traps. See `contentHeight` below.
+                availableHeight: contentAreaHeight(
+                    terminalHeight: terminalHeight, statusBarHeight: statusBarHeight),
                 environment: environment,
                 identity: rootIdentity
             )
@@ -437,7 +465,17 @@ extension RenderLoop {
             appHeaderHeight = appHeader.estimatedHeight
         }
 
-        let contentHeight = terminalHeight - statusBarHeight - appHeaderHeight
+        // Clamped at zero: the status bar and app header are laid out first and
+        // keep their full height, so a terminal shorter than the two of them
+        // together leaves the content area with LESS than nothing. Unclamped,
+        // that negative height propagated into every view's `availableHeight`
+        // and trapped in `WindowGroup.centerBuffer` ("Range requires lowerBound
+        // <= upperBound") before the first frame was drawn — the app died on
+        // launch in a short terminal. Zero means "no room"; the content renders
+        // empty and the chrome still shows.
+        let contentHeight = contentAreaHeight(
+            terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
+            headerHeight: appHeaderHeight)
         // Publish the content-area height so anchored overlays (a Picker
         // drop-down) size to the area the compositor will clamp them to — above
         // the status bar — rather than to the full `terminalHeight` (which would
@@ -460,7 +498,9 @@ extension RenderLoop {
         let actualHeaderHeight = appHeader.height
         if actualHeaderHeight != appHeaderHeight {
             diffWriter.invalidate()
-            let actualContentHeight = terminalHeight - statusBarHeight - actualHeaderHeight
+            let actualContentHeight = contentAreaHeight(
+                terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
+                headerHeight: actualHeaderHeight)
             environment.overlayContentHeight = actualContentHeight
             var correctedContext = RenderContext(
                 availableWidth: terminalWidth,
@@ -582,7 +622,9 @@ extension RenderLoop {
     ) {
         let backgroundCodes = RenderBackgroundCodes(palette: environment.palette)
         let reset = ANSIRenderer.reset
-        let contentHeight = terminalHeight - statusBarHeight - headerHeight
+        let contentHeight = contentAreaHeight(
+            terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
+            headerHeight: headerHeight)
 
         let outputLines = diffWriter.buildOutputLines(
             buffer: buffer,

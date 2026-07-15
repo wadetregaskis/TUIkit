@@ -74,6 +74,12 @@ extension BorderRenderer {
         color: Color,
         focusIndicatorColor: Color? = nil
     ) -> String {
+        // A border can be asked to draw into a terminal narrower than its own
+        // two frame characters, making `innerWidth` (width - 2) negative — and a
+        // negative count traps `String(repeating:count:)`. Clamp on the way in:
+        // every count below derives from this, so one clamp covers them all, and
+        // a degenerate border is drawn (and clipped) instead of killing the app.
+        let innerWidth = max(0, innerWidth)
         if let indicatorColor = focusIndicatorColor, innerWidth > 1 {
             // ╭●──────────────╮
             let leftCorner = ANSIRenderer.colorize(String(style.topLeft), foreground: color)
@@ -116,6 +122,7 @@ extension BorderRenderer {
         titleColor: Color,
         focusIndicatorColor: Color? = nil
     ) -> String {
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
         // The decoration after the corner (─ or ●) occupies one inner cell
         // and the title display adds two spaces of padding. Truncate the title
         // so the whole top border fits exactly within `innerWidth`.
@@ -171,6 +178,7 @@ extension BorderRenderer {
         innerWidth: Int,
         color: Color
     ) -> String {
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
         let line =
             String(style.bottomLeft)
             + String(repeating: style.horizontal, count: innerWidth)
@@ -192,6 +200,7 @@ extension BorderRenderer {
         innerWidth: Int,
         color: Color
     ) -> String {
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
         let line =
             String(style.leftT)
             + String(repeating: style.horizontal, count: innerWidth)
@@ -220,7 +229,8 @@ extension BorderRenderer {
         color: Color,
         backgroundColor: Color? = nil
     ) -> String {
-        contentLine(
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
+        return contentLine(
             content: content,
             innerWidth: innerWidth,
             vertical: ANSIRenderer.colorize(String(style.vertical), foreground: color),
@@ -257,6 +267,7 @@ extension BorderRenderer {
         backgroundColor: Color? = nil,
         contentWidth: Int? = nil
     ) -> [String] {
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
         let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
         return contents.map {
             contentLine(
@@ -282,6 +293,7 @@ extension BorderRenderer {
         backgroundColor: Color?,
         knownWidth: Int? = nil
     ) -> String {
+        let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
         // Fit the content to exactly `innerWidth`: truncate if it is wider
         // (ANSI-aware) so it cannot displace the right border, pad if narrower.
         // `knownWidth` is the caller-supplied visible width when the line is part

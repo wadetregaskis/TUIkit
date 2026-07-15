@@ -541,6 +541,15 @@ extension WindowGroup: SceneRenderable {
             return buffer
         }
 
+        // Total for ANY target, not just a sane one. `RenderLoop` clamps the
+        // content area at zero, but this must not *depend* on that: a negative
+        // target used to reach the row loop below as `0..<negative` and trap
+        // ("Range requires lowerBound <= upperBound") — the app died on launch in
+        // a terminal shorter than its own status bar plus app header. Clamping at
+        // the source fixes the bug; clamping here keeps it fixed.
+        let targetWidth = max(0, targetWidth)
+        let targetHeight = max(0, targetHeight)
+
         var result: [String] = []
         result.reserveCapacity(targetHeight)
 

@@ -151,7 +151,13 @@ extension Table {
         self.focusID = focusID
         self.isDisabled = false
 
-        self.columnSpacing = columnSpacing
+        // Clamped: spacing reaches `String(repeating:count:)` in three
+        // places, which traps on a negative count. `columnSpacing:` is a
+        // public init parameter with no other validation, so a caller
+        // computing it (or just passing -1) would kill the app. Clamp once
+        // here, at the boundary, so every use downstream is safe by
+        // construction rather than by remembering.
+        self.columnSpacing = max(0, columnSpacing)
         self.emptyPlaceholder = emptyPlaceholder
     }
 }
@@ -185,7 +191,13 @@ extension Table {
         self.focusID = focusID
         self.isDisabled = false
 
-        self.columnSpacing = columnSpacing
+        // Clamped: spacing reaches `String(repeating:count:)` in three
+        // places, which traps on a negative count. `columnSpacing:` is a
+        // public init parameter with no other validation, so a caller
+        // computing it (or just passing -1) would kill the app. Clamp once
+        // here, at the boundary, so every use downstream is safe by
+        // construction rather than by remembering.
+        self.columnSpacing = max(0, columnSpacing)
         self.emptyPlaceholder = emptyPlaceholder
     }
 }
@@ -1244,7 +1256,19 @@ where Value.ID: Hashable {
                 widths[index] = fixedWidth
                 usedWidth += fixedWidth
             case .ratio(let ratio):
-                let ratioWidth = Int(Double(contentWidth) * ratio)
+                // `.ratio` takes an unvalidated Double from public API, and a
+                // ratio is usually computed (`part / whole`) — so NaN and ±infinity
+                // arrive in practice, and `Int(Double)` traps on both, as it does
+                // on any value past Int's range. Treat a non-finite ratio as zero
+                // and clamp the rest to the space actually available: a bad ratio
+                // should render a degenerate column, not kill the app.
+                // Clamped in Double space, BEFORE the conversion: `Int(_: Double)`
+                // traps on NaN, on ±infinity, and on any finite value past Int's
+                // range (`1e30` is finite and still traps), so no post-conversion
+                // clamp can save it. A column can never be wider than the content
+                // area anyway, so bounding to that is both safe and correct.
+                let scaled = Double(contentWidth) * ratio
+                let ratioWidth = scaled.isFinite ? Int(min(max(0, scaled), Double(contentWidth))) : 0
                 widths[index] = ratioWidth
                 usedWidth += ratioWidth
             case .fit:

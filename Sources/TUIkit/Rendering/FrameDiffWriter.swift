@@ -207,6 +207,13 @@ extension FrameDiffWriter {
         // unchanged; otherwise the cached built line is stale.
         let canReuse = cache.params == params
 
+        // Total for ANY height. Callers clamp the content area at zero, but this
+        // must not *depend* on that: a negative height reached the row loop as
+        // `0..<negative` and trapped. Belt and braces — the same negative value
+        // used to crash `WindowGroup.centerBuffer`, and clamping only there just
+        // moved the crash here.
+        let terminalHeight = max(0, terminalHeight)
+
         var lines: [String] = []
         lines.reserveCapacity(terminalHeight)
         var builtCount = 0
