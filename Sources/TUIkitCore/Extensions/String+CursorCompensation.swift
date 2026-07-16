@@ -231,9 +231,27 @@ extension String {
         return result
     }
 
-    /// Returns a copy of this string with every Fitzpatrick skin-tone
-    /// modifier stripped from its cluster — falling back to the
-    /// generic-yellow base emoji.
+    /// Which skin-tone clusters ``withSkinToneFallback(basePlane:)`` strips,
+    /// selected by the Unicode plane of the cluster's BASE scalar.
+    ///
+    /// The distinction exists because terminals differ in *which* skin-tone
+    /// clusters they fail to join, and stripping one a terminal handles
+    /// correctly is a real loss: the user asked for 👍🏽 and gets 👍.
+    ///
+    /// - ``all``: every skin-tone cluster (iTerm2, Warp — they split all of them).
+    /// - ``bmpOnly``: only clusters whose base is a BMP scalar (✊🏻 ☝🏽). This is
+    ///   tmux, which joins an SMP-based cluster (👍🏽 👩🏽‍🚀) into the 2 cells we
+    ///   claim — DSR-measured — and only over-advances (4 cells) on BMP bases.
+    public enum SkinToneBasePlane: Sendable {
+        /// Strip every skin-tone cluster, whatever its base.
+        case all
+        /// Strip only clusters whose base scalar is in the BMP (below U+10000).
+        case bmpOnly
+    }
+
+    /// Returns a copy of this string with Fitzpatrick skin-tone modifiers
+    /// stripped from their clusters — falling back to the generic-yellow base
+    /// emoji.
     ///
     /// For terminals that render the modifier as a SEPARATE colour swatch
     /// beside the base instead of merging it into one glyph (iTerm2 in its
@@ -253,7 +271,15 @@ extension String {
     /// STANDALONE modifiers (a bare U+1F3FB…U+1F3FF with no base) are
     /// intentional content — a 2-cell swatch, correctly claimed — and pass
     /// through untouched, as do ANSI escape sequences.
-    public func withSkinToneFallback() -> String {
+    ///
+    /// - Parameter basePlane: which bases to strip. `.all` (the default) is the
+    ///   iTerm2/Warp behaviour: those terminals split EVERY skin-tone cluster,
+    ///   so every one must go. `.bmpOnly` strips only clusters whose base is a
+    ///   BMP scalar (✊🏻 ☝🏽), which is what tmux needs — tmux joins an
+    ///   SMP-based cluster (👍🏽 👩🏽‍🚀) into the 2 cells we claim and only
+    ///   fails on BMP bases, so stripping those it gets right would throw away
+    ///   skin tones the user asked for and the client renders correctly.
+    public func withSkinToneFallback(basePlane: SkinToneBasePlane = .all) -> String {
         // Fast path: a skin-tone cluster is always non-ASCII, so a line whose
         // bytes are all < 0x80 cannot need the fallback (same gate as
         // `withTerminalAppCursorCompensation` — this too runs on every
@@ -285,10 +311,12 @@ extension String {
             }
 
             let scalars = c.unicodeScalars
+            let baseIsBMP = (scalars.first?.value ?? 0) < 0x10000
             let isModifiedCluster =
                 scalars.count > 1
                 && scalars.first!.properties.isEmojiModifierBase
                 && scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+                && (basePlane == .all || baseIsBMP)
             if isModifiedCluster {
                 var keptVS16 = false
                 for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {

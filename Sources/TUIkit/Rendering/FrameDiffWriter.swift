@@ -317,10 +317,15 @@ extension FrameDiffWriter {
                 // FIRST: tmux is a compositor, so ITS grid is what our output
                 // lands in — the outer terminal's quirks apply to tmux's output,
                 // not ours, and its model must win even if a native host's
-                // variable somehow survived into the pane. Same shape as iTerm2:
-                // strip the skin tones tmux refuses to join, then CUF its
-                // under-advancers (SF Symbols, bare pictographs, lone RIs).
-                clipped.withSkinToneFallback().withTmuxCursorCompensation()
+                // variable somehow survived into the pane.
+                //
+                // `.bmpOnly`, NOT the blanket strip iTerm2/Warp take: tmux joins
+                // an SMP-based skin-tone cluster (👍🏽 👩🏽‍🚀) into exactly the 2
+                // cells we claim, and only over-advances on a BMP base (✊🏻 ☝🏽).
+                // Stripping the ones it gets right would throw away skin tones
+                // the user asked for and the attached client renders perfectly.
+                clipped.withSkinToneFallback(basePlane: .bmpOnly)
+                    .withTmuxCursorCompensation()
             } else if isAppleTerminal {
                 clipped.withTerminalAppCursorCompensation()
             } else if isITerm2 {

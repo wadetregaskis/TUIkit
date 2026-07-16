@@ -150,16 +150,58 @@ struct TmuxCompatibilityTests {
         }
     }
 
-    @Test("Skin tones on a BMP base are stripped before the model sees them")
-    func skinToneFallbackPrecedesCompensation() {
-        // tmux advances ✊🏻 (U+270A U+1F3FB) by 4 against a 2-cell claim — an
-        // OVER-advance no CUF can correct. The output path strips the modifier
-        // first, exactly as on iTerm2/Warp, after which the base advances as
-        // claimed.
-        let stripped = "\u{270A}\u{1F3FB}".withSkinToneFallback()
-        #expect(!stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
+    // MARK: - Skin tones: strip only what tmux actually gets wrong
+
+    @Test(
+        "A BMP-based skin tone is stripped — tmux over-advances those to 4",
+        arguments: ["\u{270A}\u{1F3FB}", "\u{261D}\u{1F3FD}", "\u{261D}\u{FE0F}\u{1F3FD}"])
+    func bmpBasedSkinTonesAreStripped(text: String) {
+        let stripped = text.withSkinToneFallback(basePlane: .bmpOnly)
+        #expect(
+            !stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
+            "the modifier must go — tmux would give this cluster 4 cells against our 2")
         let advance = stripped.reduce(0) { $0 + $1.tmuxCursorAdvance }
         let claim = stripped.reduce(0) { $0 + $1.terminalWidth }
         #expect(advance == claim, "after the strip, tmux agrees with the claim")
+    }
+
+    @Test(
+        "An SMP-based skin tone SURVIVES — tmux joins those correctly",
+        arguments: [
+            "\u{1F44D}\u{1F3FD}",                               // 👍🏽
+            "\u{1F469}\u{1F3FD}\u{200D}\u{1F680}",              // 👩🏽‍🚀
+            "\u{1F919}\u{1F3FD}",                               // 🤙🏽 (the main menu's)
+        ])
+    func smpBasedSkinTonesSurvive(text: String) {
+        // The regression this guards: the tmux path first took the blanket
+        // strip, so 👍🏽 was flattened to 👍 even though tmux allocates it
+        // exactly the 2 cells we claim and every client renders it correctly.
+        // Stripping a cluster the terminal gets RIGHT is a silent loss of the
+        // user's content, not a compensation.
+        let stripped = text.withSkinToneFallback(basePlane: .bmpOnly)
+        #expect(stripped == text, "must pass through untouched")
+        #expect(
+            stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
+            "the skin tone must survive")
+        let advance = stripped.reduce(0) { $0 + $1.tmuxCursorAdvance }
+        #expect(advance == 2, "and tmux still advances it by the claimed 2")
+    }
+
+    @Test("The blanket strip still strips everything, for iTerm2 and Warp")
+    func blanketStripIsUnchanged() {
+        // `.all` is the default and must keep its old behaviour: iTerm2/Warp
+        // split EVERY skin-tone cluster, SMP bases included.
+        for text in ["\u{1F44D}\u{1F3FD}", "\u{270A}\u{1F3FB}", "\u{1F919}\u{1F3FD}"] {
+            let stripped = text.withSkinToneFallback()
+            #expect(
+                !stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
+                "the default must still strip every base plane")
+        }
+    }
+
+    @Test("A standalone swatch is content, and survives either way")
+    func standaloneSwatchSurvives() {
+        #expect("\u{1F3FD}".withSkinToneFallback(basePlane: .bmpOnly) == "\u{1F3FD}")
+        #expect("\u{1F3FD}".withSkinToneFallback() == "\u{1F3FD}")
     }
 }
