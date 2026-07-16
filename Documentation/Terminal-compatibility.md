@@ -640,6 +640,32 @@ Steady state — no client changes, no resizes — runs **no subprocess at all**
 A tmux too old for these hooks degrades gracefully: registration fails, and
 the app adapts only on real SIGWINCHes.
 
+**The attach race (measured).** `client-attached` fires — and the hook-driven
+probe runs — BEFORE the new client's XTVERSION reply has arrived, so
+`#{client_termtype}` is empty at that instant even for a terminal that names
+itself milliseconds later (a hook logging `list-clients` at attach time
+recorded an empty termtype for an iTerm2 that reported "iTerm2 3.6.11"
+moments later). Two mitigations:
+
+- The process walk covers the common silent cases immediately — including
+  iTerm2 with session restoration enabled (the default), whose shells' parent
+  chains end at `~/Library/Application Support/iTerm2/iTermServer-<version>`
+  rather than the app bundle (measured; the bundle never appears in the chain).
+- A reading derived from a still-silent, unidentified client is retried on a
+  bounded backoff (250ms/500ms/1s), long enough for the XTVERSION round trip
+  and burning out quickly for a genuinely unknown silent terminal.
+
+A probe that FAILS outright (wedged tmux, deadline) keeps the previous answer
+rather than reading as "no clients": one slow `list-clients` under load must
+not restyle every glyph on screen and flip it back a moment later.
+
+**A chrome flip invalidates the render cache**, not just the frame diff: the
+diff invalidation rewrites every line, but line content comes from the render
+pass, and value-memoized subtrees would otherwise serve buffers with the old
+glyphs baked in — observed as a mixed-style screen (touched rows in the new
+style, untouched rows in the old) with misaligned labels where a stale 2-cell
+⬛︎ buffer met fresh 1-cell ■ measurements.
+
 **It follows a client change mid-run**, which is the point — `CheckboxStyle.automatic`
 is a marker resolved at render, not a style decided when the value was made, so
 even an app's own explicit `.checkboxStyle(.automatic)` adapts. Verified end to
