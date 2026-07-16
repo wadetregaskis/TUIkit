@@ -35,7 +35,7 @@ struct TrackStyleParityTests {
 
     /// The bar line of a bare (label-free) ProgressView: the whole rendered line.
     private func progressTrack(_ style: TrackStyle, width: Int, fraction: Double) -> String {
-        let view = ProgressView(value: fraction).trackStyle(style)
+        let view = ProgressView(value: fraction).progressViewStyle(style)
         let buffer = renderToBuffer(view, context: makeRenderContext(width: width, height: 2))
         return buffer.lines[0].stripped
     }
