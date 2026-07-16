@@ -541,13 +541,33 @@ attached client: /dev/ttys012 termtype=iTerm2 3.6.11
 no single "the client app" to specialise for. This is a property of a
 multiplexer, not a gap in the detection.
 
-**Conclusion: do not use it for rendering decisions.** The grid is
-client-independent (measured above), so widths never need it; and anything
-font-dependent (`supportsEmojiChrome`, image cell aspect) cannot be answered
-correctly when two clients with different fonts are attached at once. tmux
-therefore stays off the emoji-chrome allowlist and gets the universally-safe
-non-emoji glyphs — conservative, and correct for every client. `client_termtype`
-remains useful for diagnostics and bug reports, where a subprocess is fine.
+**With two clients attached, `display-message` reports the most recently
+ACTIVE one** — measured with Apple Terminal and Ghostty on one session: it
+returned `ghostty 1.3.1`, the higher `client_activity` (…632 vs …625), and did
+not drift afterwards. `list-clients` enumerates them all individually, each with
+its own termtype, which is what TUIkit uses.
+
+**How it is used.** Widths never need the client (the grid is
+client-independent, measured), so this drives exactly one decision: the emoji
+chrome, whose glyphs are painted by the client's font. `RenderLoop` asks tmux
+once and re-asks on resize — a re-attach from a different terminal is a
+SIGWINCH from inside a pane. Two conservatisms:
+
+- **An empty termtype loses the chrome.** Terminal.app answers no XTVERSION, so
+  empty is "Terminal.app OR an unknown terminal that is also silent". That is
+  unresolvable, and mis-measuring the selector shears the row (issue #9), so
+  tmux + Terminal.app keeps the safe glyphs despite Terminal.app being
+  allowlisted natively.
+- **Every attached client must be recognised**, not just the active one — two
+  fonts can be painting the same bytes.
+
+A same-size re-attach sends no SIGWINCH and so keeps the previous answer until
+something resizes: the accepted cost of not forking a subprocess per frame.
+
+**Known gap:** the public `CheckboxStyle.automatic` resolves eagerly, so an app
+that writes `.checkboxStyle(.automatic)` explicitly pins the static host answer
+at init and bypasses this; only the framework's own default adapts. Closing it
+needs `.automatic` to become a deferred sentinel resolved at render.
 
 ### Mouse
 
