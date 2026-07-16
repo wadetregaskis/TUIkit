@@ -323,8 +323,10 @@ enum TerminalHost {
     ///
     /// **Cost:** one `fork`/`exec` per call, so callers MUST cache. It is not
     /// safe to call per frame, let alone per view. `RenderLoop` calls it once
-    /// and re-probes only when the terminal resizes — which is what a detach or
-    /// a re-attach from a different terminal looks like from in here.
+    /// at startup (via ``EmojiChromeRefresher``) and again — asynchronously,
+    /// off the render path — only when a SIGWINCH says something changed: a
+    /// real resize, or the synthetic one the client-change hooks send (see
+    /// ``installTmuxClientChangeHooks()``). Steady state runs no probes.
     ///
     /// Fails closed: not under tmux, tmux missing from `PATH`, a non-zero exit
     /// or a hang all yield `nil`, which ``emojiChromeSupported(tmuxClients:)``
@@ -337,11 +339,27 @@ enum TerminalHost {
     /// the child is killed and the probe fails closed.
     static func probeTmuxClients() -> [TmuxClient]? {
         guard isTmux else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         // One line per attached client. The pid comes first because it is always
         // digits: the termtype takes the rest of the line, spaces and all.
-        process.arguments = ["tmux", "list-clients", "-F", "#{client_pid} #{client_termtype}"]
+        guard
+            let output = runTmux(["list-clients", "-F", "#{client_pid} #{client_termtype}"])
+        else { return nil }
+        return parseTmuxClients(output)
+    }
+
+    /// Runs one tmux command with a bounded wait, returning its stdout, or `nil`
+    /// on any failure (tmux missing, non-zero exit, or the deadline passing).
+    ///
+    /// The wait is BOUNDED: tmux answers in a few milliseconds, but a wedged
+    /// server — `SIGSTOP`, a stuck socket — could otherwise block forever on the
+    /// unbounded `readDataToEndOfFile`/`waitUntilExit` this replaces. Exit is
+    /// polled against the deadline; reading is deferred until the child has
+    /// exited, which cannot itself block because every command sent through here
+    /// answers with at most a few lines, far under the pipe buffer.
+    private static func runTmux(_ arguments: [String]) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["tmux"] + arguments
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -350,11 +368,7 @@ enum TerminalHost {
         } catch {
             return nil  // no tmux on PATH, or exec refused
         }
-        // Poll for exit against a deadline rather than blocking on it. Reading is
-        // deferred until the child has exited: `list-clients` output is a handful
-        // of lines, far under the pipe buffer, so it cannot block on a full pipe
-        // in the meantime — which is what would otherwise reintroduce the hang.
-        let deadline = DispatchTime.now() + .milliseconds(probeTimeoutMilliseconds)
+        let deadline = DispatchTime.now() + .milliseconds(commandTimeoutMilliseconds)
         while process.isRunning {
             if DispatchTime.now() >= deadline {
                 process.terminate()
@@ -362,18 +376,16 @@ enum TerminalHost {
             }
             Thread.sleep(forTimeInterval: 0.002)
         }
+        guard process.terminationStatus == 0 else { return nil }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0,
-            let output = String(data: data, encoding: .utf8)
-        else { return nil }
-        return parseTmuxClients(output)
+        return String(data: data, encoding: .utf8)
     }
 
-    /// How long ``probeTmuxClients()`` waits for tmux before giving up and
-    /// failing closed. Two orders of magnitude above tmux's normal few-ms reply,
-    /// so a loaded machine is not mistaken for a wedged one, yet short enough to
-    /// be invisible in a render loop that only re-probes every couple of seconds.
-    private static let probeTimeoutMilliseconds = 250
+    /// How long ``runTmux(_:)`` waits for tmux before giving up and failing
+    /// closed. Two orders of magnitude above tmux's normal few-ms reply, so a
+    /// loaded machine is not mistaken for a wedged one, yet short enough to be
+    /// invisible on the rare occasions a command runs.
+    private static let commandTimeoutMilliseconds = 250
 
     /// Parses `list-clients` output into one entry per attached client.
     ///
@@ -397,5 +409,100 @@ enum TerminalHost {
             let termtype = fields.count > 1 ? String(fields[1]) : ""
             return TmuxClient(termtype: termtype, pid: pid)
         }
+    }
+
+    // MARK: - tmux client-change hooks (push, not poll)
+
+    /// The tmux hooks that mean "the set of attached clients may have changed":
+    /// a client attached, detached, or switched its session to (or away from)
+    /// ours. All three fire on tmux 3.7b — measured, including for a same-size
+    /// attach (which sends no SIGWINCH) and for a client killed with SIGKILL.
+    static let tmuxClientChangeHooks = [
+        "client-attached", "client-detached", "client-session-changed",
+    ]
+
+    /// The `set-hook` arguments that make tmux notify a process of client
+    /// changes, as one flat tmux argv (`;`-separated commands). Pure, so the
+    /// exact registration is testable without a tmux server.
+    ///
+    /// Shape, for each hook in ``tmuxClientChangeHooks``:
+    ///
+    /// ```
+    /// set-hook -g 'client-attached[<pid>]' \
+    ///     "run-shell -b \"kill -s WINCH <pid> || tmux set-hook -gu 'client-attached[<pid>]'\""
+    /// ```
+    ///
+    /// Every part is load-bearing:
+    ///
+    /// - **Global (`-g`), never session-scoped.** Hooks are per-index inherited
+    ///   options, and a session-scoped hook shadows the user's ENTIRE global
+    ///   array for that hook — measured: with a session `client-attached[7391]`
+    ///   set, the user's global `client-attached[0]` stopped firing. Two global
+    ///   hooks at different indices coexist (also measured), so global is the
+    ///   only scope that leaves the user's hooks running.
+    /// - **Index = our PID**, so several TUIkit apps on one server each get
+    ///   their own slot with no collisions, and unset only their own.
+    /// - **`run-shell -b`**: background, so tmux never blocks on us.
+    /// - **`kill -s WINCH`**, not a bespoke channel: the app already has a
+    ///   complete SIGWINCH pipeline (async-signal-safe flag + self-pipe that
+    ///   wakes the idle loop, full repaint), so a client change rides it with
+    ///   zero new plumbing. And SIGWINCH's default action is IGNORE, so if this
+    ///   app dies and its PID is recycled, a stale hook signalling the new
+    ///   process is harmless — which is NOT true of e.g. SIGUSR1 (terminates).
+    /// - **`|| tmux set-hook -gu …`**: self-cleaning. `kill` fails once the PID
+    ///   is gone, and the hook removes itself on its first firing after this
+    ///   app dies without running its own cleanup.
+    static func tmuxClientChangeHookArguments(pid: pid_t) -> [String] {
+        var arguments: [String] = []
+        for hook in tmuxClientChangeHooks {
+            if !arguments.isEmpty { arguments.append(";") }
+            let slot = "\(hook)[\(pid)]"
+            arguments += [
+                "set-hook", "-g", slot,
+                "run-shell -b \"kill -s WINCH \(pid) || tmux set-hook -gu '\(slot)'\"",
+            ]
+        }
+        return arguments
+    }
+
+    /// The `set-hook -gu` arguments that remove exactly the hooks
+    /// ``tmuxClientChangeHookArguments(pid:)`` registered — ours and only ours;
+    /// unsetting one array index leaves the user's other indices untouched
+    /// (measured). Pure, for the same testability.
+    static func tmuxClientChangeUnhookArguments(pid: pid_t) -> [String] {
+        var arguments: [String] = []
+        for hook in tmuxClientChangeHooks {
+            if !arguments.isEmpty { arguments.append(";") }
+            arguments += ["set-hook", "-gu", "\(hook)[\(pid)]"]
+        }
+        return arguments
+    }
+
+    /// Registers the client-change hooks for this process, so tmux pushes a
+    /// SIGWINCH whenever a client attaches, detaches, or changes session —
+    /// including the same-size attach that sends no SIGWINCH of its own.
+    ///
+    /// This is what makes client-change detection PUSH rather than poll: with
+    /// the hooks in place the app forks nothing in steady state, and re-probes
+    /// only when tmux says something actually happened.
+    ///
+    /// Returns whether registration succeeded. Failure (a tmux too old for
+    /// these hooks, a wedged server) is tolerated: the app then adapts only on
+    /// real SIGWINCHes, exactly the behaviour before hooks existed.
+    @discardableResult
+    static func installTmuxClientChangeHooks() -> Bool {
+        guard isTmux else { return false }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return runTmux(tmuxClientChangeHookArguments(pid: pid_t(pid))) != nil
+    }
+
+    /// Removes this process's client-change hooks; the graceful-shutdown half
+    /// of ``installTmuxClientChangeHooks()``. Safe to call when nothing is
+    /// registered. (A crash skips this — then the hooks' own `||` arm removes
+    /// them on their next firing instead.)
+    static func removeTmuxClientChangeHooks() {
+        guard isTmux else { return }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        _ = runTmux(tmuxClientChangeUnhookArguments(pid: pid_t(pid)))
     }
 }
