@@ -180,6 +180,18 @@ internal final class RenderLoop<A: App> {
     /// The diff writer that tracks previous frames and writes only changed lines.
     private let diffWriter = FrameDiffWriter()
 
+    /// The emoji-chrome answer for the terminals currently attached, cached
+    /// because resolving it under tmux costs a subprocess (see
+    /// ``TerminalHost/probeTmuxClientTermtypes()``); `nil` means "ask again".
+    /// Dropped by ``invalidateDiffCache()``, i.e. on every resize — which is
+    /// what re-attaching from a different terminal looks like from here.
+    ///
+    /// Instance state on the @MainActor render loop, deliberately NOT a global:
+    /// a shared mutable static would be read by every headless render and test
+    /// in the process, which is precisely the shape that produced the
+    /// render-cache and colour-depth parallel-test flakes.
+    private var cachedEmojiChrome: Bool?
+
     /// The environment snapshot from the previous frame.
     ///
     /// Compared after `buildEnvironment()` each frame. When the snapshot
@@ -521,6 +533,29 @@ extension RenderLoop {
     /// Call this when the terminal is resized (SIGWINCH).
     func invalidateDiffCache() {
         diffWriter.invalidate()
+        // A resize is also our signal that the tmux CLIENT may have changed:
+        // detaching and re-attaching from a different terminal is exactly what a
+        // SIGWINCH looks like from in here. Drop the cached answer so the next
+        // frame re-asks tmux which terminals are watching. Same-size re-attaches
+        // send no SIGWINCH and so keep the previous answer until something does
+        // resize — the accepted cost of not spawning a subprocess per frame.
+        cachedEmojiChrome = nil
+    }
+
+    /// Whether to draw the emoji chrome glyphs this frame.
+    ///
+    /// Off tmux this is the static host allowlist and costs nothing. Under tmux
+    /// the glyphs are still painted by the *client's* font, which tmux alone can
+    /// name, so we ask it — once, then again after each resize.
+    func resolveEmojiChrome() -> Bool {
+        if let cachedEmojiChrome { return cachedEmojiChrome }
+        let supported =
+            TerminalHost.isTmux
+            ? TerminalHost.emojiChromeSupported(
+                tmuxClientTermtypes: TerminalHost.probeTmuxClientTermtypes())
+            : TerminalHost.supportsEmojiChrome
+        cachedEmojiChrome = supported
+        return supported
     }
 
     /// The effective ``MouseSupport`` configuration after combining
@@ -555,7 +590,12 @@ extension RenderLoop {
         // terminal exists — the bare EnvironmentValues defaults stay
         // terminal-independent so headless renders and tests are
         // deterministic. `.checkboxStyle(_:)` modifiers below still override.
-        environment.checkboxStyle = .automatic
+        //
+        // `resolveEmojiChrome()` rather than the static `.automatic`, because
+        // under tmux the answer depends on the CLIENT terminal's font and only
+        // tmux can name it — a question that costs a subprocess, so it is cached
+        // here and re-asked on resize. Off tmux it is the same static allowlist.
+        environment.checkboxStyle = .automatic(emojiChrome: resolveEmojiChrome())
 
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).

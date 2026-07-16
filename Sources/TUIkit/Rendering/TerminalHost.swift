@@ -121,4 +121,102 @@ enum TerminalHost {
         if let socket = environment["TMUX"], !socket.isEmpty { return true }
         return environment["TERM_PROGRAM"] == "tmux"
     }
+
+    // MARK: - tmux client identification
+
+    /// Whether the terminals currently attached to a tmux session all draw the
+    /// emoji chrome glyphs correctly, given what tmux reports each client to be.
+    ///
+    /// Under tmux the *glyph repertoire* is still the outer terminal's — tmux
+    /// composites a grid but the client's font paints it — so the emoji-chrome
+    /// question is the one thing that genuinely depends on which client is
+    /// attached. (Widths do not: tmux's grid is client-independent, measured.)
+    ///
+    /// tmux asks each client for XTVERSION and exposes the reply as
+    /// `#{client_termtype}` — "iTerm2 3.6.11", "ghostty 1.3.1",
+    /// "Warp(v0.2026…)". Terminal.app answers nothing, so an EMPTY termtype is
+    /// ambiguous: it is Terminal.app (allowlisted) or an unknown terminal that
+    /// also stays silent (not). That ambiguity is unresolvable from here, so an
+    /// empty reply is treated as unknown and loses the emoji chrome —
+    /// conservative, because mis-measuring the selector shears the whole row
+    /// (issue #9), and membership of this allowlist is earned by inspection.
+    ///
+    /// **Every** attached client must be recognised, not just the active one: a
+    /// tmux session can have several clients at once, each with its own font,
+    /// painting the same bytes. Requiring unanimity costs the common
+    /// single-client case nothing and keeps a stray unknown client from getting
+    /// glyphs it cannot draw.
+    ///
+    /// - Parameter termtypes: one entry per attached client, as
+    ///   `#{client_termtype}` reports it. `nil` means the question could not be
+    ///   asked; empty means no clients are attached (nothing to please).
+    static func emojiChromeSupported(tmuxClientTermtypes termtypes: [String]?) -> Bool {
+        guard let termtypes, !termtypes.isEmpty else { return false }
+        return termtypes.allSatisfy { termtype in
+            let lowered = termtype.lowercased()
+            // Prefix-matched, so a version bump does not silently drop support.
+            return lowered.hasPrefix("iterm2")
+                || lowered.hasPrefix("ghostty")
+                || lowered.hasPrefix("warp")
+        }
+    }
+
+    /// Asks tmux what each attached client is, or `nil` when it cannot be asked.
+    ///
+    /// There is no in-band way to learn this: tmux overwrites `TERM_PROGRAM`
+    /// with its own name, and the leaked per-terminal variables
+    /// (`LC_TERMINAL`, `GHOSTTY_*`, …) are frozen at the environment of the
+    /// client that STARTED the server — measured to still name Apple Terminal
+    /// after iTerm2 attaches to the same session. Only tmux itself knows, and
+    /// only by being asked. Hence a subprocess.
+    ///
+    /// **Cost:** one `fork`/`exec` per call, so callers MUST cache. It is not
+    /// safe to call per frame, let alone per view. `RenderLoop` calls it once
+    /// and re-probes only when the terminal resizes — which is what a detach or
+    /// a re-attach from a different terminal looks like from in here.
+    ///
+    /// Fails closed: not under tmux, tmux missing from `PATH`, a non-zero exit
+    /// or a hang all yield `nil`, which
+    /// ``emojiChromeSupported(tmuxClientTermtypes:)`` reads as "unknown" and so
+    /// as the safe non-emoji glyphs.
+    static func probeTmuxClientTermtypes() -> [String]? {
+        guard isTmux else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        // One line per attached client; an unanswered XTVERSION is an empty line,
+        // which `emojiChromeSupported` correctly reads as unknown.
+        process.arguments = ["tmux", "list-clients", "-F", "#{client_termtype}"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil  // no tmux on PATH, or exec refused
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0,
+            let output = String(data: data, encoding: .utf8)
+        else { return nil }
+        return parseTmuxClientTermtypes(output)
+    }
+
+    /// Splits `list-clients` output into one entry per attached client.
+    ///
+    /// Empty lines are kept — a client whose XTVERSION went unanswered
+    /// (Terminal.app) reports an empty termtype and is still a client, and one
+    /// that must be counted as unknown. Only the empty element the trailing
+    /// newline leaves behind is dropped. Split out from the subprocess so the
+    /// parsing is testable without one.
+    static func parseTmuxClientTermtypes(_ output: String) -> [String] {
+        // No output at all means no clients — distinct from one line that
+        // happens to be empty, which IS a client (one that answered no
+        // XTVERSION). Without this, `""` would split to a single empty element
+        // and be miscounted as an attached unknown terminal.
+        guard !output.isEmpty else { return [] }
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        let withoutTrailingNewlineArtefact = output.hasSuffix("\n") ? lines.dropLast() : lines[...]
+        return withoutTrailingNewlineArtefact.map(String.init)
+    }
 }

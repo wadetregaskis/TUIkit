@@ -204,4 +204,54 @@ struct TmuxCompatibilityTests {
         #expect("\u{1F3FD}".withSkinToneFallback(basePlane: .bmpOnly) == "\u{1F3FD}")
         #expect("\u{1F3FD}".withSkinToneFallback() == "\u{1F3FD}")
     }
+
+    // MARK: - Identifying the client terminal(s)
+
+    @Test(
+        "Emoji chrome follows the attached client(s), and every one must be known",
+        arguments: [
+            // The single-client case — the common one, and the one that matters.
+            (["iTerm2 3.6.11"], true, "iTerm2"),
+            (["ghostty 1.3.1"], true, "Ghostty"),
+            (["Warp(v0.2026.07.08.17.54.stable_02)"], true, "Warp"),
+            // Terminal.app answers no XTVERSION, so an empty termtype is
+            // ambiguous — Terminal.app, or an unknown terminal that is also
+            // silent. Unresolvable, so: conservative.
+            ([""], false, "Apple Terminal (empty) — indistinguishable from unknown"),
+            (["xterm"], false, "a terminal not on the allowlist"),
+            // Several clients, each with its own font, painting the same bytes.
+            (["iTerm2 3.6.11", "ghostty 1.3.1"], true, "two allowlisted clients"),
+            (["iTerm2 3.6.11", ""], false, "one unknown among them spoils it"),
+            (["iTerm2 3.6.11", "xterm"], false, "ditto for a known-bad one"),
+            // Degenerate.
+            (nil, false, "tmux could not be asked"),
+            ([], false, "no clients attached"),
+        ] as [([String]?, Bool, String)])
+    func emojiChromeFollowsTheClients(termtypes: [String]?, expected: Bool, what: String) {
+        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: termtypes) == expected, "\(what)")
+    }
+
+    @Test("A newer version of a known client keeps its support")
+    func versionsArePrefixMatched() {
+        // Prefix-matched so a version bump doesn't silently downgrade the glyphs.
+        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["iTerm2 99.0"]))
+        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["ghostty 2.0.0-dev"]))
+        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["Warp(v2030.01.01)"]))
+    }
+
+    @Test(
+        "list-clients output parses to one entry per client",
+        arguments: [
+            // tmux emits one line per client, newline-terminated. The empty
+            // line is Apple Terminal's unanswered XTVERSION — a real client.
+            ("iTerm2 3.6.11\n", ["iTerm2 3.6.11"]),
+            ("\n", [""]),
+            ("iTerm2 3.6.11\nghostty 1.3.1\n", ["iTerm2 3.6.11", "ghostty 1.3.1"]),
+            ("\nghostty 1.3.1\n", ["", "ghostty 1.3.1"]),
+            ("", []),
+            ("iTerm2 3.6.11", ["iTerm2 3.6.11"]),  // no trailing newline
+        ] as [(String, [String])])
+    func clientListParsing(output: String, expected: [String]) {
+        #expect(TerminalHost.parseTmuxClientTermtypes(output) == expected)
+    }
 }
