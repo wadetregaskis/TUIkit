@@ -659,6 +659,35 @@ A probe that FAILS outright (wedged tmux, deadline) keeps the previous answer
 rather than reading as "no clients": one slow `list-clients` under load must
 not restyle every glyph on screen and flip it back a moment later.
 
+**The through-tmux bar is stricter than the native one — Ghostty fails it
+(measured, 2026-07-16).** Natively a terminal qualifies with our compensation
+applied; through tmux no compensation can reach the client (a CUF we emit
+lands in tmux's grid and corrupts it). And tmux does not replay our bytes: it
+redraws a VS-15 cell to the client as
+
+```
+⬛ BS BS ⬛︎        (bare U+2B1B, two backspaces, U+2B1B U+FE0E)
+```
+
+(byte-captured from a logging client, 3.7b). The client must advance that
+sequence by the 2 cells tmux believes it occupies, unaided. DSR-measured on
+the alternate screen against exactly those bytes:
+
+| client | net advance | through-tmux emoji chrome |
+|---|---|---|
+| Apple Terminal 455.1 | 2 | ✓ |
+| iTerm2 3.6.11 | 2 | ✓ |
+| Warp v0.2026.07.08 | 2 | ✓ |
+| **Ghostty 1.3.1** | **1** | ✗ — excluded |
+
+Ghostty's net-1 is its known VS-15 under-advance (bare ⬛ advances 2, the two
+BS go back 2, the re-write with U+FE0E advances only 1) — the single quirk
+`withGhosttyCursorCompensation()` patches natively. Uncompensated, every row
+containing a chrome glyph shears left by one — observed in TUIkitExample as
+`⬛Enable Notifications` losing its gap and the right-edge scrollbar
+checkering, one sheared row at a time. So tmux+Ghostty draws the safe ■ □
+while native Ghostty keeps the emoji chrome.
+
 **A chrome flip invalidates the render cache**, not just the frame diff: the
 diff invalidation rewrites every line, but line content comes from the render
 pass, and value-memoized subtrees would otherwise serve buffers with the old
@@ -675,7 +704,8 @@ Ghostty watched, and still ⬛ when Apple Terminal took the session with
 
 | client attached | identified by | checkbox glyphs |
 |---|---|---|
-| Ghostty / iTerm2 / Warp | `#{client_termtype}`, named + versioned | ⬛ ⬜ emoji |
+| iTerm2 / Warp | `#{client_termtype}`, named + versioned | ⬛ ⬜ emoji |
+| Ghostty | `#{client_termtype}` — identified, and **excluded** | ■ □ (see below) |
 | Apple Terminal, local | owning application (termtype is empty) | ⬛ ⬜ emoji |
 | Apple Terminal, over ssh | nothing — silent, and sshd owns the client | ■ □ |
 | an unknown silent terminal | nothing | ■ □ |
