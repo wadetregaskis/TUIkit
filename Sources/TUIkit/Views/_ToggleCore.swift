@@ -35,6 +35,11 @@ enum SwitchIndicatorGlyphs {
     static func knob(for style: CheckboxStyle) -> String {
         style == .emoji ? "\u{2B1B}\u{FE0E}" : "\u{2590}\u{258C}"  // ⬛︎ : ▐▌
     }
+
+    /// The sliding knob of the bracketed (ASCII) switch: `[o ]` / `[ o]`.
+    /// A plain letter, so the style stays honest for terminals/fonts where
+    /// the block glyphs are the reason `.ascii` was chosen.
+    static let asciiKnob = "o"
 }
 
 /// Internal view that handles the actual rendering of Toggle.
@@ -68,27 +73,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
     ) -> String {
         let palette = context.environment.palette
-
-        // Bracket color: pulsing accent when focused, the normal foreground
-        // when simply unfocused, and dimmed only when actually disabled.
-        // (An unfocused-but-enabled control must stay readable — dimming it
-        // to the disabled style made the brackets almost invisible against
-        // the terminal background.)
-        let bracketColor: Color
-        if isDisabled {
-            bracketColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
-        } else if isFocused {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            bracketColor = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dimAccent, bright: palette.accent)
-        } else if isHovered {
-            // Hover bumps the brackets to a partial accent tint
-            // so the affordance reads without the focused pulse.
-            bracketColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
-        } else {
-            bracketColor = palette.foreground
-        }
+        let bracketColor = indicatorBracketColor(
+            isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
 
         // The checkbox glyphs come from the configurable ``CheckboxStyle`` (■/□
         // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
@@ -108,18 +94,53 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // Two-tone bracketed (ASCII): the brackets show focus while the
         // inner mark shows on/off (accent when checked, dimmed when
         // disabled; the OFF mark is a space, so its colour is moot).
-        let contentColor: Color
-        if isDisabled {
-            contentColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
-        } else if isOnValue {
-            contentColor = palette.accent
-        } else {
-            contentColor = palette.foreground
-        }
         return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
-            + ANSIRenderer.colorize(mark, foreground: contentColor)
+            + ANSIRenderer.colorize(
+                mark,
+                foreground: indicatorMarkColor(
+                    isOnValue: isOnValue, isDisabled: isDisabled, context: context))
             + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+    }
+
+    /// Bracket color for the two-tone bracketed indicators (checkbox `[x]` and
+    /// switch `[o ]`): pulsing accent when focused, the normal foreground when
+    /// simply unfocused, and dimmed only when actually disabled.
+    /// (An unfocused-but-enabled control must stay readable — dimming it
+    /// to the disabled style made the brackets almost invisible against
+    /// the terminal background.)
+    private func indicatorBracketColor(
+        isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
+    ) -> Color {
+        let palette = context.environment.palette
+        if isDisabled {
+            return palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
+        }
+        if isFocused {
+            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+            return SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dimAccent, bright: palette.accent)
+        }
+        if isHovered {
+            // Hover bumps the brackets to a partial accent tint
+            // so the affordance reads without the focused pulse.
+            return palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+        }
+        return palette.foreground
+    }
+
+    /// Mark color for the two-tone bracketed indicators: accent when on, plain
+    /// foreground when off, dimmed when disabled — the state channel the
+    /// brackets (focus channel) don't carry.
+    private func indicatorMarkColor(
+        isOnValue: Bool, isDisabled: Bool, context: RenderContext
+    ) -> Color {
+        let palette = context.environment.palette
+        if isDisabled {
+            return palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
+        }
+        return isOnValue ? palette.accent : palette.foreground
     }
 
     /// A switch track: a two-cell knob (██, or ⬛︎ under the `.emoji` checkbox
@@ -139,15 +160,38 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// the two never look alike. The knob is the background colour so it contrasts
     /// the track on light and dark terminals alike (dimmed to match when disabled).
     private func styledSwitchIndicator(
-        isOnValue: Bool, isDisabled: Bool, context: RenderContext
+        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
     ) -> String {
         let palette = context.environment.palette
         // The knob follows the checkbox style's glyph repertoire (see
         // ``SwitchIndicatorGlyphs/knob(for:)``): the seamless two-cell emoji
-        // square under `.emoji`, two FULL BLOCKs otherwise.
-        // Resolved, not raw: `knob(for:)` compares against `.emoji`, which an
-        // unresolved `.automatic` marker could never equal.
-        let knob = SwitchIndicatorGlyphs.knob(for: context.environment.effectiveCheckboxStyle)
+        // square under `.emoji`, two half blocks otherwise — and under a
+        // bracketed style (`.ascii`), a bracketed track with a sliding `o`.
+        // Resolved, not raw: the comparisons below are against concrete styles,
+        // which an unresolved `.automatic` marker could never equal.
+        let style = context.environment.effectiveCheckboxStyle
+
+        if !style.openBracket.isEmpty {
+            // Bracketed (ASCII) switch: `[o ]` off, `[ o]` on — the knob slides
+            // like the coloured-track switch, inside the same bracket chrome as
+            // the `[x]` checkbox. Two-tone like the checkbox: brackets carry
+            // focus / hover / disabled, the knob carries state (accent when on,
+            // foreground when off). No background colours at all, keeping the
+            // style honest for terminals/fonts where the block glyphs are the
+            // reason `.ascii` was chosen.
+            let bracketColor = indicatorBracketColor(
+                isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
+            let knob = ANSIRenderer.colorize(
+                SwitchIndicatorGlyphs.asciiKnob,
+                foreground: indicatorMarkColor(
+                    isOnValue: isOnValue, isDisabled: isDisabled, context: context))
+            let track = isOnValue ? " " + knob : knob + " "
+            return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
+                + track
+                + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+        }
+
+        let knob = SwitchIndicatorGlyphs.knob(for: style)
 
         let trackColor: Color
         let knobColor: Color
@@ -304,7 +348,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             let styledIndicator =
                 toggleStyle is SwitchToggleStyle
                 ? styledSwitchIndicator(
-                    isOnValue: isOnValue, isDisabled: isDisabled, context: context)
+                    isOnValue: isOnValue, isDisabled: isDisabled,
+                    isFocused: isFocused, isHovered: isHovered, context: context)
                 : styledToggleIndicator(
                     isOnValue: isOnValue, isDisabled: isDisabled,
                     isFocused: isFocused, isHovered: isHovered, context: context)

@@ -110,6 +110,25 @@ struct ToggleRenderTests {
         #expect(SwitchIndicatorGlyphs.knob(for: .unicode).strippedLength == 2)
     }
 
+    @Test("Under .ascii the switch is a bracketed track with a sliding knob")
+    func switchFollowsAsciiStyle() {
+        // `[o ]` off, `[ o]` on: the knob slides like the coloured-track
+        // switch, inside the same bracket chrome as the `[x]` checkbox — no
+        // block glyphs and no background colours, keeping the style honest for
+        // terminals/fonts where those are the reason `.ascii` was chosen. The
+        // knob is also state-coloured (accent when on), the checkbox's
+        // two-tone convention.
+        let offLine = lines(
+            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).checkboxStyle(.ascii)
+        ).first ?? ""
+        let onLine = lines(
+            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).checkboxStyle(.ascii)
+        ).first ?? ""
+        #expect(offLine.hasPrefix("[o ]"), "off: knob left — got: |\(offLine)|")
+        #expect(onLine.hasPrefix("[ o]"), "on: knob right — got: |\(onLine)|")
+        #expect(offLine.contains("Wifi") && onLine.contains("Wifi"))
+    }
+
     @Test("The maximum-compatibility styles stay outside the emoji problem class")
     func checkboxMarksAreTerminalSafe() {
         // Emoji-presentation codepoints paint as fixed-colour emoji (ignoring

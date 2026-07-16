@@ -111,6 +111,11 @@ struct TogglePage: View {
             Text(style == .automatic ? "\(name) (\(L("page.toggle.default")))" : name).dim()
             Toggle(L("page.toggle.on"), isOn: .constant(true))
             Toggle(L("page.toggle.off"), isOn: .constant(false))
+            // The switch under the same glyph style — under `.ascii` a
+            // bracketed track with a sliding knob (`[o ]` / `[ o]`) instead of
+            // the block-glyph coloured track.
+            Toggle(L("page.toggle.on"), isOn: .constant(true)).toggleStyle(.switch)
+            Toggle(L("page.toggle.off"), isOn: .constant(false)).toggleStyle(.switch)
         }
         .checkboxStyle(style)
     }
