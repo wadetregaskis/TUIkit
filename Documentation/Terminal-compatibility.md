@@ -508,9 +508,30 @@ It IS possible — tmux probes each client with XTVERSION and exposes the answer
 
 Read from inside a pane with
 `tmux display-message -p '#{client_termtype}'`. Three of four are named **and
-versioned**; Apple Terminal is identifiable by elimination (empty termtype +
-its minimal feature set + a bare-UUID `TERM_SESSION_ID`; iTerm2's is prefixed
-`w0t1p0:`). Ghostty is additionally the only one with a distinctive `TERM`.
+versioned**. Ghostty is additionally the only one with a distinctive `TERM`.
+
+**Apple Terminal is NOT identifiable from that table — measured.** The feature
+set above reads like a fingerprint, and isn't: a bare PTY with
+`TERM=xterm-256color` and no terminal behind it at all reports exactly
+`bpaste,ccolour,clipboard,cstyle,focus,title` too. tmux derives
+`client_termfeatures` from terminfo, so it identifies the `TERM`, not the app.
+Identification by elimination fails for the same reason — "empty termtype" is
+every silent terminal, not one of them.
+
+**It is identifiable from its process tree.** A tmux client's ancestry is the
+window it was launched in, and `#{client_pid}` is the handle:
+
+```
+  32465  /opt/homebrew/Cellar/tmux/3.7b/bin/tmux     <- #{client_pid}
+  32453  /bin/zsh
+  32452  /usr/bin/login
+    509  /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
+```
+
+This is the CLIENT's chain, not ours — the tmux server is a daemon reparented to
+launchd, so our own ancestry says nothing about who is watching. Local only: over
+ssh the client's parent is `sshd` and the terminal is on the other end. Costs no
+subprocess (`sysctl` per link, `proc_pidpath` per path).
 
 **Environment leakage does NOT work — measured.** Terminals leak their own
 variables into panes (`LC_TERMINAL=iTerm2`, `ITERM_SESSION_ID`, `GHOSTTY_*`,
@@ -551,13 +572,14 @@ its own termtype, which is what TUIkit uses.
 client-independent, measured), so this drives exactly one decision: the emoji
 chrome, whose glyphs are painted by the client's font. `RenderLoop` asks tmux
 once and re-asks on resize — a re-attach from a different terminal is a
-SIGWINCH from inside a pane. Two conservatisms:
+SIGWINCH from inside a pane. Each client is identified by XTVERSION if it
+answered, and by its owning application if it did not; the two are
+complementary, since XTVERSION crosses an ssh hop and the process walk doesn't,
+while the process walk finds a silent terminal and XTVERSION can't.
 
-- **An empty termtype loses the chrome.** Terminal.app answers no XTVERSION, so
-  empty is "Terminal.app OR an unknown terminal that is also silent". That is
-  unresolvable, and mis-measuring the selector shears the row (issue #9), so
-  tmux + Terminal.app keeps the safe glyphs despite Terminal.app being
-  allowlisted natively.
+- **A client unidentified by BOTH loses the chrome** — a terminal that stays
+  silent and isn't a local app we recognise is a real thing (a Linux VT console,
+  an old xterm over ssh) and would draw tofu.
 - **Every attached client must be recognised**, not just the active one — two
   fonts can be painting the same bytes.
 
@@ -567,16 +589,18 @@ something resizes: the accepted cost of not forking a subprocess per frame.
 **It follows a client change mid-run**, which is the point — `CheckboxStyle.automatic`
 is a marker resolved at render, not a style decided when the value was made, so
 even an app's own explicit `.checkboxStyle(.automatic)` adapts. Verified end to
-end: one running app in a tmux session drew ⬛ while Ghostty watched it, and
-switched to ■ when Apple Terminal took the session with `attach -d` — same
-process, no restart.
+end on one running app with the client swapped underneath it: it drew ⬛ while
+Ghostty watched, and still ⬛ when Apple Terminal took the session with
+`attach -d` — same process, no restart, and no termtype to go on the second time.
 
-| client attached | `#{client_termtype}` | checkbox glyphs |
+| client attached | identified by | checkbox glyphs |
 |---|---|---|
-| Ghostty / iTerm2 / Warp | named + versioned | ⬛ ⬜ emoji |
-| Apple Terminal | *(empty)* | ■ □ — conservative (see above) |
-| several, all recognised | all named | ⬛ ⬜ emoji |
-| several, any unrecognised | mixed | ■ □ |
+| Ghostty / iTerm2 / Warp | `#{client_termtype}`, named + versioned | ⬛ ⬜ emoji |
+| Apple Terminal, local | owning application (termtype is empty) | ⬛ ⬜ emoji |
+| Apple Terminal, over ssh | nothing — silent, and sshd owns the client | ■ □ |
+| an unknown silent terminal | nothing | ■ □ |
+| several, all recognised | either signal, per client | ⬛ ⬜ emoji |
+| several, any unrecognised | — | ■ □ |
 
 ### Mouse
 
