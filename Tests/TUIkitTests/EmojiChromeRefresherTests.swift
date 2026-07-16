@@ -12,6 +12,17 @@ import Testing
 
 @testable import TUIkit
 
+/// A mutable reference cell for test doubles. A `@Sendable` probe closure captures
+/// the cell — a stable reference — and reads `value` on each call, while the test
+/// mutates it between calls to simulate the world changing. This avoids the
+/// "mutated after capture by sendable closure" warning a directly-captured `var`
+/// draws. Unchecked because the suite drives it entirely on the main actor, with no
+/// real concurrency (same rationale as this file's other `@unchecked Sendable` sinks).
+private final class Mutable<Value>: @unchecked Sendable {
+    var value: Value
+    init(_ value: Value) { self.value = value }
+}
+
 @Suite("probe coalescer")
 struct ProbeCoalescerTests {
     @Test("Idle → request starts a probe; further requests fold into one re-run")
@@ -86,11 +97,11 @@ struct EmojiChromeRefresherTests {
 
     @Test("A landed refresh that changes the answer fires onChange; a same answer doesn't")
     func onChangeFiresOnlyOnChange() async throws {
-        nonisolated(unsafe) var answer = false
+        let answer = Mutable(false)
         nonisolated(unsafe) var changes = 0
         let refresher = EmojiChromeRefresher(
             isRefreshable: true,
-            probe: { Self.settled(answer) },
+            probe: { Self.settled(answer.value) },
             onChange: { changes += 1 })
         #expect(refresher.resolve() == false)  // seeded with false
 
@@ -101,7 +112,7 @@ struct EmojiChromeRefresherTests {
         #expect(refresher.resolve() == false)
 
         // Changed answer: exactly one onChange, and resolve() serves the new value.
-        answer = true
+        answer.value = true
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 1, "a changed answer must invalidate exactly once")
@@ -115,21 +126,21 @@ struct EmojiChromeRefresherTests {
         // chrome off — restyling every glyph on screen — then flip it back when
         // the next probe succeeded. nil means "could not ask", and the previous
         // answer stands.
-        nonisolated(unsafe) var answer: Bool? = true
+        let answer = Mutable<Bool?>(true)
         nonisolated(unsafe) var changes = 0
         let refresher = EmojiChromeRefresher(
             isRefreshable: true,
-            probe: { answer.map(Self.settled) },
+            probe: { answer.value.map(Self.settled) },
             onChange: { changes += 1 })
         #expect(refresher.resolve() == true)
 
-        answer = nil  // tmux went quiet
+        answer.value = nil  // tmux went quiet
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 0, "a failed probe must not restyle the screen")
         #expect(refresher.resolve() == true, "the previous answer stands")
 
-        answer = false  // a real answer again: now it may flip
+        answer.value = false  // a real answer again: now it may flip
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 1)
@@ -151,17 +162,17 @@ struct EmojiChromeRefresherTests {
         // unidentified client (supported: false, mayImproveShortly: true). A
         // moment later the reply lands; the bounded retry must pick it up with
         // NO further external event — there is none coming.
-        nonisolated(unsafe) var reading = EmojiChromeReading(
-            supported: false, mayImproveShortly: true)
+        let reading = Mutable(EmojiChromeReading(
+            supported: false, mayImproveShortly: true))
         nonisolated(unsafe) var changes = 0
         let refresher = EmojiChromeRefresher(
             isRefreshable: true,
-            probe: { reading },
+            probe: { reading.value },
             onChange: { changes += 1 },
             retryDelaysNanos: [5_000_000, 5_000_000, 5_000_000])
         #expect(refresher.resolve() == false)
 
-        reading = Self.settled(true)  // the XTVERSION reply "arrives"
+        reading.value = Self.settled(true)  // the XTVERSION reply "arrives"
         try await waitUntilSettled(refresher)
         #expect(changes == 1, "the retry must land the improved answer unprompted")
         #expect(refresher.resolve() == true)
