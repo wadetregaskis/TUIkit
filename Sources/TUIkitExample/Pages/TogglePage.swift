@@ -80,11 +80,6 @@ struct TogglePage: View {
                     Toggle("automatic", isOn: $styleDemoOn).toggleStyle(.automatic)
                     Toggle("checkbox", isOn: $styleDemoOn).toggleStyle(.checkbox)
                     Toggle("switch", isOn: $styleDemoOn).toggleStyle(.switch)
-                    // A disabled switch in the same state, so its dimmed track reads
-                    // as clearly distinct from the active "off"/"on" switch above.
-                    Toggle(L("page.toggle.switchDisabled"), isOn: $styleDemoOn)
-                        .toggleStyle(.switch)
-                        .disabled()
                 }
             }
 
