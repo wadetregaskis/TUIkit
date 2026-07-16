@@ -72,7 +72,7 @@ struct WheelChainingGraceTests {
 
     @Test("A zero delay chains immediately (the original behaviour)")
     func zeroDelayChainsImmediately() {
-        var now: UInt64 = 0
+        let now: UInt64 = 0
         let axis = makeAxis(now: { now }, delayNanos: 0)
         axis.scrollOffset = axis.maxOffset
         #expect(!wheelDown(axis), "no grace: the blocked tick chains at once")
@@ -80,7 +80,7 @@ struct WheelChainingGraceTests {
 
     @Test("A scroller with nothing to scroll never traps the wheel")
     func noOverflowNeverTraps() {
-        var now: UInt64 = 0
+        let now: UInt64 = 0
         let axis = makeAxis(now: { now })
         axis.extent = 5  // fits entirely within the 10-line viewport
         #expect(!wheelDown(axis), "no overflow — the wheel can only mean the parent")
