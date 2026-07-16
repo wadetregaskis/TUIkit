@@ -17,9 +17,16 @@ import Foundation
 /// ``ToggleCharacterSet/automatic``).
 enum TerminalHost {
     /// Whether the host terminal is macOS Terminal.app, detected once from
-    /// the process environment.
-    static let isAppleTerminal: Bool =
-        detectAppleTerminal(environment: ProcessInfo.processInfo.environment)
+    /// the process environment. Compile-time `false` off macOS, where
+    /// Terminal.app cannot run — so a spurious `TERM_PROGRAM=Apple_Terminal`
+    /// exported on another platform is never mistaken for the real thing.
+    static let isAppleTerminal: Bool = {
+        #if os(macOS)
+        return detectAppleTerminal(environment: ProcessInfo.processInfo.environment)
+        #else
+        return false
+        #endif
+    }()
 
     /// Whether the host terminal is iTerm2, detected once from the process
     /// environment.
@@ -64,16 +71,17 @@ enum TerminalHost {
     /// advances these correctly with no help.
     static var supportsEmojiChrome: Bool { isAppleTerminal || isITerm2 || isGhostty || isWarp }
 
-    /// `true` only for macOS Terminal.app (`TERM_PROGRAM == "Apple_Terminal"`).
-    /// Compile-time `false` off macOS, where Terminal.app cannot run.
-    /// Parameterised over the environment so tests exercise both answers
-    /// deterministically regardless of which terminal runs them.
+    /// `true` for macOS Terminal.app (`TERM_PROGRAM == "Apple_Terminal"`),
+    /// wherever that variable is set in the process environment.
+    ///
+    /// Pure over the environment argument — like the other native detectors
+    /// (``detectITerm2(environment:)`` and friends) — so tests exercise both
+    /// answers deterministically regardless of which terminal, or platform,
+    /// runs them. The real-host guarantee that Terminal.app cannot be running
+    /// off macOS lives on ``isAppleTerminal``, which gates this to macOS; the
+    /// raw check itself stays a plain environment predicate.
     static func detectAppleTerminal(environment: [String: String]) -> Bool {
-        #if os(macOS)
-        return environment["TERM_PROGRAM"] == "Apple_Terminal"
-        #else
-        return false
-        #endif
+        environment["TERM_PROGRAM"] == "Apple_Terminal"
     }
 
     /// `true` for iTerm2 (`TERM_PROGRAM == "iTerm.app"`), wherever iTerm2 sets
