@@ -14,6 +14,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation  // pid_t
 import Testing
 
 @testable import TUIkit
@@ -207,6 +208,11 @@ struct TmuxCompatibilityTests {
 
     // MARK: - Identifying the client terminal(s)
 
+    /// A client that answered XTVERSION, so it needs no process to identify it.
+    private static func talkative(_ termtype: String) -> TerminalHost.TmuxClient {
+        TerminalHost.TmuxClient(termtype: termtype, pid: nil)
+    }
+
     @Test(
         "Emoji chrome follows the attached client(s), and every one must be known",
         arguments: [
@@ -214,11 +220,11 @@ struct TmuxCompatibilityTests {
             (["iTerm2 3.6.11"], true, "iTerm2"),
             (["ghostty 1.3.1"], true, "Ghostty"),
             (["Warp(v0.2026.07.08.17.54.stable_02)"], true, "Warp"),
-            // Terminal.app answers no XTVERSION, so an empty termtype is
-            // ambiguous — Terminal.app, or an unknown terminal that is also
-            // silent. Unresolvable, so: conservative.
-            ([""], false, "Apple Terminal (empty) — indistinguishable from unknown"),
             (["xterm"], false, "a terminal not on the allowlist"),
+            // Silent AND unidentifiable — no pid here, so the process walk that
+            // rescues a local Terminal.app has nothing to work with. This is a
+            // terminal over ssh that answers no XTVERSION: genuinely unknown.
+            ([""], false, "silent, and no process to identify it by"),
             // Several clients, each with its own font, painting the same bytes.
             (["iTerm2 3.6.11", "ghostty 1.3.1"], true, "two allowlisted clients"),
             (["iTerm2 3.6.11", ""], false, "one unknown among them spoils it"),
@@ -228,30 +234,79 @@ struct TmuxCompatibilityTests {
             ([], false, "no clients attached"),
         ] as [([String]?, Bool, String)])
     func emojiChromeFollowsTheClients(termtypes: [String]?, expected: Bool, what: String) {
-        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: termtypes) == expected, "\(what)")
+        let clients = termtypes?.map(Self.talkative)
+        #expect(TerminalHost.emojiChromeSupported(tmuxClients: clients) == expected, "\(what)")
     }
 
     @Test("A newer version of a known client keeps its support")
     func versionsArePrefixMatched() {
         // Prefix-matched so a version bump doesn't silently downgrade the glyphs.
-        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["iTerm2 99.0"]))
-        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["ghostty 2.0.0-dev"]))
-        #expect(TerminalHost.emojiChromeSupported(tmuxClientTermtypes: ["Warp(v2030.01.01)"]))
+        #expect(TerminalHost.termtypeDrawsEmojiChrome("iTerm2 99.0"))
+        #expect(TerminalHost.termtypeDrawsEmojiChrome("ghostty 2.0.0-dev"))
+        #expect(TerminalHost.termtypeDrawsEmojiChrome("Warp(v2030.01.01)"))
     }
 
     @Test(
-        "list-clients output parses to one entry per client",
+        "A silent client is identified by the application that owns it",
         arguments: [
-            // tmux emits one line per client, newline-terminated. The empty
-            // line is Apple Terminal's unanswered XTVERSION — a real client.
-            ("iTerm2 3.6.11\n", ["iTerm2 3.6.11"]),
-            ("\n", [""]),
-            ("iTerm2 3.6.11\nghostty 1.3.1\n", ["iTerm2 3.6.11", "ghostty 1.3.1"]),
-            ("\nghostty 1.3.1\n", ["", "ghostty 1.3.1"]),
+            // The whole point: Terminal.app answers no XTVERSION, so under tmux
+            // it used to be indistinguishable from an unknown terminal and lost
+            // the emoji chrome it draws perfectly well. Its bundle names it.
+            ("/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", true, "Terminal.app"),
+            ("/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", true, "Terminal.app, pre-Ventura path"),
+            // The other three answer XTVERSION so are normally caught earlier,
+            // but a version that stayed silent should still be recognised.
+            ("/Applications/iTerm.app/Contents/MacOS/iTerm2", true, "iTerm2"),
+            ("/Applications/Ghostty.app/Contents/MacOS/ghostty", true, "Ghostty"),
+            ("/Applications/Warp.app/Contents/MacOS/stable", true, "Warp"),
+            // Not terminals we've inspected, or not terminals at all.
+            ("/Applications/Alacritty.app/Contents/MacOS/alacritty", false, "a terminal not on the allowlist"),
+            ("/usr/bin/login", false, "a process on the way up the chain"),
+            ("/usr/sbin/sshd", false, "an ssh hop — the real terminal is elsewhere"),
+            ("/bin/zsh", false, "a shell"),
+            // The allowlist is anchored at a bundle boundary, so a name that
+            // merely ENDS in an allowlisted one must not match.
+            ("/Applications/My Terminal.app/Contents/MacOS/Terminal", false, "an impostor bundle"),
+        ] as [(String, Bool, String)])
+    func applicationsAreIdentifiedByTheirBundle(path: String, expected: Bool, what: String) {
+        #expect(TerminalHost.applicationDrawsEmojiChrome(executablePath: path) == expected, "\(what)")
+    }
+
+    @Test("Walking up from a process that can't lead to a terminal ends, and says so")
+    func theProcessWalkTerminates() {
+        // launchd roots every chain and is not a terminal.
+        #expect(TerminalHost.owningApplicationPath(ofTmuxClient: 1) == nil)
+        // A client that exited between tmux answering and us asking.
+        #expect(TerminalHost.owningApplicationPath(ofTmuxClient: 0x7FFF_FFFE) == nil)
+        // Deliberately NOT asserted: the walk from our own pid. It finds
+        // whatever terminal happens to be running the suite — Terminal.app on a
+        // developer's machine, nothing at all in CI — so any expectation here
+        // would be a coin toss. The live tmux probe covers the real chain.
+    }
+
+    @Test(
+        "list-clients output parses to one client per line, pid first",
+        arguments: [
+            // tmux emits "#{client_pid} #{client_termtype}" per client,
+            // newline-terminated. The termtype takes the rest of the line
+            // because it contains spaces; the pid never does.
+            ("32465 iTerm2 3.6.11\n", [(32465 as pid_t?, "iTerm2 3.6.11")]),
+            // Apple Terminal: a real client, pid present, termtype empty. This
+            // is the line that used to be written off as unknown.
+            ("32465 \n", [(32465 as pid_t?, "")]),
+            (
+                "1 iTerm2 3.6.11\n2 ghostty 1.3.1\n",
+                [(1 as pid_t?, "iTerm2 3.6.11"), (2 as pid_t?, "ghostty 1.3.1")]
+            ),
+            ("1 \n2 ghostty 1.3.1\n", [(1 as pid_t?, ""), (2 as pid_t?, "ghostty 1.3.1")]),
             ("", []),
-            ("iTerm2 3.6.11", ["iTerm2 3.6.11"]),  // no trailing newline
-        ] as [(String, [String])])
-    func clientListParsing(output: String, expected: [String]) {
-        #expect(TerminalHost.parseTmuxClientTermtypes(output) == expected)
+            ("32465 iTerm2 3.6.11", [(32465 as pid_t?, "iTerm2 3.6.11")]),  // no trailing newline
+            // A tmux too old to know `client_pid` leaves it empty rather than
+            // wrong, and identification falls back to the termtype alone.
+            (" iTerm2 3.6.11\n", [(nil as pid_t?, "iTerm2 3.6.11")]),
+        ] as [(String, [(pid_t?, String)])])
+    func clientListParsing(output: String, expected: [(pid_t?, String)]) {
+        let parsed = TerminalHost.parseTmuxClients(output)
+        #expect(parsed == expected.map { TerminalHost.TmuxClient(termtype: $0.1, pid: $0.0) })
     }
 }

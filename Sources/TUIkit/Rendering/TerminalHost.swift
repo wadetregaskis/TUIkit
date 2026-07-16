@@ -124,22 +124,28 @@ enum TerminalHost {
 
     // MARK: - tmux client identification
 
+    /// One terminal attached to a tmux session — what tmux will tell us about
+    /// it, and the handle that lets us find out the rest ourselves.
+    struct TmuxClient: Equatable {
+        /// The client's XTVERSION reply as `#{client_termtype}` reports it —
+        /// "iTerm2 3.6.11", "ghostty 1.3.1", "Warp(v0.2026…)" — or `""` for a
+        /// terminal that answered none (Terminal.app, and anything older than
+        /// the escape).
+        let termtype: String
+
+        /// The `tmux attach` process, whose parent chain runs back through the
+        /// login shell to the terminal application that owns the window — which
+        /// is how a silent client is identified. `nil` if tmux did not report it.
+        let pid: pid_t?
+    }
+
     /// Whether the terminals currently attached to a tmux session all draw the
-    /// emoji chrome glyphs correctly, given what tmux reports each client to be.
+    /// emoji chrome glyphs correctly.
     ///
     /// Under tmux the *glyph repertoire* is still the outer terminal's — tmux
     /// composites a grid but the client's font paints it — so the emoji-chrome
     /// question is the one thing that genuinely depends on which client is
     /// attached. (Widths do not: tmux's grid is client-independent, measured.)
-    ///
-    /// tmux asks each client for XTVERSION and exposes the reply as
-    /// `#{client_termtype}` — "iTerm2 3.6.11", "ghostty 1.3.1",
-    /// "Warp(v0.2026…)". Terminal.app answers nothing, so an EMPTY termtype is
-    /// ambiguous: it is Terminal.app (allowlisted) or an unknown terminal that
-    /// also stays silent (not). That ambiguity is unresolvable from here, so an
-    /// empty reply is treated as unknown and loses the emoji chrome —
-    /// conservative, because mis-measuring the selector shears the whole row
-    /// (issue #9), and membership of this allowlist is earned by inspection.
     ///
     /// **Every** attached client must be recognised, not just the active one: a
     /// tmux session can have several clients at once, each with its own font,
@@ -147,19 +153,157 @@ enum TerminalHost {
     /// single-client case nothing and keeps a stray unknown client from getting
     /// glyphs it cannot draw.
     ///
-    /// - Parameter termtypes: one entry per attached client, as
-    ///   `#{client_termtype}` reports it. `nil` means the question could not be
-    ///   asked; empty means no clients are attached (nothing to please).
-    static func emojiChromeSupported(tmuxClientTermtypes termtypes: [String]?) -> Bool {
-        guard let termtypes, !termtypes.isEmpty else { return false }
-        return termtypes.allSatisfy { termtype in
-            let lowered = termtype.lowercased()
-            // Prefix-matched, so a version bump does not silently drop support.
-            return lowered.hasPrefix("iterm2")
-                || lowered.hasPrefix("ghostty")
-                || lowered.hasPrefix("warp")
-        }
+    /// - Parameter clients: one entry per attached client. `nil` means the
+    ///   question could not be asked; empty means no clients are attached
+    ///   (nothing to please).
+    static func emojiChromeSupported(tmuxClients clients: [TmuxClient]?) -> Bool {
+        guard let clients, !clients.isEmpty else { return false }
+        return clients.allSatisfy(clientDrawsEmojiChrome)
     }
+
+    /// Identifies one attached client, by asking it and then — if it said
+    /// nothing — by looking at what process owns it.
+    ///
+    /// Two signals, because neither covers the field alone:
+    ///
+    /// - **XTVERSION** (`termtype`) names any terminal that answers it, local or
+    ///   across an ssh hop, but Terminal.app answers nothing at all.
+    /// - **The owning application** identifies a silent terminal, but only a
+    ///   local one — over ssh the client's parent is `sshd`, not a terminal.
+    ///
+    /// So the answer to an empty termtype is not "unknown", as it used to be:
+    /// it is "ask the other way". That mattered — Terminal.app is allowlisted
+    /// natively and was silently losing its emoji chrome to nothing more than
+    /// being run inside tmux.
+    ///
+    /// A client that stays unidentified after both still loses the emoji chrome,
+    /// and should: an unknown terminal that answers no XTVERSION *and* isn't a
+    /// local app we recognise is a real thing (a Linux VT console, an old xterm
+    /// over ssh), and the squares would come out as tofu there.
+    static func clientDrawsEmojiChrome(_ client: TmuxClient) -> Bool {
+        if !client.termtype.isEmpty {
+            return termtypeDrawsEmojiChrome(client.termtype)
+        }
+        guard let pid = client.pid,
+            let executable = owningApplicationPath(ofTmuxClient: pid)
+        else { return false }
+        return applicationDrawsEmojiChrome(executablePath: executable)
+    }
+
+    /// Classifies a client by its XTVERSION reply.
+    ///
+    /// Prefix-matched and case-insensitive, so a version bump does not silently
+    /// drop support. Terminal.app is deliberately absent: it never answers, so
+    /// no termtype can name it — it is recognised by
+    /// ``applicationDrawsEmojiChrome(executablePath:)`` instead.
+    static func termtypeDrawsEmojiChrome(_ termtype: String) -> Bool {
+        let lowered = termtype.lowercased()
+        return lowered.hasPrefix("iterm2")
+            || lowered.hasPrefix("ghostty")
+            || lowered.hasPrefix("warp")
+    }
+
+    /// Executable paths of the terminal applications verified to draw the emoji
+    /// chrome — the same allowlist as ``supportsEmojiChrome``, spelled as
+    /// bundles rather than as `TERM_PROGRAM` values.
+    ///
+    /// Matched as substrings, each anchored with a leading `/` so a bundle
+    /// merely *ending* in one of these names ("/My Terminal.app/…") cannot
+    /// match. Only Terminal.app names its executable, because the others'
+    /// executable names are less predictable than their bundles (iTerm.app ships
+    /// `iTerm2`, Warp.app ships `stable`); matching to the `MacOS/` directory is
+    /// enough to identify the bundle and won't break when they rename a binary.
+    private static let emojiChromeApplicationExecutables = [
+        "/Terminal.app/Contents/MacOS/Terminal",
+        "/iTerm.app/Contents/MacOS/",
+        "/Ghostty.app/Contents/MacOS/",
+        "/Warp.app/Contents/MacOS/",
+    ]
+
+    /// Whether a terminal application, named by its executable path, is one of
+    /// the four verified to draw the emoji chrome correctly.
+    static func applicationDrawsEmojiChrome(executablePath: String) -> Bool {
+        emojiChromeApplicationExecutables.contains { executablePath.contains($0) }
+    }
+
+    /// Walks up from a tmux client process to the terminal application that owns
+    /// its window, and returns that application's executable path.
+    ///
+    /// A tmux client's ancestry is the window it was launched in — measured, for
+    /// Terminal.app:
+    ///
+    /// ```
+    ///   32465  /opt/homebrew/Cellar/tmux/3.7b/bin/tmux     ← #{client_pid}
+    ///   32453  /bin/zsh
+    ///   32452  /usr/bin/login
+    ///     509  /System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal
+    /// ```
+    ///
+    /// This is the client's chain, not ours: the tmux *server* is a daemon
+    /// reparented to `launchd`, so our own ancestry says nothing about who is
+    /// watching. Hence `#{client_pid}`.
+    ///
+    /// Costs no subprocess — `sysctl` for each parent link and `proc_pidpath`
+    /// for each path, both plain syscalls — so it adds nothing measurable to the
+    /// probe that already forked for tmux.
+    ///
+    /// Returns the first ancestor that is a recognised terminal application, or
+    /// `nil` if the chain reaches `launchd` without one (an ssh session, a
+    /// terminal we don't know, a client that already exited).
+    ///
+    /// macOS-only, and deliberately: this exists to identify Terminal.app, which
+    /// is the only allowlisted terminal that answers no XTVERSION and doesn't
+    /// exist off macOS. Ghostty answers on Linux, so there is nothing for the
+    /// walk to add there and no `/proc` twin worth carrying.
+    static func owningApplicationPath(ofTmuxClient pid: pid_t) -> String? {
+        #if canImport(Darwin)
+        var current: pid_t? = pid
+        // launchd (pid 1) roots every chain; the bound is for a pid recycled into
+        // a cycle mid-walk, which would otherwise spin forever.
+        for _ in 0..<16 {
+            guard let pid = current, pid > 1 else { return nil }
+            if let path = executablePath(ofProcess: pid),
+                applicationDrawsEmojiChrome(executablePath: path)
+            {
+                return path
+            }
+            current = parentProcess(ofProcess: pid)
+        }
+        return nil
+        #else
+        return nil
+        #endif
+    }
+
+    #if canImport(Darwin)
+    /// The parent of a process, or `nil` if it has exited or is unreadable.
+    private static func parentProcess(ofProcess pid: pid_t) -> pid_t? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        let ok = mib.withUnsafeMutableBufferPointer {
+            sysctl($0.baseAddress, u_int($0.count), &info, &size, nil, 0) == 0
+        }
+        // A dead pid succeeds with size 0 rather than failing — hence both checks.
+        guard ok, size > 0 else { return nil }
+        let parent = info.kp_eproc.e_ppid
+        return parent > 0 ? parent : nil
+    }
+
+    /// The full executable path of a process, or `nil` if it has exited or is
+    /// unreadable (another user's process, in particular).
+    private static func executablePath(ofProcess pid: pid_t) -> String? {
+        var buffer = [UInt8](repeating: 0, count: Int(4 * MAXPATHLEN))
+        // Returns the path's length, excluding the terminating NUL.
+        let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        // Failable rather than lossy: a path that isn't valid UTF-8 is one we
+        // cannot match against the allowlist anyway, and saying so leaves the
+        // client unidentified — the safe answer — instead of comparing against
+        // a string peppered with U+FFFD.
+        return String(bytes: buffer[..<Int(length)], encoding: .utf8)
+    }
+    #endif
 
     /// Asks tmux what each attached client is, or `nil` when it cannot be asked.
     ///
@@ -176,16 +320,15 @@ enum TerminalHost {
     /// a re-attach from a different terminal looks like from in here.
     ///
     /// Fails closed: not under tmux, tmux missing from `PATH`, a non-zero exit
-    /// or a hang all yield `nil`, which
-    /// ``emojiChromeSupported(tmuxClientTermtypes:)`` reads as "unknown" and so
-    /// as the safe non-emoji glyphs.
-    static func probeTmuxClientTermtypes() -> [String]? {
+    /// or a hang all yield `nil`, which ``emojiChromeSupported(tmuxClients:)``
+    /// reads as "unknown" and so as the safe non-emoji glyphs.
+    static func probeTmuxClients() -> [TmuxClient]? {
         guard isTmux else { return nil }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        // One line per attached client; an unanswered XTVERSION is an empty line,
-        // which `emojiChromeSupported` correctly reads as unknown.
-        process.arguments = ["tmux", "list-clients", "-F", "#{client_termtype}"]
+        // One line per attached client. The pid comes first because it is always
+        // digits: the termtype takes the rest of the line, spaces and all.
+        process.arguments = ["tmux", "list-clients", "-F", "#{client_pid} #{client_termtype}"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -199,24 +342,30 @@ enum TerminalHost {
         guard process.terminationStatus == 0,
             let output = String(data: data, encoding: .utf8)
         else { return nil }
-        return parseTmuxClientTermtypes(output)
+        return parseTmuxClients(output)
     }
 
-    /// Splits `list-clients` output into one entry per attached client.
+    /// Parses `list-clients` output into one entry per attached client.
     ///
-    /// Empty lines are kept — a client whose XTVERSION went unanswered
-    /// (Terminal.app) reports an empty termtype and is still a client, and one
-    /// that must be counted as unknown. Only the empty element the trailing
-    /// newline leaves behind is dropped. Split out from the subprocess so the
-    /// parsing is testable without one.
-    static func parseTmuxClientTermtypes(_ output: String) -> [String] {
+    /// Empty termtypes are kept — a client whose XTVERSION went unanswered
+    /// (Terminal.app) is still a client, and now an identifiable one. Only the
+    /// empty element the trailing newline leaves behind is dropped. Split out
+    /// from the subprocess so the parsing is testable without one.
+    static func parseTmuxClients(_ output: String) -> [TmuxClient] {
         // No output at all means no clients — distinct from one line that
-        // happens to be empty, which IS a client (one that answered no
-        // XTVERSION). Without this, `""` would split to a single empty element
-        // and be miscounted as an attached unknown terminal.
+        // happens to carry no termtype, which IS a client. Without this, `""`
+        // would split to a single empty element and be miscounted as one.
         guard !output.isEmpty else { return [] }
         let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
         let withoutTrailingNewlineArtefact = output.hasSuffix("\n") ? lines.dropLast() : lines[...]
-        return withoutTrailingNewlineArtefact.map(String.init)
+        return withoutTrailingNewlineArtefact.map { line in
+            let fields = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+            // A tmux too old to know `client_pid` substitutes nothing for it, so
+            // the pid is absent rather than wrong: identification falls back to
+            // the termtype alone, which is exactly the old behaviour.
+            let pid = fields.first.flatMap { pid_t($0) }
+            let termtype = fields.count > 1 ? String(fields[1]) : ""
+            return TmuxClient(termtype: termtype, pid: pid)
+        }
     }
 }

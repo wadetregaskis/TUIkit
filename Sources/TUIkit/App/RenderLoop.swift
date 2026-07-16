@@ -182,7 +182,7 @@ internal final class RenderLoop<A: App> {
 
     /// The emoji-chrome answer for the terminals currently attached, cached
     /// because resolving it under tmux costs a subprocess (see
-    /// ``TerminalHost/probeTmuxClientTermtypes()``); `nil` means "ask again".
+    /// ``TerminalHost/probeTmuxClients()``); `nil` means "ask again".
     /// Dropped by ``invalidateDiffCache()``, i.e. on every resize — which is
     /// what re-attaching from a different terminal looks like from here.
     ///
@@ -552,7 +552,7 @@ extension RenderLoop {
         let supported =
             TerminalHost.isTmux
             ? TerminalHost.emojiChromeSupported(
-                tmuxClientTermtypes: TerminalHost.probeTmuxClientTermtypes())
+                tmuxClients: TerminalHost.probeTmuxClients())
             : TerminalHost.supportsEmojiChrome
         cachedEmojiChrome = supported
         return supported
