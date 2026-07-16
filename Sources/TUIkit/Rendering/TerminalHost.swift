@@ -322,6 +322,12 @@ enum TerminalHost {
     /// Fails closed: not under tmux, tmux missing from `PATH`, a non-zero exit
     /// or a hang all yield `nil`, which ``emojiChromeSupported(tmuxClients:)``
     /// reads as "unknown" and so as the safe non-emoji glyphs.
+    ///
+    /// The wait is BOUNDED. `list-clients` answers in a few milliseconds, but a
+    /// tmux whose server is wedged — `SIGSTOP`, a stuck socket, a machine under
+    /// load — could otherwise block the render loop forever on the unbounded
+    /// `readDataToEndOfFile`/`waitUntilExit` this used to call. Past the deadline
+    /// the child is killed and the probe fails closed.
     static func probeTmuxClients() -> [TmuxClient]? {
         guard isTmux else { return nil }
         let process = Process()
@@ -337,13 +343,30 @@ enum TerminalHost {
         } catch {
             return nil  // no tmux on PATH, or exec refused
         }
+        // Poll for exit against a deadline rather than blocking on it. Reading is
+        // deferred until the child has exited: `list-clients` output is a handful
+        // of lines, far under the pipe buffer, so it cannot block on a full pipe
+        // in the meantime — which is what would otherwise reintroduce the hang.
+        let deadline = DispatchTime.now() + .milliseconds(probeTimeoutMilliseconds)
+        while process.isRunning {
+            if DispatchTime.now() >= deadline {
+                process.terminate()
+                return nil
+            }
+            Thread.sleep(forTimeInterval: 0.002)
+        }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
         guard process.terminationStatus == 0,
             let output = String(data: data, encoding: .utf8)
         else { return nil }
         return parseTmuxClients(output)
     }
+
+    /// How long ``probeTmuxClients()`` waits for tmux before giving up and
+    /// failing closed. Two orders of magnitude above tmux's normal few-ms reply,
+    /// so a loaded machine is not mistaken for a wedged one, yet short enough to
+    /// be invisible in a render loop that only re-probes every couple of seconds.
+    private static let probeTimeoutMilliseconds = 250
 
     /// Parses `list-clients` output into one entry per attached client.
     ///
