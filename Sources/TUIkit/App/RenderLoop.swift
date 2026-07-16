@@ -595,7 +595,14 @@ extension RenderLoop {
         // under tmux the answer depends on the CLIENT terminal's font and only
         // tmux can name it — a question that costs a subprocess, so it is cached
         // here and re-asked on resize. Off tmux it is the same static allowlist.
-        environment.checkboxStyle = .automatic(emojiChrome: resolveEmojiChrome())
+        // The DEFAULT is the `.automatic` marker, and the answer it stands for
+        // goes alongside it. Injecting the marker (rather than a style already
+        // resolved here) is what makes an app's own explicit
+        // `.checkboxStyle(.automatic)` adapt too — it overrides this default with
+        // the same marker, and the render site resolves whichever arrives.
+        environment.checkboxStyle = .automatic
+        environment.resolvedAutomaticCheckboxStyle = .automatic(
+            emojiChrome: resolveEmojiChrome())
 
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).

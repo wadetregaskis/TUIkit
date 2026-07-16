@@ -146,7 +146,7 @@ struct ToggleRenderTests {
         #expect(out.first == "\u{2B1C}\u{FE0E} Wifi", "got: |\(out.first ?? "")|")
     }
 
-    @Test(".automatic resolves to .emoji on emoji-chrome hosts, .unicode elsewhere")
+    @Test(".automatic is a marker, resolved against the terminal at render")
     func automaticStyleResolution() {
         #expect(CheckboxStyle.automatic(emojiChrome: true) == .emoji)
         #expect(CheckboxStyle.automatic(emojiChrome: false) == .unicode)
@@ -157,14 +157,71 @@ struct ToggleRenderTests {
         #expect(TerminalHost.detectITerm2(environment: ["TERM_PROGRAM": "iTerm.app"]))
         #expect(!TerminalHost.detectITerm2(environment: ["TERM_PROGRAM": "Apple_Terminal"]))
         #expect(!TerminalHost.detectITerm2(environment: [:]))
-        // The live property agrees with the live detection, whatever hosts
-        // the suite.
-        #expect(CheckboxStyle.automatic
-            == CheckboxStyle.automatic(emojiChrome: TerminalHost.supportsEmojiChrome))
+
+        // `.automatic` does NOT bake in the host at construction. It used to —
+        // it was literally `automatic(emojiChrome: TerminalHost.supportsEmojiChrome)`
+        // — which froze whatever was true when the value was made, typically at
+        // app-state init. Under tmux the right answer depends on the attached
+        // CLIENT and changes on re-attach, so the decision has to be deferred.
+        #expect(CheckboxStyle.automatic.resolvesFromTerminal)
+        #expect(!CheckboxStyle.unicode.resolvesFromTerminal)
+        #expect(!CheckboxStyle.emoji.resolvesFromTerminal)
+        #expect(!CheckboxStyle.ascii.resolvesFromTerminal)
+        #expect(!CheckboxStyle(onMark: "x", offMark: "o").resolvesFromTerminal)
+
+        // It is its own value, distinct from the marks it falls back to —
+        // which is what lets a caller match `case .automatic`.
+        #expect(CheckboxStyle.automatic != .unicode)
+        #expect(CheckboxStyle.automatic != .emoji)
+
         // The bare environment default stays terminal-independent (.unicode),
         // so headless renders and this suite are deterministic; the app run
-        // loop injects .automatic at its root instead.
+        // loop injects the marker at its root instead.
         #expect(EnvironmentValues().checkboxStyle == .unicode)
+    }
+
+    @Test("An .automatic marker resolves to whatever the frame says the terminal is")
+    func automaticResolvesFromTheEnvironment() {
+        var environment = EnvironmentValues()
+        environment.checkboxStyle = .automatic
+
+        // Nothing resolved yet (headless): the deterministic .unicode fallback.
+        #expect(environment.effectiveCheckboxStyle == .unicode)
+
+        // The run loop supplies the answer for the terminal in front of the user
+        // this frame; the SAME marker now draws emoji.
+        environment.resolvedAutomaticCheckboxStyle = .emoji
+        #expect(environment.effectiveCheckboxStyle == .emoji)
+
+        // …and follows it back when the client changes (a tmux re-attach from a
+        // terminal whose font can't draw them).
+        environment.resolvedAutomaticCheckboxStyle = .unicode
+        #expect(environment.effectiveCheckboxStyle == .unicode)
+    }
+
+    @Test("An explicit style is never second-guessed by the terminal")
+    func explicitStylesIgnoreTheResolvedAnswer() {
+        for explicit in [CheckboxStyle.unicode, .emoji, .ascii] {
+            var environment = EnvironmentValues()
+            environment.checkboxStyle = explicit
+            environment.resolvedAutomaticCheckboxStyle = .emoji
+            #expect(environment.effectiveCheckboxStyle == explicit)
+            environment.resolvedAutomaticCheckboxStyle = .ascii
+            #expect(environment.effectiveCheckboxStyle == explicit)
+        }
+    }
+
+    @Test("A Toggle draws the marker's resolved glyphs, not its fallback")
+    func toggleRendersTheResolvedAutomaticStyle() {
+        // The end-to-end shape of the fix: `.checkboxStyle(.automatic)` — what
+        // TUIkitExample applies app-wide — must follow the resolved answer.
+        var context = makeRenderContext(width: 20, height: 2)
+        context.environment.resolvedAutomaticCheckboxStyle = .emoji
+        let buffer = renderToBuffer(
+            Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.automatic), context: context)
+        #expect(
+            buffer.lines.first?.stripped == "\u{2B1C}\u{FE0E} Wifi",
+            "got: |\(buffer.lines.first?.stripped ?? "")|")
     }
 
     // MARK: - Empty / whitespace label (the "empty chrome" bug class)

@@ -92,7 +92,10 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
         // The checkbox glyphs come from the configurable ``CheckboxStyle`` (■/□
         // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
-        let style = context.environment.checkboxStyle
+        // `effectiveCheckboxStyle`, NOT `checkboxStyle`: `.automatic` is a marker
+        // that must be resolved against this frame's terminal here, at the point
+        // of drawing — that is what lets it follow a tmux client change.
+        let style = context.environment.effectiveCheckboxStyle
         let mark = isOnValue ? style.onMark : style.offMark
 
         if style.openBracket.isEmpty {
@@ -142,7 +145,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // The knob follows the checkbox style's glyph repertoire (see
         // ``SwitchIndicatorGlyphs/knob(for:)``): the seamless two-cell emoji
         // square under `.emoji`, two FULL BLOCKs otherwise.
-        let knob = SwitchIndicatorGlyphs.knob(for: context.environment.checkboxStyle)
+        // Resolved, not raw: `knob(for:)` compares against `.emoji`, which an
+        // unresolved `.automatic` marker could never equal.
+        let knob = SwitchIndicatorGlyphs.knob(for: context.environment.effectiveCheckboxStyle)
 
         let trackColor: Color
         let knobColor: Color

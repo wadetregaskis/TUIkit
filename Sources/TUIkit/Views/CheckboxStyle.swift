@@ -51,6 +51,25 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// glyph.
     public let closeBracket: String
 
+    /// Marks the value produced by ``automatic``: "decide from the terminal at
+    /// render time" rather than a decided set of glyphs.
+    ///
+    /// This is what makes ``automatic`` adapt. The alternative — resolving the
+    /// glyphs when the value is *created* — bakes in whatever the terminal
+    /// looked like at that moment, which is wrong the instant it changes: under
+    /// tmux the answer depends on the attached CLIENT, and a detach and
+    /// re-attach from a different terminal changes it mid-run.
+    ///
+    /// The marks carried alongside are ``unicode``'s, so a value that somehow
+    /// escapes resolution still draws correct, universally-safe glyphs rather
+    /// than nothing.
+    ///
+    /// Participates in `Equatable`, deliberately: `.automatic` is NOT `.unicode`
+    /// even though they carry the same marks, because they mean different things
+    /// — which is what lets a caller (the example's Theme picker) match
+    /// `case .automatic` and show it as its own option.
+    var resolvesFromTerminal: Bool = false
+
     /// Creates a checkbox style from its marks and (optional) brackets.
     public init(onMark: String, offMark: String, openBracket: String = "", closeBracket: String = "") {
         self.onMark = onMark
@@ -99,11 +118,26 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// This is what a running app uses when no ``SwiftUICore/View/checkboxStyle(_:)``
     /// modifier applies. (The bare `EnvironmentValues` default — what headless
     /// renders and tests see — is the terminal-independent ``unicode``.)
+    ///
+    /// **Resolved at render, not here.** This returns a marker
+    /// (``resolvesFromTerminal``), and the render loop supplies the answer for
+    /// the terminal in front of the user *this frame*. That matters because the
+    /// answer can change while the app runs: under tmux it depends on the
+    /// attached CLIENT's font, and detaching and re-attaching from a different
+    /// terminal changes it. Resolving eagerly — as this used to — froze whatever
+    /// was true when the value happened to be constructed, typically at app-state
+    /// init, so `.checkboxStyle(.automatic)` could never notice.
+    ///
+    /// Outside a run loop (headless renders, tests) there is no terminal to
+    /// consult and this draws ``unicode``, deterministically.
     public static var automatic: Self {
-        automatic(emojiChrome: TerminalHost.supportsEmojiChrome)
+        var style = Self.unicode
+        style.resolvesFromTerminal = true
+        return style
     }
 
-    /// Testable core of ``automatic``.
+    /// The concrete style ``automatic`` resolves TO for a given terminal — the
+    /// render loop's half of the deferral, and the testable core of the choice.
     static func automatic(emojiChrome: Bool) -> Self {
         emojiChrome ? .emoji : .unicode
     }
@@ -120,11 +154,42 @@ private struct CheckboxStyleKey: EnvironmentKey {
     static let defaultValue: CheckboxStyle = .unicode
 }
 
+/// What ``CheckboxStyle/automatic`` resolves to for the terminal in front of the
+/// user right now — supplied per frame by `RenderLoop.buildEnvironment`.
+///
+/// Its own default is ``CheckboxStyle/unicode`` so that a bare
+/// `EnvironmentValues` (headless renders, the test suite) resolves `.automatic`
+/// deterministically, with no dependence on whichever terminal happens to be
+/// running the process.
+private struct ResolvedAutomaticCheckboxStyleKey: EnvironmentKey {
+    static let defaultValue: CheckboxStyle = .unicode
+}
+
 extension EnvironmentValues {
     /// The checkbox indicator style for ``Toggle``s in this environment.
+    ///
+    /// May be ``CheckboxStyle/automatic``, which is a marker rather than a
+    /// decided set of glyphs — read ``effectiveCheckboxStyle`` to draw with.
     public var checkboxStyle: CheckboxStyle {
         get { self[CheckboxStyleKey.self] }
         set { self[CheckboxStyleKey.self] = newValue }
+    }
+
+    /// The concrete style ``CheckboxStyle/automatic`` stands for this frame.
+    var resolvedAutomaticCheckboxStyle: CheckboxStyle {
+        get { self[ResolvedAutomaticCheckboxStyleKey.self] }
+        set { self[ResolvedAutomaticCheckboxStyleKey.self] = newValue }
+    }
+
+    /// The style to actually DRAW with: ``CheckboxStyle/automatic`` resolved
+    /// against this frame's terminal, anything explicit used as it stands.
+    ///
+    /// Every render site must read this rather than ``checkboxStyle``, or an
+    /// `.automatic` marker reaches the glyph code as its ``CheckboxStyle/unicode``
+    /// fallback and the adaptation silently does nothing.
+    var effectiveCheckboxStyle: CheckboxStyle {
+        let style = checkboxStyle
+        return style.resolvesFromTerminal ? resolvedAutomaticCheckboxStyle : style
     }
 }
 
