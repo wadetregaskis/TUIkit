@@ -72,6 +72,17 @@ final class FrameDiffWriter {
     /// detection/injection story as `isAppleTerminal`.
     private let isWarp: Bool
 
+    /// Whether we are running inside tmux, which is a COMPOSITOR rather than a
+    /// renderer: it parses our bytes into its own grid using its own width table
+    /// and re-renders that grid to whichever client is attached. So tmux's model
+    /// is the one our output has to satisfy, and it wins over any native host
+    /// flag — checked first in the dispatch below. Its divergences (SF Symbols,
+    /// bare pictographs and lone regional indicators all advance 1 against a
+    /// 2-cell claim; BMP-base skin tones over-advance) take the same
+    /// strip-then-CUF treatment as iTerm2's. DSR-measured with all four
+    /// terminals attached AND with none — identical every time.
+    private let isTmux: Bool
+
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
 
@@ -119,12 +130,14 @@ final class FrameDiffWriter {
         isAppleTerminal: Bool = TerminalHost.isAppleTerminal,
         isITerm2: Bool = TerminalHost.isITerm2,
         isGhostty: Bool = TerminalHost.isGhostty,
-        isWarp: Bool = TerminalHost.isWarp
+        isWarp: Bool = TerminalHost.isWarp,
+        isTmux: Bool = TerminalHost.isTmux
     ) {
         self.isAppleTerminal = isAppleTerminal
         self.isITerm2 = isITerm2
         self.isGhostty = isGhostty
         self.isWarp = isWarp
+        self.isTmux = isTmux
     }
 }
 
@@ -300,7 +313,15 @@ extension FrameDiffWriter {
         // under-advance. All models are DSR-measured; see
         // Documentation/Terminal-compatibility.md.
         let compensated =
-            if isAppleTerminal {
+            if isTmux {
+                // FIRST: tmux is a compositor, so ITS grid is what our output
+                // lands in — the outer terminal's quirks apply to tmux's output,
+                // not ours, and its model must win even if a native host's
+                // variable somehow survived into the pane. Same shape as iTerm2:
+                // strip the skin tones tmux refuses to join, then CUF its
+                // under-advancers (SF Symbols, bare pictographs, lone RIs).
+                clipped.withSkinToneFallback().withTmuxCursorCompensation()
+            } else if isAppleTerminal {
                 clipped.withTerminalAppCursorCompensation()
             } else if isITerm2 {
                 clipped.withSkinToneFallback().withITerm2CursorCompensation()

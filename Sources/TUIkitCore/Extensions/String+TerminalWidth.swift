@@ -369,6 +369,59 @@ extension Character {
         return terminalWidth
     }
 
+    /// The number of columns **tmux** advances the text cursor by when this
+    /// character is printed (DSR-measured inside tmux 3.7b, 2026-07-15).
+    ///
+    /// tmux is a compositor: it parses our output into its own grid using its
+    /// own width table, so the number that matters is tmux's, not the outer
+    /// terminal's. Measured with Apple Terminal, iTerm2, Ghostty and Warp
+    /// attached, and with NO client attached: **all five runs are identical
+    /// across all 58 probed clusters**, so this model is client-independent by
+    /// measurement, not just by theory.
+    ///
+    /// tmux's table is plain `wcwidth` plus emoji-presentation, which diverges
+    /// from what the glyphs actually paint in three classes:
+    ///
+    /// - **Plane-16 Private Use Area** (SF Symbols): 1, against a 2-cell claim.
+    ///   tmux's `wcwidth` has never heard of SF Symbols. This is the one that
+    ///   visibly breaks: the example's "Supports SF Symbols" box draws three of
+    ///   them, and its right border landed 3 cells early (measured 65 vs 68).
+    /// - **Bare pictographs** — a lone SMP scalar whose presentation is not
+    ///   emoji: 1, against 2. Broader than
+    ///   ``isBarePictographUnderAdvancer``, which additionally requires
+    ///   `Emoji=Yes`: tmux gives 1 to *any* non-emoji-presentation SMP
+    ///   pictograph, including 🁠 dominoes (U+1F060) and 🂡 playing cards
+    ///   (U+1F0A1), which are `Emoji=No` and so are not in that set.
+    /// - **Lone regional indicators** (🇦 alone): 1, against 2 — same as
+    ///   Terminal.app and Warp.
+    ///
+    /// Everything else agrees: CJK 2, emoji-presentation 2, ZWJ families 2,
+    /// flag pairs 2, SMP + skin tone 2, NFD 1, powerline 1, blocks 1.
+    ///
+    /// Skin-tone clusters on a **BMP** base (✊🏻 = U+270A U+1F3FB) OVER-advance
+    /// at 4 — tmux declines to join them — but never reach this model: the
+    /// output path strips the modifier via ``String/withSkinToneFallback()``
+    /// first, exactly as on iTerm2 and Warp, after which the base advances 2 as
+    /// claimed. The one uncorrectable divergence is a bare ☝ (U+261D with no
+    /// selector): tmux advances 2 against a 1-cell claim, and CUF cannot claw a
+    /// cursor back. It is left alone and documented, as ZWJ is on Terminal.app.
+    public var tmuxCursorAdvance: Int {
+        let scalars = unicodeScalars
+        if scalars.count == 1, let only = scalars.first {
+            // Plane-16 PUA — SF Symbols.
+            if (0x100000...0x10FFFD).contains(only.value) { return 1 }
+            // Any lone SMP pictograph that is not emoji-presentation, whether or
+            // not Unicode calls it an emoji (dominoes and cards are not).
+            if (0x1F000...0x1FBFF).contains(only.value),
+                !only.properties.isEmojiPresentation
+            {
+                return 1
+            }
+        }
+        if isLoneRegionalIndicator { return 1 }
+        return terminalWidth
+    }
+
     /// Whether this character is a **bare** SMP pictograph — an emoji-capable
     /// scalar whose default presentation is TEXT (`Emoji=Yes`,
     /// `Emoji_Presentation=No`), carrying no variation selector — such as

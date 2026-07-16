@@ -346,6 +346,27 @@ extension String {
         withCursorForwardCompensation { $0.warpCursorAdvance }
     }
 
+    /// Returns a copy of this string with tmux's cursor-advance divergences
+    /// worked around by the same CUF injection the other hosts use: Plane-16
+    /// PUA (SF Symbols), bare SMP pictographs — including the `Emoji=No`
+    /// dominoes and playing cards — and lone regional indicators all advance 1
+    /// against a 2-cell claim, so each gets one CUF.
+    ///
+    /// Unlike the native terminals this is not a bug in a renderer but a
+    /// disagreement with a *compositor's* width table: tmux allocates the cells
+    /// it thinks a cluster needs, so without the CUF every later column on the
+    /// row shears left by one per glyph and enclosing borders land early.
+    /// Pushing the cursor to the claimed column keeps the layout intact and
+    /// leaves the glyph a blank cell to paint into.
+    ///
+    /// tmux's BMP-base skin-tone over-advance is handled upstream by
+    /// ``withSkinToneFallback()``, as on iTerm2 and Warp; a bare ☝ remains
+    /// uncorrectable (see ``Character/tmuxCursorAdvance``).
+    /// ANSI escape sequences are preserved.
+    public func withTmuxCursorCompensation() -> String {
+        withCursorForwardCompensation { $0.tmuxCursorAdvance }
+    }
+
     /// Shared CUF-injection walk: appends each character, then pushes the
     /// cursor forward by the shortfall whenever the host advances it less
     /// than the character's painted ``Character/terminalWidth``.

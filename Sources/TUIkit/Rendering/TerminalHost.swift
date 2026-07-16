@@ -36,6 +36,20 @@ enum TerminalHost {
     static let isWarp: Bool =
         detectWarp(environment: ProcessInfo.processInfo.environment)
 
+    /// Whether TUIkit is running inside tmux, detected once from the process
+    /// environment.
+    ///
+    /// tmux is a **compositor**, not a passthrough: it parses our output into
+    /// its own cell grid using its own width tables and re-renders that grid to
+    /// whichever client is attached. So the host that matters is tmux — the
+    /// outer terminal's advance quirks apply to *tmux's* output, not ours — and
+    /// this must be checked BEFORE the four native detectors would otherwise
+    /// win. In practice they cannot: tmux overwrites `TERM_PROGRAM` with its own
+    /// name rather than forwarding the outer terminal's (measured, 3.7b), so
+    /// running under tmux inside iTerm2 reports `tmux`, not `iTerm.app`.
+    static let isTmux: Bool =
+        detectTmux(environment: ProcessInfo.processInfo.environment)
+
     /// Whether the host draws the emoji-repertoire chrome glyphs (⬛︎ / ⬜︎
     /// with the U+FE0E text-presentation selector) correctly: monochrome,
     /// theme-tintable, two cells, no row shear. Verified by eye on every
@@ -87,5 +101,24 @@ enum TerminalHost {
     /// present, but `TERM_PROGRAM` is the stable, documented signal.)
     static func detectWarp(environment: [String: String]) -> Bool {
         environment["TERM_PROGRAM"] == "WarpTerminal"
+    }
+
+    /// `true` when running inside tmux, on any platform.
+    ///
+    /// `$TMUX` (the server socket path) is the primary signal: tmux always sets
+    /// it for its panes and nothing else does, so it holds even on an ancient
+    /// tmux. `TERM_PROGRAM == "tmux"` is the secondary signal — set since tmux
+    /// 3.2 and the same variable the other hosts key off — and covers a pane
+    /// whose `$TMUX` was scrubbed (a `env -u`, a `sudo`, some shell wrappers).
+    /// Either alone is sufficient; both are checked because the cost of missing
+    /// tmux is silently applying the wrong terminal's width model.
+    ///
+    /// `TERM` is deliberately NOT consulted: it is `tmux-256color` OR
+    /// `screen-256color` depending on the user's `default-terminal`, and
+    /// `screen*` is also what GNU screen sets — a different compositor with a
+    /// different width table that this model does not describe.
+    static func detectTmux(environment: [String: String]) -> Bool {
+        if let socket = environment["TMUX"], !socket.isEmpty { return true }
+        return environment["TERM_PROGRAM"] == "tmux"
     }
 }
