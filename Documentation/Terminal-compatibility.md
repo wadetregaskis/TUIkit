@@ -483,15 +483,79 @@ terminal lands in the negative-content-height crash band (see
 bar with an empty content area at 4 rows instead of trapping). Verified: four
 TUIkitExample panes at heights 19/9/5/4, all `pane_dead=0`.
 
+### Does the client terminal change tmux's behaviour? No. (measured)
+
+The compositor property is now demonstrated, not assumed. `advance_probe.py`
+was run **five ways** — with Apple Terminal, iTerm2, Ghostty and Warp attached,
+and with no client attached at all:
+
+> **All 58 clusters, all five runs: ZERO differences.**
+
+tmux's grid does not depend on which terminal is attached, or on one being
+attached at all. That is why there is **one** `tmuxCursorAdvance` model rather
+than four, and why the outer terminal's quirks are irrelevant to our output.
+
+### Identifying the client terminal (research)
+
+It IS possible — tmux probes each client with XTVERSION and exposes the answer:
+
+| Client | `#{client_termtype}` | `#{client_termname}` | `#{client_termfeatures}` |
+|---|---|---|---|
+| iTerm2 | `iTerm2 3.6.11` | `xterm-256color` | 256,bpaste,ccolour,clipboard,hyperlinks,cstyle,extkeys,focus,margins,mouse,osc7,progressbar,RGB,sixel,strikethrough,sync,title,usstyle |
+| Ghostty | `ghostty 1.3.1` | `xterm-ghostty` | bpaste,ccolour,clipboard,cstyle,focus,RGB,title |
+| Warp | `Warp(v0.2026.07.08…)` | `xterm-256color` | bpaste,ccolour,clipboard,cstyle,focus,RGB,title |
+| Apple Terminal | *(empty — answers no XTVERSION)* | `xterm-256color` | bpaste,ccolour,clipboard,cstyle,focus,title |
+
+Read from inside a pane with
+`tmux display-message -p '#{client_termtype}'`. Three of four are named **and
+versioned**; Apple Terminal is identifiable by elimination (empty termtype +
+its minimal feature set + a bare-UUID `TERM_SESSION_ID`; iTerm2's is prefixed
+`w0t1p0:`). Ghostty is additionally the only one with a distinctive `TERM`.
+
+**Environment leakage does NOT work — measured.** Terminals leak their own
+variables into panes (`LC_TERMINAL=iTerm2`, `ITERM_SESSION_ID`, `GHOSTTY_*`,
+`WARP_*`, `TERM_SESSION_ID`), which looks like a free answer. It is a trap: the
+tmux **server** keeps the environment of the client that STARTED it, forever.
+Measured by starting a server from Apple Terminal and attaching iTerm2 to the
+same session:
+
+```
+FIRST client (Apple Terminal started the server)
+  client_termtype     =                     <- Apple Terminal
+  env TERM_SESSION_ID = 05D12807-…          <- Apple Terminal's
+SECOND client attached (iTerm2), same pane, same process
+  client_termtype     = iTerm2 3.6.11       <- LIVE, correct
+  env TERM_SESSION_ID = 05D12807-…          <- STILL Apple Terminal's. Stale.
+  env LC_TERMINAL     = <unset>             <- iTerm2 is attached; still unset.
+```
+
+**And the question is malformed anyway: there may be more than one client.**
+The same run had both attached simultaneously —
+
+```
+attached client: /dev/ttys010 termtype=
+attached client: /dev/ttys012 termtype=iTerm2 3.6.11
+```
+
+— two terminals, two fonts, painting the same bytes at the same time. There is
+no single "the client app" to specialise for. This is a property of a
+multiplexer, not a gap in the detection.
+
+**Conclusion: do not use it for rendering decisions.** The grid is
+client-independent (measured above), so widths never need it; and anything
+font-dependent (`supportsEmojiChrome`, image cell aspect) cannot be answered
+correctly when two clients with different fonts are attached at once. tmux
+therefore stays off the emoji-chrome allowlist and gets the universally-safe
+non-emoji glyphs — conservative, and correct for every client. `client_termtype`
+remains useful for diagnostics and bug reports, where a subprocess is fine.
+
 ### Still unverified
 
 - Mouse encoding under `set -g mouse on` (tmux consumes reports for its own
   panes and re-emits SGR to the focused pane) — not byte-captured yet.
-- Whether the advance table is identical with a Terminal.app vs an iTerm2
-  client attached. The compositor property predicts yes, and the no-client
-  probe supports it, but it is not directly measured.
-- The outer terminal remains unidentifiable from inside tmux (`LC_TERMINAL`
-  is iTerm2-ssh-only; the server keeps its FIRST client's environment).
+- Cell pixel aspect for images: tmux does not forward the client's
+  `ws_xpixel`/`ws_ypixel`, so `cellPixelAspect()` returns nil and callers keep
+  their default. Not yet measured whether that default is right under tmux.
 
 **Reproduce:** `tmux -L probe new-session -d -x 120 -y 40 -e PROBE_OUT=/tmp/t.json
 'python3 Tools/TerminalProbes/advance_probe.py; sleep 2'` then read `/tmp/t.json`.
