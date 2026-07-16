@@ -12,8 +12,10 @@ a new terminal evaluated — record it here, with the version and the method
 of observation. Consult this document before making or reviewing any
 change that relies on terminal-specific behaviour (`TerminalHost`,
 `Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance` /
-`.ghosttyCursorAdvance` / `.warpCursorAdvance`, the `FrameDiffWriter`
-compensation paths, `CheckboxStyle.automatic`, …).
+`.ghosttyCursorAdvance` / `.warpCursorAdvance`, `String.tmuxCursorAdvance`, the
+`FrameDiffWriter` compensation paths, `CheckboxStyle.automatic`, …). tmux is a
+**fifth cursor-advance model** here, not a fall-through to "unknown": a change
+touching cursor advance must consider tmux's grid explicitly.
 
 **Terminals covered:** Apple Terminal.app, iTerm2, Ghostty, Warp, tmux
 (all measured). Jump to the
@@ -421,48 +423,64 @@ answered every DSR from its own grid with nothing downstream to ask).
 | `COLORTERM` | `truecolor` |
 | `TMUX` / `TMUX_PANE` | socket path / `%0` |
 
-So under tmux **no** host detector matches (`Apple_Terminal`, `iTerm.app`,
-`ghostty`, `WarpTerminal` all miss) — TUIkit treats the host as unknown, and
-therefore applies **no CUF compensation and no emoji chrome**. Compensation
-staying off is CORRECT and confirmed: tmux is a **compositor**, not a
-passthrough — it parses TUIkit's output into its own grid with its own width
-tables and re-renders. The outer terminal's advance quirks apply to *tmux's*
-output, not TUIkit's.
+So under tmux the four native detectors all miss (`Apple_Terminal`,
+`iTerm.app`, `ghostty`, `WarpTerminal`) — but tmux is NOT treated as an
+unknown host. It is detected in its own right (`TerminalHost.isTmux`, from
+`$TMUX`) and is a **first-class host with its own width model**, because tmux
+is a **compositor**, not a passthrough: it parses TUIkit's output into its own
+grid with its own width tables and re-renders. The outer terminal's advance
+quirks apply to *tmux's* output, not TUIkit's, so tmux's model is the one
+TUIkit must satisfy — and `FrameDiffWriter` checks `isTmux` FIRST, ahead of
+every native host, so a native variable that survived into the pane cannot
+select the wrong model (see `String.withTmuxCursorCompensation()`).
+
+> **History.** Until 8c1e06d8 (2026-07-15) tmux WAS treated as unknown and got
+> no compensation and no emoji chrome; the paragraphs below were once written
+> to argue that was correct. It was not — tmux's grid diverges from TUIkit's
+> width claims (measured, next), so leaving compensation off sheared exactly
+> the glyphs a native host would have had fixed. This section now describes the
+> shipped behaviour; the "live bug" is closed.
 
 **Colour is fine:** tmux 3.7b preserves 24-bit SGR in its grid
 (`ESC[38;2;255;100;0m` survives verbatim) and sets `COLORTERM=truecolor`, so
 TUIkit's depth detection picks truecolor correctly. No `Tc`/`RGB`
 `terminal-features` tweak needed at this version.
 
-### Cursor advance — where tmux DISAGREES with TUIkit (the live bug)
+### Cursor advance — where tmux DISAGREES with TUIkit, and how it is handled
 
 What matters under tmux is agreement between TUIkit's width tables and
-*tmux's* wcwidth. Measured:
+*tmux's* wcwidth. Measured, with what the tmux path now does about each
+divergence (`String.tmuxCursorAdvance` + `withTmuxCursorCompensation()` +
+`withSkinToneFallback(basePlane: .bmpOnly)`):
 
-| Cluster | tmux 3.7b | TUIkit claims | Verdict |
+| Cluster | tmux 3.7b | TUIkit claims | Handled how |
 |---|---|---|---|
-| `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift:166`) | ✗ **visible breakage** |
-| `U+1F5A5`, `U+1F6E1`, `U+1F577`, `U+1F39E`, `U+1F3D9` (bare SMP pictographs) | **1** | **2** (blanket `0x1F000...0x1FBFF`) | ✗ (compensation off) |
-| `U+1F060` domino, `U+1F0A1` playing card | **1** | 2 | ✗ |
-| `U+270A U+1F3FB` (**BMP** + skin tone) | **4** | 2 | ✗ (tmux doesn't join it) |
-| `U+2B1B U+FE0E` (VS-15, text presentation) | **2** | — | ✗ (VS-15 is not narrowing) |
+| `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift:166`) | CUF: one `ESC[1C` after each, landing the cursor at the claimed column |
+| `U+1F5A5`, `U+1F6E1`, `U+1F577`, `U+1F39E`, `U+1F3D9` (bare SMP pictographs) | **1** | **2** | CUF, same as above |
+| `U+1F060` domino, `U+1F0A1` playing card | **1** | 2 | CUF, same as above |
+| `U+270A U+1F3FB` (**BMP** + skin tone) | **4** | 2 | swatch stripped (`.bmpOnly`) → back to a 2-cell advance |
+| `U+2B1B U+FE0E` (VS-15 chrome ⬛︎) | **2** | 2 | ✓ already agrees (both 2) — no action |
 | `U+1F1E6` lone regional indicator | 1 | 1 | ✓ |
 | `U+4E2D` CJK · `U+1F44D` emoji · ZWJ families · `U+1F1FA U+1F1F8` flag | 2 | 2 | ✓ |
-| `U+1F44D U+1F3FD` (**SMP** + skin tone) | 2 | 2 | ✓ |
+| `U+1F44D U+1F3FD` (**SMP** + skin tone) | 2 | 2 | ✓ — NOT stripped (`.bmpOnly` keeps it; tmux joins it correctly) |
 | `U+0065 U+0301` NFD · `U+E0B0` powerline · `U+2588` block | 1 | 1 | ✓ |
 
-**Confirmed user-visible defect:** the main menu's "Supports SF Symbols"
-FeatureBox renders **three** Plane-16 PUA glyphs. TUIkit reserves 2 cells
-each (6); tmux advances 1 each (3); nothing compensates. Measured in tmux's
-own grid at 100×60: that line's right border lands at **cell 65** while every
-other line of the same box lands at **68** — exactly 3 cells short, one per
-glyph. The box border is visibly broken. Same root cause for bare SMP
-pictographs.
+**The defect this closed:** the main menu's "Supports SF Symbols" FeatureBox
+renders **three** Plane-16 PUA glyphs. TUIkit reserves 2 cells each (6); tmux
+advances 1 each (3). Before 8c1e06d8 nothing compensated, so — measured in
+tmux's own grid at 100×60 — that line's right border landed at **cell 65**
+while every other line of the box landed at **68**, exactly 3 cells short, one
+per glyph, and the border was visibly broken. The tmux path now emits one CUF
+per under-advancing cluster, landing the cursor at the claimed column, so the
+border closes. Same fix for the bare SMP pictographs and the dominoes/cards.
 
 The `:166` comment ("SF Mono: 2 cells") is right about the *font* in a native
-terminal and wrong about tmux, whose wcwidth has never heard of SF Symbols.
-Fixing this needs a tmux host (`TERM_PROGRAM == "tmux"`) with its own width
-model — not CUF compensation, which would corrupt a compositor's grid.
+terminal and about the width TUIkit paints; tmux's wcwidth has never heard of
+SF Symbols and advances 1, which is why the tmux path adds the CUF rather than
+changing the claim. `withSkinToneFallback(basePlane: .bmpOnly)` is deliberately
+narrower than the iTerm2/Warp blanket strip: tmux joins an **SMP**-base skin
+tone (👍🏽) into the 2 cells claimed, and only over-advances on a **BMP** base
+(✊🏻 ☝🏽), so stripping the SMP ones would discard a cluster tmux gets right.
 
 ### Pane geometry (why a "normal" terminal still hits small-size bugs)
 
@@ -670,6 +688,10 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 | ⤷ *(compensated since 2026-07-14 — all four CUF)* | | ✓ | ✓ | ✓ | ✓ |
 | 🁠 🂡 (domino / card — in-block non-emoji) | 2 | **1** | **1** | **1** | **1** |
 
+tmux is a fifth advance model and is measured separately (its grid is
+client-independent, so it needs no per-client column) — see
+[the tmux cursor-advance table](#cursor-advance--where-tmux-disagrees-with-tuikit-and-how-it-is-handled).
+
 ### Bare (selector-less) pictographs — FIXED 2026-07-14
 
 **Not to be confused with `🖥️`** (U+1F5A5 **+ U+FE0F**) — the form the demo
@@ -742,8 +764,15 @@ right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
 
 ### Per-host output pipeline (FrameDiffWriter)
 
+The branch is checked in this order, **tmux first** — its grid is what our
+output lands in, so it must win over any native host flag that leaked into the
+pane. (`FrameDiffWriter.init` also zeroes the four native flags when `isTmux`,
+so the tmux-first rule holds at the clip and right-edge repaint too, not only
+here.)
+
 | Host | Clip | Then |
 |---|---|---|
+| tmux | plain | `withSkinToneFallback(.bmpOnly)` → `withTmuxCursorCompensation()` |
 | Apple Terminal | cursor-aware | `withTerminalAppCursorCompensation()` |
 | iTerm2 | plain | `withSkinToneFallback()` → `withITerm2CursorCompensation()` |
 | Ghostty | plain | `withGhosttyCursorCompensation()` |
