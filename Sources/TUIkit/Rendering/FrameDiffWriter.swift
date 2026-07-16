@@ -133,11 +133,27 @@ final class FrameDiffWriter {
         isWarp: Bool = TerminalHost.isWarp,
         isTmux: Bool = TerminalHost.isTmux
     ) {
-        self.isAppleTerminal = isAppleTerminal
-        self.isITerm2 = isITerm2
-        self.isGhostty = isGhostty
-        self.isWarp = isWarp
+        // tmux wins over any native host, and here that is enforced ONCE, at the
+        // source, rather than re-checked at each use. Under tmux OUR bytes land
+        // in tmux's grid — its width table is what we must satisfy — so the outer
+        // terminal's advance model must not drive cursor math even if its
+        // variable survived into the pane. That is a live case, not a
+        // hypothetical: a tmux older than 3.2 never overwrote `TERM_PROGRAM`, so
+        // a pane started from Terminal.app carries `$TMUX` (→ isTmux) AND
+        // `TERM_PROGRAM=Apple_Terminal` (→ isAppleTerminal) at once.
+        //
+        // Zeroing the native flags when isTmux means every reader of them — the
+        // dispatch below, but ALSO the right-edge clip and `repaintRightEdge`,
+        // which check `isAppleTerminal` directly and would otherwise apply
+        // Terminal.app's model to tmux's grid — is tmux-correct without its own
+        // guard. Nothing is lost: which client is attached matters only for the
+        // emoji chrome, and that is resolved separately (RenderLoop asks tmux
+        // itself), never from these flags.
         self.isTmux = isTmux
+        self.isAppleTerminal = isAppleTerminal && !isTmux
+        self.isITerm2 = isITerm2 && !isTmux
+        self.isGhostty = isGhostty && !isTmux
+        self.isWarp = isWarp && !isTmux
     }
 }
 

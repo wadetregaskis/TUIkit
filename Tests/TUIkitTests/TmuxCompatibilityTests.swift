@@ -206,6 +206,59 @@ struct TmuxCompatibilityTests {
         #expect("\u{1F3FD}".withSkinToneFallback() == "\u{1F3FD}")
     }
 
+    // MARK: - tmux wins over a native host flag that leaked into the pane
+
+    @Test(
+        "Under tmux, a leaked native-host flag changes NOTHING in the output",
+        arguments: [
+            // (isAppleTerminal, isITerm2, isGhostty, isWarp)
+            (true, false, false, false),  // tmux < 3.2 from Apple Terminal: $TMUX set, TERM_PROGRAM=Apple_Terminal
+            (false, true, false, false),  // a re-exported iTerm.app
+            (false, false, true, false),  // ditto Ghostty
+            (false, false, false, true),  // ditto Warp
+        ] as [(Bool, Bool, Bool, Bool)])
+    @MainActor
+    func leakedNativeFlagIsInertUnderTmux(
+        apple: Bool, iterm: Bool, ghostty: Bool, warp: Bool
+    ) {
+        // The bug: only the compensation dispatch checked isTmux. The right-edge
+        // clip (FrameDiffWriter :297) and repaintRightEdge (:516) branched on the
+        // bare native flag, so a pane where BOTH isTmux and a native flag are true
+        // — a live case on tmux < 3.2, which never overwrote TERM_PROGRAM — applied
+        // the outer terminal's advance model to tmux's grid.
+        //
+        // The invariant: under tmux, tmux owns the grid, so which native terminal
+        // the flag names must make no difference to a single emitted byte.
+        let pureTmux = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: true)
+        let leaked = FrameDiffWriter(
+            isAppleTerminal: apple, isITerm2: iterm, isGhostty: ghostty, isWarp: warp, isTmux: true)
+
+        // A line that fills to the right edge and ends in a cursor-advance quirk —
+        // exactly what the Terminal.app clip and repaintRightEdge special-case, so
+        // any leak of their behaviour shows up as a divergent line.
+        for raw in [
+            String(repeating: "x", count: 18) + "\u{1F919}\u{1F3FD}",  // …🤙🏽 at the edge
+            String(repeating: "x", count: 18) + "\u{2B1B}\u{FE0E}",    // …⬛︎ VS-15 chrome
+            "\u{261D}\u{1F3FD}" + String(repeating: "y", count: 16),   // ☝🏽 BMP skin tone
+        ] {
+            #expect(
+                buildLine(leaked, raw: raw) == buildLine(pureTmux, raw: raw),
+                "the native flag must be inert under tmux: \(raw.debugDescription)")
+        }
+    }
+
+    /// Renders one raw line through the writer's real build path.
+    @MainActor
+    private func buildLine(_ writer: FrameDiffWriter, raw: String) -> String {
+        var buffer = FrameBuffer(emptyWithWidth: 20, height: 1)
+        buffer.lines = [raw]
+        return writer.buildOutputLines(
+            buffer: buffer, terminalWidth: 20, terminalHeight: 1,
+            bgCode: "", reset: "\u{1B}[0m"
+        ).joined()
+    }
+
     // MARK: - Identifying the client terminal(s)
 
     /// A client that answered XTVERSION, so it needs no process to identify it.
