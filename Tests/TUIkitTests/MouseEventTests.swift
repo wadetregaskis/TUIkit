@@ -300,7 +300,6 @@ struct MouseHitTestPropagationTests {
         _ = renderToBuffer(plain, context: context)
         #expect(dispatcher.effectiveSupport(baseConfig: .standard) == .standard)
     }
-
 }
 
 // MARK: - HitTestRegion

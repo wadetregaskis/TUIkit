@@ -64,7 +64,6 @@ struct CharacterTerminalWidthTests {
             #expect(ch.terminalWidth == 2, "U+\(String(value, radix: 16, uppercase: true))")
         }
     }
-
 }
 
 // MARK: - String.strippedLength

@@ -198,7 +198,6 @@ struct ItemListHandlerNavigationTests {
         _ = handler.handleKeyEvent(KeyEvent(key: .pageDown))  // target 11 → last selectable
         #expect(handler.focusedIndex == 9)
     }
-
 }
 
 // MARK: - Item List Handler Selection Tests
