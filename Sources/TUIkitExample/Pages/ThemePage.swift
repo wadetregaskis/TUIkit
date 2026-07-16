@@ -103,7 +103,12 @@ struct ThemePage: View {
         )
         let checkboxSelection = Binding(
             get: {
+                // `.automatic` first: it carries the same marks as `.unicode` and
+                // is distinguished only by meaning "ask the terminal", so a
+                // `.unicode` case ahead of it would swallow it and mislabel the
+                // app's actual default.
                 switch styling.checkboxStyle {
+                case .automatic: "Automatic"
                 case .ascii: "ASCII"
                 case .emoji: "Emoji"
                 default: "Unicode"
@@ -111,6 +116,7 @@ struct ThemePage: View {
             },
             set: { name in
                 switch name {
+                case "Automatic": styling.checkboxStyle = .automatic
                 case "ASCII": styling.checkboxStyle = .ascii
                 case "Emoji": styling.checkboxStyle = .emoji
                 default: styling.checkboxStyle = .unicode
@@ -221,6 +227,10 @@ struct ThemePage: View {
                                 set: { styling.boldButtons = $0 }))
 
                         Picker(L("page.theme.checkboxesLabel"), selection: checkboxSelection) {
+                            // The app's default, and now a real option: it follows
+                            // the terminal, including the tmux client changing
+                            // under a running session.
+                            Text("Automatic").tag("Automatic")
                             Text("Unicode ■").tag("Unicode")
                             Text("Emoji \u{2B1B}\u{FE0E}").tag("Emoji")
                             Text("ASCII [x]").tag("ASCII")
