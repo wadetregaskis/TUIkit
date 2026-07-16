@@ -27,6 +27,19 @@
 /// logic is unit-testable with an injected probe (no tmux server, no forks),
 /// and a `Task.detached` inside the generic `RenderLoop<A>` would capture
 /// `A.Type`, which is not `Sendable`.
+/// One probe's answer, plus whether it might improve on a short retry.
+///
+/// `mayImproveShortly` covers a measured race: the `client-attached` tmux hook
+/// fires — and the app probes — before the new client's XTVERSION reply has
+/// arrived, so the client is silent at that instant even when it is an iTerm2
+/// that will name itself milliseconds later. A silent client the process walk
+/// also can't identify is therefore worth a few bounded re-asks before the
+/// safe answer is allowed to stand.
+internal struct EmojiChromeReading: Equatable, Sendable {
+    let supported: Bool
+    let mayImproveShortly: Bool
+}
+
 @MainActor
 internal final class EmojiChromeRefresher {
     /// The last probe's answer; `nil` only before ``resolve()`` first seeds it.
@@ -36,9 +49,30 @@ internal final class EmojiChromeRefresher {
     /// so refreshing is a no-op (`false` there).
     private let isRefreshable: Bool
 
-    /// Produces the answer. Blocking (bounded) — always run off the main actor
-    /// by ``refresh()``; ``resolve()`` runs it inline exactly once, to seed.
-    private let probe: @Sendable () -> Bool
+    /// Produces the answer, or `nil` when the question could not be asked (a
+    /// wedged tmux, the probe's deadline). `nil` is NOT "no clients" — a failed
+    /// probe keeps the previous answer rather than flipping the UI, because a
+    /// single slow `list-clients` under load must not restyle every glyph on
+    /// screen (and flip it back when the next probe succeeds). Blocking
+    /// (bounded) — always run off the main actor by ``refresh()``;
+    /// ``resolve()`` runs it inline exactly once, to seed.
+    private let probe: @Sendable () -> EmojiChromeReading?
+
+    /// Backoff for re-asking after a reading that ``EmojiChromeReading/mayImproveShortly``
+    /// — long enough for an XTVERSION round trip, short enough that the user
+    /// never watches the wrong glyphs settle. Injectable so tests don't wait.
+    private let retryDelaysNanos: [UInt64]
+
+    /// How many retries the CURRENT burst may still spend; refilled by every
+    /// external ``refresh()`` (each real event earns a fresh budget), consumed
+    /// by ``scheduleRetryIfWarranted()``. Bounded so a genuinely unknown
+    /// silent terminal costs a fixed handful of probes, never a poll loop.
+    private var retriesRemaining = 0
+
+    /// Retry tasks currently sleeping toward their re-ask. Tracked separately
+    /// from the coalescer because a sleeping retry has not requested a probe
+    /// yet — without this, ``isIdleForTesting`` reads idle mid-burst.
+    private var sleepingRetries = 0
 
     /// Runs (on the main actor) when a refresh lands a DIFFERENT answer than
     /// the one frames have been rendering with. The owner treats this as
@@ -54,17 +88,20 @@ internal final class EmojiChromeRefresher {
 
     init(
         isRefreshable: Bool,
-        probe: @escaping @Sendable () -> Bool,
-        onChange: @escaping @MainActor () -> Void
+        probe: @escaping @Sendable () -> EmojiChromeReading?,
+        onChange: @escaping @MainActor () -> Void,
+        retryDelaysNanos: [UInt64] = [250_000_000, 500_000_000, 1_000_000_000]
     ) {
         self.isRefreshable = isRefreshable
         self.probe = probe
         self.onChange = onChange
+        self.retryDelaysNanos = retryDelaysNanos
     }
 
-    /// Whether no probe is in flight or queued — the moment a test can assert
-    /// the refresher's state without racing a pending completion.
-    var isIdleForTesting: Bool { coalescer.isIdle }
+    /// Whether no probe is in flight, queued, or sleeping toward a retry — the
+    /// moment a test can assert the refresher's state without racing a pending
+    /// completion.
+    var isIdleForTesting: Bool { coalescer.isIdle && sleepingRetries == 0 }
 
     /// The current answer, seeding it synchronously on the very first call.
     ///
@@ -74,8 +111,16 @@ internal final class EmojiChromeRefresher {
     /// ever probes again.
     func resolve() -> Bool {
         if let current { return current }
-        let seeded = probe()
+        // At launch there is no previous answer to keep, so a failed seed probe
+        // falls to the safe glyphs (false) — the same fail-closed answer the
+        // probe layer gives for an unreachable tmux.
+        let reading = probe()
+        let seeded = reading?.supported ?? false
         current = seeded
+        if isRefreshable, reading?.mayImproveShortly == true {
+            retriesRemaining = retryDelaysNanos.count
+            scheduleRetryIfWarranted()
+        }
         return seeded
     }
 
@@ -83,7 +128,9 @@ internal final class EmojiChromeRefresher {
     /// the probe is in flight, and `onChange` fires if the landed answer
     /// differs. No-op when the answer cannot change (off tmux).
     func refresh() {
-        guard isRefreshable, coalescer.requestProbe() else { return }
+        guard isRefreshable else { return }
+        retriesRemaining = retryDelaysNanos.count
+        guard coalescer.requestProbe() else { return }
         startProbe()
     }
 
@@ -100,14 +147,35 @@ internal final class EmojiChromeRefresher {
         }
     }
 
-    /// Completion of a background probe, back on the main actor.
-    private func apply(_ answer: Bool) {
-        if answer != current {
-            current = answer
+    /// Completion of a background probe, back on the main actor. A `nil`
+    /// reading (the probe failed) changes nothing: the previous answer stands.
+    private func apply(_ reading: EmojiChromeReading?) {
+        if let reading, reading.supported != current {
+            current = reading.supported
             onChange()
         }
         if coalescer.probeCompleted() {
             startProbe()
+        } else if reading?.mayImproveShortly == true {
+            scheduleRetryIfWarranted()
+        }
+    }
+
+    /// Re-asks after a short delay when the last reading said it might improve
+    /// — the XTVERSION race — spending one unit of the bounded retry budget.
+    /// The delayed re-ask goes through the coalescer like any other request, so
+    /// it folds into a probe a real event started in the meantime.
+    private func scheduleRetryIfWarranted() {
+        guard retriesRemaining > 0 else { return }
+        let delay = retryDelaysNanos[retryDelaysNanos.count - retriesRemaining]
+        retriesRemaining -= 1
+        sleepingRetries += 1
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard let self else { return }
+            self.sleepingRetries -= 1
+            guard self.coalescer.requestProbe() else { return }
+            self.startProbe()
         }
     }
 }

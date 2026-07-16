@@ -197,10 +197,18 @@ internal final class RenderLoop<A: App> {
     private lazy var emojiChrome = EmojiChromeRefresher(
         isRefreshable: TerminalHost.isTmux,
         probe: {
-            TerminalHost.isTmux
-                ? TerminalHost.emojiChromeSupported(
-                    tmuxClients: TerminalHost.probeTmuxClients())
-                : TerminalHost.supportsEmojiChrome
+            guard TerminalHost.isTmux else {
+                return EmojiChromeReading(
+                    supported: TerminalHost.supportsEmojiChrome, mayImproveShortly: false)
+            }
+            // nil propagates ("could not ask; keep the previous answer") —
+            // deliberately NOT collapsed to false. Fail-closed is right when
+            // there is nothing better (the launch seed), but wrong for a
+            // refresh, where flipping every glyph on a transient probe failure
+            // is strictly worse than keeping a possibly-stale style.
+            return TerminalHost.probeTmuxClients().map {
+                TerminalHost.emojiChromeReading(tmuxClients: $0)
+            }
         },
         onChange: { [diffWriter] in
             // Every glyph on screen could differ (■ vs ⬛ change cell widths):

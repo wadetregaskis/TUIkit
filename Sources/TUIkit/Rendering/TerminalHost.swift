@@ -164,8 +164,44 @@ enum TerminalHost {
     ///   question could not be asked; empty means no clients are attached
     ///   (nothing to please).
     static func emojiChromeSupported(tmuxClients clients: [TmuxClient]?) -> Bool {
-        guard let clients, !clients.isEmpty else { return false }
-        return clients.allSatisfy(clientDrawsEmojiChrome)
+        guard let clients else { return false }
+        return emojiChromeReading(tmuxClients: clients).supported
+    }
+
+    /// The full answer for a client list: the verdict, plus whether it might
+    /// improve on a short retry.
+    ///
+    /// The retry signal exists because of a measured race: the
+    /// `client-attached` hook fires — and the app probes — BEFORE the new
+    /// client's XTVERSION reply has arrived, so `#{client_termtype}` is still
+    /// empty at that moment (measured: a hook logging `list-clients` at
+    /// attach time saw `pid:` with an empty termtype for an iTerm2 that
+    /// reported "iTerm2 3.6.11" moments later). A client that is silent AND
+    /// unidentifiable by its process chain may therefore be a recognisable
+    /// terminal whose reply is milliseconds away — worth re-asking briefly —
+    /// or a genuinely unknown terminal, in which case the bounded retries burn
+    /// out and the safe answer stands.
+    static func emojiChromeReading(tmuxClients clients: [TmuxClient]) -> EmojiChromeReading {
+        guard !clients.isEmpty else {
+            return EmojiChromeReading(supported: false, mayImproveShortly: false)
+        }
+        var supported = true
+        var mayImprove = false
+        for client in clients {
+            switch classifyClient(client) {
+            case true:
+                continue
+            case false:
+                // Identified, and not on the allowlist: no retry will change it.
+                supported = false
+            case nil:
+                // Silent and unidentified — possibly an XTVERSION reply in
+                // flight (the attach race above), possibly a genuine unknown.
+                supported = false
+                mayImprove = true
+            }
+        }
+        return EmojiChromeReading(supported: supported, mayImproveShortly: mayImprove)
     }
 
     /// Identifies one attached client, by asking it and then — if it said
@@ -174,27 +210,27 @@ enum TerminalHost {
     /// Two signals, because neither covers the field alone:
     ///
     /// - **XTVERSION** (`termtype`) names any terminal that answers it, local or
-    ///   across an ssh hop, but Terminal.app answers nothing at all.
+    ///   across an ssh hop, but Terminal.app answers nothing at all (and every
+    ///   terminal is silent in the first moments after attaching — the reply is
+    ///   a round trip the `client-attached` hook does not wait for).
     /// - **The owning application** identifies a silent terminal, but only a
     ///   local one — over ssh the client's parent is `sshd`, not a terminal.
     ///
-    /// So the answer to an empty termtype is not "unknown", as it used to be:
-    /// it is "ask the other way". That mattered — Terminal.app is allowlisted
-    /// natively and was silently losing its emoji chrome to nothing more than
-    /// being run inside tmux.
-    ///
-    /// A client that stays unidentified after both still loses the emoji chrome,
-    /// and should: an unknown terminal that answers no XTVERSION *and* isn't a
-    /// local app we recognise is a real thing (a Linux VT console, an old xterm
-    /// over ssh), and the squares would come out as tofu there.
-    static func clientDrawsEmojiChrome(_ client: TmuxClient) -> Bool {
+    /// Returns `true` for a client positively identified as chrome-capable,
+    /// `false` for one positively identified as not (a termtype we don't
+    /// recognise), and `nil` for one neither signal could name — silent, with
+    /// no recognisable local application in its process chain. `nil` clients
+    /// draw the safe glyphs, but distinguish themselves from `false` because
+    /// their answer may improve within milliseconds (see
+    /// ``emojiChromeReading(tmuxClients:)``).
+    static func classifyClient(_ client: TmuxClient) -> Bool? {
         if !client.termtype.isEmpty {
             return termtypeDrawsEmojiChrome(client.termtype)
         }
         guard let pid = client.pid,
             let executable = owningApplicationPath(ofTmuxClient: pid)
-        else { return false }
-        return applicationDrawsEmojiChrome(executablePath: executable)
+        else { return nil }
+        return applicationDrawsEmojiChrome(executablePath: executable) ? true : nil
     }
 
     /// Classifies a client by its XTVERSION reply.
@@ -223,6 +259,14 @@ enum TerminalHost {
     private static let emojiChromeApplicationExecutables = [
         "/Terminal.app/Contents/MacOS/Terminal",
         "/iTerm.app/Contents/MacOS/",
+        // iTerm2's session-restoration daemon: with it enabled (the default),
+        // a shell's parent chain ends at
+        // ~/Library/Application Support/iTerm2/iTermServer-<version> — the app
+        // bundle never appears in the chain at all (measured; this is how a
+        // tmux client attached from iTerm2 walks). The daemon lives only in
+        // iTerm2's own Application Support directory, so the fragment is as
+        // unambiguous as the bundle paths.
+        "/iTerm2/iTermServer-",
         "/Ghostty.app/Contents/MacOS/",
         "/Warp.app/Contents/MacOS/",
     ]
