@@ -14,10 +14,10 @@ private enum ToggleStateIndex {
     static let isHovered = 1
 }
 
-/// The switch style's knob glyphs, selected by the ambient ``CheckboxStyle``'s
+/// The switch style's knob glyphs, selected by the ambient ``ToggleCharacterSet``'s
 /// glyph repertoire (lifted out of the generic core for testability).
 enum SwitchIndicatorGlyphs {
-    /// Under ``CheckboxStyle/emoji``, the knob is the emoji-repertoire large
+    /// Under ``ToggleCharacterSet/emoji``, the knob is the emoji-repertoire large
     /// square in text presentation — ONE glyph spanning two cells, which
     /// Terminal.app draws seamlessly where it shows visible seams between
     /// adjacent FULL BLOCK cells. Every other style gets ▐▌ (right + left
@@ -32,7 +32,7 @@ enum SwitchIndicatorGlyphs {
     /// track geometry never changes; the half blocks are plain Block
     /// Elements — SGR-tintable, no variation selector to mis-measure
     /// (issue #9).
-    static func knob(for style: CheckboxStyle) -> String {
+    static func knob(for style: ToggleCharacterSet) -> String {
         style == .emoji ? "\u{2B1B}\u{FE0E}" : "\u{2590}\u{258C}"  // ⬛︎ : ▐▌
     }
 
@@ -67,7 +67,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     private typealias StateIndex = ToggleStateIndex
 
     /// The styled checkbox indicator (■/□ by default, `[x]`/`[ ]` under
-    /// `.checkboxStyle(.ascii)`) for the toggle's current state, themed for
+    /// `.toggleCharacterSet(.ascii)`) for the toggle's current state, themed for
     /// focus / hover / disabled.
     private func styledToggleIndicator(
         isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
@@ -76,12 +76,12 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let bracketColor = indicatorBracketColor(
             isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
 
-        // The checkbox glyphs come from the configurable ``CheckboxStyle`` (■/□
-        // by default, `[x]`/`[ ]` under `.checkboxStyle(.ascii)`).
-        // `effectiveCheckboxStyle`, NOT `checkboxStyle`: `.automatic` is a marker
+        // The checkbox glyphs come from the configurable ``ToggleCharacterSet`` (■/□
+        // by default, `[x]`/`[ ]` under `.toggleCharacterSet(.ascii)`).
+        // `effectiveToggleCharacterSet`, NOT `toggleCharacterSet`: `.automatic` is a marker
         // that must be resolved against this frame's terminal here, at the point
         // of drawing — that is what lets it follow a tmux client change.
-        let style = context.environment.effectiveCheckboxStyle
+        let style = context.environment.effectiveToggleCharacterSet
         let mark = isOnValue ? style.onMark : style.offMark
 
         if style.openBracket.isEmpty {
@@ -169,7 +169,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // bracketed style (`.ascii`), a bracketed track with a sliding `o`.
         // Resolved, not raw: the comparisons below are against concrete styles,
         // which an unresolved `.automatic` marker could never equal.
-        let style = context.environment.effectiveCheckboxStyle
+        let style = context.environment.effectiveToggleCharacterSet
 
         if !style.openBracket.isEmpty {
             // Bracketed (ASCII) switch: `[o ]` off, `[ o]` on — the knob slides
@@ -315,7 +315,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             for: hoverKey, default: false)
         let isHovered = !isDisabled && !isFocused && hoverBox.value
 
-        // The built-in styles render procedurally (focus glow + `CheckboxStyle`
+        // The built-in styles render procedurally (focus glow + `ToggleCharacterSet`
         // glyphs); a custom `ToggleStyle` renders through its `makeBody`. Either
         // way the interaction wiring below (focus, mouse) is the core's job.
         var buffer: FrameBuffer

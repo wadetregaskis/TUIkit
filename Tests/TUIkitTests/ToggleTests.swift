@@ -126,7 +126,7 @@ struct ToggleTests {
             Toggle("First", isOn: bindingFirst)
             Toggle("Second", isOn: bindingSecond)
         }
-        .checkboxStyle(.ascii)
+        .toggleCharacterSet(.ascii)
         let buffer = renderToBuffer(stack, context: context)
         #expect(buffer.height == 2, "Expected one line per toggle, got \(buffer.height)")
         let unfocusedLine = buffer.lines[1]

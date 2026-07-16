@@ -60,8 +60,8 @@ struct ToggleRenderTests {
 
     @Test("The .ascii checkbox style restores the bracketed [x] / [ ] form")
     func asciiStyleRestoresBrackets() {
-        let offLine = lines(Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.ascii))
-        let onLine = lines(Toggle("Wifi", isOn: .constant(true)).checkboxStyle(.ascii))
+        let offLine = lines(Toggle("Wifi", isOn: .constant(false)).toggleCharacterSet(.ascii))
+        let onLine = lines(Toggle("Wifi", isOn: .constant(true)).toggleCharacterSet(.ascii))
         #expect(offLine[0] == "[ ] Wifi", "got: |\(offLine[0])|")
         #expect(onLine[0] == "[x] Wifi", "got: |\(onLine[0])|")
     }
@@ -91,10 +91,10 @@ struct ToggleRenderTests {
         // the 3-cell track geometry is identical either way.
         let knob = "\u{2B1B}\u{FE0E}"
         let offLine = lines(
-            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).checkboxStyle(.emoji)
+            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).toggleCharacterSet(.emoji)
         ).first ?? ""
         let onLine = lines(
-            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).checkboxStyle(.emoji)
+            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).toggleCharacterSet(.emoji)
         ).first ?? ""
         #expect(offLine.hasPrefix(knob + " "), "off: knob left — got: |\(offLine)|")
         #expect(onLine.hasPrefix(" " + knob), "on: knob right — got: |\(onLine)|")
@@ -119,10 +119,10 @@ struct ToggleRenderTests {
         // knob is also state-coloured (accent when on), the checkbox's
         // two-tone convention.
         let offLine = lines(
-            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).checkboxStyle(.ascii)
+            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch).toggleCharacterSet(.ascii)
         ).first ?? ""
         let onLine = lines(
-            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).checkboxStyle(.ascii)
+            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch).toggleCharacterSet(.ascii)
         ).first ?? ""
         #expect(offLine.hasPrefix("[o ]"), "off: knob left — got: |\(offLine)|")
         #expect(onLine.hasPrefix("[ o]"), "on: knob right — got: |\(onLine)|")
@@ -137,7 +137,7 @@ struct ToggleRenderTests {
         // styles must avoid both outright — .emoji is the deliberate,
         // documented exception, which is why `.automatic` gates it onto the
         // hosts verified to draw it correctly (Terminal.app and iTerm2).
-        for style in [CheckboxStyle.unicode, .ascii] {
+        for style in [ToggleCharacterSet.unicode, .ascii] {
             for mark in [style.onMark, style.offMark, style.openBracket, style.closeBracket] {
                 for scalar in mark.unicodeScalars {
                     #expect(
@@ -151,24 +151,24 @@ struct ToggleRenderTests {
         }
         // Every built-in's on/off marks are width-equal, so toggling never
         // shifts the label — including the two-cell emoji pair.
-        for style in [CheckboxStyle.unicode, .emoji, .ascii] {
+        for style in [ToggleCharacterSet.unicode, .emoji, .ascii] {
             #expect(style.onMark.strippedLength == style.offMark.strippedLength)
         }
     }
 
     @Test("The .emoji style is the large squares in text presentation, two cells wide")
     func emojiStyleMarks() {
-        #expect(CheckboxStyle.emoji.onMark == "\u{2B1B}\u{FE0E}")
-        #expect(CheckboxStyle.emoji.offMark == "\u{2B1C}\u{FE0E}")
-        #expect(CheckboxStyle.emoji.onMark.strippedLength == 2)
-        let out = lines(Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.emoji))
+        #expect(ToggleCharacterSet.emoji.onMark == "\u{2B1B}\u{FE0E}")
+        #expect(ToggleCharacterSet.emoji.offMark == "\u{2B1C}\u{FE0E}")
+        #expect(ToggleCharacterSet.emoji.onMark.strippedLength == 2)
+        let out = lines(Toggle("Wifi", isOn: .constant(false)).toggleCharacterSet(.emoji))
         #expect(out.first == "\u{2B1C}\u{FE0E} Wifi", "got: |\(out.first ?? "")|")
     }
 
     @Test(".automatic is a marker, resolved against the terminal at render")
     func automaticStyleResolution() {
-        #expect(CheckboxStyle.automatic(emojiChrome: true) == .emoji)
-        #expect(CheckboxStyle.automatic(emojiChrome: false) == .unicode)
+        #expect(ToggleCharacterSet.automatic(emojiChrome: true) == .emoji)
+        #expect(ToggleCharacterSet.automatic(emojiChrome: false) == .unicode)
         // Both allowlisted hosts qualify: Terminal.app and iTerm2 (verified
         // by eye — see TerminalHost.supportsEmojiChrome).
         #expect(TerminalHost.detectAppleTerminal(
@@ -182,62 +182,62 @@ struct ToggleRenderTests {
         // — which froze whatever was true when the value was made, typically at
         // app-state init. Under tmux the right answer depends on the attached
         // CLIENT and changes on re-attach, so the decision has to be deferred.
-        #expect(CheckboxStyle.automatic.resolvesFromTerminal)
-        #expect(!CheckboxStyle.unicode.resolvesFromTerminal)
-        #expect(!CheckboxStyle.emoji.resolvesFromTerminal)
-        #expect(!CheckboxStyle.ascii.resolvesFromTerminal)
-        #expect(!CheckboxStyle(onMark: "x", offMark: "o").resolvesFromTerminal)
+        #expect(ToggleCharacterSet.automatic.resolvesFromTerminal)
+        #expect(!ToggleCharacterSet.unicode.resolvesFromTerminal)
+        #expect(!ToggleCharacterSet.emoji.resolvesFromTerminal)
+        #expect(!ToggleCharacterSet.ascii.resolvesFromTerminal)
+        #expect(!ToggleCharacterSet(onMark: "x", offMark: "o").resolvesFromTerminal)
 
         // It is its own value, distinct from the marks it falls back to —
         // which is what lets a caller match `case .automatic`.
-        #expect(CheckboxStyle.automatic != .unicode)
-        #expect(CheckboxStyle.automatic != .emoji)
+        #expect(ToggleCharacterSet.automatic != .unicode)
+        #expect(ToggleCharacterSet.automatic != .emoji)
 
         // The bare environment default stays terminal-independent (.unicode),
         // so headless renders and this suite are deterministic; the app run
         // loop injects the marker at its root instead.
-        #expect(EnvironmentValues().checkboxStyle == .unicode)
+        #expect(EnvironmentValues().toggleCharacterSet == .unicode)
     }
 
     @Test("An .automatic marker resolves to whatever the frame says the terminal is")
     func automaticResolvesFromTheEnvironment() {
         var environment = EnvironmentValues()
-        environment.checkboxStyle = .automatic
+        environment.toggleCharacterSet = .automatic
 
         // Nothing resolved yet (headless): the deterministic .unicode fallback.
-        #expect(environment.effectiveCheckboxStyle == .unicode)
+        #expect(environment.effectiveToggleCharacterSet == .unicode)
 
         // The run loop supplies the answer for the terminal in front of the user
         // this frame; the SAME marker now draws emoji.
-        environment.resolvedAutomaticCheckboxStyle = .emoji
-        #expect(environment.effectiveCheckboxStyle == .emoji)
+        environment.resolvedAutomaticToggleCharacterSet = .emoji
+        #expect(environment.effectiveToggleCharacterSet == .emoji)
 
         // …and follows it back when the client changes (a tmux re-attach from a
         // terminal whose font can't draw them).
-        environment.resolvedAutomaticCheckboxStyle = .unicode
-        #expect(environment.effectiveCheckboxStyle == .unicode)
+        environment.resolvedAutomaticToggleCharacterSet = .unicode
+        #expect(environment.effectiveToggleCharacterSet == .unicode)
     }
 
     @Test("An explicit style is never second-guessed by the terminal")
     func explicitStylesIgnoreTheResolvedAnswer() {
-        for explicit in [CheckboxStyle.unicode, .emoji, .ascii] {
+        for explicit in [ToggleCharacterSet.unicode, .emoji, .ascii] {
             var environment = EnvironmentValues()
-            environment.checkboxStyle = explicit
-            environment.resolvedAutomaticCheckboxStyle = .emoji
-            #expect(environment.effectiveCheckboxStyle == explicit)
-            environment.resolvedAutomaticCheckboxStyle = .ascii
-            #expect(environment.effectiveCheckboxStyle == explicit)
+            environment.toggleCharacterSet = explicit
+            environment.resolvedAutomaticToggleCharacterSet = .emoji
+            #expect(environment.effectiveToggleCharacterSet == explicit)
+            environment.resolvedAutomaticToggleCharacterSet = .ascii
+            #expect(environment.effectiveToggleCharacterSet == explicit)
         }
     }
 
     @Test("A Toggle draws the marker's resolved glyphs, not its fallback")
     func toggleRendersTheResolvedAutomaticStyle() {
-        // The end-to-end shape of the fix: `.checkboxStyle(.automatic)` — what
+        // The end-to-end shape of the fix: `.toggleCharacterSet(.automatic)` — what
         // TUIkitExample applies app-wide — must follow the resolved answer.
         var context = makeRenderContext(width: 20, height: 2)
-        context.environment.resolvedAutomaticCheckboxStyle = .emoji
+        context.environment.resolvedAutomaticToggleCharacterSet = .emoji
         let buffer = renderToBuffer(
-            Toggle("Wifi", isOn: .constant(false)).checkboxStyle(.automatic), context: context)
+            Toggle("Wifi", isOn: .constant(false)).toggleCharacterSet(.automatic), context: context)
         #expect(
             buffer.lines.first?.stripped == "\u{2B1C}\u{FE0E} Wifi",
             "got: |\(buffer.lines.first?.stripped ?? "")|")

@@ -21,16 +21,16 @@
 ///
 /// > Note: The built-in `ToggleStyle`s render identically — a checkbox — due to
 /// > terminal constraints; the API matches SwiftUI for compatibility. The
-/// > *glyphs* of that checkbox (■/□ or ⬛︎/⬜︎ or `[x]`/`[ ]` — see `CheckboxStyle`) are a separate,
-/// > TUI-specific choice — see ``CheckboxStyle`` and
-/// > ``SwiftUICore/View/checkboxStyle(_:)``.
+/// > *glyphs* of that checkbox (■/□ or ⬛︎/⬜︎ or `[x]`/`[ ]` — see `ToggleCharacterSet`) are a separate,
+/// > TUI-specific choice — see ``ToggleCharacterSet`` and
+/// > ``SwiftUICore/View/toggleCharacterSet(_:)``.
 ///
 /// ## Custom styles
 ///
 /// Conform to `ToggleStyle` and implement ``makeBody(configuration:)`` to draw a
 /// toggle however you like (a different glyph, an `ON`/`OFF` word, …). The
 /// built-in styles above don't implement `makeBody` — they render procedurally
-/// (with the focus glow and ``CheckboxStyle`` glyphs); only custom styles use it.
+/// (with the focus glow and ``ToggleCharacterSet`` glyphs); only custom styles use it.
 public protocol ToggleStyle: Sendable {
     /// A view representing the toggle's appearance.
     associatedtype Body: View = EmptyView
@@ -92,7 +92,7 @@ public struct ToggleStyleConfiguration {
 
 /// The default toggle style.
 ///
-/// In TUIkit this is a checkbox; its glyphs come from ``CheckboxStyle`` (■/□ by default; ⬛︎/⬜︎ under Terminal.app
+/// In TUIkit this is a checkbox; its glyphs come from ``ToggleCharacterSet`` (■/□ by default; ⬛︎/⬜︎ under Terminal.app
 /// by default).
 public struct DefaultToggleStyle: ToggleStyle {
     public init() {}
@@ -105,8 +105,8 @@ public struct DefaultToggleStyle: ToggleStyle {
 /// ■ Label     (ON)
 /// ```
 ///
-/// The checkbox glyphs are configurable via ``CheckboxStyle`` (e.g.
-/// `.checkboxStyle(.ascii)` for `[ ]` / `[x]`).
+/// The checkbox glyphs are configurable via ``ToggleCharacterSet`` (e.g.
+/// `.toggleCharacterSet(.ascii)` for `[ ]` / `[x]`).
 public struct CheckboxToggleStyle: ToggleStyle {
     public init() {}
 }
@@ -170,7 +170,7 @@ extension View {
     /// ```
     ///
     /// > Note: In TUIkit, all `ToggleStyle`s currently render as a checkbox; the
-    /// > checkbox glyphs are set separately via ``CheckboxStyle``.
+    /// > checkbox glyphs are set separately via ``ToggleCharacterSet``.
     ///
     /// - Parameter style: The toggle style to use.
     /// - Returns: A view with the toggle style set.
@@ -209,7 +209,7 @@ extension View {
 /// ■ Label     (ON - accent color)
 /// ```
 ///
-/// The checkbox glyphs are configurable — see ``CheckboxStyle``.
+/// The checkbox glyphs are configurable — see ``ToggleCharacterSet``.
 ///
 /// When focused, the brackets pulse in the accent color.
 ///

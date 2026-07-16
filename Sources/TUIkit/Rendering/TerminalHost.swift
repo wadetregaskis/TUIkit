@@ -14,7 +14,7 @@ import Foundation
 /// (see ``FrameDiffWriter``, which carries workarounds gated on this), and
 /// conversely draws emoji-repertoire glyphs like ⬛︎ as single seamless
 /// multi-cell glyphs where adjacent FULL BLOCK cells show seams (see
-/// ``CheckboxStyle/automatic``).
+/// ``ToggleCharacterSet/automatic``).
 enum TerminalHost {
     /// Whether the host terminal is macOS Terminal.app, detected once from
     /// the process environment.

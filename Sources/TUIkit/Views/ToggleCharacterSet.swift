@@ -1,18 +1,20 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  CheckboxStyle.swift
+//  ToggleCharacterSet.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
 
 import TUIkitCore
 
-// MARK: - CheckboxStyle
+// MARK: - ToggleCharacterSet
 
-/// How a ``Toggle``'s checkbox indicator is drawn — a TUI-specific rendering
+/// The glyph repertoire a ``Toggle`` draws with — a TUI-specific rendering
 /// choice, distinct from the SwiftUI-parity ``ToggleStyle`` (which selects
-/// checkbox vs switch *semantics*).
+/// checkbox vs switch *semantics*). It governs BOTH forms: the checkbox marks
+/// (■/□, ⬛︎/⬜︎, `[x]`/`[ ]`) and the switch track (block-glyph or emoji knob,
+/// or the bracketed `[o ]`/`[ o]` under ``ascii``).
 ///
-/// Three built-in styles, named by glyph repertoire:
+/// Three built-in sets:
 /// - ``unicode`` — single-cell text squares ■ / □. Monochrome, theme-tintable,
 ///   and one cell wide on every terminal: the maximum-compatibility choice.
 /// - ``emoji`` — the large squares ⬛︎ / ⬜︎ from the emoji repertoire, rendered
@@ -23,20 +25,20 @@ import TUIkitCore
 ///
 /// A running app defaults to ``automatic`` — ``emoji`` under Apple's
 /// Terminal.app, ``unicode`` everywhere else. Override for a whole subtree
-/// with ``SwiftUICore/View/checkboxStyle(_:)``:
+/// with ``SwiftUICore/View/toggleCharacterSet(_:)``:
 ///
 /// ```swift
 /// SettingsForm()
-///     .checkboxStyle(.ascii)   // [x] / [ ] everywhere below
+///     .toggleCharacterSet(.ascii)   // [x] / [ ] everywhere below
 /// ```
 ///
-/// A style is just the on/off marks plus an optional bracket pair. When the
+/// A character set is just the on/off marks plus an optional bracket pair. When the
 /// brackets are empty (``unicode``) the mark is a self-contained glyph whose
 /// *shape* shows the on/off state, so its colour is free to show focus /
 /// checked / disabled. When brackets are present (``ascii``) they are coloured
 /// by focus while the inner mark is coloured by on/off — the classic two-tone
 /// `[x]`.
-public struct CheckboxStyle: Sendable, Equatable {
+public struct ToggleCharacterSet: Sendable, Equatable {
     /// The mark shown when the toggle is **on** (e.g. `■` or `x`).
     public let onMark: String
 
@@ -70,7 +72,7 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// `case .automatic` and show it as its own option.
     var resolvesFromTerminal: Bool = false
 
-    /// Creates a checkbox style from its marks and (optional) brackets.
+    /// Creates a character set from its marks and (optional) brackets.
     public init(onMark: String, offMark: String, openBracket: String = "", closeBracket: String = "") {
         self.onMark = onMark
         self.offMark = offMark
@@ -115,7 +117,7 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// shears the row (issue #9) — so they get the universally-correct
     /// ``unicode`` squares.
     ///
-    /// This is what a running app uses when no ``SwiftUICore/View/checkboxStyle(_:)``
+    /// This is what a running app uses when no ``SwiftUICore/View/toggleCharacterSet(_:)``
     /// modifier applies. (The bare `EnvironmentValues` default — what headless
     /// renders and tests see — is the terminal-independent ``unicode``.)
     ///
@@ -126,7 +128,7 @@ public struct CheckboxStyle: Sendable, Equatable {
     /// attached CLIENT's font, and detaching and re-attaching from a different
     /// terminal changes it. Resolving eagerly — as this used to — froze whatever
     /// was true when the value happened to be constructed, typically at app-state
-    /// init, so `.checkboxStyle(.automatic)` could never notice.
+    /// init, so `.toggleCharacterSet(.automatic)` could never notice.
     ///
     /// Outside a run loop (headless renders, tests) there is no terminal to
     /// consult and this draws ``unicode``, deterministically.
@@ -145,61 +147,62 @@ public struct CheckboxStyle: Sendable, Equatable {
 
 // MARK: - Environment
 
-private struct CheckboxStyleKey: EnvironmentKey {
-    /// The terminal-independent ``CheckboxStyle/unicode``, NOT
-    /// ``CheckboxStyle/automatic``: a bare `EnvironmentValues` (headless
+private struct ToggleCharacterSetKey: EnvironmentKey {
+    /// The terminal-independent ``ToggleCharacterSet/unicode``, NOT
+    /// ``ToggleCharacterSet/automatic``: a bare `EnvironmentValues` (headless
     /// renders, the test suite) must resolve identically whatever terminal
     /// hosts the process. The app run loop injects `.automatic` at the root
     /// (see `RenderLoop.buildEnvironment`), so real apps are terminal-adaptive.
-    static let defaultValue: CheckboxStyle = .unicode
+    static let defaultValue: ToggleCharacterSet = .unicode
 }
 
-/// What ``CheckboxStyle/automatic`` resolves to for the terminal in front of the
+/// What ``ToggleCharacterSet/automatic`` resolves to for the terminal in front of the
 /// user right now — supplied per frame by `RenderLoop.buildEnvironment`.
 ///
-/// Its own default is ``CheckboxStyle/unicode`` so that a bare
+/// Its own default is ``ToggleCharacterSet/unicode`` so that a bare
 /// `EnvironmentValues` (headless renders, the test suite) resolves `.automatic`
 /// deterministically, with no dependence on whichever terminal happens to be
 /// running the process.
-private struct ResolvedAutomaticCheckboxStyleKey: EnvironmentKey {
-    static let defaultValue: CheckboxStyle = .unicode
+private struct ResolvedAutomaticToggleCharacterSetKey: EnvironmentKey {
+    static let defaultValue: ToggleCharacterSet = .unicode
 }
 
 extension EnvironmentValues {
-    /// The checkbox indicator style for ``Toggle``s in this environment.
+    /// The glyph repertoire for ``Toggle``s in this environment.
     ///
-    /// May be ``CheckboxStyle/automatic``, which is a marker rather than a
-    /// decided set of glyphs — read ``effectiveCheckboxStyle`` to draw with.
-    public var checkboxStyle: CheckboxStyle {
-        get { self[CheckboxStyleKey.self] }
-        set { self[CheckboxStyleKey.self] = newValue }
+    /// May be ``ToggleCharacterSet/automatic``, which is a marker rather than a
+    /// decided set of glyphs — read ``effectiveToggleCharacterSet`` to draw with.
+    public var toggleCharacterSet: ToggleCharacterSet {
+        get { self[ToggleCharacterSetKey.self] }
+        set { self[ToggleCharacterSetKey.self] = newValue }
     }
 
-    /// The concrete style ``CheckboxStyle/automatic`` stands for this frame.
-    var resolvedAutomaticCheckboxStyle: CheckboxStyle {
-        get { self[ResolvedAutomaticCheckboxStyleKey.self] }
-        set { self[ResolvedAutomaticCheckboxStyleKey.self] = newValue }
+    /// The concrete style ``ToggleCharacterSet/automatic`` stands for this frame.
+    var resolvedAutomaticToggleCharacterSet: ToggleCharacterSet {
+        get { self[ResolvedAutomaticToggleCharacterSetKey.self] }
+        set { self[ResolvedAutomaticToggleCharacterSetKey.self] = newValue }
     }
 
-    /// The style to actually DRAW with: ``CheckboxStyle/automatic`` resolved
+    /// The style to actually DRAW with: ``ToggleCharacterSet/automatic`` resolved
     /// against this frame's terminal, anything explicit used as it stands.
     ///
-    /// Every render site must read this rather than ``checkboxStyle``, or an
-    /// `.automatic` marker reaches the glyph code as its ``CheckboxStyle/unicode``
+    /// Every render site must read this rather than ``toggleCharacterSet``, or an
+    /// `.automatic` marker reaches the glyph code as its ``ToggleCharacterSet/unicode``
     /// fallback and the adaptation silently does nothing.
-    var effectiveCheckboxStyle: CheckboxStyle {
-        let style = checkboxStyle
-        return style.resolvesFromTerminal ? resolvedAutomaticCheckboxStyle : style
+    var effectiveToggleCharacterSet: ToggleCharacterSet {
+        let style = toggleCharacterSet
+        return style.resolvesFromTerminal ? resolvedAutomaticToggleCharacterSet : style
     }
 }
 
 extension View {
-    /// Sets the checkbox indicator style (``CheckboxStyle/unicode`` by default,
-    /// or ``CheckboxStyle/ascii``) for ``Toggle``s in this view.
+    /// Sets the glyph repertoire (``ToggleCharacterSet/unicode`` by default, or
+    /// e.g. ``ToggleCharacterSet/ascii``) for ``Toggle``s in this view — both
+    /// checkbox marks and the switch track.
     ///
     /// TUI-specific: SwiftUI has no equivalent, so this is kept separate from the
     /// SwiftUI-parity ``toggleStyle(_:)``.
-    public func checkboxStyle(_ style: CheckboxStyle) -> some View {
-        environment(\.checkboxStyle, style)
+    public func toggleCharacterSet(_ style: ToggleCharacterSet) -> some View {
+        environment(\.toggleCharacterSet, style)
     }
 }

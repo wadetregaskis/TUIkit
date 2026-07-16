@@ -27,20 +27,20 @@ internal struct EnvironmentSnapshot: Equatable {
     /// The active appearance identifier.
     let appearanceID: String
 
-    /// What `.automatic` checkbox glyphs resolve to this frame. Under tmux this
+    /// What the `.automatic` toggle character set resolves to this frame. Under tmux this
     /// CHANGES mid-run when a different client attaches; without it in the
     /// snapshot, `EquatableView`/`ForEach`-memoized subtrees kept serving
     /// buffers with the OLD glyphs, so the screen showed a mix — rows the user
     /// touched re-rendered in the new style while untouched rows stayed in the
     /// old one (observed live: iTerm2 attached to a running app and the default
     /// toggles stayed ■/□ while the answer had flipped to emoji).
-    let resolvedAutomaticCheckboxStyle: CheckboxStyle
+    let resolvedAutomaticToggleCharacterSet: ToggleCharacterSet
 
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.paletteID = environment.palette.id
         self.appearanceID = environment.appearance.id
-        self.resolvedAutomaticCheckboxStyle = environment.resolvedAutomaticCheckboxStyle
+        self.resolvedAutomaticToggleCharacterSet = environment.resolvedAutomaticToggleCharacterSet
     }
 }
 
@@ -624,7 +624,7 @@ extension RenderLoop {
         // Terminal-adaptive defaults belong to the app run loop, where a real
         // terminal exists — the bare EnvironmentValues defaults stay
         // terminal-independent so headless renders and tests are
-        // deterministic. `.checkboxStyle(_:)` modifiers below still override.
+        // deterministic. `.toggleCharacterSet(_:)` modifiers below still override.
         //
         // `resolveEmojiChrome()` rather than the static `.automatic`, because
         // under tmux the answer depends on the CLIENT terminal's font and only
@@ -634,10 +634,10 @@ extension RenderLoop {
         // The DEFAULT is the `.automatic` marker, and the answer it stands for
         // goes alongside it. Injecting the marker (rather than a style already
         // resolved here) is what makes an app's own explicit
-        // `.checkboxStyle(.automatic)` adapt too — it overrides this default with
+        // `.toggleCharacterSet(.automatic)` adapt too — it overrides this default with
         // the same marker, and the render site resolves whichever arrives.
-        environment.checkboxStyle = .automatic
-        environment.resolvedAutomaticCheckboxStyle = .automatic(
+        environment.toggleCharacterSet = .automatic
+        environment.resolvedAutomaticToggleCharacterSet = .automatic(
             emojiChrome: resolveEmojiChrome())
 
         // Runtime services (shared with ViewRenderer's one-off path so

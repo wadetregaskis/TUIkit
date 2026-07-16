@@ -54,10 +54,10 @@ struct ExampleStyling: Equatable {
     var uppercaseSectionHeaders = false
     var boldButtons = false
     /// The app-wide checkbox glyph style (`.unicode`, `.emoji`, or `.ascii`),
-    /// applied to every Toggle / RadioButton in the app via `.checkboxStyle(_:)`.
+    /// applied to every Toggle / RadioButton in the app via `.toggleCharacterSet(_:)`.
     /// Starts at the terminal-adaptive default (emoji under Terminal.app,
     /// unicode elsewhere); the Theme page's picker overrides it.
-    var checkboxStyle: CheckboxStyle = .automatic
+    var toggleCharacterSet: ToggleCharacterSet = .automatic
     /// A user-built border, edited on the Theme page. When non-nil it overrides
     /// the appearance manager's built-in border for the whole app; nil falls back
     /// to the built-in appearance (F2/F3/the appearance picker).
@@ -111,9 +111,9 @@ struct ContentView: View {
                 $0.textCase = styling.uppercaseSectionHeaders ? .uppercase : nil
             }
             .buttonTextStyle { $0.bold = styling.boldButtons ? true : nil }
-            // App-wide checkbox glyphs: a local `.checkboxStyle` (e.g. the Toggle
+            // App-wide checkbox glyphs: a local `.toggleCharacterSet` (e.g. the Toggle
             // page's side-by-side demo) still overrides this for its own subtree.
-            .checkboxStyle(styling.checkboxStyle)
+            .toggleCharacterSet(styling.toggleCharacterSet)
             // The app-wide border now flows from the scene: `main.swift` applies
             // `.appearance(...)` for the user-built custom border (or defers to
             // the appearance manager / F2 / F3 / picker), reaching the app header

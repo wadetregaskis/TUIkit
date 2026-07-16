@@ -13,7 +13,7 @@ of observation. Consult this document before making or reviewing any
 change that relies on terminal-specific behaviour (`TerminalHost`,
 `Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance` /
 `.ghosttyCursorAdvance` / `.warpCursorAdvance`, `String.tmuxCursorAdvance`, the
-`FrameDiffWriter` compensation paths, `CheckboxStyle.automatic`, …). tmux is a
+`FrameDiffWriter` compensation paths, `ToggleCharacterSet.automatic`, …). tmux is a
 **fifth cursor-advance model** here, not a fall-through to "unknown": a change
 touching cursor advance must consider tmux's grid explicitly.
 
@@ -98,7 +98,7 @@ the emoji-class clusters below unless noted.
   single seamless 2-cell monochrome, SGR-tintable glyph — *preferred*
   here because adjacent FULL BLOCK `█` cells show visible seams
   (incomplete cell coverage) in this terminal. This is why
-  `CheckboxStyle.automatic` = `.emoji` on this host.
+  `ToggleCharacterSet.automatic` = `.emoji` on this host.
 - **Block Elements:** `██` can show a hairline seam between cells;
   half-block pairs like `▐▌` render contiguously (they form the
   TextField caps and the switch knob). Shades ░▒▓ render as fine stipple.
@@ -192,7 +192,7 @@ non-default setup.
   unhandled (ZWJ is unhandled on both hosts).
 - **Emoji chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): monochrome, tintable,
   2 cells, no shear — on the `supportsEmojiChrome` allowlist, so
-  `CheckboxStyle.automatic` = `.emoji` here too.
+  `ToggleCharacterSet.automatic` = `.emoji` here too.
 - **Block Elements:** gap-free full-cell coverage — `██` contiguous, no
   seams; shades ░▒▓ draw as a dotted crosshatch texture (font flavour,
   cosmetically different from Terminal.app's stipple). Half-block images
@@ -666,9 +666,9 @@ glyphs baked in — observed as a mixed-style screen (touched rows in the new
 style, untouched rows in the old) with misaligned labels where a stale 2-cell
 ⬛︎ buffer met fresh 1-cell ■ measurements.
 
-**It follows a client change mid-run**, which is the point — `CheckboxStyle.automatic`
+**It follows a client change mid-run**, which is the point — `ToggleCharacterSet.automatic`
 is a marker resolved at render, not a style decided when the value was made, so
-even an app's own explicit `.checkboxStyle(.automatic)` adapts. Verified end to
+even an app's own explicit `.toggleCharacterSet(.automatic)` adapts. Verified end to
 end on one running app with the client swapped underneath it: it drew ⬛ while
 Ghostty watched, and still ⬛ when Apple Terminal took the session with
 `attach -d` — same process, no restart, and no termtype to go on the second time.
@@ -842,5 +842,5 @@ here.)
 | anything else | plain | **untouched** (compensation would corrupt a correct terminal) |
 - `FrameDiffWriter` — applies the rewriters on its build path; Apple-only
   right-edge repaint.
-- `CheckboxStyle.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
+- `ToggleCharacterSet.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
   selection per host.

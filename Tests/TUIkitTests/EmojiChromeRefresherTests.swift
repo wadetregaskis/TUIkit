@@ -231,9 +231,9 @@ struct EnvironmentSnapshotTests {
         // participate: without it, rows the user touches re-render in the new
         // style while untouched rows keep the old one — a mixed-style screen.
         var environment = EnvironmentValues()
-        environment.resolvedAutomaticCheckboxStyle = .automatic(emojiChrome: false)
+        environment.resolvedAutomaticToggleCharacterSet = .automatic(emojiChrome: false)
         let before = EnvironmentSnapshot(from: environment)
-        environment.resolvedAutomaticCheckboxStyle = .automatic(emojiChrome: true)
+        environment.resolvedAutomaticToggleCharacterSet = .automatic(emojiChrome: true)
         let after = EnvironmentSnapshot(from: environment)
         #expect(before != after, "a chrome flip must clear the render cache")
     }

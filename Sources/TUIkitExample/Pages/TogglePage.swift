@@ -58,9 +58,9 @@ struct TogglePage: View {
                 .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
             }
 
-            DemoSection(L("page.toggle.section.checkboxGlyph")) {
+            DemoSection(L("page.toggle.section.toggleCharacterSet")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.toggle.checkboxNote"))
+                    Text(L("page.toggle.toggleCharacterSetNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
                         // The "(default)" tag follows the terminal-adaptive
@@ -106,7 +106,7 @@ struct TogglePage: View {
     /// One column of the checkbox-glyph comparison: the style's name (tagged
     /// "(default)" when it is what `.automatic` resolves to on this terminal)
     /// over an on/off pair rendered in that style.
-    private func checkboxColumn(_ name: String, style: CheckboxStyle) -> some View {
+    private func checkboxColumn(_ name: String, style: ToggleCharacterSet) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(style == .automatic ? "\(name) (\(L("page.toggle.default")))" : name).dim()
             Toggle(L("page.toggle.on"), isOn: .constant(true))
@@ -117,6 +117,6 @@ struct TogglePage: View {
             Toggle(L("page.toggle.on"), isOn: .constant(true)).toggleStyle(.switch)
             Toggle(L("page.toggle.off"), isOn: .constant(false)).toggleStyle(.switch)
         }
-        .checkboxStyle(style)
+        .toggleCharacterSet(style)
     }
 }
