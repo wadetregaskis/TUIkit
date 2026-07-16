@@ -76,9 +76,16 @@ enum TerminalHost {
         #endif
     }
 
-    /// `true` for iTerm2 (`TERM_PROGRAM == "iTerm.app"`), on any platform it
-    /// reports itself on (macOS natively; also over ssh with iTerm2's shell
-    /// integration propagating the variable).
+    /// `true` for iTerm2 (`TERM_PROGRAM == "iTerm.app"`), wherever iTerm2 sets
+    /// that variable in the process environment — locally on macOS.
+    ///
+    /// NOT across an ssh hop: `TERM_PROGRAM` is not an `LC_*` variable, and
+    /// OpenSSH forwards only `LANG` and `LC_*` by default (measured:
+    /// `/etc/ssh/ssh_config.d/100-macos.conf` sends `LANG LC_*`), so a shell on
+    /// the far side sees no `TERM_PROGRAM` and this returns false there. iTerm2's
+    /// shell integration does forward `LC_TERMINAL=iTerm2` — which ssh's `LC_*`
+    /// rule carries — but that is a different variable this does not consult; a
+    /// remote process is treated as an unknown terminal, conservatively.
     static func detectITerm2(environment: [String: String]) -> Bool {
         environment["TERM_PROGRAM"] == "iTerm.app"
     }
