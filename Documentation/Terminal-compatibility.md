@@ -564,10 +564,19 @@ SIGWINCH from inside a pane. Two conservatisms:
 A same-size re-attach sends no SIGWINCH and so keeps the previous answer until
 something resizes: the accepted cost of not forking a subprocess per frame.
 
-**Known gap:** the public `CheckboxStyle.automatic` resolves eagerly, so an app
-that writes `.checkboxStyle(.automatic)` explicitly pins the static host answer
-at init and bypasses this; only the framework's own default adapts. Closing it
-needs `.automatic` to become a deferred sentinel resolved at render.
+**It follows a client change mid-run**, which is the point — `CheckboxStyle.automatic`
+is a marker resolved at render, not a style decided when the value was made, so
+even an app's own explicit `.checkboxStyle(.automatic)` adapts. Verified end to
+end: one running app in a tmux session drew ⬛ while Ghostty watched it, and
+switched to ■ when Apple Terminal took the session with `attach -d` — same
+process, no restart.
+
+| client attached | `#{client_termtype}` | checkbox glyphs |
+|---|---|---|
+| Ghostty / iTerm2 / Warp | named + versioned | ⬛ ⬜ emoji |
+| Apple Terminal | *(empty)* | ■ □ — conservative (see above) |
+| several, all recognised | all named | ⬛ ⬜ emoji |
+| several, any unrecognised | mixed | ■ □ |
 
 ### Mouse
 
