@@ -688,6 +688,27 @@ containing a chrome glyph shears left by one — observed in TUIkitExample as
 checkering, one sheared row at a time. So tmux+Ghostty draws the safe ■ □
 while native Ghostty keeps the emoji chrome.
 
+**Skin tones through tmux are per-client too — and the mirror image
+(measured, 2026-07-16).** tmux re-emits SMP-base skin-tone clusters (👍🏽)
+**verbatim** — no backspace trick (byte-captured) — so each client applies its
+NATIVE advance while tmux's grid believes 2 cells:
+
+| client | 👍🏽 verbatim advance | tones through tmux |
+|---|---|---|
+| Ghostty 1.3.1 | 2 | ✓ kept |
+| iTerm2 3.6.11 | 2 | ✗ stripped — paints the tone as a broken separate swatch, the same appearance its native path strips for |
+| Apple Terminal 455.1 | **4** | ✗ stripped — row shears right by 2 |
+| Warp v0.2026.07.08 | **4** | ✗ stripped |
+
+So the per-client policy converges exactly on the native one: Ghostty alone
+keeps skin tones. The strip happens at SOURCE (`FrameDiffWriter`'s
+`tmuxSkinToneBasePlane`, `.bmpOnly` for all-Ghostty clients, `.all`
+otherwise) — the one fix that survives the hop, because tmux's grid then
+holds and re-emits the toneless cluster. The plane rides the same
+push-refreshed client probe as the chrome, so a client change restyles both
+in the same full redraw. BMP-base tones (✊🏻 ☝🏽) are always stripped under
+tmux: tmux's own grid over-advances those, client-independent.
+
 **A chrome flip invalidates the render cache**, not just the frame diff: the
 diff invalidation rewrites every line, but line content comes from the render
 pass, and value-memoized subtrees would otherwise serve buffers with the old
