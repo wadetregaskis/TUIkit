@@ -588,12 +588,11 @@ its own termtype, which is what TUIkit uses.
 
 **How it is used.** Widths never need the client (the grid is
 client-independent, measured), so this drives exactly one decision: the emoji
-chrome, whose glyphs are painted by the client's font. `RenderLoop` asks tmux
-once and re-asks on resize — a re-attach from a different terminal is a
-SIGWINCH from inside a pane. Each client is identified by XTVERSION if it
-answered, and by its owning application if it did not; the two are
-complementary, since XTVERSION crosses an ssh hop and the process walk doesn't,
-while the process walk finds a silent terminal and XTVERSION can't.
+chrome, whose glyphs are painted by the client's font. Each client is
+identified by XTVERSION if it answered, and by its owning application if it did
+not; the two are complementary, since XTVERSION crosses an ssh hop and the
+process walk doesn't, while the process walk finds a silent terminal and
+XTVERSION can't.
 
 - **A client unidentified by BOTH loses the chrome** — a terminal that stays
   silent and isn't a local app we recognise is a real thing (a Linux VT console,
@@ -601,8 +600,45 @@ while the process walk finds a silent terminal and XTVERSION can't.
 - **Every attached client must be recognised**, not just the active one — two
   fonts can be painting the same bytes.
 
-A same-size re-attach sends no SIGWINCH and so keeps the previous answer until
-something resizes: the accepted cost of not forking a subprocess per frame.
+**PUSH, not poll — tmux hooks (measured, 3.7b).** A same-size re-attach sends
+no SIGWINCH, so waiting for one would keep a stale answer indefinitely, and
+re-probing on a timer would fork in steady state for nothing. Instead, at
+startup the app registers three global tmux hooks at array index = its PID —
+`client-attached[pid]`, `client-detached[pid]`, `client-session-changed[pid]`
+(the complete set of events that can change which terminals paint our output;
+all three fire on 3.7b, including for a same-size attach and a SIGKILLed
+client) — each running:
+
+```
+run-shell -b "kill -s WINCH <pid> || tmux set-hook -gu '<hook>[<pid>]'"
+```
+
+Every part measured or load-bearing:
+
+- **Global at a PID index, never session-scoped**: a session-scoped hook
+  shadows the user's ENTIRE global array for that hook name (measured — the
+  user's `client-attached[0]` stopped firing), while two global hooks at
+  different indices coexist. The PID index also keeps several TUIkit apps on
+  one server out of each other's slots.
+- **SIGWINCH as the channel**: the app already has a complete, tested SIGWINCH
+  pipeline (async-signal-safe flag + self-pipe that wakes the idle-blocked
+  loop, full repaint) — a client change rides it with zero new plumbing. And
+  SIGWINCH's default action is IGNORE, so a stale hook signalling a recycled
+  PID after a crash is harmless (SIGUSR1 would terminate an innocent process).
+- **Self-cleaning**: `kill` fails once the PID is gone, and the `||` arm
+  removes the hook on its first firing after an uncleaned death. Measured: all
+  three orphaned hooks removed themselves within one attach/detach cycle.
+  A clean exit removes them explicitly (`set-hook -gu`, ours and only ours).
+- **The probe is asynchronous**: the SIGWINCH path kicks a background
+  `list-clients` (bounded 250ms; coalesced to at-most-one-in-flight plus one
+  queued re-run, so a resize drag costs one or two probes, not one per event).
+  Frames keep rendering with the previous answer while it runs; if the landed
+  answer differs, the whole screen is invalidated and re-rendered proactively —
+  the loop is woken even if it was idle, no keypress needed.
+
+Steady state — no client changes, no resizes — runs **no subprocess at all**.
+A tmux too old for these hooks degrades gracefully: registration fails, and
+the app adapts only on real SIGWINCHes.
 
 **It follows a client change mid-run**, which is the point — `CheckboxStyle.automatic`
 is a marker resolved at render, not a style decided when the value was made, so
