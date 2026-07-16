@@ -16,17 +16,31 @@
 ///
 /// Only tracks values that affect visual output — reference-type infrastructure
 /// services (`FocusManager`, `ThemeManager`) are excluded.
-private struct EnvironmentSnapshot: Equatable {
+///
+/// Internal (not private) so tests can pin which values participate: a value
+/// missing from here is a class of "changed but stale subtrees keep the old
+/// look" bug, and it is invisible in headless single-render tests.
+internal struct EnvironmentSnapshot: Equatable {
     /// The active palette identifier.
     let paletteID: String
 
     /// The active appearance identifier.
     let appearanceID: String
 
+    /// What `.automatic` checkbox glyphs resolve to this frame. Under tmux this
+    /// CHANGES mid-run when a different client attaches; without it in the
+    /// snapshot, `EquatableView`/`ForEach`-memoized subtrees kept serving
+    /// buffers with the OLD glyphs, so the screen showed a mix — rows the user
+    /// touched re-rendered in the new style while untouched rows stayed in the
+    /// old one (observed live: iTerm2 attached to a running app and the default
+    /// toggles stayed ■/□ while the answer had flipped to emoji).
+    let resolvedAutomaticCheckboxStyle: CheckboxStyle
+
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.paletteID = environment.palette.id
         self.appearanceID = environment.appearance.id
+        self.resolvedAutomaticCheckboxStyle = environment.resolvedAutomaticCheckboxStyle
     }
 }
 

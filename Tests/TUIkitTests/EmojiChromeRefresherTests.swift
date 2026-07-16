@@ -218,3 +218,30 @@ struct EmojiChromeRefresherTests {
         Issue.record("refresher never settled")
     }
 }
+
+@Suite("environment snapshot")
+struct EnvironmentSnapshotTests {
+    @Test("A resolved-chrome change invalidates the render cache (snapshot inequality)")
+    func chromeChangeChangesSnapshot() {
+        // The failure this guards, observed live: iTerm2 attached to a running
+        // app, the emoji-chrome answer flipped, the full-screen repaint ran —
+        // and the toggles still drew ■/□, because EquatableView/ForEach-memoized
+        // subtrees served their cached buffers. RenderLoop clears that cache
+        // when this snapshot differs between frames, so the resolved style MUST
+        // participate: without it, rows the user touches re-render in the new
+        // style while untouched rows keep the old one — a mixed-style screen.
+        var environment = EnvironmentValues()
+        environment.resolvedAutomaticCheckboxStyle = .automatic(emojiChrome: false)
+        let before = EnvironmentSnapshot(from: environment)
+        environment.resolvedAutomaticCheckboxStyle = .automatic(emojiChrome: true)
+        let after = EnvironmentSnapshot(from: environment)
+        #expect(before != after, "a chrome flip must clear the render cache")
+    }
+
+    @Test("An unchanged environment produces an equal snapshot (cache is kept)")
+    func unchangedEnvironmentKeepsCache() {
+        let first = EnvironmentSnapshot(from: EnvironmentValues())
+        let second = EnvironmentSnapshot(from: EnvironmentValues())
+        #expect(first == second)
+    }
+}
