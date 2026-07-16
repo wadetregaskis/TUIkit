@@ -317,7 +317,12 @@ struct MeasureRenderEquivalenceTests {
     /// width-flexible where the wrapped view's own (canonical) measure does not.
     @Test("AnyView is Layoutable and forwards the wrapped view's measurement")
     func anyViewForwardsMeasurement() {
-        #expect(AnyView(Text("hi")) is Layoutable, "AnyView conforms to Layoutable")
+        // AnyView's `Layoutable` conformance is what routes measurement to the
+        // wrapped view instead of the render-to-measure fallback. It is a static
+        // guarantee, so pin it as one: this binding fails to compile if the
+        // conformance is dropped — stronger than a runtime `is`, which here the
+        // compiler already knows is always true.
+        let _: any Layoutable = AnyView(Text("hi"))
 
         let wrapping = Text("A fairly long line of text that wraps when the width is narrow")
         let proposal = ProposedSize(width: 20, height: nil)
