@@ -549,13 +549,30 @@ therefore stays off the emoji-chrome allowlist and gets the universally-safe
 non-emoji glyphs — conservative, and correct for every client. `client_termtype`
 remains useful for diagnostics and bug reports, where a subprocess is fine.
 
+### Mouse
+
+**SGR (1006) reporting passes through and the coordinates are correct.**
+Verified end to end: with tmux at its default (`mouse off`), TUIkitExample's own
+`ESC[?1006h` / `?1002h` reach the client, and a synthetic press/release injected
+into the pane —
+
+```
+tmux send-keys -t <pane> -H <hex of ESC[<0;45;11M then ESC[<0;45;11m>
+```
+
+— landed on the menu row at screen line 11 and navigated the app to that page.
+So tmux neither eats the enable sequence nor shifts the reported cell.
+
+Not yet measured: the encoding under `set -g mouse on` (tmux then consumes
+reports for its own pane management and re-emits to the focused pane), and
+whether modifier bits survive that path.
+
 ### Still unverified
 
-- Mouse encoding under `set -g mouse on` (tmux consumes reports for its own
-  panes and re-emits SGR to the focused pane) — not byte-captured yet.
 - Cell pixel aspect for images: tmux does not forward the client's
   `ws_xpixel`/`ws_ypixel`, so `cellPixelAspect()` returns nil and callers keep
-  their default. Not yet measured whether that default is right under tmux.
+  their default. Not yet measured whether that default is right under tmux —
+  and it cannot be right for every client at once when two are attached.
 
 **Reproduce:** `tmux -L probe new-session -d -x 120 -y 40 -e PROBE_OUT=/tmp/t.json
 'python3 Tools/TerminalProbes/advance_probe.py; sleep 2'` then read `/tmp/t.json`.
