@@ -271,7 +271,13 @@ struct TmuxCompatibilityTests {
         arguments: [
             // The single-client case — the common one, and the one that matters.
             (["iTerm2 3.6.11"], true, "iTerm2"),
-            (["ghostty 1.3.1"], true, "Ghostty"),
+            // Ghostty is allowlisted NATIVELY (our CUF patches its VS-15
+            // under-advance) but not through tmux: no compensation can reach
+            // the client, and tmux's re-emission of a VS-15 cell
+            // (`base BS BS base+VS15`) nets advance 1 on Ghostty where tmux
+            // believes 2 — measured, and observed as every toggle row shearing
+            // left by one with the scrollbar checkering row by row.
+            (["ghostty 1.3.1"], false, "Ghostty — correct natively, sheared through tmux"),
             (["Warp(v0.2026.07.08.17.54.stable_02)"], true, "Warp"),
             (["xterm"], false, "a terminal not on the allowlist"),
             // Silent AND unidentifiable — no pid here, so the process walk that
@@ -279,7 +285,7 @@ struct TmuxCompatibilityTests {
             // terminal over ssh that answers no XTVERSION: genuinely unknown.
             ([""], false, "silent, and no process to identify it by"),
             // Several clients, each with its own font, painting the same bytes.
-            (["iTerm2 3.6.11", "ghostty 1.3.1"], true, "two allowlisted clients"),
+            (["iTerm2 3.6.11", "Warp(v0.2026)"], true, "two allowlisted clients"),
             (["iTerm2 3.6.11", ""], false, "one unknown among them spoils it"),
             (["iTerm2 3.6.11", "xterm"], false, "ditto for a known-bad one"),
             // Degenerate.
@@ -295,8 +301,10 @@ struct TmuxCompatibilityTests {
     func versionsArePrefixMatched() {
         // Prefix-matched so a version bump doesn't silently downgrade the glyphs.
         #expect(TerminalHost.termtypeDrawsEmojiChrome("iTerm2 99.0"))
-        #expect(TerminalHost.termtypeDrawsEmojiChrome("ghostty 2.0.0-dev"))
         #expect(TerminalHost.termtypeDrawsEmojiChrome("Warp(v2030.01.01)"))
+        // And the through-tmux EXCLUSION is version-independent the same way:
+        // no Ghostty version is assumed fixed until re-measured.
+        #expect(!TerminalHost.termtypeDrawsEmojiChrome("ghostty 2.0.0-dev"))
     }
 
     @Test(
@@ -310,7 +318,9 @@ struct TmuxCompatibilityTests {
             // The other three answer XTVERSION so are normally caught earlier,
             // but a version that stayed silent should still be recognised.
             ("/Applications/iTerm.app/Contents/MacOS/iTerm2", true, "iTerm2"),
-            ("/Applications/Ghostty.app/Contents/MacOS/ghostty", true, "Ghostty"),
+            // Excluded through tmux despite native support — see
+            // termtypeDrawsEmojiChrome; ancestry must not re-admit it.
+            ("/Applications/Ghostty.app/Contents/MacOS/ghostty", false, "Ghostty — sheared through tmux"),
             ("/Applications/Warp.app/Contents/MacOS/stable", true, "Warp"),
             // Not terminals we've inspected, or not terminals at all.
             ("/Applications/Alacritty.app/Contents/MacOS/alacritty", false, "a terminal not on the allowlist"),

@@ -233,7 +233,23 @@ enum TerminalHost {
         return applicationDrawsEmojiChrome(executablePath: executable) ? true : nil
     }
 
-    /// Classifies a client by its XTVERSION reply.
+    /// Classifies a client by its XTVERSION reply — against the THROUGH-TMUX
+    /// bar, which is stricter than the native one.
+    ///
+    /// Natively, a terminal qualifies if it draws ⬛︎/⬜︎ correctly *with our
+    /// compensation applied*. Through tmux no compensation can reach the
+    /// client — a CUF we emit lands in tmux's grid and corrupts it — and tmux
+    /// redraws a VS-15 cell to the client as `base BS BS base+VS15` (byte-
+    /// captured, 3.7b). So membership here requires the client to advance that
+    /// sequence by the 2 cells tmux believes it occupies, unaided. Measured
+    /// (DSR, alternate screen, 2026-07-16):
+    ///
+    /// - Apple Terminal 455.1: 2 ✓, iTerm2 3.6.11: 2 ✓, Warp v0.2026.07: 2 ✓
+    /// - **Ghostty 1.3.1: 1 ✗** — its VS-15 under-advance (the one quirk our
+    ///   native CUF patches) nets the trick to 1, shifting everything after
+    ///   the glyph left by one on every such row (and checkering the
+    ///   scrollbar, one shifted row at a time). Hence Ghostty, alone, is
+    ///   excluded HERE while remaining on the native allowlist.
     ///
     /// Prefix-matched and case-insensitive, so a version bump does not silently
     /// drop support. Terminal.app is deliberately absent: it never answers, so
@@ -242,7 +258,6 @@ enum TerminalHost {
     static func termtypeDrawsEmojiChrome(_ termtype: String) -> Bool {
         let lowered = termtype.lowercased()
         return lowered.hasPrefix("iterm2")
-            || lowered.hasPrefix("ghostty")
             || lowered.hasPrefix("warp")
     }
 
@@ -267,7 +282,9 @@ enum TerminalHost {
         // iTerm2's own Application Support directory, so the fragment is as
         // unambiguous as the bundle paths.
         "/iTerm2/iTermServer-",
-        "/Ghostty.app/Contents/MacOS/",
+        // Ghostty.app is deliberately absent: through tmux it under-advances
+        // the re-emitted VS-15 cells (see `termtypeDrawsEmojiChrome`), so a
+        // client owned by Ghostty must NOT earn the chrome by ancestry either.
         "/Warp.app/Contents/MacOS/",
     ]
 
