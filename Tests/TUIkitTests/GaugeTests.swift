@@ -70,7 +70,8 @@ struct GaugeTests {
         let buffer = renderToBuffer(
             Gauge(value: 0.3) { EmptyView() }, context: makeRenderContext(width: 20, height: 4))
         #expect(buffer.height == 1)
-        #expect((buffer.lines.first?.stripped ?? "").contains("▓"))
+        let bar = buffer.lines.first?.stripped ?? ""
+        #expect(bar.contains("▓"))
     }
 
     // MARK: - GaugeStyle variants
