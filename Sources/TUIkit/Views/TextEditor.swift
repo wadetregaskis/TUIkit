@@ -241,7 +241,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     lineChars, tabWidth: tabWidth,
                     scrollColumn: handler.scrollColumn, width: contentWidth,
                     caret: rowCaret, selection: selection,
-                    palette: palette, isDisabled: isDisabled, background: fieldBackground))
+                    styling: RowStyling(
+                        palette: palette, isDisabled: isDisabled, background: fieldBackground)))
         }
 
         if hasVerticalOverflow {
@@ -343,14 +344,25 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let appearance: CaretAppearance
     }
 
+    /// The frame-level painting context every row shares: the palette, the
+    /// disabled tint, and the field background. Constant across a render pass —
+    /// grouped so the per-row walk takes one appearance argument, not three.
+    private struct RowStyling {
+        let palette: any Palette
+        let isDisabled: Bool
+        let background: Color?
+    }
+
     // The row walk is one coherent cell-clipping pass; splitting it would
     // scatter the window arithmetic its closures share.
     // swiftlint:disable:next function_body_length
     private func styledRow(
         _ chars: [Character], tabWidth: TabWidth, scrollColumn: Int, width: Int,
-        caret: RowCaret?, selection: Range<Int>?,
-        palette: any Palette, isDisabled: Bool, background: Color?
+        caret: RowCaret?, selection: Range<Int>?, styling: RowStyling
     ) -> String {
+        let palette = styling.palette
+        let isDisabled = styling.isDisabled
+        let background = styling.background
         let windowStart = scrollColumn
         let windowEnd = scrollColumn + width
 
