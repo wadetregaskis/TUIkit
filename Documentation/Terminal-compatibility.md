@@ -15,8 +15,8 @@ change that relies on terminal-specific behaviour (`TerminalHost`,
 `.ghosttyCursorAdvance` / `.warpCursorAdvance`, the `FrameDiffWriter`
 compensation paths, `CheckboxStyle.automatic`, …).
 
-**Terminals covered:** Apple Terminal.app, iTerm2, Ghostty, Warp
-(measured); tmux (documented, unverified). Jump to the
+**Terminals covered:** Apple Terminal.app, iTerm2, Ghostty, Warp, tmux
+(all measured). Jump to the
 [measured advance table](#measured-advance-table-divergences-and-key-rows)
 for the one-screen comparison.
 
@@ -406,39 +406,97 @@ contrast takes `open -na Ghostty.app --args -e <cmd>`.
 
 ## tmux
 
-**Status: NOT yet locally verified** — tmux is not installed on the
-evaluation machine (no Homebrew either). The notes below are from tmux's
-documented behaviour; treat them as expectations to verify, not
-measurements.
+**Status: MEASURED — tmux 3.7b (Homebrew, arm64), 2026-07-15.** DSR-probed
+with `advance_probe.py` run *inside* a detached tmux session (no client
+attached at all — the purest test of the compositor property below: tmux
+answered every DSR from its own grid with nothing downstream to ask).
 
-- tmux (≥3.2) sets `TERM_PROGRAM=tmux` and `TERM_PROGRAM_VERSION`, and
-  always sets `$TMUX` (socket path) and `$TMUX_PANE`. `TERM` inside is
-  `screen-256color` or `tmux-256color`. This is why the Apple-Terminal
-  tweaks do not apply when TUIkit runs under tmux inside Terminal.app:
-  `TERM_PROGRAM` no longer says `Apple_Terminal` — and that is CORRECT
-  behaviour, not a detection bug, because…
-- …tmux is a **compositor**, not a passthrough: it parses TUIkit's output
-  into its own cell grid using ITS OWN width tables, then re-renders that
-  grid to the attached client. The outer terminal's advance quirks apply
-  to *tmux's* output, not TUIkit's; what matters for TUIkit under tmux is
-  agreement between TUIkit's width tables and *tmux's* (wcwidth-based,
-  varies with tmux's Unicode tables). Host-specific CUF compensation
-  would corrupt output under tmux and must stay off (it does — neither
-  detector matches).
-- Mouse: with `set -g mouse on`, tmux consumes mouse reports for its own
-  panes and re-emits SGR sequences to the focused pane's application.
-  Encoding fidelity (horizontal wheel, modifiers) needs verification.
-- The outer terminal is not reliably identifiable from inside tmux
-  (`LC_TERMINAL` propagates for iTerm2 ssh integration only; the tmux
-  server keeps the environment of its FIRST client, which may not be the
-  current one).
+### Environment (measured, confirms the ≥3.2 expectation)
 
-**Verification checklist when tmux becomes available:** run
-`advance_probe.py` inside tmux under both Terminal.app and iTerm2 clients
-(expect identical results in both — that's the compositor property);
-byte-capture the mouse encoding with `mouse_probe.py`; check VS-16 /
-skin-tone / PUA advances against TUIkit's width claims; record
-`TERM_PROGRAM_VERSION`.
+| Variable | Value inside a pane |
+|---|---|
+| `TERM_PROGRAM` | `tmux` — **overwritten**, does NOT pass the outer terminal's through |
+| `TERM_PROGRAM_VERSION` | `3.7b` |
+| `TERM` | `tmux-256color` |
+| `COLORTERM` | `truecolor` |
+| `TMUX` / `TMUX_PANE` | socket path / `%0` |
+
+So under tmux **no** host detector matches (`Apple_Terminal`, `iTerm.app`,
+`ghostty`, `WarpTerminal` all miss) — TUIkit treats the host as unknown, and
+therefore applies **no CUF compensation and no emoji chrome**. Compensation
+staying off is CORRECT and confirmed: tmux is a **compositor**, not a
+passthrough — it parses TUIkit's output into its own grid with its own width
+tables and re-renders. The outer terminal's advance quirks apply to *tmux's*
+output, not TUIkit's.
+
+**Colour is fine:** tmux 3.7b preserves 24-bit SGR in its grid
+(`ESC[38;2;255;100;0m` survives verbatim) and sets `COLORTERM=truecolor`, so
+TUIkit's depth detection picks truecolor correctly. No `Tc`/`RGB`
+`terminal-features` tweak needed at this version.
+
+### Cursor advance — where tmux DISAGREES with TUIkit (the live bug)
+
+What matters under tmux is agreement between TUIkit's width tables and
+*tmux's* wcwidth. Measured:
+
+| Cluster | tmux 3.7b | TUIkit claims | Verdict |
+|---|---|---|---|
+| `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift:166`) | ✗ **visible breakage** |
+| `U+1F5A5`, `U+1F6E1`, `U+1F577`, `U+1F39E`, `U+1F3D9` (bare SMP pictographs) | **1** | **2** (blanket `0x1F000...0x1FBFF`) | ✗ (compensation off) |
+| `U+1F060` domino, `U+1F0A1` playing card | **1** | 2 | ✗ |
+| `U+270A U+1F3FB` (**BMP** + skin tone) | **4** | 2 | ✗ (tmux doesn't join it) |
+| `U+2B1B U+FE0E` (VS-15, text presentation) | **2** | — | ✗ (VS-15 is not narrowing) |
+| `U+1F1E6` lone regional indicator | 1 | 1 | ✓ |
+| `U+4E2D` CJK · `U+1F44D` emoji · ZWJ families · `U+1F1FA U+1F1F8` flag | 2 | 2 | ✓ |
+| `U+1F44D U+1F3FD` (**SMP** + skin tone) | 2 | 2 | ✓ |
+| `U+0065 U+0301` NFD · `U+E0B0` powerline · `U+2588` block | 1 | 1 | ✓ |
+
+**Confirmed user-visible defect:** the main menu's "Supports SF Symbols"
+FeatureBox renders **three** Plane-16 PUA glyphs. TUIkit reserves 2 cells
+each (6); tmux advances 1 each (3); nothing compensates. Measured in tmux's
+own grid at 100×60: that line's right border lands at **cell 65** while every
+other line of the same box lands at **68** — exactly 3 cells short, one per
+glyph. The box border is visibly broken. Same root cause for bare SMP
+pictographs.
+
+The `:166` comment ("SF Mono: 2 cells") is right about the *font* in a native
+terminal and wrong about tmux, whose wcwidth has never heard of SF Symbols.
+Fixing this needs a tmux host (`TERM_PROGRAM == "tmux"`) with its own width
+model — not CUF compensation, which would corrupt a compositor's grid.
+
+### Pane geometry (why a "normal" terminal still hits small-size bugs)
+
+tmux reaches tiny panes from an ordinary window in three keystrokes. Measured
+from a 100×40 window, splitting horizontally:
+
+| splits | resulting pane heights |
+|---|---|
+| 1 | 20, 19 |
+| 2 | 10, 9 |
+| **3** | **5, 4** |
+| 4 | 2, 2 |
+
+`resize-window -y 12` is honoured exactly. **A 4-row pane in a 100×40 window
+is three keystrokes away** — which is how a user with a perfectly normal
+terminal lands in the negative-content-height crash band (see
+`contentAreaHeight()`; crash fixed in c02c3678, which renders header + status
+bar with an empty content area at 4 rows instead of trapping). Verified: four
+TUIkitExample panes at heights 19/9/5/4, all `pane_dead=0`.
+
+### Still unverified
+
+- Mouse encoding under `set -g mouse on` (tmux consumes reports for its own
+  panes and re-emits SGR to the focused pane) — not byte-captured yet.
+- Whether the advance table is identical with a Terminal.app vs an iTerm2
+  client attached. The compositor property predicts yes, and the no-client
+  probe supports it, but it is not directly measured.
+- The outer terminal remains unidentifiable from inside tmux (`LC_TERMINAL`
+  is iTerm2-ssh-only; the server keeps its FIRST client's environment).
+
+**Reproduce:** `tmux -L probe new-session -d -x 120 -y 40 -e PROBE_OUT=/tmp/t.json
+'python3 Tools/TerminalProbes/advance_probe.py; sleep 2'` then read `/tmp/t.json`.
+Always use a dedicated `-L <socket>` and set `TUIKIT_CONFIG_DIR` so probes
+never touch a real session or the user's preferences.
 
 ---
 
