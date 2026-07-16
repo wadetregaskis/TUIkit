@@ -166,6 +166,18 @@ extension AppRunner {
         terminal.hideCursor()
         terminal.enableRawMode()
 
+        // Under tmux, have it PUSH a SIGWINCH at us whenever a client attaches,
+        // detaches, or changes session — the only events that can change which
+        // terminal is painting our output (and so the emoji-chrome answer). A
+        // same-size attach sends no SIGWINCH of its own, so without this the
+        // answer could go stale until something happened to resize. Comes after
+        // signals.install() so the SIGWINCH handler exists before the first
+        // hook can fire. Failure (a tmux too old for these hooks) is tolerated:
+        // the app then adapts only on real resizes.
+        if TerminalHost.isTmux {
+            TerminalHost.installTmuxClientChangeHooks()
+        }
+
         // Apply the initial mouse-tracking mode based on the scene's
         // configuration. We do this before the first render so the
         // terminal is reporting the right events by the time any
@@ -458,6 +470,13 @@ extension AppRunner {
     }
 
     fileprivate func cleanup() {
+        // Before the terminal teardown: this forks tmux, and doing it while our
+        // pane is still alive is the tidy window. A crash skips this — then the
+        // hooks' own `||` arm removes them on their next firing instead (see
+        // `TerminalHost.tmuxClientChangeHookArguments`).
+        if TerminalHost.isTmux {
+            TerminalHost.removeTmuxClientChangeHooks()
+        }
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()

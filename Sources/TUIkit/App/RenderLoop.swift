@@ -137,30 +137,6 @@ internal func contentAreaHeight(
     max(0, terminalHeight - statusBarHeight - headerHeight)
 }
 
-/// When a cached emoji-chrome answer may still be trusted.
-///
-/// Split out of ``RenderLoop`` so the policy is a pure, testable unit — and
-/// because ``RenderLoop`` is generic, where Swift forbids the stored `static`
-/// this needs. See ``RenderLoop/resolveEmojiChrome(nowNanos:)`` for the caller.
-internal enum EmojiChromeCachePolicy {
-    /// How long a tmux answer is trusted before re-probing (~2s in monotonic
-    /// nanoseconds). Off tmux there is no expiry — the answer is a
-    /// process-lifetime constant — so this bounds only the tmux window during
-    /// which a client re-attach at the same terminal size goes unnoticed.
-    static let ttlNanos: Int64 = 2_000_000_000
-
-    /// Whether an answer resolved at `cachedAtNanos` is still fresh at
-    /// `nowNanos`.
-    ///
-    /// Off tmux: always (the host cannot change mid-process). Under tmux: only
-    /// within the TTL, because a detach-and-reattach from a different terminal
-    /// changes the answer and need not resize the terminal to do it.
-    static func isFresh(underTmux: Bool, cachedAtNanos: Int64, nowNanos: Int64) -> Bool {
-        guard underTmux else { return true }
-        return nowNanos - cachedAtNanos < ttlNanos
-    }
-}
-
 @MainActor
 internal final class RenderLoop<A: App> {
     /// The user's app instance (provides `body`).
@@ -204,28 +180,36 @@ internal final class RenderLoop<A: App> {
     /// The diff writer that tracks previous frames and writes only changed lines.
     private let diffWriter = FrameDiffWriter()
 
-    /// The emoji-chrome answer for the terminals currently attached, cached
-    /// because resolving it under tmux costs a subprocess (see
-    /// ``TerminalHost/probeTmuxClients()``); `nil` means "ask again".
-    ///
-    /// Dropped by ``invalidateDiffCache()`` on every resize, AND — under tmux —
-    /// expired on a short TTL (see ``cachedEmojiChromeAtNanos``). Resize alone is
-    /// not enough: a client can detach and a different terminal attach at the
-    /// SAME size (`tmux new-session -d app; tmux attach`), which sends no
-    /// SIGWINCH, so a resize-only cache would keep the previous client's answer
-    /// forever. The TTL closes that: the answer self-heals within a couple of
-    /// seconds of any attach, at the cost of at most one probe per TTL while
-    /// frames are actually being drawn (nothing while idle).
+    /// The push-refreshed emoji-chrome answer (see ``EmojiChromeRefresher``):
+    /// seeded synchronously before the first frame, re-probed asynchronously
+    /// when the tmux client-change hooks (or a real resize) send a SIGWINCH,
+    /// and a full invalidate + render request when a landed answer differs.
     ///
     /// Instance state on the @MainActor render loop, deliberately NOT a global:
     /// a shared mutable static would be read by every headless render and test
     /// in the process, which is precisely the shape that produced the
     /// render-cache and colour-depth parallel-test flakes.
-    private var cachedEmojiChrome: Bool?
-
-    /// The frame timestamp (monotonic ns) at which ``cachedEmojiChrome`` was last
-    /// resolved, for the tmux TTL. Meaningless while `cachedEmojiChrome` is nil.
-    private var cachedEmojiChromeAtNanos: Int64 = 0
+    ///
+    /// Lazy because its `onChange` needs `diffWriter`, which is not available
+    /// until `self` is. The capture list takes `diffWriter` itself, not `self`
+    /// — a generic `self` in the closure would drag the non-Sendable `A.Type`
+    /// into the refresher's detached task.
+    private lazy var emojiChrome = EmojiChromeRefresher(
+        isRefreshable: TerminalHost.isTmux,
+        probe: {
+            TerminalHost.isTmux
+                ? TerminalHost.emojiChromeSupported(
+                    tmuxClients: TerminalHost.probeTmuxClients())
+                : TerminalHost.supportsEmojiChrome
+        },
+        onChange: { [diffWriter] in
+            // Every glyph on screen could differ (■ vs ⬛ change cell widths):
+            // full-repaint invalidation, plus a wake so the redraw happens NOW
+            // even if the loop is idle-blocked awaiting input — the point is a
+            // proactive refresh, not one deferred to the next keypress.
+            diffWriter.invalidate()
+            AppState.shared.setNeedsRender()
+        })
 
     /// The environment snapshot from the previous frame.
     ///
@@ -310,7 +294,7 @@ extension RenderLoop {
         let terminalHeight = terminalSize.height
 
         // Create render context with environment
-        var environment = buildEnvironment(nowNanos: frameNowNanos)
+        var environment = buildEnvironment()
         environment.pulsePhase = pulsePhase
         environment.cursorTimer = cursorTimer
         // Animating views declare their re-render rate through the scheduler
@@ -568,43 +552,23 @@ extension RenderLoop {
     /// Call this when the terminal is resized (SIGWINCH).
     func invalidateDiffCache() {
         diffWriter.invalidate()
-        // A resize is also our signal that the tmux CLIENT may have changed:
-        // detaching and re-attaching from a different terminal is exactly what a
-        // SIGWINCH looks like from in here. Drop the cached answer so the next
-        // frame re-asks tmux which terminals are watching. Same-size re-attaches
-        // send no SIGWINCH and so keep the previous answer until something does
-        // resize — the accepted cost of not spawning a subprocess per frame.
-        cachedEmojiChrome = nil
+        // A SIGWINCH is also our signal that the tmux CLIENT may have changed —
+        // either a real resize (attaching from a different-sized terminal), or
+        // the synthetic one our tmux hooks send for a SAME-size attach/detach
+        // (see `TerminalHost.installTmuxClientChangeHooks`). Re-ask tmux which
+        // terminals are watching — asynchronously: frames keep rendering with
+        // the previous answer, and if the new one differs the screen is fully
+        // invalidated and redrawn when it lands.
+        emojiChrome.refresh()
     }
 
     /// Whether to draw the emoji chrome glyphs this frame.
     ///
-    /// Off tmux this is the static host allowlist and costs nothing; the cache,
-    /// once set, is never re-probed because the answer cannot change for the life
-    /// of the process. Under tmux the glyphs are painted by the *client's* font,
-    /// which tmux alone can name, so we ask it — and the answer can change while
-    /// the app runs, when a client detaches and a different terminal attaches. A
-    /// resize forces a re-probe (via ``invalidateDiffCache()``), but a same-size
-    /// re-attach sends no SIGWINCH, so the cache also expires on a short TTL.
-    ///
-    /// - Parameter nowNanos: this frame's monotonic timestamp, for the TTL.
-    func resolveEmojiChrome(nowNanos: Int64) -> Bool {
-        if let cachedEmojiChrome,
-            EmojiChromeCachePolicy.isFresh(
-                underTmux: TerminalHost.isTmux,
-                cachedAtNanos: cachedEmojiChromeAtNanos,
-                nowNanos: nowNanos)
-        {
-            return cachedEmojiChrome
-        }
-        let supported =
-            TerminalHost.isTmux
-            ? TerminalHost.emojiChromeSupported(
-                tmuxClients: TerminalHost.probeTmuxClients())
-            : TerminalHost.supportsEmojiChrome
-        cachedEmojiChrome = supported
-        cachedEmojiChromeAtNanos = nowNanos
-        return supported
+    /// A pure cache read after the first call — the cache is push-refreshed by
+    /// the tmux client-change hooks, off the render path; see
+    /// ``EmojiChromeRefresher``.
+    func resolveEmojiChrome() -> Bool {
+        emojiChrome.resolve()
     }
 
     /// The effective ``MouseSupport`` configuration after combining
@@ -619,10 +583,8 @@ extension RenderLoop {
 
     /// Builds a complete ``EnvironmentValues`` with all managed subsystems.
     ///
-    /// - Parameter nowNanos: this frame's monotonic timestamp, forwarded to
-    ///   ``resolveEmojiChrome(nowNanos:)`` for its tmux TTL.
     /// - Returns: A fully populated environment.
-    func buildEnvironment(nowNanos: Int64 = 0) -> EnvironmentValues {
+    func buildEnvironment() -> EnvironmentValues {
         var environment = EnvironmentValues()
         environment.statusBar = statusBar
         environment.appHeader = appHeader
@@ -645,7 +607,8 @@ extension RenderLoop {
         // `resolveEmojiChrome()` rather than the static `.automatic`, because
         // under tmux the answer depends on the CLIENT terminal's font and only
         // tmux can name it — a question that costs a subprocess, so it is cached
-        // here and re-asked on resize. Off tmux it is the same static allowlist.
+        // here and push-refreshed by the tmux client-change hooks (see
+        // `EmojiChromeRefresher`). Off tmux it is the same static allowlist.
         // The DEFAULT is the `.automatic` marker, and the answer it stands for
         // goes alongside it. Injecting the marker (rather than a style already
         // resolved here) is what makes an app's own explicit
@@ -653,7 +616,7 @@ extension RenderLoop {
         // the same marker, and the render site resolves whichever arrives.
         environment.checkboxStyle = .automatic
         environment.resolvedAutomaticCheckboxStyle = .automatic(
-            emojiChrome: resolveEmojiChrome(nowNanos: nowNanos))
+            emojiChrome: resolveEmojiChrome())
 
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).
