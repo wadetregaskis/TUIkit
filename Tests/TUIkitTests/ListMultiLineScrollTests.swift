@@ -162,7 +162,7 @@ struct ListMultiLineScrollTests {
             let count = random(in: 1...30)
             let contentHeight = random(in: 2...10)
             let heights = (0..<count).map { _ in random(in: 1...4) }
-            let showsScrollbar = next() % 2 == 0
+            let showsScrollbar = next().isMultiple(of: 2)
             let handler = makeMixedHandler(
                 heights: heights, contentHeight: contentHeight, showsScrollbar: showsScrollbar)
             handler.scrollOffset = count  // past the tail: force the exact walk
