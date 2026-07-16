@@ -8,11 +8,6 @@ import Testing
 
 @testable import TUIkit
 
-// One cohesive suite covering `ItemListHandler` navigation, selection, and
-// scrolling; keeping the related cases together reads better than splitting them
-// across files purely to satisfy the length ceiling.
-// swiftlint:disable file_length
-
 // MARK: - Item List Handler Navigation Tests
 
 @MainActor
