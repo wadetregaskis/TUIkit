@@ -173,7 +173,7 @@ enum TerminalHost {
     ///   (nothing to please).
     static func emojiChromeSupported(tmuxClients clients: [TmuxClient]?) -> Bool {
         guard let clients else { return false }
-        return emojiChromeReading(tmuxClients: clients).supported
+        return clientCapabilities(tmuxClients: clients).emojiChrome
     }
 
     /// The full answer for a client list: the verdict, plus whether it might
@@ -189,27 +189,59 @@ enum TerminalHost {
     /// terminal whose reply is milliseconds away — worth re-asking briefly —
     /// or a genuinely unknown terminal, in which case the bounded retries burn
     /// out and the safe answer stands.
-    static func emojiChromeReading(tmuxClients clients: [TmuxClient]) -> EmojiChromeReading {
+    static func clientCapabilities(tmuxClients clients: [TmuxClient]) -> ClientCapabilities {
         guard !clients.isEmpty else {
-            return EmojiChromeReading(supported: false, mayImproveShortly: false)
+            // No clients: nothing to please. No emoji chrome (nobody has earned
+            // it), but skin tones stay — tmux's own grid joins them correctly,
+            // and an attach fires the hooks, which re-probe and fully redraw.
+            return ClientCapabilities(
+                emojiChrome: false, skinTonesSafe: true, mayImproveShortly: false)
         }
-        var supported = true
+        var chrome = true
+        var skinTones = true
         var mayImprove = false
         for client in clients {
             switch classifyClient(client) {
             case true:
-                continue
+                break
             case false:
                 // Identified, and not on the allowlist: no retry will change it.
-                supported = false
+                chrome = false
             case nil:
                 // Silent and unidentified — possibly an XTVERSION reply in
                 // flight (the attach race above), possibly a genuine unknown.
-                supported = false
+                chrome = false
                 mayImprove = true
             }
+            // Skin tones: tmux re-emits the cluster VERBATIM (byte-captured, no
+            // backspace trick), so the client's NATIVE advance applies while
+            // tmux's grid believes 2 cells. Measured against exactly that,
+            // 2026-07-16: Ghostty 2 ✓; iTerm2 2 (but paints the tone as a
+            // separate swatch — the same appearance its native path strips
+            // for); Apple Terminal 4 ✗ and Warp 4 ✗, shearing the row rightward
+            // by 2 per cluster. So, exactly like every NATIVE path, only
+            // Ghostty keeps the tones; a silent client strips until identified
+            // (the shared retry covers it).
+            if clientRendersSkinTones(client) != true {
+                skinTones = false
+            }
         }
-        return EmojiChromeReading(supported: supported, mayImproveShortly: mayImprove)
+        return ClientCapabilities(
+            emojiChrome: chrome, skinTonesSafe: skinTones, mayImproveShortly: mayImprove)
+    }
+
+    /// Whether one client renders SMP-base skin-tone clusters (👍🏽) correctly
+    /// when tmux re-emits them verbatim: `true` only for Ghostty — the same
+    /// answer as the native paths, where Ghostty alone skips the skin-tone
+    /// strip. `nil` for a client neither signal could name.
+    static func clientRendersSkinTones(_ client: TmuxClient) -> Bool? {
+        if !client.termtype.isEmpty {
+            return client.termtype.lowercased().hasPrefix("ghostty")
+        }
+        guard let pid = client.pid,
+            let executable = owningApplicationPath(ofTmuxClient: pid)
+        else { return nil }
+        return executable.contains("/Ghostty.app/Contents/MacOS/")
     }
 
     /// Identifies one attached client, by asking it and then — if it said
@@ -230,7 +262,7 @@ enum TerminalHost {
     /// no recognisable local application in its process chain. `nil` clients
     /// draw the safe glyphs, but distinguish themselves from `false` because
     /// their answer may improve within milliseconds (see
-    /// ``emojiChromeReading(tmuxClients:)``).
+    /// ``clientCapabilities(tmuxClients:)``).
     static func classifyClient(_ client: TmuxClient) -> Bool? {
         if !client.termtype.isEmpty {
             return termtypeDrawsEmojiChrome(client.termtype)
@@ -279,7 +311,11 @@ enum TerminalHost {
     /// executable names are less predictable than their bundles (iTerm.app ships
     /// `iTerm2`, Warp.app ships `stable`); matching to the `MacOS/` directory is
     /// enough to identify the bundle and won't break when they rename a binary.
-    private static let emojiChromeApplicationExecutables = [
+    /// Every terminal application the process walk can name — identification,
+    /// not capability. Each capability then selects its own subset, because
+    /// they genuinely differ per terminal (Ghostty: no chrome through tmux,
+    /// but the only one that keeps skin tones).
+    private static let recognisedTerminalExecutables = [
         "/Terminal.app/Contents/MacOS/Terminal",
         "/iTerm.app/Contents/MacOS/",
         // iTerm2's session-restoration daemon: with it enabled (the default),
@@ -290,9 +326,19 @@ enum TerminalHost {
         // iTerm2's own Application Support directory, so the fragment is as
         // unambiguous as the bundle paths.
         "/iTerm2/iTermServer-",
-        // Ghostty.app is deliberately absent: through tmux it under-advances
-        // the re-emitted VS-15 cells (see `termtypeDrawsEmojiChrome`), so a
-        // client owned by Ghostty must NOT earn the chrome by ancestry either.
+        "/Ghostty.app/Contents/MacOS/",
+        "/Warp.app/Contents/MacOS/",
+    ]
+
+    /// The subset of ``recognisedTerminalExecutables`` whose owners draw the
+    /// emoji chrome correctly THROUGH TMUX. Ghostty is recognised but absent:
+    /// it under-advances tmux's re-emitted VS-15 cells (see
+    /// `termtypeDrawsEmojiChrome`), so a client owned by Ghostty must not earn
+    /// the chrome by ancestry either.
+    private static let emojiChromeApplicationExecutables = [
+        "/Terminal.app/Contents/MacOS/Terminal",
+        "/iTerm.app/Contents/MacOS/",
+        "/iTerm2/iTermServer-",
         "/Warp.app/Contents/MacOS/",
     ]
 
@@ -339,7 +385,7 @@ enum TerminalHost {
         for _ in 0..<16 {
             guard let pid = current, pid > 1 else { return nil }
             if let path = executablePath(ofProcess: pid),
-                applicationDrawsEmojiChrome(executablePath: path)
+                recognisedTerminalExecutables.contains(where: { path.contains($0) })
             {
                 return path
             }

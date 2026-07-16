@@ -1,11 +1,12 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  EmojiChromeRefresher.swift
+//  ClientCapabilityRefresher.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
 
-/// The push-refreshed cache of "do the terminal(s) in front of the user draw
-/// the emoji chrome correctly?".
+/// The push-refreshed cache of what the terminal(s) in front of the user can
+/// render — the emoji chrome, and skin-tone clusters (see
+/// ``ClientCapabilities``).
 ///
 /// Off tmux the answer is a process-lifetime constant: it is resolved once and
 /// never re-asked. Under tmux it can change while the app runs — a client
@@ -27,7 +28,20 @@
 /// logic is unit-testable with an injected probe (no tmux server, no forks),
 /// and a `Task.detached` inside the generic `RenderLoop<A>` would capture
 /// `A.Type`, which is not `Sendable`.
-/// One probe's answer, plus whether it might improve on a short retry.
+/// One probe's answer — what the attached clients can render — plus whether
+/// it might improve on a short retry.
+///
+/// Two capabilities, because they genuinely differ per terminal (measured):
+/// - `emojiChrome`: all clients draw tmux's re-emission of the ⬛︎/⬜︎ VS-15
+///   chrome correctly (Apple Terminal, iTerm2, Warp — NOT Ghostty, whose
+///   native support depends on a compensation that cannot cross tmux).
+/// - `skinTonesSafe`: all clients advance tmux's verbatim re-emission of
+///   SMP-base skin-tone clusters (👍🏽) by the 2 cells tmux believes
+///   (Ghostty ONLY — Apple Terminal and Warp advance 4, shearing the row,
+///   and iTerm2 paints the tone as a broken separate swatch). When false,
+///   the writer strips the modifiers at source, which — unlike cursor
+///   compensation — survives the tmux hop: tmux's grid then holds and
+///   re-emits the toneless cluster.
 ///
 /// `mayImproveShortly` covers a measured race: the `client-attached` tmux hook
 /// fires — and the app probes — before the new client's XTVERSION reply has
@@ -35,15 +49,16 @@
 /// that will name itself milliseconds later. A silent client the process walk
 /// also can't identify is therefore worth a few bounded re-asks before the
 /// safe answer is allowed to stand.
-internal struct EmojiChromeReading: Equatable, Sendable {
-    let supported: Bool
+internal struct ClientCapabilities: Equatable, Sendable {
+    let emojiChrome: Bool
+    let skinTonesSafe: Bool
     let mayImproveShortly: Bool
 }
 
 @MainActor
-internal final class EmojiChromeRefresher {
+internal final class ClientCapabilityRefresher {
     /// The last probe's answer; `nil` only before ``resolve()`` first seeds it.
-    private(set) var current: Bool?
+    private(set) var current: ClientCapabilities?
 
     /// Whether ``refresh()`` does anything. Off tmux the answer cannot change,
     /// so refreshing is a no-op (`false` there).
@@ -56,9 +71,9 @@ internal final class EmojiChromeRefresher {
     /// screen (and flip it back when the next probe succeeds). Blocking
     /// (bounded) — always run off the main actor by ``refresh()``;
     /// ``resolve()`` runs it inline exactly once, to seed.
-    private let probe: @Sendable () -> EmojiChromeReading?
+    private let probe: @Sendable () -> ClientCapabilities?
 
-    /// Backoff for re-asking after a reading that ``EmojiChromeReading/mayImproveShortly``
+    /// Backoff for re-asking after a reading that ``ClientCapabilities/mayImproveShortly``
     /// — long enough for an XTVERSION round trip, short enough that the user
     /// never watches the wrong glyphs settle. Injectable so tests don't wait.
     private let retryDelaysNanos: [UInt64]
@@ -88,7 +103,7 @@ internal final class EmojiChromeRefresher {
 
     init(
         isRefreshable: Bool,
-        probe: @escaping @Sendable () -> EmojiChromeReading?,
+        probe: @escaping @Sendable () -> ClientCapabilities?,
         onChange: @escaping @MainActor () -> Void,
         retryDelaysNanos: [UInt64] = [250_000_000, 500_000_000, 1_000_000_000]
     ) {
@@ -109,13 +124,16 @@ internal final class EmojiChromeRefresher {
     /// guessed answer and then visibly corrects it at launch; every later call
     /// is a pure cache read, and only ``refresh()`` — off the render path —
     /// ever probes again.
-    func resolve() -> Bool {
+    func resolve() -> ClientCapabilities {
         if let current { return current }
         // At launch there is no previous answer to keep, so a failed seed probe
-        // falls to the safe glyphs (false) — the same fail-closed answer the
-        // probe layer gives for an unreachable tmux.
+        // falls to the safe answers — no chrome, strip tones — the same
+        // fail-closed answer the probe layer gives for an unreachable tmux.
         let reading = probe()
-        let seeded = reading?.supported ?? false
+        let seeded =
+            reading
+            ?? ClientCapabilities(
+                emojiChrome: false, skinTonesSafe: false, mayImproveShortly: false)
         current = seeded
         if isRefreshable, reading?.mayImproveShortly == true {
             retriesRemaining = retryDelaysNanos.count
@@ -149,10 +167,17 @@ internal final class EmojiChromeRefresher {
 
     /// Completion of a background probe, back on the main actor. A `nil`
     /// reading (the probe failed) changes nothing: the previous answer stands.
-    private func apply(_ reading: EmojiChromeReading?) {
-        if let reading, reading.supported != current {
-            current = reading.supported
-            onChange()
+    private func apply(_ reading: ClientCapabilities?) {
+        if let reading {
+            // The retry hint is bookkeeping, not appearance: only a change to
+            // what the screen should DRAW warrants the full invalidate.
+            let drawsDifferently =
+                reading.emojiChrome != current?.emojiChrome
+                || reading.skinTonesSafe != current?.skinTonesSafe
+            current = reading
+            if drawsDifferently {
+                onChange()
+            }
         }
         if coalescer.probeCompleted() {
             startProbe()

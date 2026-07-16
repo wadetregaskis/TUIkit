@@ -194,7 +194,7 @@ internal final class RenderLoop<A: App> {
     /// The diff writer that tracks previous frames and writes only changed lines.
     private let diffWriter = FrameDiffWriter()
 
-    /// The push-refreshed emoji-chrome answer (see ``EmojiChromeRefresher``):
+    /// The push-refreshed emoji-chrome answer (see ``ClientCapabilityRefresher``):
     /// seeded synchronously before the first frame, re-probed asynchronously
     /// when the tmux client-change hooks (or a real resize) send a SIGWINCH,
     /// and a full invalidate + render request when a landed answer differs.
@@ -208,12 +208,17 @@ internal final class RenderLoop<A: App> {
     /// until `self` is. The capture list takes `diffWriter` itself, not `self`
     /// — a generic `self` in the closure would drag the non-Sendable `A.Type`
     /// into the refresher's detached task.
-    private lazy var emojiChrome = EmojiChromeRefresher(
+    private lazy var clientCapabilities = ClientCapabilityRefresher(
         isRefreshable: TerminalHost.isTmux,
         probe: {
             guard TerminalHost.isTmux else {
-                return EmojiChromeReading(
-                    supported: TerminalHost.supportsEmojiChrome, mayImproveShortly: false)
+                // Native: the chrome is the static allowlist, and skin tones
+                // are the writer's per-host business (each native path strips
+                // or keeps them itself) — `true` here means "don't ALSO strip".
+                return ClientCapabilities(
+                    emojiChrome: TerminalHost.supportsEmojiChrome,
+                    skinTonesSafe: true,
+                    mayImproveShortly: false)
             }
             // nil propagates ("could not ask; keep the previous answer") —
             // deliberately NOT collapsed to false. Fail-closed is right when
@@ -221,7 +226,7 @@ internal final class RenderLoop<A: App> {
             // refresh, where flipping every glyph on a transient probe failure
             // is strictly worse than keeping a possibly-stale style.
             return TerminalHost.probeTmuxClients().map {
-                TerminalHost.emojiChromeReading(tmuxClients: $0)
+                TerminalHost.clientCapabilities(tmuxClients: $0)
             }
         },
         onChange: { [diffWriter] in
@@ -581,16 +586,17 @@ extension RenderLoop {
         // terminals are watching — asynchronously: frames keep rendering with
         // the previous answer, and if the new one differs the screen is fully
         // invalidated and redrawn when it lands.
-        emojiChrome.refresh()
+        clientCapabilities.refresh()
     }
 
-    /// Whether to draw the emoji chrome glyphs this frame.
+    /// What the attached terminal(s) can render this frame: the emoji-chrome
+    /// answer for the environment, and the skin-tone answer for the writer.
     ///
     /// A pure cache read after the first call — the cache is push-refreshed by
     /// the tmux client-change hooks, off the render path; see
-    /// ``EmojiChromeRefresher``.
-    func resolveEmojiChrome() -> Bool {
-        emojiChrome.resolve()
+    /// ``ClientCapabilityRefresher``.
+    func resolveClientCapabilities() -> ClientCapabilities {
+        clientCapabilities.resolve()
     }
 
     /// The effective ``MouseSupport`` configuration after combining
@@ -626,19 +632,28 @@ extension RenderLoop {
         // terminal-independent so headless renders and tests are
         // deterministic. `.toggleCharacterSet(_:)` modifiers below still override.
         //
-        // `resolveEmojiChrome()` rather than the static `.automatic`, because
-        // under tmux the answer depends on the CLIENT terminal's font and only
-        // tmux can name it — a question that costs a subprocess, so it is cached
-        // here and push-refreshed by the tmux client-change hooks (see
-        // `EmojiChromeRefresher`). Off tmux it is the same static allowlist.
-        // The DEFAULT is the `.automatic` marker, and the answer it stands for
-        // goes alongside it. Injecting the marker (rather than a style already
-        // resolved here) is what makes an app's own explicit
-        // `.toggleCharacterSet(.automatic)` adapt too — it overrides this default with
-        // the same marker, and the render site resolves whichever arrives.
+        // `resolveClientCapabilities()` rather than the static `.automatic`,
+        // because under tmux the answer depends on the CLIENT terminal's font
+        // and only tmux can name it — a question that costs a subprocess, so it
+        // is cached here and push-refreshed by the tmux client-change hooks
+        // (see `ClientCapabilityRefresher`). Off tmux it is the same static
+        // allowlist. The DEFAULT is the `.automatic` marker, and the answer it
+        // stands for goes alongside it. Injecting the marker (rather than a
+        // style already resolved here) is what makes an app's own explicit
+        // `.toggleCharacterSet(.automatic)` adapt too — it overrides this
+        // default with the same marker, and the render site resolves whichever
+        // arrives.
+        let capabilities = resolveClientCapabilities()
         environment.toggleCharacterSet = .automatic
         environment.resolvedAutomaticToggleCharacterSet = .automatic(
-            emojiChrome: resolveEmojiChrome())
+            emojiChrome: capabilities.emojiChrome)
+        // The writer's tmux skin-tone plane follows the same per-client answer:
+        // keep SMP-base tones only when every attached client renders them
+        // (Ghostty alone). Set per frame; a change always arrives via the
+        // refresher's onChange, whose full invalidation keeps the writer's
+        // line-reuse cache from serving lines stripped under the old policy.
+        diffWriter.tmuxSkinToneBasePlane =
+            capabilities.skinTonesSafe ? .bmpOnly : .all
 
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).

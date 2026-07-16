@@ -1,5 +1,5 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  EmojiChromeRefresherTests.swift
+//  ClientCapabilityRefresherTests.swift
 //
 //  The async, coalesced re-probe that keeps the emoji-chrome answer current
 //  without ever blocking the render path — the receiving end of the tmux
@@ -54,32 +54,34 @@ struct ProbeCoalescerTests {
 
 @Suite("emoji-chrome refresher")
 @MainActor
-struct EmojiChromeRefresherTests {
-    /// A settled reading: no retry implied.
-    nonisolated private static func settled(_ supported: Bool) -> EmojiChromeReading {
-        EmojiChromeReading(supported: supported, mayImproveShortly: false)
+struct ClientCapabilityRefresherTests {
+    /// A settled reading: no retry implied. (Skin tones follow the chrome bit
+    /// in these tests — the refresher treats the struct opaquely.)
+    nonisolated private static func settled(_ supported: Bool) -> ClientCapabilities {
+        ClientCapabilities(
+            emojiChrome: supported, skinTonesSafe: supported, mayImproveShortly: false)
     }
 
     @Test("resolve() seeds once and is a pure cache read after")
     func resolveSeedsOnce() {
         nonisolated(unsafe) var probes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: false,
             probe: {
                 probes += 1
                 return Self.settled(true)
             },
             onChange: {})
-        #expect(refresher.resolve())
-        #expect(refresher.resolve())
-        #expect(refresher.resolve())
+        #expect(refresher.resolve().emojiChrome)
+        #expect(refresher.resolve().emojiChrome)
+        #expect(refresher.resolve().emojiChrome)
         #expect(probes == 1, "only the first resolve may probe")
     }
 
     @Test("refresh() is a no-op when the answer cannot change (off tmux)")
     func refreshInertWhenNotRefreshable() async {
         nonisolated(unsafe) var probes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: false,
             probe: {
                 probes += 1
@@ -99,24 +101,24 @@ struct EmojiChromeRefresherTests {
     func onChangeFiresOnlyOnChange() async throws {
         let answer = Mutable(false)
         nonisolated(unsafe) var changes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true,
             probe: { Self.settled(answer.value) },
             onChange: { changes += 1 })
-        #expect(refresher.resolve() == false)  // seeded with false
+        #expect(refresher.resolve().emojiChrome == false)  // seeded with false
 
         // Same answer: no onChange.
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 0, "an unchanged answer must not invalidate the screen")
-        #expect(refresher.resolve() == false)
+        #expect(refresher.resolve().emojiChrome == false)
 
         // Changed answer: exactly one onChange, and resolve() serves the new value.
         answer.value = true
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 1, "a changed answer must invalidate exactly once")
-        #expect(refresher.resolve() == true, "frames after the change draw the new answer")
+        #expect(refresher.resolve().emojiChrome, "frames after the change draw the new answer")
     }
 
     @Test("A FAILED refresh probe keeps the previous answer — no flip, no onChange")
@@ -128,31 +130,33 @@ struct EmojiChromeRefresherTests {
         // answer stands.
         let answer = Mutable<Bool?>(true)
         nonisolated(unsafe) var changes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true,
             probe: { answer.value.map(Self.settled) },
             onChange: { changes += 1 })
-        #expect(refresher.resolve() == true)
+        #expect(refresher.resolve().emojiChrome)
 
         answer.value = nil  // tmux went quiet
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 0, "a failed probe must not restyle the screen")
-        #expect(refresher.resolve() == true, "the previous answer stands")
+        #expect(refresher.resolve().emojiChrome, "the previous answer stands")
 
         answer.value = false  // a real answer again: now it may flip
         refresher.refresh()
         try await waitUntilSettled(refresher)
         #expect(changes == 1)
-        #expect(refresher.resolve() == false)
+        #expect(refresher.resolve().emojiChrome == false)
     }
 
     @Test("A failed SEED probe falls to the safe glyphs")
     func failedSeedFailsClosed() {
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true, probe: { nil }, onChange: {})
-        // At launch there is no previous answer to keep.
-        #expect(refresher.resolve() == false)
+        // At launch there is no previous answer to keep: no chrome, strip tones.
+        let seeded = refresher.resolve()
+        #expect(seeded.emojiChrome == false)
+        #expect(seeded.skinTonesSafe == false)
     }
 
     @Test("An ambiguous reading retries and picks up the late XTVERSION reply")
@@ -162,30 +166,31 @@ struct EmojiChromeRefresherTests {
         // unidentified client (supported: false, mayImproveShortly: true). A
         // moment later the reply lands; the bounded retry must pick it up with
         // NO further external event — there is none coming.
-        let reading = Mutable(EmojiChromeReading(
-            supported: false, mayImproveShortly: true))
+        let reading = Mutable(ClientCapabilities(
+            emojiChrome: false, skinTonesSafe: false, mayImproveShortly: true))
         nonisolated(unsafe) var changes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true,
             probe: { reading.value },
             onChange: { changes += 1 },
             retryDelaysNanos: [5_000_000, 5_000_000, 5_000_000])
-        #expect(refresher.resolve() == false)
+        #expect(refresher.resolve().emojiChrome == false)
 
         reading.value = Self.settled(true)  // the XTVERSION reply "arrives"
         try await waitUntilSettled(refresher)
         #expect(changes == 1, "the retry must land the improved answer unprompted")
-        #expect(refresher.resolve() == true)
+        #expect(refresher.resolve().emojiChrome)
     }
 
     @Test("Retries are bounded: a genuinely unknown silent client stops probing")
     func retriesAreBounded() async throws {
         nonisolated(unsafe) var probes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true,
             probe: {
                 probes += 1
-                return EmojiChromeReading(supported: false, mayImproveShortly: true)
+                return ClientCapabilities(
+                    emojiChrome: false, skinTonesSafe: false, mayImproveShortly: true)
             },
             onChange: {},
             retryDelaysNanos: [5_000_000, 5_000_000, 5_000_000])
@@ -203,7 +208,7 @@ struct EmojiChromeRefresherTests {
         // A detached session ([] clients) is a REAL false — no reply is coming,
         // so no retry is warranted.
         nonisolated(unsafe) var probes = 0
-        let refresher = EmojiChromeRefresher(
+        let refresher = ClientCapabilityRefresher(
             isRefreshable: true,
             probe: {
                 probes += 1
@@ -221,7 +226,7 @@ struct EmojiChromeRefresherTests {
     /// Polls until the refresher's in-flight probe (and any coalesced re-run)
     /// has landed. The probe hops through a detached task, so tests must wait
     /// for the main-actor completion rather than assert immediately.
-    private func waitUntilSettled(_ refresher: EmojiChromeRefresher) async throws {
+    private func waitUntilSettled(_ refresher: ClientCapabilityRefresher) async throws {
         for _ in 0..<200 {
             try await Task.sleep(nanoseconds: 5_000_000)
             if refresher.isIdleForTesting { return }

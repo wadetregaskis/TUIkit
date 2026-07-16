@@ -83,6 +83,23 @@ final class FrameDiffWriter {
     /// terminals attached AND with none — identical every time.
     private let isTmux: Bool
 
+    /// Which skin-tone bases the tmux path strips: `.bmpOnly` when every
+    /// attached client renders SMP-base tones (Ghostty alone, measured),
+    /// `.all` otherwise — Apple Terminal and Warp advance tmux's verbatim
+    /// re-emission of 👍🏽 by 4 against tmux's believed 2, shearing the row,
+    /// and iTerm2 paints the tone as a broken separate swatch (the same
+    /// appearance its native path strips for). Stripping at SOURCE is the one
+    /// fix that survives the tmux hop: tmux's grid then holds and re-emits
+    /// the toneless cluster.
+    ///
+    /// Per-frame config, set by `RenderLoop` from the push-refreshed client
+    /// capabilities. Safe default (`.all`) so a writer nobody configures
+    /// never emits tones a client can't place. Mutable, unlike the host
+    /// flags — legitimate against the line-reuse cache only because every
+    /// change arrives via the refresher's `onChange`, which fully invalidates
+    /// this writer before the next frame is built.
+    var tmuxSkinToneBasePlane: String.SkinToneBasePlane = .all
+
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
 
@@ -340,7 +357,7 @@ extension FrameDiffWriter {
                 // cells we claim, and only over-advances on a BMP base (✊🏻 ☝🏽).
                 // Stripping the ones it gets right would throw away skin tones
                 // the user asked for and the attached client renders perfectly.
-                clipped.withSkinToneFallback(basePlane: .bmpOnly)
+                clipped.withSkinToneFallback(basePlane: tmuxSkinToneBasePlane)
                     .withTmuxCursorCompensation()
             } else if isAppleTerminal {
                 clipped.withTerminalAppCursorCompensation()

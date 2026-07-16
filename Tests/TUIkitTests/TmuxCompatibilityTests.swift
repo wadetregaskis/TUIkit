@@ -248,6 +248,32 @@ struct TmuxCompatibilityTests {
         }
     }
 
+    @Test("The writer's tmux skin-tone plane is per-client: .all strips 👍🏽, .bmpOnly keeps it")
+    @MainActor
+    func tmuxSkinTonePlaneIsHonoured() {
+        // The plane is set per frame by RenderLoop from the push-refreshed
+        // client capabilities: .bmpOnly only when every attached client
+        // renders SMP-base tones (Ghostty alone, measured), .all otherwise —
+        // stripping at SOURCE is the one fix that survives tmux's verbatim
+        // re-emission (no CUF can reach the client).
+        let writer = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: true)
+        let thumbs = "\u{1F44D}\u{1F3FD} ok"  // SMP base + tone
+
+        writer.tmuxSkinToneBasePlane = .all
+        let stripped = buildLine(writer, raw: thumbs)
+        #expect(
+            !stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
+            "an Apple Terminal / Warp client would advance the toned cluster to 4 — strip at source")
+
+        writer.invalidate()  // as the refresher's onChange does on every policy change
+        writer.tmuxSkinToneBasePlane = .bmpOnly
+        let kept = buildLine(writer, raw: thumbs)
+        #expect(
+            kept.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
+            "a Ghostty client renders the toned cluster correctly — keep it")
+    }
+
     /// Renders one raw line through the writer's real build path.
     @MainActor
     private func buildLine(_ writer: FrameDiffWriter, raw: String) -> String {
@@ -333,6 +359,42 @@ struct TmuxCompatibilityTests {
         ] as [(String, Bool, String)])
     func applicationsAreIdentifiedByTheirBundle(path: String, expected: Bool, what: String) {
         #expect(TerminalHost.applicationDrawsEmojiChrome(executablePath: path) == expected, "\(what)")
+    }
+
+    @Test(
+        "Skin tones survive through tmux only when every client is Ghostty",
+        arguments: [
+            // tmux re-emits SMP-base skin-tone clusters VERBATIM (byte-captured
+            // — no backspace trick), so each client applies its NATIVE advance
+            // while tmux believes 2 cells. Measured against exactly that,
+            // 2026-07-16: Ghostty 2 ✓; iTerm2 2 but paints a broken separate
+            // swatch (the appearance its native path strips for);
+            // Apple Terminal 4 ✗ and Warp 4 ✗ (row shears right by 2).
+            (["ghostty 1.3.1"], true, "Ghostty renders them correctly"),
+            (["iTerm2 3.6.11"], false, "iTerm2 splits the swatch — same as its native strip"),
+            (["Warp(v0.2026)"], false, "Warp over-advances to 4"),
+            ([""], false, "a silent, unidentified client strips until identified"),
+            (["ghostty 1.3.1", "iTerm2 3.6.11"], false, "one non-Ghostty client spoils it"),
+            // No clients: tmux's own grid joins the clusters correctly, and an
+            // attach re-probes (hook) before anyone sees a frame.
+            ([], true, "nothing to please — the grid itself is fine"),
+        ] as [([String], Bool, String)])
+    func skinTonesFollowTheClients(termtypes: [String], expected: Bool, what: String) {
+        let clients = termtypes.map { TerminalHost.TmuxClient(termtype: $0, pid: nil) }
+        let capabilities = TerminalHost.clientCapabilities(tmuxClients: clients)
+        #expect(capabilities.skinTonesSafe == expected, "\(what)")
+    }
+
+    @Test("The chrome and skin-tone capabilities are independent per client")
+    func capabilitiesAreIndependent() {
+        // Ghostty: NO chrome through tmux (VS-15 re-emission shears) but the
+        // only client whose skin tones survive. iTerm2: exactly the mirror.
+        let ghostty = TerminalHost.clientCapabilities(
+            tmuxClients: [TerminalHost.TmuxClient(termtype: "ghostty 1.3.1", pid: nil)])
+        #expect(!ghostty.emojiChrome && ghostty.skinTonesSafe)
+        let iterm = TerminalHost.clientCapabilities(
+            tmuxClients: [TerminalHost.TmuxClient(termtype: "iTerm2 3.6.11", pid: nil)])
+        #expect(iterm.emojiChrome && !iterm.skinTonesSafe)
     }
 
     @Test("Walking up from a process that can't lead to a terminal ends, and says so")
