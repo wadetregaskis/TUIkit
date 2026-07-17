@@ -131,26 +131,60 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         )
     }
 
-    /// `.window` size from one render: the layout stops appending children once
-    /// the running height would exceed `availableHeight`, so the rendered height
-    /// ends on a child boundary and can fall short of the height limit by a
-    /// truncated child. Summing children analytically (as `.clip` does) would
-    /// over-report that boundary, so the exact size must come from a render under
-    /// this context. Flexibility mirrors `renderWindow`'s fill rules: a (vertical)
-    /// spacer makes `maxWidth` become `availableWidth` and expands the height, and
-    /// any width/height-flexible child fills its axis.
+    /// `.window` size, computed analytically from the same width-aware slot
+    /// walk the render paths use (Stage 3 of "Locating things without drawing
+    /// them": measuring must not render). The walk mirrors `renderWindow`'s
+    /// append-while-fits exactly — children accumulate top-down and the size
+    /// stops at the first child that would overflow `availableHeight`, so the
+    /// height ends on a child boundary just as the render does. Flexibility
+    /// mirrors the fill rules: a (vertical) spacer makes the stack fill both
+    /// axes, and any width/height-flexible child fills its axis.
+    ///
+    /// A stack WITH a spacer keeps the render-based measure: spacer heights
+    /// come from distributing the leftover after every sibling has rendered,
+    /// which is genuinely a property of the fill, not of any one child.
+    /// (`renderWindow` forfeits laziness for spacers for the same reason.)
     private func windowSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var measureContext = context
+        measureContext.isMeasuring = true
+        // Children of a windowed stack are not at the scroll origin; the
+        // window must not leak into their own measures.
+        measureContext.environment.scrollContentWindow = nil
+
+        let widthLimit = proposal.width ?? context.availableWidth
+        let heightLimit = proposal.height ?? context.availableHeight
+        let slots = naturalRowSlots(width: widthLimit, context: measureContext)
+
         var widthFlexible = false
         var heightFlexible = false
-        for child in resolveChildViews(from: content, context: context) {
-            if child.isSpacer { widthFlexible = true; heightFlexible = true }
-            let childSize = child.measure(proposal: proposal, context: context)
-            if childSize.isWidthFlexible { widthFlexible = true }
-            if childSize.isHeightFlexible { heightFlexible = true }
+        var hasSpacer = false
+        for slot in slots {
+            if slot.child.isSpacer {
+                hasSpacer = true
+                widthFlexible = true
+                heightFlexible = true
+            }
+            if slot.size.isWidthFlexible { widthFlexible = true }
+            if slot.size.isHeightFlexible { heightFlexible = true }
+        }
+
+        if hasSpacer {
+            let size = measureFixedByRendering(self, proposal: proposal, context: context)
+            return ViewSize(
+                width: size.width, height: size.height,
+                isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+        }
+
+        var height = 0
+        var maxWidth = 0
+        for slot in slots {
+            let next = height + slot.spacingBefore + slot.height
+            if next > heightLimit { break }
+            height = next
+            maxWidth = max(maxWidth, min(slot.width, widthLimit))
         }
         return ViewSize(
-            width: size.width, height: size.height,
+            width: maxWidth, height: height,
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
@@ -384,8 +418,9 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         // The same slot walk LayoutPlacing answers from (one traversal, many
         // visitors): the window predicate below and any locate/enumerate
-        // query agree on every row's y by construction.
-        let slots = naturalRowSlots(context: childContext)
+        // query agree on every row's y by construction. Width-aware, so a
+        // wrapping row's slot is its wrapped height.
+        let slots = naturalRowSlots(width: width, context: childContext)
 
         // The enumerate visitor's row set (§5d/§6a): the rows meeting the
         // viewport, plus one margin row past each edge (so a directional

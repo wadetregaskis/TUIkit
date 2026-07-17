@@ -62,6 +62,28 @@ struct LazyStackWindowingTests {
         #expect(mid[9] == "Row 9" && mid[13] == "Row 13", "margin rows at both edges")
     }
 
+    @Test("A wrapping row's slot is its wrapped height, not its unwrapped one")
+    func wrappedRowKeepsItsHeight() {
+        // The slot walk measures at the render width. Width-blind slots
+        // (measured .unspecified) gave this row a 1-line slot and the render
+        // clipped its second line away.
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            Text("short")
+            Text("a very long line that must wrap")  // 31 cols in a 20-col window
+            Text("tail")
+        }
+        var context = makeBareRenderContext(width: 20, height: 200)
+        context.environment.scrollContentWindow = ScrollContentWindow(
+            offset: 0, viewportHeight: 6)
+        let lines = renderToBuffer(view, context: context).lines.map {
+            $0.stripped.trimmingCharacters(in: .whitespaces)
+        }
+        #expect(lines[0] == "short")
+        #expect(lines[1] == "a very long line", "first wrapped line")
+        #expect(lines[2] == "that must wrap", "second wrapped line survives in its slot")
+        #expect(lines[3] == "tail", "the next row sits below the FULL wrapped height")
+    }
+
     @Test("Without a scroll window, a LazyVStack renders every row (no windowing)")
     func noWindowRendersAll() {
         let labels = (0..<12).map { "Row \($0)" }

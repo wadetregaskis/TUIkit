@@ -14,35 +14,41 @@
 
 extension _VStackCore {
     /// One child's vertical slot: content origin (below the inter-row spacing
-    /// gap), measured extent, and the spacing charged before it.
+    /// gap), measured size, and the spacing charged before it.
     struct RowSlot {
         let child: ChildView
         /// Content top, container-relative (spacing already applied).
         let y: Int
-        let height: Int
-        let width: Int
+        let size: ViewSize
         let spacingBefore: Int
+
+        var height: Int { size.height }
+        var width: Int { size.width }
     }
 
-    /// Every child's natural-height slot, top to bottom: measured at
-    /// `.unspecified` — the same proposal the windowed render uses — with
-    /// inter-row spacing charged between consecutive children.
+    /// Every child's natural-height slot, top to bottom, measured at the
+    /// given width (unconstrained when `nil`) with inter-row spacing charged
+    /// between consecutive children.
+    ///
+    /// Pass the width the rows will actually render at: a wrapping `Text`
+    /// measures taller at the real width than unconstrained, and the slot
+    /// height is authoritative — the windowed render pads/clamps the row to
+    /// it, so a width-blind slot would clip wrapped rows.
     ///
     /// Measurement-only: no rendering, no side effects. Callers inside a
     /// scroll window must pass a context whose `scrollContentWindow` is
     /// cleared (descendants aren't at the scroll origin).
-    func naturalRowSlots(context: RenderContext) -> [RowSlot] {
+    func naturalRowSlots(width: Int?, context: RenderContext) -> [RowSlot] {
         let children = resolveChildViews(from: content, context: context)
+        let proposal = ProposedSize(width: width, height: nil)
         var slots: [RowSlot] = []
         slots.reserveCapacity(children.count)
         var runningY = 0
         for (index, child) in children.enumerated() {
             let spacingBefore = index > 0 ? spacing : 0
-            let size = child.measure(proposal: .unspecified, context: context)
+            let size = child.measure(proposal: proposal, context: context)
             let y = runningY + spacingBefore
-            slots.append(RowSlot(
-                child: child, y: y, height: size.height, width: size.width,
-                spacingBefore: spacingBefore))
+            slots.append(RowSlot(child: child, y: y, size: size, spacingBefore: spacingBefore))
             runningY = y + size.height
         }
         return slots
@@ -66,7 +72,7 @@ extension _VStackCore: LayoutPlacing {
 
     func placement(at ordinal: Int, proposal: ProposedSize, context: RenderContext) -> Placement? {
         let queryContext = placementContext(context)
-        let slots = naturalRowSlots(context: queryContext)
+        let slots = naturalRowSlots(width: proposal.width, context: queryContext)
         guard slots.indices.contains(ordinal) else { return nil }
         let slot = slots[ordinal]
         return Placement(
