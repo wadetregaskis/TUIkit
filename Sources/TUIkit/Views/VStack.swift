@@ -382,15 +382,16 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let bottom = window.offset + window.viewportHeight
         let width = context.availableWidth
 
+        // The same slot walk LayoutPlacing answers from (one traversal, many
+        // visitors): the window predicate below and any locate/enumerate
+        // query agree on every row's y by construction.
+        let slots = naturalRowSlots(context: childContext)
+
         var result = FrameBuffer()
-        var runningY = 0
-        for (index, child) in children.enumerated() {
-            let spacingBefore = index > 0 ? spacing : 0
-            let measuredHeight = child.measure(proposal: .unspecified, context: childContext).height
-            let rowTop = runningY + spacingBefore
-            let rowBottom = rowTop + measuredHeight
-            let slotHeight = spacingBefore + measuredHeight
-            runningY = rowBottom
+        for slot in slots {
+            let rowTop = slot.y
+            let rowBottom = slot.y + slot.height
+            let slotHeight = slot.spacingBefore + slot.height
 
             if rowBottom <= top || rowTop >= bottom {
                 // Off-window: a blank placeholder of the same height.
@@ -398,6 +399,8 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 continue
             }
 
+            let child = slot.child
+            let spacingBefore = slot.spacingBefore
             let rendered = child.render(width: width, height: window.viewportHeight, context: childContext)
             var slot = FrameBuffer()
             if spacingBefore > 0 {

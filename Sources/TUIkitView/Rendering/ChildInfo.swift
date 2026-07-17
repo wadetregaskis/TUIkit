@@ -170,6 +170,25 @@ public struct ChildView {
     /// row — rather than measure or render it.
     public var wrappedView: any View { view }
 
+    /// The identity this child measures and renders under — the address that
+    /// "Locating things without drawing them" §5a routes by — computed without
+    /// building or rendering anything. Identical to the identity the child
+    /// receives on the real measure/render paths (same `childContext`).
+    public func identity(under context: RenderContext) -> ViewIdentity {
+        childContext(context).identity
+    }
+
+    /// The stable `ForEach` key this child's identity is disambiguated by,
+    /// or `nil` for positionally-identified children.
+    public var identityChildKey: String? { identityKey }
+
+    /// The positional index this child's identity is disambiguated by, or
+    /// `nil` when the child is keyed or descends transparently under the
+    /// parent identity.
+    public var identityChildIndex: Int? {
+        (identityType == nil || identityKey != nil) ? nil : childIndex
+    }
+
     /// Measures this child view without rendering.
     public func measure(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(view, proposal: proposal, context: childContext(context))

@@ -159,6 +159,58 @@ extension ViewIdentity {
         ViewIdentity(node: node.appending(.branch(label)))
     }
 
+    /// The identity-chain step directly below `ancestor` on this identity's
+    /// chain — the routing answer of "Locating things without drawing them"
+    /// §5a: a container at depth *d* holding a target's identity reads step
+    /// *d+1* and knows which child leads there, in O(depth), with nothing
+    /// measured or drawn.
+    ///
+    /// Returns `nil` when `ancestor` is not on this chain (the target is
+    /// `notMine`) or when the step below is a conditional branch (containers
+    /// address children by index or key, never by branch).
+    ///
+    /// Raw-ROOTED chains work: at runtime a container's identity and its
+    /// descendants' share one chain (the child steps are structural whatever
+    /// the root is), so the climb-and-compare is exact. Two *independently
+    /// built* raw identities ("A/B" vs "A/B/C" as single opaque nodes) have
+    /// no shared steps to climb and correctly answer `nil` — unlike
+    /// `isAncestor(of:)`, this never falls back to string comparison, because
+    /// an opaque path holds no index/key payload to route by.
+    ///
+    /// - Parameter ancestor: The identity of the routing container.
+    /// - Returns: The index or key of the ancestor's immediate child on the
+    ///   way to this identity.
+    public func childStep(below ancestor: ViewIdentity) -> ChildStep? {
+        let ancestorDepth = ancestor.node.depth
+        guard node.depth > ancestorDepth else { return nil }
+
+        // Climb to depth ancestorDepth+1, remembering the node one below.
+        var below = node
+        var cursor: IdentityNode? = node
+        while let n = cursor, n.depth > ancestorDepth {
+            below = n
+            cursor = n.parent
+        }
+        guard let candidate = cursor, IdentityNode.structurallyEqual(candidate, ancestor.node)
+        else { return nil }
+
+        switch below.step {
+        case .typed(_, let index): return ChildStep(index: index, key: nil)
+        case .keyed(_, let key): return ChildStep(index: nil, key: key)
+        case .branch, .raw: return nil
+        }
+    }
+
+    /// One routing step below a container on a target's identity chain:
+    /// which child (by position or `ForEach` key) leads toward the target.
+    public struct ChildStep: Sendable, Equatable {
+        /// The child's positional index, when the step is positional
+        /// (`nil` for a composite body's single, unindexed child too).
+        public let index: Int?
+        /// The child's stable `ForEach` key, when the step is keyed.
+        public let key: String?
+    }
+
     /// Whether the given identity is a strict descendant of this one.
     ///
     /// Used by `StateStorage` / `RenderCache` to invalidate all state under a
