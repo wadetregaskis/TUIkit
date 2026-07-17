@@ -61,6 +61,18 @@ extension _VStackCore {
         placementContext.environment.scrollContentWindow = nil
         return placementContext
     }
+
+    /// The published scroll window, when this stack is entitled to consume
+    /// it: either the window names no owner (tests, direct injection —
+    /// trust the publisher), or this stack is a single-child descent from
+    /// the ScrollView's direct content. A stack that is one sibling among
+    /// several (a lazy stack below a header, say) is NOT at the scroll
+    /// origin — consuming the window there blanked the wrong rows.
+    func consumableScrollWindow(context: RenderContext) -> ScrollContentWindow? {
+        guard let window = context.environment.scrollContentWindow else { return nil }
+        guard let owner = window.contentIdentity else { return window }
+        return context.identity.isDirectDescent(from: owner) ? window : nil
+    }
 }
 
 // MARK: - LayoutPlacing

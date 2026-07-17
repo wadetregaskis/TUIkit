@@ -201,6 +201,39 @@ extension ViewIdentity {
         }
     }
 
+    /// Whether this identity descends from `ancestor` through SINGLE-CHILD
+    /// steps only — typed steps with no sibling index, or conditional
+    /// branches — i.e. no multi-child container (no indexed or keyed step)
+    /// sits between them.
+    ///
+    /// This is how a windowed stack decides it is the *direct* content of a
+    /// ScrollView and may consume its published window: a stack that is one
+    /// sibling among several is NOT at the scroll origin, and windowing
+    /// against the scroll offsets there would blank the wrong rows.
+    ///
+    /// - Parameter ancestor: The candidate origin.
+    /// - Returns: `true` when every step from `ancestor` down to this
+    ///   identity is a single-child descent.
+    public func isDirectDescent(from ancestor: ViewIdentity) -> Bool {
+        let ancestorDepth = ancestor.node.depth
+        guard node.depth >= ancestorDepth else { return false }
+
+        var cursor: IdentityNode? = node
+        while let n = cursor, n.depth > ancestorDepth {
+            switch n.step {
+            case .typed(_, let index):
+                guard index == nil else { return false }
+            case .branch:
+                break
+            case .keyed, .raw:
+                return false
+            }
+            cursor = n.parent
+        }
+        guard let candidate = cursor else { return false }
+        return IdentityNode.structurallyEqual(candidate, ancestor.node)
+    }
+
     /// One routing step below a container on a target's identity chain:
     /// which child (by position or `ForEach` key) leads toward the target.
     public struct ChildStep: Sendable, Equatable {

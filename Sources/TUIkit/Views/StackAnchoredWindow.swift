@@ -197,8 +197,11 @@ extension _VStackCore {
         var sorted = placed
         sorted.sort { $0.y < $1.y }
 
+        // With a reply channel (Stage 6) the buffer is the rendered band
+        // only; prefix/suffix become metadata. See the uniform assembly.
         var result = FrameBuffer()
-        var cursor = 0
+        let sliceOrigin = window.reply != nil ? (sorted.first?.y ?? 0) : 0
+        var cursor = sliceOrigin
         var memo: [String: Int] = [:]
         for (ordinal, y) in sorted {
             let rowHeight = frame.pitch(of: ordinal) - (ordinal > 0 ? spacing : 0)
@@ -227,7 +230,10 @@ extension _VStackCore {
         let remaining = frame.children.count - 1 - lastPlaced
         let estimate = state.estimatedPitch(spacing: spacing)
         let total = max(cursor, bottomY) + max(0, remaining) * estimate
-        if total > cursor {
+        if let reply = window.reply {
+            reply.sliceOriginY = sliceOrigin
+            reply.sliceTotalHeight = total
+        } else if total > cursor {
             result.appendVertically(FrameBuffer(emptyWithHeight: total - cursor), spacing: 0)
         }
         return result

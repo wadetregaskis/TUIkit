@@ -177,11 +177,14 @@ extension _VStackCore {
             rows.append((ordinal, child))
         }
 
-        // Assemble: exact blank blocks between the rendered rows. O(rendered)
-        // buffer pieces — though the blank prefix/suffix are still O(height)
-        // in lines, which is Stage 6's target, not this one.
+        // Assemble: exact blank blocks between the rendered rows. With a
+        // reply channel (Stage 6), the buffer is just the rendered band —
+        // the prefix/suffix become metadata instead of blank lines and the
+        // ScrollView clips the band directly. Without one (tests, direct
+        // injection), the classic full-height buffer is emitted.
         var result = FrameBuffer()
-        var cursor = 0
+        let sliceOrigin = window.reply != nil ? (rows.first.map { $0.ordinal * pitch } ?? 0) : 0
+        var cursor = sliceOrigin
         var memo: [String: Int] = [:]
         for (ordinal, child) in rows {
             let rowY = ordinal * pitch
@@ -202,7 +205,10 @@ extension _VStackCore {
             cursor = rowY + extent
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
         }
-        if cursor < totalHeight {
+        if let reply = window.reply {
+            reply.sliceOriginY = sliceOrigin
+            reply.sliceTotalHeight = totalHeight
+        } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
         state.rowOrdinalMemo = memo

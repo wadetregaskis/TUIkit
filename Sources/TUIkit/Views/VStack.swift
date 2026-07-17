@@ -314,7 +314,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // uniform arithmetic first; for large variable-height content, the
         // anchored walk (§5e); a nil from both (small N, spacers, a first
         // frame with no hypothesis) falls through to the exact paths.
-        if let window = context.environment.scrollContentWindow, !context.isMeasuring {
+        if let window = consumableScrollWindow(context: context), !context.isMeasuring {
             let collection = resolveChildViewCollection(from: content, context: context)
             if collection.isUniformlyKeyed {
                 if let fast = renderUniformSeekWindow(collection, window: window, context: context) {
@@ -338,7 +338,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // viewport into a full-height buffer — off-window rows never render, so
         // their `onAppear`/`.task` don't fire and their cost is skipped, while the
         // ScrollView's clip and content-height stay correct.
-        if let window = context.environment.scrollContentWindow,
+        if let window = consumableScrollWindow(context: context),
             !context.isMeasuring,
             children.allSatisfy({ !$0.isSpacer })
         {

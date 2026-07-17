@@ -232,6 +232,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler: ScrollViewHandler,
         fullBuffer: FrameBuffer,
         viewportHeight: Int,
+        regionOriginY: Int = 0,
         context: RenderContext
     ) {
         let stateStorage = context.environment.stateStorage!
@@ -264,8 +265,10 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
            let focusedID = currentFocusedID,
            let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
         {
-            let regionTop = region.offsetY
-            let regionBottom = region.offsetY + region.height
+            // Sliced content (Stage 6): the buffer's regions are band-local;
+            // rebase them into content space before comparing to the offset.
+            let regionTop = region.offsetY + regionOriginY
+            let regionBottom = regionTop + region.height
             let viewportTop = handler.scrollOffset
             let viewportBottom = handler.scrollOffset + viewportHeight
 
@@ -358,11 +361,16 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
 
-        let fullBuffer = renderedContent(
+        let (fullBuffer, contentSlice) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             context: context)
-        handler.contentHeight = fullBuffer.height
+        // A sliced reply (Stage 6): the buffer holds only the rendered band;
+        // the content height comes from the metadata (estimated suffixes and
+        // all — the §3 scrollbar trade), and every content-space consumer
+        // below rebases by the slice origin.
+        let sliceOriginY = contentSlice?.originY ?? 0
+        handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         // Sync the horizontal axis to the rendered content width and clamp.
         if wantsHorizontal {
             handler.horizontal.extent = fullBuffer.width
@@ -392,6 +400,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             handler: handler,
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
+            regionOriginY: sliceOriginY,
             context: context)
 
         // Only be a Tab stop when there is actually something to scroll.
@@ -399,7 +408,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // invisible focus trap between the real controls (Tab would land on it
         // with no visible indicator). Overflow is known now the content is
         // measured.
-        let hasVerticalOverflow = fullBuffer.height > contentViewportHeight
+        let hasVerticalOverflow = handler.contentHeight > contentViewportHeight
         let hasHorizontalOverflow = wantsHorizontal && fullBuffer.width > contentWidth
         handler.canBeFocused = !isDisabled && (hasVerticalOverflow || hasHorizontalOverflow)
 
@@ -410,10 +419,13 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
-        // Build the windowed buffer.
+        // Build the windowed buffer. With a sliced reply the buffer's own
+        // coordinates start at the slice origin, so the clip offset rebases
+        // into slice space (clamped: a snap can propose an offset a row
+        // above the slice; the next frame's slice covers it).
         var visibleBuffer = windowedBuffer(
             full: fullBuffer,
-            scrollOffset: handler.scrollOffset,
+            scrollOffset: max(0, handler.scrollOffset - sliceOriginY),
             viewportHeight: contentViewportHeight,
             viewportWidth: contentWidth,
             horizontalEnabled: wantsHorizontal,
@@ -618,7 +630,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, context: RenderContext
-    ) -> FrameBuffer {
+    ) -> (buffer: FrameBuffer, slice: (originY: Int, totalHeight: Int)?) {
         let extents = contentExtents(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
             horizontal: horizontal, context: context)
@@ -630,16 +642,25 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // row into the tall canvas. Vertical-only: horizontal scrolling has no
         // row concept. The offset is this frame's already-clamped value; the
         // final clip (`windowedBuffer`) uses the same value, so they agree for
-        // stable content. The published buffer stays full-height (off-window rows
-        // become blank placeholders), so `contentHeight` and the clip are
-        // unchanged.
+        // stable content. `contentIdentity` restricts consumption to the direct
+        // content (a lazy stack under a header is NOT at the scroll origin);
+        // the `reply` slot lets the stack return a compact band + metadata
+        // (Stage 6) instead of a full-height canvas of mostly blank lines.
+        var reply: ScrollContentReply?
         if !horizontal {
+            let contentReply = ScrollContentReply()
+            reply = contentReply
             measureContext.environment.scrollContentWindow = ScrollContentWindow(
-                offset: verticalScrollOffset, viewportHeight: viewportHeight)
+                offset: verticalScrollOffset, viewportHeight: viewportHeight,
+                contentIdentity: measureContext.identity, reply: contentReply)
         }
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
-        return TUIkit.renderToBuffer(content, context: measureContext)
+        let buffer = TUIkit.renderToBuffer(content, context: measureContext)
+        if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
+            return (buffer, (origin, total))
+        }
+        return (buffer, nil)
     }
 
     /// Registers a mouse handler over the scrollbar's single column so the arrows
@@ -945,6 +966,35 @@ extension EnvironmentValues {
 struct ScrollContentWindow: Sendable, Hashable {
     var offset: Int
     var viewportHeight: Int
+
+    /// The identity of the ScrollView's direct content. A windowed stack
+    /// consumes this window only when its own identity is a single-child
+    /// descent from here (`ViewIdentity/isDirectDescent(from:)`): a stack
+    /// that is one sibling among several is NOT at the scroll origin, and
+    /// windowing there would blank the wrong rows. `nil` (tests, direct
+    /// injection) means "trust the publisher" and consume unconditionally.
+    var contentIdentity: ViewIdentity?
+
+    /// The render-pass reply slot (Stage 6): the stack reports the compact
+    /// slice it actually rendered, so the ScrollView can clip a band
+    /// instead of a full-height canvas. `nil` (tests, measure passes) keeps
+    /// the stack emitting the classic full-height buffer.
+    var reply: ScrollContentReply?
+}
+
+/// The Stage-6 reply channel from a windowed stack back to its ScrollView:
+/// reference semantics deliberately — the environment value travels down,
+/// the slice report travels back up within the same render call. Main-loop
+/// rendering only (`@unchecked`: never crosses threads).
+final class ScrollContentReply: @unchecked Sendable, Hashable {
+    /// Content-space y of the first line the buffer holds.
+    var sliceOriginY: Int?
+    /// The full content height the slice was cut from (estimated for
+    /// never-measured suffixes — the §3 scrollbar trade).
+    var sliceTotalHeight: Int?
+
+    static func == (lhs: ScrollContentReply, rhs: ScrollContentReply) -> Bool { lhs === rhs }
+    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }
 
 private struct ScrollContentWindowKey: EnvironmentKey {
