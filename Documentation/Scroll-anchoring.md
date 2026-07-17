@@ -84,17 +84,20 @@ the seek ladder assumes a particular policy.
 
 ### 3.1 User-side restore of Row / Window defaults
 
-Two candidate shapes, combinable:
+**Owner decision (2026-07-17): Home and End keep their literal, well-known
+meanings — scroll to top and bottom respectively — everywhere, always.**
+Redefining Home as "restore the code-set anchor" was considered and
+rejected: it would make Home behave inconsistently across Lists / Tables /
+ScrollViews depending on each one's configured default.
 
-- **Unify "restore" onto Home.** Redefine Home (in scroll contexts) as
-  *"restore the code-set anchor"* rather than literally "go to top": when
-  the default is Top it is identical to today; when Bottom, Home and End
-  both restore (End stays literal for symmetry); when Row, Home returns to
-  the anchored row; when Window, Home goes to the top (the natural reading
-  of a no-anchor default). One key, one meaning: *back to how the code
-  wants it*. The literal go-to-top remains reachable by holding a scroll
-  key or the scrollbar. Risk: users expect literal Home; mitigable by
-  making this per-ScrollView configurable.
+Remaining candidates:
+
+- **A modified Home (e.g. Option-Home) as "restore the code-set anchor"**,
+  if it doesn't conflict with anything. Caveat to check at implementation
+  time: modifier forwarding on Home/End is terminal-dependent (Terminal.app
+  is known to strip modifiers from Up/Down while keeping them on
+  Left/Right; Home/End forwarding is unmeasured). Probe per
+  `Documentation/Terminal-compatibility.md` before committing to a binding.
 - **Re-selection is the Row restore.** Since selecting a row shadow-switches
   to Row-anchoring *on that row*, "restore to the code-designated row" is
   only distinct when the user has selected a *different* row — and the code
