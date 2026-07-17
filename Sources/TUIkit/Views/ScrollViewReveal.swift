@@ -1,0 +1,132 @@
+//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  ScrollViewReveal.swift
+//
+//  Reveal-on-focus for ``_ScrollViewCore``: when focus moves (or the focused
+//  control consumes a key), snap the viewport so the focused control is
+//  actually visible — accounting for the indicator rows that replace the
+//  viewport's edge lines, and for Stage-6 sliced content whose regions are
+//  band-local.
+//
+//  Created by Wade Tregaskis
+//  License: MIT
+
+import TUIkitCore
+
+extension _ScrollViewCore {
+
+    /// "Follow the focused control" — snap the viewport back to the focused
+    /// control when focus just moved (Tab / click / programmatic) or the
+    /// focused control just consumed a key (it was poked via the keyboard
+    /// while wheel-scrolled off-screen). Focus moves are detected by comparing
+    /// `focusManager.currentFocusedID`, keyboard pokes by comparing
+    /// `focusManager.focusedInteractionGeneration` (bumped inside
+    /// `FocusManager.dispatchKeyEvent` when the focused handler consumes a
+    /// key), each against the value seen at the previous render. Wheel
+    /// scrolling changes neither, so peek mode (scroll the focused control
+    /// off-screen, no snap-back) is preserved naturally.
+    ///
+    /// This is a render-pass-only side effect and is skipped while measuring:
+    /// `renderToBuffer` runs several times per frame in measuring mode, and
+    /// during those passes the inner controls do NOT emit their hit-test
+    /// regions (they gate on `!isMeasuring`), so the focused control's region
+    /// is absent. If the detection ran while measuring it would see "focus
+    /// changed", update its bookkeeping WITHOUT being able to scroll, and the
+    /// real render would then see no change and never snap — so a focused
+    /// control below the fold (a Slider after some Buttons, say) would never
+    /// scroll into view. Gating keeps the signal intact for the one render
+    /// that can act on it.
+    func snapViewportToFocusedControl(
+        handler: ScrollViewHandler,
+        fullBuffer: FrameBuffer,
+        viewportHeight: Int,
+        regionOriginY: Int = 0,
+        indicatorsActive: Bool = true,
+        context: RenderContext
+    ) {
+        let stateStorage = context.environment.stateStorage!
+        let lastFocusedKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastFocusedID
+        )
+        let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
+            for: lastFocusedKey, default: LastFocusedIDBox())
+
+        let lastInteractionKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.lastInteractionGen
+        )
+        let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
+            for: lastInteractionKey, default: LastInteractionGenBox())
+
+        guard !context.isMeasuring else { return }
+
+        // No focus system → nothing to reveal-on-focus.
+        guard let focusManager = context.environment.focusManager else { return }
+        let currentFocusedID = focusManager.currentFocusedID
+        let currentInteractionGen = focusManager.focusedInteractionGeneration
+
+        let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
+        let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
+        let shouldSnap = focusJustChanged || interactionJustFired
+
+        if shouldSnap,
+           let focusedID = currentFocusedID,
+           let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
+        {
+            // Sliced content (Stage 6): the buffer's regions are band-local;
+            // rebase them into content space before comparing to the offset.
+            let regionTop = region.offsetY + regionOriginY
+            let regionBottom = regionTop + region.height
+            let viewportTop = handler.scrollOffset
+            let viewportBottom = handler.scrollOffset + viewportHeight
+
+            // When showsIndicators is true, the visible buffer overwrites its
+            // top and / or bottom rows with the 'N more above / below' chrome
+            // whenever there's content off-screen in that direction. Reserve a
+            // row for those indicators when computing the target scrollOffset,
+            // else the snap puts the focused control on the row the indicator
+            // then covers. The decision is bidirectional: after snapping there
+            // is still content above iff scrollOffset > 0 and below iff
+            // scrollOffset + viewportHeight < contentHeight.
+            //
+            // The FIRE condition must be indicator-aware too: a region whose
+            // only line lands exactly on the viewport's first/last row is
+            // inside the viewport by cell math yet INVISIBLE — that row is
+            // replaced by the indicator. Without this, a focused row could
+            // rest stably hidden behind "▼ N more below" and, focus being
+            // unchanged, no later frame would ever re-snap.
+            let topIndicatorShows =
+                indicatorsActive && showsIndicators && viewportTop > 0
+            let bottomIndicatorShows =
+                indicatorsActive && showsIndicators
+                && viewportBottom < handler.contentHeight
+            let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
+            let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
+
+            if regionTop < visibleTop {
+                // Scroll-up: align the region's top with viewportTop, leaving
+                // 1 row of headroom for the top indicator when one appears.
+                let proposed = regionTop
+                let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
+                handler.scrollOffset =
+                    max(0, min(handler.maxOffset, proposed - topIndicatorRow))
+            } else if regionBottom > visibleBottom {
+                // Scroll-down: align the region's bottom with viewportBottom,
+                // leaving 1 row for the bottom indicator if one appears.
+                let proposed = regionBottom - viewportHeight
+                let bottomIndicatorWouldAppear =
+                    showsIndicators
+                    && (proposed + viewportHeight < handler.contentHeight)
+                handler.scrollOffset = max(
+                    0,
+                    min(
+                        handler.maxOffset,
+                        proposed + (bottomIndicatorWouldAppear ? 1 : 0)
+                    )
+                )
+            }
+        }
+        lastFocusedBox.value.value = currentFocusedID
+        lastInteractionBox.value.value = currentInteractionGen
+    }
+}

@@ -144,7 +144,7 @@ extension ScrollView: @preconcurrency Equatable where Content: Equatable {
 /// StateStorage property indices for ``_ScrollViewCore``.
 /// Lifted out of the generic struct because Swift does not
 /// allow static stored properties in generic types.
-private enum ScrollViewStateIndex {
+enum ScrollViewStateIndex {
     static let handler = 0
     static let focusID = 1
     static let lastFocusedID = 2
@@ -156,7 +156,7 @@ private enum ScrollViewStateIndex {
 /// detect focus *changes* and scroll the new focused control into
 /// view. Class-typed so a StateBox can hold it mutably across
 /// renders.
-private final class LastFocusedIDBox: @unchecked Sendable {
+final class LastFocusedIDBox: @unchecked Sendable {
     var value: String?
 }
 
@@ -165,13 +165,13 @@ private final class LastFocusedIDBox: @unchecked Sendable {
 /// "the focused control just consumed a key event" between
 /// frames. Class-typed for the same reason as
 /// ``LastFocusedIDBox``.
-private final class LastInteractionGenBox: @unchecked Sendable {
+final class LastInteractionGenBox: @unchecked Sendable {
     var value: UInt64 = 0
 }
 
 /// Internal core that performs the windowing, hit-testing, and
 /// keyboard wiring for ``ScrollView``.
-private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
+struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     let axes: Axis.Set
     let showsIndicators: Bool
@@ -181,7 +181,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     var body: Never { fatalError("_ScrollViewCore renders via Renderable") }
 
-    private typealias StateIndex = ScrollViewStateIndex
+    typealias StateIndex = ScrollViewStateIndex
 
     // MARK: Layout
 
@@ -207,120 +207,43 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     // MARK: Render
 
-    /// "Follow the focused control" — snap the viewport back to the focused
-    /// control when focus just moved (Tab / click / programmatic) or the
-    /// focused control just consumed a key (it was poked via the keyboard
-    /// while wheel-scrolled off-screen). Focus moves are detected by comparing
-    /// `focusManager.currentFocusedID`, keyboard pokes by comparing
-    /// `focusManager.focusedInteractionGeneration` (bumped inside
-    /// `FocusManager.dispatchKeyEvent` when the focused handler consumes a
-    /// key), each against the value seen at the previous render. Wheel
-    /// scrolling changes neither, so peek mode (scroll the focused control
-    /// off-screen, no snap-back) is preserved naturally.
-    ///
-    /// This is a render-pass-only side effect and is skipped while measuring:
-    /// `renderToBuffer` runs several times per frame in measuring mode, and
-    /// during those passes the inner controls do NOT emit their hit-test
-    /// regions (they gate on `!isMeasuring`), so the focused control's region
-    /// is absent. If the detection ran while measuring it would see "focus
-    /// changed", update its bookkeeping WITHOUT being able to scroll, and the
-    /// real render would then see no change and never snap — so a focused
-    /// control below the fold (a Slider after some Buttons, say) would never
-    /// scroll into view. Gating keeps the signal intact for the one render
-    /// that can act on it.
-    private func snapViewportToFocusedControl(
-        handler: ScrollViewHandler,
-        fullBuffer: FrameBuffer,
-        viewportHeight: Int,
-        regionOriginY: Int = 0,
-        indicatorsActive: Bool = true,
-        context: RenderContext
+    /// Bottom edge affinity (defaultScrollAnchor(.bottom), §5c/§6c): being
+    /// AT the bottom is the engagement — no stored flag. If last frame's
+    /// numbers say the offset sits at (or past) maxOffset, the view is
+    /// glued: re-derive the tail from this frame's content BEFORE rendering,
+    /// so appended rows appear immediately and the window is rendered at the
+    /// right place. Scrolling up breaks the condition (offset < max) and
+    /// appends stop moving the view; any scroll that lands back at the
+    /// bottom re-engages. The very first frame (contentHeight 0, offset 0)
+    /// is glued by construction, giving the initial at-the-tail placement.
+    /// Vertical only. Returns whether the view was glued, so the caller can
+    /// re-glue against the REAL rendered height afterwards.
+    private func applyBottomAffinity(
+        handler: ScrollViewHandler, contentWidth: Int,
+        contentViewportHeight: Int, context: RenderContext
+    ) -> Bool {
+        let followsBottom = !context.isMeasuring
+            && (context.environment.defaultScrollAnchor?.y ?? 0) >= 0.75
+        guard followsBottom, handler.scrollOffset >= handler.maxOffset else { return false }
+        let estimated = ChildView(content).measure(
+            proposal: ProposedSize(width: contentWidth, height: Int.max / 4),
+            context: context.withChildIdentity(type: Content.self))
+        handler.scrollOffset = max(0, estimated.height - contentViewportHeight)
+        return true
+    }
+
+    /// Syncs the horizontal axis to the rendered content width and clamps
+    /// its offset (render passes only).
+    private func syncHorizontalAxis(
+        handler: ScrollViewHandler, wantsHorizontal: Bool,
+        bufferWidth: Int, contentWidth: Int, context: RenderContext
     ) {
-        let stateStorage = context.environment.stateStorage!
-        let lastFocusedKey = StateStorage.StateKey(
-            identity: context.identity,
-            propertyIndex: StateIndex.lastFocusedID
-        )
-        let lastFocusedBox: StateBox<LastFocusedIDBox> = stateStorage.storage(
-            for: lastFocusedKey, default: LastFocusedIDBox())
-
-        let lastInteractionKey = StateStorage.StateKey(
-            identity: context.identity,
-            propertyIndex: StateIndex.lastInteractionGen
-        )
-        let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
-            for: lastInteractionKey, default: LastInteractionGenBox())
-
-        guard !context.isMeasuring else { return }
-
-        // No focus system → nothing to reveal-on-focus.
-        guard let focusManager = context.environment.focusManager else { return }
-        let currentFocusedID = focusManager.currentFocusedID
-        let currentInteractionGen = focusManager.focusedInteractionGeneration
-
-        let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
-        let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
-        let shouldSnap = focusJustChanged || interactionJustFired
-
-        if shouldSnap,
-           let focusedID = currentFocusedID,
-           let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
-        {
-            // Sliced content (Stage 6): the buffer's regions are band-local;
-            // rebase them into content space before comparing to the offset.
-            let regionTop = region.offsetY + regionOriginY
-            let regionBottom = regionTop + region.height
-            let viewportTop = handler.scrollOffset
-            let viewportBottom = handler.scrollOffset + viewportHeight
-
-            // When showsIndicators is true, the visible buffer overwrites its
-            // top and / or bottom rows with the 'N more above / below' chrome
-            // whenever there's content off-screen in that direction. Reserve a
-            // row for those indicators when computing the target scrollOffset,
-            // else the snap puts the focused control on the row the indicator
-            // then covers. The decision is bidirectional: after snapping there
-            // is still content above iff scrollOffset > 0 and below iff
-            // scrollOffset + viewportHeight < contentHeight.
-            //
-            // The FIRE condition must be indicator-aware too: a region whose
-            // only line lands exactly on the viewport's first/last row is
-            // inside the viewport by cell math yet INVISIBLE — that row is
-            // replaced by the indicator. Without this, a focused row could
-            // rest stably hidden behind "▼ N more below" and, focus being
-            // unchanged, no later frame would ever re-snap.
-            let topIndicatorShows =
-                indicatorsActive && showsIndicators && viewportTop > 0
-            let bottomIndicatorShows =
-                indicatorsActive && showsIndicators
-                && viewportBottom < handler.contentHeight
-            let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
-            let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
-
-            if regionTop < visibleTop {
-                // Scroll-up: align the region's top with viewportTop, leaving
-                // 1 row of headroom for the top indicator when one appears.
-                let proposed = regionTop
-                let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
-                handler.scrollOffset =
-                    max(0, min(handler.maxOffset, proposed - topIndicatorRow))
-            } else if regionBottom > visibleBottom {
-                // Scroll-down: align the region's bottom with viewportBottom,
-                // leaving 1 row for the bottom indicator if one appears.
-                let proposed = regionBottom - viewportHeight
-                let bottomIndicatorWouldAppear =
-                    showsIndicators
-                    && (proposed + viewportHeight < handler.contentHeight)
-                handler.scrollOffset = max(
-                    0,
-                    min(
-                        handler.maxOffset,
-                        proposed + (bottomIndicatorWouldAppear ? 1 : 0)
-                    )
-                )
-            }
+        guard wantsHorizontal else { return }
+        handler.horizontal.extent = bufferWidth
+        handler.horizontal.viewportHeight = contentWidth
+        if !context.isMeasuring {
+            handler.horizontal.clampScrollOffset()
         }
-        lastFocusedBox.value.value = currentFocusedID
-        lastInteractionBox.value.value = currentInteractionGen
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -377,6 +300,10 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
 
+        let wasGluedToBottom = applyBottomAffinity(
+            handler: handler, contentWidth: contentWidth,
+            contentViewportHeight: contentViewportHeight, context: context)
+
         let (fullBuffer, contentSlice) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
@@ -387,14 +314,13 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // below rebases by the slice origin.
         let sliceOriginY = contentSlice?.originY ?? 0
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
-        // Sync the horizontal axis to the rendered content width and clamp.
-        if wantsHorizontal {
-            handler.horizontal.extent = fullBuffer.width
-            handler.horizontal.viewportHeight = contentWidth
-            if !context.isMeasuring {
-                handler.horizontal.clampScrollOffset()
-            }
-        }
+        // Re-glue against the REAL rendered height (the pre-render number was
+        // an estimate); the band's margin absorbs small differences and the
+        // next frame lands exactly.
+        if wasGluedToBottom { handler.scrollOffset = handler.maxOffset }
+        syncHorizontalAxis(
+            handler: handler, wantsHorizontal: wantsHorizontal,
+            bufferWidth: fullBuffer.width, contentWidth: contentWidth, context: context)
         // Re-clamp the offset against the now-known content height — but only on
         // the real render pass. A measure pass may be offered a larger height
         // than the ScrollView finally renders into (e.g. when it shares space
@@ -980,40 +906,6 @@ extension EnvironmentValues {
 /// affects a `LazyVStack` sitting at the scroll content's origin. A `LazyVStack`
 /// nested below other content isn't at `offset == 0` in the ScrollView's
 /// coordinate space, so it is left un-windowed (renders normally).
-struct ScrollContentWindow: Sendable, Hashable {
-    var offset: Int
-    var viewportHeight: Int
-
-    /// The identity of the ScrollView's direct content. A windowed stack
-    /// consumes this window only when its own identity is a single-child
-    /// descent from here (`ViewIdentity/isDirectDescent(from:)`): a stack
-    /// that is one sibling among several is NOT at the scroll origin, and
-    /// windowing there would blank the wrong rows. `nil` (tests, direct
-    /// injection) means "trust the publisher" and consume unconditionally.
-    var contentIdentity: ViewIdentity?
-
-    /// The render-pass reply slot (Stage 6): the stack reports the compact
-    /// slice it actually rendered, so the ScrollView can clip a band
-    /// instead of a full-height canvas. `nil` (tests, measure passes) keeps
-    /// the stack emitting the classic full-height buffer.
-    var reply: ScrollContentReply?
-}
-
-/// The Stage-6 reply channel from a windowed stack back to its ScrollView:
-/// reference semantics deliberately — the environment value travels down,
-/// the slice report travels back up within the same render call. Main-loop
-/// rendering only (`@unchecked`: never crosses threads).
-final class ScrollContentReply: @unchecked Sendable, Hashable {
-    /// Content-space y of the first line the buffer holds.
-    var sliceOriginY: Int?
-    /// The full content height the slice was cut from (estimated for
-    /// never-measured suffixes — the §3 scrollbar trade).
-    var sliceTotalHeight: Int?
-
-    static func == (lhs: ScrollContentReply, rhs: ScrollContentReply) -> Bool { lhs === rhs }
-    func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
-}
-
 private struct ScrollContentWindowKey: EnvironmentKey {
     static let defaultValue: ScrollContentWindow? = nil
 }

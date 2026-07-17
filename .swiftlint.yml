@@ -163,6 +163,8 @@ type_name:
     # policies), so these cores are internal rather than file-private.
     - _VStackCore
     - _HStackCore
+    # Internal so its reveal-snap extension can live in ScrollViewReveal.swift.
+    - _ScrollViewCore
     # Internal _-prefixed helper views and value types created by view
     # modifiers, following the same SwiftUI convention.
     - _TaggedView
