@@ -107,6 +107,42 @@ struct SlicedWindowTests {
         #expect(back.contains { $0.contains("row 0") }, "and back up: \(back)")
     }
 
+    @Test("Five million rows through the real ScrollView, interactively")
+    func fiveMillionRows() {
+        // The design doc's §1 composition at the scale it was designed for.
+        // Frame 1's measures use the sample-based estimate (no persisted
+        // hypothesis exists yet — seeding is render-only); the render seeds
+        // and seeks; every frame builds O(window) rows and the buffer is the
+        // band. Before this branch, this test would not have completed.
+        let view = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<5_000_000, id: \.self) { i in
+                    Button("row \(i)") {}
+                }
+            }
+        }
+        .frame(height: 6)
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        let first = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(first.contains { $0.contains("row 0") }, "top of five million: \(first)")
+
+        // Jump 4,999,993 rows by focus id: the pending-intent key scan is
+        // the documented Ω(n) id→ordinal cost — touching keys, never
+        // building rows — and the reveal rides the sliced pipeline.
+        let id0 = focusManager.registeredFocusIDsInActiveSection().first ?? ""
+        let idTail = id0.replacingOccurrences(of: "[0]", with: "[4999999]")
+        focusManager.focus(id: idTail)
+        var revealed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        if revealed.contains(where: { $0.contains("row 4999999") }) == false {
+            revealed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        }
+        #expect(
+            revealed.contains { $0.contains("row 4999999") },
+            "revealed the five-millionth row: \(revealed)")
+    }
+
     @Test("A lazy stack below a header must NOT consume the window (identity gate)")
     func nonDirectContentIsGated() {
         // Pre-gate, the leaked window blanked rows against scroll-origin

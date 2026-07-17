@@ -151,16 +151,20 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // window must not leak into their own measures.
         measureContext.environment.scrollContentWindow = nil
 
-        // The seek ladder (mirroring the render): uniform arithmetic, then
-        // the anchored estimate for large variable content — checked BEFORE
-        // the eager resolve, which would build every row.
+        // The seek ladder (mirroring the render): uniform arithmetic when
+        // the hypothesis is live, else — for any LARGE keyed collection —
+        // the sample-based anchored estimate. The latter needs no persisted
+        // state, so it also covers the very first frame (seeding is a
+        // render-path mutation): without it, frame 1's measures would
+        // eagerly walk millions of rows before the render ever got the
+        // chance to seed. Checked BEFORE the eager resolve, which would
+        // build every row.
         let collection = resolveChildViewCollection(from: content, context: measureContext)
         if collection.isUniformlyKeyed {
             if let fast = uniformSeekSizeThatFits(collection, proposal: proposal, context: context) {
                 return fast
             }
-            if uniformWindowState(context: context).broken,
-                collection.count > Self.anchoredWindowThreshold,
+            if collection.count > Self.anchoredWindowThreshold,
                 let anchored = anchoredSizeThatFits(collection, proposal: proposal, context: context)
             {
                 return anchored
