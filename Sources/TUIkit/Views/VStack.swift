@@ -151,14 +151,20 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // window must not leak into their own measures.
         measureContext.environment.scrollContentWindow = nil
 
-        // Uniform seek (§5i): a keyed lazy provider with a live uniformity
-        // hypothesis measures by arithmetic + a bounded sample — checked
-        // BEFORE the eager resolve, which would build every row.
+        // The seek ladder (mirroring the render): uniform arithmetic, then
+        // the anchored estimate for large variable content — checked BEFORE
+        // the eager resolve, which would build every row.
         let collection = resolveChildViewCollection(from: content, context: measureContext)
-        if collection.isUniformlyKeyed,
-            let fast = uniformSeekSizeThatFits(collection, proposal: proposal, context: context)
-        {
-            return fast
+        if collection.isUniformlyKeyed {
+            if let fast = uniformSeekSizeThatFits(collection, proposal: proposal, context: context) {
+                return fast
+            }
+            if uniformWindowState(context: context).broken,
+                collection.count > Self.anchoredWindowThreshold,
+                let anchored = anchoredSizeThatFits(collection, proposal: proposal, context: context)
+            {
+                return anchored
+            }
         }
 
         let widthLimit = proposal.width ?? context.availableWidth
@@ -303,16 +309,22 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// pushed the whole `ForEach` through the universal `renderToBuffer` and
     /// rendered nothing at all (issue #8).
     private func renderWindow(context: RenderContext) -> FrameBuffer {
-        // Uniform seek (§5i): checked BEFORE the eager resolve below, which
-        // would build every row of a huge ForEach just to count spacers. A
-        // nil answer (no hypothesis yet on a first frame, or falsified by a
-        // row measured just now) falls through to the exact paths.
+        // The seek ladder, checked BEFORE the eager resolve below (which
+        // would build every row of a huge ForEach just to count spacers):
+        // uniform arithmetic first; for large variable-height content, the
+        // anchored walk (§5e); a nil from both (small N, spacers, a first
+        // frame with no hypothesis) falls through to the exact paths.
         if let window = context.environment.scrollContentWindow, !context.isMeasuring {
             let collection = resolveChildViewCollection(from: content, context: context)
-            if collection.isUniformlyKeyed,
-                let fast = renderUniformSeekWindow(collection, window: window, context: context)
-            {
-                return fast
+            if collection.isUniformlyKeyed {
+                if let fast = renderUniformSeekWindow(collection, window: window, context: context) {
+                    return fast
+                }
+                if collection.count > Self.anchoredWindowThreshold,
+                    let anchored = renderAnchoredWindow(collection, window: window, context: context)
+                {
+                    return anchored
+                }
             }
         }
 

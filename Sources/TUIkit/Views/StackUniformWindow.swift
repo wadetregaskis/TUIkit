@@ -25,16 +25,20 @@ private enum VStackStateIndex {
     static let uniformWindow = 0
 }
 
-extension _VStackCore {
-    /// The windowed stack's persisted uniformity hypothesis.
-    final class UniformWindowState {
+/// The windowed stack's persisted window state: the uniformity
+/// hypothesis, and — for variable-height content — the scroll anchor
+/// (§5e: `ScrollAnchor { item, offsetWithin }`, held here in ordinal
+/// form beside the running extent estimate). File-scope (not nested in
+/// `_VStackCore`) so non-generic helpers can hold it.
+final class StackWindowState {
         /// Every row is exactly this tall, as far as this path has measured.
         /// `nil` until seeded (from row 0, on the render path only — the
         /// measure-side-effect rule forbids seeding while measuring).
         var hypothesisExtent: Int?
 
-        /// A measured row disagreed: the hypothesis is dead, permanently —
-        /// this stack uses the exact full walk from then on.
+        /// A measured row disagreed: uniform arithmetic is dead, permanently
+        /// — this stack uses the anchored walk (large N) or the exact full
+        /// walk (small N) from then on.
         var broken = false
 
         /// Ordinals of recently rendered rows by their stable key, so the
@@ -44,13 +48,51 @@ extension _VStackCore {
         /// scan — the documented Ω(n) id→ordinal cost, paid only on a cold
         /// jump and memoised while focus stays put.
         var rowOrdinalMemo: [String: Int] = [:]
-    }
 
-    func uniformWindowState(context: RenderContext) -> UniformWindowState {
+        // MARK: Anchor (variable-height content, §5e/§6a)
+
+        /// The row the viewport is anchored on.
+        var anchorOrdinal = 0
+
+        /// How many cells of the anchor row sit above the viewport top.
+        var anchorOffsetWithin = 0
+
+        /// The absolute offset the anchor was last derived against. Scroll
+        /// input arrives as a new absolute offset; the DIFFERENCE is walked
+        /// in row space (one line up looks at one row, §3), so estimates
+        /// never move what's on screen — only the scrollbar.
+        var lastDerivedOffset = 0
+
+        /// Running average of measured row pitches (row + spacing), the
+        /// extent estimate for rows never measured. Refined as rows are
+        /// touched; drives the scrollbar and big-jump seeks only.
+        var measuredPitchTotal = 0
+        var measuredPitchCount = 0
+
+        func recordMeasuredPitch(_ pitch: Int) {
+            measuredPitchTotal += pitch
+            measuredPitchCount += 1
+        }
+
+        /// The estimated pitch: measured average (rounded, not truncated —
+        /// truncation systematically over-shoots seeks), else the uniform
+        /// seed, else one line. Never below 1 (division safety).
+        func estimatedPitch(spacing: Int) -> Int {
+            if measuredPitchCount > 0 {
+                let rounded = (measuredPitchTotal + measuredPitchCount / 2) / measuredPitchCount
+                return max(1, rounded)
+            }
+            if let hypothesisExtent { return max(1, hypothesisExtent + spacing) }
+            return 1
+        }
+}
+
+extension _VStackCore {
+    func uniformWindowState(context: RenderContext) -> StackWindowState {
         let key = StateStorage.StateKey(
             identity: context.identity, propertyIndex: VStackStateIndex.uniformWindow)
-        let box: StateBox<UniformWindowState> = context.environment.stateStorage!.storage(
-            for: key, default: UniformWindowState())
+        let box: StateBox<StackWindowState> = context.environment.stateStorage!.storage(
+            for: key, default: StackWindowState())
         return box.value
     }
 }
@@ -172,7 +214,7 @@ extension _VStackCore {
     /// their neighbours (§5d — they must render to keep registering).
     private func candidateOrdinals(
         children: ChildViewCollection, window: ScrollContentWindow, pitch: Int,
-        state: UniformWindowState, context: RenderContext
+        state: StackWindowState, context: RenderContext
     ) -> Set<Int> {
         let count = children.count
         var candidates: Set<Int> = []
@@ -201,7 +243,7 @@ extension _VStackCore {
     /// scan (never builds a row view).
     private func targetOrdinal(
         for focusID: String?, children: ChildViewCollection,
-        state: UniformWindowState, context: RenderContext
+        state: StackWindowState, context: RenderContext
     ) -> Int? {
         guard let focusID else { return nil }
         guard let key = Self.rowKey(inFocusID: focusID, belowStackPath: context.identity.path)
