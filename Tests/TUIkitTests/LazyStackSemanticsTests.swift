@@ -106,10 +106,14 @@ struct LazyStackSemanticsTests {
             height: 8)
         #expect(standaloneAppeared.count == 8, "exactly the windowed rows appear: \(standaloneAppeared)")
 
-        // In a ScrollView, viewport windowing now renders (and fires lifecycle
-        // for) only the rows intersecting the visible slice — matching SwiftUI's
-        // visibility-driven laziness rather than the old materialise-everything
-        // behaviour. At offset 0 with an 8-row viewport, rows 0..7 appear.
+        // In a ScrollView, viewport windowing renders (and fires lifecycle
+        // for) the rows intersecting the visible slice PLUS the one-row
+        // enumeration margin past each edge (§5d/§5g of "Locating things
+        // without drawing them": the margin row registers its focusables so a
+        // directional focus move can step just beyond the window; its appear
+        // firing slightly before visibility is the same prefetch-margin
+        // semantic SwiftUI's lazy containers have). At offset 0 with an
+        // 8-row viewport, rows 0..7 are visible and row 8 is the margin.
         render(
             ScrollView {
                 LazyVStack {
@@ -120,8 +124,8 @@ struct LazyStackSemanticsTests {
             },
             height: 8)
         #expect(
-            scrollAppeared.count == 8,
-            "only the visible window materialises in scroll content: \(scrollAppeared)")
-        #expect(scrollAppeared.allSatisfy { $0 < 8 }, "the first 8 rows, not rows past the viewport")
+            scrollAppeared.count == 9,
+            "the visible window + one margin row materialise in scroll content: \(scrollAppeared)")
+        #expect(scrollAppeared.allSatisfy { $0 <= 8 }, "rows 0..8, nothing past the margin")
     }
 }

@@ -387,13 +387,41 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // query agree on every row's y by construction.
         let slots = naturalRowSlots(context: childContext)
 
+        // The enumerate visitor's row set (§5d/§6a): the rows meeting the
+        // viewport, plus one margin row past each edge (so a directional
+        // focus move can step just beyond the window — the ring only holds
+        // what registers, and registration happens on render), plus the
+        // focused row and any pending focus target with THEIR neighbours
+        // (focus must keep registering wherever it is, or the end-of-pass
+        // validation would steal it; the target must register once to
+        // resolve the intent). Off-window renders land in the full-height
+        // buffer where the ScrollView's clip hides them — invisible, but
+        // registered.
+        var rendersRow = [Bool](repeating: false, count: slots.count)
+        for (index, slot) in slots.enumerated() {
+            rendersRow[index] = slot.y + slot.height > top && slot.y < bottom
+        }
+        if let first = rendersRow.firstIndex(of: true), first > 0 {
+            rendersRow[first - 1] = true
+        }
+        if let last = rendersRow.lastIndex(of: true), last < slots.count - 1 {
+            rendersRow[last + 1] = true
+        }
+        if let focusManager = context.environment.focusManager {
+            for target in [focusManager.currentFocusedID, focusManager.pendingFocusID] {
+                guard let index = rowIndex(addressedBy: target, slots: slots, context: childContext)
+                else { continue }
+                for neighbour in max(0, index - 1)...min(slots.count - 1, index + 1) {
+                    rendersRow[neighbour] = true
+                }
+            }
+        }
+
         var result = FrameBuffer()
-        for slot in slots {
-            let rowTop = slot.y
-            let rowBottom = slot.y + slot.height
+        for (index, slot) in slots.enumerated() {
             let slotHeight = slot.spacingBefore + slot.height
 
-            if rowBottom <= top || rowTop >= bottom {
+            if !rendersRow[index] {
                 // Off-window: a blank placeholder of the same height.
                 result.appendVertically(FrameBuffer(emptyWithHeight: slotHeight), spacing: 0)
                 continue
@@ -417,6 +445,25 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             result.appendVertically(slot, spacing: 0)
         }
         return result
+    }
+
+    /// The slot index of the row whose subtree a focus ID addresses, when the
+    /// ID is a default (identity-path-derived) one and the addressed control
+    /// lives under one of this stack's rows.
+    ///
+    /// Cheap rejection first: unless the ID embeds this stack's own path,
+    /// no row can match and no per-row path is materialised. When it does,
+    /// the scan renders each row's identity path — O(rows) string work, only
+    /// on frames where focus (or a pending target) is inside this stack.
+    private func rowIndex(
+        addressedBy focusID: String?, slots: [RowSlot], context: RenderContext
+    ) -> Int? {
+        guard let focusID else { return nil }
+        let stackPath = context.identity.path
+        guard focusID.contains(stackPath) else { return nil }
+        return slots.firstIndex { slot in
+            FocusManager.focusID(focusID, addressesSubtreeAt: slot.child.identity(under: context).path)
+        }
     }
 
     /// Aligns a buffer horizontally within the given width.

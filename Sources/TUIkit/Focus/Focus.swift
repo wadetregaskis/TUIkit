@@ -75,6 +75,24 @@ public final class FocusManager: @unchecked Sendable {
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
     private var sectionRevertTarget: [String: String] = [:]
 
+    /// A focus request whose target was not registered when it was made —
+    /// durable focus intent ("Locating things without drawing them" §5d:
+    /// focus identity is durable; the registration set is per-frame, exactly
+    /// the controls drawn last frame). Held until a registration with this ID
+    /// appears: windowing containers consult it (`renderViewportWindow`) and
+    /// render the routed-to row precisely so it registers, resolving the
+    /// intent in the same pass. Expires after ``pendingFocusPassBudget``
+    /// render passes so an ID that matches nothing doesn't scan forever; any
+    /// other explicit focus change clears it.
+    public private(set) var pendingFocusID: String?
+
+    /// Render passes the pending intent survives unresolved: one for the
+    /// routing render it triggers, one of slack for an intervening frame.
+    private static let pendingFocusPassBudget = 2
+
+    /// Passes remaining before ``pendingFocusID`` expires.
+    private var pendingFocusPassesRemaining = 0
+
     /// A monotonic counter that increments every time the
     /// currently focused element handles (consumes) a key event.
     /// Used by ``ScrollView`` to tell apart "the focused control
@@ -180,7 +198,17 @@ extension FocusManager {
             activeSectionID = targetID
         }
         if targetID == activeSectionID && focusedID == nil && element.canBeFocused {
-            focus(element)
+            focusPreservingPendingIntent(element)
+        }
+
+        // A pending focus intent resolves the moment its target registers —
+        // the windowing container rendered the routed-to row for exactly this.
+        if let pending = pendingFocusID, element.focusID == pending, element.canBeFocused {
+            pendingFocusID = nil
+            if activeSectionID != targetID {
+                activeSectionID = targetID
+            }
+            focusPreservingPendingIntent(element)
         }
     }
 
@@ -224,8 +252,20 @@ extension FocusManager {
 
     /// Focuses a specific element.
     ///
+    /// An explicit focus supersedes any pending focus intent — without this,
+    /// a click would be yanked to the pending target a frame later when the
+    /// routed-to row registers.
+    ///
     /// - Parameter element: The element to focus.
     public func focus(_ element: Focusable) {
+        pendingFocusID = nil
+        focusPreservingPendingIntent(element)
+    }
+
+    /// ``focus(_:)`` for the framework's *automatic* focus moves (auto-focus
+    /// of a section's first element, the pending-intent resolver itself) —
+    /// moves that must not supersede a live pending intent.
+    func focusPreservingPendingIntent(_ element: Focusable) {
         guard element.canBeFocused else { return }
 
         // Focusing the already-focused element is a no-op: a click inside a
@@ -243,8 +283,15 @@ extension FocusManager {
 
     /// Focuses an element by ID (searches all sections).
     ///
+    /// A target that is not registered — off the window of a lazy container,
+    /// most likely — becomes a durable pending intent (``pendingFocusID``)
+    /// rather than a silent no-op: the next render routes to it (default,
+    /// path-derived IDs), renders it so it registers, and focuses it. An ID
+    /// that matches nothing expires after a couple of passes.
+    ///
     /// - Parameter id: The focus ID of the element to focus.
     public func focus(id: String) {
+        pendingFocusID = nil
         for section in sections {
             if let element = section.focusables.first(where: { $0.focusID == id && $0.canBeFocused }) {
                 // Also activate the section containing this element
@@ -255,6 +302,26 @@ extension FocusManager {
                 return
             }
         }
+        pendingFocusID = id
+        pendingFocusPassesRemaining = Self.pendingFocusPassBudget
+        onFocusChange?()
+    }
+
+    /// Whether a focus ID (default form: `"<prefix>-<identity path>"`)
+    /// addresses a control at or below the given identity path.
+    ///
+    /// Path-boundary-safe: the character after the matched path must be a
+    /// component boundary (`/` for a child type, `#` for a conditional
+    /// branch) or the end of the ID, so `…#7` never matches `…#70` and a
+    /// keyed sibling (`…Row[7]`) never matches its unkeyed prefix. Explicit
+    /// `.focusID("…")` strings embed no path and never match — routing to
+    /// those without rendering is the identity tax the design doc records
+    /// (§12): there is nothing to route by.
+    static func focusID(_ id: String, addressesSubtreeAt path: String) -> Bool {
+        guard !path.isEmpty, let range = id.range(of: path) else { return false }
+        if range.upperBound == id.endIndex { return true }
+        let next = id[range.upperBound]
+        return next == "/" || next == "#"
     }
 
     /// Moves focus to the next element within the active section.
@@ -667,6 +734,15 @@ extension FocusManager {
             self.focusedID = firstFocusable.focusID
             firstFocusable.onFocusReceived()
         }
+
+        // A pending intent unresolved by this pass either just triggered its
+        // routing render (give it that one) or matches nothing — bound it.
+        if pendingFocusID != nil {
+            pendingFocusPassesRemaining -= 1
+            if pendingFocusPassesRemaining <= 0 {
+                pendingFocusID = nil
+            }
+        }
     }
 }
 
@@ -759,6 +835,13 @@ extension FocusManager {
             focus(available[fallbackIndex])
             return true
         }
+    }
+
+    /// The active section's registered focus IDs in ring order — the
+    /// per-frame enumeration (§5d of "Locating things without drawing
+    /// them"). Internal: tests assert exactly what the last walk registered.
+    func registeredFocusIDsInActiveSection() -> [String] {
+        activeSection?.focusables.map(\.focusID) ?? []
     }
 
     /// Diagnostic one-line summary of the focus manager's section
