@@ -233,6 +233,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         fullBuffer: FrameBuffer,
         viewportHeight: Int,
         regionOriginY: Int = 0,
+        indicatorsActive: Bool = true,
         context: RenderContext
     ) {
         let stateStorage = context.environment.stateStorage!
@@ -280,14 +281,29 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             // then covers. The decision is bidirectional: after snapping there
             // is still content above iff scrollOffset > 0 and below iff
             // scrollOffset + viewportHeight < contentHeight.
-            if regionTop < viewportTop {
+            //
+            // The FIRE condition must be indicator-aware too: a region whose
+            // only line lands exactly on the viewport's first/last row is
+            // inside the viewport by cell math yet INVISIBLE — that row is
+            // replaced by the indicator. Without this, a focused row could
+            // rest stably hidden behind "▼ N more below" and, focus being
+            // unchanged, no later frame would ever re-snap.
+            let topIndicatorShows =
+                indicatorsActive && showsIndicators && viewportTop > 0
+            let bottomIndicatorShows =
+                indicatorsActive && showsIndicators
+                && viewportBottom < handler.contentHeight
+            let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
+            let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
+
+            if regionTop < visibleTop {
                 // Scroll-up: align the region's top with viewportTop, leaving
                 // 1 row of headroom for the top indicator when one appears.
                 let proposed = regionTop
                 let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
                 handler.scrollOffset =
                     max(0, min(handler.maxOffset, proposed - topIndicatorRow))
-            } else if regionBottom > viewportBottom {
+            } else if regionBottom > visibleBottom {
                 // Scroll-down: align the region's bottom with viewportBottom,
                 // leaving 1 row for the bottom indicator if one appears.
                 let proposed = regionBottom - viewportHeight
@@ -401,6 +417,7 @@ private struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
             regionOriginY: sliceOriginY,
+            indicatorsActive: !wantsScrollbar,
             context: context)
 
         // Only be a Tab stop when there is actually something to scroll.
