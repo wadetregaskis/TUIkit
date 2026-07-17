@@ -219,8 +219,13 @@ extension _VStackCore {
                     let ordinal = resolveOrdinal(forKey: key, children: children, state: state),
                     !placedOrdinals.contains(ordinal)
                 else { continue }
+                // Clamped, never dropped: an above-window target's estimate
+                // routinely goes negative, and dropping it meant the row
+                // never rendered, never registered, and upward reveal never
+                // happened. At y 0 the region still tells the snap "scroll
+                // up", which is all convergence needs.
                 let estimatedY = anchorY + (ordinal - state.anchorOrdinal) * estimate
-                if estimatedY >= 0 { placed.append((ordinal, estimatedY)) }
+                placed.append((ordinal, max(0, estimatedY)))
             }
         }
         guard !frame.sawSpacer else { return nil }
