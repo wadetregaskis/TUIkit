@@ -68,6 +68,17 @@ public final class StateStorage: @unchecked Sendable {
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
+    /// Subtree roots whose descendants' state survives this pass's prune even
+    /// when the descendant was not hydrated. Declared each frame by windowing
+    /// containers (lazy stacks, `List`, `Table`): a row they skipped left the
+    /// *window*, not the *tree* (§5h of "Locating things without drawing
+    /// them"). Cleared by ``beginRenderPass``, so a container that stops
+    /// rendering stops protecting and its subtree prunes on the next pass.
+    /// Deliberately NOT pruned per-row on data deletion: knowing a row left
+    /// the data would require the full id set every frame (the identity tax);
+    /// a deleted row's state lingers until its container dies.
+    private var retainedSubtreeRoots: [ViewIdentity] = []
+
     /// The render cache that state changes should invalidate — the cache of the
     /// ``TUIContext`` this storage belongs to. Wired by the context at creation and
     /// stamped onto each ``StateBox`` at hydration, so a state change clears only
@@ -127,6 +138,30 @@ extension StateStorage {
     /// - Parameter identity: The view identity to mark as active.
     public func markActive(_ identity: ViewIdentity) {
         activeIdentities.insert(identity)
+    }
+
+    /// Declares that every identity below `root` must survive this pass's
+    /// prune, hydrated or not.
+    ///
+    /// Called on the render path by containers that *window* their children —
+    /// render only the rows meeting the viewport — so the skipped rows' state
+    /// (`@State`, `onChange` baselines, conditional-branch records) persists
+    /// exactly as if they had rendered. Per-pass: declare on every frame the
+    /// container renders; the declaration lapses (and the subtree becomes
+    /// prunable) the first frame it doesn't.
+    ///
+    /// - Parameter root: The windowing container's own identity.
+    public func retainSubtree(_ root: ViewIdentity) {
+        retainedSubtreeRoots.append(root)
+    }
+
+    /// Whether the identity is protected by a retained subtree this pass.
+    ///
+    /// O(roots × depth) per call via the structural ancestor walk; roots are
+    /// the handful of windowing containers on screen, so this stays cheap even
+    /// though it runs once per prune candidate.
+    private func isRetained(_ identity: ViewIdentity) -> Bool {
+        retainedSubtreeRoots.contains { $0.isAncestor(of: identity) }
     }
 
     // MARK: - Conditional Branch Tracking
@@ -195,26 +230,37 @@ extension StateStorage {
     public func beginRenderPass() {
         activeIdentities.removeAll(keepingCapacity: true)
         onChangeCounters.removeAll(keepingCapacity: true)
+        retainedSubtreeRoots.removeAll(keepingCapacity: true)
     }
 
     /// Ends a render pass by removing state for views no longer in the tree.
     ///
     /// Any state whose identity was not marked active during this render pass
-    /// is removed. This prevents memory leaks from views that have been
-    /// permanently removed (e.g., by navigation or conditional branches).
+    /// — and is not under a ``retainSubtree(_:)`` root — is removed. This
+    /// prevents memory leaks from views that have been permanently removed
+    /// (e.g., by navigation or conditional branches) while keeping windowed-out
+    /// rows' state alive.
     public func endRenderPass() {
-        let staleKeys = values.keys.filter { !activeIdentities.contains($0.identity) }
+        let staleKeys = values.keys.filter {
+            !activeIdentities.contains($0.identity) && !isRetained($0.identity)
+        }
         for key in staleKeys {
             values.removeValue(forKey: key)
         }
-        let staleTrackedKeys = trackedValues.keys.filter { !activeIdentities.contains($0.identity) }
+        let staleTrackedKeys = trackedValues.keys.filter {
+            !activeIdentities.contains($0.identity) && !isRetained($0.identity)
+        }
         for key in staleTrackedKeys {
             trackedValues.removeValue(forKey: key)
         }
         // Drop branch records for conditionals no longer in the tree, so a
         // conditional that left and later returns is treated as fresh (its
-        // descendant state was already pruned above).
-        let staleConditionals = lastConditionalCase.keys.filter { !activeIdentities.contains($0) }
+        // descendant state was already pruned above). Retained rows keep
+        // theirs: if a retained row's conditional flips on re-entry, the
+        // flip must be SEEN so the stale branch's state gets invalidated.
+        let staleConditionals = lastConditionalCase.keys.filter {
+            !activeIdentities.contains($0) && !isRetained($0)
+        }
         for identity in staleConditionals {
             lastConditionalCase.removeValue(forKey: identity)
         }

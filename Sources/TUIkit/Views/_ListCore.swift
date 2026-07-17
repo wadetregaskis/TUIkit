@@ -237,6 +237,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let style = context.environment.listStyle
         let stateStorage = context.environment.stateStorage!
 
+        // Rows beyond the viewport are skipped, not gone: retain their state
+        // (see StateStorage.retainSubtree). Render path only, per the
+        // measure-side-effect rule.
+        if !context.isMeasuring {
+            stateStorage.retainSubtree(context.identity)
+        }
+
         // Two border cells or none, on each axis: top + bottom rows, and left +
         // right columns.
         let borderOverhead = style.showsBorder ? 2 : 0

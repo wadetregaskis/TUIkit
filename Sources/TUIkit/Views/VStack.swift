@@ -369,6 +369,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     private func renderViewportWindow(
         children: [ChildView], window: ScrollContentWindow, context: RenderContext
     ) -> FrameBuffer {
+        // Off-window rows leave the WINDOW, not the tree: their @State (and
+        // onChange baselines) must survive this frame's prune. Declared per
+        // frame; lapses when this stack stops rendering, pruning the subtree.
+        context.environment.stateStorage?.retainSubtree(context.identity)
+
         // Descendants aren't at the scroll origin, so they must not re-window.
         var childContext = context
         childContext.environment.scrollContentWindow = nil

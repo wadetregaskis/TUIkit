@@ -399,6 +399,13 @@ where Value.ID: Hashable {
         let palette = context.environment.palette
         let stateStorage = context.environment.stateStorage!
 
+        // Rows beyond the viewport are skipped, not gone: retain their state
+        // (see StateStorage.retainSubtree). Render path only, per the
+        // measure-side-effect rule.
+        if !context.isMeasuring {
+            stateStorage.retainSubtree(context.identity)
+        }
+
         // Calculate available width inside container (subtract border + padding).
         let innerWidth = max(0, context.availableWidth - 4)
 
