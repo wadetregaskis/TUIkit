@@ -54,6 +54,13 @@ final class StackWindowState {
         /// The row the viewport is anchored on.
         var anchorOrdinal = 0
 
+        /// The anchored row's stable `ForEach` key (§5f): the anchor names a
+        /// ROW, not a position. Data edits shift ordinals; each frame the
+        /// ordinal is re-bound to this key before scroll input applies, so
+        /// an insertion above the anchor moves nothing on screen (§6d) and a
+        /// deleted anchor falls to its nearest surviving neighbour.
+        var anchorKey: String?
+
         /// How many cells of the anchor row sit above the viewport top.
         var anchorOffsetWithin = 0
 
@@ -89,10 +96,19 @@ final class StackWindowState {
 
 extension _VStackCore {
     func uniformWindowState(context: RenderContext) -> StackWindowState {
+        let stateStorage = context.environment.stateStorage!
         let key = StateStorage.StateKey(
             identity: context.identity, propertyIndex: VStackStateIndex.uniformWindow)
-        let box: StateBox<StackWindowState> = context.environment.stateStorage!.storage(
+        let box: StateBox<StackWindowState> = stateStorage.storage(
             for: key, default: StackWindowState())
+        // The box lives at the stack's OWN identity, which nothing else marks
+        // active: _VStackCore is Renderable (no body-hydration markActive) and
+        // registers no focusable, and retainSubtree protects strict
+        // DESCENDANTS only. Without this, endRenderPass pruned the anchor
+        // and hypothesis every frame — each "anchored" frame silently
+        // re-derived from scratch (deterministic, so single-data tests
+        // couldn't see it; the §5f insert-above test caught it).
+        stateStorage.markActive(context.identity)
         return box.value
     }
 }

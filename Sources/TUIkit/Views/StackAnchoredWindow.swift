@@ -66,6 +66,52 @@ private final class AnchoredWindowFrame {
         built[ordinal] ?? children[ordinal]
     }
 
+    /// Re-binds the persisted anchor ordinal to its stable key (§5f). The
+    /// fast path — the key still lives at the remembered ordinal — is one
+    /// key build. On a miss, the key is searched nearby first (data shifts
+    /// are usually small), then everywhere (the documented Ω(n) id→ordinal
+    /// cost, touching keys only). A key that left the data entirely falls
+    /// to the LADDER: last frame's rendered rows, nearest survivor first,
+    /// preserving `anchorOffsetWithin`. A dead ladder (the list was
+    /// replaced) leaves the clamped index fallback — approximate, and
+    /// correct at the ends (§5f).
+    func rebindAnchor() {
+        let count = children.count
+        guard count > 0 else { return }
+        state.anchorOrdinal = min(max(0, state.anchorOrdinal), count - 1)
+        guard let anchorKey = state.anchorKey else { return }
+        guard children.key(at: state.anchorOrdinal) != anchorKey else { return }
+
+        if let found = locate(key: anchorKey) {
+            state.anchorOrdinal = found
+            return
+        }
+        let neighbours = state.rowOrdinalMemo.sorted {
+            abs($0.value - state.anchorOrdinal) < abs($1.value - state.anchorOrdinal)
+        }
+        for (key, _) in neighbours where key != anchorKey {
+            if let found = locate(key: key) {
+                state.anchorOrdinal = found
+                state.anchorKey = key
+                return
+            }
+        }
+    }
+
+    /// The ordinal holding `key`: nearby ring search first, then the full
+    /// key scan. Never builds a row view.
+    private func locate(key: String) -> Int? {
+        let count = children.count
+        let origin = state.anchorOrdinal
+        for distance in 0...64 {
+            for candidate in [origin - distance, origin + distance]
+            where candidate >= 0 && candidate < count {
+                if children.key(at: candidate) == key { return candidate }
+            }
+        }
+        return children.firstOrdinal(forKey: key)
+    }
+
     /// Applies a scroll offset to the persisted anchor. A big jump seeks by
     /// estimate (O(1), approximate — what a scrollbar drag means); a small
     /// delta walks rows until it is consumed (one line up looks at one row).
@@ -155,7 +201,9 @@ extension _VStackCore {
             children: children, spacing: spacing, state: state,
             proposal: ProposedSize(width: width, height: nil), context: childContext)
 
+        frame.rebindAnchor()
         frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
+        state.anchorKey = children.key(at: state.anchorOrdinal)
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)
 
         // Focus / pending targets, wherever they are (§5d): estimated
