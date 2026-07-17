@@ -103,28 +103,57 @@ extension ForEach: ChildViewProvider {
     /// across data mutations — reordering the data moves each row's state
     /// with its element.
     public func childViews(context: RenderContext) -> [ChildView] {
-        data.map { element in
-            let view = content(element)
-            // Identity is keyed by the element's ID — NOT its position — so a
-            // row's @State / focus / lifecycle follow the element across
-            // reorders, insertions and removals (SwiftUI's ForEach identity
-            // contract). Positional identity handed every row its neighbour's
-            // state when the data shifted.
-            let key = String(describing: element[keyPath: idKeyPath])
-            // When the element is Equatable, wrap the row in a value-memo keyed
-            // by the element (as List does), so a container re-measuring /
-            // re-rendering its children each frame serves an unchanged row from
-            // the cache. `identityType: Content.self` keeps the per-child
-            // identity exactly what it is unwrapped — the memo is identity-
-            // transparent (the wrapper is Renderable, adds no identity).
-            if let equatableElement = element as? any Equatable {
-                return ChildView(
-                    _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
-                    identityType: Content.self,
-                    key: key)
-            }
-            return ChildView(view, identityType: Content.self, key: key)
+        data.map(makeChild(for:))
+    }
+
+    /// One element's `ChildView` — the single constructor behind both the
+    /// eager array and the lazy collection, so the two cannot drift.
+    ///
+    /// Identity is keyed by the element's ID — NOT its position — so a
+    /// row's @State / focus / lifecycle follow the element across
+    /// reorders, insertions and removals (SwiftUI's ForEach identity
+    /// contract). Positional identity handed every row its neighbour's
+    /// state when the data shifted.
+    ///
+    /// When the element is Equatable, the row is wrapped in a value-memo
+    /// keyed by the element (as List does), so a container re-measuring /
+    /// re-rendering its children each frame serves an unchanged row from
+    /// the cache. `identityType: Content.self` keeps the per-child
+    /// identity exactly what it is unwrapped — the memo is identity-
+    /// transparent (the wrapper is Renderable, adds no identity).
+    private func makeChild(for element: Data.Element) -> ChildView {
+        let view = content(element)
+        let key = String(describing: element[keyPath: idKeyPath])
+        if let equatableElement = element as? any Equatable {
+            return ChildView(
+                _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                identityType: Content.self,
+                key: key)
         }
+        return ChildView(view, identityType: Content.self, key: key)
+    }
+}
+
+// MARK: - ForEach as a LazyChildViewProvider
+
+extension ForEach: LazyChildViewProvider {
+    /// The rows as an on-demand collection (Stage 4 of "Locating things
+    /// without drawing them"): count and keys come straight from `data` —
+    /// O(1) and per-touch respectively, with `content` never invoked — and
+    /// a row view is built only when an ordinal is actually subscripted.
+    /// `RandomAccessCollection` makes the per-ordinal element access O(1).
+    public func childViewCollection(context: RenderContext) -> ChildViewCollection {
+        let data = self.data
+        let idKeyPath = self.idKeyPath
+        return ChildViewCollection(
+            count: data.count,
+            key: { ordinal in
+                let element = data[data.index(data.startIndex, offsetBy: ordinal)]
+                return String(describing: element[keyPath: idKeyPath])
+            },
+            build: { ordinal in
+                makeChild(for: data[data.index(data.startIndex, offsetBy: ordinal)])
+            })
     }
 }
 

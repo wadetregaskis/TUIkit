@@ -67,7 +67,9 @@ extension _VStackCore {
 
 extension _VStackCore: LayoutPlacing {
     func placementCount(context: RenderContext) -> Int {
-        resolveChildViews(from: content, context: placementContext(context)).count
+        // O(1) for lazy providers (a ForEach answers from its data's count);
+        // eager content pays its (already-paid) resolution.
+        resolveChildViewCollection(from: content, context: placementContext(context)).count
     }
 
     func placement(at ordinal: Int, proposal: ProposedSize, context: RenderContext) -> Placement? {
@@ -83,12 +85,18 @@ extension _VStackCore: LayoutPlacing {
 
     func ordinal(of target: ViewIdentity, context: RenderContext) -> Int? {
         guard let step = target.childStep(below: context.identity) else { return nil }
-        let children = resolveChildViews(from: content, context: placementContext(context))
+        let children = resolveChildViewCollection(from: content, context: placementContext(context))
         if let key = step.key {
-            return children.firstIndex { $0.identityChildKey == key }
+            // Keys come from the provider's data — no row views are built.
+            return children.firstOrdinal(forKey: key)
         }
         if let index = step.index {
-            return children.firstIndex { $0.identityChildKey == nil && $0.identityChildIndex == index }
+            // Keyed children never match a positional step; a uniformly keyed
+            // provider (ForEach) can answer nil without building anything.
+            guard !children.isUniformlyKeyed else { return nil }
+            return children.buildingAll().firstIndex {
+                $0.identityChildKey == nil && $0.identityChildIndex == index
+            }
         }
         return nil
     }
