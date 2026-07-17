@@ -30,6 +30,9 @@ public struct ChildViewCollection {
     /// The number of children. O(1) for both backings.
     public let count: Int
 
+    /// Whether there are no children.
+    public var isEmpty: Bool { count < 1 }
+
     /// Whether EVERY child is identified by a stable key (a homogeneous
     /// keyed provider — `ForEach`). When `true`, a positional-index routing
     /// query can answer `nil` without building a single child: keyed
