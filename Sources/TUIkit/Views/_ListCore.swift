@@ -676,6 +676,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             lines.append(renderScrollIndicator(
                 direction: .up,
                 count: max(1, handler.rowsAbove),
+                unit: .rows,
                 width: rowWidth,
                 palette: palette
             ))
@@ -736,6 +737,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             lines.append(renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
+                unit: .rows,
                 width: rowWidth,
                 palette: palette
             ))

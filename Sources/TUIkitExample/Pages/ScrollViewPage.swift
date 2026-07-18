@@ -22,7 +22,7 @@ import TUIkit
 ///      controls still respond to clicks and keyboard input
 ///      inside it.
 ///   3. The same content with `showsIndicators: false` to show
-///      how to suppress the 'N more above / below' chrome
+///      how to suppress the 'N more lines above / below' chrome
 ///      without disabling scrolling.
 struct ScrollViewPage: View {
     @State var searchText: String = ""

@@ -1,13 +1,13 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  ScrollIndicatorApproximationTests.swift
 //
-//  "N more above/below" honesty: on the anchored (variable-height) windowed
+//  "N more lines above/below" honesty: on the anchored (variable-height) windowed
 //  path the counts are LINES of the ESTIMATED absolute space — measured band
 //  plus unmeasured-remainder × running pitch average — so the top-of-list
 //  "below" count and the bottom-of-list "above" count come from two slightly
 //  different refinements and need not agree (the §3 trade: estimates may
 //  move the chrome, never the content). Such counts must READ as estimates:
-//  "~10K more below", not a false-precision "10003 more below". Exact
+//  "~10K more lines below", not a false-precision "10003 more lines below". Exact
 //  counts (uniform path, eager content, List/Table rows) stay exact.
 //
 //  Created by Wade Tregaskis
@@ -62,6 +62,37 @@ struct ScrollIndicatorApproximationTests {
         #expect(approximateCountLabel(2_000_000_000_000) == "~2T")
     }
 
+    @Test("Indicator labels name their unit, singular and plural, and degrade to fit")
+    func unitWordingAndDegradation() {
+        let palette = EnvironmentValues().palette
+        func label(
+            _ count: Int, _ unit: ScrollIndicatorUnit, width: Int,
+            direction: ScrollIndicatorDirection = .down, approximate: Bool = false
+        ) -> String {
+            renderScrollIndicator(
+                direction: direction, count: count, unit: unit,
+                width: width, palette: palette, approximate: approximate
+            ).stripped.trimmingCharacters(in: .whitespaces)
+        }
+
+        // The unit is named, and agrees in number with the count.
+        #expect(label(42, .rows, width: 40) == "▼ 42 more rows below")
+        #expect(label(1, .rows, width: 40) == "▼ 1 more row below")
+        #expect(label(42, .lines, width: 40, direction: .up) == "▲ 42 more lines above")
+        #expect(label(1, .lines, width: 40) == "▼ 1 more line below")
+        #expect(
+            label(200_000_903, .lines, width: 40, approximate: true)
+                == "▼ ~200M more lines below")
+
+        // Degradation ladder for narrow viewports: drop "more", then the
+        // direction word (the arrow carries it), then the unit — the count
+        // survives longest; never clip mid-word.
+        #expect(label(14, .lines, width: 20) == "▼ 14 lines below")
+        #expect(label(14, .lines, width: 12) == "▼ 14 lines")
+        #expect(label(14, .lines, width: 6) == "▼ 14")
+        #expect(label(14, .lines, width: 2) == "▼")
+    }
+
     @Test("Anchored-path indicators read approximate; uniform stay exact")
     func anchoredApproximateUniformExact() {
         let tuiContext = TUIContext()
@@ -80,7 +111,7 @@ struct ScrollIndicatorApproximationTests {
         renderFrame(anchored, tuiContext: tuiContext, focusManager: focusManager)
         let settled = renderFrame(anchored, tuiContext: tuiContext, focusManager: focusManager)
         let below = settled.last ?? ""
-        #expect(below.contains("more below"), "the below indicator renders: \(settled)")
+        #expect(below.contains("more lines below"), "the below indicator renders: \(settled)")
         #expect(below.contains("~"), "an estimated count reads as approximate: '\(below)'")
         let digitRun = below.reduce(into: (longest: 0, current: 0)) { acc, ch in
             acc.current = ch.isNumber ? acc.current + 1 : 0
@@ -105,7 +136,7 @@ struct ScrollIndicatorApproximationTests {
             uniform, tuiContext: tuiContext2, focusManager: focusManager2)
         let uniformBelow = uniformSettled.last ?? ""
         #expect(
-            uniformBelow.contains("4994 more below"),
+            uniformBelow.contains("4994 more lines below"),
             "a uniform total is exact and stays fully precise: '\(uniformBelow)'")
         #expect(!uniformBelow.contains("~"), "no tilde on an exact count: '\(uniformBelow)'")
     }

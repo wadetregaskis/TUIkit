@@ -3,7 +3,7 @@
 //
 //  Buffer-level render audit for ScrollView. A ScrollView is greedy on
 //  both axes (fills its viewport) and windows into a taller content
-//  buffer, overwriting the top / bottom rows with "N more above / below"
+//  buffer, overwriting the top / bottom rows with "N more lines above / below"
 //  indicators when content extends past the viewport.
 //  License: MIT
 
@@ -51,8 +51,8 @@ struct ScrollViewRenderTests {
             context: ctx(width: 20, height: 6)
         )
         let joined = buffer.lines.map { $0.stripped }.joined()
-        #expect(!joined.contains("more above"))
-        #expect(!joined.contains("more below"))
+        #expect(!joined.contains("more lines above"))
+        #expect(!joined.contains("more lines below"))
     }
 
     // MARK: - Trailing Spacer (flexible filler)
@@ -73,7 +73,7 @@ struct ScrollViewRenderTests {
             context: ctx(width: 20, height: 8)
         )
         let joined = buffer.lines.map { $0.stripped }.joined()
-        #expect(!joined.contains("more below"), "3 lines + Spacer fit in 8 rows: \(buffer.lines.map { $0.stripped })")
+        #expect(!joined.contains("more lines below"), "3 lines + Spacer fit in 8 rows: \(buffer.lines.map { $0.stripped })")
     }
 
     @Test("A trailing Spacer doesn't inflate the overflow count to the canvas height")
@@ -88,7 +88,7 @@ struct ScrollViewRenderTests {
             context: ctx(width: 20, height: 8)
         )
         let lines = buffer.lines.map { $0.stripped }
-        let indicator = lines.first { $0.contains("more below") } ?? ""
+        let indicator = lines.first { $0.contains("lines below") } ?? ""
         let count = indicator.split { !$0.isNumber }.compactMap { Int($0) }.first ?? -1
         #expect(count > 0 && count < 20, "overflow count is the real remainder, not the measure canvas: \(indicator)")
     }
@@ -113,12 +113,12 @@ struct ScrollViewRenderTests {
         #expect(lines.count == 8, "fills the viewport: \(lines)")
         #expect(lines.first?.contains("top") == true, "first line is 'top': \(lines)")
         #expect(lines.last?.contains("bottom") == true, "last line is 'bottom': \(lines)")
-        #expect(!lines.joined().contains("more below"), "fits — no overflow: \(lines)")
+        #expect(!lines.joined().contains("more lines below"), "fits — no overflow: \(lines)")
     }
 
     // MARK: - Overflowing content (bottom indicator)
 
-    @Test("Tall content shows a 'N more below' indicator at the bottom edge")
+    @Test("Tall content shows a 'N more lines below' indicator at the bottom edge")
     func tallContentBottomIndicator() {
         let buffer = renderToBuffer(
             ScrollView {
@@ -130,12 +130,12 @@ struct ScrollViewRenderTests {
         )
         #expect(buffer.lines.count == 6)
         // At rest (offset 0) the top shows real content, the bottom row is
-        // the "more below" indicator.
+        // the "more lines below" indicator.
         #expect(buffer.lines[0].stripped.hasPrefix("Line 0"))
         let lastLine = buffer.lines[5].stripped
-        #expect(lastLine.contains("more below"), "Bottom row should be the down indicator, got '\(lastLine)'")
+        #expect(lastLine.contains("lines below"), "Bottom row should be the down indicator, got '\(lastLine)'")
         // No top indicator while we are at the very top.
-        #expect(!buffer.lines[0].stripped.contains("more above"))
+        #expect(!buffer.lines[0].stripped.contains("lines above"))
     }
 
     @Test("showsIndicators:false suppresses the indicator and shows raw content")
@@ -150,7 +150,7 @@ struct ScrollViewRenderTests {
         )
         #expect(buffer.lines.count == 6)
         let joined = buffer.lines.map { $0.stripped }.joined()
-        #expect(!joined.contains("more below"), "No indicator when suppressed")
+        #expect(!joined.contains("more lines below"), "No indicator when suppressed")
         // The bottom row shows real content (Line 5) rather than chrome.
         #expect(buffer.lines[5].stripped.hasPrefix("Line 5"))
     }
@@ -239,8 +239,8 @@ struct ScrollViewRenderTests {
         #expect(
             !lastColumn.contains("▲") && !lastColumn.contains("▼"),
             "no scrollbar by default: \(lastColumn)")
-        // The text "N more below" indicator is still shown.
-        #expect(buffer.lines.map { $0.stripped }.joined().contains("more below"))
+        // The text "N more lines below" indicator is still shown.
+        #expect(buffer.lines.map { $0.stripped }.joined().contains("lines below"))
     }
 
     // MARK: - Single-pass convergence (no one-frame lag, no oscillation)
@@ -264,10 +264,10 @@ struct ScrollViewRenderTests {
             lastColumn.first == "▲" && lastColumn.last == "▼",
             "vertical scrollbar present on the first render: \(lastColumn)")
         // The bar supersedes the text indicator — they never show together (the
-        // old lag flashed "more below" for a frame before the bar caught up).
+        // old lag flashed "more lines below" for a frame before the bar caught up).
         #expect(
-            !buffer.lines.map { $0.stripped }.joined().contains("more below"),
-            "no 'more below' text once the bar is shown")
+            !buffer.lines.map { $0.stripped }.joined().contains("more lines below"),
+            "no 'more lines below' text once the bar is shown")
     }
 
     @Test("Consecutive automatic renders are identical (the scrollbar does not oscillate)")

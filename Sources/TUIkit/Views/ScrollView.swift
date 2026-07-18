@@ -923,6 +923,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             lines[0] = renderScrollIndicator(
                 direction: .up,
                 count: handler.rowsAbove,
+                unit: .lines,
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate
@@ -933,6 +934,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             lines[lines.count - 1] = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
+                unit: .lines,
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate

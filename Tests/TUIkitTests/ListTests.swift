@@ -144,8 +144,8 @@ struct ListRenderingTests {
         let buffer = renderToBuffer(list, context: context)
         let content = buffer.lines.joined()
 
-        // Should have "more below" indicator since we have 20 items in height 8
-        #expect(content.contains("▼") || content.contains("more below"))
+        // Should have "more rows below" indicator since we have 20 items in height 8
+        #expect(content.contains("▼") || content.contains("more rows below"))
     }
 
     @Test("Disabled list modifier works")
@@ -427,7 +427,7 @@ struct ListRenderingTests {
         // Regression test for the bug where a List that had been
         // scrolled deep (e.g. emoji-list at row 1500) and was then
         // filtered down to a handful of items rendered as a tiny
-        // strip showing only the 'N more above' indicator — the
+        // strip showing only the 'N more rows above' indicator — the
         // viewport was pointing past the end of the filtered data
         // because scrollOffset wasn't bounds-clamped against the
         // new itemCount. The fix: _ListCore now calls
@@ -474,7 +474,7 @@ struct ListRenderingTests {
         // Now re-render with the filtered data. With the bug
         // present, scrollOffset is unchanged (≥ 90) but the new
         // itemCount is 3, so the viewport renders nothing but the
-        // 'N more above' indicator. With the fix, scrollOffset is
+        // 'N more rows above' indicator. With the fix, scrollOffset is
         // clamped to max(0, 3 - viewportHeight) and the filtered
         // rows render normally.
         let small = renderToBuffer(makeView(filteredItems), context: context)
@@ -495,12 +495,12 @@ struct ListRenderingTests {
     /// Regression test for the "spurious / misplaced scroll
     /// indicator" bug: at the top of an overflowing list the
     /// viewport reserved space for *both* indicators even though
-    /// only "▼ N more below" was showing, leaving a wasted blank
+    /// only "▼ N more rows below" was showing, leaving a wasted blank
     /// line at the bottom and bumping the indicator one row too
     /// high. The fix reserves a line only for an indicator that is
     /// actually present, so the rows + indicator fill the content
     /// area exactly.
-    @Test("Overflowing list shows 'more below' on the last content row at the top — no blank line")
+    @Test("Overflowing list shows 'more rows below' on the last content row at the top — no blank line")
     func scrollIndicatorOnLastRowAtTop() {
         let context = createTestContext(width: 24, height: 8)
         let items = (0..<20).map { "item-\($0)" }
@@ -514,8 +514,8 @@ struct ListRenderingTests {
         // the content row immediately above it (was a blank line,
         // with the indicator one row higher, under the bug).
         #expect(
-            lines[lines.count - 2].contains("more below"),
-            "'more below' must sit on the last content row; got:\n\(joined)")
+            lines[lines.count - 2].contains("more rows below"),
+            "'more rows below' must sit on the last content row; got:\n\(joined)")
         #expect(
             !lines[lines.count - 2].contains("item-"),
             "the last content row is the indicator, not an item; got:\n\(joined)")
@@ -525,11 +525,11 @@ struct ListRenderingTests {
             lines[lines.count - 3].contains("item-"),
             "a real item must sit directly above the indicator; got:\n\(joined)")
         #expect(
-            !joined.contains("more above"),
-            "no 'more above' at the very top; got:\n\(joined)")
+            !joined.contains("more rows above"),
+            "no 'more rows above' at the very top; got:\n\(joined)")
     }
 
-    /// At the bottom only the "▲ N more above" indicator shows, the
+    /// At the bottom only the "▲ N more rows above" indicator shows, the
     /// last item is visible, and it sits on the last content row
     /// (no wasted blank line at the bottom end either).
     @Test("Overflowing list shows the last item on the last content row at the bottom")
@@ -545,11 +545,11 @@ struct ListRenderingTests {
         let joined = lines.joined(separator: "\n")
 
         #expect(
-            lines[1].contains("more above"),
-            "top content row must be the 'more above' indicator; got:\n\(joined)")
+            lines[1].contains("more rows above"),
+            "top content row must be the 'more rows above' indicator; got:\n\(joined)")
         #expect(
-            !joined.contains("more below"),
-            "no 'more below' at the bottom; got:\n\(joined)")
+            !joined.contains("more rows below"),
+            "no 'more rows below' at the bottom; got:\n\(joined)")
         #expect(
             lines[lines.count - 2].contains("item-19"),
             "the last item must sit on the last content row; got:\n\(joined)")
@@ -572,11 +572,11 @@ struct ListRenderingTests {
         let joined = lines.joined(separator: "\n")
 
         #expect(
-            lines[1].contains("more above"),
-            "'more above' on the first content row; got:\n\(joined)")
+            lines[1].contains("more rows above"),
+            "'more rows above' on the first content row; got:\n\(joined)")
         #expect(
-            lines[lines.count - 2].contains("more below"),
-            "'more below' on the last content row; got:\n\(joined)")
+            lines[lines.count - 2].contains("more rows below"),
+            "'more rows below' on the last content row; got:\n\(joined)")
         // The focused row (item-6) must be a real, visible row — not
         // hidden behind the below indicator at the transition.
         #expect(
@@ -620,12 +620,12 @@ struct ListRenderingTests {
         }
     }
 
-    /// The scroll offset must never rest at 1: an "▲ 1 more above"
+    /// The scroll offset must never rest at 1: an "▲ 1 more row above"
     /// indicator hides a single row using a line that could simply
     /// show that row, so offset 0 (first row visible, no indicator)
     /// strictly dominates it. Walking the selection down must take
-    /// the above indicator straight from absent to "2 more above".
-    @Test("Overflowing list never shows '1 more above' (offset never rests at 1)")
+    /// the above indicator straight from absent to "2 more rows above".
+    @Test("Overflowing list never shows '1 more row above' (offset never rests at 1)")
     func neverShowsSingleRowAboveIndicator() {
         let context = createTestContext(width: 24, height: 8)
         let items = (0..<20).map { "item-\($0)" }
@@ -639,8 +639,8 @@ struct ListRenderingTests {
             let joined = renderToBuffer(view, context: context)
                 .lines.map(\.stripped).joined(separator: "\n")
             #expect(
-                !joined.contains("▲ 1 more above"),
-                "offset 1 is dominated by offset 0 — never show '1 more above'; got:\n\(joined)")
+                !joined.contains("▲ 1 more row above"),
+                "offset 1 is dominated by offset 0 — never show '1 more row above'; got:\n\(joined)")
         }
     }
 
@@ -695,7 +695,7 @@ struct ListRenderingTests {
         }
 
         #expect(joined.contains("row-099"), "wheel-scrolling to the end must reveal the last row")
-        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+        #expect(!joined.contains("more rows below"), "nothing should remain below once at the bottom")
     }
 
     @Test("A large List builds only ~viewport rows, not every row")

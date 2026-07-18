@@ -584,8 +584,8 @@ struct ItemListHandlerScrollTests {
     /// room for the scroll indicators. Scrolling into the middle must
     /// leave the focused row within the rows actually shown
     /// (contentHeight − 2 when both indicators are present) — never on
-    /// the "N more below" indicator line; and focusing the last item
-    /// must reach the true bottom (only the "more above" indicator
+    /// the "N more rows below" indicator line; and focusing the last item
+    /// must reach the true bottom (only the "more rows above" indicator
     /// shows there, so one extra row fits).
     @Test("Indicator-aware scroll keeps the focused row visible and reaches the true bottom")
     func indicatorAwareScrollIntoView() {

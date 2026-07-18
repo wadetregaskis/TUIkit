@@ -1,7 +1,7 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  ListMultiLineScrollTests.swift
 //
-//  A List/Table that draws a scrollbar reserves NO "N more above/below" text
+//  A List/Table that draws a scrollbar reserves NO "N more rows above/below" text
 //  indicator line, so its rows fill the whole content area. `maxOffset` (and the
 //  focus-reveal arithmetic) must therefore not reserve an indicator line when
 //  `showsScrollbar` is set — otherwise the bottom over-scrolls by one row and a
@@ -43,7 +43,7 @@ struct ListMultiLineScrollTests {
         bar.scrollOffset = 100  // force past the tail so maxOffset is exercised
         #expect(bar.maxOffset == 9, "scrollbar list fills the area, got \(bar.maxOffset)")
 
-        // Without a scrollbar the "N more above" indicator genuinely eats a line,
+        // Without a scrollbar the "N more rows above" indicator genuinely eats a line,
         // so reserving it is correct: only rows 10,11 fit below the indicator.
         let text = makeHandler(count: 12, rowHeight: 2, contentHeight: 6, showsScrollbar: false)
         text.scrollOffset = 100

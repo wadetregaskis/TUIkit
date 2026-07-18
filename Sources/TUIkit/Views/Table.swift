@@ -346,6 +346,7 @@ where Value.ID: Hashable {
                         widest,
                         renderScrollIndicator(
                             direction: .up, count: handler.rowsAbove,
+                            unit: .rows,
                             width: contentWidth, palette: palette
                         ).strippedLength)
                 }
@@ -354,6 +355,7 @@ where Value.ID: Hashable {
                         widest,
                         renderScrollIndicator(
                             direction: .down, count: handler.rowsBelow,
+                            unit: .rows,
                             width: contentWidth, palette: palette
                         ).strippedLength)
                 }
@@ -832,6 +834,7 @@ where Value.ID: Hashable {
         if window.showAbove {
             lines.append(renderScrollIndicator(
                 direction: .up, count: max(1, window.range.lowerBound),
+                unit: .rows,
                 width: contentWidth, palette: palette))
         }
         // Line granularity fills the content area EXACTLY: the bottom row may
@@ -868,6 +871,7 @@ where Value.ID: Hashable {
         if window.showBelow {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
+                unit: .rows,
                 width: contentWidth, palette: palette))
         }
         // A scrolled/overflowing table fills its content area EXACTLY,
@@ -1052,6 +1056,7 @@ where Value.ID: Hashable {
             lines.append(renderScrollIndicator(
                 direction: .up,
                 count: handler.rowsAbove,
+                unit: .rows,
                 width: contentWidth,
                 palette: palette
             ))
@@ -1075,6 +1080,7 @@ where Value.ID: Hashable {
             lines.append(renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
+                unit: .rows,
                 width: contentWidth,
                 palette: palette
             ))

@@ -220,7 +220,7 @@ struct ListRenderTests {
 
     // MARK: Scrolling / overflow
 
-    @Test("Overflowing list shows a 'more below' scroll indicator")
+    @Test("Overflowing list shows a 'more rows below' scroll indicator")
     func overflowShowsBelowIndicator() {
         let lines = strippedLines(
             List(selection: .constant(String?.none)) {
@@ -233,10 +233,10 @@ struct ListRenderTests {
         // First rows are visible from the top.
         #expect(lines[1].contains("Item 0"))
         // A downward scroll indicator with a remaining count is present.
-        let indicator = lines.first { $0.contains("▼") && $0.contains("more below") }
-        #expect(indicator != nil, "expected a '▼ N more below' indicator: \(lines)")
+        let indicator = lines.first { $0.contains("▼") && $0.contains("more rows below") }
+        #expect(indicator != nil, "expected a '▼ N more rows below' indicator: \(lines)")
         if let indicator {
-            #expect(indicator.contains("15 more below"), "wrong hidden-row count: \(indicator)")
+            #expect(indicator.contains("15 more rows below"), "wrong hidden-row count: \(indicator)")
         }
         // The bottom rows are NOT shown yet (no upward scroll happened).
         #expect(!lines.contains { $0.contains("Item 19") })
@@ -258,8 +258,8 @@ struct ListRenderTests {
         #expect(joined.contains("▲") && joined.contains("▼"), "scrollbar arrows present: \(lines)")
         let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
         #expect(joined.contains { blocks.contains($0) }, "scrollbar thumb block present: \(lines)")
-        // The bar supersedes the text indicator (no "more below" while a bar shows).
-        #expect(!joined.contains("more below"), "bar replaces the text indicator: \(lines)")
+        // The bar supersedes the text indicator (no "more rows below" while a bar shows).
+        #expect(!joined.contains("more rows below"), "bar replaces the text indicator: \(lines)")
     }
 
     @Test("Lists draw no scrollbar by default")
@@ -270,7 +270,7 @@ struct ListRenderTests {
             },
             context: listContext(width: 30, height: 8)
         )
-        // The "N more below" indicator uses ▼; the telltale of a scrollbar is its
+        // The "N more rows below" indicator uses ▼; the telltale of a scrollbar is its
         // block-glyph thumb, which a default list lacks.
         let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
         #expect(!lines.joined().contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")

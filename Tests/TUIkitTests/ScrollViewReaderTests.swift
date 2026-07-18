@@ -119,7 +119,7 @@ struct ScrollViewReaderTests {
         // Below the viewport → scrolls just enough: the row bottom-aligns.
         box.proxy?.scrollTo(1_000)
         let revealed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
-        // Bottom-aligned above the "▼ more below" indicator row.
+        // Bottom-aligned above the "▼ more lines below" indicator row.
         #expect(revealed[4].contains("row 1000"), "bottom-aligned reveal: \(revealed)")
 
         // Already visible → no movement at all.

@@ -49,7 +49,7 @@ struct MenuWindowingTests {
         let out = stripped(buffer)
         #expect(buffer.height <= 8, "the menu fits the available height, got \(buffer.height)")
         #expect(out.contains { $0.contains("Item 1") }, "the selected top item is visible")
-        #expect(out.contains { $0.contains("▼") }, "a ▼ marker shows there's more below")
+        #expect(out.contains { $0.contains("▼") }, "a ▼ marker shows there's more rows below")
         #expect(!out.contains { $0.contains("▲") }, "no ▲ marker at the top")
         #expect(!out.contains { $0.contains("Item 30") }, "far items are windowed out")
     }

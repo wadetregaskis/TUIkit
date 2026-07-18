@@ -272,7 +272,7 @@ struct TableRenderingTests {
         }
 
         #expect(joined.contains("name-99"), "wheel-scrolling to the end must reveal the last row")
-        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+        #expect(!joined.contains("more rows below"), "nothing should remain below once at the bottom")
     }
 
     @Test("Clicking the Table scrollbar's down arrow scrolls the rows")

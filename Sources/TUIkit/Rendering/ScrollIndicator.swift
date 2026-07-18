@@ -11,6 +11,25 @@ enum ScrollIndicatorDirection {
     case up, down
 }
 
+/// What a scroll indicator's count denominates — the label says which, so
+/// "42 more rows below" (a `List`'s whole items) and "~200M more lines
+/// below" (a `ScrollView`'s terminal lines) can't be conflated. Required at
+/// every call site: a new caller must decide what it is actually counting.
+enum ScrollIndicatorUnit {
+    /// Whole rows/items — `List`, `Table`, menus. Exact counts.
+    case rows
+    /// Terminal lines — `ScrollView`, whose scroll space is line-based.
+    case lines
+
+    /// The label word for `count` of this unit.
+    func word(for count: Int) -> String {
+        switch self {
+        case .rows: return count == 1 ? "row" : "rows"
+        case .lines: return count == 1 ? "line" : "lines"
+        }
+    }
+}
+
 // MARK: - Scroll Indicator Rendering
 
 /// Formats an estimated count compactly — "~897", "~5.4K", "~200M" — so an
@@ -50,9 +69,11 @@ func approximateCountLabel(_ count: Int) -> String {
 ///
 /// - Parameters:
 ///   - direction: Whether the indicator points up or down.
-///   - count: The number of rows hidden in that direction. Omitted from the
-///     label when zero (in normal use the caller only renders the indicator
-///     when at least one row is hidden).
+///   - count: The number of rows/lines hidden in that direction. Omitted
+///     from the label (along with the unit word) when zero — in normal use
+///     the caller only renders the indicator when at least one is hidden.
+///   - unit: What `count` denominates — the label spells it out
+///     ("42 more rows below" vs "~200M more lines below").
 ///   - width: The total width available for the indicator line.
 ///   - palette: The color palette for styling.
 ///   - approximate: Whether `count` derives from ESTIMATED geometry (a
@@ -64,16 +85,29 @@ func approximateCountLabel(_ count: Int) -> String {
 func renderScrollIndicator(
     direction: ScrollIndicatorDirection,
     count: Int,
+    unit: ScrollIndicatorUnit,
     width: Int,
     palette: any Palette,
     approximate: Bool = false
 ) -> String {
     let arrow = direction == .up ? "▲" : "▼"
     let countText = approximate ? approximateCountLabel(count) : "\(count)"
-    let countPrefix = count > 0 ? "\(countText) " : ""
-    let label = direction == .up
-        ? " \(countPrefix)more above "
-        : " \(countPrefix)more below "
+    let unitWord = unit.word(for: count)
+    let directionWord = direction == .up ? "above" : "below"
+
+    // The label degrades to fit a narrow viewport rather than clipping
+    // mid-word: the count and its unit survive as long as possible, and
+    // the arrow already carries the direction once the words must go.
+    let bodies: [String] = count > 0
+        ? [
+            "\(countText) more \(unitWord) \(directionWord)",
+            "\(countText) \(unitWord) \(directionWord)",
+            "\(countText) \(unitWord)",
+            countText,
+        ]
+        : ["more \(directionWord)"]
+    let body = bodies.first { 1 + $0.count + 2 <= width } ?? ""
+    let label = body.isEmpty ? " " : " \(body) "
 
     let styledArrow = ANSIRenderer.colorize(arrow, foreground: palette.foregroundTertiary)
     let styledLabel = ANSIRenderer.colorize(label, foreground: palette.foregroundTertiary)

@@ -375,11 +375,11 @@ struct TableRenderTests {
             context: tableContext(width: 30, height: 8)
         )
         let joined = lines.joined()
-        // The "N more below" text indicator legitimately uses ▼, so the telltale
+        // The "N more rows below" text indicator legitimately uses ▼, so the telltale
         // of a scrollbar is its block-glyph thumb, which a default table lacks.
         let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
         #expect(!joined.contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")
-        // The text "N more below" indicator is shown instead.
+        // The text "N more rows below" indicator is shown instead.
         #expect(joined.lowercased().contains("more"))
     }
 
@@ -418,7 +418,7 @@ struct TableRenderTests {
 
     // MARK: Scrolling / overflow
 
-    @Test("Overflowing table shows a 'more below' indicator and keeps the header")
+    @Test("Overflowing table shows a 'more rows below' indicator and keeps the header")
     func overflowIndicator() {
         let many = (0..<20).map { Row(id: "\($0)", name: "Row \($0)", size: "\($0)K") }
         let lines = strippedLines(
@@ -435,9 +435,9 @@ struct TableRenderTests {
         // First data rows visible.
         #expect(lines.contains { $0.contains("Row 0") })
         // Downward scroll indicator with remaining count.
-        let indicator = lines.first { $0.contains("▼") && $0.contains("more below") }
-        #expect(indicator != nil, "expected '▼ N more below': \(lines)")
-        if let indicator { #expect(indicator.contains("16 more below"), "wrong hidden count: \(indicator)") }
+        let indicator = lines.first { $0.contains("▼") && $0.contains("more rows below") }
+        #expect(indicator != nil, "expected '▼ N more rows below': \(lines)")
+        if let indicator { #expect(indicator.contains("16 more rows below"), "wrong hidden count: \(indicator)") }
         // Last rows not yet revealed.
         #expect(!lines.contains { $0.contains("Row 19") })
     }

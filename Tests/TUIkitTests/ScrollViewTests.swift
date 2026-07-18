@@ -363,7 +363,7 @@ struct ScrollViewRenderingTests {
     /// height — taller than the height it renders into. A measure-pass
     /// `clampScrollOffset()` then clamped the persistent offset against too large
     /// a viewport, pulling it back every frame so the last screenful was
-    /// unreachable ("N more below"). The fix gates the clamp on `!isMeasuring`.
+    /// unreachable ("N more lines below"). The fix gates the clamp on `!isMeasuring`.
     /// Mirrors `ListTests.listWithFlexibleSiblingScrollsToBottom`.
     @Test("A ScrollView sharing space with a flexible sibling scrolls fully to the bottom")
     func scrollViewWithFlexibleSiblingScrollsToBottom() {
@@ -405,7 +405,7 @@ struct ScrollViewRenderingTests {
         }
 
         #expect(joined.contains("Row 99"), "wheel-scrolling to the end must reveal the last row")
-        #expect(!joined.contains("more below"), "nothing should remain below once at the bottom")
+        #expect(!joined.contains("more lines below"), "nothing should remain below once at the bottom")
     }
 
     /// Scroll chaining: a nested scroller that has reached its own limit must
@@ -506,7 +506,7 @@ struct ScrollViewRenderingTests {
         }
         let buffer = renderToBuffer(view, context: makeContext(width: 30, height: 6))
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
-        #expect(text.contains("more below"), "Expected a 'more below' indicator; got:\n\(text)")
+        #expect(text.contains("more lines below"), "Expected a 'more lines below' indicator; got:\n\(text)")
     }
 
     @Test("Hides indicators when content fits")
@@ -516,8 +516,8 @@ struct ScrollViewRenderingTests {
         }
         let buffer = renderToBuffer(view, context: makeContext(width: 30, height: 10))
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
-        #expect(!text.contains("more below"))
-        #expect(!text.contains("more above"))
+        #expect(!text.contains("more lines below"))
+        #expect(!text.contains("more lines above"))
     }
 
     @Test("showsIndicators: false suppresses the chrome")
@@ -527,8 +527,8 @@ struct ScrollViewRenderingTests {
         }
         let buffer = renderToBuffer(view, context: makeContext(width: 30, height: 6))
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
-        #expect(!text.contains("more below"))
-        #expect(!text.contains("more above"))
+        #expect(!text.contains("more lines below"))
+        #expect(!text.contains("more lines above"))
     }
 
     /// Regression test for "the Mixed-widget ScrollView won't scroll to the

@@ -257,7 +257,7 @@ struct ScrollGranularityTests {
         let body = renderList(linesPerRow: 4, wheelTicks: 1)
         #expect(!body.contains("a-3"), "the top row's first three lines are scrolled off:\n\(body)")
         #expect(body.contains("a-4"), "the top row's last line still shows:\n\(body)")
-        #expect(body.contains("more above"), "the above indicator marks the partial row:\n\(body)")
+        #expect(body.contains("1 more row above"), "the above indicator marks the partial row (singular):\n\(body)")
     }
 
     @Test("List (row granularity): a wheel event moves three whole ROWS")
@@ -271,7 +271,7 @@ struct ScrollGranularityTests {
     func listLineTicksReachBottom() {
         let body = renderList(wheelTicks: 30)
         #expect(body.contains("f-3"), "the last row's last line is reachable:\n\(body)")
-        #expect(!body.contains("more below"), "nothing remains below at the bottom:\n\(body)")
+        #expect(!body.contains("more rows below"), "nothing remains below at the bottom:\n\(body)")
     }
 
     // MARK: - Table rendering

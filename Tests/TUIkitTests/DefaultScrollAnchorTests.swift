@@ -89,7 +89,7 @@ struct DefaultScrollAnchorTests {
         #expect(!held.contains { $0.contains("line 99") }, "scrolled away from the tail: \(held)")
 
         // Appends must NOT yank the view back down (the scroll-lock). The
-        // "N more below" indicator count legitimately grows; the CONTENT
+        // "N more lines below" indicator count legitimately grows; the CONTENT
         // rows must be identical.
         let heldAfterAppend = renderFrame(
             makeView(lines: 140), tuiContext: tuiContext, focusManager: focusManager)
