@@ -1156,11 +1156,15 @@ where Value.ID: Hashable {
         // Insert at the back so interactive children inside a
         // row still win the dispatcher's reverse-iteration
         // match. See the parallel comment in _ListCore.
+        // The table's focusID rides on this region: it is how an enclosing
+        // ScrollView locates the focused table to scroll it into view
+        // (`snapViewportToFocusedControl` scans regions by focusID).
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0, offsetY: 0,
                 width: buffer.width, height: buffer.height,
-                handlerID: mouseHandlerID
+                handlerID: mouseHandlerID,
+                focusID: state.focusID
             ),
             at: 0
         )

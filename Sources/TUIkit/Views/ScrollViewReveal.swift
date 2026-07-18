@@ -111,9 +111,13 @@ extension _ScrollViewCore {
             let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
             let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
 
-            if regionTop < visibleTop {
+            if regionTop < visibleTop || (regionBottom > visibleBottom && region.height >= viewportHeight) {
                 // Scroll-up: align the region's top with viewportTop, leaving
                 // 1 row of headroom for the top indicator when one appears.
+                // A region TALLER than the viewport (a focused Table/List
+                // bigger than the visible area) also top-aligns when reached
+                // by scrolling down: its header row is what identifies the
+                // control, so show its top rather than its tail.
                 let proposed = regionTop
                 let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
                 handler.scrollOffset =

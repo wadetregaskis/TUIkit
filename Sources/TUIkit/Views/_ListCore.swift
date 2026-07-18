@@ -937,13 +937,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // dispatcher's reverse-iteration match. This region is
         // the fallback — it fires only when nothing more
         // specific matched.
+        // The list's focusID rides on this region: it is how an enclosing
+        // ScrollView locates the focused list to scroll it into view
+        // (`snapViewportToFocusedControl` scans regions by focusID).
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0,
                 offsetY: 0,
                 width: buffer.width,
                 height: buffer.height,
-                handlerID: mouseHandlerID
+                handlerID: mouseHandlerID,
+                focusID: state.focusID
             ),
             at: 0
         )
@@ -982,7 +986,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         offsetY: topInset + position.yStart + (start - clip),
                         width: region.width,
                         height: end - start,
-                        handlerID: region.handlerID
+                        handlerID: region.handlerID,
+                        focusID: region.focusID
                     )
                 )
             }
