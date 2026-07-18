@@ -27,6 +27,13 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// instead of a full-height canvas. `nil` (tests, measure passes) keeps
     /// the stack emitting the classic full-height buffer.
     var reply: ScrollContentReply?
+
+    /// A pending programmatic scroll (``ScrollViewProxy/scrollTo(_:anchor:)``).
+    /// The stack that locates the key renders AT the request's resolved
+    /// offset — so the very frame that carries the request shows the target
+    /// — and reports the offset via ``ScrollContentReply/seekResolvedOffset``
+    /// for the ScrollView to adopt.
+    var seek: ScrollToRequest?
 }
 
 /// The Stage-6 reply channel from a windowed stack back to its ScrollView:
@@ -39,7 +46,74 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// The full content height the slice was cut from (estimated for
     /// never-measured suffixes — the §3 scrollbar trade).
     var sliceTotalHeight: Int?
+    /// The window offset the stack rendered at in answer to
+    /// ``ScrollContentWindow/seek`` — the ScrollView adopts it as its
+    /// scroll position. `nil` when there was no request or the key wasn't
+    /// found (an unknown id is a no-op, as in SwiftUI).
+    var seekResolvedOffset: Int?
 
     static func == (lhs: ScrollContentReply, rhs: ScrollContentReply) -> Bool { lhs === rhs }
     func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+}
+
+// MARK: - Scroll-To Requests
+
+/// One programmatic scroll request: the target row's stable identity key
+/// (a `ForEach` element id, stringified exactly as identity keys are) and
+/// the SwiftUI-parity anchor. Created by ``ScrollViewProxy/scrollTo(_:anchor:)``,
+/// parked on the ``ScrollViewHandler`` until the next render pass, then
+/// carried down inside ``ScrollContentWindow``.
+struct ScrollToRequest: Sendable, Hashable {
+    /// The target row's stable identity key.
+    var key: String
+
+    /// Where the target lands in the viewport: `nil` is SwiftUI's "minimal
+    /// movement to make it visible — none if it already is"; otherwise the
+    /// anchor's `y` aligns the row's unit point with the viewport's
+    /// (0 = top, 0.5 = centre, 1 = bottom).
+    var anchor: UnitPoint?
+
+    /// One row of headroom per edge when the ScrollView's "N more
+    /// above/below" indicators can replace the viewport's first/last line
+    /// (indicators active, no scrollbar) — without it, a `.top` seek lands
+    /// the target exactly under the indicator. Stamped by the ScrollView;
+    /// the reveal snap applies the same reservation.
+    var topInset = 0
+    var bottomInset = 0
+
+    /// The window offset that realises this request for a row of
+    /// `rowHeight` cells whose top sits at content-space `targetY`,
+    /// clamped to the scrollable range. Shared by every seek path so the
+    /// anchor semantics cannot drift between them.
+    func windowOffset(
+        targetY: Int, rowHeight: Int, currentOffset: Int,
+        viewportHeight: Int, totalHeight: Int
+    ) -> Int {
+        // Indicator headroom mirrors the reveal snap: a pad is charged only
+        // when that edge's indicator will actually show at the destination
+        // (offset 0 has no "more above"; the very bottom no "more below").
+        let topPad = (topInset > 0 && targetY > 0) ? 1 : 0
+        let bottomBase = targetY + rowHeight - viewportHeight
+        let bottomPad = (bottomInset > 0 && bottomBase + viewportHeight < totalHeight) ? 1 : 0
+        let raw: Int
+        if let anchor {
+            let slack = viewportHeight - topPad - bottomPad - rowHeight
+            raw = targetY - topPad - Int((Double(slack) * anchor.y).rounded())
+        } else {
+            // Minimal movement: visible means within the CURRENT frame's
+            // indicator-clipped band, exactly as the reveal fire condition
+            // defines it.
+            let topShown = (topInset > 0 && currentOffset > 0) ? 1 : 0
+            let bottomShown =
+                (bottomInset > 0 && currentOffset + viewportHeight < totalHeight) ? 1 : 0
+            if targetY < currentOffset + topShown {
+                raw = targetY - topPad
+            } else if targetY + rowHeight > currentOffset + viewportHeight - bottomShown {
+                raw = bottomBase + bottomPad
+            } else {
+                raw = currentOffset
+            }
+        }
+        return max(0, min(raw, max(0, totalHeight - viewportHeight)))
+    }
 }

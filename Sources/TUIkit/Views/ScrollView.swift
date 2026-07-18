@@ -224,7 +224,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     ) -> Bool {
         let followsBottom = !context.isMeasuring
             && (context.environment.defaultScrollAnchor?.y ?? 0) >= 0.75
-        guard followsBottom, handler.scrollOffset >= handler.maxOffset else { return false }
+        // A pending scrollTo supersedes the glue this frame: the explicit
+        // programmatic scroll is exactly the "scrolling away releases the
+        // follow" interaction, expressed in code.
+        guard followsBottom, handler.pendingScrollTo == nil,
+            handler.scrollOffset >= handler.maxOffset
+        else { return false }
         let estimated = ChildView(content).measure(
             proposal: ProposedSize(width: contentWidth, height: Int.max / 4),
             context: context.withChildIdentity(type: Content.self))
@@ -270,6 +275,21 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         return handler
     }
 
+    /// The parked scrollTo request to carry down this frame — render passes
+    /// only (a measure pass must neither resolve nor clear it). When the
+    /// edge indicators are active they replace the viewport's first/last
+    /// line, so the request is stamped with one row of headroom per edge.
+    private func consumedSeek(
+        handler: ScrollViewHandler, wantsScrollbar: Bool, context: RenderContext
+    ) -> ScrollToRequest? {
+        guard !context.isMeasuring, var seek = handler.pendingScrollTo else { return nil }
+        if showsIndicators, !wantsScrollbar {
+            seek.topInset = 1
+            seek.bottomInset = 1
+        }
+        return seek
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let viewportWidth = context.availableWidth
         let viewportHeight = max(0, context.availableHeight)
@@ -282,6 +302,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             propertyIndex: StateIndex.focusID
         )
         let handler = resolvedHandler(persistedFocusID: persistedFocusID, context: context)
+
+        // Rendezvous with an enclosing ScrollViewReader, refreshed every
+        // render pass so the proxy always reaches the LIVE handler set.
+        if !context.isMeasuring {
+            context.environment.scrollToRegistry?.register(
+                handler: handler, identity: context.identity, renderCache: context.renderCache)
+        }
 
         // Scrollbar reservation. Each bar steals one cell across the viewport — the
         // vertical bar a trailing column, the horizontal bar a bottom row. The
@@ -310,19 +337,29 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             handler: handler, contentWidth: contentWidth,
             contentViewportHeight: contentViewportHeight, context: context)
 
-        var (fullBuffer, contentSlice) = renderedContent(
+        let pendingSeek = consumedSeek(
+            handler: handler, wantsScrollbar: wantsScrollbar, context: context)
+        var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            context: context)
+            seek: pendingSeek, context: context)
+        if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
         // all — the §3 scrollbar trade), and every content-space consumer
         // below rebases by the slice origin.
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
-        // Re-glue against the REAL rendered height (the pre-render number was
-        // an estimate); the band's margin absorbs small differences and the
-        // next frame lands exactly.
-        if wasGluedToBottom { handler.scrollOffset = handler.maxOffset }
+        if let seekOffset {
+            // The content rendered AT the request's offset; adopt it. (The
+            // bottom re-glue below must not fight it — scrolling away IS
+            // the release, expressed programmatically.)
+            handler.scrollOffset = seekOffset
+        } else if wasGluedToBottom {
+            // Re-glue against the REAL rendered height (the pre-render
+            // number was an estimate); the band's margin absorbs small
+            // differences and the next frame lands exactly.
+            handler.scrollOffset = handler.maxOffset
+        }
         syncHorizontalAxis(
             handler: handler, wantsHorizontal: wantsHorizontal,
             bufferWidth: fullBuffer.width, contentWidth: contentWidth, context: context)
@@ -349,6 +386,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             viewportHeight: contentViewportHeight,
             regionOriginY: contentSlice?.originY ?? 0,
             indicatorsActive: !wantsScrollbar,
+            suppressed: seekOffset != nil,
             context: context)
         coverSnappedViewport(
             handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
@@ -582,8 +620,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// height.
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
-        verticalScrollOffset: Int, context: RenderContext
-    ) -> (buffer: FrameBuffer, slice: (originY: Int, totalHeight: Int)?) {
+        verticalScrollOffset: Int, seek: ScrollToRequest? = nil, context: RenderContext
+    ) -> (buffer: FrameBuffer, slice: (originY: Int, totalHeight: Int)?, seekOffset: Int?) {
         let extents = contentExtents(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
             horizontal: horizontal, context: context)
@@ -593,27 +631,30 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Publish the visible vertical slice so a direct `LazyVStack` renders only
         // the rows intersecting the viewport (true windowing) rather than every
         // row into the tall canvas. Vertical-only: horizontal scrolling has no
-        // row concept. The offset is this frame's already-clamped value; the
-        // final clip (`windowedBuffer`) uses the same value, so they agree for
-        // stable content. `contentIdentity` restricts consumption to the direct
-        // content (a lazy stack under a header is NOT at the scroll origin);
-        // the `reply` slot lets the stack return a compact band + metadata
-        // (Stage 6) instead of a full-height canvas of mostly blank lines.
+        // row concept (which is also why a `seek` request rides this window and
+        // is unsupported on horizontal-capable scroll views). The offset is this
+        // frame's already-clamped value; the final clip (`windowedBuffer`) uses
+        // the same value, so they agree for stable content. `contentIdentity`
+        // restricts consumption to the direct content (a lazy stack under a
+        // header is NOT at the scroll origin); the `reply` slot lets the stack
+        // return a compact band + metadata (Stage 6) instead of a full-height
+        // canvas of mostly blank lines.
         var reply: ScrollContentReply?
         if !horizontal {
             let contentReply = ScrollContentReply()
             reply = contentReply
             measureContext.environment.scrollContentWindow = ScrollContentWindow(
                 offset: verticalScrollOffset, viewportHeight: viewportHeight,
-                contentIdentity: measureContext.identity, reply: contentReply)
+                contentIdentity: measureContext.identity, reply: contentReply,
+                seek: seek)
         }
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
-            return (buffer, (origin, total))
+            return (buffer, (origin, total), reply.seekResolvedOffset)
         }
-        return (buffer, nil)
+        return (buffer, nil, reply?.seekResolvedOffset)
     }
 
     /// Registers a mouse handler over the scrollbar's single column so the arrows

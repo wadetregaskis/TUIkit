@@ -202,6 +202,35 @@ extension _VStackCore {
             proposal: ProposedSize(width: width, height: nil), context: childContext)
 
         frame.rebindAnchor()
+
+        // A pending scrollTo: pin the anchor to the TARGET (§5e — seek by
+        // anchor, not by absolute offset). The estimated y positions only
+        // the scrollbar and the clamp; the target row itself lands exactly
+        // where the anchor walk below puts it, estimates notwithstanding.
+        // `advanceAnchor` then walks the (≤ viewport-sized) delta between
+        // the target's top and the anchor-adjusted offset in row space, so
+        // centre/bottom alignment measures real rows, not estimates.
+        var window = window
+        var resolvedSeek: Int?
+        if let seek = window.seek {
+            window.seek = nil
+            if let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state) {
+                let estimate = state.estimatedPitch(spacing: spacing)
+                let estimatedY = ordinal * estimate
+                let rowHeight = frame.pitch(of: ordinal) - (ordinal > 0 ? spacing : 0)
+                let newOffset = seek.windowOffset(
+                    targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
+                    viewportHeight: window.viewportHeight,
+                    totalHeight: children.count * estimate - spacing)
+                state.anchorOrdinal = ordinal
+                state.anchorKey = children.key(at: ordinal)
+                state.anchorOffsetWithin = 0
+                state.lastDerivedOffset = estimatedY
+                window.offset = newOffset
+                resolvedSeek = newOffset
+            }
+        }
+
         frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
         state.anchorKey = children.key(at: state.anchorOrdinal)
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)
@@ -239,9 +268,15 @@ extension _VStackCore {
         }
         guard !frame.sawSpacer else { return nil }
 
-        return assembleAnchoredBuffer(
+        let buffer = assembleAnchoredBuffer(
             placed: placed, grafts: grafts, lastPlaced: lastPlaced, bottomY: bottomY,
             frame: frame, window: window, width: width, context: childContext)
+        // Answer the seek only on success: a nil (spacer bail) falls to the
+        // exact path, which re-resolves against its own geometry.
+        if buffer != nil, let resolvedSeek {
+            window.reply?.seekResolvedOffset = resolvedSeek
+        }
+        return buffer
     }
 
     /// Assembles the full-height buffer: rendered rows at their y, exact
@@ -308,8 +343,9 @@ extension _VStackCore {
         return result
     }
 
-    /// Memo hit, else one key scan (never builds a row view).
-    private func resolveOrdinal(
+    /// Memo hit, else one key scan (never builds a row view). Shared by the
+    /// anchored and uniform paths (focus targets and scrollTo seeks alike).
+    func resolveOrdinal(
         forKey key: String, children: ChildViewCollection, state: StackWindowState
     ) -> Int? {
         if let memoised = state.rowOrdinalMemo[key],

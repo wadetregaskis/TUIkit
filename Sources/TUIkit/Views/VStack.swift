@@ -451,8 +451,6 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var childContext = context
         childContext.environment.scrollContentWindow = nil
 
-        let top = window.offset
-        let bottom = window.offset + window.viewportHeight
         let width = context.availableWidth
 
         // The same slot walk LayoutPlacing answers from (one traversal, many
@@ -460,6 +458,26 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // query agree on every row's y by construction. Width-aware, so a
         // wrapping row's slot is its wrapped height.
         let slots = naturalRowSlots(width: width, context: childContext)
+
+        // A pending scrollTo: exact on this path — the slots carry every
+        // row's true y. Re-aim the window before choosing the render set,
+        // and report the offset so the ScrollView adopts it this frame.
+        var window = window
+        if let seek = window.seek {
+            window.seek = nil
+            if let index = slots.firstIndex(where: { $0.child.identityChildKey == seek.key }) {
+                let total = slots.last.map { $0.y + $0.height } ?? 0
+                let newOffset = seek.windowOffset(
+                    targetY: slots[index].y, rowHeight: slots[index].height,
+                    currentOffset: window.offset, viewportHeight: window.viewportHeight,
+                    totalHeight: total)
+                window.offset = newOffset
+                window.reply?.seekResolvedOffset = newOffset
+            }
+        }
+
+        let top = window.offset
+        let bottom = window.offset + window.viewportHeight
 
         // The enumerate visitor's row set (§5d/§6a): the rows meeting the
         // viewport, plus one margin row past each edge (so a directional

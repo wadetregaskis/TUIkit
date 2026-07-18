@@ -175,6 +175,10 @@ extension _VStackCore {
         let count = children.count
         let totalHeight = count * pitch - spacing
 
+        let (window, resolvedSeek) = resolvingUniformSeek(
+            in: window, children: children, state: state,
+            pitch: pitch, extent: extent, totalHeight: totalHeight)
+
         let candidates = candidateOrdinals(
             children: children, window: window, pitch: pitch, state: state, context: context)
         // Classic mode (no reply channel) keeps every row inline in the
@@ -192,18 +196,14 @@ extension _VStackCore {
         // Build + verify each candidate. A disagreeing height falsifies the
         // hypothesis for good; the caller re-walks exactly, this same frame.
         let proposal = ProposedSize(width: width, height: nil)
-        func verified(_ ordinals: [Int]) -> [(ordinal: Int, child: ChildView)]? {
-            var result: [(ordinal: Int, child: ChildView)] = []
-            result.reserveCapacity(ordinals.count)
-            for ordinal in ordinals {
-                let child = children[ordinal]
-                let measured = child.measure(proposal: proposal, context: childContext)
-                guard measured.height == extent, !child.isSpacer else { return nil }
-                result.append((ordinal, child))
-            }
-            return result
-        }
-        guard let rows = verified(inline), let graftRows = verified(grafted) else {
+        guard
+            let rows = verifiedUniformRows(
+                inline, children: children, extent: extent,
+                proposal: proposal, context: childContext),
+            let graftRows = verifiedUniformRows(
+                grafted, children: children, extent: extent,
+                proposal: proposal, context: childContext)
+        else {
             state.broken = true
             return nil
         }
@@ -222,16 +222,9 @@ extension _VStackCore {
             if rowY > cursor {
                 result.appendVertically(FrameBuffer(emptyWithHeight: rowY - cursor), spacing: 0)
             }
-            var rendered = child.render(
-                width: width, height: window.viewportHeight, context: childContext)
-            rendered = alignBuffer(rendered, toWidth: width, alignment: alignment)
-            var slot = FrameBuffer()
-            slot.appendVertically(rendered, spacing: 0)
-            if slot.height < extent {
-                slot.appendVertically(FrameBuffer(emptyWithHeight: extent - slot.height), spacing: 0)
-            } else if slot.height > extent {
-                slot = slot.clamped(toWidth: max(width, slot.width), height: extent)
-            }
+            let slot = uniformRowSlot(
+                child, extent: extent, width: width,
+                viewportHeight: window.viewportHeight, context: childContext)
             result.appendVertically(slot, spacing: 0)
             cursor = rowY + extent
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
@@ -249,7 +242,69 @@ extension _VStackCore {
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
         }
         state.rowOrdinalMemo = memo
+        if let resolvedSeek {
+            window.reply?.seekResolvedOffset = resolvedSeek
+        }
         return result
+    }
+
+    /// Renders one uniform row into a slot of exactly `extent` lines
+    /// (padded or clamped), aligned to the stack's width.
+    private func uniformRowSlot(
+        _ child: ChildView, extent: Int, width: Int, viewportHeight: Int, context: RenderContext
+    ) -> FrameBuffer {
+        let rendered = alignBuffer(
+            child.render(width: width, height: viewportHeight, context: context),
+            toWidth: width, alignment: alignment)
+        var slot = FrameBuffer()
+        slot.appendVertically(rendered, spacing: 0)
+        if slot.height < extent {
+            slot.appendVertically(FrameBuffer(emptyWithHeight: extent - slot.height), spacing: 0)
+        } else if slot.height > extent {
+            slot = slot.clamped(toWidth: max(width, slot.width), height: extent)
+        }
+        return slot
+    }
+
+    /// Builds each ordinal's child, verifying the uniform hypothesis as it
+    /// goes: a row measuring anything but `extent` — or a spacer — returns
+    /// `nil` (falsified).
+    private func verifiedUniformRows(
+        _ ordinals: [Int], children: ChildViewCollection, extent: Int,
+        proposal: ProposedSize, context: RenderContext
+    ) -> [(ordinal: Int, child: ChildView)]? {
+        var result: [(ordinal: Int, child: ChildView)] = []
+        result.reserveCapacity(ordinals.count)
+        for ordinal in ordinals {
+            let child = children[ordinal]
+            let measured = child.measure(proposal: proposal, context: context)
+            guard measured.height == extent, !child.isSpacer else { return nil }
+            result.append((ordinal, child))
+        }
+        return result
+    }
+
+    /// Resolves a pending scrollTo against uniform geometry — EXACT, the
+    /// target's y is arithmetic. Returns the window re-aimed at the
+    /// request's offset (so the band renders there and the same frame shows
+    /// the target) plus the offset to report, or the window unchanged when
+    /// there is no request or the key is absent. The reply is written only
+    /// when the caller completes: a falsified hypothesis falls through, and
+    /// the next path re-resolves for itself.
+    private func resolvingUniformSeek(
+        in window: ScrollContentWindow, children: ChildViewCollection,
+        state: StackWindowState, pitch: Int, extent: Int, totalHeight: Int
+    ) -> (window: ScrollContentWindow, resolved: Int?) {
+        var window = window
+        guard let seek = window.seek else { return (window, nil) }
+        window.seek = nil
+        guard let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state)
+        else { return (window, nil) }
+        let newOffset = seek.windowOffset(
+            targetY: ordinal * pitch, rowHeight: extent, currentOffset: window.offset,
+            viewportHeight: window.viewportHeight, totalHeight: totalHeight)
+        window.offset = newOffset
+        return (window, newOffset)
     }
 
     /// The ordinals this frame renders: the contiguous window BAND (rows
@@ -312,12 +367,7 @@ extension _VStackCore {
         guard let focusID else { return nil }
         guard let key = Self.rowKey(inFocusID: focusID, belowStackPath: context.identity.path)
         else { return nil }
-        if let memoised = state.rowOrdinalMemo[key],
-            memoised < children.count, children.key(at: memoised) == key
-        {
-            return memoised
-        }
-        return children.firstOrdinal(forKey: key)
+        return resolveOrdinal(forKey: key, children: children, state: state)
     }
 }
 

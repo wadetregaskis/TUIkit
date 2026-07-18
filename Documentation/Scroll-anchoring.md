@@ -68,7 +68,7 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 | User adjustability toggle | Not implemented. (`ScrollView.disabled` suppresses keyboard focus but the wheel still scrolls, and chrome doesn't grey out — not the spec's shape.) |
 | Selection → Row shadow-switch | Not implemented (needs the selection↔anchor wiring). |
 | Sticky edges | Not implemented. End/Home exist as jumps; the *push-past* detection (deliberate vs grazing) lives naturally in `ScrollViewHandler`'s event paths, which see each wheel tick / keypress and can distinguish "clamped this event" from "landed exactly". Additive; no conflict. |
-| Code-side restore | Not implemented; recommendation in §3.2. |
+| Code-side restore | The **vehicle shipped**: `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` (SwiftUI parity, all three seek paths, same-frame). The TUI restore extensions themselves (`restoreDefaultAnchor()` etc., §3.2) await this feature. |
 | Over/underscroll | Not implemented. Clamping is centralised (`clampScrollOffset` / `maxOffset`), so the allowance is an additive parameter, not a rework. Note the negative-size crash class: over/underscroll maths must clamp at source and sink like all chrome subtraction. |
 
 **Substrate compatibility:** the locating work *enables* rather than

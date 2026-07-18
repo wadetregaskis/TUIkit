@@ -35,12 +35,20 @@ extension _ScrollViewCore {
     /// control below the fold (a Slider after some Buttons, say) would never
     /// scroll into view. Gating keeps the signal intact for the one render
     /// that can act on it.
+    /// `suppressed` skips the snap itself while still updating the change-
+    /// detection baselines: on a `scrollTo` frame the programmatic scroll
+    /// must win over the reveal heuristic (the triggering Button both holds
+    /// focus and just consumed a key — the classic snap conditions — and an
+    /// un-suppressed snap would yank the viewport straight back to it), but
+    /// the baselines must advance or the NEXT frame would fire the deferred
+    /// snap and undo the scroll anyway.
     func snapViewportToFocusedControl(
         handler: ScrollViewHandler,
         fullBuffer: FrameBuffer,
         viewportHeight: Int,
         regionOriginY: Int = 0,
         indicatorsActive: Bool = true,
+        suppressed: Bool = false,
         context: RenderContext
     ) {
         let stateStorage = context.environment.stateStorage!
@@ -69,7 +77,7 @@ extension _ScrollViewCore {
         let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
         let shouldSnap = focusJustChanged || interactionJustFired
 
-        if shouldSnap,
+        if shouldSnap, !suppressed,
            let focusedID = currentFocusedID,
            let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
         {
@@ -152,10 +160,11 @@ extension _ScrollViewCore {
         let bandEnd = slice.originY + fullBuffer.height
         let visibleEnd = min(handler.scrollOffset + viewportHeight, handler.contentHeight)
         guard handler.scrollOffset < slice.originY || visibleEnd > bandEnd else { return }
-        (fullBuffer, contentSlice) = renderedContent(
+        let recovered = renderedContent(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
             horizontal: horizontal, verticalScrollOffset: handler.scrollOffset,
             context: context)
+        (fullBuffer, contentSlice) = (recovered.buffer, recovered.slice)
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         handler.clampScrollOffset()
     }

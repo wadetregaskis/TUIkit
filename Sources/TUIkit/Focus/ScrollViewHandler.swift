@@ -68,6 +68,14 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// repeat state) so the same scrollbar machinery serves both axes.
     public let horizontal = ScrollAxis()
 
+    /// A parked ``ScrollViewProxy/scrollTo(_:anchor:)`` request, set at event
+    /// time (or from an async context) and consumed — one-shot — by the next
+    /// render pass, which carries it to the content via the scroll-window
+    /// handshake and adopts the offset the content answers with. Cleared
+    /// whether or not the key was found: an unknown id is a no-op, as in
+    /// SwiftUI, not a standing intent.
+    var pendingScrollTo: ScrollToRequest?
+
     /// The total natural height of the scroll view's content,
     /// computed during the layout pass.
     ///
