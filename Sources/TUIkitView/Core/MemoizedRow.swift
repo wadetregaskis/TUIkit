@@ -172,12 +172,13 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         guard let cache = context.renderCache else {
             return measureChild(content, proposal: proposal, context: context)
         }
-        // A measured row is in the tree just as a rendered one is: without
-        // this, a row that a frame only MEASURES (a windowed stack's pitch
-        // sample of off-window rows, above all) had its size entries GC'd by
-        // `removeInactive` at the end of every pass — so those rows missed
-        // the memo every frame, forever, despite identical keys and values.
-        cache.markActive(context.identity)
+        // Deliberately NO markActive here: marking EVERY measured identity
+        // is O(total rows) per frame on a giant eager tree (fanout at scale
+        // 100 measures ~200k memoized rows — the Set inserts and identity
+        // hashing alone regressed it 13%). A measure-only row whose entries
+        // must survive the pass is the WINDOWED band's concern, and the
+        // band paths mark the specific rows they measure (pitch and the
+        // width samples) — bounded by the window, not the tree.
         let key = RenderCache.SizeKey(
             identity: context.identity,
             proposalWidth: proposal.width, proposalHeight: proposal.height,

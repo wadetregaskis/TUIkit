@@ -408,7 +408,11 @@ extension _VStackCore {
         var widthFlexible = false
         var heightFlexible = false
         for ordinal in 0..<min(fitCount, 64) {
-            let size = children[ordinal].measure(proposal: sampleProposal, context: measureContext)
+            let child = children[ordinal]
+            let size = child.measure(proposal: sampleProposal, context: measureContext)
+            // Sample rows are measured but never rendered — keep their memo
+            // entries alive across the pass GC (see AnchoredWindowFrame.pitch).
+            measureContext.renderCache?.markActive(child.identity(under: measureContext))
             guard size.height == extent else { return nil }  // falsified: exact walk
             maxWidth = max(maxWidth, min(size.width, widthLimit))
             if size.isWidthFlexible { widthFlexible = true }

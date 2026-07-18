@@ -55,6 +55,13 @@ private final class AnchoredWindowFrame {
         let child = children[ordinal]
         if child.isSpacer { sawSpacer = true }
         let measured = child.measure(proposal: proposal, context: context)
+        // Keep a measure-only row's memo entries alive across the pass GC:
+        // an off-window row touched only by this pitch walk never renders,
+        // so nothing else marks it — and unmarked entries are pruned at the
+        // end of every pass, forcing a full re-measure every frame. Bounded
+        // by the rows this frame touches, unlike marking inside the memo
+        // itself (which is O(tree) on eager stacks).
+        context.renderCache?.markActive(child.identity(under: context))
         let value = max(1, measured.height) + (ordinal > 0 ? spacing : 0)
         pitchCache[ordinal] = value
         built[ordinal] = child
@@ -390,6 +397,9 @@ extension _VStackCore {
             let child = children[ordinal]
             guard !child.isSpacer else { return nil }
             let size = child.measure(proposal: sampleProposal, context: measureContext)
+            // Sample rows are measured but never rendered — keep their memo
+            // entries alive (see `AnchoredWindowFrame.pitch`).
+            measureContext.renderCache?.markActive(child.identity(under: measureContext))
             sampleTotal += max(1, size.height) + (ordinal > 0 ? spacing : 0)
             maxWidth = max(maxWidth, min(size.width, widthLimit))
             if size.isWidthFlexible { widthFlexible = true }

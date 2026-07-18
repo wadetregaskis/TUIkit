@@ -167,11 +167,9 @@ extension EquatableView: Layoutable {
         guard let cache = context.renderCache else {
             return measureChild(content, proposal: proposal, context: context)
         }
-        // A measured view is in the tree just as a rendered one is — same
-        // GC contract as `_MemoizedRow.sizeThatFits`: without this, a view
-        // that a frame only measures had its size entries pruned by
-        // `removeInactive` every pass and missed the memo every frame.
-        cache.markActive(context.identity)
+        // Deliberately NO markActive here — see `_MemoizedRow.sizeThatFits`:
+        // marking every measured identity is O(tree) per frame on eager
+        // trees. Measure-only persistence is the windowed band's concern.
         let key = RenderCache.SizeKey(
             identity: context.identity,
             proposalWidth: proposal.width,
