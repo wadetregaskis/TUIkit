@@ -143,6 +143,98 @@ struct SlicedWindowTests {
             "revealed the five-millionth row: \(revealed)")
     }
 
+    /// One live-loop-shaped frame against a bare windowed stack (no
+    /// ScrollView), returning the raw band buffer and its reply — for
+    /// asserting on the band's SIZE, which the ScrollView's clip hides.
+    private func renderBandFrame<V: View>(
+        _ view: V, tuiContext: TUIContext, focusManager: FocusManager,
+        offset: Int, viewportHeight: Int = 5
+    ) -> (buffer: FrameBuffer, reply: ScrollContentReply) {
+        let reply = ScrollContentReply()
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tuiContext)
+        environment.scrollContentWindow = ScrollContentWindow(
+            offset: offset, viewportHeight: viewportHeight, contentIdentity: nil, reply: reply)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 50,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        focusManager.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        focusManager.endRenderPass()
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return (buffer, reply)
+    }
+
+    @Test("A focused row a million rows from the window keeps the band compact (uniform)")
+    func farFocusedRowCompactBandUniform() {
+        // The focused row must render every frame (registration keeps focus
+        // alive), but it must NOT drag the band with it: materialising the
+        // focus→window gap as blank lines costs O(distance) time and memory
+        // per frame, forever, while the user stays scrolled away.
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<1_000_000, id: \.self) { i in Button("row \(i)") {} }
+        }
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        _ = renderBandFrame(view, tuiContext: tuiContext, focusManager: focusManager, offset: 0)
+        let id0 = focusManager.registeredFocusIDsInActiveSection().first ?? ""
+        focusManager.focus(id: id0)
+        _ = renderBandFrame(view, tuiContext: tuiContext, focusManager: focusManager, offset: 0)
+
+        let far = renderBandFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, offset: 999_990)
+        #expect(far.buffer.height < 40, "band, not gap: \(far.buffer.height) lines")
+        #expect(
+            far.reply.sliceOriginY == 999_989,
+            "the band anchors on the WINDOW, not the focused row: \(String(describing: far.reply.sliceOriginY))")
+        #expect(
+            far.buffer.lines.contains { $0.contains("row 999990") },
+            "the window rows themselves render")
+        #expect(focusManager.currentFocusedID == id0, "the far focused row still registers")
+
+        // The focused row's region rides along at its true content-space y
+        // (band-local, so negative here), so reveal-on-focus still sees it.
+        let region = far.buffer.hitTestRegions.first { $0.focusID == id0 }
+        #expect(region != nil, "the focused row's hit region is grafted into the band")
+        if let region, let origin = far.reply.sliceOriginY {
+            #expect(region.offsetY + origin == 0, "region sits at row 0 in content space")
+        }
+    }
+
+    @Test("A focused row far from the window keeps the band compact (anchored)")
+    func farFocusedRowCompactBandAnchored() {
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<100_000, id: \.self) { i in
+                Button("row \(i)") {}.frame(height: i % 3 + 1)
+            }
+        }
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        _ = renderBandFrame(view, tuiContext: tuiContext, focusManager: focusManager, offset: 0)
+        let id0 = focusManager.registeredFocusIDsInActiveSection().first ?? ""
+        focusManager.focus(id: id0)
+        _ = renderBandFrame(view, tuiContext: tuiContext, focusManager: focusManager, offset: 0)
+
+        let far = renderBandFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, offset: 150_000)
+        #expect(far.buffer.height < 60, "band, not gap: \(far.buffer.height) lines")
+        #expect(
+            (far.reply.sliceOriginY ?? 0) > 100_000,
+            "the band anchors near the WINDOW, not the focused row: \(String(describing: far.reply.sliceOriginY))")
+        #expect(focusManager.currentFocusedID == id0, "the far focused row still registers")
+        #expect(
+            far.buffer.hitTestRegions.contains { $0.focusID == id0 },
+            "the focused row's hit region is grafted into the band")
+    }
+
     @Test("A lazy stack below a header must NOT consume the window (identity gate)")
     func nonDirectContentIsGated() {
         // Pre-gate, the leaked window blanked rows against scroll-origin

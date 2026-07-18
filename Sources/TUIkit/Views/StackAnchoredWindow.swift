@@ -208,7 +208,12 @@ extension _VStackCore {
 
         // Focus / pending targets, wherever they are (§5d): estimated
         // positions relative to the anchor — the reveal snap converges on
-        // them, and "already visible → do nothing" ends the chase.
+        // them, and "already visible → do nothing" ends the chase. In band
+        // mode (a reply channel) a far target must not stretch the band —
+        // the gap would materialise as O(distance) blank lines — so it is
+        // grafted out-of-band instead; classic mode keeps it inline in the
+        // full-height canvas.
+        var grafts: [(ordinal: Int, y: Int)] = []
         if let focusManager = context.environment.focusManager {
             let anchorY = window.offset - state.anchorOffsetWithin
             let estimate = state.estimatedPitch(spacing: spacing)
@@ -225,13 +230,17 @@ extension _VStackCore {
                 // happened. At y 0 the region still tells the snap "scroll
                 // up", which is all convergence needs.
                 let estimatedY = anchorY + (ordinal - state.anchorOrdinal) * estimate
-                placed.append((ordinal, max(0, estimatedY)))
+                if window.reply == nil {
+                    placed.append((ordinal, max(0, estimatedY)))
+                } else {
+                    grafts.append((ordinal, max(0, estimatedY)))
+                }
             }
         }
         guard !frame.sawSpacer else { return nil }
 
         return assembleAnchoredBuffer(
-            placed: placed, lastPlaced: lastPlaced, bottomY: bottomY,
+            placed: placed, grafts: grafts, lastPlaced: lastPlaced, bottomY: bottomY,
             frame: frame, window: window, width: width, context: childContext)
     }
 
@@ -242,7 +251,8 @@ extension _VStackCore {
     /// — their exact place is unknowable without the prefix sum nobody
     /// computes (§3).
     private func assembleAnchoredBuffer(
-        placed: [(ordinal: Int, y: Int)], lastPlaced: Int, bottomY: Int,
+        placed: [(ordinal: Int, y: Int)], grafts: [(ordinal: Int, y: Int)],
+        lastPlaced: Int, bottomY: Int,
         frame: AnchoredWindowFrame, window: ScrollContentWindow, width: Int,
         context: RenderContext
     ) -> FrameBuffer? {
@@ -278,6 +288,12 @@ extension _VStackCore {
             if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
         }
         guard !frame.sawSpacer else { return nil }
+        for (ordinal, y) in grafts {
+            graftOffBandRow(
+                frame.child(at: ordinal), into: &result, bandLocalY: y - sliceOrigin,
+                width: width, viewportHeight: window.viewportHeight, context: context)
+            if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
+        }
         state.rowOrdinalMemo = memo
 
         let remaining = frame.children.count - 1 - lastPlaced

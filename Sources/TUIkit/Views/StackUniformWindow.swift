@@ -177,20 +177,35 @@ extension _VStackCore {
 
         let candidates = candidateOrdinals(
             children: children, window: window, pitch: pitch, state: state, context: context)
+        // Classic mode (no reply channel) keeps every row inline in the
+        // full-height canvas, exactly at its y. Band mode must NOT stretch
+        // the band to reach a far focus target: the gap would materialise as
+        // O(distance) blank lines every frame — and the universal render
+        // clamp then truncates the lines while keeping the regions, leaving
+        // a corrupt band whose clip shows nothing. Off-band targets render
+        // out-of-band instead (`graftOffBandRow`).
+        let inline = window.reply == nil
+            ? Set(candidates.band).union(candidates.offBand).sorted()
+            : candidates.band
+        let grafted = window.reply == nil ? [] : candidates.offBand
 
         // Build + verify each candidate. A disagreeing height falsifies the
         // hypothesis for good; the caller re-walks exactly, this same frame.
         let proposal = ProposedSize(width: width, height: nil)
-        var rows: [(ordinal: Int, child: ChildView)] = []
-        rows.reserveCapacity(candidates.count)
-        for ordinal in candidates.sorted() {
-            let child = children[ordinal]
-            let measured = child.measure(proposal: proposal, context: childContext)
-            guard measured.height == extent, !child.isSpacer else {
-                state.broken = true
-                return nil
+        func verified(_ ordinals: [Int]) -> [(ordinal: Int, child: ChildView)]? {
+            var result: [(ordinal: Int, child: ChildView)] = []
+            result.reserveCapacity(ordinals.count)
+            for ordinal in ordinals {
+                let child = children[ordinal]
+                let measured = child.measure(proposal: proposal, context: childContext)
+                guard measured.height == extent, !child.isSpacer else { return nil }
+                result.append((ordinal, child))
             }
-            rows.append((ordinal, child))
+            return result
+        }
+        guard let rows = verified(inline), let graftRows = verified(grafted) else {
+            state.broken = true
+            return nil
         }
 
         // Assemble: exact blank blocks between the rendered rows. With a
@@ -227,38 +242,65 @@ extension _VStackCore {
         } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
+        for (ordinal, child) in graftRows {
+            graftOffBandRow(
+                child, into: &result, bandLocalY: ordinal * pitch - sliceOrigin,
+                width: width, viewportHeight: window.viewportHeight, context: childContext)
+            if let key = children.key(at: ordinal) { memo[key] = ordinal }
+        }
         state.rowOrdinalMemo = memo
         return result
     }
 
-    /// The ordinals this frame renders: rows meeting the window, one margin
-    /// row past each edge, and the focused row / pending focus target with
-    /// their neighbours (§5d — they must render to keep registering).
+    /// The ordinals this frame renders: the contiguous window BAND (rows
+    /// meeting the window plus one margin row past each edge), and the
+    /// OFF-BAND focused row / pending focus target with their neighbours
+    /// (§5d — they must render to keep registering, wherever they are).
     private func candidateOrdinals(
         children: ChildViewCollection, window: ScrollContentWindow, pitch: Int,
         state: StackWindowState, context: RenderContext
-    ) -> Set<Int> {
+    ) -> (band: [Int], offBand: [Int]) {
         let count = children.count
-        var candidates: Set<Int> = []
+        var band: [Int] = []
         let firstVisible = max(0, window.offset / pitch)
         let lastVisible = min(
             count - 1, max(firstVisible, (window.offset + window.viewportHeight - 1) / pitch))
         if firstVisible < count {
-            for ordinal in max(0, firstVisible - 1)...min(count - 1, lastVisible + 1) {
-                candidates.insert(ordinal)
-            }
+            band = Array(max(0, firstVisible - 1)...min(count - 1, lastVisible + 1))
         }
+        var targets: Set<Int> = []
         if let focusManager = context.environment.focusManager {
             for target in [focusManager.currentFocusedID, focusManager.pendingFocusID] {
                 guard let ordinal = targetOrdinal(
                     for: target, children: children, state: state, context: context)
                 else { continue }
                 for neighbour in max(0, ordinal - 1)...min(count - 1, ordinal + 1) {
-                    candidates.insert(neighbour)
+                    targets.insert(neighbour)
                 }
             }
         }
-        return candidates
+        return (band, targets.subtracting(band).sorted())
+    }
+
+    /// Renders an off-band focus/pending target row for its side effects —
+    /// focus registration above all — and grafts its hit-test regions and
+    /// overlays into the band buffer at the row's band-local y, WITHOUT
+    /// adding any lines. Materialising the band→row gap as blank lines
+    /// would cost O(distance) time and memory every frame the control stays
+    /// focused off-window (and the universal render clamp then truncates
+    /// the lines while keeping the regions, corrupting the band). Regions
+    /// are pure rects, so they sit happily outside the band's line range —
+    /// negative or far beyond — where the ScrollView's reveal math reads
+    /// them and its viewport clip then drops the invisible ones.
+    func graftOffBandRow(
+        _ child: ChildView, into result: inout FrameBuffer, bandLocalY: Int,
+        width: Int, viewportHeight: Int, context: RenderContext
+    ) {
+        let rendered = child.render(width: width, height: viewportHeight, context: context)
+        let aligned = alignBuffer(rendered, toWidth: width, alignment: alignment)
+        result.hitTestRegions.append(
+            contentsOf: aligned.shiftedHitTestRegions(byX: 0, y: bandLocalY))
+        result.overlays.append(contentsOf: aligned.shiftedOverlays(byX: 0, y: bandLocalY))
     }
 
     /// The ordinal of the row a focus ID addresses: memo hit, else one key

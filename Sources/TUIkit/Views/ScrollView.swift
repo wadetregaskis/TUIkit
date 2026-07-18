@@ -246,23 +246,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
     }
 
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let viewportWidth = context.availableWidth
-        let viewportHeight = max(0, context.availableHeight)
-        let stateStorage = context.environment.stateStorage!
-
-        // Resolve the persistent focus ID and the handler.
-        let persistedFocusID = FocusRegistration.persistFocusID(
-            context: context,
-            explicitFocusID: explicitFocusID,
-            defaultPrefix: "scrollview",
-            propertyIndex: StateIndex.focusID
-        )
+    /// Hydrates the persistent ``ScrollViewHandler`` for this scroll view and
+    /// re-syncs every render-captured field (Shift acceleration, wheel-chaining
+    /// delays — captured at render so event-time code can read them when the
+    /// environment is no longer reachable).
+    private func resolvedHandler(persistedFocusID: String, context: RenderContext) -> ScrollViewHandler {
         let handlerKey = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: StateIndex.handler
         )
-        let handlerBox: StateBox<ScrollViewHandler> = stateStorage.storage(
+        let handlerBox: StateBox<ScrollViewHandler> = context.environment.stateStorage!.storage(
             for: handlerKey,
             default: ScrollViewHandler(
                 focusID: persistedFocusID,
@@ -271,11 +264,24 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         )
         let handler = handlerBox.value
         handler.canBeFocused = !isDisabled
-        // Captured at render so Shift+arrow can accelerate at event time, when the
-        // environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
         handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
+        return handler
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let viewportWidth = context.availableWidth
+        let viewportHeight = max(0, context.availableHeight)
+
+        // Resolve the persistent focus ID and the handler.
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context,
+            explicitFocusID: explicitFocusID,
+            defaultPrefix: "scrollview",
+            propertyIndex: StateIndex.focusID
+        )
+        let handler = resolvedHandler(persistedFocusID: persistedFocusID, context: context)
 
         // Scrollbar reservation. Each bar steals one cell across the viewport — the
         // vertical bar a trailing column, the horizontal bar a bottom row. The
@@ -304,7 +310,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             handler: handler, contentWidth: contentWidth,
             contentViewportHeight: contentViewportHeight, context: context)
 
-        let (fullBuffer, contentSlice) = renderedContent(
+        var (fullBuffer, contentSlice) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             context: context)
@@ -312,7 +318,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // the content height comes from the metadata (estimated suffixes and
         // all — the §3 scrollbar trade), and every content-space consumer
         // below rebases by the slice origin.
-        let sliceOriginY = contentSlice?.originY ?? 0
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         // Re-glue against the REAL rendered height (the pre-render number was
         // an estimate); the band's margin absorbs small differences and the
@@ -342,9 +347,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             handler: handler,
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
-            regionOriginY: sliceOriginY,
+            regionOriginY: contentSlice?.originY ?? 0,
             indicatorsActive: !wantsScrollbar,
             context: context)
+        coverSnappedViewport(
+            handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
+            contentWidth: contentWidth, viewportHeight: contentViewportHeight,
+            horizontal: wantsHorizontal, context: context)
+        let sliceOriginY = contentSlice?.originY ?? 0
 
         // Only be a Tab stop when there is actually something to scroll.
         // Registering unconditionally made a non-overflowing ScrollView an
@@ -570,7 +580,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// `VStack { Text; Spacer; Text }` puts the two at top and bottom) and collapses
     /// when the content is taller, so it scrolls without the filler forcing extra
     /// height.
-    private func renderedContent(
+    func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, context: RenderContext
     ) -> (buffer: FrameBuffer, slice: (originY: Int, totalHeight: Int)?) {

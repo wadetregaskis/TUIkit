@@ -129,4 +129,34 @@ extension _ScrollViewCore {
         lastFocusedBox.value.value = currentFocusedID
         lastInteractionBox.value.value = currentInteractionGen
     }
+
+    /// Re-renders the content at the (post-snap) scroll offset when the
+    /// rendered band no longer covers the visible rows.
+    ///
+    /// A snap can jump beyond the band: a far focus target renders OFF-band
+    /// (only its hit regions are grafted in, `graftOffBandRow`) precisely so
+    /// the band stays compact, which means the snapped offset may land in a
+    /// gap the band never materialised. Rendering once more at the new
+    /// offset — O(window), and only on focus-jump frames — lets this same
+    /// frame show the revealed row. One frame of blank viewport is not an
+    /// acceptable alternative: with no new event arriving, the render loop
+    /// would not redraw, and the blank would simply stay.
+    func coverSnappedViewport(
+        handler: ScrollViewHandler,
+        fullBuffer: inout FrameBuffer,
+        contentSlice: inout (originY: Int, totalHeight: Int)?,
+        contentWidth: Int, viewportHeight: Int, horizontal: Bool,
+        context: RenderContext
+    ) {
+        guard !context.isMeasuring, let slice = contentSlice else { return }
+        let bandEnd = slice.originY + fullBuffer.height
+        let visibleEnd = min(handler.scrollOffset + viewportHeight, handler.contentHeight)
+        guard handler.scrollOffset < slice.originY || visibleEnd > bandEnd else { return }
+        (fullBuffer, contentSlice) = renderedContent(
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: horizontal, verticalScrollOffset: handler.scrollOffset,
+            context: context)
+        handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
+        handler.clampScrollOffset()
+    }
 }
