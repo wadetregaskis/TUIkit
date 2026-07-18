@@ -152,7 +152,7 @@ extension _ScrollViewCore {
     func coverSnappedViewport(
         handler: ScrollViewHandler,
         fullBuffer: inout FrameBuffer,
-        contentSlice: inout (originY: Int, totalHeight: Int)?,
+        contentSlice: inout (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         context: RenderContext
     ) {
@@ -166,6 +166,7 @@ extension _ScrollViewCore {
             context: context)
         (fullBuffer, contentSlice) = (recovered.buffer, recovered.slice)
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
+        handler.contentHeightIsEstimate = contentSlice?.totalIsEstimate ?? false
         handler.clampScrollOffset()
     }
 }

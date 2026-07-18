@@ -337,6 +337,11 @@ extension _VStackCore {
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = total
+            // Anchored absolute space is estimate-derived: the unmeasured
+            // remainder is priced at the running pitch average, and the band
+            // origin itself drifts with past estimates. Even at the tail
+            // (remaining == 0) the prefix above is estimated.
+            reply.sliceTotalIsEstimate = true
         } else if total > cursor {
             result.appendVertically(FrameBuffer(emptyWithHeight: total - cursor), spacing: 0)
         }

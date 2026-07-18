@@ -345,8 +345,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
         // all — the §3 scrollbar trade), and every content-space consumer
-        // below rebases by the slice origin.
+        // below rebases by the slice origin. An estimated total is surfaced
+        // in the indicators as an approximate count.
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
+        handler.contentHeightIsEstimate = contentSlice?.totalIsEstimate ?? false
         if let seekOffset {
             // The content rendered AT the request's offset; adopt it. (The
             // bottom re-glue below must not fight it — scrolling away IS
@@ -639,7 +641,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, seek: ScrollToRequest? = nil, context: RenderContext
-    ) -> (buffer: FrameBuffer, slice: (originY: Int, totalHeight: Int)?, seekOffset: Int?) {
+    ) -> (
+        buffer: FrameBuffer,
+        slice: (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
+        seekOffset: Int?
+    ) {
         let extents = contentExtents(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
             horizontal: horizontal, context: context)
@@ -670,7 +676,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
-            return (buffer, (origin, total), reply.seekResolvedOffset)
+            return (buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset)
         }
         return (buffer, nil, reply?.seekResolvedOffset)
     }
@@ -918,7 +924,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 direction: .up,
                 count: handler.rowsAbove,
                 width: width,
-                palette: palette
+                palette: palette,
+                approximate: handler.contentHeightIsEstimate
             ).padToVisibleWidth(width)
         }
 
@@ -927,7 +934,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 direction: .down,
                 count: handler.rowsBelow,
                 width: width,
-                palette: palette
+                palette: palette,
+                approximate: handler.contentHeightIsEstimate
             ).padToVisibleWidth(width)
         }
 

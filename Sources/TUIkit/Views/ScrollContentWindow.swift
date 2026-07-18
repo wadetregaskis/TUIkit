@@ -46,6 +46,13 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// The full content height the slice was cut from (estimated for
     /// never-measured suffixes — the §3 scrollbar trade).
     var sliceTotalHeight: Int?
+    /// Whether ``sliceTotalHeight`` involves ESTIMATED extents (the anchored
+    /// path's unmeasured remainder at the running pitch average, and its
+    /// estimate-drifted absolute origin). The ScrollView surfaces this in
+    /// the "N more" indicators — "~200M more below" — so the chrome doesn't
+    /// assert precision the geometry doesn't have. The uniform path's
+    /// arithmetic totals are hypothesis-exact and leave this `false`.
+    var sliceTotalIsEstimate = false
     /// The window offset the stack rendered at in answer to
     /// ``ScrollContentWindow/seek`` — the ScrollView adopts it as its
     /// scroll position. `nil` when there was no request or the key wasn't

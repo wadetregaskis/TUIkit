@@ -96,6 +96,12 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// The visible height of the scroll view's viewport.
     public var viewportHeight: Int = 0
 
+    /// Whether ``contentHeight`` came from ESTIMATED geometry (a windowed
+    /// stack's unmeasured remainder). The "N more above/below" indicators
+    /// read this to present their counts approximately ("~200M") instead of
+    /// with false precision. Re-synced every render pass.
+    var contentHeightIsEstimate = false
+
     /// How many lines/columns a Shift-accelerated arrow press scrolls. Set from
     /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
     /// always scrolls one. See ``View/shiftStepMultiplier(_:)``.
