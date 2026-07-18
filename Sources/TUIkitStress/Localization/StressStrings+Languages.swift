@@ -108,6 +108,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N rows whose content changes every frame (tick-driven) — no memo hits.",
         "stress.scenario.churn.stresses": "full re-render per frame · cache invalidation · measure with no memo",
         "stress.scenario.churn.heading": "Churn Update — frame {0}, {1} rows invalidated/frame",
+        "stress.scenario.scrollfollow.title": "Scroll Follow",
+        "stress.scenario.scrollfollow.blurb": "Bottom-anchored ScrollView over N variable-height rows; a row appends every tick.",
+        "stress.scenario.scrollfollow.stresses": "windowed band render · anchor advance · tail estimate · O(window) at any N",
         "stress.scenario.scrollfollow.heading": "Scroll Follow — {0} rows, bottom-anchored (a row appends every frame)",
 
         // MARK: kitchensink
@@ -208,6 +211,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N Zeilen, deren Inhalt sich pro Frame ändert (tick-gesteuert) — keine Memo-Treffer.",
         "stress.scenario.churn.stresses": "vollständiges Neu-Rendern pro Frame · Cache-Invalidierung · Messung ohne Memo",
         "stress.scenario.churn.heading": "Churn-Aktualisierung — Frame {0}, {1} Zeilen pro Frame invalidiert",
+        "stress.scenario.scrollfollow.title": "Scroll-Verfolgung",
+        "stress.scenario.scrollfollow.blurb": "Unten verankerte ScrollView über N Zeilen variabler Höhe; pro Tick kommt eine Zeile hinzu.",
+        "stress.scenario.scrollfollow.stresses": "gefensterte Band-Darstellung · Anker-Fortschreibung · End-Schätzung · O(Fenster) bei jedem N",
         "stress.scenario.scrollfollow.heading": "Scroll-Verfolgung — {0} Zeilen, unten verankert (pro Frame kommt eine Zeile hinzu)",
 
         // MARK: kitchensink
@@ -308,6 +314,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N lignes dont le contenu change à chaque image (piloté par tick) — aucun succès de mémo.",
         "stress.scenario.churn.stresses": "rendu complet par image · invalidation du cache · mesure sans mémo",
         "stress.scenario.churn.heading": "Mise à jour continue — image {0}, {1} lignes invalidées/image",
+        "stress.scenario.scrollfollow.title": "Suivi du défilement",
+        "stress.scenario.scrollfollow.blurb": "ScrollView ancrée en bas sur N lignes de hauteur variable ; une ligne ajoutée à chaque tick.",
+        "stress.scenario.scrollfollow.stresses": "rendu de bande fenêtré · avance de l'ancre · estimation de fin · O(fenêtre) pour tout N",
         "stress.scenario.scrollfollow.heading": "Suivi du défilement — {0} lignes, ancré en bas (une ligne ajoutée par image)",
 
         // MARK: kitchensink
@@ -408,6 +417,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N righe il cui contenuto cambia a ogni frame (guidato dal tick) — nessun successo di memo.",
         "stress.scenario.churn.stresses": "render completo per frame · invalidazione cache · misura senza memo",
         "stress.scenario.churn.heading": "Aggiornamento continuo — frame {0}, {1} righe invalidate/frame",
+        "stress.scenario.scrollfollow.title": "Scorrimento ancorato",
+        "stress.scenario.scrollfollow.blurb": "ScrollView ancorata in basso su N righe di altezza variabile; una riga aggiunta a ogni tick.",
+        "stress.scenario.scrollfollow.stresses": "rendering a banda finestrata · avanzamento dell'àncora · stima della coda · O(finestra) per ogni N",
         "stress.scenario.scrollfollow.heading": "Scorrimento ancorato — {0} righe, ancorato in basso (una riga aggiunta per frame)",
 
         // MARK: kitchensink
@@ -508,6 +520,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N filas cuyo contenido cambia en cada fotograma (impulsado por tick) — sin aciertos de memo.",
         "stress.scenario.churn.stresses": "renderizado completo por fotograma · invalidación de caché · medición sin memo",
         "stress.scenario.churn.heading": "Actualización continua — fotograma {0}, {1} filas invalidadas/fotograma",
+        "stress.scenario.scrollfollow.title": "Seguimiento de desplazamiento",
+        "stress.scenario.scrollfollow.blurb": "ScrollView anclado abajo sobre N filas de altura variable; se añade una fila por tick.",
+        "stress.scenario.scrollfollow.stresses": "renderizado de banda en ventana · avance del ancla · estimación de cola · O(ventana) para cualquier N",
         "stress.scenario.scrollfollow.heading": "Seguimiento de desplazamiento — {0} filas, anclado abajo (se añade una fila por fotograma)",
 
         // MARK: kitchensink
@@ -608,6 +623,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N 行内容每帧都变化（由 tick 驱动）— 无备忘命中。",
         "stress.scenario.churn.stresses": "每帧完全重渲染 · 缓存失效 · 无备忘的测量",
         "stress.scenario.churn.heading": "翻动更新 — 第 {0} 帧，每帧失效 {1} 行",
+        "stress.scenario.scrollfollow.title": "滚动跟随",
+        "stress.scenario.scrollfollow.blurb": "底部锚定的 ScrollView，N 行可变高度；每个 tick 追加一行。",
+        "stress.scenario.scrollfollow.stresses": "窗口化条带渲染 · 锚点推进 · 尾部估算 · 任意 N 均为 O(窗口)",
         "stress.scenario.scrollfollow.heading": "滚动跟随 — {0} 行，底部锚定（每帧追加一行）",
 
         // MARK: kitchensink
@@ -708,6 +726,9 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N 行の内容が毎フレーム変化（tick 駆動）— メモのヒットなし。",
         "stress.scenario.churn.stresses": "フレームごとの完全な再レンダリング · キャッシュ無効化 · メモなしの計測",
         "stress.scenario.churn.heading": "チャーン更新 — フレーム {0}、毎フレーム {1} 行を無効化",
+        "stress.scenario.scrollfollow.title": "スクロール追従",
+        "stress.scenario.scrollfollow.blurb": "下部アンカーの ScrollView、可変高さの N 行。tick ごとに 1 行追加。",
+        "stress.scenario.scrollfollow.stresses": "ウィンドウ化バンド描画 · アンカー前進 · 末尾推定 · どの N でも O(ウィンドウ)",
         "stress.scenario.scrollfollow.heading": "スクロール追従 — {0} 行、下部アンカー（毎フレーム 1 行追加）",
 
         // MARK: kitchensink
