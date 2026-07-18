@@ -108,6 +108,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N rows whose content changes every frame (tick-driven) — no memo hits.",
         "stress.scenario.churn.stresses": "full re-render per frame · cache invalidation · measure with no memo",
         "stress.scenario.churn.heading": "Churn Update — frame {0}, {1} rows invalidated/frame",
+        "stress.scenario.scrollfollow.heading": "Scroll Follow — {0} rows, bottom-anchored (a row appends every frame)",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "Kitchen Sink",
@@ -207,6 +208,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N Zeilen, deren Inhalt sich pro Frame ändert (tick-gesteuert) — keine Memo-Treffer.",
         "stress.scenario.churn.stresses": "vollständiges Neu-Rendern pro Frame · Cache-Invalidierung · Messung ohne Memo",
         "stress.scenario.churn.heading": "Churn-Aktualisierung — Frame {0}, {1} Zeilen pro Frame invalidiert",
+        "stress.scenario.scrollfollow.heading": "Scroll-Verfolgung — {0} Zeilen, unten verankert (pro Frame kommt eine Zeile hinzu)",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "Komplettpaket",
@@ -306,6 +308,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N lignes dont le contenu change à chaque image (piloté par tick) — aucun succès de mémo.",
         "stress.scenario.churn.stresses": "rendu complet par image · invalidation du cache · mesure sans mémo",
         "stress.scenario.churn.heading": "Mise à jour continue — image {0}, {1} lignes invalidées/image",
+        "stress.scenario.scrollfollow.heading": "Suivi du défilement — {0} lignes, ancré en bas (une ligne ajoutée par image)",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "Tout-en-un",
@@ -405,6 +408,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N righe il cui contenuto cambia a ogni frame (guidato dal tick) — nessun successo di memo.",
         "stress.scenario.churn.stresses": "render completo per frame · invalidazione cache · misura senza memo",
         "stress.scenario.churn.heading": "Aggiornamento continuo — frame {0}, {1} righe invalidate/frame",
+        "stress.scenario.scrollfollow.heading": "Scorrimento ancorato — {0} righe, ancorato in basso (una riga aggiunta per frame)",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "Tutto in uno",
@@ -504,6 +508,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N filas cuyo contenido cambia en cada fotograma (impulsado por tick) — sin aciertos de memo.",
         "stress.scenario.churn.stresses": "renderizado completo por fotograma · invalidación de caché · medición sin memo",
         "stress.scenario.churn.heading": "Actualización continua — fotograma {0}, {1} filas invalidadas/fotograma",
+        "stress.scenario.scrollfollow.heading": "Seguimiento de desplazamiento — {0} filas, anclado abajo (se añade una fila por fotograma)",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "Todo en uno",
@@ -603,6 +608,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N 行内容每帧都变化（由 tick 驱动）— 无备忘命中。",
         "stress.scenario.churn.stresses": "每帧完全重渲染 · 缓存失效 · 无备忘的测量",
         "stress.scenario.churn.heading": "翻动更新 — 第 {0} 帧，每帧失效 {1} 行",
+        "stress.scenario.scrollfollow.heading": "滚动跟随 — {0} 行，底部锚定（每帧追加一行）",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "大杂烩",
@@ -702,6 +708,7 @@ extension StressStrings {
         "stress.scenario.churn.blurb": "N 行の内容が毎フレーム変化（tick 駆動）— メモのヒットなし。",
         "stress.scenario.churn.stresses": "フレームごとの完全な再レンダリング · キャッシュ無効化 · メモなしの計測",
         "stress.scenario.churn.heading": "チャーン更新 — フレーム {0}、毎フレーム {1} 行を無効化",
+        "stress.scenario.scrollfollow.heading": "スクロール追従 — {0} 行、下部アンカー（毎フレーム 1 行追加）",
 
         // MARK: kitchensink
         "stress.scenario.kitchensink.title": "全部入り",

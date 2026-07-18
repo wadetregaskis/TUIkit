@@ -47,6 +47,7 @@ enum Scenarios {
     @MainActor
     static let all: [Scenario] = [
         MegaListScenario.descriptor,
+        ScrollFollowScenario.descriptor,
         WideTableScenario.descriptor,
         MultiLineTableScenario.descriptor,
         TablesInScrollViewScenario.descriptor,

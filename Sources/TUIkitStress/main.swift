@@ -47,7 +47,7 @@ let usageText = """
     Self-check:   TUIkitStress --selfcheck [--scale N]
     Benchmark:    TUIkitStress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
 
-    Scenarios are listed in the interactive menu; ids: megalist, table, deep,
+    Scenarios are listed in the interactive menu; ids: megalist, scrollfollow, table, deep,
     fanout, modifiers, textwall, anyview, dashboard, framedcolumns, churn,
     kitchensink.
     """
