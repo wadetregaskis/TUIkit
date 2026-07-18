@@ -55,7 +55,8 @@ def is_app(path: str) -> bool:
     return bool(path) and not path.startswith(SYSTEM_PREFIXES)
 
 
-def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: str):
+def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: str,
+            callers_of=None):
     xml = export_table(trace, run, "time-profile")
 
     # Global id -> value maps. Instruments shares ONE id namespace across
@@ -72,6 +73,8 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
     app_self_ms = defaultdict(float)
     app_incl_ms = defaultdict(float)
     thread_ms = defaultdict(float)
+    callers_ms = defaultdict(float)
+    callers_matched_ms = 0.0
 
     total_ms = 0.0
     rows = 0
@@ -165,6 +168,19 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         if is_app(leaf_bp):
             app_self_ms[leaf_name] += ms
 
+        if callers_of is not None:
+            # Attribute this sample's weight to the immediate caller(s) of
+            # every frame matching the pattern (frames are leaf -> root, so
+            # the caller is the next entry). Recursion dedups per sample.
+            matched_callers = set()
+            for i, (name, _bn, _bp) in enumerate(frames):
+                if callers_of in name and i + 1 < len(frames):
+                    matched_callers.add(frames[i + 1][0])
+            if matched_callers:
+                callers_matched_ms += ms
+                for caller in matched_callers:
+                    callers_ms[caller] += ms
+
         seen, seen_app = set(), set()
         for name, _bn, bp in frames:
             if name in seen:
@@ -179,6 +195,7 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         "rows": rows, "total_ms": total_ms, "thread_ms": thread_ms,
         "self_ms": self_ms, "self_n": self_n, "incl_ms": incl_ms,
         "mod_ms": mod_ms, "app_self_ms": app_self_ms, "app_incl_ms": app_incl_ms,
+        "callers_ms": callers_ms, "callers_matched_ms": callers_matched_ms,
         "top": top,
     }
 
@@ -207,12 +224,17 @@ def main():
                     help="restrict to the Main Thread (the render loop) or all threads")
     ap.add_argument("--state", choices=["running", "all"], default="running",
                     help="restrict to on-CPU samples (default) or include all")
+    ap.add_argument("--callers", metavar="PATTERN", default=None,
+                    help="also aggregate the immediate CALLERS of every frame whose "
+                         "name contains PATTERN — answers 'who is invoking this hot "
+                         "function?' without opening Instruments")
     args = ap.parse_args()
 
     if not os.path.exists(args.trace):
         sys.exit(f"no such trace: {args.trace}")
 
-    r = analyze(args.trace, args.run, args.top, args.thread, args.state)
+    r = analyze(args.trace, args.run, args.top, args.thread, args.state,
+                callers_of=args.callers)
 
     print("=" * 78)
     print(f"Time Profiler analysis: {args.trace}")
@@ -234,6 +256,12 @@ def main():
                 r["app_self_ms"], t, r["top"])
     print_table("APP ONLY — inclusive time in TUIkit / TUIkitExample",
                 r["app_incl_ms"], t, r["top"])
+    if args.callers is not None:
+        print_table(
+            f"Callers of '{args.callers}' "
+            f"(matched {r['callers_matched_ms']:.0f} ms = "
+            f"{(r['callers_matched_ms'] / t * 100) if t else 0:.1f}%)",
+            r["callers_ms"], t, r["top"])
 
 
 if __name__ == "__main__":
