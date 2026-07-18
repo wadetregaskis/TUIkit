@@ -159,25 +159,63 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         )
     }
 
-    /// `.window` size from one render: the layout is *windowed* on
-    /// `availableWidth` (it stops appending columns once the running width would
-    /// exceed it), so the rendered width ends on a child boundary and can fall
-    /// short of the width limit by a truncated column — the exact size must come
-    /// from a render under this context, not an analytical sum. Flexibility
-    /// mirrors `renderWindow`: a (horizontal) spacer absorbs the slack and fills
-    /// the width, and any width/height-flexible child fills its axis.
+    /// `.window` size, computed analytically from the same append-while-fits
+    /// walk `renderWindow` performs (Stage 3 of "Locating things without
+    /// drawing them": measuring must not render). Children accumulate left to
+    /// right at their `.unspecified` measures — exactly the fit-check the
+    /// render uses — and the size stops at the first column that would
+    /// overflow the width limit, so the width ends on a child boundary just
+    /// as the render's does; the height is the tallest fitting column's.
+    /// Flexibility mirrors the fill rules: a (horizontal) spacer fills the
+    /// width, and any width/height-flexible child fills its axis.
+    ///
+    /// A stack WITH a spacer keeps the render-based measure: spacer widths
+    /// come from distributing the leftover after every sibling has rendered,
+    /// which is genuinely a property of the fill, not of any one child.
+    /// (`renderWindow` forfeits laziness for spacers for the same reason.)
     private func windowSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
+        var measureContext = context
+        measureContext.isMeasuring = true
+
+        let children = resolveChildViews(from: content, context: measureContext)
+        guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
+        let widthLimit = proposal.width ?? context.availableWidth
+
         var widthFlexible = false
         var heightFlexible = false
-        for child in resolveChildViews(from: content, context: context) {
-            if child.isSpacer { widthFlexible = true }
-            let childSize = child.measure(proposal: proposal, context: context)
-            if childSize.isWidthFlexible { widthFlexible = true }
-            if childSize.isHeightFlexible { heightFlexible = true }
+        var hasSpacer = false
+        var sizes: [ViewSize] = []
+        sizes.reserveCapacity(children.count)
+        for child in children {
+            if child.isSpacer {
+                hasSpacer = true
+                widthFlexible = true
+                sizes.append(ViewSize.fixed(0, 0))
+                continue
+            }
+            let size = child.measure(proposal: .unspecified, context: measureContext)
+            if size.isWidthFlexible { widthFlexible = true }
+            if size.isHeightFlexible { heightFlexible = true }
+            sizes.append(size)
+        }
+
+        if hasSpacer {
+            let size = measureFixedByRendering(self, proposal: proposal, context: context)
+            return ViewSize(
+                width: size.width, height: size.height,
+                isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+        }
+
+        var width = 0
+        var height = 1
+        for (index, size) in sizes.enumerated() {
+            let next = width + (index > 0 ? spacing : 0) + size.width
+            if next > widthLimit { break }
+            width = next
+            height = max(height, size.height)
         }
         return ViewSize(
-            width: size.width, height: size.height,
+            width: width, height: height,
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 

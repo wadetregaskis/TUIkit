@@ -475,4 +475,60 @@ struct LazyStackLazinessTests {
         #expect(line.hasSuffix("R0R1"), "the ForEach columns are pushed to the trailing edge: '\(line)'")
         #expect(line.strippedLength == 20, "the spacer fills the row")
     }
+
+    @Test("Measuring a LazyHStack draws nothing (Stage 3)")
+    func hStackMeasureDrawsNothing() {
+        // `FlagProbe` can't see this: measure-by-render runs renderToBuffer
+        // under `isMeasuring`, which the flag records as a measure. The call
+        // log counts the ENTRY POINTS, so a render is a render regardless of
+        // the pass it happens in.
+        let log = CallLog()
+        let stack = LazyHStack(spacing: 1) {
+            CallLogProbe(log: log, width: 8)
+            CallLogProbe(log: log, width: 8)
+            CallLogProbe(log: log, width: 8)
+        }
+        let context = makeBareRenderContext(width: 20, height: 3)
+
+        let size = measureChild(
+            stack, proposal: ProposedSize(width: 20, height: nil), context: context)
+        #expect(log.renderCalls == 0, "measuring drew \(log.renderCalls) probes")
+        #expect(log.measureCalls > 0, "…while genuinely measuring them")
+        // Append-while-fits: 8 + 1+8 = 17 fits, the third column (+1+8 = 26)
+        // does not — the width ends on a child boundary, as the render does.
+        #expect(size.width == 17, "windowed width: \(size.width)")
+        #expect(size.height == 1)
+
+        // And the analytic measure agrees with the real render, truncated
+        // column and all.
+        let buffer = renderToBuffer(stack, context: context)
+        #expect(buffer.width == size.width, "measure == render width: \(buffer.width)")
+        #expect(buffer.height == size.height, "measure == render height: \(buffer.height)")
+    }
+}
+
+// MARK: - Call-counting probe
+
+private final class CallLog {
+    var renderCalls = 0
+    var measureCalls = 0
+}
+
+/// Counts actual `renderToBuffer` and `sizeThatFits` entries, regardless of
+/// `isMeasuring` — the discriminator for "measuring must not render".
+private struct CallLogProbe: View, Renderable, Layoutable {
+    let log: CallLog
+    let width: Int
+
+    var body: Never { fatalError("probe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        log.renderCalls += 1
+        return FrameBuffer(text: String(repeating: "x", count: width))
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        log.measureCalls += 1
+        return ViewSize.fixed(width, 1)
+    }
 }
