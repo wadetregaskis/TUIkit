@@ -291,6 +291,73 @@ struct ScrollViewReaderTests {
         handler = nil
         registry.scrollTo(key: "43", anchor: nil)  // sweeps the dead entry, no crash
     }
+
+    @Test("Seeded storm: seeks and data mutations interleave, invariants hold")
+    func scrollToMutationStorm() {
+        // 150 iterations of random scrollTo (any anchor, both directions,
+        // sometimes unknown ids) interleaved with the row count growing and
+        // shrinking — with row 0's Button focused throughout. Invariants
+        // after every settle frame: the seek target is visible (when its id
+        // survived the mutation), the focused row keeps registering (focus
+        // is never stolen by the end-of-pass validation), and nothing traps.
+        // Variable heights keep the anchored path engaged; the shrink
+        // branch dips below the 256-row threshold to cross seek paths.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        func makeView(rows: Int) -> some View {
+            ScrollViewReader { proxy in
+                let _ = box.proxy = proxy
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<rows, id: \.self) { i in
+                            Button("row \(i)") {}.frame(height: i % 3 + 1)
+                        }
+                    }
+                }
+                .frame(height: Self.viewport)
+            }
+        }
+
+        var seed: UInt64 = 0x5EED_5C11
+        func rand(_ bound: Int) -> Int {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Int(truncatingIfNeeded: seed >> 33) % bound
+        }
+
+        var rows = 5_000
+        renderFrame(makeView(rows: rows), tuiContext: tuiContext, focusManager: focusManager)
+        let focusedID = focusManager.currentFocusedID
+        #expect(focusedID != nil, "row 0's button auto-focuses")
+
+        let anchors: [UnitPoint?] = [.top, .center, .bottom, nil]
+        for iteration in 0..<150 {
+            var expectedVisible: Int?
+            switch rand(5) {
+            case 0:  // grow
+                rows = min(20_000, rows + 1 + rand(3_000))
+            case 1:  // shrink — sometimes below the anchored threshold
+                rows = max(1, rows - 1 - rand(rand(10) == 0 ? 4_900 : 1_500))
+            case 2:  // seek to a nonexistent id (must be a clean no-op)
+                box.proxy?.scrollTo(rows + 1 + rand(1_000), anchor: anchors[rand(4)])
+            default:  // seek to a live row
+                let target = rand(rows)
+                box.proxy?.scrollTo(target, anchor: anchors[rand(4)])
+                expectedVisible = target
+            }
+            renderFrame(makeView(rows: rows), tuiContext: tuiContext, focusManager: focusManager)
+            let settled = renderFrame(
+                makeView(rows: rows), tuiContext: tuiContext, focusManager: focusManager)
+            if let target = expectedVisible {
+                #expect(
+                    settled.contains { $0.contains("row \(target) ") || $0.hasSuffix("row \(target)") },
+                    "iteration \(iteration) (seed path): row \(target) of \(rows) visible: \(settled)")
+            }
+            #expect(
+                focusManager.currentFocusedID == focusedID,
+                "iteration \(iteration): the focused row keeps registering (rows: \(rows))")
+        }
+    }
 }
 
 // swiftlint:enable redundant_discardable_let
