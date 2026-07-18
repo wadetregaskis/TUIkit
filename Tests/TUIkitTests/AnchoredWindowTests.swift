@@ -125,4 +125,93 @@ struct AnchoredWindowTests {
         let home = renderFrame(counter: counter, tuiContext: tuiContext, offset: 0)
         #expect(home[0] == "row 0", "offset 0 is exactly row 0")
     }
+
+    /// One live-loop-shaped frame through the REAL ScrollView (the memo test
+    /// needs it: the churn under test comes from the ScrollView's render
+    /// canvas, which the bare-stack harness doesn't reproduce).
+    private func renderScrollFrame<V: View>(
+        _ view: V, tuiContext: TUIContext, focusManager: FocusManager
+    ) {
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: Self.viewport,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        focusManager.beginRenderPass()
+        _ = renderToBuffer(view, context: context)
+        focusManager.endRenderPass()
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+    }
+
+    @Test("Band row measures memoize across growing frames (follow mode)")
+    func rowMeasuresMemoizeAcrossGrowingFrames() {
+        // Through the real ScrollView, in follow mode: every frame appends a
+        // row, and the band re-measures the rows it touches — including the
+        // width/flexibility SAMPLE rows (0..15), which are measured but
+        // never rendered. The size memo stored their sizes each frame, but
+        // only renderToBuffer marked identities active, so removeInactive
+        // pruned the measure-only entries at the end of EVERY pass: those
+        // rows missed the memo every frame, forever, despite identical keys
+        // and values (each miss re-measuring — for Text rows, re-wrapping).
+        // Steady state must re-measure only what the frame genuinely
+        // touches for the first time: the appended row.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let log = MeasureLog()
+        func makeView(rows: Int) -> some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rows, id: \.self) { i in
+                        MeasureCountRow(log: log, index: i)
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+            .defaultScrollAnchor(.bottom)
+        }
+
+        // Warm frames: seed the anchor, the glue, and the memo.
+        for delta in 0..<3 {
+            renderScrollFrame(
+                makeView(rows: 5_000 + delta), tuiContext: tuiContext, focusManager: focusManager)
+        }
+        let before = log.measures
+        renderScrollFrame(makeView(rows: 5_003), tuiContext: tuiContext, focusManager: focusManager)
+        let perFrame = log.measures - before
+        #expect(
+            perFrame <= 8,
+            "a steady append frame re-measures a handful of fresh rows, not the band + samples: \(perFrame)")
+    }
+}
+
+// MARK: - Measure-counting probe
+
+/// Counts `sizeThatFits` entries on the row content itself: a size-memo MISS
+/// measures the content, a hit does not — the discriminator for "unchanged
+/// band rows must not re-measure while the content total grows".
+private final class MeasureLog: @unchecked Sendable {
+    var measures = 0
+}
+
+private struct MeasureCountRow: View, Renderable, Layoutable {
+    let log: MeasureLog
+    let index: Int
+
+    var body: Never { fatalError("probe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        FrameBuffer(
+            lines: Array(repeating: "row \(index)", count: index % 3 + 1), width: 8)
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        log.measures += 1
+        return ViewSize.fixed(8, index % 3 + 1)
+    }
 }

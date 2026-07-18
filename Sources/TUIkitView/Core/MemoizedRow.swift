@@ -172,6 +172,12 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         guard let cache = context.renderCache else {
             return measureChild(content, proposal: proposal, context: context)
         }
+        // A measured row is in the tree just as a rendered one is: without
+        // this, a row that a frame only MEASURES (a windowed stack's pitch
+        // sample of off-window rows, above all) had its size entries GC'd by
+        // `removeInactive` at the end of every pass — so those rows missed
+        // the memo every frame, forever, despite identical keys and values.
+        cache.markActive(context.identity)
         let key = RenderCache.SizeKey(
             identity: context.identity,
             proposalWidth: proposal.width, proposalHeight: proposal.height,
