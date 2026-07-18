@@ -210,31 +210,31 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// Bottom edge affinity (defaultScrollAnchor(.bottom), §5c/§6c): being
     /// AT the bottom is the engagement — no stored flag. If last frame's
     /// numbers say the offset sits at (or past) maxOffset, the view is
-    /// glued: re-derive the tail from this frame's content BEFORE rendering,
-    /// so appended rows appear immediately and the window is rendered at the
-    /// right place. Scrolling up breaks the condition (offset < max) and
-    /// appends stop moving the view; any scroll that lands back at the
-    /// bottom re-engages. The very first frame (contentHeight 0, offset 0)
-    /// is glued by construction, giving the initial at-the-tail placement.
-    /// Vertical only. Returns whether the view was glued, so the caller can
-    /// re-glue against the REAL rendered height afterwards.
-    private func applyBottomAffinity(
-        handler: ScrollViewHandler, contentWidth: Int,
-        contentViewportHeight: Int, context: RenderContext
-    ) -> Bool {
+    /// glued: the frame renders at the previous tail, the post-render
+    /// re-glue lands on the real new maximum, and `coverSnappedViewport`
+    /// re-renders — O(window) — when the band's margin doesn't already
+    /// cover the difference (it does for the common one-row append).
+    /// Scrolling up breaks the condition (offset < max) and appends stop
+    /// moving the view; any scroll that lands back at the bottom
+    /// re-engages. The very first frame (contentHeight 0, offset 0) is
+    /// glued by construction, giving the initial at-the-tail placement.
+    /// Vertical only.
+    ///
+    /// Deliberately NO pre-render tail estimate: this used to measure the
+    /// whole content tree every glued frame to pre-position the offset, and
+    /// that estimate systematically disagreed with the post-render reply
+    /// total (they come from different estimators), so the coverage
+    /// re-render fired EVERY frame — a full measure plus two band renders
+    /// per frame, 23% of the scrollfollow profile in the second render
+    /// alone.
+    private func isGluedToBottom(handler: ScrollViewHandler, context: RenderContext) -> Bool {
         let followsBottom = !context.isMeasuring
             && (context.environment.defaultScrollAnchor?.y ?? 0) >= 0.75
         // A pending scrollTo supersedes the glue this frame: the explicit
         // programmatic scroll is exactly the "scrolling away releases the
         // follow" interaction, expressed in code.
-        guard followsBottom, handler.pendingScrollTo == nil,
-            handler.scrollOffset >= handler.maxOffset
-        else { return false }
-        let estimated = ChildView(content).measure(
-            proposal: ProposedSize(width: contentWidth, height: Int.max / 4),
-            context: context.withChildIdentity(type: Content.self))
-        handler.scrollOffset = max(0, estimated.height - contentViewportHeight)
-        return true
+        return followsBottom && handler.pendingScrollTo == nil
+            && handler.scrollOffset >= handler.maxOffset
     }
 
     /// Syncs the horizontal axis to the rendered content width and clamps
@@ -333,9 +333,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
 
-        let wasGluedToBottom = applyBottomAffinity(
-            handler: handler, contentWidth: contentWidth,
-            contentViewportHeight: contentViewportHeight, context: context)
+        let wasGluedToBottom = isGluedToBottom(handler: handler, context: context)
 
         let pendingSeek = consumedSeek(
             handler: handler, wantsScrollbar: wantsScrollbar, context: context)
@@ -392,6 +390,21 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, context: context)
+        if wasGluedToBottom, seekOffset == nil {
+            // A coverage render refines the content-height estimate, which
+            // can move maxOffset out from under the earlier re-glue —
+            // leaving the view a hair off the tail, where the NEXT frame's
+            // glue condition (offset >= maxOffset) would silently release
+            // the follow. Re-glue against the refined number; the guard
+            // render is a no-op once a band actually reaches the tail,
+            // whose totals are exact (§3: estimates cover only what was
+            // never rendered), so this converges — no loop.
+            handler.scrollOffset = handler.maxOffset
+            coverSnappedViewport(
+                handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
+                contentWidth: contentWidth, viewportHeight: contentViewportHeight,
+                horizontal: wantsHorizontal, context: context)
+        }
         let sliceOriginY = contentSlice?.originY ?? 0
 
         // Only be a Tab stop when there is actually something to scroll.
@@ -423,23 +436,38 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             horizontalOffset: handler.horizontal.scrollOffset
         )
 
-        // Compose the scroll-indicator chrome on top of the windowed content.
-        // Indicators replace the first / last line of the visible buffer rather
-        // than adding to its height — they're a hint, not extra content. A
-        // scrollbar supersedes the text indicators (it shows the same thing more
-        // precisely), so they are mutually exclusive.
+        applyScrollChrome(
+            to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
+            wantsScrollbar: wantsScrollbar, wantsHorizontalBar: wantsHorizontalBar,
+            isFocused: isFocused, context: context)
+
+        attachViewportMouseHandler(
+            to: &visibleBuffer, context: context, handler: handler,
+            persistedFocusID: persistedFocusID, viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight, wantsHorizontal: wantsHorizontal)
+
+        return visibleBuffer
+    }
+
+    /// Composes the scroll chrome over the windowed content: the "N more
+    /// above/below" indicators — which replace the first/last line rather
+    /// than adding height (they're a hint, not extra content), and which a
+    /// scrollbar supersedes (it shows the same thing more precisely, so the
+    /// two are mutually exclusive) — then the trailing vertical scrollbar
+    /// column and the bottom horizontal bar, each made interactive (arrows /
+    /// track / thumb drag).
+    private func applyScrollChrome(
+        to visibleBuffer: inout FrameBuffer, handler: ScrollViewHandler, contentWidth: Int,
+        wantsScrollbar: Bool, wantsHorizontalBar: Bool, isFocused: Bool, context: RenderContext
+    ) {
         if showsIndicators && !wantsScrollbar {
-            let palette = context.environment.palette
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,
                 width: contentWidth,
-                palette: palette
+                palette: context.environment.palette
             )
         }
-
-        // Append the trailing scrollbar column over the reserved width, then make
-        // it interactive (arrows / track / thumb drag).
         if wantsScrollbar {
             visibleBuffer = appendVerticalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth, handler: handler,
@@ -447,9 +475,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             attachScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
-
-        // Append the bottom horizontal scrollbar over the reserved row (with a
-        // corner cell where it meets the vertical bar), then make it interactive.
         if wantsHorizontalBar {
             visibleBuffer = appendHorizontalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth,
@@ -458,13 +483,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             attachHorizontalScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
         }
-
-        attachViewportMouseHandler(
-            to: &visibleBuffer, context: context, handler: handler,
-            persistedFocusID: persistedFocusID, viewportWidth: viewportWidth,
-            viewportHeight: viewportHeight, wantsHorizontal: wantsHorizontal)
-
-        return visibleBuffer
     }
 
     /// Registers the viewport-wide mouse handler + its hit region. The handler:
