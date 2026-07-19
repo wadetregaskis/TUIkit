@@ -364,12 +364,39 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID) && !isDisabled
         let selected = selectedIndex
 
-        if style == .bordered {
-            return renderBordered(
+        var buffer =
+            style == .bordered
+            ? renderBordered(
                 selectedIndex: selected, isFocused: isFocused, palette: palette, context: context)
-        }
-        return renderCompact(
-            selectedIndex: selected, isFocused: isFocused, palette: palette, context: context)
+            : renderCompact(
+                selectedIndex: selected, isFocused: isFocused, palette: palette, context: context)
+        attachRevealRegion(
+            to: &buffer, persistedFocusID: persistedFocusID, context: context)
+        return buffer
+    }
+
+    /// A whole-TabView region carrying the persisted focusID, so an
+    /// ENCLOSING ScrollView can locate the focused TabView and scroll it
+    /// into view (`snapViewportToFocusedControl` scans regions by focusID —
+    /// the same rule Table, List, and ScrollView follow). Whole-control
+    /// deliberately, not the strip: a TabView taller than the viewport then
+    /// top-aligns (headers visible, content filling the rest), and a
+    /// shorter one is revealed entirely. The handler is inert and the
+    /// region sits at the BACK of the dispatch order, so the tab-strip
+    /// click regions and interactive tab content keep winning every click.
+    private func attachRevealRegion(
+        to buffer: inout FrameBuffer, persistedFocusID: String, context: RenderContext
+    ) {
+        guard !context.isMeasuring,
+            let dispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        let handlerID = dispatcher.register { _ in false }
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: buffer.width, height: buffer.height,
+                handlerID: handlerID, focusID: persistedFocusID),
+            at: 0
+        )
     }
 
     // MARK: Surface, padding & geometry

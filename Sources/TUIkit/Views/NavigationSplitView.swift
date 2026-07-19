@@ -680,6 +680,9 @@ extension _NavigationSplitViewCore {
         /// The mouse handler claiming drags on the divider, or `nil` when the
         /// split isn't resizable (or while measuring).
         let mouseHandlerID: HitTestRegion.HandlerID?
+        /// The divider's focus identity, stamped onto its hit region so an
+        /// enclosing ScrollView can scroll a focused divider into view.
+        var focusID: String?
     }
 
     /// Sets up the divider that follows column `index`: registers its focus
@@ -769,7 +772,8 @@ extension _NavigationSplitViewCore {
         }
 
         return DividerRenderInfo(
-            isActive: isActive, isHovered: handler.isHovered, mouseHandlerID: mouseHandlerID)
+            isActive: isActive, isHovered: handler.isHovered, mouseHandlerID: mouseHandlerID,
+            focusID: handler.focusID)
     }
 
     /// Builds the one-column divider buffer for a gap.
@@ -839,7 +843,8 @@ extension _NavigationSplitViewCore {
         if let id = info.mouseHandlerID {
             buffer.hitTestRegions.append(
                 HitTestRegion(
-                    offsetX: 0, offsetY: 0, width: 1, height: h, handlerID: id
+                    offsetX: 0, offsetY: 0, width: 1, height: h, handlerID: id,
+                    focusID: info.focusID
                 )
             )
         }

@@ -542,10 +542,15 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             }
             return false
         }
+        // The ScrollView's focusID rides on this region: it is how an
+        // ENCLOSING ScrollView locates a focused embedded ScrollView to
+        // scroll it into view (`snapViewportToFocusedControl` scans regions
+        // by focusID — the same rule Table and List follow).
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0, offsetY: 0, width: viewportWidth, height: viewportHeight,
-                handlerID: mouseHandlerID),
+                handlerID: mouseHandlerID,
+                focusID: persistedFocusID),
             at: 0
         )
     }

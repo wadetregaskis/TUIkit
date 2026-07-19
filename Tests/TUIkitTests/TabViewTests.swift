@@ -416,9 +416,13 @@ struct TabViewTests {
         }
         let buffer = renderToBuffer(view, context: ctx)
         dispatcher.setRegions(buffer.hitTestRegions)
-        // The third tab's region.
-        #expect(buffer.hitTestRegions.count >= 3, "a hit region per tab")
-        let r = buffer.hitTestRegions[2]
+        // The third tab's region. (The whole-TabView reveal region spans the
+        // full buffer — skip it; the per-tab regions follow in tab order.)
+        let tabRegions = buffer.hitTestRegions.filter {
+            !($0.width == buffer.width && $0.height == buffer.height)
+        }
+        #expect(tabRegions.count >= 3, "a hit region per tab")
+        let r = tabRegions[2]
         let x = r.offsetX + r.width / 2
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: r.offsetY))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: r.offsetY))
