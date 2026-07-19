@@ -181,6 +181,43 @@ struct ScrollViewReaderTests {
         #expect(upward[1].contains("row 10"), "anchored upward: \(upward)")
     }
 
+    @Test("Anchored nil-anchor scrollTo of a visible row is a strict no-op")
+    func anchoredNilAnchorVisibleNoOp() {
+        // Height profile chosen to poison the pitch estimate: 100 3-tall
+        // rows seed pitch ≈ 3, then the visible region is 1-tall — so the
+        // target's estimate-space y disagrees badly with the walked offset.
+        // Judging "already visible" in estimate space then teleports the
+        // view; it must be judged in walked row space and be a no-op.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<600, id: \.self) { i in
+                        Text("row \(i)").frame(height: i < 100 ? 3 : 1)
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+
+        box.proxy?.scrollTo(150, anchor: .top)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        let settled = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(settled[1].contains("row 150"), "landed on the target: \(settled)")
+
+        // Row 152 is on screen (rows 150-153 are 1-tall in a 6-line
+        // viewport with both indicators). SwiftUI parity: nil anchor +
+        // visible target = no movement at all.
+        box.proxy?.scrollTo(152)
+        let after = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(after == settled, "visible target must not move the view: \(after) vs \(settled)")
+    }
+
     @Test("scrollTo works on the exact path (small, variable, eager)")
     func exactPathScrollTo() {
         let tuiContext = TUIContext()

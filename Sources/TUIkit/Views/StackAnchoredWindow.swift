@@ -228,20 +228,36 @@ extension _VStackCore {
         if let seek = window.seek {
             window.seek = nil
             if let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state) {
-                let estimate = state.estimatedPitch(spacing: spacing)
-                let estimatedY = ordinal * estimate
-                let rowHeight =
-                    frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
-                let newOffset = seek.windowOffset(
-                    targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
-                    viewportHeight: window.viewportHeight,
-                    totalHeight: children.count * estimate - spacing)
-                state.anchorOrdinal = ordinal
-                state.anchorKey = children.key(at: ordinal)
-                state.anchorOffsetWithin = 0
-                state.lastDerivedOffset = estimatedY
-                window.offset = newOffset
-                resolvedSeek = newOffset
+                if seek.anchor == nil,
+                    let nearOffset = nilAnchorSeekOffset(
+                        target: ordinal, frame: frame, state: state,
+                        window: window, seek: seek, count: children.count)
+                {
+                    // Nil anchor near the window resolves in WALKED row
+                    // space: an already-visible target moves NOTHING, a
+                    // nearby one moves minimally. The estimate path below
+                    // judges visibility by estimate-space y against the
+                    // walked offset — two coordinate spaces that drift
+                    // apart — and teleported the view (and the scrollbar)
+                    // for a target that was plainly on screen.
+                    window.offset = nearOffset
+                    resolvedSeek = nearOffset
+                } else {
+                    let estimate = state.estimatedPitch(spacing: spacing)
+                    let estimatedY = ordinal * estimate
+                    let rowHeight =
+                        frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
+                    let newOffset = seek.windowOffset(
+                        targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
+                        viewportHeight: window.viewportHeight,
+                        totalHeight: children.count * estimate - spacing)
+                    state.anchorOrdinal = ordinal
+                    state.anchorKey = children.key(at: ordinal)
+                    state.anchorOffsetWithin = 0
+                    state.lastDerivedOffset = estimatedY
+                    window.offset = newOffset
+                    resolvedSeek = newOffset
+                }
             }
         }
 
@@ -394,6 +410,54 @@ extension _VStackCore {
             result.appendVertically(FrameBuffer(emptyWithHeight: total - cursor), spacing: 0)
         }
         return result
+    }
+
+    /// Resolves a nil-anchor ("minimal movement") seek in WALKED row space,
+    /// for targets near the current window: the exact pitch walk gives the
+    /// target's true viewport-local position, so an already-visible target
+    /// (within the indicator-clipped band, as the reveal snap defines it)
+    /// moves nothing and a nearby one moves just enough. Far targets return
+    /// `nil` — minimality is meaningless hundreds of rows away, and the
+    /// estimate seek handles them.
+    private func nilAnchorSeekOffset(
+        target: Int, frame: AnchoredWindowFrame, state: StackWindowState,
+        window: ScrollContentWindow, seek: ScrollToRequest, count: Int
+    ) -> Int? {
+        let anchor = state.anchorOrdinal
+        guard abs(target - anchor) <= window.viewportHeight * 2 + 4 else { return nil }
+        var y = -state.anchorOffsetWithin
+        if target >= anchor {
+            for ordinal in anchor..<target { y += frame.pitch(of: ordinal) }
+        } else {
+            for ordinal in target..<anchor { y -= frame.pitch(of: ordinal) }
+        }
+        let rowHeight = frame.pitch(of: target) - (target < count - 1 ? spacing : 0)
+
+        let topShown = (seek.topInset > 0 && window.offset > 0) ? 1 : 0
+        var lastVisible = anchor
+        var walked = -state.anchorOffsetWithin
+        while lastVisible < count - 1,
+            walked + frame.pitch(of: lastVisible) < window.viewportHeight
+        {
+            walked += frame.pitch(of: lastVisible)
+            lastVisible += 1
+        }
+        let lastHeight =
+            frame.pitch(of: lastVisible) - (lastVisible < count - 1 ? spacing : 0)
+        let contentBelow =
+            lastVisible < count - 1 || walked + lastHeight > window.viewportHeight
+        let bottomShown = (seek.bottomInset > 0 && contentBelow) ? 1 : 0
+
+        if y >= topShown, y + rowHeight <= window.viewportHeight - bottomShown {
+            return window.offset  // fully visible: strict no-op
+        }
+        if y < topShown {
+            let destination = window.offset + y
+            let topPad = (seek.topInset > 0 && destination > 0) ? 1 : 0
+            return max(0, destination - topPad)
+        }
+        let bottomPad = (seek.bottomInset > 0 && target < count - 1) ? 1 : 0
+        return max(0, window.offset + y + rowHeight - window.viewportHeight + bottomPad)
     }
 
     /// Memo hit, else one key scan (never builds a row view). Shared by the
