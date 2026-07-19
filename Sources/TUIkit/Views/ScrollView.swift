@@ -271,8 +271,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let handler = handlerBox.value
         handler.canBeFocused = !isDisabled
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
-        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
-        handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
+        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
+        handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         return handler
     }
 
@@ -556,6 +556,15 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 focusID: persistedFocusID),
             at: 0
         )
+        // Register this viewport as a drag auto-scroll zone (sharing the region
+        // id, so the driver can read its absolute rect): a drag hovering near an
+        // edge scrolls the content to bring an off-screen drop target into view.
+        context.environment.dragAndDropSession?.registerAutoScrollZone(
+            DragAndDropSession.AutoScrollZone(
+                handlerID: mouseHandlerID,
+                vertical: handler,
+                horizontal: wantsHorizontal ? handler.horizontal : nil,
+                delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
     }
 
     /// Resolves which scrollbars to reserve this frame, from the CURRENT content's

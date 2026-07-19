@@ -306,12 +306,23 @@ private struct ScrollChainingDelayKey: EnvironmentKey {
     static let defaultValue: Duration = .milliseconds(500)
 }
 
+private struct DragAutoScrollDelayKey: EnvironmentKey {
+    static let defaultValue: Duration = .milliseconds(300)
+}
+
 extension EnvironmentValues {
     /// How long a nested scroller holds blocked wheel ticks at its edge
     /// before they chain to the enclosing scroller.
     public var scrollChainingDelay: Duration {
         get { self[ScrollChainingDelayKey.self] }
         set { self[ScrollChainingDelayKey.self] = newValue }
+    }
+
+    /// How long the drag cursor must dwell near a scrollable's edge before it
+    /// starts auto-scrolling toward an off-screen drop target.
+    public var dragAutoScrollDelay: Duration {
+        get { self[DragAutoScrollDelayKey.self] }
+        set { self[DragAutoScrollDelayKey.self] = newValue }
     }
 }
 
@@ -324,11 +335,20 @@ extension View {
     public func scrollChainingDelay(_ delay: Duration) -> some View {
         environment(\.scrollChainingDelay, delay)
     }
+
+    /// Sets how long the drag cursor must dwell near a scrollable's edge before
+    /// that scrollable begins auto-scrolling to bring an off-screen drop target
+    /// into view (macOS's drag auto-scroll). The rate then ramps with how far
+    /// past the edge the cursor is dragged. `.zero` scrolls immediately; the
+    /// default is 300 ms.
+    public func dragAutoScrollDelay(_ delay: Duration) -> some View {
+        environment(\.dragAutoScrollDelay, delay)
+    }
 }
 
 extension Duration {
     /// This duration as whole nanoseconds, clamped at zero.
-    var wheelDelayNanos: UInt64 {
+    var clampedNanoseconds: UInt64 {
         guard self > .zero else { return 0 }
         let seconds = UInt64(components.seconds) &* 1_000_000_000
         return seconds &+ UInt64(components.attoseconds / 1_000_000_000)

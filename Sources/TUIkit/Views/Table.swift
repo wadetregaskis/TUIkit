@@ -672,7 +672,7 @@ where Value.ID: Hashable {
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
-        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.wheelDelayNanos
+        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
         // The reveal-on-focus arithmetic (run between renders, on key events)
@@ -1188,6 +1188,16 @@ where Value.ID: Hashable {
             ),
             at: 0
         )
+
+        // Register the table as a drag auto-scroll zone (sharing the container
+        // region id): a drag hovering near its top/bottom edge scrolls the rows
+        // to reveal an off-screen drop target.
+        context.environment.dragAndDropSession?.registerAutoScrollZone(
+            DragAndDropSession.AutoScrollZone(
+                handlerID: mouseHandlerID,
+                vertical: state.handler,
+                horizontal: nil,
+                delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
 
         // A one-row region at the keyboard cursor's on-screen line, ahead of
         // the whole-table region so an enclosing ScrollView follows the

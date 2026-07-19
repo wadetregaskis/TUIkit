@@ -90,6 +90,37 @@ final class DragAndDropSession: @unchecked Sendable {
         let setTargeted: (Bool) -> Void
     }
 
+    /// One frame's registration of a scrollable that should auto-scroll while
+    /// a drag hovers near its edges — so a payload can be carried to a drop
+    /// target that is currently scrolled out of view (macOS's drag
+    /// auto-scroll, `NSView.autoscroll(with:)`).
+    ///
+    /// The zone carries the same `handlerID` as the scrollable's viewport hit
+    /// region, so the driver can read the region's *absolute* on-screen rect
+    /// from the dispatcher — the one place that geometry exists (a scrollable
+    /// only knows its own size at render time, never where the compositor
+    /// finally places it). The scroll state is held by reference (both are
+    /// classes) so the driver can move the viewport and read whether there is
+    /// anything left to reveal in a given direction.
+    struct AutoScrollZone {
+        /// The viewport region's id — its rect is the auto-scroll frame.
+        let handlerID: HitTestRegion.HandlerID
+
+        /// The vertical scroll position to drive (a `ScrollViewHandler` or an
+        /// `ItemListHandler`).
+        let vertical: any ScrollableOffsetState
+
+        /// The horizontal scroll position, when the scrollable has one (a
+        /// `ScrollView` with horizontal scrolling); `nil` otherwise.
+        let horizontal: (any ScrollableOffsetState)?
+
+        /// How long the cursor must dwell at this zone's edge before the first
+        /// auto-scroll tick — captured from the scrollable's own environment at
+        /// registration (`.dragAutoScrollDelay(_:)`), so a per-subtree override
+        /// is honoured even though the driver runs at the root.
+        let delayNanos: UInt64
+    }
+
     /// The drag in flight, or `nil`.
     struct ActiveDrag {
         /// The dragged value, type-erased (drops re-match it by type).
@@ -131,6 +162,20 @@ final class DragAndDropSession: @unchecked Sendable {
     /// This frame's drop targets, in registration (render) order.
     private(set) var targets: [Target] = []
 
+    /// This frame's auto-scroll zones, in registration (render) order — outer
+    /// scrollables before the inner ones they contain, so a tie at the cursor
+    /// resolves to the innermost by preferring the last (deepest) match.
+    private(set) var autoScrollZones: [AutoScrollZone] = []
+
+    /// When the cursor first entered an auto-scroll zone's trigger band on the
+    /// current run, or `nil` when nothing is engaged — the anchor for the
+    /// configurable initial delay before the first scroll tick.
+    private var autoScrollEngagedSinceNanos: UInt64?
+
+    /// The monotonic instant the next auto-scroll tick is due; `0` before the
+    /// first tick fires (see ``driveAutoScroll(nowNanos:delayNanos:)``).
+    private var autoScrollNextFireNanos: UInt64 = 0
+
     /// The drag in flight, or `nil`.
     private(set) var active: ActiveDrag?
 
@@ -144,11 +189,19 @@ final class DragAndDropSession: @unchecked Sendable {
     /// render before the view tree renders (and re-registers).
     func beginFrame() {
         targets.removeAll(keepingCapacity: true)
+        autoScrollZones.removeAll(keepingCapacity: true)
     }
 
     /// Registers a drop destination for this frame.
     func registerTarget(_ target: Target) {
         targets.append(target)
+    }
+
+    /// Registers a scrollable's auto-scroll zone for this frame. Cleared and
+    /// re-registered every render, exactly like a drop target — the driver
+    /// only ever reads THIS frame's zones against THIS frame's geometry.
+    func registerAutoScrollZone(_ zone: AutoScrollZone) {
+        autoScrollZones.append(zone)
     }
 
     /// Starts a drag. The cursor position is taken from the triggering
@@ -244,6 +297,140 @@ final class DragAndDropSession: @unchecked Sendable {
     func end() {
         active?.targeted?.setTargeted(false)
         active = nil
+        autoScrollEngagedSinceNanos = nil
+    }
+
+    // MARK: - Auto-scroll
+
+    /// Geometry and cadence for drag auto-scroll.
+    private enum AutoScroll {
+        /// Rows of "hot margin" just inside an edge where scrolling engages at
+        /// the modest base rate; the rate ramps up the further past the edge
+        /// the cursor is dragged.
+        static let hotMarginRows = 2
+        /// The fastest auto-scroll step, in lines/rows per tick.
+        static let maxRate = 6
+        /// The interval between ticks once engaged (~18 Hz).
+        static let intervalNanos: UInt64 = 55_000_000
+    }
+
+    /// One auto-scroll zone plus the per-tick step to apply to it.
+    private struct AutoScrollStep {
+        let zone: AutoScrollZone
+        let dy: Int
+        let dx: Int
+    }
+
+    /// Drives one auto-scroll tick for the drag in flight when the cursor is
+    /// near a registered scrollable's edge, returning whether auto-scroll is
+    /// currently engaged. While engaged the run loop keeps ticking even if the
+    /// cursor holds still, so a held-at-edge drag keeps scrolling. A no-op (and
+    /// `false`) when nothing is dragging or the cursor is near no edge.
+    ///
+    /// This lives on the session — not on a scrollable — because deciding
+    /// *which* scrollable to move and *how far past its edge* the cursor sits
+    /// needs the absolute on-screen geometry (from the dispatcher) together
+    /// with the drag cursor (here); a scrollable only ever knows its own size,
+    /// never where the compositor placed it. The run loop calls this at the top
+    /// of a frame, against the still-present previous frame's zones and region
+    /// rects (a re-render re-registers both before the mutated scroll shows),
+    /// so the scroll appears without a visible frame of lag.
+    ///
+    /// - Parameter nowNanos: This frame's monotonic timestamp.
+    @discardableResult
+    func driveAutoScroll(nowNanos: UInt64) -> Bool {
+        guard active != nil, let dispatcher, let cursor = lastAbsoluteEvent,
+            let step = bestAutoScroll(
+                cursorX: cursor.x, cursorY: cursor.y, dispatcher: dispatcher)
+        else {
+            autoScrollEngagedSinceNanos = nil
+            return false
+        }
+
+        if autoScrollEngagedSinceNanos == nil {
+            // Just engaged: arm the configurable initial delay before the first
+            // tick, so a drag merely crossing an edge on its way elsewhere
+            // doesn't yank the viewport.
+            autoScrollEngagedSinceNanos = nowNanos
+            autoScrollNextFireNanos = nowNanos &+ step.zone.delayNanos
+        } else if nowNanos >= autoScrollNextFireNanos {
+            if step.dy != 0 { step.zone.vertical.scrollFine(by: step.dy) }
+            if step.dx != 0 { step.zone.horizontal?.scrollFine(by: step.dx) }
+            autoScrollNextFireNanos = nowNanos &+ AutoScroll.intervalNanos
+        }
+        return true
+    }
+
+    /// The innermost engaged zone at the cursor and its per-tick step, or `nil`
+    /// when the cursor is near no scrollable edge. Innermost wins: zones are
+    /// registered outer-first, and the smallest-area match is the deepest, so a
+    /// drag over a scrollable nested in another scrolls the inner one.
+    private func bestAutoScroll(
+        cursorX: Int, cursorY: Int, dispatcher: MouseEventDispatcher
+    ) -> AutoScrollStep? {
+        var best: (step: AutoScrollStep, area: Int)?
+        for zone in autoScrollZones {
+            guard let rect = dispatcher.regionRect(for: zone.handlerID) else { continue }
+            let withinCols = cursorX >= rect.offsetX && cursorX < rect.offsetX + rect.width
+            let withinRows = cursorY >= rect.offsetY && cursorY < rect.offsetY + rect.height
+
+            // Vertical scroll needs the cursor over the zone's columns (so a
+            // cursor far to the side isn't a candidate); horizontal needs it
+            // within the rows. A cursor past an edge stays a candidate on the
+            // OTHER axis' overlap — that is the "drag past the edge" case.
+            let dy =
+                withinCols
+                ? Self.autoScrollDelta(
+                    position: cursorY, start: rect.offsetY, extent: rect.height,
+                    canBackward: zone.vertical.hasContentAbove,
+                    canForward: zone.vertical.hasContentBelow)
+                : 0
+            let dx: Int
+            if let horizontal = zone.horizontal, withinRows {
+                dx = Self.autoScrollDelta(
+                    position: cursorX, start: rect.offsetX, extent: rect.width,
+                    canBackward: horizontal.hasContentAbove,
+                    canForward: horizontal.hasContentBelow)
+            } else {
+                dx = 0
+            }
+
+            guard dy != 0 || dx != 0 else { continue }
+            let area = rect.width * rect.height
+            if best == nil || area <= best!.area {
+                best = (AutoScrollStep(zone: zone, dy: dy, dx: dx), area)
+            }
+        }
+        return best?.step
+    }
+
+    /// The signed per-tick step for one axis: negative toward the start,
+    /// positive toward the end, `0` when the cursor is comfortably inside the
+    /// viewport or the axis cannot move that way. The magnitude ramps from the
+    /// modest base rate within the hot margin to ``AutoScroll/maxRate`` the
+    /// further past the edge the cursor sits — the macOS drag-autoscroll feel
+    /// (near the edge: gentle; dragged past it: markedly faster). When a
+    /// scrollable butts against the screen edge the cursor clamps there and the
+    /// rate tops out modestly; when it has room past its edge (a scrollable
+    /// smaller than the screen) the cursor can go further and accelerate — the
+    /// same distinction macOS makes.
+    private static func autoScrollDelta(
+        position: Int, start: Int, extent: Int, canBackward: Bool, canForward: Bool
+    ) -> Int {
+        guard extent > 0 else { return 0 }
+        let lastEdge = start + extent - 1
+        let pastStart = (start + AutoScroll.hotMarginRows) - position
+        let pastEnd = position - (lastEdge - AutoScroll.hotMarginRows)
+        if pastStart > 0, canBackward { return -rate(forOvershoot: pastStart) }
+        if pastEnd > 0, canForward { return rate(forOvershoot: pastEnd) }
+        return 0
+    }
+
+    /// Lines/rows per tick for how far the cursor is past the hot-margin
+    /// trigger: the base rate within the margin, then one more per row beyond
+    /// the edge, capped at ``AutoScroll/maxRate``.
+    private static func rate(forOvershoot overshoot: Int) -> Int {
+        Swift.min(AutoScroll.maxRate, 1 + Swift.max(0, overshoot - AutoScroll.hotMarginRows))
     }
 
     /// The innermost on-screen region at the given position that is a

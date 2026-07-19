@@ -88,9 +88,9 @@ struct WheelChainingGraceTests {
 
     @Test("Duration → nanoseconds conversion clamps and scales correctly")
     func durationConversion() {
-        #expect(Duration.milliseconds(500).wheelDelayNanos == 500_000_000)
-        #expect(Duration.zero.wheelDelayNanos == 0)
-        #expect(Duration.seconds(2).wheelDelayNanos == 2_000_000_000)
-        #expect(Duration.milliseconds(-100).wheelDelayNanos == 0, "negative clamps to zero")
+        #expect(Duration.milliseconds(500).clampedNanoseconds == 500_000_000)
+        #expect(Duration.zero.clampedNanoseconds == 0)
+        #expect(Duration.seconds(2).clampedNanoseconds == 2_000_000_000)
+        #expect(Duration.milliseconds(-100).clampedNanoseconds == 0, "negative clamps to zero")
     }
 }

@@ -433,6 +433,15 @@ extension MouseEventDispatcher {
         return (region.offsetX, region.offsetY)
     }
 
+    /// The full absolute rectangle of the region registered with `id`, or `nil`
+    /// when no current region carries it. Unlike ``regionOffset(for:)`` this
+    /// carries the size too — the drag auto-scroll driver compares the cursor
+    /// against a scrollable's *edges*, which needs its width/height, not just
+    /// its top-left.
+    func regionRect(for id: HitTestRegion.HandlerID) -> HitTestRegion? {
+        regions.first { $0.handlerID == id }
+    }
+
     /// Processes a bare cursor-motion event by synthesising
     /// `.entered` / `.exited` transitions on the affected
     /// handlers — the hover state machine.

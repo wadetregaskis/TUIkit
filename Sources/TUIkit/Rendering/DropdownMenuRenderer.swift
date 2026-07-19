@@ -132,7 +132,7 @@ enum DropdownMenu {
         scroll.extent = rows.count
         scroll.viewportHeight = maxVisible
         scroll.wheelEdgeHold.delayNanos =
-            context.environment.scrollChainingDelay.wheelDelayNanos
+            context.environment.scrollChainingDelay.clampedNanoseconds
         if config.followHighlight, let highlightedRow = config.highlightedRow {
             // The follow margin keeps that many rows of context visible
             // beyond the highlight (see ScrollFollowMargin); the default

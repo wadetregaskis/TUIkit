@@ -338,6 +338,19 @@ extension RenderLoop {
         environment.volatileReadTracker = VolatileReadTracker()
         cursorTimer?.beginFrameReadTracking()
 
+        // Drag auto-scroll: BEFORE the tree re-registers this frame's zones,
+        // drive one tick against the still-present previous frame's zones and
+        // (absolute) region rects — the drag cursor is current, so a scroll
+        // near an edge shows this frame with no visible lag. While engaged the
+        // loop must keep ticking even if the cursor holds still, so request a
+        // grid at the auto-scroll cadence.
+        if let dragSession = environment.dragAndDropSession,
+            dragSession.driveAutoScroll(nowNanos: UInt64(bitPattern: frameNowNanos))
+        {
+            _ = animationScheduler?.request(
+                "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
+        }
+
         let scene = evaluateAppBody(environment: environment)
         if let paletteOverrideScene = scene as? any RootPaletteOverrideProvidingScene,
             let paletteOverride = paletteOverrideScene.rootPaletteOverride()
