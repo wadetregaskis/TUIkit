@@ -181,8 +181,21 @@ extension EquatableView: Layoutable {
         if let cached = cache.lookupSize(key: key, view: content) {
             return cached
         }
-        let size = measureChild(content, proposal: proposal, context: context)
-        cache.storeSize(key: key, view: content, size: size)
+        // Measure under the volatile tracker — see the matching gate in
+        // `_MemoizedRow.sizeThatFits`: a subtree declaring a render side
+        // effect (`.onRenderPass`) or reading a per-frame-volatile value must
+        // not have its measurement memoised away.
+        let existingTracker = context.environment.volatileReadTracker
+        let tracker = existingTracker ?? VolatileReadTracker()
+        let measureContext =
+            existingTracker == nil
+            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
+            : context
+        let unsafeBefore = tracker.cacheUnsafeCount
+        let size = measureChild(content, proposal: proposal, context: measureContext)
+        if tracker.cacheUnsafeCount == unsafeBefore {
+            cache.storeSize(key: key, view: content, size: size)
+        }
         return size
     }
 }

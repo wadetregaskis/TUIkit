@@ -187,8 +187,24 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
         if let cached = cache.lookupSize(key: key, view: element) {
             return cached
         }
-        let size = measureChild(content, proposal: proposal, context: context)
-        cache.storeSize(key: key, view: element, size: size)
+        // Measure under the volatile tracker, as the render path above does:
+        // a subtree that declares a render side effect (`.onRenderPass`
+        // instrumentation) or reads a per-frame-volatile value must not have
+        // its measurement memoised away — a served size would silently hide
+        // real layout participation, breaking the OnRenderPassModifier
+        // contract ("observation must not be memoised away"). Store-gating
+        // suffices: such a subtree never stores, so it never hits either.
+        let existingTracker = context.environment.volatileReadTracker
+        let tracker = existingTracker ?? VolatileReadTracker()
+        let measureContext =
+            existingTracker == nil
+            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
+            : context
+        let unsafeBefore = tracker.cacheUnsafeCount
+        let size = measureChild(content, proposal: proposal, context: measureContext)
+        if tracker.cacheUnsafeCount == unsafeBefore {
+            cache.storeSize(key: key, view: element, size: size)
+        }
         return size
     }
 }

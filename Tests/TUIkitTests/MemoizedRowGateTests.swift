@@ -125,4 +125,27 @@ struct MemoizedRowGateTests {
         #expect(!capture.path.contains("_MemoizedRow"))
         #expect(capture.path.contains("IdentityProbe"))
     }
+
+    @Test("Instrumented content is never memoised away (size memo declines)")
+    func instrumentationSurvivesSizeMemo() {
+        // The OnRenderPass contract: caches must not hide layout
+        // participation. The size memo (the ForEach row memo, and
+        // EquatableView which shares the gate) must decline to store a
+        // measurement that declared a render side effect — so a second,
+        // identical measure fires the hook again.
+        let tuiContext = TUIContext()
+        var measures = 0
+        let view = _MemoizedRow(
+            element: 1, content: Text("hello").onRenderPass { if $0 == .measure { measures += 1 } })
+
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 8,
+            environment: environment, tuiContext: tuiContext)
+        let proposal = ProposedSize(width: 40, height: nil)
+        _ = measureChild(view, proposal: proposal, context: context)
+        _ = measureChild(view, proposal: proposal, context: context)
+        #expect(measures == 2, "both measures fired the hook, got \(measures)")
+    }
 }
