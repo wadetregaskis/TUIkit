@@ -6,11 +6,12 @@
 //  the rows below — wherever the compositor places it, the options must be
 //  readable). Reported from live testing; this reproduces the shape.
 //
-//  TRIAGED PRE-EXISTING (2026-07-18): the identical repro fails at the
-//  branch fork point f089ccdf — the control opens (glyph flips to ▴) but
-//  the drop-down overlay never reaches the composited screen. Not a
-//  windowed-rendering regression; deferred past the branch merge by
-//  request. Un-disable the test when fixing.
+//  Root cause (pre-existing on main, triaged at fork point f089ccdf): the
+//  ScrollView's windowing culled overlays by the POPUP's span alone, and a
+//  drop-down anchored to the last visible row starts exactly at the
+//  viewport's bottom edge — discarded before the root compositor (whose
+//  job the flip-above-the-anchor placement is) ever saw it. The keep-test
+//  now spans popup ∪ anchor.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -25,9 +26,7 @@ import Testing
 @Suite("Picker popup at the viewport edge")
 struct PickerPopupEdgeTests {
 
-    @Test(
-        "Opening a Picker on the last visible row still shows the drop-down",
-        .disabled("pre-existing on main (triaged at fork point f089ccdf); fix post-merge"))
+    @Test("Opening a Picker on the last visible row still shows the drop-down")
     func popupOnLastVisibleRow() {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()

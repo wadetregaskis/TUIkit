@@ -878,7 +878,15 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let dx = horizontalEnabled ? -horizontalOffset : 0
         let visibleOverlays = full.overlays.compactMap { overlay -> OverlayLayer? in
             guard !overlay.centered else { return overlay }
-            let topY = overlay.offsetY
+            // The overlay's extent includes its ANCHOR (the control spanning
+            // `anchorHeight` rows immediately above `offsetY`): a drop-down
+            // attached to a control on the LAST visible row starts exactly at
+            // `viewportBottom`, and culling it by the popup's own span alone
+            // silently discarded it — the root compositor (whose job the
+            // flip-above-the-anchor placement is) never saw it, so opening
+            // such a picker showed nothing. With no anchor this reduces to
+            // the popup's own span, exactly the old test.
+            let topY = overlay.offsetY - overlay.anchorHeight
             let bottomY = overlay.offsetY + overlay.content.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
             return overlay.shifted(byX: dx, y: -scrollOffset)
