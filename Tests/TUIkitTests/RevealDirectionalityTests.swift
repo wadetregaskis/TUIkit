@@ -134,4 +134,43 @@ struct RevealDirectionalityTests {
             snapped.contains { $0.contains("item ") },
             "consuming a key snapped the focused list back into view: \(snapped)")
     }
+
+    @Test("With a scrollbar, reveals scroll minimally (no indicator headroom)")
+    func scrollbarRevealScrollsMinimally() {
+        // A scrollbar supersedes the "N more" text indicators, so a reveal
+        // must NOT reserve the indicator's edge row: doing so over-scrolled
+        // every reveal by exactly one line (the Forms shift-tab sighting —
+        // the focused control landed one row inside the edge instead of on
+        // it). Minimal scroll: the revealed control sits ON the viewport
+        // edge row in the direction it was revealed from.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<20, id: \.self) { i in
+                    Button("b\(i)e") {}.focusID("b\(i)")
+                }
+            }
+        }
+        .scrollbarVisibility(.visible)
+        .frame(height: 8)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+
+        // Reveal downward: b10 must land exactly on the LAST viewport row.
+        focusManager.focus(id: "b10")
+        let down = renderFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        #expect(down.last?.contains("b10e") == true, "b10 sits on the last row: \(down)")
+        #expect(!down.contains { $0.contains("b11e") }, "no over-scroll below b10: \(down)")
+
+        // Reveal upward (the shift-tab direction): b2 must land exactly on
+        // the FIRST viewport row.
+        focusManager.focus(id: "b2")
+        let up = renderFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        #expect(up.first?.contains("b2e") == true, "b2 sits on the first row: \(up)")
+        #expect(!up.contains { $0.contains("b1e") }, "no over-scroll above b2: \(up)")
+    }
 }

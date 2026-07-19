@@ -123,9 +123,13 @@ extension _ScrollViewCore {
                 // bigger than the visible area) also top-aligns when reached
                 // by scrolling down: its header row is what identifies the
                 // control, so show its top rather than its tail.
+                // Headroom is gated on `indicatorsActive` like the fire
+                // condition above: a scrollbar supersedes the text
+                // indicators, so reserving a row for them would over-scroll
+                // every reveal by exactly one line.
                 let proposed = regionTop
                 let topIndicatorRow =
-                    (showsIndicators && indicatorsFit && proposed > 0) ? 1 : 0
+                    (indicatorsActive && showsIndicators && indicatorsFit && proposed > 0) ? 1 : 0
                 handler.scrollOffset =
                     max(0, min(handler.maxOffset, proposed - topIndicatorRow))
             } else if regionBottom > visibleBottom {
@@ -133,7 +137,7 @@ extension _ScrollViewCore {
                 // leaving 1 row for the bottom indicator if one appears.
                 let proposed = regionBottom - viewportHeight
                 let bottomIndicatorWouldAppear =
-                    showsIndicators && indicatorsFit
+                    indicatorsActive && showsIndicators && indicatorsFit
                     && (proposed + viewportHeight < handler.contentHeight)
                 handler.scrollOffset = max(
                     0,
