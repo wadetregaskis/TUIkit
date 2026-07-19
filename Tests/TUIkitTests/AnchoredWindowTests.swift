@@ -188,6 +188,73 @@ struct AnchoredWindowTests {
             perFrame <= 8,
             "a steady append frame re-measures a handful of fresh rows, not the band + samples: \(perFrame)")
     }
+
+    /// Renders a variable-height keyed stack with the given row count and
+    /// spacing under an injected window — `rows` chooses the path (≤256 =
+    /// exact full walk, above = anchored fill).
+    @discardableResult
+    private func renderSpacedFrame(
+        rows: Int, spacing: Int, offset: Int, tuiContext: TUIContext
+    ) -> [String] {
+        let view = LazyVStack(alignment: .leading, spacing: spacing) {
+            ForEach(0..<rows, id: \.self) { i in
+                Text("row \(i)").frame(height: i % 3 + 1)
+            }
+        }
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        environment.scrollContentWindow = ScrollContentWindow(
+            offset: offset, viewportHeight: Self.viewport)
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: rows * 4,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+    }
+
+    @Test("Nonzero spacing: the anchored path's geometry matches the exact path")
+    func anchoredSpacingMatchesExact() {
+        // Same content prefix either side of the anchored threshold: 100
+        // rows take the exact full walk, 400 the anchored fill. The first
+        // rows are identical, so the head lines must be byte-identical —
+        // above all the spacing line between row 0 and row 1, which the
+        // anchored pitch walk is prone to dropping (spacing charged BEFORE
+        // a row but applied as the advance AFTER it misses exactly one gap).
+        let exact = renderSpacedFrame(
+            rows: 100, spacing: 1, offset: 0, tuiContext: TUIContext())
+        let anchored = renderSpacedFrame(
+            rows: 400, spacing: 1, offset: 0, tuiContext: TUIContext())
+        #expect(
+            Array(exact.prefix(10)) == Array(anchored.prefix(10)),
+            "exact \(Array(exact.prefix(10))) vs anchored \(Array(anchored.prefix(10)))")
+
+        // And line scrolling stays line-exact WITH spacing: each one-line
+        // scroll shifts the visible slice by exactly one line (spacing
+        // lines included in the walk).
+        let tuiContext = TUIContext()
+        var previous = Array(
+            renderSpacedFrame(rows: 400, spacing: 1, offset: 0, tuiContext: tuiContext)
+                .prefix(Self.viewport))
+        for offset in 1...8 {
+            let lines = renderSpacedFrame(
+                rows: 400, spacing: 1, offset: offset, tuiContext: tuiContext)
+            guard lines.count >= offset + Self.viewport else {
+                Issue.record("buffer too short at offset \(offset)")
+                return
+            }
+            let visible = Array(lines[offset..<(offset + Self.viewport)])
+            #expect(
+                Array(previous.dropFirst()) == Array(visible.dropLast()),
+                "offset \(offset): one-line shift with spacing, was \(previous) now \(visible)")
+            previous = visible
+        }
+    }
 }
 
 // MARK: - Measure-counting probe

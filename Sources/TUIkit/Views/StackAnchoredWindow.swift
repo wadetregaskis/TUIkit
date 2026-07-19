@@ -62,7 +62,13 @@ private final class AnchoredWindowFrame {
         // by the rows this frame touches, unlike marking inside the memo
         // itself (which is O(tree) on eager stacks).
         context.renderCache?.markActive(child.identity(under: context))
-        let value = max(1, measured.height) + (ordinal > 0 ? spacing : 0)
+        // AFTER-spacing semantics: a row's pitch is its height plus the gap
+        // BELOW it (every row but the last has one). `fill` advances by the
+        // pitch of the row it just placed, so the gap must ride the row
+        // ABOVE it — the before-spacing convention dropped exactly the
+        // row 0 → row 1 gap (row 0's pitch carried no spacing) and shifted
+        // the whole tail up one line per spacing unit.
+        let value = max(1, measured.height) + (ordinal < children.count - 1 ? spacing : 0)
         pitchCache[ordinal] = value
         built[ordinal] = child
         state.recordMeasuredPitch(value)
@@ -224,7 +230,8 @@ extension _VStackCore {
             if let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state) {
                 let estimate = state.estimatedPitch(spacing: spacing)
                 let estimatedY = ordinal * estimate
-                let rowHeight = frame.pitch(of: ordinal) - (ordinal > 0 ? spacing : 0)
+                let rowHeight =
+                    frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
                 let newOffset = seek.windowOffset(
                     targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
                     viewportHeight: window.viewportHeight,
@@ -309,7 +316,9 @@ extension _VStackCore {
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
         for (ordinal, y) in sorted {
-            let rowHeight = frame.pitch(of: ordinal) - (ordinal > 0 ? spacing : 0)
+            let rowHeight =
+                frame.pitch(of: ordinal)
+                - (ordinal < frame.children.count - 1 ? spacing : 0)
             let slotY = max(y, cursor)
             if slotY > cursor {
                 result.appendVertically(FrameBuffer(emptyWithHeight: slotY - cursor), spacing: 0)
@@ -340,7 +349,12 @@ extension _VStackCore {
 
         let remaining = frame.children.count - 1 - lastPlaced
         let estimate = state.estimatedPitch(spacing: spacing)
-        let total = max(cursor, bottomY) + max(0, remaining) * estimate
+        // The estimate prices each remaining row at height + below-gap; the
+        // actual last row has no below-gap, so an estimated suffix carries
+        // one spacing too many.
+        let total =
+            max(cursor, bottomY) + max(0, remaining) * estimate
+            - (remaining > 0 ? spacing : 0)
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = total
@@ -400,7 +414,7 @@ extension _VStackCore {
             // Sample rows are measured but never rendered — keep their memo
             // entries alive (see `AnchoredWindowFrame.pitch`).
             measureContext.renderCache?.markActive(child.identity(under: measureContext))
-            sampleTotal += max(1, size.height) + (ordinal > 0 ? spacing : 0)
+            sampleTotal += max(1, size.height) + (ordinal < count - 1 ? spacing : 0)
             maxWidth = max(maxWidth, min(size.width, widthLimit))
             if size.isWidthFlexible { widthFlexible = true }
             if size.isHeightFlexible { heightFlexible = true }
