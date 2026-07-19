@@ -125,4 +125,56 @@ struct FocusSectionCycleHygieneTests {
             "a non-overflowing ScrollView never takes focus: \(lap)")
         #expect(lap == ["two", "one", "two", "one"], "the buttons alternate cleanly: \(lap)")
     }
+
+    @Test("Disabled controls are never Tab stops (plain and page-shaped)")
+    func disabledControlsSkipRing() {
+        // The Toggle Demo shape: enabled and .disabled() toggles in a
+        // bordered section inside an overflowing page ScrollView. Disabled
+        // controls register (for layout bookkeeping) with canBeFocused
+        // false and the walk must never land on them.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Toggle("a", isOn: .constant(false))
+                    Toggle("off", isOn: .constant(false)).disabled()
+                    Toggle("on", isOn: .constant(true)).disabled()
+                    Toggle("b", isOn: .constant(false))
+                }
+                .padding()
+                .border()
+                ForEach(0..<20, id: \.self) { i in Text("filler \(i)") }
+            }
+        }
+        .frame(height: 10)
+
+        func frame() {
+            var environment = EnvironmentValues()
+            environment.focusManager = focusManager
+            environment.applyRuntimeServices(from: tuiContext)
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 10,
+                environment: environment, tuiContext: tuiContext)
+            tuiContext.preferences.beginRenderPass()
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            _ = renderToBuffer(view, context: context)
+            focusManager.endRenderPass()
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+        }
+        frame()
+        frame()
+
+        for press in 0..<8 {
+            focusManager.focusNext()
+            frame()
+            let id = focusManager.currentFocusedID ?? "nil"
+            #expect(
+                !id.contains(".1/") && !id.contains(".2/"),
+                "press \(press) landed on a disabled toggle: \(id)")
+        }
+    }
 }
