@@ -139,6 +139,13 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// wrapping or rendering its off-screen rows.
     var rowHeight: ((Int) -> Int)?
 
+    /// How eagerly the viewport follows the focus cursor — synced from the
+    /// environment each render (see ``ScrollFollowMargin``). With the default
+    /// `.none`, ``ensureFocusedItemVisible()`` scrolls only when the cursor
+    /// reaches a viewport edge; a margin starts the scroll early so that many
+    /// lines/rows of context stay visible beyond the cursor.
+    var followMargin: ScrollFollowMargin = .none
+
     /// The largest valid scroll offset, in rows.
     ///
     /// With variable-height rows (``rowHeight`` set) the default
@@ -693,14 +700,15 @@ extension ItemListHandler {
         }
         guard contentHeight > 0 else { return }
 
-        // Scroll up: the focused row becomes the first visible row.
-        // When it isn't the very first item an "above" indicator
-        // appears, but the focused row is still the first *row* shown
+        // Scroll up: the focused row (plus any follow margin) becomes the
+        // first visible content. When it isn't the very first item an
+        // "above" indicator appears, but the focused row is still shown
         // (just below the indicator), so it stays visible. A focused
         // row must be FULLY visible, so any line-granularity top clip
         // on it is cleared too.
-        if focusedIndex < scrollOffset {
-            scrollOffset = focusedIndex
+        let marginAbove = followMarginRows(from: focusedIndex, step: -1)
+        if focusedIndex - marginAbove < scrollOffset {
+            scrollOffset = max(0, focusedIndex - marginAbove)
             scrollTopClipLines = 0
         } else if focusedIndex == scrollOffset, scrollTopClipLines > 0 {
             scrollTopClipLines = 0
@@ -712,12 +720,21 @@ extension ItemListHandler {
         // back to the true bottom near the end.
         if let rowHeight, focusedIndex < itemCount {
             // Multi-line rows: pull the top down only as far as needed for the
-            // focused row to fit as the last visible row, accumulating heights.
-            // The top row's height counts net of any line-granularity clip.
-            // A scrollbar reserves no indicator lines, so it gets the full area.
+            // focused row (plus as much of the follow margin below it as the
+            // area allows) to fit as the last visible content, accumulating
+            // heights. The top row's height counts net of any line-granularity
+            // clip. A scrollbar reserves no indicator lines, so it gets the
+            // full area.
             let budget = max(1, showsScrollbar ? contentHeight : contentHeight - 2)
-            var top = focusedIndex
             var used = rowHeight(focusedIndex)
+            var tail = focusedIndex
+            let marginTail = min(
+                itemCount - 1, focusedIndex + followMarginRows(from: focusedIndex, step: 1))
+            while tail < marginTail, used + rowHeight(tail + 1) <= budget {
+                used += rowHeight(tail + 1)
+                tail += 1
+            }
+            var top = focusedIndex
             while top > 0, used + rowHeight(top - 1) <= budget {
                 used += rowHeight(top - 1)
                 top -= 1
@@ -734,14 +751,45 @@ extension ItemListHandler {
                 (showsScrollbar || itemCount <= contentHeight)
                 ? contentHeight
                 : max(1, contentHeight - 2)
-            if focusedIndex >= scrollOffset + safeRows {
-                scrollOffset = focusedIndex - safeRows + 1
+            let tail = min(
+                itemCount - 1, focusedIndex + followMarginRows(from: focusedIndex, step: 1))
+            if tail >= scrollOffset + safeRows {
+                // Keep the margin rows below the cursor visible too — but the
+                // cursor itself always wins over its margin.
+                scrollOffset = min(focusedIndex, tail - safeRows + 1)
                 scrollTopClipLines = 0
             }
         }
 
         clampScrollOffset()
         clampTopClip()
+    }
+
+    /// The number of rows of context the follow margin keeps visible beyond
+    /// the cursor in one direction (`step` −1 above / +1 below) — see
+    /// ``followMargin``. `.rows` counts rows directly; `.lines` / `.fraction`
+    /// resolve to terminal lines and convert by walking real row heights
+    /// outward from `index` (1:1 when rows are single-line). Clamped so the
+    /// cursor can always rest strictly inside the visible area.
+    private func followMarginRows(from index: Int, step: Int) -> Int {
+        guard let contentHeight, contentHeight > 1 else { return 0 }
+        switch followMargin.value {
+        case .rows(let count):
+            return min(max(0, count), max(0, (contentHeight - 1) / 2))
+        case .lines, .fraction:
+            let lines = followMargin.resolvedLines(viewportLines: contentHeight)
+            guard lines > 0 else { return 0 }
+            guard let rowHeight else { return lines }
+            var rows = 0
+            var used = 0
+            var i = index + step
+            while i >= 0, i < itemCount, used < lines {
+                used += max(1, rowHeight(i))
+                rows += 1
+                i += step
+            }
+            return rows
+        }
     }
 
     /// The pre-dynamic-indicator scroll-into-view arithmetic, kept

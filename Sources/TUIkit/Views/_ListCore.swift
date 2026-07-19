@@ -589,6 +589,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Captured at render for the same reason as the shift multiplier:
         // wheel events arrive when the environment is out of reach.
         handler.scrollGranularity = context.environment.scrollGranularity
+        // Same event-time capture: the reveal runs on key events.
+        handler.followMargin = context.environment.scrollFollowMargin
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing

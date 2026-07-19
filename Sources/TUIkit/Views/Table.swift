@@ -676,6 +676,7 @@ where Value.ID: Hashable {
         // Captured for wheel events, which arrive when the environment is out
         // of reach — line granularity steps by lines through the tall rows.
         handler.scrollGranularity = context.environment.scrollGranularity
+        handler.followMargin = context.environment.scrollFollowMargin
         // Choose viewportHeight so the handler's row-based maxOffset
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
         let furthest = maxScrollOffset(count: data.count, contentHeight: contentHeight, height: heightOf)
@@ -973,6 +974,7 @@ where Value.ID: Hashable {
         // sync it (and zero any stale clip below) in case the table's rows
         // switch between the single-line and multi-line paths across frames.
         handler.scrollGranularity = context.environment.scrollGranularity
+        handler.followMargin = context.environment.scrollFollowMargin
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`

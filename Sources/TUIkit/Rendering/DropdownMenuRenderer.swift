@@ -134,11 +134,16 @@ enum DropdownMenu {
         scroll.wheelEdgeHold.delayNanos =
             context.environment.scrollChainingDelay.wheelDelayNanos
         if config.followHighlight, let highlightedRow = config.highlightedRow {
+            // The follow margin keeps that many rows of context visible
+            // beyond the highlight (see ScrollFollowMargin); the default
+            // zero is the classic edge-triggered follow.
+            let margin = context.environment.scrollFollowMargin
+                .resolvedLines(viewportLines: maxVisible)
             var offset = scroll.scrollOffset
-            if highlightedRow < offset {
-                offset = highlightedRow
-            } else if highlightedRow >= offset + maxVisible {
-                offset = highlightedRow - maxVisible + 1
+            if highlightedRow - margin < offset {
+                offset = max(0, highlightedRow - margin)
+            } else if highlightedRow + margin >= offset + maxVisible {
+                offset = min(highlightedRow, highlightedRow + margin - maxVisible + 1)
             }
             scroll.scrollOffset = offset
         }

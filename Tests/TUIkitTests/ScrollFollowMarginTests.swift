@@ -142,6 +142,92 @@ struct ScrollFollowMarginTests {
             "a 2-line margin scrolls exactly 2 steps earlier: default \(defaultTops), margin \(marginTops)")
     }
 
+    // MARK: List cursor + ScrollView reveal under a margin
+
+    @discardableResult
+    private func renderFrame<V: View>(
+        _ view: V, tuiContext: TUIContext, focusManager: FocusManager, height: Int
+    ) -> [String] {
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: height,
+            environment: environment, tuiContext: tuiContext)
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        focusManager.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        focusManager.endRenderPass()
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private struct Item: Identifiable {
+        let id: Int
+        var label: String { "item-\(id)-end" }
+    }
+
+    @Test("List cursor with .lines(2) keeps two rows visible beyond it")
+    func listCursorMargin() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let items = (0..<30).map { Item(id: $0) }
+        let view = List(items, selection: Binding<Int?>.constant(nil)) { item in
+            Text(item.label)
+        }
+        .scrollFollowMargin(.lines(2))
+        .frame(height: 10)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 10)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 10)
+        // Walk the cursor deep; mid-list the margin must keep 2 rows visible
+        // BELOW the cursor (an edge-triggered walk shows the cursor row last).
+        for _ in 0..<12 { _ = focusManager.dispatchKeyEvent(KeyEvent(key: .down)) }
+        let lines = renderFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, height: 10)
+        #expect(lines.contains { $0.contains("item-12-end") }, "cursor visible: \(lines)")
+        #expect(
+            lines.contains { $0.contains("item-13-end") }
+                && lines.contains { $0.contains("item-14-end") },
+            "two rows of context visible beyond the cursor: \(lines)")
+    }
+
+    @Test("ScrollView reveal with .lines(2) leaves two lines beyond the control")
+    func scrollViewRevealMargin() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<20, id: \.self) { i in
+                    Button("b\(i)e") {}.focusID("b\(i)")
+                }
+            }
+        }
+        .scrollbarVisibility(.visible)
+        .scrollFollowMargin(.lines(2))
+        .frame(height: 8)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+
+        // Reveal downward: b10 lands 2 rows above the last viewport row, so
+        // b11 and b12 are visible beyond it.
+        focusManager.focus(id: "b10")
+        let down = renderFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        #expect(down.contains { $0.contains("b10e") }, "the control is visible: \(down)")
+        #expect(down.last?.contains("b12e") == true, "two lines beyond it show: \(down)")
+
+        // And upward: b4 lands 2 rows below the first viewport row.
+        focusManager.focus(id: "b4")
+        let up = renderFrame(
+            view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        #expect(up.first?.contains("b2e") == true, "two lines above it show: \(up)")
+    }
+
     @Test("Walking back up: the default only scrolls at the top edge")
     func edgeTriggeredUpward() {
         // Walk deep, then back. On the way up the window must hold until the

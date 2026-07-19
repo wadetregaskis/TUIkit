@@ -113,8 +113,17 @@ extension _ScrollViewCore {
             let bottomIndicatorShows =
                 indicatorsActive && showsIndicators && indicatorsFit
                 && viewportBottom < handler.contentHeight
-            let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
-            let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
+            // The follow margin widens both the fire condition and the snap
+            // targets below, so the revealed control keeps that much context
+            // visible beyond it (see ScrollFollowMargin). Regions as tall as
+            // the viewport skip it — they fill the window regardless.
+            let margin =
+                region.height >= viewportHeight
+                ? 0
+                : context.environment.scrollFollowMargin
+                    .resolvedLines(viewportLines: viewportHeight)
+            let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0) + margin
+            let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0) - margin
 
             if regionTop < visibleTop || (regionBottom > visibleBottom && region.height >= viewportHeight) {
                 // Scroll-up: align the region's top with viewportTop, leaving
@@ -127,7 +136,7 @@ extension _ScrollViewCore {
                 // condition above: a scrollbar supersedes the text
                 // indicators, so reserving a row for them would over-scroll
                 // every reveal by exactly one line.
-                let proposed = regionTop
+                let proposed = regionTop - margin
                 let topIndicatorRow =
                     (indicatorsActive && showsIndicators && indicatorsFit && proposed > 0) ? 1 : 0
                 handler.scrollOffset =
@@ -135,7 +144,7 @@ extension _ScrollViewCore {
             } else if regionBottom > visibleBottom {
                 // Scroll-down: align the region's bottom with viewportBottom,
                 // leaving 1 row for the bottom indicator if one appears.
-                let proposed = regionBottom - viewportHeight
+                let proposed = regionBottom - viewportHeight + margin
                 let bottomIndicatorWouldAppear =
                     indicatorsActive && showsIndicators && indicatorsFit
                     && (proposed + viewportHeight < handler.contentHeight)
