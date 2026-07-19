@@ -83,13 +83,31 @@ struct FocusStateTests {
         @FocusState var field: Field?
         let binding: Box<FocusState<Field?>.Binding?>
         var applyDefault = false
+        var priority: DefaultFocusEvaluationPriority = .automatic
         var body: some View {
             binding.value = $field
             return VStack {
                 TextField("name", text: .constant("")).focused($field, equals: .name)
                 TextField("email", text: .constant("")).focused($field, equals: .email)
             }
-            .defaultFocus($field, applyDefault ? .email : .name)
+            .defaultFocus($field, applyDefault ? .email : .name, priority: priority)
+        }
+    }
+
+    /// The default's target (`.email`) is only shown when `showEmail` is set.
+    private struct ConditionalHarness: View {
+        @FocusState var field: Field?
+        let binding: Box<FocusState<Field?>.Binding?>
+        let showEmail: Box<Bool>
+        var body: some View {
+            binding.value = $field
+            return VStack {
+                TextField("name", text: .constant("")).focused($field, equals: .name)
+                if showEmail.value {
+                    TextField("email", text: .constant("")).focused($field, equals: .email)
+                }
+            }
+            .defaultFocus($field, .email)
         }
     }
 
@@ -150,5 +168,91 @@ struct FocusStateTests {
         #expect(
             bindingBox.value?.wrappedValue == .name,
             "the default focus is initial-only; it does not re-steal focus")
+    }
+
+    @Test("A default whose target appears on a later frame does not steal focus (finding 1/4)")
+    func conditionalDefaultTargetDoesNotSteal() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let bindingBox = Box<FocusState<Field?>.Binding?>(nil)
+        let showEmail = Box(false)
+        let view = ConditionalHarness(binding: bindingBox, showEmail: showEmail)
+
+        // Frame 1: the .email default target isn't shown yet, so the default
+        // shot is spent and .name (the only focusable) auto-focuses.
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(bindingBox.value?.wrappedValue == .name, "the shown field auto-focuses")
+
+        // The .email field appears on a later frame; the already-spent default
+        // must NOT yank focus off .name.
+        showEmail.value = true
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(
+            bindingBox.value?.wrappedValue == .name,
+            "a conditionally-appearing default target does not steal focus later")
+    }
+
+    @Test("defaultFocus re-applies when its focus scope disappears and reappears (finding 3)")
+    func defaultFocusReAppliesOnScopeReappear() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let bindingBox = Box<FocusState<Field?>.Binding?>(nil)
+        let view = FieldHarness(binding: bindingBox, applyDefault: true)
+
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(bindingBox.value?.wrappedValue == .email)
+
+        // The user moves off the default, then the whole scope leaves the tree.
+        bindingBox.value?.wrappedValue = .name
+        render(Text("elsewhere"), tuiContext: tui, focusManager: manager)
+
+        // Re-presenting the scope re-applies its default (not left "applied").
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(
+            bindingBox.value?.wrappedValue == .email,
+            "a re-presented scope's default focus applies again")
+    }
+
+    @Test(".userInitiated defaultFocus re-asserts focus every render (finding 7)")
+    func userInitiatedDefaultReAsserts() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let bindingBox = Box<FocusState<Field?>.Binding?>(nil)
+        let view = FieldHarness(
+            binding: bindingBox, applyDefault: true, priority: .userInitiated)
+
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(bindingBox.value?.wrappedValue == .email)
+
+        // The user moves to .name; .userInitiated drags it back on the next render.
+        bindingBox.value?.wrappedValue = .name
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(
+            bindingBox.value?.wrappedValue == .email,
+            ".userInitiated re-asserts the default even after the user moved focus")
+    }
+
+    @Test("defaultFocus lands directly on its target — no transient focus on the wrong control (finding 6)")
+    func defaultFocusDoesNotTransientlyFocusFirstControl() {
+        let manager = FocusManager()
+        let first = MockFocusable(id: "a")
+        let target = MockFocusable(id: "b")
+
+        // Simulate one render pass: .defaultFocus declares the value BEFORE the
+        // controls register (it wraps them), then each .focused registers its
+        // binding and its control.
+        manager.beginRenderPass()
+        manager.setDefaultFocusValue(AnyHashable(2), priority: .automatic, forStore: "s")
+        manager.registerFocusBinding(store: "s", value: AnyHashable(1), focusID: "a")
+        manager.register(first)
+        manager.registerFocusBinding(store: "s", value: AnyHashable(2), focusID: "b")
+        manager.register(target)
+        manager.endRenderPass()
+
+        #expect(target.focusReceivedCount == 1, "the default target receives focus")
+        #expect(
+            first.focusReceivedCount == 0,
+            "the first control is never transiently focused (no spurious editing began/ended)")
+        #expect(first.focusLostCount == 0)
     }
 }

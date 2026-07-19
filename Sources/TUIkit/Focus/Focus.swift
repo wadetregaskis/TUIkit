@@ -107,22 +107,45 @@ public final class FocusManager: @unchecked Sendable {
 
     // MARK: @FocusState binding registry
 
-    /// Per-`@FocusState` value→focusID maps, keyed by the store's stable id.
+    /// One `.focused(_:equals:)` binding: which focusID a value maps to, and
+    /// the render generation it was last registered in (for per-frame pruning).
+    private struct FocusBinding {
+        let focusID: String
+        var generation: UInt64
+    }
+
+    /// One `.defaultFocus(_:_:)` declaration.
+    private struct DefaultFocusDeclaration {
+        let value: AnyHashable
+        let priority: DefaultFocusEvaluationPriority
+        var generation: UInt64
+    }
+
+    /// Per-`@FocusState` value→binding maps, keyed by the store's stable id.
     /// Rebuilt as `.focused(_:equals:)` modifiers render, but kept HERE — on the
     /// manager that outlives any single frame's view structs — so a
     /// `@FocusState` read at the top of a body (before its `.focused` modifiers
     /// have re-registered this frame) still resolves against the last frame's
     /// mapping. This is what makes `if focus == .name { … }` read the live
-    /// focus, not a momentarily-empty map.
-    private var focusBindings: [String: [AnyHashable: String]] = [:]
+    /// focus, not a momentarily-empty map. Entries carry a render generation so
+    /// ``pruneFocusRegistry()`` can drop those whose control left the tree,
+    /// keeping the maps bounded to the working set (a windowed list of thousands
+    /// of `.focused` rows never accumulates thousands of stale entries).
+    private var focusBindings: [String: [AnyHashable: FocusBinding]] = [:]
 
     /// The declared default-focus value per store (from `.defaultFocus`), used
-    /// to pick the initial focus once its id is known.
-    private var focusDefaultValues: [String: AnyHashable] = [:]
+    /// to pick the initial focus once its bound control's id is known.
+    private var focusDefaultValues: [String: DefaultFocusDeclaration] = [:]
 
-    /// Store ids whose default focus has already been applied — `.defaultFocus`
-    /// sets the INITIAL focus once, then leaves the user in control.
+    /// Store ids whose `.automatic` default focus has been applied —
+    /// `.defaultFocus` sets the INITIAL focus once, then leaves the user in
+    /// control. Dropped when a store's scope leaves the tree, so a dismissed and
+    /// re-presented scope re-applies its default.
     private var appliedDefaultFocus: Set<String> = []
+
+    /// Monotonic per-render-pass counter, bumped in ``beginRenderPass()``, used
+    /// to age out `@FocusState` registry entries whose control stopped rendering.
+    private var focusRenderGeneration: UInt64 = 0
 
     /// Creates a new focus manager instance.
     public init() {}
@@ -225,7 +248,14 @@ extension FocusManager {
         if activeSectionID == nil {
             activeSectionID = targetID
         }
-        if targetID == activeSectionID && focusedID == nil && element.canBeFocused {
+        // Hold off auto-focusing the section's first element while a
+        // `.defaultFocus` still wants the initial focus — otherwise the first
+        // control would transiently receive (and then lose) focus this frame,
+        // firing a spurious editing-began/ended on the wrong control. The
+        // default lands directly in `endRenderPass`.
+        if targetID == activeSectionID && focusedID == nil && element.canBeFocused
+            && !hasUnresolvedDefaultFocus
+        {
             focusPreservingPendingIntent(element)
         }
 
@@ -353,16 +383,18 @@ extension FocusManager {
     /// stable id and the bound `value`) renders with `focusID`. Rebuilt each
     /// frame as the modifiers render, but retained on the manager so a
     /// `@FocusState` read BEFORE those modifiers re-register this frame still
-    /// resolves against last frame's mapping.
+    /// resolves against last frame's mapping. Stamped with the current render
+    /// generation for ``pruneFocusRegistry()``.
     func registerFocusBinding(store: String, value: AnyHashable, focusID: String) {
-        focusBindings[store, default: [:]][value] = focusID
+        focusBindings[store, default: [:]][value] =
+            FocusBinding(focusID: focusID, generation: focusRenderGeneration)
     }
 
     /// The value whose bound control currently holds focus, for a store — the
     /// getter behind `@FocusState`. `nil` (the empty value) when none does.
     func focusedValue(forStore store: String) -> AnyHashable? {
         guard let focused = focusedID, let map = focusBindings[store] else { return nil }
-        return map.first { $0.value == focused }?.key
+        return map.first { $0.value.focusID == focused }?.key
     }
 
     /// Moves focus to the control bound to `value` for a store, or — when
@@ -371,30 +403,68 @@ extension FocusManager {
     /// called from event closures (outside a render pass).
     func setFocusValue(_ value: AnyHashable?, forStore store: String) {
         let map = focusBindings[store] ?? [:]
-        if let value, let id = map[value] {
-            focus(id: id)
-        } else if let focused = focusedID, map.values.contains(focused) {
+        if let value, let binding = map[value] {
+            focus(id: binding.focusID)
+        } else if let focused = focusedID, map.values.contains(where: { $0.focusID == focused }) {
             relinquishFocus()
         }
     }
 
-    /// Declares a store's initial-focus value (from `.defaultFocus`).
-    func setDefaultFocusValue(_ value: AnyHashable, forStore store: String) {
-        focusDefaultValues[store] = value
+    /// Declares a store's initial-focus value (from `.defaultFocus`), stamped
+    /// with the current render generation.
+    func setDefaultFocusValue(
+        _ value: AnyHashable, priority: DefaultFocusEvaluationPriority, forStore store: String
+    ) {
+        focusDefaultValues[store] = DefaultFocusDeclaration(
+            value: value, priority: priority, generation: focusRenderGeneration)
     }
 
-    /// Applies each store's declared default focus ONCE — the initial focus,
-    /// after which the user is in control. Called from ``endRenderPass()`` when
-    /// every `.focused` binding for the frame has registered, so the target's id
-    /// is known and its control is in a section. A store whose default value has
-    /// no bound control yet is skipped until one appears.
+    /// Whether a store has a default focus that still wants to steal the initial
+    /// focus this pass, so ``register(_:inSection:)`` can hold off the automatic
+    /// first-focusable choice and let the default land directly (no transient
+    /// focus on the wrong control).
+    private var hasUnresolvedDefaultFocus: Bool {
+        focusDefaultValues.contains { store, declaration in
+            declaration.priority == .userInitiated || !appliedDefaultFocus.contains(store)
+        }
+    }
+
+    /// Applies each store's declared default focus — the initial focus, after
+    /// which the user is in control (`.automatic`), or on every pass
+    /// (`.userInitiated`). Called from ``endRenderPass()`` once every `.focused`
+    /// binding for the frame has registered.
+    ///
+    /// An `.automatic` default is a ONE-SHOT: it is consumed on the first pass
+    /// it is declared, whether or not its target has a bound control yet. If the
+    /// target is present it takes focus; if it is not (a conditionally-shown or
+    /// not-yet-windowed control) the shot is spent and the automatic
+    /// first-focusable stands — so the default never lies in wait to yank focus
+    /// off the user's later choice.
     private func resolvePendingDefaultFocus() {
-        for (store, value) in focusDefaultValues where !appliedDefaultFocus.contains(store) {
-            guard let id = focusBindings[store]?[value] else { continue }
-            appliedDefaultFocus.insert(store)
+        for (store, declaration) in focusDefaultValues {
+            let isAutomatic = declaration.priority == .automatic
+            if isAutomatic && appliedDefaultFocus.contains(store) { continue }
+            if isAutomatic { appliedDefaultFocus.insert(store) }
+            guard let binding = focusBindings[store]?[declaration.value] else { continue }
             // `focus(id:)` fires the old element's onFocusLost and the new one's
             // onFocusReceived (and no-ops if it is already focused).
-            focus(id: id)
+            focus(id: binding.focusID)
+        }
+    }
+
+    /// Drops `@FocusState` registry entries whose control did not render this
+    /// pass — keeping the maps bounded to the working set — while retaining this
+    /// pass's entries for the next frame's body-top reads. A default whose scope
+    /// vanished loses its applied-flag, so re-presenting the scope re-applies it.
+    private func pruneFocusRegistry() {
+        for (store, var map) in focusBindings {
+            map = map.filter { $0.value.generation == focusRenderGeneration }
+            if map.isEmpty { focusBindings[store] = nil } else { focusBindings[store] = map }
+        }
+        for (store, declaration) in focusDefaultValues
+        where declaration.generation != focusRenderGeneration {
+            focusDefaultValues[store] = nil
+            appliedDefaultFocus.remove(store)
         }
     }
 
@@ -781,6 +851,11 @@ extension FocusManager {
         // clearing here means a dismissed modal (which no longer renders, so no
         // longer re-marks) stops grabbing input on the very next frame.
         modalSectionIDs.removeAll()
+        // A new generation so this pass's @FocusState registrations can be told
+        // apart from prior ones (see `pruneFocusRegistry`). The registry itself
+        // is NOT cleared here — a body-top read must resolve against last frame's
+        // mapping before this frame's `.focused` modifiers re-register.
+        focusRenderGeneration &+= 1
         // activeSectionID and focusedID are intentionally preserved.
         // They will be validated after the render pass re-registers sections.
     }
@@ -804,33 +879,38 @@ extension FocusManager {
             restoreFocusForActiveSection()
         }
 
-        // Validate focused element. "Present but no longer focusable" is
-        // treated like "gone": some elements register with a dynamic
-        // `canBeFocused` (a ScrollView is focusable only while its content
-        // overflows), and focus resting on one would silently eat key events
-        // while showing no focus indicator anywhere.
+        // Drop focus that is gone or no longer focusable. "Present but not
+        // focusable" is treated like "gone": some elements register with a
+        // dynamic `canBeFocused` (a ScrollView is focusable only while its
+        // content overflows), and focus resting on one would silently eat key
+        // events while showing no focus indicator anywhere.
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
-                // Previously focused element is gone — auto-focus first available
                 self.focusedID = nil
-                if let firstFocusable = section.focusables.first(where: { $0.canBeFocused }) {
-                    self.focusedID = firstFocusable.focusID
-                    firstFocusable.onFocusReceived()
-                }
             }
-        } else if focusedID == nil, let section = activeSection,
+        }
+
+        // `.defaultFocus` overrides the automatic first-focusable choice for the
+        // INITIAL focus — applied here, after this pass's `.focused` bindings
+        // have all registered (so there is no first-frame flash) and BEFORE the
+        // first-focusable fallback (so the default target takes focus directly,
+        // never via a transient focus on the wrong control). `register` holds
+        // off auto-focusing while a default is unresolved, so `focusedID` is
+        // still nil here on that first frame.
+        resolvePendingDefaultFocus()
+
+        // Auto-focus the first focusable if, after validation and any default,
+        // nothing holds focus.
+        if focusedID == nil, let section = activeSection,
             let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
         {
             self.focusedID = firstFocusable.focusID
             firstFocusable.onFocusReceived()
         }
 
-        // `.defaultFocus` overrides the automatic first-focusable choice for the
-        // INITIAL focus — resolved here, after this pass's `.focused` bindings
-        // have all registered, so there is no first-frame flash and no per-store
-        // ordering dependence.
-        resolvePendingDefaultFocus()
+        // Drop `@FocusState` entries whose control left the tree this pass.
+        pruneFocusRegistry()
 
         // A pending intent unresolved by this pass either just triggered its
         // routing render (give it that one) or matches nothing — bound it.

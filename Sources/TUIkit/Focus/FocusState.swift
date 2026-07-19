@@ -122,7 +122,14 @@ public struct FocusState<Value: Hashable>: RenderIdentityBindable {
     /// The binding passed to `.focused(_:)` / `.focused(_:equals:)` /
     /// `.defaultFocus(_:_:)`.
     public var projectedValue: Binding {
-        Binding(store: store)
+        // Cache the manager at body time (`$field` is projected while the active
+        // environment is published) so an event closure capturing this binding
+        // can still move focus even if the bound control did not render this
+        // frame (windowed out) and so never wired the store itself.
+        if store.focusManager == nil {
+            store.focusManager = StateRegistration.activeEnvironment?.focusManager
+        }
+        return Binding(store: store)
     }
 
     /// Creates a `Bool` focus state (default `false` — not focused).
@@ -173,13 +180,27 @@ extension View {
 
     /// Sets the value a `@FocusState` should take when its focus scope first
     /// appears — the control bound to `value` receives the initial focus,
-    /// overriding the automatic "first focusable" choice. Applied once; the
-    /// user then controls focus.
+    /// overriding the automatic "first focusable" choice.
+    ///
+    /// With the default `.automatic` priority this is applied once and then the
+    /// user controls focus; `.userInitiated` re-applies it every render, even
+    /// after the user has moved focus.
     public func defaultFocus<Value: Hashable>(
-        _ binding: FocusState<Value>.Binding, _ value: Value
+        _ binding: FocusState<Value>.Binding, _ value: Value,
+        priority: DefaultFocusEvaluationPriority = .automatic
     ) -> some View {
-        _DefaultFocusModifier(content: self, store: binding.store, value: value)
+        _DefaultFocusModifier(
+            content: self, store: binding.store, value: value, priority: priority)
     }
+}
+
+/// How aggressively `.defaultFocus(_:_:priority:)` claims focus. Mirrors
+/// SwiftUI's `DefaultFocusEvaluationPriority`.
+public enum DefaultFocusEvaluationPriority: Sendable {
+    /// Set the initial focus once, then leave the user in control (default).
+    case automatic
+    /// Re-assert the focus on every render, overriding the user's moves.
+    case userInitiated
 }
 
 /// Forces the wrapped control's focusID (via ``EnvironmentValues/assignedFocusID``)
@@ -225,6 +246,7 @@ struct _DefaultFocusModifier<Content: View, Value: Hashable>: View {
     let content: Content
     let store: FocusStateStore<Value>
     let value: Value
+    let priority: DefaultFocusEvaluationPriority
 
     var body: some View { content }
 }
@@ -233,7 +255,8 @@ extension _DefaultFocusModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         if !context.isMeasuring, let manager = context.environment.focusManager {
             store.focusManager = manager
-            manager.setDefaultFocusValue(AnyHashable(value), forStore: store.storeID)
+            manager.setDefaultFocusValue(
+                AnyHashable(value), priority: priority, forStore: store.storeID)
         }
         return TUIkitView.renderToBuffer(content, context: context)
     }
