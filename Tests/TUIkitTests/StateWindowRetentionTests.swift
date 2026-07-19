@@ -132,6 +132,54 @@ struct RetainSubtreeTests {
         #expect(survived?.value == 1, "the windowed-out descendant's state must survive")
     }
 
+    @Test("A retained row keeps its conditional-branch record through the prune")
+    func retainedConditionalRecordSurvives() {
+        // The third prune filter: `lastConditionalCase` entries must honour
+        // retainSubtree exactly as state boxes do. Its purpose is that a
+        // branch flip happening while a row is OFF-window is still SEEN on
+        // re-entry (recordConditionalBranch returns true → ConditionalView
+        // invalidates the stale branch's retained state). Dropping
+        // `!isRetained` from just that filter silently resurrects
+        // stale-branch state: the pruned record makes the flip look like a
+        // fresh first sighting (false), skipping the invalidation.
+        let storage = StateStorage()
+        let root = ViewIdentity(rootType: Marker.self)
+        let row = root.child(type: Marker.self, index: 5)
+
+        // The row renders once on the true branch (first sighting: no
+        // prior, so no flip)…
+        #expect(!storage.recordConditionalBranch(row, isTrueBranch: true),
+            "first sighting is not a flip")
+
+        // …then leaves the window (retained, not active) for a pass.
+        storage.beginRenderPass()
+        storage.retainSubtree(root)
+        storage.endRenderPass()
+
+        // On re-entry the branch has FLIPPED. Only a surviving record can
+        // report that — a pruned one reads as a fresh sighting (false) and
+        // the stale branch's retained state is never invalidated.
+        #expect(storage.recordConditionalBranch(row, isTrueBranch: false),
+            "the flip is seen: the record survived retention")
+    }
+
+    @Test("An unretained conditional record prunes (fresh on return)")
+    func unretainedConditionalRecordPrunes() {
+        // The negative control: with no retention, the record goes with the
+        // pass, and a returning conditional reads as fresh even on the
+        // other branch (its descendants' state was pruned too — nothing to
+        // invalidate).
+        let storage = StateStorage()
+        let row = ViewIdentity(rootType: Marker.self).child(type: Marker.self, index: 5)
+        #expect(!storage.recordConditionalBranch(row, isTrueBranch: true))
+
+        storage.beginRenderPass()
+        storage.endRenderPass()
+
+        #expect(!storage.recordConditionalBranch(row, isTrueBranch: false),
+            "an unretained record pruned: the return reads as fresh")
+    }
+
     @Test("Non-descendants still prune normally")
     func unrelatedKeysStillPrune() {
         let storage = StateStorage()
