@@ -183,7 +183,16 @@ extension FocusManager {
     ///   - sectionID: The section to register in. Defaults to the active section
     ///     or the default section if no section is active.
     public func register(_ element: Focusable, inSection sectionID: String? = nil) {
-        let targetID = sectionID ?? activeSectionID ?? Self.defaultSectionID
+        // Membership comes from WHERE the control renders — the environment's
+        // activeFocusSectionID, threaded here by FocusRegistration and set by
+        // .focusSection, modal/alert presentation, and NavigationSplitView's
+        // columns. A nil means "no enclosing section": file it in the stable
+        // default section. Falling back to the momentarily-ACTIVE section
+        // (the old behaviour) made membership and section ORDER drift with
+        // focus — focus a split-view divider and the next frame filed the
+        // page's controls into the divider's section, created FIRST that
+        // pass, collapsing Tab into a two-stop oscillation.
+        let targetID = sectionID ?? Self.defaultSectionID
 
         // Ensure section exists
         if !sections.contains(where: { $0.id == targetID }) {
