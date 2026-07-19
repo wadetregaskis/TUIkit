@@ -152,7 +152,12 @@ struct OverlaysPage: View {
     /// The main background content with menu and description.
     private var backgroundContent: some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 3) {
+            // Top-aligned: the menu windows itself to the page's visible
+            // viewport, which only keeps its selection on screen if the menu
+            // actually starts at the top of the page — centre alignment
+            // against the (taller) description panel would push its lower
+            // rows, selection included, below the fold on short terminals.
+            HStack(alignment: .top, spacing: 3) {
                 // Left: Demo menu
                 Menu(
                     title: L("page.overlays.selectDemo"),
