@@ -41,6 +41,18 @@ final class StackWindowState {
         /// walk (small N) from then on.
         var broken = false
 
+        /// The widest row the render paths have measured — a one-time bounded
+        /// seed sample plus every verified band row, grow-only — with the
+        /// flexibility flags OR-ed over the same rows. `nil` until the first
+        /// uniform render seeds it (seeding is a render-path mutation, like
+        /// the extent). Lets `uniformSeekSizeThatFits` answer O(1): without
+        /// it, every measure re-sampled up to 64 rows for width/flexibility,
+        /// which on any cache-invalidating frame (any `@State` write clears
+        /// the memo) is the WHOLE stack for ≤64 rows — every frame.
+        var hypothesisRowWidth: Int?
+        var hypothesisWidthFlexible = false
+        var hypothesisHeightFlexible = false
+
         /// Ordinals of recently rendered rows by their stable key, so the
         /// focused row (which moved off-window and must keep registering)
         /// resolves O(1) instead of re-scanning all keys. Rebuilt each fast
@@ -212,10 +224,10 @@ extension _VStackCore {
         guard
             let rows = verifiedUniformRows(
                 inline, children: children, extent: extent,
-                proposal: proposal, context: childContext),
+                state: state, proposal: proposal, context: childContext),
             let graftRows = verifiedUniformRows(
                 grafted, children: children, extent: extent,
-                proposal: proposal, context: childContext)
+                state: state, proposal: proposal, context: childContext)
         else {
             state.broken = true
             return nil
@@ -281,10 +293,19 @@ extension _VStackCore {
 
     /// Builds each ordinal's child, verifying the uniform hypothesis as it
     /// goes: a row measuring anything but `extent` — or a spacer — returns
-    /// `nil` (falsified).
+    /// `nil` (falsified). Verified rows also SEED and GROW the width
+    /// hypothesis (and its flexibility flags), render-path mutations both:
+    /// the stack's O(1) measure answer tracks the widest row the render has
+    /// ever seen, so scrolling a wider row into the band widens the report
+    /// on the same frame — and no row beyond the ones the render already
+    /// touches is ever measured for it (the O(window) build bound holds).
+    /// Fidelity note: the answer is the max over VISITED rows, where the old
+    /// per-measure sampling took the first 64 — both are heuristics for
+    /// content the window has not reached, and the only consumer of a seeded
+    /// stack's width (a vertical ScrollView's extents) discards it.
     private func verifiedUniformRows(
         _ ordinals: [Int], children: ChildViewCollection, extent: Int,
-        proposal: ProposedSize, context: RenderContext
+        state: StackWindowState, proposal: ProposedSize, context: RenderContext
     ) -> [(ordinal: Int, child: ChildView)]? {
         var result: [(ordinal: Int, child: ChildView)] = []
         result.reserveCapacity(ordinals.count)
@@ -292,6 +313,9 @@ extension _VStackCore {
             let child = children[ordinal]
             let measured = child.measure(proposal: proposal, context: context)
             guard measured.height == extent, !child.isSpacer else { return nil }
+            state.hypothesisRowWidth = max(state.hypothesisRowWidth ?? 0, measured.width)
+            if measured.isWidthFlexible { state.hypothesisWidthFlexible = true }
+            if measured.isHeightFlexible { state.hypothesisHeightFlexible = true }
             result.append((ordinal, child))
         }
         return result
@@ -386,9 +410,8 @@ extension _VStackCore {
     func uniformSeekSizeThatFits(
         _ children: ChildViewCollection, proposal: ProposedSize, context: RenderContext
     ) -> ViewSize? {
-        guard let extent = uniformWindowState(context: context).hypothesisExtent,
-            !uniformWindowState(context: context).broken,
-            extent > 0
+        let state = uniformWindowState(context: context)
+        guard let extent = state.hypothesisExtent, !state.broken, extent > 0
         else { return nil }
 
         let count = children.count
@@ -400,6 +423,19 @@ extension _VStackCore {
         // Append-while-fits: k rows fit when k*pitch - spacing <= limit.
         let fitCount = max(0, min(count, (heightLimit + spacing) / pitch))
         let height = fitCount > 0 ? fitCount * pitch - spacing : 0
+        guard fitCount > 0 else { return ViewSize.fixed(0, 0) }
+
+        // O(1) once the render has seeded the width hypothesis: the answer is
+        // pure arithmetic plus the persisted widest-row width — no row
+        // measures at all, the steady state. (Before the first render only
+        // the sample below can answer, and it must not persist anything —
+        // measuring must not mutate.)
+        if let rowWidth = state.hypothesisRowWidth {
+            return ViewSize(
+                width: min(rowWidth, widthLimit), height: height,
+                isWidthFlexible: state.hypothesisWidthFlexible,
+                isHeightFlexible: state.hypothesisHeightFlexible)
+        }
 
         var measureContext = context
         measureContext.isMeasuring = true
