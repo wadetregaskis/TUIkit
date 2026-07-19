@@ -59,18 +59,46 @@ struct LifecycleMemoTests {
     }
 
     @Test("A memoized row's .task stays alive across cache-hit frames")
-    func taskSurvivesCachedFrames() {
-        nonisolated(unsafe) var starts = 0
+    func taskSurvivesCachedFrames() async {
+        // `.task` runs its body inside a `Task { … }` (TUIContext.startTask), so
+        // the increment lands ASYNCHRONOUSLY, after the synchronous render call
+        // returns. Counting into a plain `var` and asserting immediately raced
+        // the scheduler (the task hadn't run yet → a spurious `0`). The signal
+        // lets the test await the started task's first (and only) run before
+        // asserting, so the count is observed deterministically.
+        let signal = TaskSignal()
         let row = VStack {
             ForEach(["row"], id: \.self) { name in
-                Text(name).task { starts += 1 }
+                Text(name).task { await signal.hit() }
             }
         }
 
         for _ in 1...4 { frame(row) }
+        await signal.awaitFirstHit()
         // One start, and — critically — no cancel/restart churn: the token
-        // stayed recorded on every frame, so the disappear machinery never
-        // cancelled a visible row's task.
-        #expect(starts == 1, "the task starts once and is never spuriously restarted, got \(starts)")
+        // stayed recorded on every frame (frames 2–4 are cache hits that do not
+        // re-`startTask`), so the disappear machinery never cancelled a visible
+        // row's task and never spawned a second one.
+        let hits = await signal.hits
+        #expect(hits == 1, "the task starts once and is never spuriously restarted, got \(hits)")
+    }
+}
+
+/// Counts `.task` invocations and lets a test await the first one — the started
+/// task runs asynchronously, so awaiting its signal is how the count is read
+/// without racing the scheduler.
+private actor TaskSignal {
+    private(set) var hits = 0
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func hit() {
+        hits += 1
+        waiter?.resume()
+        waiter = nil
+    }
+
+    func awaitFirstHit() async {
+        if hits > 0 { return }
+        await withCheckedContinuation { waiter = $0 }
     }
 }
