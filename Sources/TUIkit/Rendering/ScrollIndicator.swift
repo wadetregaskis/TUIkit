@@ -30,6 +30,22 @@ enum ScrollIndicatorUnit {
     }
 }
 
+/// The per-frame emphasis colour for a scrollable's "N more" indicators — a
+/// pulsing accent while the scrollable holds keyboard focus, or `nil` (resting
+/// `foregroundTertiary`) otherwise. The scrollbar-less counterpart to
+/// ``ScrollbarColors/focusIndicating(isFocused:context:)``: a focused
+/// ScrollView / List / Table with no scrollbar shows its focus by breathing
+/// the edge indicators. Uses the shared ``SelectionIndicator`` convention, so
+/// it honours `.selectionIndicatorStyle` and the cursor clock (an idle
+/// indicator costs nothing).
+@MainActor
+func scrollIndicatorEmphasis(isFocused: Bool, context: RenderContext) -> Color? {
+    guard isFocused else { return nil }
+    let palette = context.environment.palette
+    return SelectionIndicator.resolve(isFocused: true, context: context)
+        .color(dim: palette.foregroundTertiary, bright: palette.accent)
+}
+
 // MARK: - Scroll Indicator Rendering
 
 /// Formats an estimated count compactly — "~897", "~5.4K", "~200M" — so an
@@ -80,6 +96,10 @@ func approximateCountLabel(_ count: Int) -> String {
 ///     windowed stack's unmeasured remainder) — rendered as "~5.4K" so the
 ///     label doesn't assert precision the number doesn't have. Exact counts
 ///     (`List`/`Table` rows, fully measured content) keep full precision.
+///   - emphasis: When non-`nil`, the arrow and label are drawn in this colour
+///     instead of the quiet `foregroundTertiary` — used to PULSE the
+///     indicators (a scrollbar-less scrollable's focus cue). `nil` keeps the
+///     resting appearance.
 /// - Returns: A styled string with a centered scroll indicator.
 @MainActor
 func renderScrollIndicator(
@@ -88,7 +108,8 @@ func renderScrollIndicator(
     unit: ScrollIndicatorUnit,
     width: Int,
     palette: any Palette,
-    approximate: Bool = false
+    approximate: Bool = false,
+    emphasis: Color? = nil
 ) -> String {
     let arrow = direction == .up ? "▲" : "▼"
     let countText = approximate ? approximateCountLabel(count) : "\(count)"
@@ -109,8 +130,9 @@ func renderScrollIndicator(
     let body = bodies.first { 1 + $0.count + 2 <= width } ?? ""
     let label = body.isEmpty ? " " : " \(body) "
 
-    let styledArrow = ANSIRenderer.colorize(arrow, foreground: palette.foregroundTertiary)
-    let styledLabel = ANSIRenderer.colorize(label, foreground: palette.foregroundTertiary)
+    let indicatorColor = emphasis ?? palette.foregroundTertiary
+    let styledArrow = ANSIRenderer.colorize(arrow, foreground: indicatorColor)
+    let styledLabel = ANSIRenderer.colorize(label, foreground: indicatorColor)
 
     let indicatorWidth = 1 + label.count
     let padding = max(0, (width - indicatorWidth) / 2)

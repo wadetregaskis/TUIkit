@@ -477,7 +477,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 to: visibleBuffer,
                 handler: handler,
                 width: contentWidth,
-                palette: context.environment.palette
+                palette: context.environment.palette,
+                emphasis: scrollIndicatorEmphasis(isFocused: isFocused, context: context)
             )
         }
         if wantsScrollbar {
@@ -924,7 +925,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         to buffer: FrameBuffer,
         handler: ScrollViewHandler,
         width: Int,
-        palette: any Palette
+        palette: any Palette,
+        emphasis: Color?
     ) -> FrameBuffer {
         guard buffer.height > 0 else { return buffer }
         guard handler.hasContentAbove || handler.hasContentBelow else {
@@ -943,7 +945,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 unit: .lines,
                 width: width,
                 palette: palette,
-                approximate: handler.contentHeightIsEstimate
+                approximate: handler.contentHeightIsEstimate,
+                emphasis: emphasis
             ).padToVisibleWidth(width)
         }
 
@@ -954,7 +957,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 unit: .lines,
                 width: width,
                 palette: palette,
-                approximate: handler.contentHeightIsEstimate
+                approximate: handler.contentHeightIsEstimate,
+                emphasis: emphasis
             ).padToVisibleWidth(width)
         }
 

@@ -681,13 +681,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var lines: [String] = []
         var ranges: [VisibleRowRange] = []
 
+        // A focused list with no scrollbar pulses its "N more" indicators as
+        // its focus cue (in addition to the pulsing cursor row) — the
+        // scrollbar-less counterpart to the bar's own pulse.
+        let indicatorEmphasis = scrollIndicatorEmphasis(isFocused: listHasFocus, context: context)
+
         if handler.hasContentAbove || handler.scrollTopClipLines > 0 {
             lines.append(renderScrollIndicator(
                 direction: .up,
                 count: max(1, handler.rowsAbove),
                 unit: .rows,
                 width: rowWidth,
-                palette: palette
+                palette: palette,
+                emphasis: indicatorEmphasis
             ))
         }
 
@@ -748,7 +754,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 count: handler.rowsBelow,
                 unit: .rows,
                 width: rowWidth,
-                palette: palette
+                palette: palette,
+                emphasis: indicatorEmphasis
             ))
         }
         return (lines, ranges)

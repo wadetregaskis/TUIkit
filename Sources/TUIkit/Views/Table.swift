@@ -831,12 +831,15 @@ where Value.ID: Hashable {
         // row or a scroll indicator is never wider than the header and rows; that
         // width mismatch is what made the wrapping VStack centre the header.
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+        // A focused table with no scrollbar pulses its "N more" indicators.
+        let indicatorEmphasis = scrollIndicatorEmphasis(
+            isFocused: tableHasFocus, context: context)
         var lines: [String] = []
         if window.showAbove {
             lines.append(renderScrollIndicator(
                 direction: .up, count: max(1, window.range.lowerBound),
                 unit: .rows,
-                width: contentWidth, palette: palette))
+                width: contentWidth, palette: palette, emphasis: indicatorEmphasis))
         }
         // Line granularity fills the content area EXACTLY: the bottom row may
         // be partially clipped (the top row already can be, via
@@ -1053,6 +1056,8 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> [String] {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+        let indicatorEmphasis = scrollIndicatorEmphasis(
+            isFocused: tableHasFocus, context: context)
         var lines: [String] = []
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
@@ -1060,7 +1065,8 @@ where Value.ID: Hashable {
                 count: handler.rowsAbove,
                 unit: .rows,
                 width: contentWidth,
-                palette: palette
+                palette: palette,
+                emphasis: indicatorEmphasis
             ))
         }
         let visibleRange = handler.visibleRange
@@ -1084,7 +1090,8 @@ where Value.ID: Hashable {
                 count: handler.rowsBelow,
                 unit: .rows,
                 width: contentWidth,
-                palette: palette
+                palette: palette,
+                emphasis: indicatorEmphasis
             ))
         }
         return lines
