@@ -136,6 +136,28 @@ struct ScrollbarColors {
     let thumb: Color
     let track: Color
     let arrow: Color
+
+    /// The standard palette for a bar that doubles as its container's focus
+    /// indicator: quiet secondary/tertiary tones unfocused, and a PULSING
+    /// accent thumb + arrows when focused — the same SelectionIndicator
+    /// convention (and `.selectionIndicatorStyle` knob) every other focused
+    /// control breathes with. The steady accent alone was too subtle a
+    /// focus cue.
+    @MainActor
+    static func focusIndicating(isFocused: Bool, context: RenderContext) -> Self {
+        let palette = context.environment.palette
+        guard isFocused else {
+            return Self(
+                thumb: palette.foregroundSecondary,
+                track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary)
+        }
+        let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        let accent = SelectionIndicator.resolve(isFocused: true, context: context)
+            .color(dim: dim, bright: palette.accent)
+        return Self(
+            thumb: accent, track: palette.foregroundQuaternary, arrow: accent)
+    }
 }
 
 // MARK: - Renderer

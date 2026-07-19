@@ -248,7 +248,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         if hasVerticalOverflow {
             appendScrollbar(
                 to: &output, height: height, extent: displayLines.count,
-                offset: handler.scrollLine, isFocused: isFocused, palette: palette)
+                offset: handler.scrollLine, isFocused: isFocused, context: context)
         }
 
         var buffer = FrameBuffer(lines: output)
@@ -262,15 +262,14 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// Appends a one-column vertical scroll indicator to each row.
     private func appendScrollbar(
         to output: inout [String], height: Int, extent: Int, offset: Int,
-        isFocused: Bool, palette: any Palette
+        isFocused: Bool, context: RenderContext
     ) {
         let bar = ScrollbarRenderer.verticalScrollbar(
             height: height, extent: extent, viewport: height, offset: offset,
             arrows: .none, proportional: true,
-            colors: ScrollbarColors(
-                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
-                track: palette.foregroundQuaternary,
-                arrow: palette.foregroundTertiary))
+            // Pulses the accent while the editor is focused — the shared
+            // focus-indicator convention (ScrollbarColors.focusIndicating).
+            colors: .focusIndicating(isFocused: isFocused, context: context))
         for index in 0..<min(height, output.count) {
             output[index] += index < bar.count ? bar[index] : " "
         }

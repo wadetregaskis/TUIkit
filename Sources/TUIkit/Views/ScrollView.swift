@@ -776,12 +776,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             offset: handler.scrollOffset,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
-            colors: ScrollbarColors(
-                // The thumb is the focus indicator: accent when the ScrollView
-                // holds keyboard focus, quiet otherwise.
-                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
-                track: palette.foregroundQuaternary,
-                arrow: isFocused ? palette.accent : palette.foregroundTertiary))
+            // The bar is the ScrollView's focus indicator: it pulses the
+            // accent while focused (see ScrollbarColors.focusIndicating).
+            colors: .focusIndicating(isFocused: isFocused, context: context))
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
         var lines = buffer.lines
         for index in 0..<height {
@@ -808,10 +805,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             offset: handler.horizontal.scrollOffset,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
-            colors: ScrollbarColors(
-                thumb: isFocused ? palette.accent : palette.foregroundSecondary,
-                track: palette.foregroundQuaternary,
-                arrow: isFocused ? palette.accent : palette.foregroundTertiary))
+            colors: .focusIndicating(isFocused: isFocused, context: context))
         let corner =
             hasVerticalBar
             ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
