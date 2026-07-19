@@ -285,7 +285,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         handler.selection = erasedSelection
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
-        handler.wrapsAtEdge = context.environment.radioButtonGroupWrapsAtEdge
+        handler.edgeBehavior = context.environment.radioButtonGroupEdgeBehavior
 
         FocusRegistration.register(context: context, handler: handler)
         let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
@@ -542,11 +542,11 @@ final class RadioButtonGroupHandler: Focusable {
     let orientation: RadioButtonOrientation
     var canBeFocused: Bool
 
-    /// Whether arrowing past the first/last item wraps within the group
-    /// (`true`) or relinquishes focus to the neighbouring control (`false`,
-    /// the default). Synced each render from the environment. See
-    /// ``View/radioButtonGroupWrapsAtEdge(_:)``.
-    var wrapsAtEdge: Bool = false
+    /// What an on-axis arrow past the first/last item does — contain (stay,
+    /// the default), escape (relinquish to the neighbour), or wrap. Synced
+    /// each render from the environment. See
+    /// ``View/radioButtonGroupEdgeBehavior(_:)``.
+    var edgeBehavior: RadioButtonGroupEdgeBehavior = .contain
 
     /// The currently focused item index within the group.
     /// Persisted across renders to maintain focus position.
@@ -594,10 +594,9 @@ extension RadioButtonGroupHandler {
 
         switch event.key {
         // On the group's movement axis, an interior press moves focus within the
-        // group; a press *past* the edge either wraps (opt-in) or relinquishes —
-        // returning `false` lets FocusManager move to the neighbouring control in
-        // that direction (the default; see `radioButtonGroupWrapsAtEdge`). A
-        // cross-axis press is consumed as a no-op, as before.
+        // group; a press *past* the edge follows `edgeBehavior` (contain by
+        // default — see `radioButtonGroupEdgeBehavior`). A cross-axis press
+        // always relinquishes so a single-axis group can be left by arrow.
         case .up:
             return moveOnAxis(.vertical, forward: false)
 
@@ -626,31 +625,32 @@ extension RadioButtonGroupHandler {
     /// relinquishes focus — returning `false` lets `FocusManager` move to the
     /// neighbouring control in that direction. This is what makes Up/Down step
     /// OUT of a horizontal group (to the control above / below) and Left/Right
-    /// step out of a vertical one, mirroring how the on-axis arrows already
-    /// relinquish past the group's edge. (It was previously a consumed no-op,
-    /// which swallowed Up on a horizontal group so you could never arrow back
-    /// to the control above it.) On the movement axis an interior press steps
-    /// `focusedIndex` and consumes the event; a press past the first/last item
-    /// wraps and consumes when ``wrapsAtEdge`` is set, otherwise returns
-    /// `false` to relinquish likewise.
+    /// step out of a vertical one. (It was previously a consumed no-op, which
+    /// swallowed Up on a horizontal group so you could never arrow back to the
+    /// control above it.) It is INDEPENDENT of ``edgeBehavior``: a single-axis
+    /// group has nowhere to move cross-axis, so relinquishing is the only way
+    /// to leave it that way.
+    ///
+    /// On the movement axis an interior press steps `focusedIndex` and consumes
+    /// the event; a press past the first/last item follows ``edgeBehavior``:
+    /// `.contain` stays put and consumes (the default — you can't overshoot out
+    /// of the group, which matters inside a scroll view), `.escape` returns
+    /// `false` to relinquish to the neighbour, `.wrap` cycles to the far end.
     private func moveOnAxis(_ axis: RadioButtonOrientation, forward: Bool) -> Bool {
         guard orientation == axis else { return false }  // cross-axis: relinquish focus
         let lastIndex = itemValues.count - 1
-        if forward {
-            if focusedIndex < lastIndex {
-                focusedIndex += 1
-                return true
-            }
-            guard wrapsAtEdge else { return false }  // escape past the bottom / right
-            focusedIndex = 0
+        let atEdge = forward ? focusedIndex >= lastIndex : focusedIndex <= 0
+        if !atEdge {
+            focusedIndex += forward ? 1 : -1
             return true
-        } else {
-            if focusedIndex > 0 {
-                focusedIndex -= 1
-                return true
-            }
-            guard wrapsAtEdge else { return false }  // escape past the top / left
-            focusedIndex = lastIndex
+        }
+        switch edgeBehavior {
+        case .contain:
+            return true  // stay on the edge item; consume so focus doesn't leave
+        case .escape:
+            return false  // relinquish to the neighbouring control
+        case .wrap:
+            focusedIndex = forward ? 0 : lastIndex
             return true
         }
     }

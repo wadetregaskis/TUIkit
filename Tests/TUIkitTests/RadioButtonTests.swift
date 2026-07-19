@@ -303,15 +303,30 @@ struct RadioButtonGroupHandlerTests {
         )
     }
 
-    @Test("By default, arrowing past the edge relinquishes focus (does not wrap)")
-    func boundaryRelinquishesByDefault() {
+    @Test("By default (.contain), arrowing past the edge stays put and consumes")
+    func boundaryContainsByDefault() {
+        // Up from the first item IS consumed (returns true) and focus does not
+        // leave the group — the default containment, like List/Table. You can't
+        // overshoot out of the group; Tab is how you leave.
+        let handler = boundaryHandler()
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
+        #expect(handler.focusedIndex == 0, "focus stays on the first item")
+
+        // Down from the last item likewise stays and consumes.
+        handler.focusedIndex = 1
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == true)
+        #expect(handler.focusedIndex == 1)
+    }
+
+    @Test(".escape relinquishes focus past the edge (does not wrap)")
+    func boundaryEscapesWhenOptedIn() {
         // Up from the first item is NOT consumed (returns false), so FocusManager
         // moves to the previous control instead of wrapping to the last item.
         let handler = boundaryHandler()
+        handler.edgeBehavior = .escape
         #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == false)
         #expect(handler.focusedIndex == 0, "focus stays put; the group did not wrap")
 
-        // Down from the last item likewise relinquishes.
         handler.focusedIndex = 1
         #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == false)
         #expect(handler.focusedIndex == 1)
@@ -358,10 +373,10 @@ struct RadioButtonGroupHandlerTests {
         #expect(v.handleKeyEvent(KeyEvent(key: .right)) == false)
     }
 
-    @Test("wrapsAtEdge restores wrap-around at the boundaries")
+    @Test(".wrap restores wrap-around at the boundaries")
     func boundaryWrapsWhenOptedIn() {
         let handler = boundaryHandler()
-        handler.wrapsAtEdge = true  // what .radioButtonGroupWrapsAtEdge() syncs
+        handler.edgeBehavior = .wrap  // what .radioButtonGroupEdgeBehavior(.wrap) syncs
 
         // Up from the first item wraps to the last and consumes.
         #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
@@ -371,22 +386,24 @@ struct RadioButtonGroupHandlerTests {
         #expect(handler.focusedIndex == 0)
     }
 
-    @Test("radioButtonGroupWrapsAtEdge environment value defaults to false; modifier sets it")
-    func wrapEnvironmentAndModifier() {
+    @Test("radioButtonGroupEdgeBehavior environment value defaults to .contain; modifier sets it")
+    func edgeBehaviorEnvironmentAndModifier() {
         var env = EnvironmentValues()
-        #expect(env.radioButtonGroupWrapsAtEdge == false, "default is escape, not wrap")
-        env.radioButtonGroupWrapsAtEdge = true
-        #expect(env.radioButtonGroupWrapsAtEdge == true)
+        #expect(env.radioButtonGroupEdgeBehavior == .contain, "default is contain")
+        env.radioButtonGroupEdgeBehavior = .escape
+        #expect(env.radioButtonGroupEdgeBehavior == .escape)
+        env.radioButtonGroupEdgeBehavior = .wrap
+        #expect(env.radioButtonGroupEdgeBehavior == .wrap)
         // The View modifier compiles and returns a view.
-        _ = Text("x").radioButtonGroupWrapsAtEdge()
-        _ = Text("x").radioButtonGroupWrapsAtEdge(false)
+        _ = Text("x").radioButtonGroupEdgeBehavior(.escape)
+        _ = Text("x").radioButtonGroupEdgeBehavior(.contain)
     }
 
-    @Test("Escaping past the bottom edge moves focus to the next control in the section")
+    @Test("With .escape, past the bottom edge moves focus to the next control")
     func escapeMovesFocusToNeighbour() {
-        // End-to-end: the group relinquishing the arrow (returning false) lets
-        // FocusManager advance focus to the sibling control, the whole point of
-        // the default escape behaviour.
+        // End-to-end: an .escape group relinquishing the arrow (returning false)
+        // lets FocusManager advance focus to the sibling control — the point of
+        // the opt-in escape behaviour.
         let manager = FocusManager()
         var selection = AnyHashable("a")
         let binding = Binding(get: { selection }, set: { selection = $0 })
@@ -394,6 +411,7 @@ struct RadioButtonGroupHandlerTests {
             focusID: "radio", selection: binding,
             itemValues: [AnyHashable("a"), AnyHashable("b")],
             orientation: .vertical, canBeFocused: true)
+        group.edgeBehavior = .escape
         let neighbour = MockFocusable(id: "after", shouldConsumeEvents: false)
         manager.register(group)  // first registered → auto-focused
         manager.register(neighbour)
@@ -404,6 +422,30 @@ struct RadioButtonGroupHandlerTests {
         #expect(
             manager.currentFocusedID == "after",
             "focus escaped the group to the next control, not wrapped inside it")
+    }
+
+    @Test("With the default .contain, arrowing past the edge keeps focus in the group")
+    func containKeepsFocusInGroup() {
+        // The complaint fix: with containment (the default), overshooting the
+        // bottom does NOT drop you into the next control — you stay in the group.
+        let manager = FocusManager()
+        var selection = AnyHashable("a")
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        let group = RadioButtonGroupHandler(
+            focusID: "radio", selection: binding,
+            itemValues: [AnyHashable("a"), AnyHashable("b")],
+            orientation: .vertical, canBeFocused: true)
+        // edgeBehavior defaults to .contain
+        let neighbour = MockFocusable(id: "after", shouldConsumeEvents: false)
+        manager.register(group)
+        manager.register(neighbour)
+        manager.focus(group)
+        group.focusedIndex = group.itemValues.count - 1
+
+        _ = manager.dispatchKeyEvent(KeyEvent(key: .down))  // down past the bottom
+        #expect(
+            manager.currentFocusedID == "radio",
+            "focus stayed in the group; overshooting does not fall out")
     }
 
     @Test("Handler handles empty items without crashing")
