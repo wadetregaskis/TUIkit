@@ -55,7 +55,7 @@ struct WindowedFocusReachTests {
 
     /// Row 499's focus ID, captured the honest way: while it is on screen.
     /// (Default focus IDs embed the identity path; an app would capture one
-    /// via FocusState or use focus(id:) with an ID it saw while visible.)
+    /// via FocusReference or use focus(id:) with an ID it saw while visible.)
     private func captureTailRowID(
         _ view: some View, tuiContext: TUIContext, focusManager: FocusManager
     ) -> String {

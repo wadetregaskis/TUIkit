@@ -363,7 +363,7 @@ When all system items are hidden and there are no active user items, the status 
 
 ### Focus
 
-- ``FocusState``
+- ``FocusReference``
 - ``Focusable``
 
 ### Status Bar

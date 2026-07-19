@@ -1,5 +1,5 @@
 //  TUIKit - Terminal UI Kit for Swift
-//  FocusStateTests.swift
+//  FocusReferenceTests.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
@@ -9,16 +9,16 @@ import Testing
 
 @testable import TUIkit
 
-// MARK: - Focus State Tests
+// MARK: - Focus Reference Tests
 
 @MainActor
-@Suite("Focus State Tests", .serialized)
-struct FocusStateTests {
+@Suite("Focus Reference Tests", .serialized)
+struct FocusReferenceTests {
 
-    @Test("FocusState isFocused reflects focus manager state")
-    func focusStateIsFocused() {
+    @Test("FocusReference isFocused reflects focus manager state")
+    func focusReferenceIsFocused() {
         let manager = FocusManager()
-        let state = FocusState(id: "state-test", focusManager: manager)
+        let state = FocusReference(id: "state-test", focusManager: manager)
         let element = MockFocusable(id: "state-test")
 
         manager.register(element)
@@ -27,8 +27,8 @@ struct FocusStateTests {
         #expect(state.isFocused)
     }
 
-    @Test("FocusState requestFocus changes focus via manager")
-    func focusStateRequestFocus() {
+    @Test("FocusReference requestFocus changes focus via manager")
+    func focusReferenceRequestFocus() {
         let manager = FocusManager()
 
         let element1 = MockFocusable(id: "req-1")
@@ -41,7 +41,7 @@ struct FocusStateTests {
         #expect(manager.isFocused(id: "req-1"))
 
         // Request focus for second element
-        FocusState(id: "req-2", focusManager: manager).requestFocus()
+        FocusReference(id: "req-2", focusManager: manager).requestFocus()
         #expect(manager.isFocused(id: "req-2"), "req-2 should be focused after requestFocus()")
     }
 }

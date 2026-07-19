@@ -8,7 +8,7 @@ TUIkit provides a focus system that lets users move between interactive views (b
 
 - **`FocusManager`**: Tracks which element is focused, handles navigation
 - **``Focusable``**: Protocol that views adopt to receive focus
-- **``FocusState``**: Lightweight state object that views use to query and request focus
+- **``FocusReference``**: Lightweight handle that views use to query and request focus by id
 
 ## How Focus Works
 
@@ -38,18 +38,18 @@ public protocol Focusable: AnyObject {
 
 A default extension provides sensible defaults for `canBeFocused` (`true`), `onFocusReceived()`, and `onFocusLost()` (both no-ops). Only `focusID` and `handleKeyEvent(_:)` must be implemented.
 
-## Using FocusState
+## Using FocusReference
 
-``FocusState`` is the user-facing API for checking and requesting focus inside a view:
+``FocusReference`` is the imperative API for checking and requesting focus inside a view by id (the declarative `@FocusState` property wrapper is the SwiftUI-style alternative):
 
 ```swift
 // The environment's focusManager is Optional: it is nil in isolated/measure
 // renders and in tests that don't install a focus system.
 guard let focusManager = context.environment.focusManager else { return }
-let focusState = FocusState(id: "my-button", focusManager: focusManager)
+let focusRef = FocusReference(id: "my-button", focusManager: focusManager)
 
 // Check if this element is currently focused
-if focusState.isFocused {
+if focusRef.isFocused {
     // render with focus indicator
 }
 
@@ -57,7 +57,7 @@ if focusState.isFocused {
 focusState.requestFocus()
 ```
 
-Built-in views like ``Button`` and ``Menu`` create their own `FocusState` internally: you only need it when building custom focusable views.
+Built-in views like ``Button`` and ``Menu`` register their own focus internally: you only need this when building custom focusable views.
 
 ## Navigation Keys
 

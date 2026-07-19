@@ -219,7 +219,7 @@ struct MyApp: App {
 
 ### Focus System
 
-- ``FocusState``
+- ``FocusReference``
 - ``Focusable``
 
 ### Status Bar

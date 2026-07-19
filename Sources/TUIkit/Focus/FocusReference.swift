@@ -1,33 +1,37 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
-//  FocusState.swift
+//  FocusReference.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
 
 import Foundation
 
-// MARK: - Focus State for Views
+// MARK: - Imperative focus handle
 
-/// Tracks focus state for a specific element.
+/// A lightweight handle to one element's focus, over a ``FocusManager``.
 ///
-/// `FocusState` is a lightweight wrapper around a `FocusManager` that
-/// provides a simple focused/unfocused API for a single element.
-///
-/// Create a `FocusState` with a reference to the focus manager
-/// (typically obtained from `context.environment.focusManager`):
+/// `FocusReference` is the imperative counterpart to the declarative
+/// `@FocusState` property wrapper: where `@FocusState` binds a control's focus
+/// to a view's state, a `FocusReference` is a plain object you query and drive
+/// by id. Create one with the id and the focus manager (typically from
+/// `context.environment.focusManager`):
 ///
 /// ```swift
-/// let focus = FocusState(focusManager: context.environment.focusManager)
+/// let focus = FocusReference(id: "my-button", focusManager: manager)
 /// if focus.isFocused { /* render focused style */ }
+/// focus.requestFocus()
 /// ```
-public class FocusState {
+///
+/// - Note: This type used to be called `FocusState`; that name now belongs to
+///   the SwiftUI-shaped `@FocusState` property wrapper.
+public class FocusReference {
     /// The focus ID.
     public let id: String
 
     /// The focus manager that tracks focus state.
     private let focusManager: FocusManager
 
-    /// Creates a focus state with the given ID and focus manager.
+    /// Creates a focus reference with the given ID and focus manager.
     ///
     /// - Parameters:
     ///   - id: The unique focus ID. Defaults to a new UUID.
@@ -45,7 +49,7 @@ public class FocusState {
 
 // MARK: - Public API
 
-extension FocusState {
+extension FocusReference {
     /// Requests focus for this element.
     public func requestFocus() {
         focusManager.focus(id: id)
