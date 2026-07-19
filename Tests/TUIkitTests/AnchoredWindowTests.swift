@@ -303,6 +303,58 @@ struct AnchoredWindowTests {
             previous = visible
         }
     }
+    @Test("Uniform band row measures memoize across growing frames (follow mode)")
+    func uniformRowMeasuresMemoizeAcrossGrowingFrames() {
+        // The uniform path's twin of the anchored pin above: its width/
+        // flexibility sample (uniformSeekSizeThatFits, ≤64 rows) is
+        // measured every frame but never rendered when scrolled deep, so
+        // only the band-path markActive keeps those size-memo entries
+        // alive across removeInactive. Without it, a follow-mode uniform
+        // stack re-measures the whole sample every frame, forever.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let log = MeasureLog()
+        func makeView(rows: Int) -> some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rows, id: \.self) { i in
+                        UniformMeasureCountRow(log: log, index: i)
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+            .defaultScrollAnchor(.bottom)
+        }
+
+        for delta in 0..<3 {
+            renderScrollFrame(
+                makeView(rows: 5_000 + delta), tuiContext: tuiContext, focusManager: focusManager)
+        }
+        let before = log.measures
+        renderScrollFrame(makeView(rows: 5_003), tuiContext: tuiContext, focusManager: focusManager)
+        let perFrame = log.measures - before
+        #expect(
+            perFrame <= 8,
+            "a steady uniform append frame re-measures a handful of rows, not the 64-row sample: \(perFrame)")
+    }
+}
+
+/// The uniform-height sibling of ``MeasureCountRow`` — constant extent so
+/// the uniformity hypothesis holds and the arithmetic fast path stays live.
+private struct UniformMeasureCountRow: View, Renderable, Layoutable {
+    let log: MeasureLog
+    let index: Int
+
+    var body: Never { fatalError("probe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        FrameBuffer(lines: ["row \(index)"], width: 8)
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        log.measures += 1
+        return ViewSize.fixed(8, 1)
+    }
 }
 
 // MARK: - Measure-counting probe
