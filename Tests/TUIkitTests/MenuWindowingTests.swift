@@ -191,4 +191,35 @@ struct MenuWindowingTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 5, y: y))
         #expect(box.sel == 16, "clicking the 'Item 17' row selects index 16, got \(box.sel)")
     }
+
+    @Test("A Menu inside a ScrollView windows to the visible viewport")
+    func menuInScrollViewCapsToViewport() {
+        // Inside a ScrollView the proposed height is the (huge) measure
+        // canvas, so without the viewport cap the menu rendered EVERY item
+        // and arrowing the selection walked it below the fold — the Menu
+        // doesn't route through the focus system, so the enclosing
+        // ScrollView cannot follow it (the Overlays page sighting). Capped
+        // to the published viewport, the menu windows itself exactly as it
+        // does at the top level: selection always visible, truthful markers.
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 8,
+            environment: environment, tuiContext: tuiContext)
+        let view = ScrollView {
+            Menu(items: items(30), selectedIndex: 15)
+        }
+        .frame(height: 8)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        tuiContext.stateStorage.endRenderPass()
+        let out = stripped(buffer)
+        #expect(out.contains { $0.contains("Item 16") }, "the selected item is visible: \(out)")
+        #expect(out.contains { $0.contains("▲") }, "items are windowed out above: \(out)")
+        #expect(out.contains { $0.contains("▼") }, "items are windowed out below: \(out)")
+    }
 }

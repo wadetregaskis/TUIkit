@@ -294,7 +294,16 @@ private struct _MenuCore: View, Renderable, Layoutable {
         // visible. A menu taller than its viewport shows ▲/▼ overflow markers and
         // scrolls as the selection moves — so every item is reachable on a short
         // terminal. The border eats 2 rows and the title block eats its own.
-        let itemBudget = max(1, context.availableHeight - 2 - titleLines.count)
+        // Inside a ScrollView the proposed height is the (effectively unbounded)
+        // measure canvas, which would defeat the windowing entirely: the menu
+        // renders every item and moving the selection walks it below the fold —
+        // the enclosing ScrollView cannot follow because the Menu doesn't route
+        // through the focus system. Cap to the published visible viewport so
+        // the menu windows itself there just like it does at the top level.
+        let heightBudget = min(
+            context.availableHeight,
+            context.environment.scrollViewportSize?.height ?? Int.max)
+        let itemBudget = max(1, heightBudget - 2 - titleLines.count)
         let window = Self.windowedRows(itemRows, budget: itemBudget, selection: currentSelection)
 
         // Assemble the content lines plus a parallel item-index map (for clicks):
