@@ -209,6 +209,13 @@ public struct Menu: View {
 
 /// Internal view that handles the actual rendering of Menu.
 private struct _MenuCore: View, Renderable, Layoutable {
+    /// StateStorage property indices for the menu's persisted values.
+    private enum StateIndex {
+        /// The item-window start row from the previous frame — the anchor
+        /// the follow margin moves minimally from (`windowedRows`).
+        static let windowStart = 0
+    }
+
     let title: String?
     let items: [MenuItem]
     let selectedIndex: Int
@@ -304,7 +311,26 @@ private struct _MenuCore: View, Renderable, Layoutable {
             context.availableHeight,
             context.environment.scrollViewportSize?.height ?? Int.max)
         let itemBudget = max(1, heightBudget - 2 - titleLines.count)
-        let window = Self.windowedRows(itemRows, budget: itemBudget, selection: currentSelection)
+        // Persist the window start across frames so the follow margin has a
+        // "where the window was" to move minimally from — with the default
+        // zero margin that is the classic edge-triggered scroll. Read-only
+        // while measuring (measure passes run at speculative sizes).
+        let margin = context.environment.scrollFollowMargin
+            .resolvedLines(viewportLines: itemBudget)
+        // markActive: manual storage isn't hydrated via @State, so without
+        // this the end-of-pass GC prunes the box every frame (the same
+        // pattern as Spinner / _ImageCore).
+        context.environment.stateStorage?.markActive(context.identity)
+        let startBox: StateBox<Int?>? = context.environment.stateStorage?.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.windowStart),
+            default: nil)
+        let window = Self.windowedRows(
+            itemRows, budget: itemBudget, selection: currentSelection,
+            margin: margin, previousStart: startBox?.value)
+        if !context.isMeasuring {
+            startBox?.value = window.start
+        }
 
         // Assemble the content lines plus a parallel item-index map (for clicks):
         // title lines, an optional ▲, the visible item rows, an optional ▼.
@@ -361,8 +387,16 @@ private struct _MenuCore: View, Renderable, Layoutable {
 
     /// The slice of `rows` to show for a `budget`-row viewport, keeping the
     /// `selection` row visible. Returns the full list (no markers) when it fits;
-    /// otherwise a window centred on the selection with `hasAbove`/`hasBelow`
+    /// otherwise a window containing the selection with `hasAbove`/`hasBelow`
     /// flags for the ▲/▼ markers (each marker consumes one budget row).
+    ///
+    /// `margin` (resolved terminal lines — see ``ScrollFollowMargin``) is how
+    /// far the selection must stay from the window edges; within that
+    /// constraint the window moves as little as possible from
+    /// `previousStart`, so a zero margin is the classic edge-triggered
+    /// scroll and a half-viewport margin keeps the selection centred. With
+    /// no `previousStart` (a freshly opened menu, or no state storage) the
+    /// window opens centred on the selection.
     ///
     /// The window plus its markers NEVER exceeds `budget` lines. A naive
     /// two-pass shape (measure markers at full budget, then shrink) let a
@@ -374,12 +408,21 @@ private struct _MenuCore: View, Renderable, Layoutable {
     /// the largest. Tiny budgets (1–2 lines) can't fit the row and both
     /// markers — the selected row wins and the markers are dropped.
     private static func windowedRows(
-        _ rows: [(item: Int?, line: String)], budget: Int, selection: Int
-    ) -> (rows: ArraySlice<(item: Int?, line: String)>, hasAbove: Bool, hasBelow: Bool) {
-        guard rows.count > budget else { return (rows[...], false, false) }
+        _ rows: [(item: Int?, line: String)], budget: Int, selection: Int,
+        margin: Int = 0, previousStart: Int? = nil
+    ) -> (
+        rows: ArraySlice<(item: Int?, line: String)>, hasAbove: Bool, hasBelow: Bool,
+        start: Int
+    ) {
+        guard rows.count > budget else { return (rows[...], false, false, 0) }
         let selRow = nearestItemRow(to: selection, in: rows)
         func place(_ visible: Int) -> (start: Int, above: Bool, below: Bool) {
-            let start = max(0, min(selRow - visible / 2, rows.count - visible))
+            let clampedMargin = min(margin, max(0, (visible - 1) / 2))
+            let lowest = selRow - (visible - 1 - clampedMargin)
+            let highest = selRow - clampedMargin
+            var start = previousStart ?? (selRow - visible / 2)
+            start = min(max(start, lowest), highest)
+            start = max(0, min(start, rows.count - visible))
             return (start, start > 0, start + visible < rows.count)
         }
         var visible = max(1, budget)
@@ -398,7 +441,7 @@ private struct _MenuCore: View, Renderable, Layoutable {
             emitted -= 1
         }
         if emitted > budget, hasBelow { hasBelow = false }
-        return (rows[placed.start..<placed.start + visible], hasAbove, hasBelow)
+        return (rows[placed.start..<placed.start + visible], hasAbove, hasBelow, placed.start)
     }
 
     /// The row index the window anchors on: the row showing `selection`, or —
