@@ -959,6 +959,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             at: 0
         )
 
+        // A one-row region at the keyboard cursor's on-screen line, stamped
+        // with the SAME focusID and inserted ahead of the container region:
+        // `snapViewportToFocusedControl` takes the FIRST region matching the
+        // focused ID, so an enclosing ScrollView follows the cursor row — not
+        // the list's top — as the selection moves through a list taller than
+        // the outer viewport, and its indicator-aware fire condition keeps
+        // the row from resting hidden under "▲ N more above". At index 0 the
+        // dispatcher's reverse iteration never routes a click here before the
+        // container region, so reusing its handler is inert.
+        if let (position, _) = zip(state.visibleRowYRanges, state.visibleRows)
+            .first(where: { $0.1.index == state.handler.focusedIndex })
+        {
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: 0,
+                    offsetY: topInset + position.yStart,
+                    width: buffer.width,
+                    height: max(1, position.height),
+                    handlerID: mouseHandlerID,
+                    focusID: state.focusID
+                ),
+                at: 0
+            )
+        }
+
         // Rows render into standalone (per-frame memoised) buffers, so their
         // own hit-test regions — per-row `.onMouseEvent`, Buttons and other
         // interactive children — must be carried into the list's buffer

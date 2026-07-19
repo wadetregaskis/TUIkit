@@ -1168,6 +1168,37 @@ where Value.ID: Hashable {
             ),
             at: 0
         )
+
+        // A one-row region at the keyboard cursor's on-screen line, ahead of
+        // the whole-table region so an enclosing ScrollView follows the
+        // cursor row — not just the table's top — through a table taller than
+        // the outer viewport. Mirrors the marker in _ListCore (see the
+        // comment there); the y math mirrors containerMouseHandler's
+        // click-to-row mapping.
+        let cursor = state.handler.focusedIndex
+        if state.visibleRange.contains(cursor) {
+            let rowOffset = cursor - state.visibleRange.lowerBound
+            let cursorY: Int
+            let cursorHeight: Int
+            if state.visibleRowHeights.isEmpty {
+                cursorY = firstRowY + rowOffset
+                cursorHeight = 1
+            } else if rowOffset < state.visibleRowHeights.count {
+                cursorY = firstRowY + state.visibleRowHeights[0..<rowOffset].reduce(0, +)
+                cursorHeight = max(1, state.visibleRowHeights[rowOffset])
+            } else {
+                return
+            }
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: 0, offsetY: cursorY,
+                    width: buffer.width, height: cursorHeight,
+                    handlerID: mouseHandlerID,
+                    focusID: state.focusID
+                ),
+                at: 0
+            )
+        }
     }
 
     /// The closure invoked by the container-wide hit-test
