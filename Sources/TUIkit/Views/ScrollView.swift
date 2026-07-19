@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkitCore
 
 // MARK: - ScrollView
@@ -478,7 +479,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 handler: handler,
                 width: contentWidth,
                 palette: context.environment.palette,
-                emphasis: scrollIndicatorEmphasis(isFocused: isFocused, context: context)
+                emphasis: scrollIndicatorEmphasis(isFocused: isFocused, context: context),
+                locale: context.environment.localizationService.currentLanguage.locale
             )
         }
         if wantsScrollbar {
@@ -926,7 +928,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler: ScrollViewHandler,
         width: Int,
         palette: any Palette,
-        emphasis: Color?
+        emphasis: Color?,
+        locale: Locale
     ) -> FrameBuffer {
         guard buffer.height > 0 else { return buffer }
         guard handler.hasContentAbove || handler.hasContentBelow else {
@@ -946,7 +949,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
-                emphasis: emphasis
+                emphasis: emphasis,
+                locale: locale
             ).padToVisibleWidth(width)
         }
 
@@ -958,7 +962,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
-                emphasis: emphasis
+                emphasis: emphasis,
+                locale: locale
             ).padToVisibleWidth(width)
         }
 

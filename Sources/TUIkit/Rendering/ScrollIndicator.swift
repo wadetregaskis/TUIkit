@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 // MARK: - Scroll Direction
 
 /// The direction of a scroll indicator arrow.
@@ -57,9 +59,10 @@ func scrollIndicatorEmphasis(isFocused: Bool, context: RenderContext) -> Color? 
 ///
 /// One decimal below ten of a unit ("~5.4K"), whole numbers above ("~54K",
 /// "~200M"); a value that rounds up to a unit's ceiling promotes to the next
-/// ("~1M", never "~1000K").
-func approximateCountLabel(_ count: Int) -> String {
-    guard count >= 1000 else { return "~\(count)" }
+/// ("~1M", never "~1000K"). The decimal separator follows `locale`, so a
+/// German app reads "~5,4K".
+func approximateCountLabel(_ count: Int, locale: Locale = .current) -> String {
+    guard count >= 1000 else { return "~\(localizedInteger(count, locale: locale))" }
     let units: [(divisor: Double, suffix: String)] = [
         (1e3, "K"), (1e6, "M"), (1e9, "B"), (1e12, "T"),
     ]
@@ -71,11 +74,21 @@ func approximateCountLabel(_ count: Int) -> String {
     let text: String
     if value < 9.95 {
         let tenths = Int((value * 10).rounded())
-        text = tenths.isMultiple(of: 10) ? "\(tenths / 10)" : "\(tenths / 10).\(tenths % 10)"
+        text =
+            tenths.isMultiple(of: 10)
+            ? "\(tenths / 10)"
+            : (Double(tenths) / 10).formatted(
+                .number.precision(.fractionLength(1)).grouping(.never).locale(locale))
     } else {
         text = "\(Int(value.rounded()))"
     }
     return "~\(text)\(units[index].suffix)"
+}
+
+/// A whole number with the grouping separator of `locale` — "12,000" (en),
+/// "12.000" (de), "12 000" (fr) — for the counts rendered into scroll chrome.
+func localizedInteger(_ value: Int, locale: Locale = .current) -> String {
+    value.formatted(.number.grouping(.automatic).locale(locale))
 }
 
 /// Renders a centered scroll indicator line with an arrow, a row count and label.
@@ -100,6 +113,9 @@ func approximateCountLabel(_ count: Int) -> String {
 ///     instead of the quiet `foregroundTertiary` — used to PULSE the
 ///     indicators (a scrollbar-less scrollable's focus cue). `nil` keeps the
 ///     resting appearance.
+///   - locale: Formats the count's grouping / decimal separators — the app's
+///     current language locale, so the number reads "12,000" (en) / "12.000"
+///     (de) / "12 000" (fr). Defaults to `.current`.
 /// - Returns: A styled string with a centered scroll indicator.
 @MainActor
 func renderScrollIndicator(
@@ -109,10 +125,14 @@ func renderScrollIndicator(
     width: Int,
     palette: any Palette,
     approximate: Bool = false,
-    emphasis: Color? = nil
+    emphasis: Color? = nil,
+    locale: Locale = .current
 ) -> String {
     let arrow = direction == .up ? "▲" : "▼"
-    let countText = approximate ? approximateCountLabel(count) : "\(count)"
+    let countText =
+        approximate
+        ? approximateCountLabel(count, locale: locale)
+        : localizedInteger(count, locale: locale)
     let unitWord = unit.word(for: count)
     let directionWord = direction == .up ? "above" : "below"
 

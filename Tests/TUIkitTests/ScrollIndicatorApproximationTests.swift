@@ -136,8 +136,8 @@ struct ScrollIndicatorApproximationTests {
             uniform, tuiContext: tuiContext2, focusManager: focusManager2)
         let uniformBelow = uniformSettled.last ?? ""
         #expect(
-            uniformBelow.contains("4994 more lines below"),
-            "a uniform total is exact and stays fully precise: '\(uniformBelow)'")
+            uniformBelow.contains("4,994 more lines below"),
+            "a uniform total is exact and stays fully precise (locale-grouped): '\(uniformBelow)'")
         #expect(!uniformBelow.contains("~"), "no tilde on an exact count: '\(uniformBelow)'")
     }
 }

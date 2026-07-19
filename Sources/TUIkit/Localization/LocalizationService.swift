@@ -35,6 +35,16 @@ public final class LocalizationService: @unchecked Sendable {
             case .japanese: "日本語"
             }
         }
+
+        /// The `Locale` this language formats numbers, dates, and the like
+        /// in — the app's chosen language drives its number grouping, so a
+        /// German app groups "12.000" and a French one "12 000" while the
+        /// UI text is already in that language. Derived from the language
+        /// code; a bare-code locale carries the correct grouping / decimal
+        /// separators without pinning a region.
+        public var locale: Locale {
+            Locale(identifier: rawValue)
+        }
     }
 
     /// The shared localization service instance.

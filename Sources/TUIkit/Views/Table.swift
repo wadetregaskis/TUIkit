@@ -341,13 +341,18 @@ where Value.ID: Hashable {
                     stateStorage: context.environment.stateStorage!,
                     context: context, contentHeight: rowArea, overflowing: true)
                 reserveIndicatorLines(handler: handler, contentHeight: rowArea)
+                // Measure with the SAME locale the display path uses, or a
+                // grouped "12,000" would be measured as "12000" and the column
+                // sized one cell short.
+                let measureLocale = context.environment.localizationService
+                    .currentLanguage.locale
                 if handler.hasContentAbove {
                     widest = max(
                         widest,
                         renderScrollIndicator(
                             direction: .up, count: handler.rowsAbove,
                             unit: .rows,
-                            width: contentWidth, palette: palette
+                            width: contentWidth, palette: palette, locale: measureLocale
                         ).strippedLength)
                 }
                 if handler.hasContentBelow {
@@ -356,7 +361,7 @@ where Value.ID: Hashable {
                         renderScrollIndicator(
                             direction: .down, count: handler.rowsBelow,
                             unit: .rows,
-                            width: contentWidth, palette: palette
+                            width: contentWidth, palette: palette, locale: measureLocale
                         ).strippedLength)
                 }
             }
@@ -834,12 +839,14 @@ where Value.ID: Hashable {
         // A focused table with no scrollbar pulses its "N more" indicators.
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
+        let numberLocale = context.environment.localizationService.currentLanguage.locale
         var lines: [String] = []
         if window.showAbove {
             lines.append(renderScrollIndicator(
                 direction: .up, count: max(1, window.range.lowerBound),
                 unit: .rows,
-                width: contentWidth, palette: palette, emphasis: indicatorEmphasis))
+                width: contentWidth, palette: palette, emphasis: indicatorEmphasis,
+                locale: numberLocale))
         }
         // Line granularity fills the content area EXACTLY: the bottom row may
         // be partially clipped (the top row already can be, via
@@ -876,7 +883,8 @@ where Value.ID: Hashable {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
                 unit: .rows,
-                width: contentWidth, palette: palette))
+                width: contentWidth, palette: palette, emphasis: indicatorEmphasis,
+                locale: numberLocale))
         }
         // A scrolled/overflowing table fills its content area EXACTLY,
         // whatever the granularity: whole rows can underfill under row
@@ -1058,6 +1066,7 @@ where Value.ID: Hashable {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
+        let numberLocale = context.environment.localizationService.currentLanguage.locale
         var lines: [String] = []
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
@@ -1066,7 +1075,8 @@ where Value.ID: Hashable {
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis
+                emphasis: indicatorEmphasis,
+                locale: numberLocale
             ))
         }
         let visibleRange = handler.visibleRange
@@ -1091,7 +1101,8 @@ where Value.ID: Hashable {
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis
+                emphasis: indicatorEmphasis,
+                locale: numberLocale
             ))
         }
         return lines
