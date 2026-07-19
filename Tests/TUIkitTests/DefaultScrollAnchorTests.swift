@@ -56,6 +56,78 @@ struct DefaultScrollAnchorTests {
         return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
     }
 
+    @Test("Glue survives content SHRINKING — and shrink-to-empty is safe")
+    func glueSurvivesShrink() {
+        // The log-truncation case: a capped buffer, a filter applied. The
+        // frame content shrinks arrives with a STALE offset; the repair
+        // chain (contentHeight clamp -> re-glue -> coverage re-render) must
+        // land the SAME frame on the new tail with a full viewport, keep
+        // the glue engaged (later appends still follow), and a shrink below
+        // one viewport (or to zero) must neither trap nor strand blanks.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        renderFrame(makeView(lines: 100), tuiContext: tuiContext, focusManager: focusManager)
+        let glued = renderFrame(
+            makeView(lines: 100), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(glued.contains { $0.contains("line 99") }, "settled at the tail: \(glued)")
+
+        // Shrink 100 -> 30: the very frame of the shrink shows the new tail,
+        // every viewport row real content (no blank rows from a stale band).
+        let shrunk = renderFrame(
+            makeView(lines: 30), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(shrunk.contains { $0.contains("line 29") }, "the shrink frame shows the new tail: \(shrunk)")
+        #expect(!shrunk.contains { $0.contains("line 99") }, "no stale content: \(shrunk)")
+
+        // The glue survived: an append after the shrink is followed.
+        renderFrame(makeView(lines: 31), tuiContext: tuiContext, focusManager: focusManager)
+        let followed = renderFrame(
+            makeView(lines: 31), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(followed.contains { $0.contains("line 30") }, "appends still follow: \(followed)")
+
+        // Below one viewport: content top-anchors at offset 0, no indicators.
+        let tiny = renderFrame(
+            makeView(lines: 3), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(tiny.contains { $0.contains("line 0") } && tiny.contains { $0.contains("line 2") },
+            "sub-viewport content is fully visible: \(tiny)")
+        #expect(!tiny.contains { $0.contains("more") }, "no indicators: \(tiny)")
+
+        // And to ZERO (the shrink-while-scrolled crash class): must not trap.
+        let empty = renderFrame(
+            makeView(lines: 0), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(!empty.contains { $0.contains("line") }, "empty content shows nothing: \(empty)")
+
+        // Regrowth from empty recovers cleanly.
+        renderFrame(makeView(lines: 50), tuiContext: tuiContext, focusManager: focusManager)
+        let regrown = renderFrame(
+            makeView(lines: 50), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(regrown.contains { $0.contains("line 49") }, "regrowth re-glues to the tail: \(regrown)")
+    }
+
+    @Test("Variable-height shrink while glued (anchored path)")
+    func variableShrinkWhileGlued() {
+        // The anchored twin: variable heights + a parked anchor deep in the
+        // list when the data shrinks under it (the rebind ladder + clamp
+        // arithmetic all run with count changed).
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        renderFrame(
+            makeView(lines: 600, variable: true), tuiContext: tuiContext,
+            focusManager: focusManager)
+        renderFrame(
+            makeView(lines: 600, variable: true), tuiContext: tuiContext,
+            focusManager: focusManager)
+        let shrunk = renderFrame(
+            makeView(lines: 40, variable: true), tuiContext: tuiContext,
+            focusManager: focusManager)
+        #expect(shrunk.contains { $0.contains("line 39") }, "anchored shrink lands on the tail: \(shrunk)")
+        let empty = renderFrame(
+            makeView(lines: 0, variable: true), tuiContext: tuiContext,
+            focusManager: focusManager)
+        #expect(!empty.contains { $0.contains("line") }, "anchored shrink-to-empty is safe: \(empty)")
+    }
+
     @Test("Starts at the tail and follows appends")
     func startsAtTailAndFollows() {
         let tuiContext = TUIContext()

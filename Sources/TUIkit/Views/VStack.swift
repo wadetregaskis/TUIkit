@@ -476,8 +476,17 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
-        let top = window.offset
-        let bottom = window.offset + window.viewportHeight
+        // The offset can be STALE beyond the walked content — the data
+        // shrank this frame, and the ScrollView clamps only after this
+        // render returns. An unclamped window then intersects no slot and
+        // the whole buffer comes out as blank placeholders — which the
+        // ScrollView cannot repair, because this classic full-height path
+        // has no slice metadata for coverSnappedViewport to check. Clamp
+        // to the real extent so the tail rows render at their true y; the
+        // ScrollView's own clamp then lands the clip exactly on them.
+        let walkedTotal = slots.last.map { $0.y + $0.height } ?? 0
+        let top = min(window.offset, max(0, walkedTotal - window.viewportHeight))
+        let bottom = top + window.viewportHeight
 
         // The enumerate visitor's row set (§5d/§6a): the rows meeting the
         // viewport, plus one margin row past each edge (so a directional
