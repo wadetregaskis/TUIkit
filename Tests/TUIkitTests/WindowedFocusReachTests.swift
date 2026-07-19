@@ -134,6 +134,49 @@ struct WindowedFocusReachTests {
             "focus rests stably on the off-window row")
     }
 
+    @Test("Tab walks past a disabled row at the window edge")
+    func tabWalksPastDisabledRow() {
+        // Rows 8-10 are disabled: a disabled row renders but never registers
+        // with the focus system, so the enumeration margin past the focused
+        // row must extend BEYOND the disabled run — otherwise the ring ends
+        // at row 7, Tab wraps back into the band, and every row after the
+        // run is permanently unreachable by keyboard.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<Self.rowCount, id: \.self) { i in
+                Button("row \(i)") {}.disabled((8...10).contains(i))
+            }
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0)
+        let ring = focusManager.registeredFocusIDsInActiveSection()
+        focusManager.focus(id: ring[0])
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0)
+
+        // Twelve steps from row 0: rows 1-7, then STRAIGHT OVER the disabled
+        // run to rows 11-15. Focus must advance on every step, never repeat,
+        // and never land on a disabled row.
+        var visited: [String] = [focusManager.currentFocusedID ?? ""]
+        for step in 1...12 {
+            focusManager.focusNext()
+            renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0)
+            let current = focusManager.currentFocusedID ?? "nil"
+            #expect(
+                !visited.contains(current),
+                "step \(step) revisited \(current) — the walk is trapped: \(visited)")
+            visited.append(current)
+        }
+        for id in visited {
+            for disabled in 8...10 {
+                #expect(!id.contains("[\(disabled)]"), "disabled row \(disabled) took focus: \(id)")
+            }
+        }
+        #expect(
+            visited.last?.contains("[15]") == true,
+            "12 steps from row 0 over a 3-row disabled run lands on row 15: \(visited)")
+    }
+
     @Test("A bogus focus(id:) expires without stealing focus")
     func bogusIntentExpires() {
         let tuiContext = TUIContext()

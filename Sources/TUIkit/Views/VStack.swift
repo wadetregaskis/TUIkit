@@ -507,6 +507,19 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                     rendersRow[neighbour] = true
                 }
             }
+            // Ring continuation (see StackFocusReach.swift): a disabled
+            // neighbour registers nothing, so the nearest focusable row past
+            // it must render too or Tab dead-ends at the run. The sweep
+            // below renders ascending, so the ring stays in data order.
+            for stop in focusRingContinuations(
+                focusedOrdinal: rowIndex(
+                    addressedBy: focusManager.currentFocusedID, slots: slots,
+                    context: childContext),
+                count: slots.count, child: { slots[$0].child },
+                width: width, viewportHeight: window.viewportHeight, context: childContext)
+            {
+                rendersRow[stop] = true
+            }
         }
 
         var result = FrameBuffer()

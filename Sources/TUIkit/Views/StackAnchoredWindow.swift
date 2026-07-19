@@ -280,6 +280,33 @@ extension _VStackCore {
                 }
             }
         }
+        // Ring continuation (see StackFocusReach.swift): the nearest
+        // focusable row past a non-focusable run adjacent to focus must
+        // render too, or Tab dead-ends at the run. Positioned like any
+        // other off-window target: estimated y relative to the anchor.
+        let focusedOrdinal = targetOrdinal(
+            for: context.environment.focusManager?.currentFocusedID,
+            children: children, state: state, context: context)
+        if focusedOrdinal != nil {
+            let anchorY = window.offset - state.anchorOffsetWithin
+            let estimate = state.estimatedPitch(spacing: spacing)
+            let covered = Set(placed.map(\.ordinal)).union(grafts.map(\.ordinal))
+            for stop in focusRingContinuations(
+                focusedOrdinal: focusedOrdinal, count: children.count,
+                child: { frame.child(at: $0) }, width: width,
+                viewportHeight: window.viewportHeight, context: childContext)
+            where !covered.contains(stop) {
+                let estimatedY = anchorY + (stop - state.anchorOrdinal) * estimate
+                if window.reply == nil {
+                    placed.append((stop, max(0, estimatedY)))
+                } else {
+                    grafts.append((stop, max(0, estimatedY)))
+                }
+            }
+        }
+        // Grafts render after the band; keep them in ascending row order so
+        // the focus ring (registration order) stays in data order.
+        grafts.sort { $0.ordinal < $1.ordinal }
         guard !frame.sawSpacer else { return nil }
 
         let buffer = assembleAnchoredBuffer(

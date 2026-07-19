@@ -181,6 +181,19 @@ extension _VStackCore {
 
         let candidates = candidateOrdinals(
             children: children, window: window, pitch: pitch, state: state, context: context)
+        // The ring must continue past a non-focusable run adjacent to the
+        // focused row (a disabled neighbour registers nothing and would end
+        // the ring, trapping Tab inside the band) — probe for the nearest
+        // focusable in each direction and render it too.
+        let continuations = focusRingContinuations(
+            focusedOrdinal: targetOrdinal(
+                for: context.environment.focusManager?.currentFocusedID,
+                children: children, state: state, context: context),
+            count: count, child: { children[$0] },
+            width: width, viewportHeight: window.viewportHeight, context: childContext)
+        let offBand = Set(candidates.offBand)
+            .union(continuations.filter { !candidates.band.contains($0) })
+            .sorted()
         // Classic mode (no reply channel) keeps every row inline in the
         // full-height canvas, exactly at its y. Band mode must NOT stretch
         // the band to reach a far focus target: the gap would materialise as
@@ -189,9 +202,9 @@ extension _VStackCore {
         // a corrupt band whose clip shows nothing. Off-band targets render
         // out-of-band instead (`graftOffBandRow`).
         let inline = window.reply == nil
-            ? Set(candidates.band).union(candidates.offBand).sorted()
+            ? Set(candidates.band).union(offBand).sorted()
             : candidates.band
-        let grafted = window.reply == nil ? [] : candidates.offBand
+        let grafted = window.reply == nil ? [] : offBand
 
         // Build + verify each candidate. A disagreeing height falsifies the
         // hypothesis for good; the caller re-walks exactly, this same frame.
@@ -356,18 +369,6 @@ extension _VStackCore {
         result.hitTestRegions.append(
             contentsOf: aligned.shiftedHitTestRegions(byX: 0, y: bandLocalY))
         result.overlays.append(contentsOf: aligned.shiftedOverlays(byX: 0, y: bandLocalY))
-    }
-
-    /// The ordinal of the row a focus ID addresses: memo hit, else one key
-    /// scan (never builds a row view).
-    private func targetOrdinal(
-        for focusID: String?, children: ChildViewCollection,
-        state: StackWindowState, context: RenderContext
-    ) -> Int? {
-        guard let focusID else { return nil }
-        guard let key = Self.rowKey(inFocusID: focusID, belowStackPath: context.identity.path)
-        else { return nil }
-        return resolveOrdinal(forKey: key, children: children, state: state)
     }
 }
 
