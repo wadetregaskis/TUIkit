@@ -333,7 +333,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
 
-        let wasGluedToBottom = isGluedToBottom(handler: handler, context: context)
+        // A one-shot End/scrollToBottom intent converges exactly like a
+        // glued frame (see ScrollViewHandler.seekingTail).
+        let seekingTail = handler.seekingTail
+        if !context.isMeasuring { handler.seekingTail = false }
+        let wasGluedToBottom =
+            isGluedToBottom(handler: handler, context: context) || seekingTail
 
         let pendingSeek = consumedSeek(
             handler: handler, wantsScrollbar: wantsScrollbar, context: context)

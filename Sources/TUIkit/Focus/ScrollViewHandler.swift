@@ -102,6 +102,15 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// with false precision. Re-synced every render pass.
     var contentHeightIsEstimate = false
 
+    /// A one-shot "seek to the very bottom" intent (End key, scrollbar
+    /// bottom jump, `scrollToBottom()`). Against an ESTIMATED content
+    /// height, assigning `maxOffset` once can strand the view short: the
+    /// next render's reply refines the total, and the clamp only ever pulls
+    /// the offset DOWN. The ScrollView treats this flag like one frame of
+    /// bottom glue — re-asserting `maxOffset` after the refinement, whose
+    /// tail totals are exact — then clears it.
+    var seekingTail = false
+
     /// How many lines/columns a Shift-accelerated arrow press scrolls. Set from
     /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
     /// always scrolls one. See ``View/shiftStepMultiplier(_:)``.
@@ -136,7 +145,10 @@ extension ScrollViewHandler {
     public func scrollToTop() { scrollOffset = 0 }
 
     /// Jumps to the bottom of the content.
-    public func scrollToBottom() { scrollOffset = maxOffset }
+    public func scrollToBottom() {
+        scrollOffset = maxOffset
+        seekingTail = true
+    }
 }
 
 // MARK: - Key Event Handling
