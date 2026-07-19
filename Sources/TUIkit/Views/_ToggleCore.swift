@@ -213,9 +213,27 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             knobColor = palette.background
         }
 
+        // Focused: the TRACK breathes — the coloured-track styles have no
+        // bracket chrome to pulse, so the switch's own background carries the
+        // focus animation (same SelectionIndicator convention as the
+        // bracketed styles). The endpoints stay within the state's own hue —
+        // accent for on, neutral grey lifted toward the foreground for off —
+        // so the breathing never misreads as a state change, and the knob's
+        // half-block margin keeps it visible at the dim end of the pulse.
+        var focusedTrack = trackColor
+        if isFocused, !isDisabled {
+            let bright: Color =
+                isOnValue
+                ? palette.accent
+                : Color.lerp(.brightBlack, palette.foreground, phase: 0.45)
+            let dim = trackColor.opacity(ViewConstants.focusPulseMin, over: palette.background)
+            focusedTrack = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: dim, bright: bright)
+        }
+
         // Off: knob then a blank cell; on: a blank cell then knob.
         let cells = isOnValue ? " " + knob : knob + " "
-        return ANSIRenderer.colorize(cells, foreground: knobColor, background: trackColor)
+        return ANSIRenderer.colorize(cells, foreground: knobColor, background: focusedTrack)
     }
 
     /// Composes a built-in toggle's buffer from its indicator and label.

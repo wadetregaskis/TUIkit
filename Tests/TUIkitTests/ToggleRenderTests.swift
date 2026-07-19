@@ -32,6 +32,15 @@ struct ToggleRenderTests {
         renderToBuffer(v, context: makeBareRenderContext(width: w, height: h)).lines.map { $0.stripped }
     }
 
+    /// Renders focused at a specific pulse phase, returning the RAW first line
+    /// (SGR bytes included) so colour animation is observable.
+    private func rawFocusedLine(_ v: some View, pulsePhase: Double) -> String {
+        let context = makeRenderContext(width: 30, height: 4) { environment, _ in
+            environment.pulsePhase = pulsePhase
+        }
+        return renderToBuffer(v, context: context).lines.first ?? ""
+    }
+
     // MARK: - On / off indicator
 
     @Test("An OFF toggle renders □ then the label, on a single line")
@@ -332,5 +341,41 @@ struct ToggleRenderTests {
         let out = lines(Toggle("Short", isOn: .constant(false)), w: 40)
         #expect(out.count == 1)
         #expect(out[0] == "\(off) Short", "got: |\(out[0])|")
+    }
+
+    // MARK: - Switch focus pulse
+
+    @Test("A focused coloured-track switch pulses its track (both states)")
+    func focusedSwitchTrackPulses() {
+        // The coloured-track styles have no bracket chrome, so the TRACK (the
+        // switch's background) carries the focus animation — previously they
+        // showed no focus indication at all. The raw SGR bytes must differ
+        // across pulse phases when focused, and must not when unfocused.
+        for isOn in [false, true] {
+            let toggle = Toggle("Wifi", isOn: .constant(isOn)).toggleStyle(.switch)
+            let dim = rawFocusedLine(toggle, pulsePhase: 0.0)
+            let bright = rawFocusedLine(toggle, pulsePhase: 1.0)
+            #expect(dim != bright, "isOn=\(isOn): the focused track animates with the phase")
+
+            let unfocusedA = renderToBuffer(
+                toggle, context: makeBareRenderContext(width: 30, height: 4)
+            ).lines.first ?? ""
+            let unfocusedB = renderToBuffer(
+                toggle, context: makeBareRenderContext(width: 30, height: 4)
+            ).lines.first ?? ""
+            #expect(unfocusedA == unfocusedB, "isOn=\(isOn): unfocused output is steady")
+        }
+    }
+
+    @Test("The switch pulse never repaints an OFF track as the accent")
+    func offSwitchPulseStaysNeutral() {
+        // The off-state pulse endpoints are neutral greys — an off switch
+        // breathing up to the ACCENT would falsely read as "on". The bright
+        // end of an off pulse must differ from the on-state track bytes.
+        let onSteady = rawFocusedLine(
+            Toggle("Wifi", isOn: .constant(true)).toggleStyle(.switch), pulsePhase: 1.0)
+        let offBright = rawFocusedLine(
+            Toggle("Wifi", isOn: .constant(false)).toggleStyle(.switch), pulsePhase: 1.0)
+        #expect(onSteady != offBright, "on and off remain distinguishable mid-pulse")
     }
 }
