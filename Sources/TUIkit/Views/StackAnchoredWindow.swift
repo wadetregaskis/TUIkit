@@ -137,7 +137,6 @@ private final class AnchoredWindowFrame {
             let estimate = state.estimatedPitch(spacing: spacing)
             anchor = min(count - 1, max(0, offset / estimate))
             within = max(0, offset - anchor * estimate)
-            within = min(within, max(0, pitch(of: anchor) - 1))
         } else if delta != 0 {
             within += delta
             while within < 0, anchor > 0 {
@@ -149,8 +148,14 @@ private final class AnchoredWindowFrame {
                 within -= pitch(of: anchor)
                 anchor += 1
             }
-            within = min(within, max(0, pitch(of: anchor) - 1))
         }
+        // Clamp against the CURRENT pitch unconditionally — not just on the
+        // frames that scrolled. A width change re-wraps rows and shrinks
+        // pitches under a stale `within` (a viewport top that was a wrap
+        // continuation line no longer exists), and without this the anchor
+        // row silently drifts above the viewport on a resize frame whose
+        // offset didn't move (§5e: the anchor row is pinned by construction).
+        within = min(within, max(0, pitch(of: anchor) - 1))
         state.anchorOrdinal = anchor
         state.anchorOffsetWithin = within
         state.lastDerivedOffset = offset

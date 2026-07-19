@@ -218,6 +218,54 @@ struct AnchoredWindowTests {
         return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
     }
 
+    /// Renders wrap-height rows (every 3rd wraps to 2 lines at width 30,
+    /// all 1 line at width 60) at the given width and window offset.
+    @discardableResult
+    private func renderWrappedFrame(
+        width: Int, offset: Int, tuiContext: TUIContext
+    ) -> [String] {
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<400, id: \.self) { i in
+                Text(i.isMultiple(of: 3) ? "row \(i) " + String(repeating: "w", count: 36) : "row \(i)")
+            }
+        }
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        environment.scrollContentWindow = ScrollContentWindow(
+            offset: offset, viewportHeight: Self.viewport)
+        let context = RenderContext(
+            availableWidth: width, availableHeight: 400 * 3,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+    }
+
+    @Test("A width change re-clamps the anchor's offset-within (no drift)")
+    func widthChangeReclampsAnchorOffset() {
+        // At width 30 every 3rd row wraps to 2 lines; scroll to offset 1 so
+        // the viewport top is row 0's CONTINUATION line — the anchor is row
+        // 0 with offsetWithin 1. Re-rendering the same offset at width 60
+        // makes every row 1 line: a stale offsetWithin ≥ the new pitch
+        // silently pushes the anchor row above the viewport (§5e violation:
+        // the anchor row is pinned to the offset the clip shows). The
+        // clamped anchor must keep row 0 as the viewport's top row.
+        let tuiContext = TUIContext()
+        renderWrappedFrame(width: 30, offset: 0, tuiContext: tuiContext)
+        let narrow = renderWrappedFrame(width: 30, offset: 1, tuiContext: tuiContext)
+        #expect(narrow[1].hasPrefix("www"), "viewport top is row 0's wrap line: \(narrow.prefix(3))")
+
+        let wide = renderWrappedFrame(width: 60, offset: 1, tuiContext: tuiContext)
+        #expect(
+            wide[1].hasPrefix("row 0 "),
+            "after widening, the anchor row stays at the viewport top: \(wide.prefix(3))")
+    }
+
     @Test("Nonzero spacing: the anchored path's geometry matches the exact path")
     func anchoredSpacingMatchesExact() {
         // Same content prefix either side of the anchored threshold: 100
