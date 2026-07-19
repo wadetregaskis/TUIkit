@@ -146,6 +146,7 @@ struct TablePage: View {
     @State var ratioSelection: String?
     @State var notesSelection: Int?
     @State var fixedHeightByLine = true
+    @State var fixedHeightFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
@@ -222,6 +223,9 @@ struct TablePage: View {
                     Text(L("page.table.wrappingCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(L("demo.scrollGranularity.line"), isOn: $fixedHeightByLine)
+                    // How early the table scrolls to follow the moving
+                    // cursor: at the edge (default), 2 lines early, or centred.
+                    FollowMarginPicker(selection: $fixedHeightFollowMargin)
                     // 300 rows in a fixed 20-row viewport → it scrolls. The Note
                     // column is `.flexible` with `.lineLimit(3)`, so each row's
                     // height varies: short notes stay one line, longer ones wrap
@@ -238,6 +242,8 @@ struct TablePage: View {
                     .frame(height: 20)
                     .scrollbarVisibility(.visible)
                     .scrollGranularity(fixedHeightByLine ? .line : .row)
+                    .scrollFollowMargin(
+                        FollowMarginChoice(rawValue: fixedHeightFollowMargin)?.margin ?? .none)
                 }
                 .frame(maxWidth: .infinity)
             }

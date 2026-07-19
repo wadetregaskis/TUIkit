@@ -34,6 +34,7 @@ struct ScrollViewPage: View {
     @State var barArrows: ScrollbarArrows = .single
     @State var barProportional: Bool = true
     @State var barClickBehavior: ScrollbarClickBehavior = .page
+    @State var revealFollowMargin = FollowMarginChoice.none.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -131,6 +132,8 @@ struct ScrollViewPage: View {
                     .scrollbarArrows(barArrows)
                     .scrollbarProportionalThumb(barProportional)
                     .scrollbarClickBehavior(barClickBehavior)
+                    .scrollFollowMargin(
+                        FollowMarginChoice(rawValue: revealFollowMargin)?.margin ?? .none)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -150,6 +153,9 @@ struct ScrollViewPage: View {
                         Text(L("page.scrollView.click.jump")).tag(ScrollbarClickBehavior.jump)
                     }
                     Toggle(L("page.scrollView.proportionalThumb"), isOn: $barProportional)
+                    // How early the reveal-on-focus scrolls: at the edge
+                    // (default), 2 lines early, or keeping the control centred.
+                    FollowMarginPicker(selection: $revealFollowMargin)
                 }
             }
 

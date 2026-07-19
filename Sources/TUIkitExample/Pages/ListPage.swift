@@ -50,6 +50,7 @@ struct ListPage: View {
     @State var transientSelection: String?
     @State var multiLineSelection: String?
     @State var multiLineByLine = true
+    @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
 
     var body: some View {
@@ -224,6 +225,10 @@ struct ListPage: View {
                     // a wheel tick moves three LINES (the top row can rest
                     // partially clipped) or three whole ROWS.
                     Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
+                    // How early the list scrolls to follow the moving
+                    // selection: at the edge (default), 2 lines early, or
+                    // keeping the selection centred.
+                    FollowMarginPicker(selection: $multiLineFollowMargin)
                     multiLineList
                 }
             }
@@ -270,5 +275,7 @@ struct ListPage: View {
         .frame(height: 8)
         .scrollbarVisibility(.visible)
         .scrollGranularity(multiLineByLine ? .line : .row)
+        .scrollFollowMargin(
+            FollowMarginChoice(rawValue: multiLineFollowMargin)?.margin ?? .none)
     }
 }
