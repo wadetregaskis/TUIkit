@@ -219,6 +219,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// available height (clipping trailing rows at the cell), render, align, and
     /// clamp.
     private func renderClip(context: RenderContext) -> FrameBuffer {
+        resolveEagerSeek(context: context)
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
@@ -429,6 +430,29 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return result
+    }
+
+    /// A pending scrollTo against EAGER (`.clip`) content: the stack renders
+    /// in full regardless, so the seek only needs the target row's exact y —
+    /// answered from the same slot walk `LayoutPlacing` uses — reported for
+    /// the ScrollView to adopt this frame. Without this,
+    /// `ScrollView { VStack { ForEach } }` (the most natural SwiftUI
+    /// composition) silently ignored `scrollTo`.
+    private func resolveEagerSeek(context: RenderContext) {
+        guard !context.isMeasuring,
+            let window = consumableScrollWindow(context: context),
+            let seek = window.seek, let reply = window.reply
+        else { return }
+        var childContext = context
+        childContext.environment.scrollContentWindow = nil
+        let slots = naturalRowSlots(width: context.availableWidth, context: childContext)
+        guard let index = slots.firstIndex(where: { $0.child.identityChildKey == seek.key })
+        else { return }
+        let total = slots.last.map { $0.y + $0.height } ?? 0
+        reply.seekResolvedOffset = seek.windowOffset(
+            targetY: slots[index].y, rowHeight: slots[index].height,
+            currentOffset: window.offset, viewportHeight: window.viewportHeight,
+            totalHeight: total)
     }
 
     /// Renders only the children intersecting an enclosing ScrollView's visible
