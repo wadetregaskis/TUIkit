@@ -92,7 +92,12 @@ struct FocusRegistration {
         propertyIndex: Int
     ) -> String {
         let stateStorage = context.environment.stateStorage!
-        let defaultID = explicitFocusID ?? "\(defaultPrefix)-\(context.identity.path)"
+        // A `.focused($binding, equals:)` modifier forces the child's id via
+        // `assignedFocusID`; it ranks below an explicit `.focusID(_:)` but above
+        // the auto-generated path id.
+        let defaultID =
+            explicitFocusID ?? context.environment.assignedFocusID
+            ?? "\(defaultPrefix)-\(context.identity.path)"
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: propertyIndex)
         let box: StateBox<String> = stateStorage.storage(for: key, default: defaultID)
         return box.value

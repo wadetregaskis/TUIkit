@@ -169,6 +169,9 @@ type_name:
     # modifiers, following the same SwiftUI convention.
     - _TaggedView
     - _ZIndexView
+    # @FocusState modifier helpers created by .focused / .defaultFocus.
+    - _FocusedModifier
+    - _DefaultFocusModifier
     - _PickerEntry
     - _PickerMenuCore
     - _PickerMenuHandler

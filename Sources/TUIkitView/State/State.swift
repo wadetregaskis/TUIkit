@@ -384,8 +384,26 @@ extension State: StateBindable {
     }
 }
 
-/// Binds every `@State` of `view` to storage keyed by the view's own render
-/// `identity` + declaration order. Mirrors ``resolveEnvironmentProperties``.
+/// A property that needs only a *stable id* derived from its view's render
+/// identity — not a full ``StateStorage`` slot — bound at render time.
+///
+/// `@FocusState` (in the higher-level `TUIkit` module, where the focus system
+/// lives) uses this: it keeps its per-value focus mappings on the persistent
+/// `FocusManager`, keyed by an id that must stay the same across frames so a
+/// control's focusID and the "which value is focused?" reverse-lookup remain
+/// stable. The id is derived from the owning view's identity + the property's
+/// declaration order, exactly like a ``StateBindable`` slot key. Public so a
+/// type in a module layered above `TUIkitView` can participate in the same
+/// ``bindStateProperties(of:identity:storage:)`` walk that binds `@State`.
+public protocol RenderIdentityBindable {
+    /// Binds this property to a stable id derived from its view's render
+    /// `path` and declaration `propertyIndex`.
+    func bindRenderIdentity(path: String, propertyIndex: Int)
+}
+
+/// Binds every `@State` (and ``RenderIdentityBindable``, e.g. `@FocusState`)
+/// property of `view` to storage/ids keyed by the view's own render `identity`
+/// + declaration order. Mirrors ``resolveEnvironmentProperties``.
 @MainActor
 func bindStateProperties<V>(of view: V, identity: ViewIdentity, storage: StateStorage) {
     let typeID = ObjectIdentifier(V.self)
@@ -394,6 +412,12 @@ func bindStateProperties<V>(of view: V, identity: ViewIdentity, storage: StateSt
     for child in Mirror(reflecting: view).children {
         if let bindable = child.value as? StateBindable {
             bindable.bindState(to: storage, identity: identity, propertyIndex: index)
+            index += 1
+        } else if let idBindable = child.value as? RenderIdentityBindable {
+            // Shares the same declaration-order counter as @State so mixing
+            // @State and @FocusState in one view keeps stable, non-colliding
+            // keys regardless of their relative order.
+            idBindable.bindRenderIdentity(path: identity.path, propertyIndex: index)
             index += 1
         }
     }
