@@ -467,7 +467,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         to visibleBuffer: inout FrameBuffer, handler: ScrollViewHandler, contentWidth: Int,
         wantsScrollbar: Bool, wantsHorizontalBar: Bool, isFocused: Bool, context: RenderContext
     ) {
-        if showsIndicators && !wantsScrollbar {
+        // Indicators REPLACE viewport lines, so a 1-2 line viewport scrolled
+        // mid-content would be 100% chrome — "▼ N more below" as the entire
+        // view, with the content it advertises never visible at any offset.
+        // Content always wins the last lines: indicators need 3+ rows (both
+        // may show and at least one content line survives).
+        if showsIndicators && !wantsScrollbar && visibleBuffer.height >= 3 {
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,

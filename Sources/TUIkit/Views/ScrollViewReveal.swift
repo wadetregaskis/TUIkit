@@ -103,10 +103,15 @@ extension _ScrollViewCore {
             // replaced by the indicator. Without this, a focused row could
             // rest stably hidden behind "▼ N more below" and, focus being
             // unchanged, no later frame would ever re-snap.
+            // Indicators need 3+ viewport rows (content always wins the
+            // last lines — see applyScrollChrome), and the snap's
+            // visibility math must agree or it reserves headroom for
+            // chrome that never renders.
+            let indicatorsFit = viewportHeight >= 3
             let topIndicatorShows =
-                indicatorsActive && showsIndicators && viewportTop > 0
+                indicatorsActive && showsIndicators && indicatorsFit && viewportTop > 0
             let bottomIndicatorShows =
-                indicatorsActive && showsIndicators
+                indicatorsActive && showsIndicators && indicatorsFit
                 && viewportBottom < handler.contentHeight
             let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0)
             let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0)
@@ -119,7 +124,8 @@ extension _ScrollViewCore {
                 // by scrolling down: its header row is what identifies the
                 // control, so show its top rather than its tail.
                 let proposed = regionTop
-                let topIndicatorRow = (showsIndicators && proposed > 0) ? 1 : 0
+                let topIndicatorRow =
+                    (showsIndicators && indicatorsFit && proposed > 0) ? 1 : 0
                 handler.scrollOffset =
                     max(0, min(handler.maxOffset, proposed - topIndicatorRow))
             } else if regionBottom > visibleBottom {
@@ -127,7 +133,7 @@ extension _ScrollViewCore {
                 // leaving 1 row for the bottom indicator if one appears.
                 let proposed = regionBottom - viewportHeight
                 let bottomIndicatorWouldAppear =
-                    showsIndicators
+                    showsIndicators && indicatorsFit
                     && (proposed + viewportHeight < handler.contentHeight)
                 handler.scrollOffset = max(
                     0,
