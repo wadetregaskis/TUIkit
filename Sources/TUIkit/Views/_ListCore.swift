@@ -513,6 +513,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         _ source: RowSource<SelectionValue>,
         targetContentHeight: Int
     ) -> Bool {
+        // More rows than target lines is overflow by counting alone — every
+        // row renders at least its own line. This matters: the walk below
+        // touches rows from the HEAD of the list, and touching a row's
+        // `buffer` resolves (renders) it — so a deep-scrolled list resolved
+        // ~a viewport of rows it wasn't even showing, every frame, just to
+        // answer this predicate (~25% of a megalist frame).
+        if source.count > targetContentHeight { return true }
         var totalRowLines = 0
         for index in 0..<source.count {
             totalRowLines += source.row(at: index).buffer.height
