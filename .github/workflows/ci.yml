@@ -55,6 +55,9 @@ jobs:
       - name: Lint
         run: swiftlint
 
+      - name: Validate test module boundaries
+        run: ./Tools/validate-test-boundaries.sh
+
       - name: Build
         env:
           DISABLE_SWIFTLINT: "1"

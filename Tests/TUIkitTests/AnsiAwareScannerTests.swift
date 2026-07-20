@@ -7,7 +7,6 @@
 import Testing
 
 @testable import TUIkit
-@testable import TUIkitCore
 
 /// Regression tests for the ANSI-aware scanners when an SGR escape's
 /// terminator is immediately followed by an **Extend** scalar (a lone

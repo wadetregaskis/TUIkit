@@ -6,9 +6,7 @@
 
 import Testing
 
-import TUIkitCore
-
-@testable import TUIkit
+@testable import TUIkitCore
 
 @MainActor
 @Suite("Overlay placement")

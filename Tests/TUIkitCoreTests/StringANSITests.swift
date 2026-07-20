@@ -6,7 +6,7 @@
 
 import Testing
 
-@testable import TUIkit
+@testable import TUIkitCore
 
 @MainActor
 @Suite("String ANSI Extension Tests")

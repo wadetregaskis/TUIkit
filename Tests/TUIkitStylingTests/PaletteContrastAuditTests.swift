@@ -13,7 +13,6 @@
 import Foundation
 import Testing
 
-@testable import TUIkit
 @testable import TUIkitStyling
 
 @MainActor

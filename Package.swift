@@ -66,6 +66,14 @@ let package = Package(
             dependencies: ["TUIkit"],
             resources: [.copy("Resources")]
         ),
+        // The umbrella test target: integration tests + every test that exercises
+        // a control, the App/run loop, focus, or the shared render helpers (which
+        // live in this target). Module-specific *unit* tests live in the
+        // per-module test targets below, which link ONLY their module (+ its
+        // real deps) so a test that reaches across a module boundary fails to
+        // compile. `swift test` runs every target, so the full suite is
+        // unchanged. Tools/validate-test-boundaries.sh enforces this going
+        // forward (see also the per-target import guard it applies).
         .testTarget(
             name: "TUIkitTests",
             dependencies: ["TUIkit"],
@@ -74,6 +82,15 @@ let package = Package(
             // exclude them from the build rather than declaring them as resources.
             exclude: ["__Snapshots__"]
         ),
+
+        // ── Per-module unit-test targets (compiler-enforced layering) ──────────────────────────────────────
+        // Each links ONLY its module. A unit test that drifts into a sibling or
+        // higher layer stops compiling here — that is the point: it keeps every
+        // module provably testable in isolation.
+        .testTarget(name: "TUIkitCoreTests", dependencies: ["TUIkitCore"]),
+        .testTarget(name: "TUIkitStylingTests", dependencies: ["TUIkitStyling"]),
+        .testTarget(name: "TUIkitViewTests", dependencies: ["TUIkitView"]),
+        .testTarget(name: "TUIkitImageTests", dependencies: ["TUIkitImage"]),
 
         // ── Stress test ─────────────────────────────────────────────────────────────────────────────────
         // A performance stress harness shaped like an app: deep/wide view

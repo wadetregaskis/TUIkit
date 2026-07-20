@@ -6,7 +6,7 @@
 
 import Testing
 
-@testable import TUIkit
+@testable import TUIkitCore
 
 /// String preference key for testing.
 private struct ValStringKey: PreferenceKey {

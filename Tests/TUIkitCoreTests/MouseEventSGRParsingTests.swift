@@ -10,7 +10,6 @@
 
 import Testing
 
-@testable import TUIkit
 @testable import TUIkitCore
 
 // MARK: - SGR Parsing

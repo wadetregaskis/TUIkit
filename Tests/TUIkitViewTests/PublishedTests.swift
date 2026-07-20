@@ -7,7 +7,7 @@
 import Observation
 import Testing
 
-@testable import TUIkit
+@testable import TUIkitView
 
 // MARK: - Test Observable
 
