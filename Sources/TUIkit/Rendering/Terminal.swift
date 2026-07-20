@@ -124,7 +124,16 @@ final class Terminal: TerminalProtocol {
     /// tests inject a closure to script split reads deterministically, since
     /// the parser is otherwise impossible to drive without a live TTY.
     var readSource: (UnsafeMutableBufferPointer<UInt8>) -> Int = { buffer in
-        read(STDIN_FILENO, buffer.baseAddress, buffer.count)
+        guard let base = buffer.baseAddress else { return 0 }
+        while true {
+            let n = read(STDIN_FILENO, base, buffer.count)
+            // Retry only on EINTR (a signal interrupted the read before any byte
+            // arrived); surface everything else — n >= 0, or a real error / the
+            // benign EAGAIN of a non-blocking fd with no data — unchanged, which
+            // `appendDrain`'s `n > 0` check already handles.
+            if n < 0 && errno == EINTR { continue }
+            return n
+        }
     }
 
     /// The original terminal settings.
@@ -938,18 +947,36 @@ extension Terminal {
         frameBuffer.append(contentsOf: string.utf8)
     }
 
-    /// Writes all buffered bytes to `STDOUT_FILENO` in a single syscall.
+    /// Writes all `count` bytes at `base` to `STDOUT_FILENO`, in as few syscalls
+    /// as possible.
+    ///
+    /// Retries the unwritten tail on a partial write **and on `EINTR`** — a
+    /// signal (SIGWINCH resize, SIGCONT, SIGTSTP) interrupting the blocking
+    /// `write` returns `-1`/`EINTR` without having transferred the rest of the
+    /// frame. The previous `if result <= 0 { break }` treated that the same as a
+    /// hard error and abandoned the remainder, so a signal landing mid-flush
+    /// dropped the frame tail (a corrupted/truncated frame) or left the terminal
+    /// half-restored mid-teardown. `errno` is read immediately after the failed
+    /// `write`, before any other call, since it is thread-local and transient.
+    fileprivate static func writeAll(_ base: UnsafePointer<UInt8>, _ count: Int) {
+        var written = 0
+        while written < count {
+            let result = Foundation.write(STDOUT_FILENO, base + written, count - written)
+            if result < 0 {
+                if errno == EINTR { continue }  // interrupted by a signal — retry the rest
+                break                            // real write error — give up on the remainder
+            }
+            if result == 0 { break }             // wrote nothing — avoid an infinite spin
+            written += result
+        }
+    }
+
+    /// Writes all buffered bytes to `STDOUT_FILENO`.
     fileprivate func flushBuffer() {
         guard !frameBuffer.isEmpty else { return }
         frameBuffer.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
-            let count = buffer.count
-            var written = 0
-            while written < count {
-                let result = Foundation.write(STDOUT_FILENO, baseAddress + written, count - written)
-                if result <= 0 { break }
-                written += result
-            }
+            Terminal.writeAll(baseAddress, buffer.count)
         }
         frameBuffer.removeAll(keepingCapacity: true)
     }
@@ -961,12 +988,7 @@ extension Terminal {
             let count = buffer.count - 1
             guard count >= 1, let baseAddress = buffer.baseAddress else { return }
             baseAddress.withMemoryRebound(to: UInt8.self, capacity: count) { pointer in
-                var written = 0
-                while written < count {
-                    let result = Foundation.write(STDOUT_FILENO, pointer + written, count - written)
-                    if result <= 0 { break }
-                    written += result
-                }
+                Terminal.writeAll(pointer, count)
             }
         }
     }
