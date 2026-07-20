@@ -161,7 +161,9 @@ extension AlertPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.overlayContentHeight)
         alertContext.environment.activeFocusSectionID = sectionID
-        var alertBuffer = TUIkit.renderToBuffer(alert, context: alertContext)
+        var alertBuffer = renderPresentedDialog(
+            alert, context: alertContext,
+            capHeight: context.environment.overlayContentHeight)
 
         guard !alertBuffer.isEmpty else { return baseBuffer }
 
