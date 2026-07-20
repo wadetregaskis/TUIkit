@@ -6,8 +6,8 @@ The render loop should do nothing while nothing changes, so a static screen with
 no input must approach 0% CPU and 0 bytes/s of render output. This is the probe
 behind the "demand-driven animation clocks" work (see git log).
 
-    swift build -c release --product TUIkitExample -Xswiftc -g
-    BIN="$(swift build -c release --product TUIkitExample --show-bin-path)/TUIkitExample"
+    swift build -c release --product Example -Xswiftc -g
+    BIN="$(swift build -c release --product Example --show-bin-path)/Example"
     python3 Tools/Profiling/idle_cpu.py "$BIN" [settle_s] [window_s] [keys]
 
 `keys` (optional) is sent after the settle delay to drive to another screen

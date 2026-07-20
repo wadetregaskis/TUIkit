@@ -22,10 +22,10 @@ let package = Package(
         .library(name: "TUIkit", targets: ["TUIkit"]),
 
         // ── App ─────────────────────────────────────────────────────────────────────────────────────────
-        .executable(name: "TUIkitExample", targets: ["TUIkitExample"]),
+        .executable(name: "Example", targets: ["Example"]),
 
         // ── Stress test (perf instrument; secondarily a complex-TUI demo) ────────────────────────────────
-        .executable(name: "TUIkitStress", targets: ["TUIkitStress"]),
+        .executable(name: "Stress", targets: ["Stress"]),
 
         // ── Tools ───────────────────────────────────────────────────────────────────────────────────────
         .executable(name: "EmojiBugScanner", targets: ["EmojiBugScanner"]),
@@ -62,7 +62,7 @@ let package = Package(
 
         // ── App & Tests ─────────────────────────────────────────────────────────────────────────────────
         .executableTarget(
-            name: "TUIkitExample",
+            name: "Example",
             dependencies: ["TUIkit"],
             resources: [.copy("Resources")]
         ),
@@ -79,9 +79,9 @@ let package = Package(
         // A performance stress harness shaped like an app: deep/wide view
         // hierarchies over large, pseudo-randomly synthesised data sets. Runs
         // interactively, or headless (`--bench`/`--selfcheck`) as a no-PTY
-        // profiling instrument (see Sources/TUIkitStress/README.md).
+        // profiling instrument (see Sources/Stress/README.md).
         .executableTarget(
-            name: "TUIkitStress",
+            name: "Stress",
             dependencies: ["TUIkit"],
             exclude: ["README.md"]  // documentation, not a bundled resource
         ),

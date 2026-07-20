@@ -469,11 +469,11 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
    (`.all`/`.text` + `.semanticColor`). Broad modifiers
    `.bold/.italic/.underline/.strikethrough/.fontWeight/.textCase` (+ `FontWeight`,
    `TextCase`) and the generic `.style(_:_:)`. Delivers (a), (e), (f-text).
-   `Text.bold()` unchanged. (TUIkitExample: Text Styles page "Cascading styles".)
+   `Text.bold()` unchanged. (Example: Text Styles page "Cascading styles".)
 2. ✅ **(shipped)** **Chrome roles** — `Section` header/footer resolve via an
    environment `chromeRole` + `.chrome(...)` scope; defaults preserve the current
    look (header bold+dim, footer dim) and are now overridable (e.g. uppercase /
-   un-bold headers). (TUIkitExample: Text Styles page "Themeable chrome".)
+   un-bold headers). (Example: Text Styles page "Themeable chrome".)
 3. ▶︎ **Control targeting, control by control** (in progress) — soft-default
    styles + cascade resolution + typed conveniences, one control per commit.
    First landed `StyleAttributes.foreground/background` (the deferred half of the
@@ -498,13 +498,13 @@ reflects: colour-role attributes early; `disabled` late but before tint; tint la
 4. ✅ **(shipped) Cascading `.disabled`** — env `isEnabled` + an additive
    `DisabledModifier` (`.disabled(_:)` on any View); every interactive control
    combines `self.isDisabled || !environment.isEnabled`. A descendant can't
-   re-enable what an ancestor disabled. (TUIkitExample: Buttons page "Cascading
+   re-enable what an ancestor disabled. (Example: Buttons page "Cascading
    .disabled".)
 5. ✅ **(shipped) Tint** — `.tint(_:)` + env `tint`, implemented by overriding the
    subtree palette's `accent` (a `TintedPalette` wrapper) so *every* `palette.accent`
    read — button caps/focus, toggle ON mark, slider/stepper arrows, radio dot,
    focus highlights, accent-coloured text — follows the tint with no per-control
-   wiring. Nested tints override; `.tint(nil)` inherits. (TUIkitExample: Buttons
+   wiring. Nested tints override; `.tint(nil)` inherits. (Example: Buttons
    page "Tinted group".)
 6. ✅ **(shipped) `Theme` + `.theme(_:)`** — a `Theme` bundle (palette, appearance,
    tint, scoped `styles`, optional control styles); the View modifier expands it

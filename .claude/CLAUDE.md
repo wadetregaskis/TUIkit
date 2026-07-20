@@ -24,7 +24,7 @@
 
 ### Performance & profiling (non-negotiable)
 - **Profile with the committed tools.** `Tools/Profiling/` records an
-  Instruments Time Profiler trace of `TUIkitExample` driven through a PTY
+  Instruments Time Profiler trace of `Example` driven through a PTY
   (`record.sh`) and ranks the hot functions (`analyze_timeprofile.py`).
   See `Tools/Profiling/README.md`. Extend these rather than hand-rolling
   one-off profiling.

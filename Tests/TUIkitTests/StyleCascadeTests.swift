@@ -195,7 +195,7 @@ struct StyleCascadeTests {
 
     @Test("A custom header opting into .chrome inherits app-wide textCase but not the default dim")
     func customChromeHeaderInheritsCaseNotDim() {
-        // Mirrors TUIkitExample's DemoSection title: a bold + underlined header
+        // Mirrors Example's DemoSection title: a bold + underlined header
         // that opts into `.chrome(.sectionHeader)` to pick up an app-wide textCase
         // toggle, while locally clearing the role's default dim so it stays crisp.
         // The inner `dim = false` and the outer `textCase` target different
@@ -457,7 +457,7 @@ struct TextFieldStyleCascadeTests {
         // Regression: `.textFieldTextStyle { $0.foreground = .palette.accent }`
         // put a *semantic* colour in the cascade, which the field handed to
         // ANSIRenderer unresolved — and ANSIRenderer traps on `.semantic`. (This
-        // is what crashed TUIkitExample's Text Fields page.) The semantic accent
+        // is what crashed Example's Text Fields page.) The semantic accent
         // must resolve to a concrete RGB. Non-empty text guarantees the entered-
         // text path runs rather than the dim-prompt branch.
         let view = TextField("Name", text: .constant("Ada"))

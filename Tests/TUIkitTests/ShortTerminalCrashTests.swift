@@ -6,7 +6,7 @@
 //  than its own chrome produced a NEGATIVE available height — which
 //  `WindowGroup.centerBuffer` then fed straight into `0..<(targetHeight -
 //  verticalOffset)`, trapping with "Range requires lowerBound <= upperBound"
-//  before a single frame was drawn. Reproduced end-to-end: TUIkitExample died at
+//  before a single frame was drawn. Reproduced end-to-end: Example died at
 //  1, 2, 4 and 5 rows with exactly that message, backtrace at App.swift:563.
 //
 //  Two invariants are pinned here:

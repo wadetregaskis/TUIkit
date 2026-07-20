@@ -50,7 +50,7 @@ struct WindowedCompositionTests {
 
     @Test("A scrollbar over windowed content: geometry converges, End reaches the tail")
     func scrollbarOverWindowedContent() {
-        // The composition TUIkitExample ships: .automatic scrollbar + a big
+        // The composition Example ships: .automatic scrollbar + a big
         // lazy list. The reservation loop must measure the ESTIMATED full
         // height (reserving the bar), the handshake then runs at the
         // narrowed width, and the bar column renders on every content row.

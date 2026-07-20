@@ -1,10 +1,10 @@
-# TUIkitStress
+# Stress
 
 A performance **stress harness shaped like an app**. Its primary purpose is to
 be a reproducible instrument for profiling and optimising the TUIkit render
 pipeline; it is *secondarily* a showcase of deliberately absurd TUIs.
 
-Unlike `TUIkitExample` (built for humans, to demonstrate features), every
+Unlike `Example` (built for humans, to demonstrate features), every
 scenario here is built to **push a specific part of the pipeline to its limit**:
 deep recursion, wide fan-out, very large data sets, heavy modifier chains,
 type-erasure, all-invalidating churn, and so on.
@@ -24,13 +24,13 @@ byte-identical content, so:
 
 ```sh
 # Interactive (needs a terminal): a menu of scenarios.
-swift run TUIkitStress
+swift run Stress
 
 # Headless smoke test: render every scenario once, non-zero exit on empty.
-swift run TUIkitStress --selfcheck
+swift run Stress --selfcheck
 
 # Headless benchmark of one scenario (no PTY — see "Profiling" below).
-swift run -c release TUIkitStress -- --bench --scenario fanout --iterations 2000 --cold
+swift run -c release Stress -- --bench --scenario fanout --iterations 2000 --cold
 ```
 
 ### Configuration (environment variable | CLI flag)
@@ -76,8 +76,8 @@ profiled by having Instruments *launch* it (works in sandboxes/CI/VMs where
 `--attach` is denied):
 
 ```sh
-swift build -c release --product TUIkitStress -Xswiftc -g
-BIN="$(swift build -c release --product TUIkitStress --show-bin-path)/TUIkitStress"
+swift build -c release --product Stress -Xswiftc -g
+BIN="$(swift build -c release --product Stress --show-bin-path)/Stress"
 xcrun xctrace record --template 'Time Profiler' --output stress.trace \
     --launch -- "$BIN" --bench --scenario megalist --iterations 5000 --cold
 python3 Tools/Profiling/analyze_timeprofile.py stress.trace
@@ -93,14 +93,14 @@ and the relative hot-spots shift.
   to isolate one view's dispatch.
 - **`Benchmarks/TUIkitBenchmarks`** (ordo-one) — statistical benchmarks with
   warmup/baselines for regression tracking.
-- **`TUIkitStress`** (this) — large, realistic, *app-shaped* worst cases for
+- **`Stress`** (this) — large, realistic, *app-shaped* worst cases for
   finding where the pipeline falls over at scale. Start here to discover a
   bottleneck; reproduce it minimally in `RenderHarness`; lock it in
   `TUIkitBenchmarks`.
 
 ## Adding a scenario
 
-1. Add `Sources/TUIkitStress/Scenarios/Foo.swift` with a `FooScenario.descriptor`
+1. Add `Sources/Stress/Scenarios/Foo.swift` with a `FooScenario.descriptor`
    (`Scenario` value) and a private `View`.
 2. Append `FooScenario.descriptor` to `Scenarios.all` in `Scenario.swift`.
 3. Prefer **on-demand** synthesis (`mix(seed, index)` per visible row) over a

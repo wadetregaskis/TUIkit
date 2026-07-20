@@ -41,11 +41,11 @@ func flagValue(_ name: String) -> String? {
 }
 
 let usageText = """
-    TUIkitStress — a performance stress harness for TUIkit.
+    Stress — a performance stress harness for TUIkit.
 
-    Interactive:  TUIkitStress
-    Self-check:   TUIkitStress --selfcheck [--scale N]
-    Benchmark:    TUIkitStress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
+    Interactive:  Stress
+    Self-check:   Stress --selfcheck [--scale N]
+    Benchmark:    Stress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
 
     Scenarios are listed in the interactive menu; ids: megalist, scrollfollow, table, deep,
     fanout, modifiers, textwall, anyview, dashboard, framedcolumns, churn,

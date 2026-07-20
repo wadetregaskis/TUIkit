@@ -17,7 +17,7 @@ import Testing
 // Escape key, so it times out after two stale frames — and the regression these
 // tests pin is that the timed-out `ESC` must NOT strand its `[` / `O` introducer
 // to be dispatched as a literal character (which intermittently jumped
-// `TUIkitExample` to its `[` = Sliders page).
+// `Example` to its `[` = Sliders page).
 //
 // The parser reads stdin directly, so these tests drive it through the
 // injectable `readSource`, feeding bytes exactly when we choose to model the

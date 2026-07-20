@@ -41,7 +41,7 @@ UP, DOWN, RIGHT, LEFT = ESC + b"[A", ESC + b"[B", ESC + b"[C", ESC + b"[D"
 ENTER, TAB = b"\r", b"\t"
 PGUP, PGDN = ESC + b"[5~", ESC + b"[6~"
 
-# ContentView page shortcuts (see Sources/TUIkitExample/ContentView.swift).
+# ContentView page shortcuts (see Sources/Example/ContentView.swift).
 PAGE_KEYS = {
     "lists": "-", "tables": "=", "scroll": "s", "emoji": ".", "mouse": "m",
     "text": "1", "colors": "2", "containers": "3", "buttons": "6",

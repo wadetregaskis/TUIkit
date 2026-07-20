@@ -242,7 +242,7 @@ struct ToggleRenderTests {
     @Test("A Toggle draws the marker's resolved glyphs, not its fallback")
     func toggleRendersTheResolvedAutomaticStyle() {
         // The end-to-end shape of the fix: `.toggleCharacterSet(.automatic)` — what
-        // TUIkitExample applies app-wide — must follow the resolved answer.
+        // Example applies app-wide — must follow the resolved answer.
         var context = makeRenderContext(width: 20, height: 2)
         context.environment.resolvedAutomaticToggleCharacterSet = .emoji
         let buffer = renderToBuffer(

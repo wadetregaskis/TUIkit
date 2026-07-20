@@ -4,7 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 //
-//  Generated localization fragment for the TUIkitExample demo pages:
+//  Generated localization fragment for the Example demo pages:
 //  TextStyles, Colors, Containers, Overlays, Layout. English is the source of
 //  truth; the other languages mirror the same key set. Merged into the example
 //  app's translation tables alongside the chrome/menu strings.

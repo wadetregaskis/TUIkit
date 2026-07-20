@@ -11,7 +11,7 @@ then aggregates CPU time by:
   • inclusive  — every distinct function on a sample's stack
   • module     — per-binary self time (your code vs. system libraries)
   • app only   — self/inclusive restricted to non-system binaries, i.e.
-                 TUIkit + TUIkitExample, so your own hot code stands out
+                 TUIkit + Example, so your own hot code stands out
 
 Why not just use DuckDB / the instruments-analyzer skill? Instruments'
 XML dedups recurring stack frames with an id/ref scheme: the first
@@ -252,9 +252,9 @@ def main():
                 r["incl_ms"], t, r["top"])
     print_table("Self time by module (your code vs. system)",
                 r["mod_ms"], t, r["top"])
-    print_table("APP ONLY — self time in TUIkit / TUIkitExample",
+    print_table("APP ONLY — self time in TUIkit / Example",
                 r["app_self_ms"], t, r["top"])
-    print_table("APP ONLY — inclusive time in TUIkit / TUIkitExample",
+    print_table("APP ONLY — inclusive time in TUIkit / Example",
                 r["app_incl_ms"], t, r["top"])
     if args.callers is not None:
         print_table(

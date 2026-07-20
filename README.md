@@ -131,7 +131,7 @@ struct ContentView: View {
 ## Run the example app
 
 ```bash
-swift run TUIkitExample
+swift run Example
 ```
 
 Press `q` to exit. (Inside a demo page, `ESC` goes back to the menu.)
@@ -293,8 +293,8 @@ Sources/
 │   ├── Utility/          Misc helpers
 │   ├── TUIkit.docc/      DocC documentation catalog
 │   └── Views/            Text, Stacks, Button, TextField, Slider, List, Table, Image, ...
-├── TUIkitExample/        Example app (executable target)
-└── TUIkitStress/         Performance stress harness, also a complex-TUI demo (executable)
+├── Example/        Example app (executable target)
+└── Stress/         Performance stress harness, also a complex-TUI demo (executable)
 
 Tests/
 └── TUIkitTests/          ~2,850 tests across ~410 suites in 256 files

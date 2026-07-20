@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Record an Instruments Time Profiler trace of TUIkitExample while a
+# Record an Instruments Time Profiler trace of Example while a
 # scripted scenario drives it, then print the hot functions.
 #
 # This is the end-to-end ("Mode B") profiling flow: it profiles the real
@@ -28,9 +28,9 @@ COLS="${4:-160}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-echo "==> Building TUIkitExample (release, with debug symbols)…"
-swift build -c release --product TUIkitExample -Xswiftc -g
-BIN="$(swift build -c release --product TUIkitExample --show-bin-path)/TUIkitExample"
+echo "==> Building Example (release, with debug symbols)…"
+swift build -c release --product Example -Xswiftc -g
+BIN="$(swift build -c release --product Example --show-bin-path)/Example"
 [ -x "$BIN" ] || { echo "build did not produce $BIN" >&2; exit 1; }
 
 OUTDIR="$REPO_ROOT/profiling-traces"

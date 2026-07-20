@@ -499,7 +499,7 @@ is three keystrokes away** — which is how a user with a perfectly normal
 terminal lands in the negative-content-height crash band (see
 `contentAreaHeight()`; crash fixed in c02c3678, which renders header + status
 bar with an empty content area at 4 rows instead of trapping). Verified: four
-TUIkitExample panes at heights 19/9/5/4, all `pane_dead=0`.
+Example panes at heights 19/9/5/4, all `pane_dead=0`.
 
 ### Does the client terminal change tmux's behaviour? No. (measured)
 
@@ -683,7 +683,7 @@ the alternate screen against exactly those bytes:
 Ghostty's net-1 is its known VS-15 under-advance (bare ⬛ advances 2, the two
 BS go back 2, the re-write with U+FE0E advances only 1) — the single quirk
 `withGhosttyCursorCompensation()` patches natively. Uncompensated, every row
-containing a chrome glyph shears left by one — observed in TUIkitExample as
+containing a chrome glyph shears left by one — observed in Example as
 `⬛Enable Notifications` losing its gap and the right-edge scrollbar
 checkering, one sheared row at a time. So tmux+Ghostty draws the safe ■ □
 while native Ghostty keeps the emoji chrome.
@@ -736,7 +736,7 @@ Ghostty watched, and still ⬛ when Apple Terminal took the session with
 ### Mouse
 
 **SGR (1006) reporting passes through and the coordinates are correct.**
-Verified end to end: with tmux at its default (`mouse off`), TUIkitExample's own
+Verified end to end: with tmux at its default (`mouse off`), Example's own
 `ESC[?1006h` / `?1002h` reach the client, and a synthetic press/release injected
 into the pane —
 

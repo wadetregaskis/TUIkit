@@ -4,7 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 //
-//  Per-language translation tables for the TUIkitStress harness. English is the
+//  Per-language translation tables for the Stress harness. English is the
 //  source of truth; other languages fall back to English (then the key) for any
 //  key they omit.
 //

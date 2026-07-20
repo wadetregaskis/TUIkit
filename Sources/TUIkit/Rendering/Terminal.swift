@@ -114,7 +114,7 @@ final class Terminal: TerminalProtocol {
     /// …) whose remaining bytes were split into a later `read()`. Committing it
     /// as Escape too early strands the sequence's `[` / `O` to be parsed as a
     /// literal keystroke on the next pass — which is how an arrow key could
-    /// momentarily register as `[` (e.g. jumping `TUIkitExample` to its `[` =
+    /// momentarily register as `[` (e.g. jumping `Example` to its `[` =
     /// Sliders page). So instead we hold the decision one round: the next
     /// ``readEvent()`` re-attaches the `ESC` if a `[`/`O` arrived (parsing the
     /// real sequence, no Escape emitted), and otherwise commits the Escape.

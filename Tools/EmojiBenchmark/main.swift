@@ -19,7 +19,7 @@ import TUIkitCore
 
 // MARK: - Workload
 
-/// Typical FeatureBox row from `TUIkitExample`'s main menu — mostly
+/// Typical FeatureBox row from `Example`'s main menu — mostly
 /// ASCII / box-drawing, with some CJK and a couple of emoji.  This is
 /// roughly what every render-loop iteration is asking the function
 /// about, every cell, every frame.

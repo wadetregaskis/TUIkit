@@ -19,7 +19,7 @@ path end to end. This directory makes that repeatable.
 
 | Mode | What it profiles | Status |
 |------|------------------|--------|
-| **B — end-to-end (this toolkit)** | The real `TUIkitExample` driven through a PTY: input → 5-layer dispatch → render → diff → `write()` | ✅ working |
+| **B — end-to-end (this toolkit)** | The real `Example` driven through a PTY: input → 5-layer dispatch → render → diff → `write()` | ✅ working |
 | **A — headless render harness** | `renderToBuffer(view:)` on fixed view trees in a tight loop — deterministic, fully CPU-bound, no input timing | ✅ working (`RenderHarness`) |
 
 Mode B is the realism check. Mode A is the microscope for iterating on a
@@ -60,7 +60,7 @@ Traces land in `profiling-traces/` (git-ignored).
 ## The pieces
 
 ### `record.sh` — orchestrator
-Builds `TUIkitExample` in release with `-g`, drives the chosen scenario
+Builds `Example` in release with `-g`, drives the chosen scenario
 under the Time Profiler, then analyzes the trace.
 `record.sh [scenario] [seconds] [rows] [cols]`.
 
@@ -72,10 +72,10 @@ child never stalls. Scenarios: `tour`, `list`, `table`, `emoji`,
 
 ```bash
 # Drive without profiling — a fast sanity check that the app responds:
-.build/release/TUIkitExample        # don't run this directly; use:
-swift build -c release --product TUIkitExample
+.build/release/Example        # don't run this directly; use:
+swift build -c release --product Example
 python3 Tools/Profiling/drive.py \
-    "$(swift build -c release --product TUIkitExample --show-bin-path)/TUIkitExample" \
+    "$(swift build -c release --product Example --show-bin-path)/Example" \
     --scenario mouse
 ```
 
@@ -90,7 +90,7 @@ aggregates CPU time into five views:
 - **Self time** — leaf frame of each sample (where the CPU actually was)
 - **Inclusive time** — every distinct function on a sample's stack
 - **By module** — your code vs. system libraries
-- **App only (self / inclusive)** — restricted to TUIkit / TUIkitExample
+- **App only (self / inclusive)** — restricted to TUIkit / Example
 
 ```bash
 python3 Tools/Profiling/analyze_timeprofile.py profiling-traces/emoji-….trace
