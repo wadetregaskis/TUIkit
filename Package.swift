@@ -100,7 +100,24 @@ let package = Package(
         .executableTarget(
             name: "Stress",
             dependencies: ["TUIkit"],
-            exclude: ["README.md"]  // documentation, not a bundled resource
+            exclude: ["README.md"],  // documentation, not a bundled resource
+            // The render/measure pass recurses once per view-nesting level and is
+            // `@MainActor`, so it runs on the main thread — whose default 8 MB
+            // stack overflows around ~340 levels of nesting. As a profiling
+            // instrument the `deep` scenario deliberately nests far deeper than
+            // any real UI, so give the main thread a much larger stack. macOS
+            // takes the main-thread stack size from a Mach-O load command set by
+            // the linker (`-stack_size`); 512 MB lifts the ceiling into the tens
+            // of thousands of levels (well past where render *time* becomes the
+            // practical limit). On Linux the main-thread stack is governed by
+            // `RLIMIT_STACK` (`ulimit -s`) instead, so there is no build-time
+            // equivalent — deep runs there need `ulimit -s unlimited`.
+            linkerSettings: [
+                .unsafeFlags(
+                    ["-Xlinker", "-stack_size", "-Xlinker", "0x20000000"],
+                    .when(platforms: [.macOS])
+                )
+            ]
         ),
 
         // ── Tools ───────────────────────────────────────────────────────────────────────────────────────

@@ -98,6 +98,21 @@ and the relative hot-spots shift.
   bottleneck; reproduce it minimally in `RenderHarness`; lock it in
   `TUIkitBenchmarks`.
 
+## Deep nesting and the main-thread stack
+
+The measure/render pass recurses once per view-nesting level and is
+`@MainActor`, so it runs on the main thread. The `deep` scenario nests far
+deeper than any real UI on purpose, so at high `--scale` it can overflow the
+main thread's default **8 MB** stack (≈ 340 levels ≈ `--scale 9`) with a
+`SIGSEGV`. The `Stress` target therefore links with a **512 MB** main-thread
+stack on macOS (`-stack_size`, see `Package.swift`), lifting that ceiling into
+the tens of thousands of levels — well past where render *time* becomes the
+practical limit. Beyond the stack, the render is O(depth²) (each container
+re-measures its children to lay them out, and this plain nesting is not memoized
+— unlike `EquatableView` subtrees), so `--scale 20` (depth 800) already takes
+seconds. On **Linux** the main-thread stack is governed by `RLIMIT_STACK`
+instead of a load command, so deep runs there need `ulimit -s unlimited`.
+
 ## Adding a scenario
 
 1. Add `Sources/Stress/Scenarios/Foo.swift` with a `FooScenario.descriptor`
