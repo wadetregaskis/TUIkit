@@ -158,6 +158,29 @@ extension AppState {
     }
 }
 
+// MARK: - Render Invalidation Sink
+
+/// Receives render-invalidation requests raised by state mutations.
+///
+/// A `@State` write fires ``StateBox``'s `didSet`, which must (a) drop the
+/// cached buffers for the affected subtree and (b) request a re-render. The
+/// write can originate off the main actor (a `@State` mutated from a background
+/// `Task`), and ``RenderCache`` is single-threaded — so the box must not touch
+/// the cache directly. Instead it calls this sink, whose conformer records the
+/// invalidation behind a lock and applies it on the main-actor frame boundary.
+///
+/// ``RenderCache`` conforms (it is the per-context object that owns the cached
+/// buffers, so routing through it keeps each context's invalidations isolated).
+/// Keeping the seam a protocol lets ``StateBox`` stay free of both the concrete
+/// cache type and the app-state singleton name.
+public protocol RenderInvalidationSink: AnyObject, Sendable {
+    /// Records that the subtree rooted at `identity` (or the whole cache, when
+    /// `identity` is `nil`) needs its cached buffers dropped, and requests a
+    /// re-render. Thread-safe; the cache mutation itself is deferred to the
+    /// next main-actor frame boundary.
+    func invalidateRender(for identity: ViewIdentity?)
+}
+
 // MARK: - Environment Registration
 
 /// Publishes the active environment during a composite view's `body` evaluation

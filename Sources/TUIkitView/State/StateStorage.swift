@@ -120,12 +120,12 @@ extension StateStorage {
     public func storage<Value>(for key: StateKey, default defaultValue: Value) -> StateBox<Value> {
         if let existing = values[key] as? StateBox<Value> {
             existing.identity = key.identity
-            existing.renderCache = renderCache
+            existing.invalidationSink = renderCache
             return existing
         }
         let fresh = StateBox(defaultValue)
         fresh.identity = key.identity
-        fresh.renderCache = renderCache
+        fresh.invalidationSink = renderCache
         values[key] = fresh
         return fresh
     }
@@ -301,32 +301,30 @@ extension StateStorage {
 /// It is a reference type so that mutations are visible across all copies
 /// of the `@State` struct (which uses `nonmutating set`).
 ///
-/// On value change, signals a re-render through `AppState.shared`.
-/// Cache invalidation is identity-aware: only the affected subtree is
-/// cleared instead of the entire cache.
+/// On value change, the box asks its ``RenderInvalidationSink`` to drop the
+/// affected subtree's cached buffers and request a re-render. Invalidation is
+/// identity-aware: only the affected subtree is cleared, not the whole cache.
 public final class StateBox<Value>: @unchecked Sendable {
     /// The identity of the view that owns this state property.
     ///
-    /// Set during hydration from ``StateStorage``. Used for targeted
-    /// cache invalidation via ``RenderCache/clearAffected(by:)``.
+    /// Set during hydration from ``StateStorage``. Passed to the sink so it can
+    /// invalidate only the affected subtree.
     var identity: ViewIdentity?
 
-    /// The render cache to invalidate on change — the box's owning context's cache,
-    /// wired during hydration from ``StateStorage``. There is no shared singleton,
-    /// so each context (the app's, and every test's) invalidates only its own
-    /// cache. `nil` before the box is first hydrated, in which case nothing has
-    /// been cached for it yet, so there is nothing to clear.
-    weak var renderCache: RenderCache?
+    /// The sink that turns a value change into a (deferred, thread-safe) cache
+    /// invalidation plus a re-render request — the box's owning context's
+    /// ``RenderCache`` (wired during hydration from ``StateStorage``). Routing
+    /// through the per-context sink keeps each context (the app's, and every
+    /// test's) invalidating only its own cache, and — because the sink defers
+    /// the mutation to the main-actor frame boundary — a `@State` written from a
+    /// background `Task` never races the single-threaded cache. `nil` before the
+    /// box is first hydrated, in which case nothing has been cached for it yet.
+    weak var invalidationSink: (any RenderInvalidationSink)?
 
     /// The current value.
     public var value: Value {
         didSet {
-            if let identity {
-                renderCache?.clearAffected(by: identity)
-            } else {
-                renderCache?.clearAll()
-            }
-            AppState.shared.setNeedsRender()
+            invalidationSink?.invalidateRender(for: identity)
         }
     }
 

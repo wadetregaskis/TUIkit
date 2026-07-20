@@ -403,16 +403,25 @@ struct RenderCacheTests {
             identity: identity, view: 0, buffer: FrameBuffer(text: "B"), contextWidth: 80, contextHeight: 24)
 
         // Hydrate a @State box on context A at that identity. Hydration wires the
-        // box to A's cache (the replacement for the old implicit shared target),
-        // so its didSet must invalidate A's cache — and only A's.
+        // box's invalidation sink to A's cache, so its didSet enqueues an
+        // invalidation of A's cache — and only A's.
         let key = StateStorage.StateKey(identity: identity, propertyIndex: 0)
         let box = contextA.stateStorage.storage(for: key, default: 0)
 
         box.value = 1
 
+        // The invalidation is *deferred*: the box only enqueues it (so a write
+        // from a background Task never races the single-threaded cache). Nothing
+        // is dropped until the owning context's next frame drains the queue.
+        #expect(
+            contextA.renderCache.lookup(identity: identity, view: 0, contextWidth: 80, contextHeight: 24) != nil,
+            "the invalidation is deferred, not applied synchronously on the write")
+
+        contextA.renderCache.beginRenderPass()
+
         #expect(
             contextA.renderCache.lookup(identity: identity, view: 0, contextWidth: 80, contextHeight: 24) == nil,
-            "the owning context's cached subtree is invalidated on a @State change")
+            "the owning context's cached subtree is invalidated at its next frame")
         #expect(
             contextB.renderCache.lookup(identity: identity, view: 0, contextWidth: 80, contextHeight: 24) != nil,
             "an unrelated context's cache is untouched (no shared-singleton bleed)")

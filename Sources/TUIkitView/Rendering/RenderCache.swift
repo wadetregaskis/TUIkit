@@ -178,6 +178,19 @@ public final class RenderCache: @unchecked Sendable {
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
+    /// Invalidations enqueued by ``invalidateRender(for:)`` — a `@State` write —
+    /// since the last frame, drained on the main actor at ``beginRenderPass()``.
+    private struct PendingInvalidations: Sendable {
+        /// `true` once a whole-cache clear is requested; supersedes `identities`.
+        var clearAll = false
+        /// Subtrees whose cached buffers must be dropped (unless `clearAll`).
+        var identities: Set<ViewIdentity> = []
+    }
+
+    /// Guards ``PendingInvalidations`` so an off-main `@State` write can enqueue
+    /// without racing the (otherwise single-threaded) `entries`/`sizeEntries`.
+    private let pendingInvalidations = Lock(initialState: PendingInvalidations())
+
     /// Cumulative cache performance statistics.
     public private(set) var stats = Stats()
 
@@ -307,11 +320,37 @@ extension RenderCache {
         activeIdentities.insert(identity)
     }
 
-    /// Begins a new render pass by clearing the active identity set
-    /// and snapshotting the current stats for per-frame delta calculation.
+    /// Begins a new render pass by draining any deferred `@State` invalidations,
+    /// clearing the active identity set, and snapshotting the current stats for
+    /// per-frame delta calculation.
     public func beginRenderPass() {
-        activeIdentities.removeAll(keepingCapacity: true)
+        // Snapshot stats *before* the drain so the deferred clears it applies
+        // count toward this frame's delta (they are the first thing this frame
+        // does). Then apply invalidations enqueued — possibly off the main actor
+        // — by `@State` writes since the last frame, on the main actor, before
+        // this frame reads the cache.
         statsAtFrameStart = stats
+        drainPendingInvalidations()
+        activeIdentities.removeAll(keepingCapacity: true)
+    }
+
+    /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the
+    /// last frame. Runs on the main actor (from ``beginRenderPass()``), where
+    /// mutating `entries`/`sizeEntries` is safe.
+    private func drainPendingInvalidations() {
+        let pending = pendingInvalidations.withLock { state -> PendingInvalidations in
+            let snapshot = state
+            state.clearAll = false
+            state.identities.removeAll(keepingCapacity: true)
+            return snapshot
+        }
+        if pending.clearAll {
+            clearAll()
+        } else {
+            for identity in pending.identities {
+                clearAffected(by: identity)
+            }
+        }
     }
 
     /// Removes cache entries for views no longer in the tree.
@@ -397,6 +436,35 @@ extension RenderCache {
                 + "subtreeClears: \(frame.subtreeClears), "
                 + "entries: \(entries.count), hit rate: \(rate)"
         )
+    }
+}
+
+// MARK: - Render Invalidation Sink
+
+extension RenderCache: RenderInvalidationSink {
+    /// Records a `@State`-driven invalidation and requests a re-render.
+    ///
+    /// This is the seam ``StateBox`` calls on every value change. It only
+    /// *enqueues* the work behind ``pendingInvalidations``' lock — the actual
+    /// `entries`/`sizeEntries` mutation happens later, on the main actor, in
+    /// ``drainPendingInvalidations()`` at frame start. That indirection is what
+    /// makes a `@State` written from a background `Task` race-free: the cache is
+    /// otherwise single-threaded, so it must never be mutated from the writer's
+    /// thread. The re-render request goes through the retained `AppState`
+    /// singleton (already thread-safe).
+    ///
+    /// - Parameter identity: the subtree whose cached buffers are now stale, or
+    ///   `nil` to drop the whole cache.
+    public func invalidateRender(for identity: ViewIdentity?) {
+        pendingInvalidations.withLock { state in
+            if let identity {
+                if !state.clearAll { state.identities.insert(identity) }
+            } else {
+                state.clearAll = true
+                state.identities.removeAll(keepingCapacity: true)
+            }
+        }
+        AppState.shared.setNeedsRender()
     }
 }
 
