@@ -248,6 +248,8 @@ struct MousePage: View {
                 await runPoofTicker()
             }
 
+            DragScrollDemoSection()
+
             DemoSection(L("page.mouse.rawEvents")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.mouse.rawEventsInstruction"))
