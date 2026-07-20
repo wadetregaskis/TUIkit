@@ -414,7 +414,7 @@ struct MouseEventDispatcherTests {
         // Reset and register a handler that records which fired.
         dispatcher.beginRenderPass()
         let outer2 = dispatcher.register { _ in
-            return true
+            true
         }
         let inner2 = dispatcher.register { _ in
             sawInner = true

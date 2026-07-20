@@ -367,7 +367,7 @@ extension _Color256GridCore: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // O(1): the grid's footprint is fixed by the layout, no need to place all
         // 256 cells just to size it (this is measured for every tab-width probe).
-        return ViewSize(
+        ViewSize(
             width: Palette256Layout.widthInCells * cellWidth,
             height: Palette256Layout.rows.count,
             isWidthFlexible: false,
