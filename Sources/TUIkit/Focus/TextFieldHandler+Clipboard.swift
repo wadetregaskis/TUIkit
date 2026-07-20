@@ -146,9 +146,13 @@ extension TextFieldHandler {
 
             do {
                 try process.run()
-                process.waitUntilExit()
-
+                // Drain the pipe BEFORE waiting: `readDataToEndOfFile` returns
+                // when the child closes stdout (i.e. finishes writing), so a
+                // clipboard payload larger than the ~64 KB pipe buffer can't
+                // block `pbpaste` on a full pipe — which would otherwise deadlock
+                // `waitUntilExit()` forever. Reaping after is then immediate.
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
                 // Strip trailing newline that pbpaste adds
                 var result = String(data: data, encoding: .utf8) ?? ""
                 if result.hasSuffix("\n") {
@@ -170,9 +174,11 @@ extension TextFieldHandler {
 
                 do {
                     try process.run()
-                    process.waitUntilExit()
-
+                    // Drain before waiting (see the macOS branch): a large
+                    // clipboard payload must not block xclip/xsel on a full pipe
+                    // and deadlock waitUntilExit().
                     let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    process.waitUntilExit()
                     var result = String(data: data, encoding: .utf8) ?? ""
                     if result.hasSuffix("\n") {
                         result.removeLast()
