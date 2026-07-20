@@ -334,6 +334,12 @@ public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> Child
 /// - Returns: The size this view needs.
 @MainActor
 public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
+    // Deep-nesting guard: if the recursion is about to overflow the stack, stop
+    // descending and report the (untruncated part of the) subtree as zero-size
+    // rather than crashing with SIGSEGV. See StackGuard — this measures the real
+    // remaining stack, so it only ever trips on pathologically deep trees.
+    if !StackGuard.hasHeadroom() { return ViewSize.fixed(0, 0) }
+
     // Use Layoutable if available (mark as measuring to suppress side-effects).
     //
     // Spacer is handled here too: it conforms to `Layoutable` and its
@@ -473,6 +479,11 @@ public func measureFixedByRendering<V: View>(_ view: V, proposal: ProposedSize, 
 /// - Returns: The rendered buffer.
 @MainActor
 public func renderChild<V: View>(_ view: V, width: Int, height: Int, context: RenderContext) -> FrameBuffer {
+    // Deep-nesting guard (see measureChild): render a truncation marker instead
+    // of recursing another level into a stack overflow.
+    if !StackGuard.hasHeadroom() {
+        return FrameBuffer(text: "⋯").clamped(toWidth: width, height: height)
+    }
     var renderContext = context
     renderContext.availableWidth = width
     renderContext.availableHeight = height
