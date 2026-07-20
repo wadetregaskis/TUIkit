@@ -343,33 +343,29 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // EVERY measured child (Spacer is the sole conformer and is `Layoutable`).
     // `SpacerProtocol` is still used by the stacks for fill distribution.
     if let layoutable = view as? Layoutable {
+        // The common path, and the one deep nesting recurses through. When the
+        // parent is already measuring, the context is unchanged — skip the copy
+        // that only flips `isMeasuring` (a no-op then), so a deep chain doesn't
+        // re-copy the context at every level.
+        if context.isMeasuring {
+            return layoutable.sizeThatFits(proposal: proposal, context: context)
+        }
         var measureContext = context
         measureContext.isMeasuring = true
         return layoutable.sizeThatFits(proposal: proposal, context: measureContext)
     }
 
-    // For composite views (Body != Never, NOT Renderable), traverse into
-    // the body to find an inner Layoutable. This handles cases like
-    // TextField<Text> whose body is _TextFieldCore<Text> which IS Layoutable.
+    // For composite views (Body != Never, NOT Renderable), descend into the
+    // body — extracted into a separate, non-inlined function so materialising
+    // `body` (a stack local as large as `V.Body`) stays OUT of this frame. The
+    // common `Layoutable` path above then recurses with a smaller frame, which
+    // matters under deep nesting where every level adds one.
     //
     // Skip Renderable views: their rendering logic (including environment
     // injection) lives in renderToBuffer, not in body. They fall through
     // to the single-render fallback below.
     if !(view is Renderable), V.Body.self != Never.self {
-        // Descend into the body under the SAME child identity `renderToBuffer`
-        // uses (it appends the body type via `withChildIdentity`). Measuring
-        // under the parent identity instead made the measure pass hydrate a
-        // composite view's `@State` from a different slot than the render pass,
-        // so a state-dependent view could measure a different size than it
-        // rendered. Hydration still keys off `context` (the parent), exactly as
-        // render does; only the recursion descends with the child identity.
-        let childContext = context.withChildIdentity(type: V.Body.self)
-        bindStateProperties(
-            of: view, identity: context.identity, storage: context.environment.stateStorage!)
-        let body = StateRegistration.withHydration(context: context) {
-            view.body
-        }
-        return measureChild(body, proposal: proposal, context: childContext)
+        return measureCompositeBody(view, proposal: proposal, context: context)
     }
 
     // Fallback: a `Renderable` view with no `Layoutable` conformance. Measure by
@@ -393,6 +389,37 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // to `Layoutable` to advertise that — the equivalence harness
     // (`MeasureRenderEquivalenceTests`) is the guard that catches one that doesn't.
     return measureFixedByRendering(view, proposal: proposal, context: context)
+}
+
+/// Measures a composite view (`Body != Never`, not `Renderable`) by descending
+/// into its body to find an inner `Layoutable`. This handles cases like
+/// `TextField<Text>` whose body is `_TextFieldCore<Text>` which IS `Layoutable`.
+///
+/// Kept a **separate, non-inlined** function (called by ``measureChild``) so the
+/// `body` stack local — as large as `V.Body` — does not inflate every
+/// `measureChild` frame, only the frames that actually descend into a composite.
+/// Under deep nesting, where each level contributes a frame, keeping the common
+/// path's frame small is what buys the extra depth.
+///
+/// Descends under the SAME child identity `renderToBuffer` uses (it appends the
+/// body type via `withChildIdentity`). Measuring under the parent identity
+/// instead made the measure pass hydrate a composite view's `@State` from a
+/// different slot than the render pass, so a state-dependent view could measure
+/// a different size than it rendered. Hydration still keys off `context` (the
+/// parent), exactly as render does; only the recursion descends with the child
+/// identity.
+@inline(never)
+@MainActor
+private func measureCompositeBody<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext
+) -> ViewSize {
+    let childContext = context.withChildIdentity(type: V.Body.self)
+    bindStateProperties(
+        of: view, identity: context.identity, storage: context.environment.stateStorage!)
+    let body = StateRegistration.withHydration(context: context) {
+        view.body
+    }
+    return measureChild(body, proposal: proposal, context: childContext)
 }
 
 /// Measures a fixed-size view by rendering it ONCE in measuring mode and
