@@ -51,7 +51,7 @@ Before the main loop starts, `run()` prepares the terminal:
 | 2 | Enter alternate screen | Preserve the user's existing terminal content |
 | 3 | Hide cursor | Avoid cursor flicker during rendering |
 | 4 | Enable raw mode | Disable line buffering, echo, and signal processing |
-| 5 | Register state observer | `AppState` changes trigger re-renders via `signals.requestRerender()` |
+| 5 | Register state observer | `AppState` changes set `appState.needsRender` and `wake()` the loop |
 | 6 | Register focus observer | Focus changes reset the pulse timer and trigger re-renders |
 | 7 | Prepare animation timers | PulseTimer (100 ms) and CursorTimer (50 ms), each started on demand only while a rendered frame consumes it |
 | 8 | Render first frame | Show the initial UI immediately |
@@ -69,18 +69,18 @@ The original terminal settings are saved and restored during cleanup.
 
 ## Main Loop
 
-`AppRunner.run()` is `async` and **demand-driven**, not a fixed-rate poll. With nothing pending and nothing animating, the loop blocks in `await stdinArrival.waitForArrival(...)` until it is woken — by terminal input, a render request, or a signal (SIGWINCH arrives via a self-pipe) — so a static screen renders zero frames and uses no CPU. When work is pending it renders at most once per frame interval (`App.maxFrameRate`, default 60 FPS), coalescing a burst of requests into a single frame. The wait is a real suspension point, so it releases the main actor and lets `Task`, `MainActor.run`, and `DispatchQueue.main` work run between frames. The loop runs until shutdown:
+`AppRunner.run()` is `async` and **demand-driven**, not a fixed-rate poll. With nothing pending and nothing animating, the loop blocks in `await stdinArrival.waitForArrival(...)` until it is woken — by terminal input, a render request, or a signal (SIGWINCH / SIGINT / SIGTERM arrive via libdispatch signal sources, whose main-queue handlers wake the loop) — so a static screen renders zero frames and uses no CPU. When work is pending it renders at most once per frame interval (`App.maxFrameRate`, default 60 FPS), coalescing a burst of requests into a single frame. The wait is a real suspension point, so it releases the main actor and lets `Task`, `MainActor.run`, and `DispatchQueue.main` work run between frames. The loop runs until shutdown:
 
 @Image(source: "lifecycle-main-loop.svg", alt: "Flowchart of the main loop: run() performs terminal setup, registers observers, prepares timers, renders the first frame, then loops checking shouldShutdown, consuming the resize flag to invalidate the diff cache, rendering at most once per frame interval when a render is pending, draining key and mouse events and dispatching them, and otherwise blocking until woken by input, a render request, or a signal. On shouldShutdown, cleanup restores the terminal and exits.")
 
 ### Re-render Triggers
 
-Several sources cause a new frame to be rendered. Each sets a flag the loop checks (`appState.needsRender` or the rerender flag) **and** `wake()`s the loop if it is currently idle-blocked:
+Several sources cause a new frame to be rendered. Each sets a flag the loop checks (`appState.needsRender` or the resize flag) **and** `wake()`s the loop if it is currently idle-blocked:
 
 | Trigger | Path | Main loop check |
 |---------|------|-----------------|
-| SIGWINCH | Sets `signalNeedsRerender` + `signalTerminalResized` (wakes via the self-pipe) | `consumeRerenderFlag()` |
-| @State mutation | `AppState` observer calls `signals.requestRerender()` | `consumeRerenderFlag()` |
+| SIGWINCH | Dispatch signal source sets the resize flag + wakes the loop | `consumeResizeFlag()` |
+| @State mutation | `AppState.setNeedsRender()` sets the flag; observer wakes the loop | `appState.needsRender` |
 | PulseTimer / CursorTimer (while active) | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 | Focus change | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 

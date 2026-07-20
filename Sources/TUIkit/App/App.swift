@@ -90,7 +90,7 @@ internal final class AppRunner<A: App> {
     private let terminal: Terminal
     private let tuiContext: TUIContext
     private var isRunning = false
-    private var signals = SignalManager()
+    private let signals = SignalManager()
 
     init(app: A) {
         self.app = app
@@ -160,8 +160,19 @@ extension AppRunner {
         // AnimationScheduler / RenderContext.requestAnimation.
         let animationScheduler = AnimationScheduler()
 
-        // Setup
-        signals.install()
+        // Wakes the main loop on stdin data (a DispatchSource on STDIN_FILENO)
+        // and on render-requests (via `wake()`). The loop awaits its
+        // `waitForArrival(...)`. See StdinArrivalStream.swift. Created before the
+        // signal install below because the signal sources' wake closure captures
+        // it (a SIGWINCH / SIGINT / SIGTERM must rouse the idle-blocked loop).
+        let stdinArrival = StdinArrivalNotifier()
+        stdinArrival.start()
+        defer { stdinArrival.stop() }
+
+        // Setup: install the dispatch signal sources (SIGWINCH resize, SIGINT /
+        // SIGTERM graceful shutdown). Each source's handler sets a flag the loop
+        // drains and wakes the notifier. `await`s until every source is armed.
+        await signals.install(wake: { [weak stdinArrival] in stdinArrival?.wake() })
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()
@@ -171,7 +182,7 @@ extension AppRunner {
         // terminal is painting our output (and so the emoji-chrome answer). A
         // same-size attach sends no SIGWINCH of its own, so without this the
         // answer could go stale until something happened to resize. Comes after
-        // signals.install() so the SIGWINCH handler exists before the first
+        // signals.install() so the SIGWINCH source exists before the first
         // hook can fire. Failure (a tmux too old for these hooks) is tolerated:
         // the app then adapts only on real resizes.
         if TerminalHost.isTmux {
@@ -186,24 +197,14 @@ extension AppRunner {
         // re-apply step inside the main loop below.
         terminal.applyMouseSupport(.standard)
 
-        // Wakes the main loop on stdin data (a DispatchSource on STDIN_FILENO)
-        // and on render-requests (via `wake()`). The loop awaits its
-        // `waitForArrival(...)`. See StdinArrivalStream.swift.
-        let stdinArrival = StdinArrivalNotifier()
-        stdinArrival.start()
-        // Also wake on signals via SignalManager's self-pipe (set up in
-        // `signals.install()` above), so a resize / SIGINT wakes the
-        // demand-driven loop even while it's blocked with nothing to render.
-        stdinArrival.watchWakeFD(signals.signalWakeReadFD)
-        defer { stdinArrival.stop() }
-
-        // Register for state changes: flag a rerender AND wake the (possibly
-        // idle-blocked) loop. `setNeedsRender`'s observers can fire off the main
-        // actor, so hop to the main actor to touch the MainActor-isolated
-        // notifier. `stdinArrival` is captured weakly so this persistent observer
-        // doesn't keep it alive past the run.
-        appState.observe { [signals, weak stdinArrival] in
-            signals.requestRerender()
+        // Register for state changes: wake the (possibly idle-blocked) loop.
+        // `setNeedsRender` already set `appState.needsRender` synchronously (the
+        // loop polls it), so the observer's only job is to rouse the loop.
+        // `setNeedsRender`'s observers can fire off the main actor, so hop to the
+        // main actor to touch the MainActor-isolated notifier. `stdinArrival` is
+        // captured weakly so this persistent observer doesn't keep it alive past
+        // the run.
+        appState.observe { [weak stdinArrival] in
             Task { @MainActor in stdinArrival?.wake() }
         }
 
@@ -262,10 +263,6 @@ extension AppRunner {
             // Terminal resize (SIGWINCH): rewrite every line at the new size.
             if signals.consumeResizeFlag() {
                 renderer.invalidateDiffCache()
-                pendingRender = true
-            }
-            // A render requested by the AppState observer / state change.
-            if signals.consumeRerenderFlag() {
                 pendingRender = true
             }
 
@@ -480,6 +477,7 @@ extension AppRunner {
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()
+        signals.stop()
         appState.clearObservers()
         focusManager.clear()
         tuiContext.reset()

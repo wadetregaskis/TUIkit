@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Dispatch
+
 #if canImport(Glibc)
     import Glibc
 #elseif canImport(Musl)
@@ -12,181 +14,189 @@
     import Darwin
 #endif
 
-// MARK: - Signal Flags
+// MARK: - Signal Registration Barrier
 
-/// The three boolean flags a signal handler may set, plus the
-/// consume-on-read logic the main loop uses to drain them.
+/// Bridges libdispatch signal-source *registration* callbacks — which fire on a
+/// Dispatch queue, possibly before the installer gets around to awaiting them —
+/// into an async sequence the installer waits on.
 ///
-/// Extracted into its own value type so the flag semantics can be
-/// unit-tested in isolation (construct a `SignalFlags`, set a field,
-/// assert `consume*` returns `true` once then `false`) without
-/// installing real handlers, sending real signals, or touching the
-/// process-global instance below.
-///
-/// ## Why three plain `Bool`s and not locks or atomics?
-///
-/// POSIX signal handlers may only call "async-signal-safe" functions.
-/// Lock acquisition (pthread_mutex_lock, os_unfair_lock_lock) and most
-/// Swift runtime functions are NOT safe. Writing a `Bool` field of this
-/// struct at a fixed offset in the global instance is a single aligned
-/// memory store — async-signal-safe. The worst case is a torn read,
-/// which for a `Bool` just means we might miss one signal or see it
-/// twice; both are acceptable (re-rendering twice is harmless, and a
-/// missed signal is caught on the next iteration).
-struct SignalFlags {
-    /// Set by SIGWINCH (or `requestRerender`) to request a re-render.
-    var needsRerender = false
+/// Buffering is unbounded so a callback that arrives before the `await` is
+/// never dropped. This lets ``SignalManager/install(wake:)`` block until every
+/// source is actually armed, closing the startup race where a signal delivered
+/// between `resume()` and "source armed" would be lost — preserving the old
+/// synchronous `signal()`'s "Ctrl-C caught from the first instruction" guarantee.
+private final class SignalRegistrationBarrier: Sendable {
+    /// Registration notifications consumed by the installer.
+    let events: AsyncStream<Void>
 
-    /// Set by SIGWINCH to indicate a terminal resize. Separate from
-    /// `needsRerender` because resize requires additional work
-    /// (invalidating the frame diff cache) beyond just re-rendering.
-    var terminalResized = false
+    /// Thread-safe producer used by the Dispatch registration handlers.
+    private let continuation: AsyncStream<Void>.Continuation
 
-    /// Set by SIGINT to request a graceful shutdown. The actual cleanup
-    /// (disabling raw mode, restoring cursor, exiting alternate screen)
-    /// happens in the main loop — signal handlers must not call
-    /// non-async-signal-safe functions like `write()` or `fflush()`.
-    var needsShutdown = false
-
-    /// Returns `true` if a re-render was requested since the last call,
-    /// resetting the flag. This consume-on-read pattern prevents
-    /// redundant renders.
-    mutating func consumeRerender() -> Bool {
-        guard needsRerender else { return false }
-        needsRerender = false
-        return true
+    init() {
+        let pair = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .unbounded)
+        self.events = pair.stream
+        self.continuation = pair.continuation
     }
 
-    /// Returns `true` if a terminal resize occurred since the last call,
-    /// resetting the flag.
-    mutating func consumeResize() -> Bool {
-        guard terminalResized else { return false }
-        terminalResized = false
-        return true
+    /// A nonisolated Dispatch callback that records one registration.
+    func callback() -> @Sendable () -> Void {
+        { [continuation] in continuation.yield() }
+    }
+
+    /// Finishes the registration stream once every source is armed.
+    func finish() {
+        continuation.finish()
     }
 }
 
-/// The process-global signal flags.
-///
-/// `nonisolated(unsafe)` is the correct annotation: the flags are
-/// genuinely unsafe in the general case but safe in this specific usage
-/// pattern (single writer from a signal handler, single reader from the
-/// main loop), and the handler only ever performs an async-signal-safe
-/// `Bool`-field store on it.
-nonisolated(unsafe) private var signalFlags = SignalFlags()
-
-/// Read/write ends of a self-pipe. A signal handler writes one byte to `write`
-/// (async-signal-safe); the run loop watches `read` with a `DispatchSource` and
-/// wakes. This lets the demand-driven loop — which blocks indefinitely when
-/// nothing needs rendering — notice SIGWINCH (resize) / SIGINT without polling.
-/// `(-1, -1)` until ``SignalManager/install()`` creates it.
-nonisolated(unsafe) private var signalWakePipe: (read: Int32, write: Int32) = (-1, -1)
-
 // MARK: - Signal Manager
 
-/// Manages POSIX signal handlers for the application lifecycle.
+/// Manages POSIX signal handling for the application lifecycle via libdispatch
+/// signal sources.
 ///
-/// Encapsulates the global signal flags and handler installation.
-/// The flags remain file-private globals because C signal handlers
-/// cannot capture Swift object references.
+/// SIGWINCH (terminal resize) and SIGINT / SIGTERM (graceful shutdown) are
+/// monitored with `DispatchSource.makeSignalSource` on the main queue. Each
+/// source's handler runs on the main actor, sets an instance flag, and wakes the
+/// demand-driven run loop directly. There is no async-signal-safe C handler, no
+/// self-pipe, and no flag-poll layer: the loop still drains the flags each
+/// iteration exactly as before (``shouldShutdown``, ``consumeResizeFlag()``),
+/// but the flags are ordinary main-actor state pushed by the sources.
+///
+/// ## Why dispatch signal sources rather than `signal()` handlers?
+///
+/// A C signal handler may only call async-signal-safe functions, which is why
+/// the previous design set aligned `Bool`s from the handler and woke the loop
+/// through a self-pipe. A dispatch signal source moves that off the handler
+/// entirely: libdispatch delivers the signal as an ordinary queued event, so the
+/// handler is normal main-actor code — no torn reads, no self-pipe fd, no poll.
 ///
 /// ## Usage
 ///
 /// ```swift
 /// let signals = SignalManager()
-/// signals.install()
-///
+/// await signals.install(wake: { notifier.wake() })
 /// while running {
 ///     if signals.shouldShutdown { break }
-///     if signals.consumeRerenderFlag() { render() }
+///     if signals.consumeResizeFlag() { invalidateAndRepaint() }
 /// }
+/// signals.stop()
 /// ```
-internal struct SignalManager {
-    /// Whether a graceful shutdown was requested (SIGINT).
-    var shouldShutdown: Bool {
-        signalFlags.needsShutdown
-    }
-}
+@MainActor
+final class SignalManager {
+    private typealias Disposition = @convention(c) (Int32) -> Void
 
-// MARK: - Internal API
-
-extension SignalManager {
-    /// Checks and resets the rerender flag (SIGWINCH or state change).
-    ///
-    /// Returns `true` if a re-render was requested since the last call,
-    /// then resets the flag. This consume-on-read pattern prevents
-    /// redundant renders.
-    ///
-    /// - Returns: `true` if a rerender was requested.
-    mutating func consumeRerenderFlag() -> Bool {
-        signalFlags.consumeRerender()
+    private enum Kind {
+        case resize
+        case shutdown
     }
 
-    /// Checks and resets the terminal resize flag (SIGWINCH).
-    ///
-    /// Returns `true` if the terminal was resized since the last call,
-    /// then resets the flag. Used by `AppRunner` to invalidate the
-    /// frame diff cache on resize.
-    ///
-    /// - Returns: `true` if a terminal resize occurred.
-    mutating func consumeResizeFlag() -> Bool {
-        signalFlags.consumeResize()
+    private struct Registration {
+        let number: Int32
+        /// The disposition to restore on teardown (Darwin only; `nil` on Linux,
+        /// where the disposition must not be touched — see ``register(_:kind:barrier:)``).
+        let previous: Disposition?
+        let source: any DispatchSourceSignal
     }
 
-    /// Requests a re-render programmatically.
-    ///
-    /// Called by the `AppState` observer to signal that application
-    /// state has changed and the UI needs updating.
-    func requestRerender() {
-        signalFlags.needsRerender = true
+    private var registrations: [Registration] = []
+
+    /// Set by SIGWINCH; consumed by the loop to invalidate the frame-diff cache
+    /// and repaint at the new size.
+    private var terminalResized = false
+
+    /// Set (sticky) by SIGINT / SIGTERM to request a graceful shutdown. The loop
+    /// reads it and breaks so the terminal-restore teardown runs.
+    private var needsShutdown = false
+
+    /// Wakes the demand-driven run loop when a signal lands while it is
+    /// idle-blocked with nothing to render.
+    private var wake: (@MainActor @Sendable () -> Void)?
+
+    /// Whether a graceful shutdown was requested (SIGINT / SIGTERM).
+    var shouldShutdown: Bool { needsShutdown }
+
+    /// Returns `true` if the terminal was resized since the last call, then
+    /// resets the flag (consume-on-read).
+    func consumeResizeFlag() -> Bool {
+        defer { terminalResized = false }
+        return terminalResized
     }
 
-    /// Installs POSIX signal handlers for SIGINT and SIGWINCH.
+    /// Installs signal sources for SIGWINCH, SIGINT, and SIGTERM.
     ///
-    /// - SIGINT (Ctrl+C): Sets the shutdown flag for graceful cleanup.
-    /// - SIGWINCH (terminal resize): Sets the rerender flag.
+    /// `wake` is invoked from each source's main-actor handler so a signal that
+    /// arrives while the loop is idle-blocked wakes it. This awaits each source's
+    /// registration before returning, so a signal delivered *during* install is
+    /// buffered by the barrier rather than dropped.
     ///
-    /// Signal handlers only set boolean flags — all actual work
-    /// happens in the main loop, which is async-signal-safe.
-    func install() {
-        // Self-pipe (non-blocking both ends): the run loop watches the read end
-        // to wake on signals, since it is otherwise demand-driven and may block
-        // indefinitely. Best-effort — if `pipe` fails the flags still work, the
-        // loop just won't be woken by signals until its next wake from elsewhere.
-        var fds: [Int32] = [-1, -1]
-        if pipe(&fds) == 0 {
-            for fd in fds {
-                _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+    /// - Parameter wake: Called (on the main actor) after a signal updates the
+    ///   flags, to rouse the run loop.
+    func install(wake: @escaping @MainActor @Sendable () -> Void) async {
+        guard registrations.isEmpty else { return }
+        self.wake = wake
+
+        let barrier = SignalRegistrationBarrier()
+        register(SIGINT, kind: .shutdown, barrier: barrier)
+        register(SIGTERM, kind: .shutdown, barrier: barrier)
+        register(SIGWINCH, kind: .resize, barrier: barrier)
+
+        // Block until every source's registration handler has fired — i.e. all
+        // sources are armed — so no early signal slips through the startup gap.
+        var iterator = barrier.events.makeAsyncIterator()
+        for _ in registrations { _ = await iterator.next() }
+        barrier.finish()
+    }
+
+    private func register(_ number: Int32, kind: Kind, barrier: SignalRegistrationBarrier) {
+        // A dispatch signal source changes NO disposition on either platform, so
+        // the default action still applies unless we suppress it — but HOW we
+        // suppress it differs:
+        //   • Darwin (kqueue EVFILT_SIGNAL): the source fires in addition to the
+        //     default action, and still fires under SIG_IGN. So SIG_IGN the
+        //     signal (default=terminate for INT/TERM) and restore on teardown;
+        //     SIGWINCH's default is already IGNORE, so that's a harmless no-op.
+        //   • Linux (swift-corelibs-libdispatch): libdispatch installs and OWNS
+        //     the signal's handler as part of source setup, which both feeds the
+        //     source and displaces the terminate default. Calling SIG_IGN there
+        //     would overwrite libdispatch's handler and BREAK delivery — so leave
+        //     the disposition untouched.
+        #if os(Linux)
+            let previous: Disposition? = nil
+        #else
+            let previous = signal(number, SIG_IGN)
+        #endif
+
+        let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+        source.setEventHandler { [weak self] in
+            // Runs on the main thread (queue: .main), so we are already on the
+            // MainActor executor — `assumeIsolated` is a static-only bridge.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                switch kind {
+                case .resize: self.terminalResized = true
+                case .shutdown: self.needsShutdown = true
+                }
+                // Set the flag THEN wake, so the resumed loop sees it already set.
+                self.wake?()
             }
-            signalWakePipe = (read: fds[0], write: fds[1])
         }
-
-        // Each handler does only async-signal-safe work: aligned Bool stores on
-        // `signalFlags`, then a single non-blocking one-byte write to the
-        // self-pipe to wake the loop.
-        signal(SIGINT) { _ in
-            signalFlags.needsShutdown = true
-            let fd = signalWakePipe.write
-            if fd >= 0 {
-                var byte: UInt8 = 0
-                _ = write(fd, &byte, 1)
-            }
-        }
-        signal(SIGWINCH) { _ in
-            signalFlags.needsRerender = true
-            signalFlags.terminalResized = true
-            let fd = signalWakePipe.write
-            if fd >= 0 {
-                var byte: UInt8 = 0
-                _ = write(fd, &byte, 1)
-            }
-        }
+        source.setRegistrationHandler(handler: barrier.callback())
+        source.resume()
+        registrations.append(Registration(number: number, previous: previous, source: source))
     }
 
-    /// The read end of the signal self-pipe (`-1` if `install()` hasn't run or
-    /// the pipe couldn't be created). The run loop watches this with a
-    /// `DispatchSource` to wake on SIGWINCH / SIGINT.
-    var signalWakeReadFD: Int32 {
-        signalWakePipe.read
+    /// Cancels the signal sources and restores prior dispositions (Darwin).
+    /// Idempotent — safe to call more than once.
+    func stop() {
+        for registration in registrations {
+            registration.source.cancel()
+            #if !os(Linux)
+                if let previous = registration.previous {
+                    signal(registration.number, previous)
+                }
+            #endif
+        }
+        registrations.removeAll()
+        wake = nil
     }
 }

@@ -8,12 +8,12 @@ Every frame in TUIkit follows the same synchronous pipeline: **clear per-frame s
 
 ## What Triggers a Frame
 
-Several sources cause `RenderLoop` to produce a new frame. They converge on two boolean checks in the main loop (`consumeRerenderFlag()` and `appState.needsRender`):
+Several sources cause `RenderLoop` to produce a new frame. They converge on two boolean checks in the main loop (`consumeResizeFlag()` and `appState.needsRender`):
 
 | Trigger | Source | Mechanism |
 |---------|--------|-----------|
-| Terminal resize | `SIGWINCH` signal | `SignalManager` sets `signalNeedsRerender` and `signalTerminalResized` |
-| State mutation | `@State` property change | `AppState` observer calls `signals.requestRerender()` |
+| Terminal resize | `SIGWINCH` signal | `SignalManager`'s dispatch signal source sets the resize flag |
+| State mutation | `@State` property change | `AppState.setNeedsRender()` sets `needsRender`; the observer wakes the loop |
 | Animation timers | PulseTimer (100 ms) / CursorTimer (50 ms) | Calls `appState.setNeedsRender()` |
 | Focus change | `FocusManager.onFocusChange` | Resets pulse timer and calls `appState.setNeedsRender()` |
 

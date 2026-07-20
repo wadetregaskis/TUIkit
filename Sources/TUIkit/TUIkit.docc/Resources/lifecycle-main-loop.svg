@@ -26,7 +26,7 @@
 <title>observers</title>
 <path fill="#1f9b76" stroke="black" stroke-width="0" d="M357.29,-556.41C357.29,-556.41 129.5,-556.41 129.5,-556.41 123.5,-556.41 117.5,-550.41 117.5,-544.41 117.5,-544.41 117.5,-532.08 117.5,-532.08 117.5,-526.08 123.5,-520.08 129.5,-520.08 129.5,-520.08 357.29,-520.08 357.29,-520.08 363.29,-520.08 369.29,-526.08 369.29,-532.08 369.29,-532.08 369.29,-544.41 369.29,-544.41 369.29,-550.41 363.29,-556.41 357.29,-556.41"/>
 <text xml:space="preserve" text-anchor="middle" x="243.39" y="-540.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Register observers</text>
-<text xml:space="preserve" text-anchor="middle" x="243.39" y="-528.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → requestRerender · focus → wake()</text>
+<text xml:space="preserve" text-anchor="middle" x="243.39" y="-528.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppState → needsRender · focus → wake()</text>
 </g>
 <!-- setup&#45;&gt;observers -->
 <g id="edge1" class="edge">

@@ -82,10 +82,6 @@ final class StdinArrivalNotifier {
     /// hasn't been called.
     private var source: (any DispatchSourceRead)?
 
-    /// An extra read source (e.g. the signal self-pipe) whose readability also
-    /// wakes the loop, registered via ``watchWakeFD(_:)``. Drained on each fire.
-    private var extraSource: (any DispatchSourceRead)?
-
     /// A wake delivered while no waiter was suspended. The next
     /// ``waitForArrival(timeoutNanoseconds:)`` returns immediately and clears
     /// it, so a render-request that lands between the loop's check and its
@@ -117,31 +113,11 @@ final class StdinArrivalNotifier {
         src.activate()
     }
 
-    /// Also wake when `fd` becomes readable (e.g. the signal self-pipe, so
-    /// SIGWINCH / SIGINT wake the demand-driven loop). The fd is drained on each
-    /// fire so it doesn't keep re-triggering. Pass the read end; ownership of the
-    /// fd stays with the caller (this only watches it).
-    func watchWakeFD(_ fd: Int32) {
-        guard fd >= 0 else { return }
-        let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
-        src.setEventHandler { [weak self] in
-            MainActor.assumeIsolated {
-                var scratch = [UInt8](repeating: 0, count: 64)
-                while read(fd, &scratch, scratch.count) > 0 {}
-                self?.wake()
-            }
-        }
-        extraSource = src
-        src.activate()
-    }
-
-    /// Tears the dispatch sources down. Safe to call multiple
+    /// Tears the dispatch source down. Safe to call multiple
     /// times.
     func stop() {
         source?.cancel()
         source = nil
-        extraSource?.cancel()
-        extraSource = nil
         // If anyone is still waiting, resume them so the loop
         // doesn't hang on the way out.
         signal()
