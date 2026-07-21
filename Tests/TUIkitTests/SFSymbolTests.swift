@@ -109,15 +109,39 @@ struct SFSymbolTests {
     }
 
     #if canImport(AppKit)
-    @Test("Label shows the symbol glyph before the title on Apple platforms")
+    @Test("Label shows the symbol glyph before the title only when the font is present")
     func labelShowsGlyph() {
         let text = renderToBuffer(
             Label("Star", systemImage: "star.fill"), context: makeBareRenderContext()
         ).lines.map { $0.stripped }.joined()
-        #expect(text.contains(String(Unicode.Scalar(0x10_02C3)!)))
+        let glyph = String(Unicode.Scalar(0x10_02C3)!)
+        if SFSymbol.isFontAvailable {
+            // The SF Symbols font is installed here — the glyph renders.
+            #expect(text.contains(glyph))
+        } else {
+            // No font: the glyph is suppressed so it can't draw as a missing-glyph
+            // box; the label falls back to its title alone.
+            #expect(!text.contains(glyph))
+        }
         #expect(text.contains("Star"))
     }
     #endif
+
+    @Test("isFontAvailable gates rendering, consistent with resolvability")
+    func fontAvailabilityConsistent() {
+        // A `static let`, so it's evaluated once — reading it just must not crash
+        // constructing the CoreText probe.
+        let available = SFSymbol.isFontAvailable
+        #if !canImport(CoreText)
+        // No CoreText (Linux): nothing can draw the Private-Use glyphs.
+        #expect(available == false)
+        #endif
+        // Availability is a strictly stronger claim than resolvability: if symbols
+        // are renderable here, the anchor name must at least resolve to a glyph.
+        if available {
+            #expect(SFSymbol.glyph(named: "star.fill") != nil)
+        }
+    }
 
     @Test("Label with an unresolvable symbol renders title-only, no leading gap")
     func labelUnresolvedTitleOnly() {

@@ -92,6 +92,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "emoji",
             "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
             "page.emoji.sfSymbolsEmpty": "SF Symbols render only on macOS, in a terminal whose font has them (SF Mono).",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols unavailable",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols are an Apple-platform feature; this system can't render them.",
+            "page.emoji.sfSymbolsUnavailableFont": "The SF Symbols font isn't installed; get it from Apple's dev site and use Terminal.app with SF Mono.",
         ],
         // MARK: - German
         "de": [

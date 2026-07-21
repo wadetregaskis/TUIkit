@@ -134,20 +134,33 @@ struct EmojiPage: View {
     }
 
     /// The SF Symbols browse list — its own selection and scroll position,
-    /// independent of the emoji list but filtered by the same field. Shows a
-    /// placeholder when empty (an unmatched filter, or a non-Apple platform
-    /// where no symbols resolve).
-    private var symbolTable: some View {
-        List(
-            "\(filteredSymbols.count) \(L("page.emoji.ofCount")) \(Self.allSymbols.count) "
-                + L("page.emoji.sfSymbolsCountSuffix"),
-            selection: $selectedSymbolID
-        ) {
-            ForEach(filteredSymbols) { entry in
-                SymbolRow(entry: entry)
+    /// independent of the emoji list but filtered by the same field.
+    ///
+    /// Rendering symbols needs BOTH an Apple platform AND the SF Symbols font
+    /// installed (`SFSymbol.isFontAvailable`) — a resolved codepoint alone would
+    /// draw a missing-glyph box on a system without the font. When that check
+    /// fails, show a placeholder explaining what's missing instead of a list of
+    /// broken glyphs; the message distinguishes a non-Apple platform (no symbols
+    /// resolve at all) from an Apple system that just lacks the font.
+    @ViewBuilder private var symbolTable: some View {
+        if SFSymbol.isFontAvailable {
+            List(
+                "\(filteredSymbols.count) \(L("page.emoji.ofCount")) \(Self.allSymbols.count) "
+                    + L("page.emoji.sfSymbolsCountSuffix"),
+                selection: $selectedSymbolID
+            ) {
+                ForEach(filteredSymbols) { entry in
+                    SymbolRow(entry: entry)
+                }
             }
+            .listEmptyPlaceholder(L("page.emoji.sfSymbolsEmpty"))
+        } else {
+            ContentUnavailableView(
+                L("page.emoji.sfSymbolsUnavailableTitle"),
+                description: Self.allSymbols.isEmpty
+                    ? L("page.emoji.sfSymbolsUnavailablePlatform")
+                    : L("page.emoji.sfSymbolsUnavailableFont"))
         }
-        .listEmptyPlaceholder(L("page.emoji.sfSymbolsEmpty"))
     }
 
     // MARK: - Filtering

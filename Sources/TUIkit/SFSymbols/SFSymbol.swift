@@ -4,6 +4,12 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+#if canImport(CoreText)
+    import CoreText
+    import CoreGraphics
+    import Foundation
+#endif
+
 /// Resolves an SF Symbol name (`"star.fill"`, `"gearshape"`) to the terminal
 /// glyph that renders it, and enumerates every known symbol.
 ///
@@ -75,6 +81,45 @@ public enum SFSymbol {
         return []
         #endif
     }
+
+    /// Whether the running system actually carries a font that can draw SF Symbol
+    /// glyphs — in practice, whether the **SF Symbols font is installed** (it is
+    /// *not* by default; users download it from Apple's developer site).
+    ///
+    /// ``glyph(named:)`` maps a name to its Private-Use codepoint on every Apple
+    /// build whether or not that font is present, so a resolved codepoint alone
+    /// doesn't mean anything will render — without the font the terminal draws a
+    /// missing-glyph box. This probes CoreText's font-substitution cascade with a
+    /// known anchor symbol (`star.fill`): if some installed font supplies a real
+    /// glyph for its codepoint, symbols are renderable here; otherwise they are
+    /// not, and callers should fall back (``Label(_:systemImage:)`` shows just its
+    /// title, the example's browser shows a "not available" placeholder).
+    ///
+    /// Evaluated once and cached. `false` on any platform without CoreText (Linux)
+    /// and when the anchor symbol can't be resolved.
+    public static let isFontAvailable: Bool = {
+        #if canImport(CoreText)
+        guard let glyph = glyph(named: "star.fill") else { return false }
+        let utf16 = Array(glyph.utf16)  // a Plane-16 scalar → one UTF-16 surrogate pair
+        guard !utf16.isEmpty else { return false }
+        // A base font whose CoreText cascade the system extends: the SF Symbols
+        // font, once installed, joins that cascade, so substitution finds the
+        // Private-Use glyph. Menlo is Terminal.app's default and always present.
+        let base = CTFontCreateWithName("Menlo" as CFString, 12, nil)
+        let substitute = CTFontCreateForString(
+            base, glyph as CFString, CFRange(location: 0, length: utf16.count))
+        var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+        _ = utf16.withUnsafeBufferPointer { buffer in
+            CTFontGetGlyphsForCharacters(substitute, buffer.baseAddress!, &glyphs, utf16.count)
+        }
+        // For a surrogate pair CTFontGetGlyphsForCharacters puts the composed
+        // glyph in [0] and 0 in [1], and reports `false` for that trailing unit —
+        // so the mapped glyph in [0], not the bool return, is the real signal.
+        return glyphs[0] != 0
+        #else
+        return false
+        #endif
+    }()
 
     #if canImport(AppKit)
     /// The Plane-16 Private Use Area base every codepoint offset is measured from.

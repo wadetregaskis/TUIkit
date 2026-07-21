@@ -91,10 +91,16 @@ extension Label where Title == Text, Icon == Text {
     ///   - title: The title shown beside the icon.
     ///   - systemImage: The SF Symbol name, e.g. `"star.fill"`.
     public init<S: StringProtocol>(_ title: S, systemImage systemName: String) {
+        // Show the glyph only when it BOTH resolves to a codepoint AND the system
+        // has a font that can draw it (``SFSymbol/isFontAvailable``). A resolved
+        // codepoint with no installed SF Symbols font would otherwise render as a
+        // missing-glyph box; fall back to the title alone, as SwiftUI does when a
+        // symbol is unavailable.
         let resolved = SFSymbol.glyph(named: systemName)
+        let showIcon = resolved != nil && SFSymbol.isFontAvailable
         self.init(
             title: Text(String(title)),
             icon: Text(resolved ?? ""),
-            iconIsVisible: resolved != nil)
+            iconIsVisible: showIcon)
     }
 }
