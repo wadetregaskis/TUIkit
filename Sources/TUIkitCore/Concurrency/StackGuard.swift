@@ -12,6 +12,8 @@
     import Musl
 #endif
 
+import Foundation  // Thread.isMainThread, for the debug-only seeding assertion
+
 /// A run-time guard against overflowing the call stack during deep view
 /// nesting.
 ///
@@ -28,9 +30,27 @@
 /// *actual* remaining stack, not an arbitrary depth cap, so it adapts to the
 /// thread's real stack size and the tree's real per-level cost.
 ///
-/// - Note: The bound is that of the thread that first calls into it — the
-///   render runs entirely on the main actor (one thread), so a single cached
-///   bound is correct for every render.
+/// ## Thread correctness
+///
+/// The bound and the stack pointer it's compared against must come from the
+/// *same* thread, so a single cached ``floor`` is only correct if every access
+/// happens on one thread. That's guaranteed structurally: the measure/render
+/// recursion is `@MainActor` by architecture (`View`/`Renderable` are
+/// `@MainActor`), and ``floor``/``hasHeadroom()`` are `@MainActor`-isolated to
+/// match. A `@MainActor` lazy static initializes on first access — which, being
+/// `@MainActor`, is forced onto the main thread — so the compiler *proves* the
+/// bound is computed, and every comparison made, on that one thread. An
+/// off-thread first touch (which a nonisolated version would silently allow,
+/// caching a foreign thread's bounds process-wide) is thus a compile error.
+///
+/// A per-thread design (thread-local ``floor``) would lift the main-thread
+/// requirement, but measured ~2–5% slower per frame on measure-heavy trees (a
+/// `pthread_getspecific` on the hot `hasHeadroom()` path, called hundreds of
+/// thousands of times per frame) — not worth it while rendering is main-only.
+///
+/// - Note: `@MainActor` guarantees the main *actor*; the default executor drains
+///   it on the main *thread*. A debug-only `assert` in ``computeFloor()`` catches
+///   the exotic case of a replaced main-actor executor running elsewhere.
 public enum StackGuard {
     /// Stack to keep in reserve below the guard point (bytes). Must comfortably
     /// exceed the deepest non-recursive work that still has to complete once the
@@ -45,14 +65,21 @@ public enum StackGuard {
     /// can't report stack bounds, which disables the guard (``hasHeadroom()``
     /// then always returns `true` — same behaviour as before this existed).
     ///
-    /// Computed once, lazily, on the first call — i.e. on the render thread.
+    /// Computed once, lazily, on the first call. `@MainActor`-isolated so the
+    /// compiler forces that first access — and thus ``computeFloor()``'s read of
+    /// the current thread's stack bounds — onto the main thread, the one thread
+    /// the `@MainActor` measure/render recursion ever runs on.
+    @MainActor
     static let floor: UInt = computeFloor()
 
     /// Whether there is enough stack left to safely recurse another level.
     ///
     /// Cheap enough for the hot measure/render funnels: a stack-pointer read and
-    /// one comparison against the cached ``floor``.
+    /// one comparison against the cached ``floor``. `@MainActor`-isolated (it
+    /// reads ``floor``, and its callers already are), so it stays a direct,
+    /// inlined call with no actor hop.
     @inline(__always)
+    @MainActor
     public static func hasHeadroom() -> Bool {
         guard floor != 0 else { return true }  // bounds unknown → guard disabled
         var probe: UInt = 0
@@ -62,7 +89,15 @@ public enum StackGuard {
         return stackPointer > floor
     }
 
+    @MainActor
     private static func computeFloor() -> UInt {
+        // The bound is captured from the CURRENT thread; the guard is only
+        // correct if that's the same thread every `hasHeadroom()` later probes.
+        // `@MainActor` proves this is the main actor, whose default executor
+        // runs on the main thread — but a replaced executor could drain it
+        // elsewhere, silently caching the wrong stack's bounds. This debug-only
+        // check trips loudly if that ever happens; it compiles out in release.
+        assert(Thread.isMainThread, "StackGuard.floor must be seeded on the main thread")
         #if canImport(Darwin)
             let thread = pthread_self()
             // `pthread_get_stackaddr_np` returns the stack BASE (highest address);
