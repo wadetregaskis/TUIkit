@@ -35,6 +35,22 @@ public struct ScrollFollowMargin: Sendable, Hashable {
         case lines(Int)
         case rows(Int)
         case fraction(Double)
+        case centered(RowAnchor)
+    }
+
+    /// Which LINE of a (possibly multi-line) row is the one held at the centre
+    /// under ``ScrollFollowMargin/centered(anchor:)``. Single-line rows ignore
+    /// this — every choice resolves to the row's only line.
+    public enum RowAnchor: Sendable, Hashable {
+        /// The row's first line sits at the centre — the row grows downward
+        /// from the middle.
+        case top
+        /// The row's middle line sits at the centre — the row straddles the
+        /// midline evenly (the default).
+        case center
+        /// A specific line index within the row sits at the centre (clamped to
+        /// the row's height).
+        case line(Int)
     }
 
     let value: Value
@@ -43,8 +59,22 @@ public struct ScrollFollowMargin: Sendable, Hashable {
     /// viewport edge. The default.
     public static let none = Self(value: .lines(0))
 
-    /// Keep the selection centred while scrolling (``fraction(_:)`` of 0.5).
-    public static let centered = Self(value: .fraction(0.5))
+    /// Keep the selection centred while scrolling, holding the row's middle
+    /// line at the viewport centre (``RowAnchor/center``).
+    public static let centered = Self(value: .centered(.center))
+
+    /// Keep the selection centred while scrolling, holding `anchor`'s line of a
+    /// multi-line row at the viewport centre.
+    ///
+    /// Row-margin centring counts whole rows above and below, so on a list of
+    /// variable-height rows the focused row's vertical position drifts as its
+    /// neighbours' heights change. This instead centres a specific LINE of the
+    /// focused row with sub-row precision, so a tall row sits stably — pick
+    /// ``RowAnchor/top`` to pin its first line to the middle, ``RowAnchor/center``
+    /// its middle, or ``RowAnchor/line(_:)`` an exact line.
+    public static func centered(anchor: RowAnchor) -> Self {
+        Self(value: .centered(anchor))
+    }
 
     /// Keep `count` terminal lines visible beyond the selection.
     public static func lines(_ count: Int) -> Self {
@@ -76,8 +106,22 @@ public struct ScrollFollowMargin: Sendable, Hashable {
             raw = count
         case .fraction(let fraction):
             raw = Int((Double(viewportLines) * fraction).rounded())
+        case .centered:
+            // Half the viewport, so line-space consumers (single-line lists,
+            // menus, drop-downs, ScrollView reveal) still centre the selection.
+            // Row-space consumers with multi-line rows instead use the anchor
+            // (see ``centeredAnchor``) for sub-row-precise centring.
+            raw = Int((Double(viewportLines) * 0.5).rounded())
         }
         return min(max(0, raw), max(0, (viewportLines - 1) / 2))
+    }
+
+    /// The row anchor when this margin is ``centered(anchor:)`` — the signal a
+    /// multi-line row list uses to centre with sub-row precision instead of the
+    /// whole-row margin approximation. `nil` for every other margin.
+    var centeredAnchor: RowAnchor? {
+        if case .centered(let anchor) = value { return anchor }
+        return nil
     }
 }
 

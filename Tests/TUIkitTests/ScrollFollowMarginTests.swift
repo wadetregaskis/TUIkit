@@ -29,8 +29,12 @@ struct ScrollFollowMarginTests {
         #expect(ScrollFollowMargin.lines(2).resolvedLines(viewportLines: 10) == 2)
         #expect(ScrollFollowMargin.rows(3).resolvedLines(viewportLines: 10) == 3)
         #expect(ScrollFollowMargin.fraction(0.25).resolvedLines(viewportLines: 12) == 3)
-        // centered == fraction(0.5), clamped to (viewport - 1) / 2.
-        #expect(ScrollFollowMargin.centered == ScrollFollowMargin.fraction(0.5))
+        // .centered is its own value (carrying a row anchor), distinct from
+        // fraction(0.5), but still resolves to half the viewport in line-space so
+        // single-line / line-based consumers centre the selection as before.
+        #expect(ScrollFollowMargin.centered != ScrollFollowMargin.fraction(0.5))
+        #expect(ScrollFollowMargin.centered.centeredAnchor == .center)
+        #expect(ScrollFollowMargin.centered(anchor: .top).centeredAnchor == .top)
         #expect(ScrollFollowMargin.centered.resolvedLines(viewportLines: 9) == 4)
         #expect(ScrollFollowMargin.centered.resolvedLines(viewportLines: 10) == 4)
         // Excess margins clamp so a selection can rest strictly inside.
@@ -243,5 +247,107 @@ struct ScrollFollowMarginTests {
         let firstTop = tops.first ?? -1
         let holds = tops.prefix { $0 == firstTop }.count
         #expect(holds == 2, "the selection walks to the top edge before any scroll: \(tops)")
+    }
+}
+
+/// The sub-row-precise centring the `.centered(anchor:)` margin gives a
+/// variable-height-row list (bug: on the fixed-height/hundreds-of-rows Table the
+/// whole-row centred margin drifted, since it counts rows not lines).
+@MainActor
+@Suite("centered follow-margin row anchoring")
+struct CenteredAnchorTests {
+    /// A line-granularity handler over `heights.count` variable-height rows in a
+    /// `viewport`-line content area, centred on `anchor`.
+    private func handler(
+        heights: [Int], viewport: Int, anchor: ScrollFollowMargin.RowAnchor = .center
+    ) -> ItemListHandler<Int> {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: heights.count,
+            viewportHeight: viewport, selectionMode: .single)
+        handler.contentHeight = viewport
+        handler.rowHeight = { heights[$0] }
+        handler.followMargin = .centered(anchor: anchor)
+        handler.scrollGranularity = .line
+        return handler
+    }
+
+    /// The viewport line (0-based) the focused row's anchor line lands on.
+    private func anchorViewportLine(
+        _ handler: ItemListHandler<Int>, heights: [Int],
+        anchor: ScrollFollowMargin.RowAnchor
+    ) -> Int {
+        let focusedHeight = heights[handler.focusedIndex]
+        let anchorLine: Int
+        switch anchor {
+        case .top: anchorLine = 0
+        case .center: anchorLine = focusedHeight / 2
+        case .line(let index): anchorLine = max(0, min(focusedHeight - 1, index))
+        }
+        let absoluteAnchor = heights[0..<handler.focusedIndex].reduce(0, +) + anchorLine
+        let absoluteFirstVisible =
+            heights[0..<handler.scrollOffset].reduce(0, +) + handler.scrollTopClipLines
+        return absoluteAnchor - absoluteFirstVisible
+    }
+
+    @Test("A mid-list focused row's centre line lands on the viewport centre")
+    func centresMidList() {
+        let heights = Array(repeating: 2, count: 20)
+        let handler = handler(heights: heights, viewport: 11)  // centre line 5
+        handler.focusedIndex = 10
+        handler.ensureFocusedItemVisible()
+        #expect(anchorViewportLine(handler, heights: heights, anchor: .center) == 5)
+    }
+
+    @Test("Variable row heights keep the anchor pinned at the centre line")
+    func stableUnderVariableHeights() {
+        // Alternating tall/short rows: the whole-row margin drifts as the mix of
+        // neighbour heights changes; the line-precise anchor does not.
+        let heights = (0..<30).map { $0.isMultiple(of: 2) ? 3 : 1 }
+        let handler = handler(heights: heights, viewport: 11)  // centre line 5
+        for focus in 8...20 {
+            handler.focusedIndex = focus
+            handler.ensureFocusedItemVisible()
+            #expect(
+                anchorViewportLine(handler, heights: heights, anchor: .center) == 5,
+                "focus \(focus): centre line held")
+        }
+    }
+
+    @Test("The .top anchor pins the focused row's FIRST line to the centre")
+    func topAnchor() {
+        let heights = Array(repeating: 4, count: 20)
+        let handler = handler(heights: heights, viewport: 11, anchor: .top)  // centre 5
+        handler.focusedIndex = 10
+        handler.ensureFocusedItemVisible()
+        #expect(anchorViewportLine(handler, heights: heights, anchor: .top) == 5)
+    }
+
+    @Test("Near the top the row rests fully against the top edge")
+    func restsAtTop() {
+        let heights = Array(repeating: 2, count: 20)
+        let handler = handler(heights: heights, viewport: 11)
+        handler.focusedIndex = 0
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset == 0)
+        #expect(handler.scrollTopClipLines == 0, "the first row is fully visible")
+    }
+
+    @Test("Near the bottom the offset clamps to the last valid top")
+    func restsAtBottom() {
+        let heights = Array(repeating: 2, count: 20)
+        let handler = handler(heights: heights, viewport: 11)
+        handler.focusedIndex = 19
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset == handler.maxOffset, "centring past the end clamps down")
+    }
+
+    @Test("Under row granularity the sub-row clip is zeroed (row-precise centring)")
+    func rowGranularityZeroesClip() {
+        let heights = Array(repeating: 3, count: 20)
+        let handler = handler(heights: heights, viewport: 11)
+        handler.scrollGranularity = .row  // clampTopClip zeroes the clip here
+        handler.focusedIndex = 10
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollTopClipLines == 0, "row granularity forbids a sub-row clip")
     }
 }

@@ -700,6 +700,14 @@ extension ItemListHandler {
         }
         guard contentHeight > 0 else { return }
 
+        // Centring a multi-line-row list: hold a specific LINE of the focused
+        // row at the viewport centre with sub-row precision, rather than the
+        // whole-row margin below (which drifts as neighbouring row heights vary).
+        if let anchor = followMargin.centeredAnchor, rowHeight != nil {
+            anchorFocusedRow(anchor: anchor)
+            return
+        }
+
         // Scroll up: the focused row (plus any follow margin) becomes the
         // first visible content. When it isn't the very first item an
         // "above" indicator appears, but the focused row is still shown
@@ -765,6 +773,67 @@ extension ItemListHandler {
         clampTopClip()
     }
 
+    /// Positions the viewport so a chosen LINE of the focused row lands on the
+    /// viewport's centre line — sub-row precise via ``scrollTopClipLines``, so a
+    /// tall multi-line row centres stably instead of the whole-row margin
+    /// jumping as neighbouring heights vary. Walks UP from ``focusedIndex`` only,
+    /// accumulating real row heights until it has covered the lines that must
+    /// sit above the anchor, so it is O(viewport) whatever the list size. Near
+    /// the top the row still rests against the edge; near the bottom
+    /// ``clampScrollOffset()`` pulls it back, and under
+    /// ``ScrollGranularity/row`` ``clampTopClip()`` zeroes the sub-row clip so
+    /// the centring degrades gracefully to row precision.
+    private func anchorFocusedRow(anchor: ScrollFollowMargin.RowAnchor) {
+        guard let rowHeight, let contentHeight, contentHeight > 0,
+            focusedIndex >= 0, focusedIndex < itemCount
+        else { return }
+
+        let focusedHeight = max(1, rowHeight(focusedIndex))
+        // Which line WITHIN the focused row to hold at the centre.
+        let anchorLine: Int
+        switch anchor {
+        case .top: anchorLine = 0
+        case .center: anchorLine = focusedHeight / 2
+        case .line(let index): anchorLine = max(0, min(focusedHeight - 1, index))
+        }
+
+        // The viewport line the anchor lands on, and how many content lines must
+        // therefore sit above it.
+        let targetLine = (contentHeight - 1) / 2
+        var linesAbove = targetLine
+
+        if anchorLine >= linesAbove {
+            // The focused row's own above-anchor lines already overfill the space
+            // above the centre — clip into the focused row itself.
+            scrollOffset = focusedIndex
+            scrollTopClipLines = anchorLine - linesAbove
+        } else {
+            // Consume the focused row's above-anchor lines, then walk up through
+            // whole rows until the remaining lines are covered.
+            linesAbove -= anchorLine
+            var top = focusedIndex
+            var clip = 0
+            while top > 0 {
+                let height = max(1, rowHeight(top - 1))
+                if height >= linesAbove {
+                    top -= 1
+                    clip = height - linesAbove
+                    linesAbove = 0
+                    break
+                }
+                linesAbove -= height
+                top -= 1
+            }
+            // If the rows above ran out (linesAbove still > 0), the row simply
+            // rests against the top — top is 0, clip 0.
+            scrollOffset = top
+            scrollTopClipLines = clip
+        }
+
+        clampScrollOffset()
+        clampTopClip()
+    }
+
     /// The number of rows of context the follow margin keeps visible beyond
     /// the cursor in one direction (`step` −1 above / +1 below) — see
     /// ``followMargin``. `.rows` counts rows directly; `.lines` / `.fraction`
@@ -776,7 +845,7 @@ extension ItemListHandler {
         switch followMargin.value {
         case .rows(let count):
             return min(max(0, count), max(0, (contentHeight - 1) / 2))
-        case .lines, .fraction:
+        case .lines, .fraction, .centered:
             let lines = followMargin.resolvedLines(viewportLines: contentHeight)
             guard lines > 0 else { return 0 }
             guard let rowHeight else { return lines }
