@@ -137,6 +137,32 @@ overscroll as content), sticky-edge detection (pushing into overscroll is
 the definitive "deliberate" signal — a nice synergy: the overscroll region
 makes edge-stickiness discoverable and grazing-safe by construction).
 
+**Implementation constraint, measured 2026-07-21 — overscroll must NOT be
+expressed as an out-of-range `scrollOffset`.** §2's note that the allowance
+is "an additive parameter, not a rework" is too optimistic: widening
+`clampScrollOffset`'s bounds so the offset itself may go negative (or past
+`maxOffset`) reaches consumers that assume the offset is in `[0, maxOffset]`
+and **traps**, not merely misdraws —
+
+- `_ListCore.swift` `(0..<handler.scrollOffset)` — a negative offset is a
+  fatal range (`lowerBound <= upperBound`); an over-max offset indexes
+  `source.row(at:)` past the data.
+- `ScrollView.swift` `full.lines.dropFirst(scrollOffset)` — `dropFirst`
+  traps on a negative count.
+- `ScrollableOffsetState.hasContentAbove` / `rowsAbove` (`scrollOffset > 0`
+  / `= scrollOffset`) report nonsense either side, which is the same
+  "indicators must not count overscroll as content" problem seen from the
+  other end.
+
+This is the negative-size crash class (see the terminal-compatibility notes
+on clamping chrome subtractions at source AND sink) applied to the scroll
+axis. **Recommended shape:** keep `scrollOffset` in its current valid domain
+and carry the excursion as a separate signed *rendering* quantity (blank
+lines drawn past the edge) that the clamp permits, the renderer honours, and
+the indicators ignore. Data-indexing consumers then need no audit at all,
+and the sticky-edge detector reads the excursion directly — which is a
+cleaner "deliberate push" signal than inferring it from a clamped offset.
+
 ---
 
 ## 4. Interim guardrails (in force now)
