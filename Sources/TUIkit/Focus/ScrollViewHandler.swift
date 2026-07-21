@@ -173,21 +173,22 @@ extension ScrollViewHandler {
         let step = event.shift ? max(1, shiftStepMultiplier) : 1
         switch event.key {
         case .up:
-            scroll(by: -step)
-            return true
+            return userScroll(by: -step)
         case .down:
-            scroll(by: step)
-            return true
+            return userScroll(by: step)
         case .pageUp:
-            scroll(by: -max(1, viewportHeight))
-            return true
+            return userScroll(by: -max(1, viewportHeight))
         case .pageDown:
-            scroll(by: max(1, viewportHeight))
-            return true
+            return userScroll(by: max(1, viewportHeight))
         case .home:
+            // An explicit jump: release the anchor first so it takes effect
+            // (otherwise the next render re-derives the offset from the anchor
+            // and the view never moves), then jump.
+            releaseAnchorOnUserScroll()
             scrollToTop()
             return true
         case .end:
+            releaseAnchorOnUserScroll()
             scrollToBottom()
             return true
         case .left:
@@ -205,5 +206,19 @@ extension ScrollViewHandler {
         default:
             return false
         }
+    }
+
+    /// A keyboard scroll by `delta` lines that behaves like a *user* scroll: it
+    /// releases a bound anchor (§1.2 shadow-switch) whenever it actually moves
+    /// the viewport, exactly as a wheel tick does. Without the release, an
+    /// anchored view re-derives its offset from the anchor every render, so the
+    /// arrow key changed `scrollOffset` for one instant and the next frame
+    /// pulled it straight back — the keys appeared dead. Always consumed (it is
+    /// a scroll command either way), so an at-the-edge press doesn't bubble.
+    private func userScroll(by delta: Int) -> Bool {
+        let before = scrollOffset
+        scroll(by: delta)
+        if scrollOffset != before { releaseAnchorOnUserScroll() }
+        return true
     }
 }

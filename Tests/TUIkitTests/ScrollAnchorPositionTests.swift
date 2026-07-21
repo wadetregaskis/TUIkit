@@ -195,6 +195,48 @@ struct ScrollAnchorPositionTests {
         #expect(box.anchor == nil, "a wheel tick that moved nothing isn't a departure")
     }
 
+    // MARK: - Release on a KEYBOARD scroll
+
+    /// An anchored ScrollView re-derives its offset from the anchor every
+    /// render, so an arrow key that only nudged `scrollOffset` was pulled
+    /// straight back — the keys looked dead. A keyboard scroll must release the
+    /// anchor exactly as the wheel does.
+    @Test("An arrow-key scroll releases the anchor to .window")
+    func arrowKeyReleases() {
+        let (handler, read) = boundHandler()
+        #expect(read() == nil, "starts undeparted")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
+        #expect(read() == .window, "the arrow key scrolled — the anchor is released")
+    }
+
+    @Test("Page and Home/End also release the anchor")
+    func pageAndJumpKeysRelease() {
+        for key in [Key.pageDown, .end, .home] {
+            let (handler, read) = boundHandler()
+            if key == .home { handler.scrollOffset = 5 }  // give Home somewhere to go
+            _ = handler.handleKeyEvent(KeyEvent(key: key))
+            #expect(read() == .window, "\(key) is a user scroll — releases the anchor")
+        }
+    }
+
+    /// An arrow key that cannot move the viewport (content fits) must not
+    /// release — matching the blocked-wheel rule, so browsing a short anchored
+    /// view with the keyboard doesn't spuriously drop the anchor.
+    @Test("An arrow key that cannot move the viewport does not release")
+    func blockedArrowDoesNotRelease() {
+        final class Box { var anchor: ScrollAnchor<AnyHashable>? }
+        let box = Box()
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 5      // fits entirely — nothing to scroll
+        handler.viewportHeight = 10
+        handler.anchorPositionBinding = Binding(
+            get: { box.anchor }, set: { box.anchor = $0 })
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
+        #expect(box.anchor == nil, "a key press that moved nothing isn't a departure")
+    }
+
     // MARK: - Selection → Row (the §1.2 shadow-switch)
 
     private func listHandler(
