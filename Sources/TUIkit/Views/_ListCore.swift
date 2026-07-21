@@ -660,6 +660,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         handler.primaryAction = primaryAction
+        // An editable `ForEach` (`.onDelete`) makes the focused row deletable
+        // via the Delete / Backspace key. Wired ONLY for the homogeneous
+        // all-content list, where a row's focus index equals its data offset —
+        // a Section's header / footer rows would shift that mapping, so a
+        // Section-nested ForEach isn't exposed here.
+        handler.onDelete =
+            source.allContent ? (content as? DynamicViewContentActions)?.deleteAction : nil
         return handler
     }
 

@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 /// A view that generates views from a collection of data.
 ///
 /// `ForEach` iterates over a collection and creates a view for each
@@ -58,6 +60,15 @@ public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>
 
     /// The closure that creates a view for each element.
     let content: (Data.Element) -> Content
+
+    /// The `.onMove(perform:)` row-reorder action, if attached: `(source
+    /// offsets, destination offset)`. `nil` unless a `.onMove` modifier set it.
+    /// Read by an enclosing editable `List` (see ``DynamicViewContentActions``).
+    var onMoveAction: ((IndexSet, Int) -> Void)?
+
+    /// The `.onDelete(perform:)` row-delete action, if attached: `(offsets to
+    /// delete)`. `nil` unless a `.onDelete` modifier set it.
+    var onDeleteAction: ((IndexSet) -> Void)?
 
     /// Creates a ForEach with an explicit ID key path.
     ///

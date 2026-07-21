@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 // MARK: - Selection Mode
 
 /// The selection mode for a list or table component.
@@ -192,6 +194,13 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// (and AppKit's action/doubleAction split). `nil` keeps the original
     /// behaviour: Enter and Space both toggle selection.
     var primaryAction: ((SelectionValue) -> Void)?
+
+    /// The `.onDelete(perform:)` action from an editable `ForEach`, if any:
+    /// pressing Delete / Backspace on the focused row invokes it with that
+    /// row's data offset (its focus index, in the all-content list this is only
+    /// wired for). `nil` keeps Delete inert so it falls through to page
+    /// navigation. See ``handleKeyEvent(_:)`` and ``DynamicViewContentActions``.
+    var onDelete: ((IndexSet) -> Void)?
 
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode
@@ -424,6 +433,23 @@ extension ItemListHandler {
 
         case .enter, .space:
             handleSelectionKey(event.key)
+            return true
+
+        case .delete, .backspace:
+            // Delete the focused row when the enclosing ForEach is deletable.
+            // The focus index IS the data offset here — `onDelete` is wired only
+            // for the homogeneous all-content list (see `_ListCore`), so no
+            // header/footer rows shift it. Left inert (fall through) otherwise,
+            // so a plain list never swallows Backspace.
+            guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount else {
+                return false
+            }
+            let offset = focusedIndex
+            onDelete(IndexSet(integer: offset))
+            // The row below slides up into this slot; keep focus on it, clamped
+            // to the about-to-shrink data (itemCount refreshes next render).
+            focusedIndex = max(0, min(offset, itemCount - 2))
+            ensureFocusedItemVisible()
             return true
 
         default:
