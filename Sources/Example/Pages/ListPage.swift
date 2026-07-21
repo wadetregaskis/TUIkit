@@ -52,6 +52,13 @@ struct ListPage: View {
     @State var multiLineByLine = true
     @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
+    @State private var searchQuery = ""
+    @State private var editMode = EditMode.inactive
+
+    private static let fruits = [
+        "Apple", "Apricot", "Banana", "Blueberry", "Cherry",
+        "Grape", "Lemon", "Mango", "Orange", "Peach",
+    ]
 
     var body: some View {
         // The page is taller than most terminals, so it's wrapped in a
@@ -69,6 +76,37 @@ struct ListPage: View {
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
+
+            DemoSection(L("page.list.searchableSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.list.searchableExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    HStack(spacing: 2) {
+                        EditButton()
+                        ValueDisplayRow(
+                            L("page.list.editModeLabel"), editMode.isEditing ? "on" : "off")
+                    }
+
+                    let matches = searchQuery.isEmpty
+                        ? Self.fruits
+                        : Self.fruits.filter { $0.localizedCaseInsensitiveContains(searchQuery) }
+                    Group {
+                        if matches.isEmpty {
+                            Text(L("page.list.searchableEmpty")).dim()
+                        } else {
+                            List {
+                                ForEach(matches, id: \.self) { Text($0) }
+                            }
+                            .frame(height: 6)
+                        }
+                    }
+                    // The .searchable field filters `Self.fruits` above (app-driven).
+                    .searchable(text: $searchQuery)
+                }
+                // Provide the edit-mode binding EditButton reads/drives.
+                .environment(\.editMode, $editMode)
+            }
 
             // Bottom-aligned: the browser column is one line taller (its path
             // caption sits above the list), and both lists are equally tall —

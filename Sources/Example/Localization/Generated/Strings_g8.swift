@@ -35,3 +35,5 @@ extension ExampleStrings {
         ]
     ]
 }
+
+// swiftlint:enable line_length
