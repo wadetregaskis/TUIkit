@@ -405,5 +405,6 @@ the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 is the one remaining documented divergence (`foregroundStyle`), kept
 deliberately. The roadmap is §4a — additive SwiftUI features that a terminal can
 express but TUIkit hasn't built yet, led by `NavigationStack` on the API side and
-by drag-to-reorder rows on the *implicit-behaviour* side (the behaviours SwiftUI's
-built-in views perform on their own, not just the API you call).
+by click-a-column-header-to-sort on the *implicit-behaviour* side (the behaviours
+SwiftUI's built-in views perform on their own, not just the API you call — that
+table's former flagship, drag-to-reorder rows, now ships).
