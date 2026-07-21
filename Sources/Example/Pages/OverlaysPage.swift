@@ -107,6 +107,8 @@ struct OverlaysPage: View {
     @State var showOverlay: Bool = false
     @State var authUsername: String = ""
     @State var authPassword: String = ""
+    @State private var showConfirm = false
+    @State private var confirmChoice = "—"
 
     /// Callback to navigate back to the main menu.
     let onBack: () -> Void
@@ -121,6 +123,19 @@ struct OverlaysPage: View {
             .modal(isPresented: $showOverlay) {
                 overlayContent(for: selectedDemo)
             }
+            .confirmationDialog(
+                L("page.overlays.confirm.title"),
+                isPresented: $showConfirm,
+                titleVisibility: .visible,
+                actions: {
+                    Button(L("page.overlays.confirm.delete"), role: .destructive) {
+                        confirmChoice = L("page.overlays.confirm.deleted")
+                    }
+                    Button(L("page.overlays.confirm.cancel"), role: .cancel) {
+                        confirmChoice = L("page.overlays.confirm.cancelled")
+                    }
+                },
+                message: { Text(L("page.overlays.confirm.message")) })
             // Note: notifications are hosted once at the app root (see
             // `ExampleApp` in main.swift) so a toast posted here survives
             // navigating back to the menu, rather than vanishing with the page.
@@ -180,6 +195,17 @@ struct OverlaysPage: View {
 
                 // Right: Description of selected demo
                 descriptionPanel
+            }
+
+            DemoSection(L("page.overlays.confirm.section")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.overlays.confirm.explain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(spacing: 2) {
+                        Button(L("page.overlays.confirm.trigger")) { showConfirm = true }
+                        ValueDisplayRow(L("page.overlays.confirm.result"), confirmChoice)
+                    }
+                }
             }
 
             DemoSection(L("page.overlays.section.howItWorks")) {

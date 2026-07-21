@@ -92,6 +92,66 @@ extension View {
     }
 }
 
+// MARK: - Confirmation Dialog
+
+extension View {
+    /// Presents a confirmation dialog (action sheet) with a message when a
+    /// binding is true. Mirrors SwiftUI's `confirmationDialog(_:isPresented:...)`.
+    ///
+    /// Presented like `.alert` — a centred, dimming overlay dismissible with
+    /// Escape — but with the action buttons stacked **vertically** (an action
+    /// sheet). A `.cancel`-role button sorts to the bottom.
+    ///
+    /// - Note: SwiftUI's `title` is a `LocalizedStringKey`; TUIkit uses `String`
+    ///   to match its own `.alert` spelling (documented deviation).
+    ///
+    /// - Parameters:
+    ///   - title: The dialog title (suppressed when `titleVisibility` is `.hidden`).
+    ///   - isPresented: A binding controlling presentation.
+    ///   - titleVisibility: Whether the title is shown (default `.automatic`).
+    ///   - actions: A ViewBuilder returning the dialog's action buttons.
+    ///   - message: A ViewBuilder returning the dialog's message.
+    public func confirmationDialog<Actions: View, Message: View>(
+        _ title: String,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping () -> Actions,
+        @ViewBuilder message: @escaping () -> Message
+    ) -> some View {
+        AlertPresentationModifier<Self, Actions, Message>(
+            content: self,
+            isPresented: isPresented,
+            title: titleVisibility == .hidden ? "" : title,
+            message: message(),
+            actions: actions(),
+            borderStyle: nil,
+            borderColor: nil,
+            titleColor: nil,
+            verticalButtons: true
+        )
+    }
+
+    /// Presents a confirmation dialog (action sheet) with actions only.
+    public func confirmationDialog<Actions: View>(
+        _ title: String,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping () -> Actions
+    ) -> some View {
+        AlertPresentationModifier<Self, Actions, EmptyView>(
+            content: self,
+            isPresented: isPresented,
+            title: titleVisibility == .hidden ? "" : title,
+            message: nil,
+            actions: actions(),
+            borderStyle: nil,
+            borderColor: nil,
+            titleColor: nil,
+            verticalButtons: true
+        )
+    }
+}
+
 // MARK: - App Header
 
 extension View {

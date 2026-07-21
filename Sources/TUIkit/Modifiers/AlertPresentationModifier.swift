@@ -48,6 +48,10 @@ public struct AlertPresentationModifier<Content: View, Actions: View, Message: V
     /// Alert title color (optional).
     let titleColor: Color?
 
+    /// Stack the action buttons vertically (a confirmation-dialog action sheet)
+    /// rather than the default horizontal alert row.
+    var verticalButtons: Bool = false
+
     public var body: Never {
         fatalError("AlertPresentationModifier renders via Renderable")
     }
@@ -102,6 +106,7 @@ extension AlertPresentationModifier: Renderable {
             borderStyle: borderStyle,
             borderColor: borderColor,
             titleColor: titleColor,
+            verticalButtons: verticalButtons,
             actions: { actions }
         )
 

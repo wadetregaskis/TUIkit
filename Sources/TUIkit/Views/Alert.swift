@@ -47,6 +47,10 @@ public struct Alert<Actions: View>: View {
     /// The action views (typically buttons).
     let actions: Actions
 
+    /// Whether the action buttons stack vertically (an action-sheet /
+    /// confirmation-dialog column) rather than the default horizontal row.
+    let verticalButtons: Bool
+
     /// Creates an alert with custom action views.
     ///
     /// - Parameters:
@@ -56,6 +60,7 @@ public struct Alert<Actions: View>: View {
     ///   - borderColor: The border color (default: theme border).
     ///   - titleColor: The title color (default: theme foreground).
     ///   - showFooterSeparator: Whether to show separator before actions (default: true).
+    ///   - verticalButtons: Stack the buttons vertically (default: `false`).
     ///   - actions: The action views to display in the footer.
     public init(
         title: String,
@@ -64,6 +69,7 @@ public struct Alert<Actions: View>: View {
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         showFooterSeparator: Bool = true,
+        verticalButtons: Bool = false,
         @ViewBuilder actions: () -> Actions
     ) {
         self.title = title
@@ -76,6 +82,7 @@ public struct Alert<Actions: View>: View {
             showFooterSeparator: showFooterSeparator
         )
         self.actions = actions()
+        self.verticalButtons = verticalButtons
     }
 
     public var body: some View {
@@ -83,7 +90,8 @@ public struct Alert<Actions: View>: View {
             title: title,
             message: message,
             config: config,
-            actions: actions
+            actions: actions,
+            verticalButtons: verticalButtons
         )
     }
 }
@@ -99,6 +107,7 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
     let message: String
     let config: ContainerConfig
     let actions: Actions
+    var verticalButtons: Bool = false
 
     var body: Never {
         fatalError("_AlertCore renders via Renderable")
@@ -106,13 +115,6 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
 
     /// Maximum width for alerts (characters).
     private static var maxWidth: Int { 60 }
-
-    /// The footer row built from the alert's actions, or nil when there are
-    /// none. Shared so measure and render size the same footer.
-    private var footerView: AlertButtonRow? {
-        let buttons = extractButtons(from: actions)
-        return buttons.isEmpty ? nil : AlertButtonRow(buttons: buttons)
-    }
 
     /// Measures via the shared container path, applying the same `maxWidth`
     /// clamp `renderToBuffer` uses — to the proposal as well as the context, so
@@ -124,14 +126,17 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
         if let width = proposal.width {
             alertProposal = ProposedSize(width: min(width, Self.maxWidth), height: proposal.height)
         }
+        let buttons = extractButtons(from: actions)
+        if verticalButtons {
+            return measureContainer(
+                title: title, config: config, content: Text(message),
+                footer: buttons.isEmpty ? nil : AlertButtonColumn(buttons: buttons),
+                proposal: alertProposal, context: alertContext)
+        }
         return measureContainer(
-            title: title,
-            config: config,
-            content: Text(message),
-            footer: footerView,
-            proposal: alertProposal,
-            context: alertContext
-        )
+            title: title, config: config, content: Text(message),
+            footer: buttons.isEmpty ? nil : AlertButtonRow(buttons: buttons),
+            proposal: alertProposal, context: alertContext)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -139,13 +144,17 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
         var alertContext = context
         alertContext.availableWidth = min(context.availableWidth, Self.maxWidth)
 
+        let buttons = extractButtons(from: actions)
+        if verticalButtons {
+            return renderContainer(
+                title: title, config: config, content: Text(message),
+                footer: buttons.isEmpty ? nil : AlertButtonColumn(buttons: buttons),
+                context: alertContext)
+        }
         return renderContainer(
-            title: title,
-            config: config,
-            content: Text(message),
-            footer: footerView,
-            context: alertContext
-        )
+            title: title, config: config, content: Text(message),
+            footer: buttons.isEmpty ? nil : AlertButtonRow(buttons: buttons),
+            context: alertContext)
     }
 
     /// Extracts Button instances from a view hierarchy using the `ButtonProvider` protocol.
@@ -242,6 +251,56 @@ struct AlertButtonRow: View, Renderable {
     }
 }
 
+// MARK: - Alert Button Column
+
+/// Internal view that renders buttons stacked vertically for confirmation
+/// dialogs (action sheets). A cancel-role button is sorted to the bottom, and
+/// each button is centred within the dialog width.
+struct AlertButtonColumn: View, Renderable {
+    let buttons: [Button]
+
+    var body: Never {
+        fatalError("AlertButtonColumn renders via Renderable")
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        guard !buttons.isEmpty else {
+            return FrameBuffer(lines: [])
+        }
+
+        // Cancel goes last (bottom), matching action-sheet convention.
+        let sortedButtons = buttons.sorted { lhs, rhs in
+            let lhsIsCancel = lhs.role == .cancel
+            let rhsIsCancel = rhs.role == .cancel
+            if lhsIsCancel != rhsIsCancel {
+                return !lhsIsCancel  // non-cancel first, cancel last
+            }
+            return false
+        }
+
+        let width = context.availableWidth
+        var lines: [String] = []
+        var regions: [HitTestRegion] = []
+
+        for button in sortedButtons {
+            let buffer = TUIkit.renderToBuffer(button, context: context)
+            let leftPadding = max(0, (width - buffer.width) / 2)
+            let pad = String(repeating: " ", count: leftPadding)
+            let startY = lines.count
+            for line in buffer.lines {
+                lines.append(pad + line)
+            }
+            // Lift each button's hit-test regions to its position in the column.
+            regions.append(
+                contentsOf: buffer.shiftedHitTestRegions(byX: leftPadding, y: startY))
+        }
+
+        var result = FrameBuffer(lines: lines)
+        result.hitTestRegions = regions
+        return result
+    }
+}
+
 // MARK: - Convenience Initializer (no actions)
 
 extension Alert where Actions == EmptyView {
@@ -270,6 +329,7 @@ extension Alert where Actions == EmptyView {
             showFooterSeparator: false
         )
         self.actions = EmptyView()
+        self.verticalButtons = false
     }
 }
 

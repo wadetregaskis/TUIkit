@@ -44,6 +44,18 @@ extension ExampleStrings {
             "page.state.idCount": "Count",
             "page.state.idHint": "← its own @State",
             "page.state.idReset": "Reset (bump .id)",
+
+            // confirmationDialog (Overlays page)
+            "page.overlays.confirm.section": "confirmationDialog",
+            "page.overlays.confirm.explain": "An action sheet: vertically-stacked buttons, the cancel role sorted last, Escape to dismiss.",
+            "page.overlays.confirm.trigger": "Delete item…",
+            "page.overlays.confirm.result": "Choice",
+            "page.overlays.confirm.title": "Delete this item?",
+            "page.overlays.confirm.message": "This action cannot be undone.",
+            "page.overlays.confirm.delete": "Delete",
+            "page.overlays.confirm.cancel": "Cancel",
+            "page.overlays.confirm.deleted": "deleted",
+            "page.overlays.confirm.cancelled": "cancelled",
         ]
     ]
 }
