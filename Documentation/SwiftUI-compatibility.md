@@ -316,11 +316,34 @@ non-obvious.)
 | **Viewport windowing for a nested `LazyVStack` + `pinnedViews:`** | A `LazyVStack` that is the *direct* content of a `ScrollView` now windows to the viewport (§2.8) — the offset-publishing + render-only-visible policy landed. Remaining: a `LazyVStack` nested *below* other scroll content isn't at the content origin so it can't map the offset yet, and `pinnedViews:` is still absent from the lazy inits. | Thread the stack's own y-offset within the scroll content so a non-top stack can window too; `pinnedViews` then composites the active `Section` header over the viewport top. |
 | **`@FocusState` as a property wrapper** | *(shipped)* `@FocusState var x: Bool` / `var f: Field?` + `.focused($x)` / `.focused($f, equals:)` + `.defaultFocus($f, value)`, matching SwiftUI. The value is derived from the persistent `FocusManager`; the imperative handle formerly called `FocusState` is now `FocusReference`. Remaining: `@FocusState` on multiple focusables in one `.focused` (SwiftUI binds a single control), and re-applying a default when a dismissed focus scope re-appears. |
 | **`.keyboardShortcut` (general key equivalents)** | Bind an arbitrary key to any action. | The SEMANTIC actions shipped: `.keyboardShortcut(.defaultAction)` makes a Button the default (Return/Enter fires it whenever the focused control lets the key fall through — a `TextEditor` keeps its newline, a list keeps its row activation, a submit-less `TextField` lets Return through) and `.cancelAction` binds Escape. Remaining gap: arbitrary equivalents (`"s"`, `modifiers:`) — terminals don't report ⌘, so those would need a different chord vocabulary. |
-| **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. |
+| **List editing: `onDelete`/`onMove`, `EditButton`/`editMode`, `.listRowInsets`/`.listRowBackground`/`.listSectionSeparator`** | Editable lists. | Wire into the existing selection/row model; key-driven move/delete. `onMove` is also the API *behind* the implicit drag-to-reorder behaviour (see the behaviours table below) — reuse the shipped Transferable drag infra + the gradient-stop live-reorder pattern for a nearest-slot row drag. |
 | **Common modifiers: `.id`, `.opacity`(View), `.truncationMode`(View), `.onSubmit`/`.submitLabel`, `.focusable`, `.searchable`, `.refreshable`, `.contextMenu`, `.onReceive`** | Frequently used; each terminal-expressible. | `.id` (identity reset) and `.searchable` are the highest-value. `.opacity` → dim/blend approximation only. (`.multilineTextAlignment` now shipped — §1.) |
 | **Scoped wrappers: `@Bindable`, `@SceneStorage`, `@FocusedValue`** | `@Bindable` pairs with `@Observable`; the others are niche. | `@Bindable` is the useful one (binding into an `@Observable`); `@SceneStorage` ≈ `@AppStorage` for a single scene. |
 | **Env values: `\.locale`, `\.layoutDirection`, `\.dynamicTypeSize`, `\.openURL`, `\.scenePhase`** | Standard environment reads. | `\.openURL`/`\.locale`/`\.scenePhase` are independently useful; size-class concepts map loosely to terminal dimensions. (`\.isEnabled` is already present — §1.) |
 | **Text richness: `Text(_:format:)`, `LocalizedStringKey`, `AttributedString`, Markdown, `Text + Text`** | Formatting & localization. | `Text + Text` concatenation and `Text(_:format:)` are tractable; full `AttributedString`/Markdown is larger. TUIkit has a localization service to build `LocalizedStringKey` on. |
+
+#### Implicit / view-internal behaviours (not public API — but SwiftUI does them for you)
+
+Parity isn't only the programmable API surface — the modifiers and initializers
+you *call*. It's also the behaviours SwiftUI's built-in views exhibit **on their
+own**. A `List` you never configured still lets you drag its rows to reorder them
+in edit mode; a `Table` re-sorts when you click a column header; a focused
+`TextField` can grow a clear button. Reproducing these is as much a part of
+"acting like SwiftUI" as matching a signature — adapting the *gesture* (a terminal
+has no swipe) while preserving the *behaviour*. **Verdict: mimic, best-effort**,
+tracked here as the behavioural companion to §4a's API gaps.
+
+| Behaviour | SwiftUI does it… | Terminal adaptation |
+|---|---|---|
+| **Drag-to-reorder rows** in `List`/`Table` | drag a row (edit mode / backed by `.onMove`) to a new slot | mouse-drag a row → live nearest-slot reorder (reuse the gradient-stop reorder pattern), commit through `onMove`; a keyboard fallback (modifier + ↑/↓) covers no-mouse terminals. **First target.** |
+| **Click a column header to sort** a `Table` | `TableColumn(sortUsing:)` + a `sortOrder` binding; header click toggles asc/desc | clickable header cells that toggle a sort indicator and re-sort the bound order |
+| **Swipe actions** on a `List` row | `.swipeActions { … }` reveals buttons | no swipe in a terminal — surface as a per-row action menu (key, or drag the row aside) |
+| **Clear button** in a `TextField` | some field styles show an "✕" while editing a non-empty field | optional trailing clear affordance on a focused, non-empty field |
+| **Auto-scroll to keep selection/focus visible** | the list scrolls so the active row stays on-screen | *largely shipped* (selection-reveal + follow-margin) — audit remaining edge cases |
+| **Expand/collapse hierarchy** (`DisclosureGroup`/`OutlineGroup`) | click a disclosure triangle to expand a node | a disclosure glyph (▶/▼) toggled by click / Enter on the row |
+| **Type-ahead selection** in `Picker`/`Menu`/`List` | type a prefix to jump to a matching item | match typed characters against visible item labels to move the selection |
+
+This table will grow as we notice more of SwiftUI's built-in behaviours.
 
 ### 4b. SwiftUI has it · TUIkit won't (bitmap vs. text-cell)
 
@@ -381,4 +404,6 @@ theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 is the one remaining documented divergence (`foregroundStyle`), kept
 deliberately. The roadmap is §4a — additive SwiftUI features that a terminal can
-express but TUIkit hasn't built yet, led by `NavigationStack`.
+express but TUIkit hasn't built yet, led by `NavigationStack` on the API side and
+by drag-to-reorder rows on the *implicit-behaviour* side (the behaviours SwiftUI's
+built-in views perform on their own, not just the API you call).
