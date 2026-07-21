@@ -164,6 +164,54 @@ struct DesignatedRowAnchorTests {
             comment: "anchored walk path")
     }
 
+    // MARK: - Sticky re-anchor when forced off the held line
+
+    /// The priority with a designated row is to minimise ITS visual movement.
+    /// So when an edit forces the row off its held line — e.g. rows above it are
+    /// deleted until it hits the top — it re-anchors where it landed, and does
+    /// NOT spring back to its original line when the rows are restored.
+    @Test("A row forced to the top re-anchors there, and does not spring back")
+    func stickyReAnchorAfterForcedMove() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var items = Array(0..<40)
+
+        // Designate row 5 while the view is at the top: it settles a few lines
+        // down (there is content above it to fill those lines).
+        _ = settle(
+            items: items, anchored: 5, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        let settled = renderFrame(
+            items: items, anchored: 5, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        guard let startLine = screenLine(of: 5, in: settled), startLine > 1 else {
+            Issue.record("row 5 should start below the top: \(settled)")
+            return
+        }
+
+        // Delete most of the rows above it — enough to force it partway up, but
+        // leaving some content above so it lands clear of the top indicator
+        // (making the held line exact rather than off-by-the-indicator).
+        items.removeSubrange(0..<3)
+        let forced = renderFrame(
+            items: items, anchored: 5, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        guard let forcedLine = screenLine(of: 5, in: forced), forcedLine < startLine else {
+            Issue.record("row 5 should have ridden up: \(settled) → \(forced)")
+            return
+        }
+
+        // Restore rows above it. It must HOLD where it was pushed to, not spring
+        // back to `startLine`.
+        items.insert(contentsOf: 100..<103, at: 0)
+        let restored = renderFrame(
+            items: items, anchored: 5, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            screenLine(of: 5, in: restored) == forcedLine,
+            "row 5 sprang back toward \(startLine) instead of holding \(forcedLine): \(restored)")
+    }
+
     // MARK: - The contrast: no designation means no holding
 
     /// Shows the designation is doing the work: with none, the default is

@@ -50,20 +50,34 @@ extension StackWindowState {
         // pins the window somewhere the row isn't — a blank viewport. Clamped,
         // designating an off-screen row brings it into view by the minimum
         // movement, which is also what `scrollTo(_:anchor: nil)` does.
+        // Reserve the indicator lines: a row held at the very first/last line
+        // sits under a "N more above/below" indicator and shows nothing.
+        let lastLine = max(window.edgeInset, window.viewportHeight - rowHeight - window.edgeInset)
+        func heldLine(landingAt screenLine: Int) -> Int {
+            min(max(screenLine, window.edgeInset), lastLine)
+        }
         if designatedAnchorKey != key {
             designatedAnchorKey = key
-            // Reserve the indicator lines: landing the row exactly under a
-            // "N more below" indicator places it correctly and shows nothing.
-            let lastLine = max(
-                window.edgeInset, window.viewportHeight - rowHeight - window.edgeInset)
-            anchorHeldScreenLine = min(max(rowY - window.offset, window.edgeInset), lastLine)
+            anchorHeldScreenLine = heldLine(landingAt: rowY - window.offset)
         }
-        // The hold is best-effort at the ends: near the tail the offset runs
-        // out of room before the line is reached, and the row rides up the
-        // last screenful. That is the sticky-edge behaviour, not a failure —
-        // there is no offset that would place it lower.
+        // The hold is best-effort at the ends: near an edge the offset runs out
+        // of room before the held line is reached, and the row rides up (or
+        // down) to wherever it can sit.
         let maxOffset = max(0, totalHeight - window.viewportHeight)
-        return min(max(rowY - anchorHeldScreenLine, 0), maxOffset)
+        let desired = rowY - anchorHeldScreenLine
+        let clamped = min(max(desired, 0), maxOffset)
+        // When an edge forced the row off its held line, RE-ANCHOR at the line
+        // it actually landed on. The priority with a designated row is to
+        // minimise its visual movement: once it has been pushed (e.g. rows
+        // above it were deleted until it hit the top), it should stay put when
+        // those rows are restored, not spring back to the original line. So the
+        // held line follows the row to its new resting place rather than the
+        // row springing back to the line. (`rowY - clamped` is the row's actual
+        // screen line at the clamped offset.)
+        if clamped != desired {
+            anchorHeldScreenLine = heldLine(landingAt: rowY - clamped)
+        }
+        return clamped
     }
 
     /// Forgets any adopted line, so the next designation adopts afresh.
