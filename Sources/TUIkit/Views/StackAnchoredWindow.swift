@@ -226,7 +226,8 @@ extension _VStackCore {
             proposal: ProposedSize(width: width, height: nil), context: childContext)
 
         frame.rebindAnchor(
-            mode: ScrollAnchorMode.resolved(
+            mode: ScrollAnchorMode.effective(
+                boundAnchor: context.environment.anchorPosition?.wrappedValue,
                 defaultScrollAnchor: context.environment.defaultScrollAnchor))
 
         // A pending scrollTo: pin the anchor to the TARGET (§5e — seek by

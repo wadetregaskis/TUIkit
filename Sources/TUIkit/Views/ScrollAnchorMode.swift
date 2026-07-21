@@ -52,4 +52,26 @@ enum ScrollAnchorMode: Equatable {
         if y <= 0.25 { return .top }
         return .window
     }
+
+    /// The mode actually in effect: a **non-nil** bound
+    /// ``TUIkit/View/anchorPosition(_:)`` overrides the declared
+    /// `defaultScrollAnchor`; `nil` means "no departure from the declaration"
+    /// and falls back to it.
+    ///
+    /// This is what makes writing `nil` restore the declared anchor — the
+    /// declaration is re-asserted by the view tree every render, so it is
+    /// always recoverable and the framework keeps no hidden shadow state. It is
+    /// also why `.window` and `nil` must stay distinct: `.window` is an
+    /// explicit release (the user scrolled away), `nil` is "never left".
+    static func effective(
+        boundAnchor: ErasedScrollAnchor?, defaultScrollAnchor anchor: UnitPoint?
+    ) -> Self {
+        switch boundAnchor {
+        case .none: return resolved(defaultScrollAnchor: anchor)
+        case .top: return .top
+        case .bottom: return .bottom
+        case .row: return .row
+        case .window: return .window
+        }
+    }
 }

@@ -104,22 +104,47 @@ Remaining candidates:
   can always re-assert (§3.2). A dedicated keybinding for this seems
   unearned; recommend not inventing one until a real use asks for it.
 
-### 3.2 Code-side restore
+### 3.2 Code-side restore — SUPERSEDED (owner decision, 2026-07-21)
 
-Recommend riding the `ScrollViewReader` parity surface (already on the
-roadmap): the proxy gains, alongside SwiftUI's exact
-`scrollTo(_:anchor:)`, TUI-specific extensions —
+~~Proxy extensions `restoreDefaultAnchor()` / `anchor(to:)` / `anchor(toRow:)`.~~
+
+**Replaced by a single bound anchor**, which subsumes all three:
 
 ```swift
-proxy.restoreDefaultAnchor()      // re-assert the code-set mode
-proxy.anchor(to: .top / .bottom)  // imperatively change the CODE-set mode
-proxy.anchor(toRow: id)           // Row mode on a designated row
+public enum ScrollAnchor<ID: Hashable> { case top, bottom, row(ID), window }
+
+List { … }
+    .defaultScrollAnchor(.bottom)     // the DECLARED anchor (SwiftUI parity)
+    .anchorPosition($anchor)          // Binding<ScrollAnchor<ID>?> — live
 ```
 
-SwiftUI source stays portable (the extensions are additive); "Return to
-top" / "Follow latest" buttons are one closure each. The alternative — a
-bindable `ScrollPosition`-style state object — is closer to iOS-18 SwiftUI
-but heavier; the proxy can grow into it later without breaking.
+**A non-nil binding overrides the declaration; `nil` means "no departure from
+it".** Because a declarative modifier is re-asserted every render, the declared
+anchor is always recoverable — so the framework needs no hidden shadow state,
+and writing `nil` *is* `restoreDefaultAnchor()`. Writing `.row(id)` is
+`anchor(toRow:)`; writing `.top`/`.bottom` is `anchor(to:)`. All three proxy
+methods, and the `ScrollViewReader` wrapper they required, disappear.
+
+**`nil` and `.window` are deliberately distinct.** `.window` is an *explicit
+release* (the user scrolled away); `nil` is *never left*. Without that split
+the binding could not answer "am I still following the log?" — with it, that
+question is `anchor == nil`. An earlier `Binding<ID?>` sketch could not express
+it: `nil` would have had to mean both "restore the declaration" (app-written)
+and "released from it" (framework-written), which are opposites.
+
+`.top`/`.bottom` are **positional**, `.row` is **identity**, and they are not
+interchangeable — encoding the edges as sentinel row ids would collapse exactly
+the divergence they exist to express (`.bottom` re-targets to the new last row
+on append; `.row(lastID)` pins to the old one). See `ScrollAnchor`'s doc
+comment.
+
+Note the framework currently writes back only the id-free cases (`.window` on
+user scroll); `.row` write-back needs the selection↔anchor wiring of §1.2 and
+lands with it.
+
+*Not yet reconsidered:* whether an app also wants a read-only *effective* mode
+when the binding is `nil` (it reports "following the declaration", not which
+edge). Deferred until a real use asks.
 
 ### 3.3 Over/underscroll API sketch
 
