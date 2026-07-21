@@ -578,6 +578,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // Captured at render so a USER wheel scroll can release a bound anchor
+        // to `.window` at event time. (The list's ARROW keys move the selection,
+        // which the spec shadow-switches to Row, not Window — that needs the
+        // selection↔anchor wiring and lands with it.)
+        handler.anchorPositionBinding = context.environment.anchorPosition
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // List rows can be any height (the renderer already windows by real
         // line heights), so the focus-reveal AND offset-clamp arithmetic must

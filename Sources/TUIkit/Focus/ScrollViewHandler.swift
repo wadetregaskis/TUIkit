@@ -61,6 +61,10 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
     /// Wheel-chaining grace state (``ScrollableOffsetState``).
     public var wheelEdgeHold = WheelEdgeHold()
+    /// Bound `.anchorPosition` override, captured each render so a USER scroll
+    /// can release it to `.window` at event time. See
+    /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
+    public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
 
     /// The horizontal scroll axis, used when the ScrollView's `axes` include
     /// `.horizontal`. The handler itself is the vertical axis; this carries the

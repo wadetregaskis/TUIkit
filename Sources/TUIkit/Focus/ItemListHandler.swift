@@ -272,6 +272,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
 
     /// Wheel-chaining grace state (``ScrollableOffsetState``).
     var wheelEdgeHold = WheelEdgeHold()
+    /// Bound `.anchorPosition` override, captured each render so a USER scroll
+    /// can release it to `.window` at event time. See
+    /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
+    var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
 
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?

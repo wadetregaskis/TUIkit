@@ -59,6 +59,12 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``WheelEdgeHold`` and ``handleWheelEvent(_:linesPerTick:)``.
     var wheelEdgeHold: WheelEdgeHold { get set }
 
+    /// The bound ``TUIkit/View/anchorPosition(_:)`` override, captured from the
+    /// environment during render so a *user* scroll can release it at event
+    /// time (when the environment is out of reach). `nil` when the app bound
+    /// nothing. See ``releaseAnchorOnUserScroll()``.
+    var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>? { get set }
+
     /// The largest valid ``scrollOffset`` for the current extent and viewport.
     ///
     /// A protocol *requirement* (with the obvious `extent - viewportHeight`
@@ -105,6 +111,9 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var scrollbarDragGrab: Int?
     public var scrollbarRepeat: ScrollbarRepeat?
     public var wheelEdgeHold = WheelEdgeHold()
+    /// A horizontal axis is never anchored (anchoring is a vertical, row-wise
+    /// notion), so this stays `nil`.
+    public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
 
     public init() {}
 }
@@ -250,12 +259,36 @@ extension ScrollableOffsetState {
     ) -> Bool {
         switch event.button {
         case .scrollUp:
-            return resolveWheelOutcome(moved: scrollFine(by: -linesPerTick))
+            let moved = scrollFine(by: -linesPerTick)
+            if moved { releaseAnchorOnUserScroll() }
+            return resolveWheelOutcome(moved: moved)
         case .scrollDown:
-            return resolveWheelOutcome(moved: scrollFine(by: linesPerTick))
+            let moved = scrollFine(by: linesPerTick)
+            if moved { releaseAnchorOnUserScroll() }
+            return resolveWheelOutcome(moved: moved)
         default:
             return false
         }
+    }
+
+    /// Records that the **user** moved this viewport, releasing a bound anchor
+    /// to ``ScrollAnchor/window`` — the spec's §1.2 shadow-switch
+    /// ("Scrolling → shadow-switches to Window").
+    ///
+    /// Only genuine user input may call this. A programmatic move — a
+    /// `scrollTo` seek, a focus-driven reveal, a clamp after the data shrank —
+    /// must NOT, or an app would appear to have "scrolled away" from its own
+    /// declared anchor without the user touching anything.
+    ///
+    /// Writing `.window` (rather than clearing to `nil`) is what keeps
+    /// "released" distinguishable from "never departed" — see
+    /// ``TUIkit/View/anchorPosition(_:)``. Idempotent: a second release while
+    /// already `.window` writes nothing, so a held wheel doesn't churn `@State`.
+    public func releaseAnchorOnUserScroll() {
+        guard let binding = anchorPositionBinding, binding.wrappedValue != .window else {
+            return
+        }
+        binding.wrappedValue = .window
     }
 
     /// Maps "did the wheel move the viewport" onto "is the event consumed",

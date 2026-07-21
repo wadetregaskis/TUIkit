@@ -271,6 +271,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let handler = handlerBox.value
         handler.canBeFocused = !isDisabled
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // Captured at render so a USER scroll can release a bound anchor to
+        // `.window` at event time (the environment is out of reach there).
+        handler.anchorPositionBinding = context.environment.anchorPosition
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         return handler

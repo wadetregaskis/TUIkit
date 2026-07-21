@@ -120,6 +120,81 @@ struct ScrollAnchorPositionTests {
         #expect(asRow != asTop, "row 0 is not the same policy as 'stay at the top'")
     }
 
+    // MARK: - Release on a USER scroll
+
+    private func boundHandler() -> (ScrollViewHandler, () -> ScrollAnchor<AnyHashable>?) {
+        final class Box { var anchor: ScrollAnchor<AnyHashable>? }
+        let box = Box()
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        handler.anchorPositionBinding = Binding(
+            get: { box.anchor }, set: { box.anchor = $0 })
+        return (handler, { box.anchor })
+    }
+
+    @Test("A user wheel scroll releases the anchor to .window")
+    func wheelReleases() {
+        let (handler, read) = boundHandler()
+        #expect(read() == nil, "starts undeparted")
+
+        _ = handler.handleWheelEvent(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 0, y: 0))
+        #expect(read() == .window, "the user scrolled — the anchor is released")
+    }
+
+    /// The distinction is only useful if it survives a held wheel without
+    /// churning `@State` — releasing twice must write once.
+    @Test("Releasing is idempotent while already released")
+    func releaseIsIdempotent() {
+        final class Box {
+            var anchor: ScrollAnchor<AnyHashable>?
+            var writes = 0
+        }
+        let box = Box()
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 100
+        handler.viewportHeight = 10
+        handler.anchorPositionBinding = Binding(
+            get: { box.anchor }, set: { box.anchor = $0; box.writes += 1 })
+
+        handler.releaseAnchorOnUserScroll()
+        handler.releaseAnchorOnUserScroll()
+        handler.releaseAnchorOnUserScroll()
+        #expect(box.anchor == .window)
+        #expect(box.writes == 1, "a held wheel doesn't churn the binding")
+    }
+
+    /// The load-bearing negative: a scrollTo seek, a focus reveal, or a clamp
+    /// after the data shrank must NOT look like the user scrolling away, or an
+    /// app would appear to abandon its own declared anchor untouched.
+    @Test("A programmatic move does NOT release the anchor")
+    func programmaticMoveDoesNotRelease() {
+        let (handler, read) = boundHandler()
+
+        handler.scroll(by: 5)          // the path scrollTo / reveal / clamp use
+        #expect(handler.scrollOffset > 0, "it really moved")
+        #expect(read() == nil, "still following the declared anchor")
+
+        handler.clampScrollOffset()
+        #expect(read() == nil, "a clamp is not a user scroll either")
+    }
+
+    @Test("A wheel event that cannot move the viewport does not release")
+    func blockedWheelDoesNotRelease() {
+        final class Box { var anchor: ScrollAnchor<AnyHashable>? }
+        let box = Box()
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 5      // fits entirely — nothing to scroll
+        handler.viewportHeight = 10
+        handler.anchorPositionBinding = Binding(
+            get: { box.anchor }, set: { box.anchor = $0 })
+
+        _ = handler.handleWheelEvent(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 0, y: 0))
+        #expect(box.anchor == nil, "a wheel tick that moved nothing isn't a departure")
+    }
+
     // MARK: - Rendering through the modifier
 
     @Test("A bound .window anchor reaches the render path and takes effect")
