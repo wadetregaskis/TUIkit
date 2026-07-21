@@ -344,8 +344,7 @@ where Value.ID: Hashable {
                 // Measure with the SAME locale the display path uses, or a
                 // grouped "12,000" would be measured as "12000" and the column
                 // sized one cell short.
-                let measureLocale = context.environment.localizationService
-                    .currentLanguage.locale
+                let measureLocale = context.environment.locale
                 if handler.hasContentAbove {
                     widest = max(
                         widest,
@@ -839,7 +838,7 @@ where Value.ID: Hashable {
         // A focused table with no scrollbar pulses its "N more" indicators.
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
-        let numberLocale = context.environment.localizationService.currentLanguage.locale
+        let numberLocale = context.environment.locale
         var lines: [String] = []
         if window.showAbove {
             lines.append(renderScrollIndicator(
@@ -1066,7 +1065,7 @@ where Value.ID: Hashable {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
-        let numberLocale = context.environment.localizationService.currentLanguage.locale
+        let numberLocale = context.environment.locale
         var lines: [String] = []
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(

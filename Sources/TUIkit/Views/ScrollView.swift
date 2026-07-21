@@ -480,7 +480,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 width: contentWidth,
                 palette: context.environment.palette,
                 emphasis: scrollIndicatorEmphasis(isFocused: isFocused, context: context),
-                locale: context.environment.localizationService.currentLanguage.locale
+                locale: context.environment.locale
             )
         }
         if wantsScrollbar {

@@ -685,7 +685,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // its focus cue (in addition to the pulsing cursor row) — the
         // scrollbar-less counterpart to the bar's own pulse.
         let indicatorEmphasis = scrollIndicatorEmphasis(isFocused: listHasFocus, context: context)
-        let numberLocale = context.environment.localizationService.currentLanguage.locale
+        let numberLocale = context.environment.locale
 
         if handler.hasContentAbove || handler.scrollTopClipLines > 0 {
             lines.append(renderScrollIndicator(
