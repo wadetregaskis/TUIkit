@@ -71,6 +71,9 @@ struct ListPage: View {
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State private var searchQuery = ""
     @State private var editMode = EditMode.inactive
+    @State private var editableItems = [
+        "🍎 Apple", "🍌 Banana", "🍒 Cherry", "🍇 Grape", "🍑 Peach", "🍋 Lemon",
+    ]
 
     private static let fruits = [
         "Apple", "Apricot", "Banana", "Blueberry", "Cherry",
@@ -123,6 +126,19 @@ struct ListPage: View {
                 }
                 // Provide the edit-mode binding EditButton reads/drives.
                 .environment(\.editMode, $editMode)
+            }
+
+            DemoSection(L("page.list.editableSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.list.editableInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    List {
+                        ForEach(editableItems, id: \.self) { Text($0) }
+                            .onMove { editableItems.move(fromOffsets: $0, toOffset: $1) }
+                            .onDelete { editableItems.remove(atOffsets: $0) }
+                    }
+                    .frame(height: 8)
+                }
             }
 
             // Bottom-aligned: the browser column is one line taller (its path

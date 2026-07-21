@@ -32,6 +32,10 @@ extension ExampleStrings {
             "page.list.searchableEmpty": "No matches",
             "page.list.editModeLabel": "Edit mode",
 
+            // ForEach .onMove / .onDelete (Lists page)
+            "page.list.editableSection": "Editable \u{00B7} .onMove / .onDelete",
+            "page.list.editableInstruction": "Drag a row with the mouse to reorder it (it drops where you release). Tab to the list, then press Delete or Backspace to remove the focused row.",
+
             // @Bindable + .id (State Persistence page)
             "page.state.bindableSection": "@Bindable · bindings into an @Observable",
             "page.state.bindableDescription": "@Bindable derives a Binding into a mutable property of an @Observable object you already own.",
