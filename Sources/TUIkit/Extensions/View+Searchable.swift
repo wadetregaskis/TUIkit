@@ -63,7 +63,12 @@ struct SearchableModifier<Content: View>: View {
                 if supportsEmojiChrome {
                     Text("\u{1F50D}")
                 }
+                // Scope ONLY the query field to the `.search` submit role, so a
+                // Return here fires `.onSubmit(of: .search)` — not `.onSubmit(of:
+                // .text)`, and a plain text field in `content` (a sibling) still
+                // consumes `.text`.
                 TextField("", text: text, prompt: prompt ?? Text("Search"))
+                    .environment(\.submitTriggerRole, .search)
             }
             content
         }

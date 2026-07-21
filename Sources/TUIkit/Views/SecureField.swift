@@ -293,7 +293,13 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // Keep handler in sync with current values
         handler.text = text
         handler.canBeFocused = !isDisabled
-        handler.onSubmit = onSubmitAction
+        // Compose the per-field closure with any cascading `.onSubmit(of:)` that
+        // matches this field's role (see TextField for the rationale; stays nil
+        // when empty so Return can fall through).
+        handler.onSubmit = combinedSubmitAction(
+            perField: onSubmitAction,
+            cascading: context.environment.submitActions,
+            role: context.environment.submitTriggerRole)
         handler.textContentType = context.environment.textContentType
         handler.clampCursorPosition()
 

@@ -15,6 +15,11 @@ struct TextInputPage: View {
     @State private var searchQuery: String = ""
     @State private var submittedValue: String = ""
 
+    // Cascading .onSubmit / .submitLabel demo state
+    @State private var formName: String = ""
+    @State private var formEmail: String = ""
+    @State private var submitLog: [String] = []
+
     // SecureField state
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
@@ -97,6 +102,43 @@ struct TextInputPage: View {
                 // .textFieldTextStyle re-themes the entered text of all fields
                 // in this section (cursor, selection and prompt keep their colours).
                 .textFieldTextStyle { $0.foreground = .palette.accent }
+            }
+
+            // MARK: Cascading .onSubmit + .submitLabel
+            DemoSection(L("page.textInput.submitSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textInput.submitExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    // One `.onSubmit` on the VStack cascades to BOTH fields:
+                    // Return in either runs it. The Email field ALSO has its own
+                    // per-field `.onSubmit`, so submitting there logs twice
+                    // (per-field first, then the cascading form action).
+                    // `.submitLabel(_:)` is accepted for SwiftUI parity — a
+                    // terminal has no on-screen Return key to draw it on.
+                    VStack(alignment: .leading, spacing: 0) {
+                        TextField(
+                            L("page.textInput.submitName"), text: $formName,
+                            prompt: Text(L("page.textInput.submitName")))
+                            .submitLabel(.next)
+                        TextField(
+                            L("page.textInput.submitEmail"), text: $formEmail,
+                            prompt: Text(L("page.textInput.submitEmail")))
+                            .submitLabel(.send)
+                            .onSubmit { logSubmit(L("page.textInput.submitEmailCommitted")) }
+                    }
+                    .onSubmit {
+                        logSubmit("\(L("page.textInput.submitForm")): \(formName) / \(formEmail)")
+                    }
+
+                    if submitLog.isEmpty {
+                        Text(L("page.textInput.submitHint")).dim()
+                    } else {
+                        ForEach(Array(submitLog.suffix(4).enumerated()), id: \.offset) { _, entry in
+                            Text("• \(entry)").foregroundStyle(.palette.success)
+                        }
+                    }
+                }
             }
 
             // MARK: SecureField
@@ -199,6 +241,12 @@ struct TextInputPage: View {
         .appHeader {
             DemoAppHeader(L("menu.item.textInput"))
         }
+    }
+
+    /// Appends a submit-log entry, keeping only the most recent handful.
+    private func logSubmit(_ entry: String) {
+        submitLog.append(entry)
+        if submitLog.count > 8 { submitLog.removeFirst(submitLog.count - 8) }
     }
 
     private var cursorStatusBarItems: [any StatusBarItemProtocol] {

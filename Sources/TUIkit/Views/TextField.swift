@@ -476,7 +476,14 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let handler = handlerBox.value
         handler.text = text
         handler.canBeFocused = !isDisabled
-        handler.onSubmit = onSubmitAction
+        // Compose the per-field closure with any cascading `.onSubmit(of:)` in
+        // scope that matches this field's role (.text by default). Stays nil when
+        // there's nothing to run, so Return still falls through to a dialog's
+        // default button.
+        handler.onSubmit = combinedSubmitAction(
+            perField: onSubmitAction,
+            cascading: context.environment.submitActions,
+            role: context.environment.submitTriggerRole)
         handler.onEditingChanged = onEditingChangedAction
         handler.textContentType = context.environment.textContentType
         handler.clampCursorPosition()
