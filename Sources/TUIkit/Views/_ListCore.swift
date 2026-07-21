@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 // `_ListCore` is a single cohesive render core (the windowed row source, the
 // list core, and the content view that draws it) whose pieces are tightly
 // coupled through the row/selection/overflow model; splitting it across files
@@ -660,13 +662,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         handler.primaryAction = primaryAction
-        // An editable `ForEach` (`.onDelete`) makes the focused row deletable
-        // via the Delete / Backspace key. Wired ONLY for the homogeneous
-        // all-content list, where a row's focus index equals its data offset —
-        // a Section's header / footer rows would shift that mapping, so a
-        // Section-nested ForEach isn't exposed here.
-        handler.onDelete =
-            source.allContent ? (content as? DynamicViewContentActions)?.deleteAction : nil
+        // An editable `ForEach` (`.onDelete` / `.onMove`) makes the focused row
+        // deletable via the Delete / Backspace key and draggable to reorder.
+        // Wired ONLY for the homogeneous all-content list, where a row's focus
+        // index equals its data offset — a Section's header / footer rows would
+        // shift that mapping, so a Section-nested ForEach isn't exposed here.
+        let dynamicActions = source.allContent ? content as? DynamicViewContentActions : nil
+        handler.onDelete = dynamicActions?.deleteAction
+        handler.onMove = dynamicActions?.moveAction
         return handler
     }
 
@@ -1090,24 +1093,85 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if captureHandler.handleWheelEvent(event) { return true }
 
             if event.button == .left {
-                guard event.phase == .released else {
-                    return event.phase == .pressed
+                // Row at the cursor (content columns only), from the press-frame
+                // bands. Those stay valid for the whole gesture: a reorder drag
+                // commits only on release, so the list order — and thus these
+                // bands — never shifts mid-drag.
+                func rowAt(y: Int) -> (rowIndex: Int, type: ListRowType<SelectionValue>)? {
+                    let yInLines = y - topInset
+                    guard contentColumns.contains(event.x),
+                        let hit = rowRanges.first(where: {
+                            yInLines >= $0.yStart && yInLines < $0.yStart + $0.height
+                        })
+                    else { return nil }
+                    return (hit.rowIndex, hit.type)
                 }
-                // Translate event.y → row index by walking the
-                // captured y-ranges. Clicks on a row's CONTENT
-                // columns select it and focus the list; clicks on
-                // chrome — the border columns, empty area — just
-                // focus (the border shares a y with some row, but
-                // nobody clicking a frame means "select that row").
-                let yInLines = event.y - topInset
-                if contentColumns.contains(event.x), let hit = rowRanges.first(where: {
-                    yInLines >= $0.yStart && yInLines < $0.yStart + $0.height
-                }) {
-                    if case .content(let id) = hit.type {
-                        // A double-click fires the row's activation ("open");
-                        // a single click selects with macOS semantics (plain
-                        // = sole selection, shift = range, ctrl/option =
-                        // toggle) — see handleClickSelection.
+
+                switch event.phase {
+                case .pressed:
+                    // Pick up the row for a possible reorder (only when the
+                    // ForEach is reorderable). Claim the press either way so the
+                    // matching drag / release routes back here.
+                    if captureHandler.onMove != nil, let hit = rowAt(y: event.y),
+                        case .content = hit.type
+                    {
+                        captureHandler.reorder = ItemListHandler<SelectionValue>.RowReorder(
+                            grabbedOffset: hit.rowIndex, active: false)
+                        // Highlight the grabbed row via the focus cursor so the
+                        // user sees what they've picked up (no new render path).
+                        captureHandler.focusedIndex = hit.rowIndex
+                    }
+                    return true
+
+                case .dragged:
+                    // Any motion during a grab is a reorder, not a click. Track
+                    // the row under the cursor with the focus highlight so it
+                    // reads as a drop target; the data moves on release.
+                    guard captureHandler.onMove != nil,
+                        var reorder = captureHandler.reorder
+                    else { return true }
+                    reorder.active = true
+                    captureHandler.reorder = reorder
+                    if let hit = rowAt(y: event.y), case .content = hit.type {
+                        captureHandler.focusedIndex = hit.rowIndex
+                    }
+                    return true
+
+                case .released:
+                    // A reorder drop: commit one onMove from the grabbed row to
+                    // where the cursor landed, then clear the drag.
+                    if let reorder = captureHandler.reorder, reorder.active,
+                        let onMove = captureHandler.onMove
+                    {
+                        captureHandler.reorder = nil
+                        let target = rowAt(y: event.y)?.rowIndex ?? (captureHandler.itemCount - 1)
+                        let destination = Self.reorderDestination(
+                            grabbed: reorder.grabbedOffset, target: target)
+                        // Skip a no-op (dropping a row onto itself or the slot
+                        // just after it) so an aimless drag doesn't churn state.
+                        if destination != reorder.grabbedOffset,
+                            destination != reorder.grabbedOffset + 1
+                        {
+                            onMove(IndexSet(integer: reorder.grabbedOffset), destination)
+                        }
+                        captureHandler.focusedIndex = min(
+                            max(0, destination > reorder.grabbedOffset ? destination - 1 : destination),
+                            max(0, captureHandler.itemCount - 1))
+                        focusManager?.focus(id: captureFocusID)
+                        return true
+                    }
+                    captureHandler.reorder = nil
+
+                    // Not a reorder — the original click / selection path.
+                    // Translate event.y → row index by walking the captured
+                    // y-ranges. Clicks on a row's CONTENT columns select it and
+                    // focus the list; clicks on chrome — the border columns,
+                    // empty area — just focus (the border shares a y with some
+                    // row, but nobody clicking a frame means "select that row").
+                    if let hit = rowAt(y: event.y), case .content(let id) = hit.type {
+                        // A double-click fires the row's activation ("open"); a
+                        // single click selects with macOS semantics (plain =
+                        // sole selection, shift = range, ctrl/option = toggle).
                         if event.clickCount >= 2, let action = capturedPrimaryAction {
                             captureHandler.focusedIndex = hit.rowIndex
                             action(id)
@@ -1115,12 +1179,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                             captureHandler.handleClickSelection(at: hit.rowIndex, event: event)
                         }
                     }
+                    focusManager?.focus(id: captureFocusID)
+                    return true
+
+                default:
+                    return false
                 }
-                focusManager?.focus(id: captureFocusID)
-                return true
             }
             return false
         }
+    }
+
+    /// The SwiftUI `move(fromOffsets:toOffset:)` destination for dropping the
+    /// `grabbed` row onto `target`: after the target when moving down (insert
+    /// past it), before the target when moving up. `toOffset` is measured
+    /// against the collection *before* the move — exactly what `onMove` expects.
+    private static func reorderDestination(grabbed: Int, target: Int) -> Int {
+        grabbed < target ? target + 1 : target
     }
 
     // MARK: - Row Extraction

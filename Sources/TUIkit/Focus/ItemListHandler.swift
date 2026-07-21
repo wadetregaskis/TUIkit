@@ -202,6 +202,27 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// navigation. See ``handleKeyEvent(_:)`` and ``DynamicViewContentActions``.
     var onDelete: ((IndexSet) -> Void)?
 
+    /// The `.onMove(perform:)` reorder action from an editable `ForEach`, if
+    /// any: dragging a row with the mouse commits through it on release with
+    /// `(source offset, destination offset)`. `nil` makes rows non-draggable.
+    /// See ``RowReorder`` and `_ListCore`'s mouse handler.
+    var onMove: ((IndexSet, Int) -> Void)?
+
+    /// The state of an in-flight mouse reorder drag, or `nil`. The row order is
+    /// left UNCHANGED until the drop (`onMove` fires once on release), so the
+    /// press-frame row geometry the drag closure captured stays valid for the
+    /// whole gesture — no live re-layout to chase.
+    var reorder: RowReorder?
+
+    /// One in-flight row-reorder drag.
+    struct RowReorder: Equatable {
+        /// The data offset of the row picked up on press.
+        var grabbedOffset: Int
+        /// Whether the cursor has actually moved since the press — a plain
+        /// press/release with no motion is a click (selection), not a reorder.
+        var active: Bool
+    }
+
     /// The selection mode (single or multi).
     let selectionMode: SelectionMode
 
