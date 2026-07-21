@@ -88,10 +88,16 @@ private final class AnchoredWindowFrame {
     /// preserving `anchorOffsetWithin`. A dead ladder (the list was
     /// replaced) leaves the clamped index fallback — approximate, and
     /// correct at the ends (§5f).
-    func rebindAnchor() {
+    func rebindAnchor(mode: ScrollAnchorMode) {
         let count = children.count
         guard count > 0 else { return }
         state.anchorOrdinal = min(max(0, state.anchorOrdinal), count - 1)
+        // WINDOW mode (the spec's default) is *no* anchor: the position stays
+        // where it is in line coordinates, so the ordinal is kept as-is and an
+        // insert above shifts the content down. Only the row-holding modes
+        // re-bind the ordinal to its key below. See
+        // `Documentation/Scroll-anchoring.md` §1.1 / §2.
+        guard mode.holdsRowIdentity else { return }
         guard let anchorKey = state.anchorKey else { return }
         guard children.key(at: state.anchorOrdinal) != anchorKey else { return }
 
@@ -219,7 +225,9 @@ extension _VStackCore {
             children: children, spacing: spacing, state: state,
             proposal: ProposedSize(width: width, height: nil), context: childContext)
 
-        frame.rebindAnchor()
+        frame.rebindAnchor(
+            mode: ScrollAnchorMode.resolved(
+                defaultScrollAnchor: context.environment.defaultScrollAnchor))
 
         // A pending scrollTo: pin the anchor to the TARGET (§5e — seek by
         // anchor, not by absolute offset). The estimated y positions only

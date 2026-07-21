@@ -63,8 +63,21 @@ struct AnchorLadderTests {
         }
     }
 
-    @Test("Inserting rows above the anchor moves nothing on screen")
-    func insertAboveHoldsTheView() {
+    /// The DEFAULT anchor mode is Window (`Documentation/Scroll-anchoring.md`
+    /// §1.1): technically *no* anchor — the position stays where it is in LINE
+    /// coordinates, so prepending rows shifts what is on screen rather than
+    /// holding the row that was there.
+    ///
+    /// This test previously asserted the opposite ("prepending must hold the
+    /// view"). That was the anchored path's *placeholder* policy, which §2 of
+    /// the spec explicitly flags as Row semantics applied silently as the
+    /// default, to be corrected when this feature landed — it now is. The
+    /// row-holding counterpart belongs to Row mode, which has no public
+    /// designator yet (spec guardrail #1: it arrives via its own API, not by
+    /// overloading the `UnitPoint` anchor), so it is deliberately not asserted
+    /// here rather than faked through a mode that merely happens to re-bind.
+    @Test("Window mode (the default): prepending shifts the view, line-coordinate stable")
+    func insertAboveShiftsTheViewInWindowMode() {
         let tuiContext = TUIContext()
         var items = Array(1_000..<1_400)  // 400 rows, variable heights
 
@@ -73,13 +86,31 @@ struct AnchorLadderTests {
         let before = renderFrame(items: items, tuiContext: tuiContext, offset: 300)
         #expect(!shownIDs(before).isEmpty, "anchored mid-list: \(before)")
 
-        // Prepend 60 new rows. The absolute content grew ~120 cells, but the
-        // anchor names a row — the visible slice must not move.
+        // Prepend 60 rows. Window keeps the ordinal, so the same slice of the
+        // (now longer) list shows — i.e. earlier rows than before.
         items.insert(contentsOf: 0..<60, at: 0)
         let after = renderFrame(items: items, tuiContext: tuiContext, offset: 300)
+        #expect(!shownIDs(after).isEmpty, "still rendering rows: \(after)")
         #expect(
-            after == before,
-            "prepending must hold the view (§6d): before=\(before) after=\(after)")
+            after != before,
+            "Window holds the POSITION, not the row: before=\(before) after=\(after)")
+        if let firstBefore = shownIDs(before).first, let firstAfter = shownIDs(after).first {
+            #expect(
+                firstAfter < firstBefore,
+                "the same ordinal now names an earlier row (60 were prepended)")
+        }
+    }
+
+    @Test("Window mode never re-binds; the row-holding modes do")
+    func modePolicyBranch() {
+        #expect(ScrollAnchorMode.window.holdsRowIdentity == false)
+        #expect(ScrollAnchorMode.row.holdsRowIdentity == true)
+        // No anchor asked for → Window, the spec's default.
+        #expect(ScrollAnchorMode.resolved(defaultScrollAnchor: nil) == .window)
+        #expect(ScrollAnchorMode.resolved(defaultScrollAnchor: .bottom) == .bottom)
+        #expect(ScrollAnchorMode.resolved(defaultScrollAnchor: .top) == .top)
+        // Mid-content has no edge meaning — still Window.
+        #expect(ScrollAnchorMode.resolved(defaultScrollAnchor: .center) == .window)
     }
 
     @Test("Deleting the anchored row falls to its nearest surviving neighbour")
