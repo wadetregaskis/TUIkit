@@ -29,6 +29,15 @@ struct ScrollViewPage: View {
     @State var counter: Int = 0
     @State var sliderValue: Double = 50
 
+    // Scroll-anchoring demo: rows that can be inserted/removed ABOVE the
+    // anchored one, so the hold is visible as the data shifts under it.
+    @State var anchorRows: [Int] = Array(1...40)
+    @State var rowAnchor: ScrollAnchor<Int>?
+    @State var nextInsertedRow = 100
+
+    /// The row the demo designates. Fixed so it can be labelled in the list.
+    private static let anchoredRow = 20
+
     // Live scrollbar settings for the configurable demo below.
     @State var barVisibility: ScrollbarVisibility = .visible
     @State var barArrows: ScrollbarArrows = .single
@@ -159,6 +168,44 @@ struct ScrollViewPage: View {
                 }
             }
 
+            DemoSection(L("page.scrollView.anchorSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.scrollView.anchorBody"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    ScrollView {
+                        // LazyVStack, not VStack: anchoring is a property of
+                        // the WINDOWED render paths, so an eager stack (which
+                        // draws the whole canvas and lets the ScrollView clip
+                        // it) has no anchor to hold.
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(anchorRows, id: \.self) { row in
+                                anchorRowView(row)
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+                    .border(color: .palette.border)
+                    // The whole point: with a row designated, inserting or
+                    // removing rows above it moves the SCROLL POSITION, not
+                    // the row. Release it and the same edits shove it around.
+                    .anchorPosition($rowAnchor)
+
+                    HStack(spacing: 1) {
+                        Button(L("page.scrollView.anchorInsert")) { insertRowsAbove() }
+                        Button(L("page.scrollView.anchorRemove")) { removeRowsAbove() }
+                        Button(L("page.scrollView.anchorReset")) { resetAnchorRows() }
+                    }
+                    HStack(spacing: 1) {
+                        Button(L("page.scrollView.anchorHold")) {
+                            rowAnchor = .row(Self.anchoredRow)
+                        }
+                        Button(L("page.scrollView.anchorRelease")) { rowAnchor = .window }
+                    }
+                    ValueDisplayRow(L("page.scrollView.anchorState"), anchorDescription)
+                }
+            }
+
             DemoSection(L("page.scrollView.indicatorsOffSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.scrollView.indicatorsOffBody"))
@@ -199,6 +246,51 @@ struct ScrollViewPage: View {
                 subtitle: L("page.scrollView.subtitle")
             )
         }
+    }
+
+    // MARK: - Scroll anchoring
+
+    /// One row of the anchoring demo, with the designated row called out so
+    /// it can be followed by eye as rows are inserted and removed above it.
+    @ViewBuilder
+    private func anchorRowView(_ row: Int) -> some View {
+        if row == Self.anchoredRow {
+            Text("▶ \(L("page.scrollView.anchorRowLabel")) \(row)")
+            .bold()
+            .foregroundStyle(.palette.accent)
+        } else {
+            Text("  \(L("page.scrollView.anchorRowPlain")) \(row)")
+        }
+    }
+
+    /// The bound anchor, spelled out — including the distinction the optional
+    /// exists for: `nil` (never departed from the declared anchor) reads
+    /// differently from `.window` (explicitly released).
+    private var anchorDescription: String {
+        switch rowAnchor {
+        case .none: L("page.scrollView.anchorState.none")
+        case .window: L("page.scrollView.anchorState.window")
+        case .top: L("page.scrollView.anchorState.top")
+        case .bottom: L("page.scrollView.anchorState.bottom")
+        case .row(let id): "\(L("page.scrollView.anchorState.row")) \(id)"
+        }
+    }
+
+    private func insertRowsAbove() {
+        guard let index = anchorRows.firstIndex(of: Self.anchoredRow) else { return }
+        let inserted = (0..<5).map { nextInsertedRow + $0 }
+        nextInsertedRow += 5
+        anchorRows.insert(contentsOf: inserted, at: max(0, index - 3))
+    }
+
+    private func removeRowsAbove() {
+        guard let index = anchorRows.firstIndex(of: Self.anchoredRow), index > 0 else { return }
+        anchorRows.removeSubrange(max(0, index - 5)..<index)
+    }
+
+    private func resetAnchorRows() {
+        anchorRows = Array(1...40)
+        nextInsertedRow = 100
     }
 
     /// A long enough body of text to overflow the demo viewports.
