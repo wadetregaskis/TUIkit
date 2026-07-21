@@ -85,6 +85,15 @@ final class StackWindowState {
         /// to the viewport top instead of leaving it where it sits.
         var designatedAnchorKey: String?
 
+        /// The screen line the designated row is held on — its distance below
+        /// the viewport top, adopted when the designation changes and held
+        /// thereafter. Used by the paths that place rows at ABSOLUTE content y
+        /// (uniform arithmetic, exact walk), where holding a row means moving
+        /// the offset under it; see `StackDesignatedAnchor.swift`. The anchored
+        /// walk holds its row through ``anchorOffsetWithin`` instead, being
+        /// anchor-relative by construction.
+        var anchorHeldScreenLine = 0
+
         /// The absolute offset the anchor was last derived against. Scroll
         /// input arrives as a new absolute offset; the DIFFERENCE is walked
         /// in row space (one line up looks at one row, §3), so estimates
@@ -196,9 +205,15 @@ extension _VStackCore {
         let count = children.count
         let totalHeight = count * pitch - spacing
 
-        let (window, resolvedSeek) = resolvingUniformSeek(
+        let (seeked, resolvedSeek) = resolvingUniformSeek(
             in: window, children: children, state: state,
             pitch: pitch, extent: extent, totalHeight: totalHeight)
+        // A designated row overrides the offset: the position follows the ROW.
+        // Exact here — a uniform row's absolute y is arithmetic.
+        let (window, resolvedAnchor) = holdingDesignatedRow(
+            in: seeked, children: children, state: state,
+            rowY: { $0 * pitch }, rowHeight: extent,
+            totalHeight: totalHeight, context: context)
 
         let candidates = candidateOrdinals(
             children: children, window: window, pitch: pitch, state: state, context: context)
@@ -276,8 +291,11 @@ extension _VStackCore {
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
         }
         state.rowOrdinalMemo = memo
-        if let resolvedSeek {
-            window.reply?.seekResolvedOffset = resolvedSeek
+        // The anchor correction wins over the seek: when both happen on one
+        // frame the seek chose a row and the designation then held it, so the
+        // corrected offset is the one actually rendered.
+        if let resolved = resolvedAnchor ?? resolvedSeek {
+            window.reply?.seekResolvedOffset = resolved
         }
         return result
     }

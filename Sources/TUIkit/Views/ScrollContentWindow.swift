@@ -28,6 +28,14 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// the stack emitting the classic full-height buffer.
     var reply: ScrollContentReply?
 
+    /// One line of headroom per edge when the "N more above/below" indicators
+    /// can replace the viewport's first/last line — the same reservation
+    /// ``ScrollToRequest/topInset`` makes for seeks, carried on the window
+    /// because a DESIGNATED anchor reveals rows with no request to stamp.
+    /// Without it, designating an off-screen row lands it exactly under an
+    /// indicator, where it is invisible however correctly it was placed.
+    var edgeInset = 0
+
     /// A pending programmatic scroll (``ScrollViewProxy/scrollTo(_:anchor:)``).
     /// The stack that locates the key renders AT the request's resolved
     /// offset — so the very frame that carries the request shows the target

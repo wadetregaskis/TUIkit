@@ -287,11 +287,17 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler: ScrollViewHandler, wantsScrollbar: Bool, context: RenderContext
     ) -> ScrollToRequest? {
         guard !context.isMeasuring, var seek = handler.pendingScrollTo else { return nil }
-        if showsIndicators, !wantsScrollbar {
-            seek.topInset = 1
-            seek.bottomInset = 1
-        }
+        seek.topInset = edgeInset(wantsScrollbar: wantsScrollbar)
+        seek.bottomInset = seek.topInset
         return seek
+    }
+
+    /// One line per edge when the "N more" indicators are what occupies the
+    /// viewport's first and last line. Shared by the seek path and the
+    /// designated-anchor reveal so a row cannot be placed under an indicator
+    /// by one and not the other.
+    private func edgeInset(wantsScrollbar: Bool) -> Int {
+        showsIndicators && !wantsScrollbar ? 1 : 0
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -349,7 +355,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            seek: pendingSeek, context: context)
+            seek: pendingSeek, edgeInset: edgeInset(wantsScrollbar: wantsScrollbar),
+            context: context)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
@@ -670,7 +677,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// height.
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
-        verticalScrollOffset: Int, seek: ScrollToRequest? = nil, context: RenderContext
+        verticalScrollOffset: Int, seek: ScrollToRequest? = nil, edgeInset: Int = 0,
+        context: RenderContext
     ) -> (
         buffer: FrameBuffer,
         slice: (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
@@ -700,7 +708,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             measureContext.environment.scrollContentWindow = ScrollContentWindow(
                 offset: verticalScrollOffset, viewportHeight: viewportHeight,
                 contentIdentity: measureContext.identity, reply: contentReply,
-                seek: seek)
+                edgeInset: edgeInset, seek: seek)
         }
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height

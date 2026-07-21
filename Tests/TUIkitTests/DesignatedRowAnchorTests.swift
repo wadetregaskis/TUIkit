@@ -8,6 +8,13 @@
 //  Before this was wired, `.row` merely switched row-holding ON and the row it
 //  held was whatever sat at the top of the viewport, not the designated one.
 //
+//  Harness note: these render a REAL `ScrollView`, and read the row's line out
+//  of the visible output rather than slicing a full-height buffer by hand. That
+//  is load-bearing — holding a row means the effective scroll offset MOVES, so
+//  a harness that slices at the offset it passed in cannot see the feature work
+//  (it reads the pre-correction window and finds blanks). The ScrollView slices
+//  at the offset it actually adopted, which is the thing under test.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -20,117 +27,219 @@ import Testing
 @Suite("Designated row anchor")
 struct DesignatedRowAnchorTests {
 
-    private static let viewport = 10
+    private static let viewport = 8
 
-    /// Renders the windowed stack with a designated anchor row, and reports the
-    /// visible slice so a row's SCREEN LINE can be compared across edits.
+    /// One rendered frame of a scrollable list, returned as the VISIBLE lines.
+    ///
+    /// `uniform` picks the render path under test: equal-height rows take the
+    /// arithmetic seek path, variable heights take the anchored walk (over the
+    /// 256-row threshold) or the exact walk (under it).
     private func renderFrame(
-        items: [Int], anchored: Int?, tuiContext: TUIContext, offset: Int
+        items: [Int], anchored: Int?, uniform: Bool,
+        tuiContext: TUIContext, focusManager: FocusManager
     ) -> [String] {
-        let view = LazyVStack(alignment: .leading, spacing: 0) {
-            // Variable heights: the anchor machinery lives on the anchored
-            // (non-uniform) path — uniform rows take the arithmetic path,
-            // which has no anchor at all.
-            ForEach(items, id: \.self) { i in
-                Text("row \(i)").frame(height: i % 3 + 1)
+        let list = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(items, id: \.self) { i in
+                    Text("row \(i)").frame(height: uniform ? 1 : i % 3 + 1)
+                }
             }
         }
+        .frame(height: Self.viewport)
+
         var environment = EnvironmentValues()
+        environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
-        environment.scrollContentWindow = ScrollContentWindow(
-            offset: offset, viewportHeight: Self.viewport)
         if let anchored {
             environment.anchorPosition = .constant(.row(AnyHashable(anchored)))
         }
         let context = RenderContext(
-            availableWidth: 30, availableHeight: 8000,
+            availableWidth: 30, availableHeight: Self.viewport,
             environment: environment, tuiContext: tuiContext)
 
         tuiContext.preferences.beginRenderPass()
         tuiContext.stateStorage.beginRenderPass()
         tuiContext.renderCache.beginRenderPass()
-        let buffer = renderToBuffer(view, context: context)
+        focusManager.beginRenderPass()
+        let buffer = renderToBuffer(list, context: context)
+        focusManager.endRenderPass()
         tuiContext.stateStorage.endRenderPass()
         tuiContext.renderCache.removeInactive()
-
-        let lines = buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
-        guard lines.count >= offset + Self.viewport else { return [] }
-        return Array(lines[offset..<(offset + Self.viewport)])
+        return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
     }
 
-    /// The screen line the designated row occupies within the visible slice.
+    /// The screen line the designated row occupies in the visible output.
     private func screenLine(of row: Int, in slice: [String]) -> Int? {
-        slice.firstIndex(of: "row \(row)")
+        slice.firstIndex { $0.contains("row \(row)") && !$0.contains("row \(row)0") }
     }
 
-    @Test("An inserted block above the anchored row leaves it on the same screen line")
-    func insertAboveKeepsScreenLine() {
-        let tuiContext = TUIContext()
-        var items = Array(0..<400)
-        let anchored = 300
+    /// Renders until the view has settled, then reports the anchored row's line.
+    /// Returns `nil` when the row never came into view (a test precondition).
+    private func settle(
+        items: [Int], anchored: Int?, uniform: Bool,
+        tuiContext: TUIContext, focusManager: FocusManager
+    ) -> (line: Int, lines: [String])? {
+        var lines: [String] = []
+        for _ in 0..<4 {
+            lines = renderFrame(
+                items: items, anchored: anchored, uniform: uniform,
+                tuiContext: tuiContext, focusManager: focusManager)
+        }
+        guard let anchored, let line = screenLine(of: anchored, in: lines) else { return nil }
+        return (line, lines)
+    }
 
-        // Settle the anchor mid-list.
-        _ = renderFrame(items: items, anchored: anchored, tuiContext: tuiContext, offset: 0)
-        _ = renderFrame(items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
-        let before = renderFrame(
-            items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
-        guard let lineBefore = screenLine(of: anchored, in: before) else {
-            Issue.record("anchored row not visible to begin with: \(before)")
+    // MARK: - The requirement, on every render path
+
+    /// The core of the owner's spec: "when a row is anchored it stays in the
+    /// same spot on the screen … if other rows are added or deleted around it,
+    /// the scroll position actually adjusts as necessary".
+    private func expectHoldsScreenLine(
+        uniform: Bool, count: Int, anchored: Int,
+        edit: (inout [Int]) -> Void, comment: Comment
+    ) {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var items = Array(0..<count)
+
+        guard
+            let (lineBefore, before) = settle(
+                items: items, anchored: anchored, uniform: uniform,
+                tuiContext: tuiContext, focusManager: focusManager)
+        else {
+            Issue.record("\(comment): anchored row never came into view")
             return
         }
 
-        // Insert 25 rows ABOVE it. Its ordinal shifts by 25; its screen line
-        // must not move.
-        items.insert(contentsOf: (1_000..<1_025), at: 10)
+        edit(&items)
         let after = renderFrame(
-            items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
+            items: items, anchored: anchored, uniform: uniform,
+            tuiContext: tuiContext, focusManager: focusManager)
         #expect(
             screenLine(of: anchored, in: after) == lineBefore,
-            "row \(anchored) moved: was line \(lineBefore), slice now \(after)")
+            """
+            \(comment): row \(anchored) moved — was line \(lineBefore).
+            before: \(before)
+            after:  \(after)
+            """)
     }
 
-    @Test("Deleting rows above the anchored row also leaves it on the same screen line")
-    func deleteAboveKeepsScreenLine() {
-        let tuiContext = TUIContext()
-        var items = Array(0..<400)
-        let anchored = 300
-
-        _ = renderFrame(items: items, anchored: anchored, tuiContext: tuiContext, offset: 0)
-        _ = renderFrame(items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
-        let before = renderFrame(
-            items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
-        guard let lineBefore = screenLine(of: anchored, in: before) else {
-            Issue.record("anchored row not visible to begin with: \(before)")
-            return
-        }
-
-        // Remove 20 rows ABOVE it — the scroll position must come up to
-        // compensate.
-        items.removeSubrange(10..<30)
-        let after = renderFrame(
-            items: items, anchored: anchored, tuiContext: tuiContext, offset: 595)
-        #expect(
-            screenLine(of: anchored, in: after) == lineBefore,
-            "row \(anchored) moved: was line \(lineBefore), slice now \(after)")
+    @Test("Uniform rows: an insert above the anchored row leaves it on its line")
+    func uniformInsertAbove() {
+        expectHoldsScreenLine(
+            uniform: true, count: 60, anchored: 30,
+            edit: { $0.insert(contentsOf: 1_000..<1_025, at: 5) },
+            comment: "uniform arithmetic path")
     }
 
-    /// The contrast that shows the designation is doing the work: with NO
-    /// designated row the default is Window, which holds the POSITION — so the
-    /// same edit moves that row instead.
+    @Test("Uniform rows: a delete above the anchored row leaves it on its line")
+    func uniformDeleteAbove() {
+        expectHoldsScreenLine(
+            uniform: true, count: 60, anchored: 30,
+            edit: { $0.removeSubrange(5..<15) },
+            comment: "uniform arithmetic path")
+    }
+
+    @Test("Small variable-height list: the exact walk holds the row too")
+    func exactWalkHoldsRow() {
+        expectHoldsScreenLine(
+            uniform: false, count: 60, anchored: 30,
+            edit: { $0.insert(contentsOf: 1_000..<1_010, at: 5) },
+            comment: "exact full-walk path")
+    }
+
+    @Test("Large variable-height list: the anchored walk holds the row")
+    func anchoredWalkHoldsRow() {
+        expectHoldsScreenLine(
+            uniform: false, count: 400, anchored: 300,
+            edit: { $0.insert(contentsOf: 1_000..<1_025, at: 10) },
+            comment: "anchored walk path")
+    }
+
+    @Test("Deleting rows above the anchored row also holds it (anchored walk)")
+    func anchoredWalkHoldsOnDelete() {
+        expectHoldsScreenLine(
+            uniform: false, count: 400, anchored: 300,
+            edit: { $0.removeSubrange(10..<30) },
+            comment: "anchored walk path")
+    }
+
+    // MARK: - The contrast: no designation means no holding
+
+    /// Shows the designation is doing the work: with none, the default is
+    /// Window, which holds the POSITION — so the same edit moves the row.
     @Test("Without a designation the same insert DOES move the row (Window default)")
     func withoutDesignationTheRowMoves() {
         let tuiContext = TUIContext()
+        let focusManager = FocusManager()
         var items = Array(0..<400)
 
-        _ = renderFrame(items: items, anchored: nil, tuiContext: tuiContext, offset: 0)
-        _ = renderFrame(items: items, anchored: nil, tuiContext: tuiContext, offset: 595)
-        let before = renderFrame(items: items, anchored: nil, tuiContext: tuiContext, offset: 595)
+        // Drive to where row 300 is visible via a designation, then drop it:
+        // the comparison needs the row on screen to begin with.
+        _ = settle(
+            items: items, anchored: 300, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
+        let before = renderFrame(
+            items: items, anchored: nil, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
         let lineBefore = screenLine(of: 300, in: before)
 
-        items.insert(contentsOf: (1_000..<1_025), at: 10)
-        let after = renderFrame(items: items, anchored: nil, tuiContext: tuiContext, offset: 595)
+        items.insert(contentsOf: 1_000..<1_025, at: 10)
+        let after = renderFrame(
+            items: items, anchored: nil, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
         #expect(
             screenLine(of: 300, in: after) != lineBefore,
             "Window holds the position, so the row shifts: \(before) → \(after)")
+    }
+
+    // MARK: - Adoption
+
+    /// Designating a row that is already visible must NOT jerk the viewport:
+    /// the row stays where it sits. This matters most for the §1.2 shadow
+    /// switch, which designates the SELECTED row — an adoption that slammed it
+    /// to the viewport top would make every first arrow-key press jump.
+    @Test("Designating an already-visible row does not move it")
+    func adoptionHoldsAVisibleRow() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let items = Array(0..<60)
+
+        // No designation yet: the view sits at the top, so rows 0… are visible.
+        let before = renderFrame(
+            items: items, anchored: nil, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        guard let lineBefore = screenLine(of: 3, in: before) else {
+            Issue.record("row 3 should be visible at the top: \(before)")
+            return
+        }
+
+        // Now designate row 3 — it must stay exactly where it was.
+        let after = renderFrame(
+            items: items, anchored: 3, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            screenLine(of: 3, in: after) == lineBefore,
+            "adoption moved a visible row: \(before) → \(after)")
+    }
+
+    /// The complement: designating an OFF-screen row has to bring it into view
+    /// — there is no sensible "hold" for a line that isn't on screen, and the
+    /// alternative (holding an out-of-range line) forces a blank viewport.
+    @Test("Designating an off-screen row brings it into view")
+    func adoptionRevealsAnOffscreenRow() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let items = Array(0..<60)
+
+        let before = renderFrame(
+            items: items, anchored: nil, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        #expect(screenLine(of: 40, in: before) == nil, "row 40 starts off screen")
+
+        let after = renderFrame(
+            items: items, anchored: 40, uniform: true,
+            tuiContext: tuiContext, focusManager: focusManager)
+        #expect(screenLine(of: 40, in: after) != nil, "designating revealed it: \(after)")
     }
 }

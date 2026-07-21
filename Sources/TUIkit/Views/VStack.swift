@@ -500,6 +500,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
+        // A designated anchor row overrides the offset so it keeps its screen
+        // line as rows come and go around it. Exact here: the slots carry
+        // every row's true y and height.
+        holdDesignatedRow(slots: slots, window: &window, context: context)
+
         // The offset can be STALE beyond the walked content — the data
         // shrank this frame, and the ScrollView clamps only after this
         // render returns. An unclamped window then intersects no slot and
