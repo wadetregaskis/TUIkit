@@ -5,7 +5,27 @@
 //  License: MIT
 
 import Foundation
+import Observation
 import TUIkit
+
+/// An observable model, demonstrated with `@Bindable` on the page below.
+@Observable private final class DemoSettings {
+    var name = "Ada"
+    var subscribed = false
+}
+
+/// A self-contained counter with its own `@State`. When the page re-keys it with
+/// `.id(_:)`, it gets a fresh identity and its count resets to zero.
+private struct CounterView: View {
+    @State private var count = 0
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Button("\(L("page.state.idCount")): \(count)") { count += 1 }
+            Text(L("page.state.idHint")).dim()
+        }
+    }
+}
 
 /// State-persistence demo page.
 ///
@@ -19,6 +39,11 @@ struct StatePersistencePage: View {
     @AppStorage("state.launchTaps") private var launchTaps: Int = 0
     @AppStorage("state.remembered") private var remembered: Bool = false
     @AppStorage("state.note") private var note: String = ""
+
+    /// An @Observable model, projected with @Bindable below.
+    @State private var settings = DemoSettings()
+    /// Bumping this re-keys the CounterView via `.id`, resetting its @State.
+    @State private var resetToken = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -48,6 +73,31 @@ struct StatePersistencePage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
                     TextField(L("page.state.notePlaceholder"), text: $note)
                         .frame(width: 32)
+                }
+            }
+
+            DemoSection(L("page.state.bindableSection")) {
+                // Derive Bindings into the @Observable model we already own.
+                let bindable = Bindable(settings)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.state.bindableDescription"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    TextField(L("page.state.bindableName"), text: bindable.name)
+                        .frame(width: 24)
+                    Toggle(L("page.state.bindableSubscribed"), isOn: bindable.subscribed)
+                    ValueDisplayRow(
+                        L("page.state.bindableLive"),
+                        "\(settings.name) · \(settings.subscribed ? "on" : "off")")
+                }
+            }
+
+            DemoSection(L("page.state.idSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.state.idDescription"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // Re-keying by resetToken restarts CounterView's @State.
+                    CounterView().id(resetToken)
+                    Button(L("page.state.idReset")) { resetToken += 1 }
                 }
             }
 

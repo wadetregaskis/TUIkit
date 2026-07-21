@@ -32,6 +32,18 @@ extension ExampleStrings {
             "page.list.searchableExplain": "A .searchable field filters the list (filtering is app-driven); EditButton toggles \\.editMode.",
             "page.list.searchableEmpty": "No matches",
             "page.list.editModeLabel": "Edit mode",
+
+            // @Bindable + .id (State Persistence page)
+            "page.state.bindableSection": "@Bindable · bindings into an @Observable",
+            "page.state.bindableDescription": "@Bindable derives a Binding into a mutable property of an @Observable object you already own.",
+            "page.state.bindableName": "Name",
+            "page.state.bindableSubscribed": "Subscribed",
+            "page.state.bindableLive": "Live model",
+            "page.state.idSection": ".id() · identity reset",
+            "page.state.idDescription": "Changing a view's .id() gives it a fresh identity, so its own @State resets. Increment the counter, then press Reset.",
+            "page.state.idCount": "Count",
+            "page.state.idHint": "← its own @State",
+            "page.state.idReset": "Reset (bump .id)",
         ]
     ]
 }
