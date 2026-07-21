@@ -190,6 +190,34 @@ cleaner "deliberate push" signal than inferring it from a clamped offset.
 
 ---
 
+## 3.4 KNOWN LIMITATION — anchoring is inert on ordinary-sized lists
+
+**Measured 2026-07-21.** `.anchorPosition(.row(id))` holds a row's screen
+position **only when the scrollable is on the *anchored* render path**, which
+requires BOTH:
+
+- **more than 256 rows** — at ≤256 the lazy-stack measure ladder uses the exact
+  full walk, and
+- **variable row heights** — uniform rows take the O(1) arithmetic path.
+
+Neither path carries an anchor, so on anything else the designation is
+*silently inert*: the view behaves as Window (holds the position, the row
+moves). Verified by re-running `DesignatedRowAnchorTests` against a 60-row
+fixture — both hold-the-row tests fail exactly as the no-designation contrast
+case does.
+
+This is a **spec violation**, not a documented trade-off: §1.1 scopes the modes
+by *policy*, never by list size or row uniformity, and most real lists are well
+under 256 rows. The user-visible symptom is the worst kind — the API accepts
+the designation, reports it back through the binding, and does nothing.
+
+**Fix before building on this:** teach the exact-walk and uniform paths to
+honour a designated anchor (they need only the key → ordinal lookup plus the
+offset compensation; they have no ladder to reuse but also no estimate error to
+fight). Until then, treat the feature as large-variable-list-only.
+
+---
+
 ## 4. Interim guardrails (in force now)
 
 While the feature is pending, work on the branch observes:
