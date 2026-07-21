@@ -59,16 +59,15 @@ struct FocusPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.focus.focusableExplain"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    // A plain Text — not a control — made a Tab stop with .focusable(),
-                    // then bound to @FocusState via .focused().
-                    Text(L("page.focus.focusableLabel"))
-                        .focusable()
-                        .focused($labelFocused)
-                    ValueDisplayRow(
-                        L("page.focus.focusableLabel"),
+                    // A single plain Text — not a control — made a Tab stop with
+                    // .focusable() and bound to @FocusState via .focused(). It
+                    // gains a "(focused)" suffix while it holds focus.
+                    Text(
                         labelFocused
                             ? L("page.focus.focusableFocused")
-                            : L("page.focus.focusableNotFocused"))
+                            : L("page.focus.focusableUnfocused"))
+                        .focusable()
+                        .focused($labelFocused)
                 }
             }
 

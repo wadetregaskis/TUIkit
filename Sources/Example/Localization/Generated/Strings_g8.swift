@@ -22,10 +22,9 @@ extension ExampleStrings {
 
             // .focusable (Focus & Input page)
             "page.focus.focusableSection": "Focusable views · .focusable()",
-            "page.focus.focusableExplain": "Any view becomes a Tab stop with .focusable(); @FocusState then binds to it via .focused(). Tab to the label below.",
-            "page.focus.focusableLabel": "Plain text — made focusable",
-            "page.focus.focusableFocused": "focused",
-            "page.focus.focusableNotFocused": "not focused",
+            "page.focus.focusableExplain": "Any view becomes a Tab stop with .focusable(); @FocusState then binds to it via .focused(). Tab to the item below — it shows (focused) while it holds focus.",
+            "page.focus.focusableUnfocused": "Focusable",
+            "page.focus.focusableFocused": "Focusable (focused)",
 
             // .searchable + EditButton (Lists page)
             "page.list.searchableSection": "Searchable + Edit Mode",
