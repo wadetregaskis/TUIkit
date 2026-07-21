@@ -30,6 +30,23 @@ private struct FileItem: Identifiable {
         Self(id: "11", name: "Makefile", size: "0.8 KB", icon: "📄"),
         Self(id: "12", name: ".claude", size: "16 KB", icon: "📁"),
     ]
+
+    /// A longer list for the multi-line follow-margin demo — enough rows that the
+    /// viewport overflows substantially, so the difference between the edge,
+    /// "2 lines early", and centred follow margins is clearly visible while
+    /// paging the selection down through the list.
+    static let manyFiles: [Self] = {
+        let icons = ["📄", "📦", "📁", "⚙️", "🖼️", "🎬", "🎵", "🗜️"]
+        let stems = ["report", "config", "assets", "module", "notes", "draft", "archive", "backup", "index", "manifest"]
+        let exts = ["md", "swift", "txt", "json", "png"]
+        return (1...40).map { i in
+            Self(
+                id: "m\(i)",
+                name: "\(stems[i % stems.count])-\(i).\(exts[i % exts.count])",
+                size: "\((i * 37) % 900 + 1).\(i % 10) KB",
+                icon: icons[i % icons.count])
+        }
+    }()
 }
 
 // MARK: - List Page
@@ -296,7 +313,7 @@ struct ListPage: View {
     /// re-apply `.scrollGranularity` to it without deepening the section body.
     @ViewBuilder private var multiLineList: some View {
         List(selection: $multiLineSelection) {
-            ForEach(FileItem.sampleFiles) { file in
+            ForEach(FileItem.manyFiles) { file in
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 1) {
                         Text("\(file.icon) \(file.name)").bold()
