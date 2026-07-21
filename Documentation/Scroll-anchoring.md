@@ -63,10 +63,10 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 | Bottom mode | **Shipped** as `defaultScrollAnchor(.bottom)`: starts at the tail, follows appends; user scrolling up releases (a shadow-switch to Window, in the spec's terms); **End re-engages**. The code-set mode (the environment value) is inherently preserved — an accidental match with the shadow-settings model. |
 | Top mode | Not distinct yet. Today's top-ish behaviour is the *absence* of the bottom anchor, which is really… |
 | Window mode (default) | **Resolved (slice 1).** Was divergent: the uniform-extent path behaved as Window, but the anchored (variable-height) path re-bound its anchor to the row's identity every frame (§5f ladder), so an insert-above *held the row* — Row semantics, silently, as the default. Policy is now explicit: `ScrollAnchorMode` (Top/Bottom/Row/Window) is resolved from the environment and passed to `rebindAnchor(mode:)`, which **skips the key re-bind in Window mode**, keeping the ordinal and therefore the position in line coordinates. The ladder machinery is untouched — it now runs only for the row-holding modes, exactly the one branch this row predicted. `AnchorLadderTests` asserts the new default (prepending shifts the view); the test that asserted the placeholder row-holding default was retargeted, not deleted. Note the trade-off the original entry recorded: identity-binding also stabilised against extent-estimate error, so Window leans harder on the estimate — watch for drift on very large variable-height data. |
-| Row mode | The machinery exists internally (the §5f key-bound anchor + ladder *is* Row mode, applied to the implicit top-visible row) but there is no API to designate a row, and it only operates on the anchored path. |
+| Row mode | **Shipped.** `.anchorPosition(_:)` designates a row, and all three render paths hold it — see §3.4 for how each does it, and for the two remaining restrictions (the stack must be lazy; the anchored walk still adopts by jumping the row to the top). |
 | Gap avoidance | Partially: clamping (`maxOffset`) prevents scrolling past the end and content shrinkage pulls the view up — but with no over/underscroll allowance to observe. |
 | User adjustability toggle | Not implemented. (`ScrollView.disabled` suppresses keyboard focus but the wheel still scrolls, and chrome doesn't grey out — not the spec's shape.) |
-| Selection → Row shadow-switch | Not implemented (needs the selection↔anchor wiring). |
+| Selection → Row shadow-switch | **Shipped** (`04b3034c`). Selecting a row — by key or click — turns a declared Top/Bottom anchor into Row on that row, via `ItemListHandler.anchorOnSelection(at:)`. Scoped by two negatives it also tests: a view already released to `.window` is being browsed and is left alone, and Window declares no edge policy to depart from. |
 | Sticky edges | Not implemented. End/Home exist as jumps; the *push-past* detection (deliberate vs grazing) lives naturally in `ScrollViewHandler`'s event paths, which see each wheel tick / keypress and can distinguish "clamped this event" from "landed exactly". Additive; no conflict. |
 | Code-side restore | The **vehicle shipped**: `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` (SwiftUI parity, all three seek paths, same-frame). The TUI restore extensions themselves (`restoreDefaultAnchor()` etc., §3.2) await this feature. |
 | Over/underscroll | Not implemented. Clamping is centralised (`clampScrollOffset` / `maxOffset`), so the allowance is an additive parameter, not a rework. Note the negative-size crash class: over/underscroll maths must clamp at source and sink like all chrome subtraction. |
@@ -190,31 +190,55 @@ cleaner "deliberate push" signal than inferring it from a clamped offset.
 
 ---
 
-## 3.4 KNOWN LIMITATION — anchoring is inert on ordinary-sized lists
+## 3.4 Which scrollables honour a designated row
 
-**Measured 2026-07-21.** `.anchorPosition(.row(id))` holds a row's screen
-position **only when the scrollable is on the *anchored* render path**, which
-requires BOTH:
+**Measured 2026-07-21; the size/uniformity restriction below was fixed the same
+day (`f1ce2ed6`).**
 
-- **more than 256 rows** — at ≤256 the lazy-stack measure ladder uses the exact
-  full walk, and
-- **variable row heights** — uniform rows take the O(1) arithmetic path.
+`.anchorPosition(.row(id))` originally held a row's screen position **only on
+the *anchored* render path** — which needs both >256 rows AND variable row
+heights. On everything else (so: most real lists) the designation was *silently
+inert*: the API accepted it, reported it back through the binding, and did
+nothing. That was a spec violation, since §1.1 scopes the modes by *policy*,
+never by list size or row uniformity.
 
-Neither path carries an anchor, so on anything else the designation is
-*silently inert*: the view behaves as Window (holds the position, the row
-moves). Verified by re-running `DesignatedRowAnchorTests` against a 60-row
-fixture — both hold-the-row tests fail exactly as the no-designation contrast
-case does.
+All three render paths now honour a designation:
 
-This is a **spec violation**, not a documented trade-off: §1.1 scopes the modes
-by *policy*, never by list size or row uniformity, and most real lists are well
-under 256 rows. The user-visible symptom is the worst kind — the API accepts
-the designation, reports it back through the binding, and does nothing.
+| Path | Rows | How it holds the row |
+|------|------|----------------------|
+| Anchored walk | >256, variable heights | Structural — rows are laid out RELATIVE to the anchor |
+| Uniform arithmetic | any count, equal heights | Corrects the offset; row y is `ordinal * pitch` |
+| Exact full walk | ≤256, variable heights | Corrects the offset; row y comes from the walked slot |
 
-**Fix before building on this:** teach the exact-walk and uniform paths to
-honour a designated anchor (they need only the key → ordinal lookup plus the
-offset compensation; they have no ladder to reuse but also no estimate error to
-fight). Until then, treat the feature as large-variable-list-only.
+The two offset-correcting paths share one adoption rule
+(`StackDesignatedAnchor.swift`) and report the corrected offset up the Stage-6
+reply channel as `seekResolvedOffset` — a designation is, in effect, a seek
+re-issued every frame.
+
+### Still restricted: the stack must be LAZY
+
+Anchoring is a property of the **windowed** render paths. A plain `VStack`
+inside a `ScrollView` draws its whole canvas and lets the ScrollView clip it —
+there is no window, so there is no anchor to hold, and `.anchorPosition` is
+silently inert exactly as it used to be everywhere else. Use `LazyVStack`
+(or `List`/`Table`).
+
+This was found by running the Example, not by the tests: every unit test used
+`LazyVStack`, so the whole suite passed while the demo did nothing.
+
+### Still inconsistent: adoption on the anchored walk
+
+The two offset-correcting paths adopt by **holding the row where it already
+sits** (and revealing it by minimal movement if off-screen). The anchored walk
+still adopts by slamming the row to the viewport **top** (`anchorOffsetWithin =
+0`). Identical app code therefore jumps or doesn't depending purely on how many
+rows there happen to be — and the §1.2 selection shadow-switch, which
+designates the *selected* row, inherits that jump.
+
+Aligning it means expressing "the anchor sits BELOW the viewport top", which
+the walk's `anchorY = offset - anchorOffsetWithin` invariant cannot currently
+represent (it would need a negative `anchorOffsetWithin`, and `fill(window:)`
+is not written for that). Left for its own change rather than bolted on.
 
 ---
 
@@ -222,12 +246,15 @@ fight). Until then, treat the feature as large-variable-list-only.
 
 While the feature is pending, work on the branch observes:
 
-1. No API is added that hard-codes a two-mode (top/bottom) worldview; the
+1. ~~No API is added that hard-codes a two-mode (top/bottom) worldview; the
    `UnitPoint`-based `defaultScrollAnchor` is forward-compatible (Row mode
-   will arrive via a separate designator, as in SwiftUI).
-2. The anchored path's row-holding default is understood to be a
-   *placeholder policy*, not the final default; anything new that depends
-   on hold-the-row semantics must go through `rebindAnchor` so the policy
-   switch stays one branch.
+   will arrive via a separate designator, as in SwiftUI).~~ **Discharged:**
+   the designator shipped as `.anchorPosition(_:)`, taking a
+   `Binding<ScrollAnchor<ID>?>` rather than a `UnitPoint`.
+2. ~~The anchored path's row-holding default is understood to be a
+   *placeholder policy*, not the final default.~~ **Discharged (slice 1):**
+   the default is now explicitly Window. The surviving half of the rule
+   still holds — anything depending on hold-the-row semantics goes through
+   `rebindAnchor`/`ScrollAnchorMode` so the policy switch stays one branch.
 3. Scroll-clamping changes keep the allowance parameter in mind (no new
    call sites that assume `[0, maxOffset]` is closed forever).
