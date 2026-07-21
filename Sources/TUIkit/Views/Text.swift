@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 /// A view that displays text in the terminal.
 ///
 /// `Text` is one of the most fundamental views in TUIkit. It displays
@@ -41,6 +43,28 @@ public struct Text: View, Equatable {
     public init(verbatim: String) {
         self.content = verbatim
         self.style = TextStyle()
+    }
+
+    /// Creates a text view that displays a value formatted with the given
+    /// format style.
+    ///
+    /// ```swift
+    /// Text(0.5, format: .percent)     // "50%"
+    /// Text(1234, format: .number)     // "1,234"
+    /// Text(price, format: .currency(code: "USD"))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - input: The underlying value to format.
+    ///   - format: A format style that converts `input` into a `String`.
+    ///
+    /// - Note: SwiftUI re-resolves the format against the environment's
+    ///   `\.locale` when the view renders. TUIkit formats eagerly here using the
+    ///   format style's own locale (`.current` unless the style pins one), so
+    ///   pin a locale on the style if you need deterministic output.
+    public init<F: FormatStyle>(_ input: F.FormatInput, format: F)
+    where F.FormatInput: Equatable, F.FormatOutput == String {
+        self.init(format.format(input))
     }
 
     public var body: Never {
