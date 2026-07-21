@@ -16,6 +16,10 @@ import TUIkit
 struct FocusPage: View {
     @State private var lastKey: String = "—"
 
+    /// Bound to a plain `Text` made focusable with `.focusable()` — proof that
+    /// `.focused()`/`@FocusState` now work on any view, not just controls.
+    @FocusState private var labelFocused: Bool
+
     // The focus manager publishes the currently focused element's id; reading it
     // in `body` re-evaluates each render, and a focus change requests a re-render,
     // so the readout below tracks the focus live as you Tab around.
@@ -48,6 +52,23 @@ struct FocusPage: View {
                     ValueDisplayRow(
                         L("page.focus.focusedID"),
                         focusManager?.currentFocusedID ?? "—")
+                }
+            }
+
+            DemoSection(L("page.focus.focusableSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.focus.focusableExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // A plain Text — not a control — made a Tab stop with .focusable(),
+                    // then bound to @FocusState via .focused().
+                    Text(L("page.focus.focusableLabel"))
+                        .focusable()
+                        .focused($labelFocused)
+                    ValueDisplayRow(
+                        L("page.focus.focusableLabel"),
+                        labelFocused
+                            ? L("page.focus.focusableFocused")
+                            : L("page.focus.focusableNotFocused"))
                 }
             }
 

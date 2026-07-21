@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Text styles demo page.
@@ -20,6 +21,16 @@ struct TextStylesPage: View {
         }
         .appHeader {
             DemoAppHeader(L("page.textStyles.header"))
+        }
+    }
+
+    /// A left-aligned label followed by a value view (a `Text(_:format:)`).
+    @ViewBuilder private func formatRow<V: View>(
+        _ label: String, @ViewBuilder value: () -> V
+    ) -> some View {
+        HStack(spacing: 2) {
+            Text(label).foregroundStyle(.palette.foregroundSecondary).frame(width: 16)
+            value()
         }
     }
 
@@ -45,6 +56,30 @@ struct TextStylesPage: View {
             DemoSection(L("page.textStyles.section.special")) {
                 Text(L("page.textStyles.blinking")).blink()
                 Text(L("page.textStyles.inverted")).inverted()
+            }
+
+            DemoSection(L("page.textStyles.section.format")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textStyles.formatExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // Each right-hand view IS a Text(value, format:) rendering.
+                    formatRow(".percent") { Text(0.5, format: .percent) }
+                    formatRow(".number") { Text(1_234_567, format: .number) }
+                    formatRow(".currency(USD)") { Text(1299.99, format: .currency(code: "USD")) }
+                }
+            }
+
+            DemoSection(L("page.textStyles.section.locale")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textStyles.localeExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // The same value under three locales (via the format style's own
+                    // locale). The \.locale environment re-locales Table/List number
+                    // chrome the same way.
+                    formatRow("en_US") { Text(1_234_567, format: .number.locale(Locale(identifier: "en_US"))) }
+                    formatRow("de_DE") { Text(1_234_567, format: .number.locale(Locale(identifier: "de_DE"))) }
+                    formatRow("fr_FR") { Text(1_234_567, format: .number.locale(Locale(identifier: "fr_FR"))) }
+                }
             }
 
             DemoSection(L("page.textStyles.section.fontWeight")) {
