@@ -515,4 +515,61 @@ struct PickerMenuHandlerTests {
         handler.onFocusLost()
         #expect(handler.isOpen == false)
     }
+
+    // MARK: - Jump navigation (Home/End/Page/Shift-accelerated) while open
+
+    /// An OPEN drop-down over `count` options with a `viewport`-row window.
+    private func openHandler(count: Int, viewport: Int) -> _PickerMenuHandler {
+        var sel = AnyHashable("v0")
+        let binding = Binding<AnyHashable>(get: { sel }, set: { sel = $0 })
+        let handler = _PickerMenuHandler(
+            focusID: "picker", selection: binding,
+            itemValues: (0..<count).map { AnyHashable("v\($0)") },
+            canBeFocused: true)
+        handler.isOpen = true
+        handler.menuScroll.viewportHeight = viewport
+        return handler
+    }
+
+    @Test("Open: Home/End jump the highlight to the ends")
+    func openHomeEnd() {
+        let handler = openHandler(count: 20, viewport: 5)
+        handler.highlightedIndex = 8
+        #expect(handler.handleKeyEvent(KeyEvent(key: .end)) == true)
+        #expect(handler.highlightedIndex == 19)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home)) == true)
+        #expect(handler.highlightedIndex == 0)
+    }
+
+    @Test("Open: PageDown/PageUp move the highlight by a visible page")
+    func openPageByViewport() {
+        let handler = openHandler(count: 20, viewport: 5)
+        handler.highlightedIndex = 2
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown)) == true)
+        #expect(handler.highlightedIndex == 7, "one 5-row viewport down")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageUp)) == true)
+        #expect(handler.highlightedIndex == 2)
+    }
+
+    @Test("Open: Shift+Down/Up accelerate by the synced multiplier, clamped")
+    func openShiftAccel() {
+        let handler = openHandler(count: 20, viewport: 5)
+        // Non-default multiplier (4) — proves the synced field, not a constant.
+        handler.shiftStepMultiplier = 4
+        handler.highlightedIndex = 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == true)
+        #expect(handler.highlightedIndex == 4)
+        handler.highlightedIndex = 18
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == true)
+        #expect(handler.highlightedIndex == 19, "clamps at the last option")
+    }
+
+    @Test("Closed: jump keys fall through so focus navigation isn't blocked")
+    func closedJumpKeysFallThrough() {
+        let handler = openHandler(count: 10, viewport: 5)
+        handler.isOpen = false
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home)) == false)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown)) == false)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == false)
+    }
 }

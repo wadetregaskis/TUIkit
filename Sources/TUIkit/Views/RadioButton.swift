@@ -286,6 +286,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
         handler.edgeBehavior = context.environment.radioButtonGroupEdgeBehavior
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
 
         FocusRegistration.register(context: context, handler: handler)
         let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
@@ -548,6 +549,13 @@ final class RadioButtonGroupHandler: Focusable {
     /// ``View/radioButtonGroupEdgeBehavior(_:)``.
     var edgeBehavior: RadioButtonGroupEdgeBehavior = .contain
 
+    /// How many options a Shift-accelerated on-axis arrow jumps. Synced from
+    /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
+    /// moves one. See ``View/shiftStepMultiplier(_:)``. (Terminal.app strips
+    /// Shift from Up/Down, so on a *vertical* group the accelerator only fires
+    /// where the terminal keeps it — Home/End/Page always work regardless.)
+    var shiftStepMultiplier: Int = 5
+
     /// The currently focused item index within the group.
     /// Persisted across renders to maintain focus position.
     var focusedIndex: Int = 0
@@ -591,6 +599,24 @@ extension RadioButtonGroupHandler {
 
         // Clamp focusedIndex to valid range in case items changed
         focusedIndex = min(focusedIndex, itemValues.count - 1)
+
+        // Home/End/Page and a Shift-accelerated on-axis arrow jump to a clamped
+        // destination within the group (shared with the other option lists —
+        // Picker, Menu, combo-box). A radio group has no scrolling viewport, so
+        // Page collapses onto Home/End (pageSize == count). The on-axis arrows
+        // follow the group's orientation, so Shift+Left/Right accelerates a
+        // horizontal group and Shift+Up/Down a vertical one — the cross-axis
+        // arrow still relinquishes below.
+        let (onForward, onBackward): (Key, Key) =
+            orientation == .vertical ? (.down, .up) : (.right, .left)
+        if let destination = OptionListNavigation.clampedDestination(
+            for: event, from: focusedIndex, count: itemValues.count,
+            onAxisForward: onForward, onAxisBackward: onBackward,
+            multiplier: shiftStepMultiplier, pageSize: itemValues.count)
+        {
+            focusedIndex = destination
+            return true
+        }
 
         switch event.key {
         // On the group's movement axis, an interior press moves focus within the

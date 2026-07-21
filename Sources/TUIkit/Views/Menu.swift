@@ -521,8 +521,25 @@ private struct _MenuCore: View, Renderable, Layoutable {
     private func registerKeyHandlers(binding: Binding<Int>, context: RenderContext) {
         let menuItems = items
         let selectCallback = onSelect
+        let shiftMultiplier = context.environment.shiftStepMultiplier
 
         context.environment.keyEventDispatcher!.addHandler { event in
+            // Home/End/Page and a Shift-accelerated Up/Down jump to a clamped
+            // destination (shared with the radio group and Picker drop-down),
+            // then snap to the nearest SELECTABLE item so a landing on a divider
+            // still resolves. A menu has no separate scroll cursor, so Page
+            // collapses onto Home/End (pageSize == count).
+            if let destination = OptionListNavigation.clampedDestination(
+                for: event, from: binding.wrappedValue, count: menuItems.count,
+                onAxisForward: .down, onAxisBackward: .up,
+                multiplier: shiftMultiplier, pageSize: menuItems.count)
+            {
+                let direction = destination >= binding.wrappedValue ? 1 : -1
+                binding.wrappedValue = Self.selectableIndex(
+                    nearest: destination, direction: direction, in: menuItems)
+                return true
+            }
+
             switch event.key {
             case .up:
                 // Move selection up, wrapping and skipping dividers
@@ -572,6 +589,30 @@ private struct _MenuCore: View, Renderable, Layoutable {
             index = (index + delta + items.count) % items.count
         } while items[index].isDivider
         return index
+    }
+
+    /// The selectable index nearest `target`, scanning `direction` (+1 / −1)
+    /// first and the other way as a fallback — clamped, never wrapping. Used to
+    /// resolve a jump (Home/End/Page/Shift-accelerated) that may land on a
+    /// divider onto the real item it meant. Returns the clamped `target` when the
+    /// menu has no selectable items.
+    private static func selectableIndex(
+        nearest target: Int, direction: Int, in items: [MenuItem]
+    ) -> Int {
+        let clamped = max(0, min(target, items.count - 1))
+        guard items.contains(where: { !$0.isDivider }) else { return clamped }
+        let step = direction >= 0 ? 1 : -1
+        var index = clamped
+        while index >= 0, index < items.count {
+            if !items[index].isDivider { return index }
+            index += step
+        }
+        index = clamped
+        while index >= 0, index < items.count {
+            if !items[index].isDivider { return index }
+            index -= step
+        }
+        return clamped
     }
 
     /// The maximum width of menu items (for sizing).

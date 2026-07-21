@@ -194,6 +194,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         handler.selection = erasedSelection
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         if isDisabled { handler.isOpen = false }
         return handler
     }
@@ -481,6 +482,11 @@ final class _PickerMenuHandler: Focusable {
     /// The option index highlighted while the drop-down is open.
     var highlightedIndex: Int = 0
 
+    /// How many options a Shift-accelerated Up/Down jumps in the open drop-down.
+    /// Synced from `environment.shiftStepMultiplier` during render (default 5);
+    /// a plain arrow moves one. See ``View/shiftStepMultiplier(_:)``.
+    var shiftStepMultiplier: Int = 5
+
     /// The drop-down's vertical scroll, when the option list is taller than the
     /// menu can show. `extent` = option count, `viewportHeight` = visible rows,
     /// `scrollOffset` = first visible option. Drives the menu's scrollbar (the
@@ -522,6 +528,20 @@ final class _PickerMenuHandler: Focusable {
         highlightedIndex = min(max(0, highlightedIndex), itemValues.count - 1)
 
         if isOpen {
+            // Home/End/Page and Shift-accelerated Up/Down jump to a clamped
+            // destination (shared with the radio group and menus). PageUp/PageDown
+            // move by a visible page of the scrolling drop-down.
+            if let destination = OptionListNavigation.clampedDestination(
+                for: event, from: highlightedIndex, count: itemValues.count,
+                onAxisForward: .down, onAxisBackward: .up,
+                multiplier: shiftStepMultiplier,
+                pageSize: max(1, menuScroll.viewportHeight))
+            {
+                highlightedIndex = destination
+                scrollFollowPending = true
+                return true
+            }
+
             switch event.key {
             case .up:
                 highlightedIndex =
@@ -531,14 +551,6 @@ final class _PickerMenuHandler: Focusable {
             case .down:
                 highlightedIndex =
                     highlightedIndex < itemValues.count - 1 ? highlightedIndex + 1 : 0
-                scrollFollowPending = true
-                return true
-            case .home:
-                highlightedIndex = 0
-                scrollFollowPending = true
-                return true
-            case .end:
-                highlightedIndex = itemValues.count - 1
                 scrollFollowPending = true
                 return true
             case .enter, .space:

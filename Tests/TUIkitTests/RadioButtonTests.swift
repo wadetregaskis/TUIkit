@@ -518,6 +518,84 @@ struct RadioButtonGroupHandlerTests {
 
         #expect(handler.canBeFocused == false)
     }
+
+    // MARK: - Jump navigation (Home/End/Page/Shift-accelerated)
+
+    /// A vertical handler over `count` options, selection & focus on item 0.
+    private func jumpHandler(count: Int) -> RadioButtonGroupHandler {
+        var selection = AnyHashable("opt0")
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        return RadioButtonGroupHandler(
+            focusID: "test", selection: binding,
+            itemValues: (0..<count).map { AnyHashable("opt\($0)") },
+            orientation: .vertical, canBeFocused: true)
+    }
+
+    @Test("Home jumps to the first item, End to the last (consumed, no selection change)")
+    func homeAndEndJump() {
+        let handler = jumpHandler(count: 6)
+        handler.focusedIndex = 3
+        var selection = AnyHashable("opt3")
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        handler.selection = binding
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .end)) == true)
+        #expect(handler.focusedIndex == 5)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home)) == true)
+        #expect(handler.focusedIndex == 0)
+        #expect(selection == AnyHashable("opt3"), "jumps move focus only, never the selection")
+    }
+
+    @Test("PageUp/PageDown jump to the ends (a radio group has no viewport)")
+    func pageIsHomeEnd() {
+        let handler = jumpHandler(count: 8)
+        handler.focusedIndex = 4
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown)) == true)
+        #expect(handler.focusedIndex == 7, "PageDown lands on the last item")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageUp)) == true)
+        #expect(handler.focusedIndex == 0, "PageUp lands on the first item")
+    }
+
+    @Test("Shift+Down/Up accelerate by the synced multiplier, clamped (no wrap)")
+    func shiftAcceleratesByMultiplier() {
+        let handler = jumpHandler(count: 10)
+        // Sync the multiplier to a NON-default value (3, not the default 5) —
+        // proving the handler reads the synced field, not a baked-in constant.
+        handler.shiftStepMultiplier = 3
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == true)
+        #expect(handler.focusedIndex == 3, "Shift+Down moves by the multiplier (3)")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == true)
+        #expect(handler.focusedIndex == 6)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up, shift: true)) == true)
+        #expect(handler.focusedIndex == 3, "Shift+Up moves back by the multiplier")
+
+        // Clamps at the ends rather than wrapping.
+        handler.focusedIndex = 8
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == true)
+        #expect(handler.focusedIndex == 9, "clamps at the last item")
+        handler.focusedIndex = 1
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up, shift: true)) == true)
+        #expect(handler.focusedIndex == 0, "clamps at the first item")
+    }
+
+    @Test("On a horizontal group Shift accelerates Left/Right, not Up/Down")
+    func horizontalShiftAxis() {
+        var selection = AnyHashable("opt0")
+        let binding = Binding(get: { selection }, set: { selection = $0 })
+        let handler = RadioButtonGroupHandler(
+            focusID: "h", selection: binding,
+            itemValues: (0..<10).map { AnyHashable("opt\($0)") },
+            orientation: .horizontal, canBeFocused: true)
+        handler.shiftStepMultiplier = 4
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .right, shift: true)) == true)
+        #expect(handler.focusedIndex == 4, "Shift+Right accelerates on a horizontal group")
+        // Shift+Down is cross-axis here: it relinquishes (false), doesn't accelerate.
+        let before = handler.focusedIndex
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)) == false)
+        #expect(handler.focusedIndex == before, "cross-axis Shift+Down doesn't move within the group")
+    }
 }
 
 // MARK: - Radio Button Orientation Tests
