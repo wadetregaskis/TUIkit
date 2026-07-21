@@ -113,7 +113,7 @@ struct StatePersistencePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.state.title"))
+            DemoAppHeader(L("menu.item.statePersistence"))
         }
     }
 

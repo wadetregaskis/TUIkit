@@ -94,7 +94,7 @@ struct TogglePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.toggle.header"))
+            DemoAppHeader(L("menu.item.toggles"))
         }
     }
 

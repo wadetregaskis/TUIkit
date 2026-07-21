@@ -155,7 +155,7 @@ struct SplitViewPage: View {
             styledSplitView
         }
         .appHeader {
-            DemoAppHeader(L("page.splitView.title"))
+            DemoAppHeader(L("menu.item.splitView"))
         }
     }
 

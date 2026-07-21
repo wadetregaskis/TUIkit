@@ -243,7 +243,7 @@ struct ProgressViewPage: View {
                 isPresented: $editingGradient)
         }
         .appHeader {
-            DemoAppHeader(L("page.progressView.title"))
+            DemoAppHeader(L("menu.item.progress"))
         }
         // Merges with the page's back / scroll items. Cycles only the top
         // "Determinate" section's style; the style catalogues below stay put.

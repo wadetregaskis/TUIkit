@@ -113,7 +113,7 @@ struct EmojiPage: View {
         // content and is greedy in height (it fills the viewport and scrolls
         // itself). Nesting it in a page ScrollView would defeat both.
         .appHeader {
-            DemoAppHeader(L("page.emoji.title"),
+            DemoAppHeader(L("menu.item.emoji"),
                           subtitle: L("page.emoji.subtitle"))
         }
     }

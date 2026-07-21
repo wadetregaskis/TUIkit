@@ -91,7 +91,7 @@ struct StepperPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.stepper.title"))
+            DemoAppHeader(L("menu.item.steppers"))
         }
     }
 }

@@ -197,7 +197,7 @@ struct TextInputPage: View {
         .statusBarItems(cursorStatusBarItems)
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.textInput.title"))
+            DemoAppHeader(L("menu.item.textInput"))
         }
     }
 

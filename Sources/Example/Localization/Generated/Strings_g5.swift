@@ -42,7 +42,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Use [Tab] to move focus between pickers",
             "page.picker.help.openMenu": "Use [Enter], [Space] or [↓] to open a menu picker",
             "page.picker.help.moveChoose": "Use [↑/↓] to move, [Enter] to choose, [Esc] to cancel",
-            "page.picker.title": "Picker Demo",
             // ProgressView
             "page.progressView.determinate": "Determinate",
             "component.trackEditor.fill": "Fill",
@@ -78,7 +77,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "Indeterminate animations",
             "page.progressView.editGradient": "Edit gradient…",
             "page.progressView.gradientTitle": "Gradient",
-            "page.progressView.title": "Progress & Gauges",
             "page.progressView.styleLabel": "style",
             // Mouse
             "page.mouse.tapCounter": "Tap Counter",
@@ -127,7 +125,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ scroll over me ]",
             "page.mouse.ticksLabel": "Ticks:",
             "page.mouse.lastDirectionLabel": "Last direction:",
-            "page.mouse.title": "Mouse Demo",
             "page.mouse.subtitle": "Tap, scroll, drag, and raw events on arbitrary views",
             "page.mouse.phaseIdle": "idle",
             "page.mouse.phaseBegan": "began",
@@ -172,7 +169,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] move focus; [←→] adjust the focused colour channel",
             "page.theme.help.cyclePalette": "[F2] / [F3] cycle palette / appearance from any page",
             "page.theme.help.everyChange": "Every change here re-themes the whole app instantly",
-            "page.theme.title": "Theme Demo",
             "page.theme.edit": "Edit",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "Title only",
@@ -187,7 +183,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "Refresh pressed:",
             "page.contentUnavailable.help.placeholder": "A placeholder for empty states — pair it with `if items.isEmpty`",
             "page.contentUnavailable.help.tabFocuses": "[Tab] focuses the action button, [Enter]/[Space] activates it",
-            "page.contentUnavailable.title": "Empty State Demo",
         ],
         "de": [
             // Picker
@@ -217,7 +212,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Mit [Tab] den Fokus zwischen Auswahlfeldern bewegen",
             "page.picker.help.openMenu": "Mit [Enter], [Leertaste] oder [↓] ein Menü-Auswahlfeld öffnen",
             "page.picker.help.moveChoose": "Mit [↑/↓] bewegen, [Enter] zum Wählen, [Esc] zum Abbrechen",
-            "page.picker.title": "Auswahl-Demo",
             // ProgressView
             "page.progressView.determinate": "Bestimmt",
             "component.trackEditor.fill": "Füllung",
@@ -253,7 +247,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "Unbestimmte Animationen",
             "page.progressView.editGradient": "Verlauf bearbeiten…",
             "page.progressView.gradientTitle": "Verlauf",
-            "page.progressView.title": "Fortschritt & Anzeigen",
             "page.progressView.styleLabel": "Stil",
             // Mouse
             "page.mouse.tapCounter": "Klickzähler",
@@ -302,7 +295,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ über mich scrollen ]",
             "page.mouse.ticksLabel": "Ticks:",
             "page.mouse.lastDirectionLabel": "Letzte Richtung:",
-            "page.mouse.title": "Maus-Demo",
             "page.mouse.subtitle": "Tippen, Scrollen, Ziehen und rohe Ereignisse auf beliebigen Ansichten",
             "page.mouse.phaseIdle": "untätig",
             "page.mouse.phaseBegan": "begonnen",
@@ -347,7 +339,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] bewegen den Fokus; [←→] passen den fokussierten Farbkanal an",
             "page.theme.help.cyclePalette": "[F2] / [F3] wechseln Palette / Erscheinungsbild von jeder Seite aus",
             "page.theme.help.everyChange": "Jede Änderung hier gestaltet die ganze App sofort neu",
-            "page.theme.title": "Design-Demo",
             "page.theme.edit": "Bearbeiten",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "Nur Titel",
@@ -362,7 +353,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "Aktualisieren gedrückt:",
             "page.contentUnavailable.help.placeholder": "Ein Platzhalter für leere Zustände — kombiniere ihn mit `if items.isEmpty`",
             "page.contentUnavailable.help.tabFocuses": "[Tab] fokussiert die Aktionsschaltfläche, [Enter]/[Leertaste] aktiviert sie",
-            "page.contentUnavailable.title": "Leerzustand-Demo",
         ],
         "fr": [
             // Picker
@@ -392,7 +382,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Utilisez [Tab] pour déplacer le focus entre les sélecteurs",
             "page.picker.help.openMenu": "Utilisez [Entrée], [Espace] ou [↓] pour ouvrir un sélecteur menu",
             "page.picker.help.moveChoose": "Utilisez [↑/↓] pour vous déplacer, [Entrée] pour choisir, [Échap] pour annuler",
-            "page.picker.title": "Démo du sélecteur",
             // ProgressView
             "page.progressView.determinate": "Déterminé",
             "component.trackEditor.fill": "Remplissage",
@@ -428,7 +417,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "Animations indéterminées",
             "page.progressView.editGradient": "Modifier le dégradé…",
             "page.progressView.gradientTitle": "Dégradé",
-            "page.progressView.title": "Progression et jauges",
             "page.progressView.styleLabel": "style",
             // Mouse
             "page.mouse.tapCounter": "Compteur de clics",
@@ -477,7 +465,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ faites défiler sur moi ]",
             "page.mouse.ticksLabel": "Crans :",
             "page.mouse.lastDirectionLabel": "Dernière direction :",
-            "page.mouse.title": "Démo de la souris",
             "page.mouse.subtitle": "Clic, défilement, glissement et événements bruts sur des vues arbitraires",
             "page.mouse.phaseIdle": "inactif",
             "page.mouse.phaseBegan": "commencé",
@@ -522,7 +509,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] déplacent le focus ; [←→] ajustent le canal de couleur ciblé",
             "page.theme.help.cyclePalette": "[F2] / [F3] font défiler palette / apparence depuis n'importe quelle page",
             "page.theme.help.everyChange": "Chaque changement ici réapplique le thème à toute l'app instantanément",
-            "page.theme.title": "Démo des thèmes",
             "page.theme.edit": "Modifier",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "Titre seul",
@@ -537,7 +523,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "Actualiser pressé :",
             "page.contentUnavailable.help.placeholder": "Un espace réservé pour les états vides — associez-le à `if items.isEmpty`",
             "page.contentUnavailable.help.tabFocuses": "[Tab] cible le bouton d'action, [Entrée]/[Espace] l'active",
-            "page.contentUnavailable.title": "Démo d'état vide",
         ],
         "it": [
             // Picker
@@ -567,7 +552,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Usa [Tab] per spostare il focus tra i selettori",
             "page.picker.help.openMenu": "Usa [Invio], [Spazio] o [↓] per aprire un selettore a menu",
             "page.picker.help.moveChoose": "Usa [↑/↓] per spostarti, [Invio] per scegliere, [Esc] per annullare",
-            "page.picker.title": "Demo selettore",
             // ProgressView
             "page.progressView.determinate": "Determinato",
             "component.trackEditor.fill": "Riempimento",
@@ -603,7 +587,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "Animazioni indeterminate",
             "page.progressView.editGradient": "Modifica gradiente…",
             "page.progressView.gradientTitle": "Gradiente",
-            "page.progressView.title": "Avanzamento e indicatori",
             "page.progressView.styleLabel": "stile",
             // Mouse
             "page.mouse.tapCounter": "Contatore clic",
@@ -652,7 +635,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ scorri su di me ]",
             "page.mouse.ticksLabel": "Scatti:",
             "page.mouse.lastDirectionLabel": "Ultima direzione:",
-            "page.mouse.title": "Demo mouse",
             "page.mouse.subtitle": "Tocco, scorrimento, trascinamento ed eventi grezzi su viste arbitrarie",
             "page.mouse.phaseIdle": "inattivo",
             "page.mouse.phaseBegan": "iniziato",
@@ -697,7 +679,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] spostano il focus; [←→] regolano il canale di colore selezionato",
             "page.theme.help.cyclePalette": "[F2] / [F3] scorrono palette / aspetto da qualsiasi pagina",
             "page.theme.help.everyChange": "Ogni modifica qui riapplica il tema a tutta l'app all'istante",
-            "page.theme.title": "Demo tema",
             "page.theme.edit": "Modifica",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "Solo titolo",
@@ -712,7 +693,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "Aggiorna premuto:",
             "page.contentUnavailable.help.placeholder": "Un segnaposto per gli stati vuoti — abbinalo a `if items.isEmpty`",
             "page.contentUnavailable.help.tabFocuses": "[Tab] mette a fuoco il pulsante d'azione, [Invio]/[Spazio] lo attiva",
-            "page.contentUnavailable.title": "Demo stato vuoto",
         ],
         "es": [
             // Picker
@@ -742,7 +722,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Usa [Tab] para mover el foco entre selectores",
             "page.picker.help.openMenu": "Usa [Intro], [Espacio] o [↓] para abrir un selector de menú",
             "page.picker.help.moveChoose": "Usa [↑/↓] para moverte, [Intro] para elegir, [Esc] para cancelar",
-            "page.picker.title": "Demo del selector",
             // ProgressView
             "page.progressView.determinate": "Determinado",
             "component.trackEditor.fill": "Relleno",
@@ -778,7 +757,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "Animaciones indeterminadas",
             "page.progressView.editGradient": "Editar degradado…",
             "page.progressView.gradientTitle": "Degradado",
-            "page.progressView.title": "Progreso e indicadores",
             "page.progressView.styleLabel": "estilo",
             // Mouse
             "page.mouse.tapCounter": "Contador de clics",
@@ -827,7 +805,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ desplázate sobre mí ]",
             "page.mouse.ticksLabel": "Muescas:",
             "page.mouse.lastDirectionLabel": "Última dirección:",
-            "page.mouse.title": "Demo del ratón",
             "page.mouse.subtitle": "Toque, desplazamiento, arrastre y eventos sin procesar en vistas arbitrarias",
             "page.mouse.phaseIdle": "inactivo",
             "page.mouse.phaseBegan": "comenzó",
@@ -872,7 +849,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] mueven el foco; [←→] ajustan el canal de color enfocado",
             "page.theme.help.cyclePalette": "[F2] / [F3] alternan paleta / apariencia desde cualquier página",
             "page.theme.help.everyChange": "Cada cambio aquí reaplica el tema a toda la app al instante",
-            "page.theme.title": "Demo de temas",
             "page.theme.edit": "Editar",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "Solo título",
@@ -887,7 +863,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "Actualizar pulsado:",
             "page.contentUnavailable.help.placeholder": "Un marcador de posición para estados vacíos — combínalo con `if items.isEmpty`",
             "page.contentUnavailable.help.tabFocuses": "[Tab] enfoca el botón de acción, [Intro]/[Espacio] lo activa",
-            "page.contentUnavailable.title": "Demo de estado vacío",
         ],
         "zh": [
             // Picker
@@ -917,7 +892,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "使用 [Tab] 在选择器之间移动焦点",
             "page.picker.help.openMenu": "使用 [Enter]、[空格] 或 [↓] 打开菜单选择器",
             "page.picker.help.moveChoose": "使用 [↑/↓] 移动，[Enter] 选择，[Esc] 取消",
-            "page.picker.title": "选择器演示",
             // ProgressView
             "page.progressView.determinate": "确定",
             "component.trackEditor.fill": "填充",
@@ -953,7 +927,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "不确定动画",
             "page.progressView.editGradient": "编辑渐变…",
             "page.progressView.gradientTitle": "渐变",
-            "page.progressView.title": "进度与仪表",
             "page.progressView.styleLabel": "样式",
             // Mouse
             "page.mouse.tapCounter": "点击计数器",
@@ -1002,7 +975,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ 在我上面滚动 ]",
             "page.mouse.ticksLabel": "滚动次数：",
             "page.mouse.lastDirectionLabel": "上次方向：",
-            "page.mouse.title": "鼠标演示",
             "page.mouse.subtitle": "在任意视图上进行点击、滚动、拖动和原始事件",
             "page.mouse.phaseIdle": "空闲",
             "page.mouse.phaseBegan": "开始",
@@ -1047,7 +1019,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] 移动焦点；[←→] 调整选中的颜色通道",
             "page.theme.help.cyclePalette": "[F2] / [F3] 可从任意页面循环切换调色板 / 外观",
             "page.theme.help.everyChange": "此处的每次更改都会即时为整个应用重新设置主题",
-            "page.theme.title": "主题演示",
             "page.theme.edit": "编辑",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "仅标题",
@@ -1062,7 +1033,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "刷新已按下：",
             "page.contentUnavailable.help.placeholder": "空状态的占位符——与 `if items.isEmpty` 搭配使用",
             "page.contentUnavailable.help.tabFocuses": "[Tab] 聚焦操作按钮，[Enter]/[空格] 激活它",
-            "page.contentUnavailable.title": "空状态演示",
         ],
         "ja": [
             // Picker
@@ -1092,7 +1062,6 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "[Tab] でピッカー間のフォーカスを移動",
             "page.picker.help.openMenu": "[Enter]、[Space] または [↓] でメニューピッカーを開く",
             "page.picker.help.moveChoose": "[↑/↓] で移動、[Enter] で選択、[Esc] でキャンセル",
-            "page.picker.title": "ピッカーのデモ",
             // ProgressView
             "page.progressView.determinate": "確定",
             "component.trackEditor.fill": "塗り",
@@ -1128,7 +1097,6 @@ extension ExampleStrings {
             "page.progressView.indeterminateAnimations": "不確定アニメーション",
             "page.progressView.editGradient": "グラデーションを編集…",
             "page.progressView.gradientTitle": "グラデーション",
-            "page.progressView.title": "進捗とゲージ",
             "page.progressView.styleLabel": "スタイル",
             // Mouse
             "page.mouse.tapCounter": "タップカウンター",
@@ -1177,7 +1145,6 @@ extension ExampleStrings {
             "page.mouse.scrollOverMe": "[ 上でスクロールして ]",
             "page.mouse.ticksLabel": "ティック数：",
             "page.mouse.lastDirectionLabel": "最後の方向：",
-            "page.mouse.title": "マウスのデモ",
             "page.mouse.subtitle": "任意のビューでのタップ、スクロール、ドラッグ、生イベント",
             "page.mouse.phaseIdle": "待機",
             "page.mouse.phaseBegan": "開始",
@@ -1222,7 +1189,6 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] でフォーカスを移動、[←→] で選択中のカラーチャンネルを調整",
             "page.theme.help.cyclePalette": "[F2] / [F3] でどのページからでもパレット / 外観を切り替え",
             "page.theme.help.everyChange": "ここでの変更はすべて、アプリ全体に即座にテーマを再適用します",
-            "page.theme.title": "テーマのデモ",
             "page.theme.edit": "編集",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "タイトルのみ",
@@ -1237,7 +1203,6 @@ extension ExampleStrings {
             "page.contentUnavailable.refreshPressed": "更新が押された回数：",
             "page.contentUnavailable.help.placeholder": "空の状態のためのプレースホルダー — `if items.isEmpty` と組み合わせて使います",
             "page.contentUnavailable.help.tabFocuses": "[Tab] でアクションボタンにフォーカスし、[Enter]/[Space] で実行します",
-            "page.contentUnavailable.title": "空の状態のデモ",
         ],
     ]
 }

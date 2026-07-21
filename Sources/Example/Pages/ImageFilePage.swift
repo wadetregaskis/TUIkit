@@ -57,7 +57,7 @@ struct ImageFilePage: View {
         }
         .statusBarItems(statusBarItems)
         .appHeader {
-            DemoAppHeader(L("page.imageFile.title"))
+            DemoAppHeader(L("menu.item.imageFile"))
         }
     }
 

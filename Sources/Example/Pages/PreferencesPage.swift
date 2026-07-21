@@ -84,7 +84,7 @@ struct PreferencesPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.preferences.title"))
+            DemoAppHeader(L("menu.item.preferences"))
         }
     }
 }

@@ -83,7 +83,7 @@ struct ColorsPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.colors.header"))
+            DemoAppHeader(L("menu.item.colors"))
         }
     }
 }

@@ -14,7 +14,6 @@ extension ExampleStrings {
     static let g6: [String: [String: String]] = [
         "en": [
             // TabView page
-            "page.tabView.title": "TabView Demo",
             "page.tabView.compactStyle": "Compact Style (no chrome)",
             "page.tabView.profile": "Profile",
             "page.tabView.firstProgrammer": "First programmer",
@@ -68,7 +67,6 @@ extension ExampleStrings {
             "page.form.status": "Status",
             "page.form.statusActive": "Active",
             "page.form.signOut": "Sign Out",
-            "page.form.title": "Forms",
             "page.form.columnsSection": "Columns style (.columns — the default, macOS convention)",
             "page.form.groupedSection": "Grouped style (.grouped) — same content, different style",
             "page.form.rowAlignmentSection": "Per-row alignment override (.formRowAlignment)",
@@ -87,7 +85,6 @@ extension ExampleStrings {
         ],
         "de": [
             // TabView page
-            "page.tabView.title": "TabView-Demo",
             "page.tabView.compactStyle": "Kompakter Stil (ohne Rahmen)",
             "page.tabView.profile": "Profil",
             "page.tabView.firstProgrammer": "Erste Programmiererin",
@@ -141,7 +138,6 @@ extension ExampleStrings {
             "page.form.status": "Status",
             "page.form.statusActive": "Aktiv",
             "page.form.signOut": "Abmelden",
-            "page.form.title": "Formulare",
             "page.form.columnsSection": "Spaltenstil (.columns — die Standardeinstellung, macOS-Konvention)",
             "page.form.groupedSection": "Gruppierter Stil (.grouped) — gleicher Inhalt, anderer Stil",
             "page.form.rowAlignmentSection": "Ausrichtungs-Überschreibung pro Zeile (.formRowAlignment)",
@@ -160,7 +156,6 @@ extension ExampleStrings {
         ],
         "fr": [
             // TabView page
-            "page.tabView.title": "Démo TabView",
             "page.tabView.compactStyle": "Style compact (sans cadre)",
             "page.tabView.profile": "Profil",
             "page.tabView.firstProgrammer": "Première programmeuse",
@@ -214,7 +209,6 @@ extension ExampleStrings {
             "page.form.status": "Statut",
             "page.form.statusActive": "Actif",
             "page.form.signOut": "Se déconnecter",
-            "page.form.title": "Formulaires",
             "page.form.columnsSection": "Style en colonnes (.columns — par défaut, convention macOS)",
             "page.form.groupedSection": "Style groupé (.grouped) — même contenu, style différent",
             "page.form.rowAlignmentSection": "Remplacement d'alignement par ligne (.formRowAlignment)",
@@ -233,7 +227,6 @@ extension ExampleStrings {
         ],
         "it": [
             // TabView page
-            "page.tabView.title": "Demo TabView",
             "page.tabView.compactStyle": "Stile compatto (senza cornice)",
             "page.tabView.profile": "Profilo",
             "page.tabView.firstProgrammer": "Prima programmatrice",
@@ -287,7 +280,6 @@ extension ExampleStrings {
             "page.form.status": "Stato",
             "page.form.statusActive": "Attivo",
             "page.form.signOut": "Esci",
-            "page.form.title": "Moduli",
             "page.form.columnsSection": "Stile a colonne (.columns — predefinito, convenzione macOS)",
             "page.form.groupedSection": "Stile raggruppato (.grouped) — stesso contenuto, stile diverso",
             "page.form.rowAlignmentSection": "Override di allineamento per riga (.formRowAlignment)",
@@ -306,7 +298,6 @@ extension ExampleStrings {
         ],
         "es": [
             // TabView page
-            "page.tabView.title": "Demo de TabView",
             "page.tabView.compactStyle": "Estilo compacto (sin marco)",
             "page.tabView.profile": "Perfil",
             "page.tabView.firstProgrammer": "Primera programadora",
@@ -360,7 +351,6 @@ extension ExampleStrings {
             "page.form.status": "Estado",
             "page.form.statusActive": "Activo",
             "page.form.signOut": "Cerrar sesión",
-            "page.form.title": "Formularios",
             "page.form.columnsSection": "Estilo en columnas (.columns — el predeterminado, convención de macOS)",
             "page.form.groupedSection": "Estilo agrupado (.grouped) — mismo contenido, estilo diferente",
             "page.form.rowAlignmentSection": "Anulación de alineación por fila (.formRowAlignment)",
@@ -379,7 +369,6 @@ extension ExampleStrings {
         ],
         "zh": [
             // TabView page
-            "page.tabView.title": "TabView 演示",
             "page.tabView.compactStyle": "紧凑样式（无边框）",
             "page.tabView.profile": "个人资料",
             "page.tabView.firstProgrammer": "第一位程序员",
@@ -433,7 +422,6 @@ extension ExampleStrings {
             "page.form.status": "状态",
             "page.form.statusActive": "活跃",
             "page.form.signOut": "退出登录",
-            "page.form.title": "表单",
             "page.form.columnsSection": "列样式（.columns — 默认，macOS 惯例）",
             "page.form.groupedSection": "分组样式（.grouped）— 内容相同，样式不同",
             "page.form.rowAlignmentSection": "逐行对齐覆盖（.formRowAlignment）",
@@ -452,7 +440,6 @@ extension ExampleStrings {
         ],
         "ja": [
             // TabView page
-            "page.tabView.title": "TabView デモ",
             "page.tabView.compactStyle": "コンパクトスタイル（枠なし）",
             "page.tabView.profile": "プロフィール",
             "page.tabView.firstProgrammer": "最初のプログラマー",
@@ -506,7 +493,6 @@ extension ExampleStrings {
             "page.form.status": "ステータス",
             "page.form.statusActive": "有効",
             "page.form.signOut": "サインアウト",
-            "page.form.title": "フォーム",
             "page.form.columnsSection": "列スタイル（.columns — デフォルト、macOS の慣例）",
             "page.form.groupedSection": "グループ化スタイル（.grouped）— 同じ内容、異なるスタイル",
             "page.form.rowAlignmentSection": "行ごとの配置の上書き（.formRowAlignment）",

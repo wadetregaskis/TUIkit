@@ -25,7 +25,7 @@ struct ButtonsPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("page.buttons.header"))
+            DemoAppHeader(L("menu.item.buttons"))
         }
     }
 

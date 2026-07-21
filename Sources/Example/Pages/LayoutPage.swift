@@ -208,7 +208,7 @@ struct LayoutPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.layout.header"))
+            DemoAppHeader(L("menu.item.layout"))
         }
     }
 

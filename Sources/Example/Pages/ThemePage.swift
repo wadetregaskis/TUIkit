@@ -305,7 +305,7 @@ struct ThemePage: View {
             }
         }
         .appHeader {
-            DemoAppHeader(L("page.theme.title"))
+            DemoAppHeader(L("menu.item.theme"))
         }
     }
 

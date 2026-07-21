@@ -22,7 +22,6 @@ extension ExampleStrings {
             "menu.item.focus": "Focus & Input",
 
             // State persistence page
-            "page.state.title": "State Persistence Demo",
             "page.state.persistenceSection": "@AppStorage (survives relaunch)",
             "page.state.description": "@AppStorage persists values to disk, so they survive quitting and relaunching the app.",
             "page.state.tapToIncrement": "Tap to increment",
@@ -39,7 +38,6 @@ extension ExampleStrings {
             "page.state.relaunchHint": "Change a value, press q to quit, relaunch — the values carry over.",
 
             // Lifecycle page
-            "page.lifecycle.title": "Lifecycle Demo",
             "page.lifecycle.countersSection": "Live hook counters",
             "page.lifecycle.description": "Each counter ticks up as its lifecycle hook fires. Revisit the page to watch .onAppear climb; .task ticks shortly after the first frame.",
             "page.lifecycle.lastEvent": "Last event",
@@ -52,7 +50,6 @@ extension ExampleStrings {
             "page.lifecycle.tracked": "Tracked",
 
             // Preferences page
-            "page.preferences.title": "Preferences Demo",
             "page.preferences.parentSection": "Parent",
             "page.preferences.childrenReporting": "children reporting",
             "page.preferences.description": "Each child reports a value UP via a PreferenceKey; the parent header above shows the live total.",
@@ -63,7 +60,6 @@ extension ExampleStrings {
             "page.preferences.lastMessage": "Last message",
 
             // Focus & input page
-            "page.focus.title": "Focus & Input Demo",
             "page.focus.sectionsSection": "Focus sections",
             "page.focus.sectionsDescription": "Tab between the two sections; the focused element's id shows below.",
             "page.focus.sectionA": "Section A",
@@ -95,7 +91,6 @@ extension ExampleStrings {
 
             // Reorganised pages: the controls above now live on focused pages.
             "menu.item.textInput": "Text Input",
-            "page.textInput.title": "Text Input",
             "page.textInput.editorSection": "Multi-line editor",
             "page.textInput.editorBordered": "The same editor with .border() (the boxed look):",
             "page.progressView.gaugeSection": "Gauges",
@@ -109,7 +104,6 @@ extension ExampleStrings {
             "menu.item.preferences": "Präferenzen",
             "menu.item.focus": "Fokus & Eingabe",
 
-            "page.state.title": "Zustandspersistenz-Demo",
             "page.state.persistenceSection": "@AppStorage (übersteht Neustart)",
             "page.state.description": "@AppStorage speichert Werte auf der Festplatte, sodass sie das Beenden und Neustarten der App überstehen.",
             "page.state.tapToIncrement": "Zum Erhöhen tippen",
@@ -125,7 +119,6 @@ extension ExampleStrings {
             "page.state.savedTo": "Gespeichert in",
             "page.state.relaunchHint": "Ändere einen Wert, drücke q zum Beenden, starte neu — die Werte bleiben erhalten.",
 
-            "page.lifecycle.title": "Lebenszyklus-Demo",
             "page.lifecycle.countersSection": "Live-Hook-Zähler",
             "page.lifecycle.description": "Jeder Zähler steigt, wenn sein Lebenszyklus-Hook auslöst. Besuche die Seite erneut, um .onAppear steigen zu sehen; .task tickt kurz nach dem ersten Frame.",
             "page.lifecycle.lastEvent": "Letztes Ereignis",
@@ -137,7 +130,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "Wert erhöhen",
             "page.lifecycle.tracked": "Verfolgt",
 
-            "page.preferences.title": "Präferenzen-Demo",
             "page.preferences.parentSection": "Elternteil",
             "page.preferences.childrenReporting": "meldende Kinder",
             "page.preferences.description": "Jedes Kind meldet einen Wert NACH OBEN über einen PreferenceKey; die Eltern-Überschrift oben zeigt die Live-Summe.",
@@ -147,7 +139,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "meldet sich",
             "page.preferences.lastMessage": "Letzte Nachricht",
 
-            "page.focus.title": "Fokus- & Eingabe-Demo",
             "page.focus.sectionsSection": "Fokusbereiche",
             "page.focus.sectionsDescription": "Wechsle mit Tab zwischen den beiden Bereichen; die id des fokussierten Elements wird unten angezeigt.",
             "page.focus.sectionA": "Bereich A",
@@ -176,7 +167,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "Fokussiertes Feld anpassen",
 
             "menu.item.textInput": "Texteingabe",
-            "page.textInput.title": "Texteingabe",
             "page.textInput.editorSection": "Mehrzeiliger Editor",
             "page.textInput.editorBordered": "Derselbe Editor mit .border() (mit Rahmen):",
             "page.progressView.gaugeSection": "Anzeigen",
@@ -190,7 +180,6 @@ extension ExampleStrings {
             "menu.item.preferences": "Préférences",
             "menu.item.focus": "Focus et saisie",
 
-            "page.state.title": "Démo de persistance d'état",
             "page.state.persistenceSection": "@AppStorage (survit au redémarrage)",
             "page.state.description": "@AppStorage enregistre les valeurs sur le disque, elles survivent donc à la fermeture et au redémarrage de l'application.",
             "page.state.tapToIncrement": "Appuyez pour incrémenter",
@@ -206,7 +195,6 @@ extension ExampleStrings {
             "page.state.savedTo": "Enregistré dans",
             "page.state.relaunchHint": "Modifiez une valeur, appuyez sur q pour quitter, relancez — les valeurs sont conservées.",
 
-            "page.lifecycle.title": "Démo de cycle de vie",
             "page.lifecycle.countersSection": "Compteurs de hooks en direct",
             "page.lifecycle.description": "Chaque compteur augmente quand son hook de cycle de vie se déclenche. Revenez sur la page pour voir .onAppear grimper ; .task s'incrémente juste après la première image.",
             "page.lifecycle.lastEvent": "Dernier événement",
@@ -218,7 +206,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "Augmenter la valeur",
             "page.lifecycle.tracked": "Suivi",
 
-            "page.preferences.title": "Démo des préférences",
             "page.preferences.parentSection": "Parent",
             "page.preferences.childrenReporting": "enfants signalent",
             "page.preferences.description": "Chaque enfant remonte une valeur via un PreferenceKey ; l'en-tête parent ci-dessus affiche le total en direct.",
@@ -228,7 +215,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "se signale",
             "page.preferences.lastMessage": "Dernier message",
 
-            "page.focus.title": "Démo focus et saisie",
             "page.focus.sectionsSection": "Sections de focus",
             "page.focus.sectionsDescription": "Passez d'une section à l'autre avec Tab ; l'id de l'élément focalisé s'affiche ci-dessous.",
             "page.focus.sectionA": "Section A",
@@ -257,7 +243,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "Ajuster le champ ciblé",
 
             "menu.item.textInput": "Saisie de texte",
-            "page.textInput.title": "Saisie de texte",
             "page.textInput.editorSection": "Éditeur multiligne",
             "page.textInput.editorBordered": "Le même éditeur avec .border() (encadré) :",
             "page.progressView.gaugeSection": "Jauges",
@@ -271,7 +256,6 @@ extension ExampleStrings {
             "menu.item.preferences": "Preferenze",
             "menu.item.focus": "Focus e input",
 
-            "page.state.title": "Demo di persistenza dello stato",
             "page.state.persistenceSection": "@AppStorage (sopravvive al riavvio)",
             "page.state.description": "@AppStorage salva i valori su disco, così sopravvivono alla chiusura e al riavvio dell'app.",
             "page.state.tapToIncrement": "Tocca per incrementare",
@@ -287,7 +271,6 @@ extension ExampleStrings {
             "page.state.savedTo": "Salvato in",
             "page.state.relaunchHint": "Cambia un valore, premi q per uscire, riavvia — i valori vengono mantenuti.",
 
-            "page.lifecycle.title": "Demo del ciclo di vita",
             "page.lifecycle.countersSection": "Contatori dei hook in tempo reale",
             "page.lifecycle.description": "Ogni contatore aumenta quando il suo hook del ciclo di vita si attiva. Rivisita la pagina per vedere .onAppear salire; .task scatta poco dopo il primo frame.",
             "page.lifecycle.lastEvent": "Ultimo evento",
@@ -299,7 +282,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "Incrementa valore",
             "page.lifecycle.tracked": "Tracciato",
 
-            "page.preferences.title": "Demo delle preferenze",
             "page.preferences.parentSection": "Genitore",
             "page.preferences.childrenReporting": "figli che segnalano",
             "page.preferences.description": "Ogni figlio riporta un valore VERSO L'ALTO tramite un PreferenceKey; l'intestazione del genitore qui sopra mostra il totale in tempo reale.",
@@ -309,7 +291,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "si segnala",
             "page.preferences.lastMessage": "Ultimo messaggio",
 
-            "page.focus.title": "Demo focus e input",
             "page.focus.sectionsSection": "Sezioni di focus",
             "page.focus.sectionsDescription": "Passa tra le due sezioni con Tab; l'id dell'elemento con focus appare sotto.",
             "page.focus.sectionA": "Sezione A",
@@ -338,7 +319,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "Regola il campo attivo",
 
             "menu.item.textInput": "Immissione testo",
-            "page.textInput.title": "Immissione testo",
             "page.textInput.editorSection": "Editor multiriga",
             "page.textInput.editorBordered": "Lo stesso editor con .border() (riquadrato):",
             "page.progressView.gaugeSection": "Indicatori",
@@ -352,7 +332,6 @@ extension ExampleStrings {
             "menu.item.preferences": "Preferencias",
             "menu.item.focus": "Foco y entrada",
 
-            "page.state.title": "Demo de persistencia de estado",
             "page.state.persistenceSection": "@AppStorage (sobrevive al reinicio)",
             "page.state.description": "@AppStorage guarda los valores en disco, así que sobreviven al cerrar y reiniciar la aplicación.",
             "page.state.tapToIncrement": "Toca para incrementar",
@@ -368,7 +347,6 @@ extension ExampleStrings {
             "page.state.savedTo": "Guardado en",
             "page.state.relaunchHint": "Cambia un valor, pulsa q para salir, reinicia — los valores se conservan.",
 
-            "page.lifecycle.title": "Demo de ciclo de vida",
             "page.lifecycle.countersSection": "Contadores de hooks en vivo",
             "page.lifecycle.description": "Cada contador sube cuando su hook de ciclo de vida se dispara. Vuelve a la página para ver subir .onAppear; .task se incrementa poco después del primer fotograma.",
             "page.lifecycle.lastEvent": "Último evento",
@@ -380,7 +358,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "Incrementar valor",
             "page.lifecycle.tracked": "Seguido",
 
-            "page.preferences.title": "Demo de preferencias",
             "page.preferences.parentSection": "Padre",
             "page.preferences.childrenReporting": "hijos informando",
             "page.preferences.description": "Cada hijo informa un valor HACIA ARRIBA mediante un PreferenceKey; el encabezado del padre arriba muestra el total en vivo.",
@@ -390,7 +367,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "informando",
             "page.preferences.lastMessage": "Último mensaje",
 
-            "page.focus.title": "Demo de foco y entrada",
             "page.focus.sectionsSection": "Secciones de foco",
             "page.focus.sectionsDescription": "Cambia entre las dos secciones con Tab; el id del elemento enfocado aparece abajo.",
             "page.focus.sectionA": "Sección A",
@@ -419,7 +395,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "Ajustar el campo enfocado",
 
             "menu.item.textInput": "Entrada de texto",
-            "page.textInput.title": "Entrada de texto",
             "page.textInput.editorSection": "Editor multilínea",
             "page.textInput.editorBordered": "El mismo editor con .border() (con recuadro):",
             "page.progressView.gaugeSection": "Indicadores",
@@ -433,7 +408,6 @@ extension ExampleStrings {
             "menu.item.preferences": "偏好设置",
             "menu.item.focus": "焦点与输入",
 
-            "page.state.title": "状态持久化演示",
             "page.state.persistenceSection": "@AppStorage（重启后保留）",
             "page.state.description": "@AppStorage 将值保存到磁盘，因此它们在退出并重新启动应用后仍然保留。",
             "page.state.tapToIncrement": "点击以递增",
@@ -449,7 +423,6 @@ extension ExampleStrings {
             "page.state.savedTo": "保存到",
             "page.state.relaunchHint": "更改一个值，按 q 退出，重新启动——这些值会保留下来。",
 
-            "page.lifecycle.title": "生命周期演示",
             "page.lifecycle.countersSection": "实时钩子计数器",
             "page.lifecycle.description": "每个计数器在其生命周期钩子触发时递增。重新进入该页面以观察 .onAppear 上升；.task 会在第一帧后不久递增。",
             "page.lifecycle.lastEvent": "最后事件",
@@ -461,7 +434,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "递增值",
             "page.lifecycle.tracked": "已跟踪",
 
-            "page.preferences.title": "偏好设置演示",
             "page.preferences.parentSection": "父视图",
             "page.preferences.childrenReporting": "个子视图正在上报",
             "page.preferences.description": "每个子视图通过 PreferenceKey 向上报告一个值；上方的父标题实时显示总数。",
@@ -471,7 +443,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "正在上报",
             "page.preferences.lastMessage": "最后消息",
 
-            "page.focus.title": "焦点与输入演示",
             "page.focus.sectionsSection": "焦点区域",
             "page.focus.sectionsDescription": "用 Tab 在两个区域之间切换；获得焦点的元素 id 显示在下方。",
             "page.focus.sectionA": "区域 A",
@@ -500,7 +471,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "调整聚焦的字段",
 
             "menu.item.textInput": "文本输入",
-            "page.textInput.title": "文本输入",
             "page.textInput.editorSection": "多行编辑器",
             "page.textInput.editorBordered": "同一编辑器加 .border()（带边框）：",
             "page.progressView.gaugeSection": "仪表",
@@ -514,7 +484,6 @@ extension ExampleStrings {
             "menu.item.preferences": "プリファレンス",
             "menu.item.focus": "フォーカスと入力",
 
-            "page.state.title": "状態の永続化デモ",
             "page.state.persistenceSection": "@AppStorage（再起動後も保持）",
             "page.state.description": "@AppStorage は値をディスクに保存するため、アプリを終了して再起動しても値が保持されます。",
             "page.state.tapToIncrement": "タップして増加",
@@ -530,7 +499,6 @@ extension ExampleStrings {
             "page.state.savedTo": "保存先",
             "page.state.relaunchHint": "値を変更し、q を押して終了し、再起動すると値が引き継がれます。",
 
-            "page.lifecycle.title": "ライフサイクルデモ",
             "page.lifecycle.countersSection": "ライブフックカウンター",
             "page.lifecycle.description": "各カウンターは対応するライフサイクルフックが発火するたびに増えます。ページを再訪すると .onAppear が増えるのが見え、.task は最初のフレームの直後に増えます。",
             "page.lifecycle.lastEvent": "最後のイベント",
@@ -542,7 +510,6 @@ extension ExampleStrings {
             "page.lifecycle.bump": "値を増やす",
             "page.lifecycle.tracked": "追跡中",
 
-            "page.preferences.title": "プリファレンスデモ",
             "page.preferences.parentSection": "親",
             "page.preferences.childrenReporting": "個の子が報告中",
             "page.preferences.description": "各子は PreferenceKey を通じて値を上方向に報告し、上の親ヘッダーが合計をライブ表示します。",
@@ -552,7 +519,6 @@ extension ExampleStrings {
             "page.preferences.reporting": "報告中",
             "page.preferences.lastMessage": "最後のメッセージ",
 
-            "page.focus.title": "フォーカスと入力デモ",
             "page.focus.sectionsSection": "フォーカスセクション",
             "page.focus.sectionsDescription": "Tab で2つのセクションを切り替えます。フォーカス中の要素の id が下に表示されます。",
             "page.focus.sectionA": "セクション A",
@@ -581,7 +547,6 @@ extension ExampleStrings {
             "page.newControls.helpEdit": "フォーカス中のフィールドを調整",
 
             "menu.item.textInput": "テキスト入力",
-            "page.textInput.title": "テキスト入力",
             "page.textInput.editorSection": "複数行エディター",
             "page.textInput.editorBordered": "同じエディターに .border()（枠あり）：",
             "page.progressView.gaugeSection": "ゲージ",

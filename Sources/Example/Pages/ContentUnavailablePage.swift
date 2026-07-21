@@ -50,7 +50,7 @@ struct ContentUnavailablePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.contentUnavailable.title"))
+            DemoAppHeader(L("menu.item.emptyState"))
         }
     }
 }

@@ -14,13 +14,11 @@ extension ExampleStrings {
     static let g3: [String: [String: String]] = [
         "en": [
             // Spinners
-            "page.spinners.title": "Spinners",
             "page.spinners.styles": "Styles",
             "page.spinners.customColorSection": "Custom Color",
             "page.spinners.installing": "Installing...",
 
             // List
-            "page.list.title": "List Demo",
             "page.list.singleSelection": "Single Selection",
             "page.list.multiSelection": "Multi Selection",
             "page.list.currentSelections": "Current Selections",
@@ -51,7 +49,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "Use the mouse wheel to scroll any list (works whether or not the list has focus, and whether or not it has a selection binding)",
 
             // Table
-            "page.table.title": "Table Demo",
             "page.table.fileBrowserCaption": "File Browser (Name sized to fit, Type fills, opt-in scrollbar)",
             "page.table.multiSelectionCaption": "Multi-Selection + multi-line Details (.lineLimit(2))",
             "page.table.wrappingCaption": "Fixed height, hundreds of rows, varied wrapping & truncation (.lineLimit(3))",
@@ -76,7 +73,6 @@ extension ExampleStrings {
             "page.table.help.switch": "Use [Tab] to switch between tables",
 
             // ScrollView
-            "page.scrollView.title": "ScrollView",
             "page.scrollView.subtitle": "Generic scrollable container for arbitrary content",
             "page.scrollView.longTextSection": "Long text — naked ScrollView with default indicators",
             "page.scrollView.longTextBody": "ScrollView draws no chrome of its own beyond the optional 'N more lines above / below' indicators — there's no border, no background, no padding. The visible box below is just a .border() applied to the ScrollView; remove that line and the ScrollView is invisible except for the indicators and any content it shows.",
@@ -118,7 +114,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Home/End]: jump to top / bottom",
 
             // Slider
-            "page.slider.title": "Slider Demo",
             "page.slider.basicSection": "Basic Slider (Block Style)",
             "page.slider.volume": "Volume:",
             "page.slider.trackStylesSection": "Track Styles",
@@ -147,13 +142,11 @@ extension ExampleStrings {
         ],
         "de": [
             // Spinners
-            "page.spinners.title": "Spinner",
             "page.spinners.styles": "Stile",
             "page.spinners.customColorSection": "Benutzerdefinierte Farbe",
             "page.spinners.installing": "Wird installiert …",
 
             // List
-            "page.list.title": "Listen-Demo",
             "page.list.singleSelection": "Einfachauswahl",
             "page.list.multiSelection": "Mehrfachauswahl",
             "page.list.currentSelections": "Aktuelle Auswahl",
@@ -184,7 +177,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "Mit dem Mausrad jede Liste scrollen (funktioniert, ob die Liste fokussiert ist oder nicht und ob sie eine Auswahlbindung hat oder nicht)",
 
             // Table
-            "page.table.title": "Tabellen-Demo",
             "page.table.fileBrowserCaption": "Datei-Browser (Name an Inhalt angepasst, Typ füllt aus, optionale Bildlaufleiste)",
             "page.table.multiSelectionCaption": "Mehrfachauswahl + mehrzeilige Details (.lineLimit(2))",
             "page.table.wrappingCaption": "Feste Höhe, Hunderte Zeilen, unterschiedlicher Umbruch & Abschneiden (.lineLimit(3))",
@@ -209,7 +201,6 @@ extension ExampleStrings {
             "page.table.help.switch": "Mit [Tab] zwischen Tabellen wechseln",
 
             // ScrollView
-            "page.scrollView.title": "ScrollView",
             "page.scrollView.subtitle": "Generischer scrollbarer Container für beliebigen Inhalt",
             "page.scrollView.longTextSection": "Langer Text — nackte ScrollView mit Standardindikatoren",
             "page.scrollView.longTextBody": "ScrollView zeichnet außer den optionalen Indikatoren „N weitere Zeilen oben / unten“ keine eigene Umrandung — kein Rahmen, kein Hintergrund, kein Innenabstand. Das sichtbare Feld unten ist nur ein auf die ScrollView angewandter .border(); entferne diese Zeile, und die ScrollView ist bis auf die Indikatoren und ihren Inhalt unsichtbar.",
@@ -251,7 +242,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Pos1/Ende]: nach oben / unten springen",
 
             // Slider
-            "page.slider.title": "Schieberegler-Demo",
             "page.slider.basicSection": "Einfacher Schieberegler (Block-Stil)",
             "page.slider.volume": "Lautstärke:",
             "page.slider.trackStylesSection": "Spurstile",
@@ -280,13 +270,11 @@ extension ExampleStrings {
         ],
         "fr": [
             // Spinners
-            "page.spinners.title": "Indicateurs",
             "page.spinners.styles": "Styles",
             "page.spinners.customColorSection": "Couleur personnalisée",
             "page.spinners.installing": "Installation…",
 
             // List
-            "page.list.title": "Démo de liste",
             "page.list.singleSelection": "Sélection unique",
             "page.list.multiSelection": "Sélection multiple",
             "page.list.currentSelections": "Sélections actuelles",
@@ -317,7 +305,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "Utilisez la molette de la souris pour faire défiler n'importe quelle liste (fonctionne que la liste ait le focus ou non, et qu'elle ait une liaison de sélection ou non)",
 
             // Table
-            "page.table.title": "Démo de tableau",
             "page.table.fileBrowserCaption": "Explorateur de fichiers (Nom ajusté au contenu, Type remplit, barre de défilement optionnelle)",
             "page.table.multiSelectionCaption": "Sélection multiple + Détails sur plusieurs lignes (.lineLimit(2))",
             "page.table.wrappingCaption": "Hauteur fixe, des centaines de lignes, retour à la ligne et troncature variés (.lineLimit(3))",
@@ -342,7 +329,6 @@ extension ExampleStrings {
             "page.table.help.switch": "Utilisez [Tab] pour passer d'un tableau à l'autre",
 
             // ScrollView
-            "page.scrollView.title": "ScrollView",
             "page.scrollView.subtitle": "Conteneur défilant générique pour contenu arbitraire",
             "page.scrollView.longTextSection": "Texte long — ScrollView nue avec indicateurs par défaut",
             "page.scrollView.longTextBody": "ScrollView ne dessine aucun habillage propre au-delà des indicateurs optionnels « N lignes de plus au-dessus / en dessous » — pas de bordure, pas d'arrière-plan, pas de marge intérieure. La boîte visible ci-dessous n'est qu'un .border() appliqué à la ScrollView ; supprimez cette ligne et la ScrollView est invisible, hormis les indicateurs et le contenu qu'elle affiche.",
@@ -384,7 +370,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Origine/Fin] : aller en haut / en bas",
 
             // Slider
-            "page.slider.title": "Démo de curseur",
             "page.slider.basicSection": "Curseur de base (style bloc)",
             "page.slider.volume": "Volume :",
             "page.slider.trackStylesSection": "Styles de piste",
@@ -413,13 +398,11 @@ extension ExampleStrings {
         ],
         "it": [
             // Spinners
-            "page.spinners.title": "Indicatori",
             "page.spinners.styles": "Stili",
             "page.spinners.customColorSection": "Colore personalizzato",
             "page.spinners.installing": "Installazione…",
 
             // List
-            "page.list.title": "Demo elenco",
             "page.list.singleSelection": "Selezione singola",
             "page.list.multiSelection": "Selezione multipla",
             "page.list.currentSelections": "Selezioni attuali",
@@ -450,7 +433,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "Usa la rotellina del mouse per scorrere qualsiasi elenco (funziona sia che l'elenco abbia il focus o meno, e sia che abbia un binding di selezione o meno)",
 
             // Table
-            "page.table.title": "Demo tabella",
             "page.table.fileBrowserCaption": "Browser di file (Nome adattato al contenuto, Tipo riempie, barra di scorrimento opzionale)",
             "page.table.multiSelectionCaption": "Selezione multipla + Dettagli su più righe (.lineLimit(2))",
             "page.table.wrappingCaption": "Altezza fissa, centinaia di righe, a capo e troncamento vari (.lineLimit(3))",
@@ -475,7 +457,6 @@ extension ExampleStrings {
             "page.table.help.switch": "Usa [Tab] per passare da una tabella all'altra",
 
             // ScrollView
-            "page.scrollView.title": "ScrollView",
             "page.scrollView.subtitle": "Contenitore scorrevole generico per contenuti arbitrari",
             "page.scrollView.longTextSection": "Testo lungo — ScrollView nuda con indicatori predefiniti",
             "page.scrollView.longTextBody": "ScrollView non disegna alcun elemento decorativo proprio oltre agli indicatori opzionali «N altre righe sopra / sotto» — niente bordo, niente sfondo, niente spaziatura interna. Il riquadro visibile qui sotto è solo un .border() applicato alla ScrollView; rimuovi quella riga e la ScrollView è invisibile tranne gli indicatori e il contenuto che mostra.",
@@ -517,7 +498,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Inizio/Fine]: salta in cima / in fondo",
 
             // Slider
-            "page.slider.title": "Demo cursore",
             "page.slider.basicSection": "Cursore di base (stile blocco)",
             "page.slider.volume": "Volume:",
             "page.slider.trackStylesSection": "Stili della traccia",
@@ -546,13 +526,11 @@ extension ExampleStrings {
         ],
         "es": [
             // Spinners
-            "page.spinners.title": "Indicadores",
             "page.spinners.styles": "Estilos",
             "page.spinners.customColorSection": "Color personalizado",
             "page.spinners.installing": "Instalando…",
 
             // List
-            "page.list.title": "Demo de lista",
             "page.list.singleSelection": "Selección única",
             "page.list.multiSelection": "Selección múltiple",
             "page.list.currentSelections": "Selecciones actuales",
@@ -583,7 +561,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "Usa la rueda del ratón para desplazar cualquier lista (funciona tenga o no el foco la lista, y tenga o no un enlace de selección)",
 
             // Table
-            "page.table.title": "Demo de tabla",
             "page.table.fileBrowserCaption": "Explorador de archivos (Nombre ajustado al contenido, Tipo rellena, barra de desplazamiento opcional)",
             "page.table.multiSelectionCaption": "Selección múltiple + Detalles de varias líneas (.lineLimit(2))",
             "page.table.wrappingCaption": "Altura fija, cientos de filas, ajuste y truncamiento variados (.lineLimit(3))",
@@ -608,7 +585,6 @@ extension ExampleStrings {
             "page.table.help.switch": "Usa [Tab] para cambiar entre tablas",
 
             // ScrollView
-            "page.scrollView.title": "ScrollView",
             "page.scrollView.subtitle": "Contenedor desplazable genérico para contenido arbitrario",
             "page.scrollView.longTextSection": "Texto largo — ScrollView desnuda con indicadores predeterminados",
             "page.scrollView.longTextBody": "ScrollView no dibuja ningún adorno propio más allá de los indicadores opcionales «N líneas más arriba / abajo» — sin borde, sin fondo, sin relleno. El cuadro visible de abajo es solo un .border() aplicado a la ScrollView; quita esa línea y la ScrollView es invisible salvo por los indicadores y el contenido que muestra.",
@@ -650,7 +626,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Inicio/Fin]: saltar arriba / abajo",
 
             // Slider
-            "page.slider.title": "Demo de control deslizante",
             "page.slider.basicSection": "Control deslizante básico (estilo bloque)",
             "page.slider.volume": "Volumen:",
             "page.slider.trackStylesSection": "Estilos de pista",
@@ -679,13 +654,11 @@ extension ExampleStrings {
         ],
         "zh": [
             // Spinners
-            "page.spinners.title": "加载指示器",
             "page.spinners.styles": "样式",
             "page.spinners.customColorSection": "自定义颜色",
             "page.spinners.installing": "正在安装…",
 
             // List
-            "page.list.title": "列表演示",
             "page.list.singleSelection": "单选",
             "page.list.multiSelection": "多选",
             "page.list.currentSelections": "当前选择",
@@ -716,7 +689,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "使用鼠标滚轮滚动任意列表（无论列表是否获得焦点，也无论它是否有选择绑定均可使用）",
 
             // Table
-            "page.table.title": "表格演示",
             "page.table.fileBrowserCaption": "文件浏览器（名称按内容自适应，类型填充，可选滚动条）",
             "page.table.multiSelectionCaption": "多选 + 多行详情 (.lineLimit(2))",
             "page.table.wrappingCaption": "固定高度，数百行，多样的换行与截断 (.lineLimit(3))",
@@ -741,7 +713,6 @@ extension ExampleStrings {
             "page.table.help.switch": "使用 [Tab] 在表格间切换",
 
             // ScrollView
-            "page.scrollView.title": "滚动视图",
             "page.scrollView.subtitle": "用于任意内容的通用可滚动容器",
             "page.scrollView.longTextSection": "长文本 — 带默认指示器的裸 ScrollView",
             "page.scrollView.longTextBody": "除了可选的“上方/下方还有 N 行”指示器外，ScrollView 不绘制任何自身的外观装饰 — 没有边框、没有背景、没有内边距。下方可见的方框只是应用到 ScrollView 上的一个 .border()；删除该行后，除了指示器和它显示的内容外，ScrollView 是不可见的。",
@@ -783,7 +754,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Home/End]：跳到顶部 / 底部",
 
             // Slider
-            "page.slider.title": "滑块演示",
             "page.slider.basicSection": "基本滑块（块状样式）",
             "page.slider.volume": "音量：",
             "page.slider.trackStylesSection": "轨道样式",
@@ -812,13 +782,11 @@ extension ExampleStrings {
         ],
         "ja": [
             // Spinners
-            "page.spinners.title": "スピナー",
             "page.spinners.styles": "スタイル",
             "page.spinners.customColorSection": "カスタムカラー",
             "page.spinners.installing": "インストール中…",
 
             // List
-            "page.list.title": "リストのデモ",
             "page.list.singleSelection": "単一選択",
             "page.list.multiSelection": "複数選択",
             "page.list.currentSelections": "現在の選択",
@@ -849,7 +817,6 @@ extension ExampleStrings {
             "page.list.help.wheel": "マウスホイールで任意のリストをスクロール（リストがフォーカスを持っているかどうか、選択バインディングがあるかどうかに関係なく機能します）",
 
             // Table
-            "page.table.title": "テーブルのデモ",
             "page.table.fileBrowserCaption": "ファイルブラウザ（名前は内容に合わせ、種類は埋め、オプトインのスクロールバー）",
             "page.table.multiSelectionCaption": "複数選択 + 複数行の詳細 (.lineLimit(2))",
             "page.table.wrappingCaption": "固定高さ、数百行、さまざまな折り返しと切り詰め (.lineLimit(3))",
@@ -874,7 +841,6 @@ extension ExampleStrings {
             "page.table.help.switch": "[Tab] でテーブル間を切り替え",
 
             // ScrollView
-            "page.scrollView.title": "スクロールビュー",
             "page.scrollView.subtitle": "任意のコンテンツ向けの汎用スクロールコンテナ",
             "page.scrollView.longTextSection": "長文 — デフォルトのインジケーター付きの素の ScrollView",
             "page.scrollView.longTextBody": "ScrollView は、オプションの「上/下にあと N 行」インジケーター以外、独自の装飾を一切描画しません — 枠線も、背景も、パディングもありません。下に見える枠は ScrollView に適用された単なる .border() です。その行を削除すると、インジケーターと表示するコンテンツを除いて ScrollView は見えなくなります。",
@@ -916,7 +882,6 @@ extension ExampleStrings {
             "page.scrollView.help.jump": "[Home/End]：先頭 / 末尾へジャンプ",
 
             // Slider
-            "page.slider.title": "スライダーのデモ",
             "page.slider.basicSection": "基本スライダー（ブロックスタイル）",
             "page.slider.volume": "音量：",
             "page.slider.trackStylesSection": "トラックスタイル",

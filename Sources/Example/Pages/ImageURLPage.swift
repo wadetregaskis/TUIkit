@@ -84,7 +84,7 @@ struct ImageURLPage: View {
         .imageEdgeThreshold(edgeLines ? edgeThreshold : nil)
         .statusBarItems(statusBarItems)
         .appHeader {
-            DemoAppHeader(L("page.imageURL.title"))
+            DemoAppHeader(L("menu.item.imageURL"))
         }
     }
 

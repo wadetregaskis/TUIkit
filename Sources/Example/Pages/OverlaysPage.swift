@@ -226,7 +226,7 @@ struct OverlaysPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.overlays.header"))
+            DemoAppHeader(L("menu.item.overlays"))
         }
     }
 

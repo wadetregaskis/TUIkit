@@ -304,7 +304,7 @@ struct TablePage: View {
             await runLiveTicker()
         }
         .appHeader {
-            DemoAppHeader(L("page.table.title"))
+            DemoAppHeader(L("menu.item.tables"))
         }
     }
 

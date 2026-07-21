@@ -16,7 +16,6 @@ extension ExampleStrings {
         // MARK: - English (source of truth)
         "en": [
             // page.textStyles
-            "page.textStyles.header": "Text Styles Demo",
             "page.textStyles.section.basic": "Basic Styles",
             "page.textStyles.normal": "Normal text - no styling applied",
             "page.textStyles.bold": "Bold text",
@@ -58,7 +57,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "Themed header",
 
             // page.colors
-            "page.colors.header": "Colors Demo",
             "page.colors.section.standard": "Standard ANSI Colors",
             "page.colors.black": "Black",
             "page.colors.red": "Red",
@@ -92,7 +90,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "grayscale",
 
             // page.containers
-            "page.containers.header": "Container Views Demo",
             "page.containers.aCardView": "A Card view",
             "page.containers.withPadding": "with padding",
             "page.containers.simpleBordered": "Simple bordered content",
@@ -119,7 +116,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "BorderStyle is determined by Appearance. Press 'a' to cycle.",
 
             // page.overlays
-            "page.overlays.header": "Overlays, Modals & Notifications Demo",
             "page.overlays.selectDemo": "Select a Demo",
             "page.overlays.label.alertStandard": "Alert (Standard)",
             "page.overlays.label.alertWarning": "Alert (Warning)",
@@ -184,7 +180,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "show",
 
             // page.layout
-            "page.layout.header": "Layout System Demo",
             "page.layout.section.vstack": "VStack (Vertical)",
             "page.layout.item": "Item",
             "page.layout.section.hstack": "HStack (Horizontal)",
@@ -218,7 +213,6 @@ extension ExampleStrings {
         // MARK: - German
         "de": [
             // page.textStyles
-            "page.textStyles.header": "Textstile-Demo",
             "page.textStyles.section.basic": "Grundlegende Stile",
             "page.textStyles.normal": "Normaler Text – ohne Stil",
             "page.textStyles.bold": "Fetter Text",
@@ -260,7 +254,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "Gestaltete Überschrift",
 
             // page.colors
-            "page.colors.header": "Farben-Demo",
             "page.colors.section.standard": "Standard-ANSI-Farben",
             "page.colors.black": "Schwarz",
             "page.colors.red": "Rot",
@@ -294,7 +287,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "graustufen",
 
             // page.containers
-            "page.containers.header": "Container-Ansichten-Demo",
             "page.containers.aCardView": "Eine Card-Ansicht",
             "page.containers.withPadding": "mit Innenabstand",
             "page.containers.simpleBordered": "Einfacher umrandeter Inhalt",
@@ -321,7 +313,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "Der Rahmenstil wird durch das Erscheinungsbild bestimmt. Mit 'a' durchschalten.",
 
             // page.overlays
-            "page.overlays.header": "Overlays-, Modale- & Benachrichtigungen-Demo",
             "page.overlays.selectDemo": "Demo auswählen",
             "page.overlays.label.alertStandard": "Hinweis (Standard)",
             "page.overlays.label.alertWarning": "Hinweis (Warnung)",
@@ -386,7 +377,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "zeigen",
 
             // page.layout
-            "page.layout.header": "Layout-System-Demo",
             "page.layout.section.vstack": "VStack (Vertikal)",
             "page.layout.item": "Element",
             "page.layout.section.hstack": "HStack (Horizontal)",
@@ -420,7 +410,6 @@ extension ExampleStrings {
         // MARK: - French
         "fr": [
             // page.textStyles
-            "page.textStyles.header": "Démo des styles de texte",
             "page.textStyles.section.basic": "Styles de base",
             "page.textStyles.normal": "Texte normal - aucun style appliqué",
             "page.textStyles.bold": "Texte gras",
@@ -462,7 +451,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "En-tête thématisé",
 
             // page.colors
-            "page.colors.header": "Démo des couleurs",
             "page.colors.section.standard": "Couleurs ANSI standard",
             "page.colors.black": "Noir",
             "page.colors.red": "Rouge",
@@ -496,7 +484,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "niveaux de gris",
 
             // page.containers
-            "page.containers.header": "Démo des vues conteneurs",
             "page.containers.aCardView": "Une vue Card",
             "page.containers.withPadding": "avec marge intérieure",
             "page.containers.simpleBordered": "Contenu simple avec bordure",
@@ -523,7 +510,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "Le style de bordure est déterminé par l'apparence. Appuyez sur « a » pour faire défiler.",
 
             // page.overlays
-            "page.overlays.header": "Démo des superpositions, modales et notifications",
             "page.overlays.selectDemo": "Choisir une démo",
             "page.overlays.label.alertStandard": "Alerte (Standard)",
             "page.overlays.label.alertWarning": "Alerte (Avertissement)",
@@ -588,7 +574,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "afficher",
 
             // page.layout
-            "page.layout.header": "Démo du système de mise en page",
             "page.layout.section.vstack": "VStack (Vertical)",
             "page.layout.item": "Élément",
             "page.layout.section.hstack": "HStack (Horizontal)",
@@ -622,7 +607,6 @@ extension ExampleStrings {
         // MARK: - Italian
         "it": [
             // page.textStyles
-            "page.textStyles.header": "Demo degli stili di testo",
             "page.textStyles.section.basic": "Stili di base",
             "page.textStyles.normal": "Testo normale - nessuno stile applicato",
             "page.textStyles.bold": "Testo grassetto",
@@ -664,7 +648,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "Intestazione personalizzata",
 
             // page.colors
-            "page.colors.header": "Demo dei colori",
             "page.colors.section.standard": "Colori ANSI standard",
             "page.colors.black": "Nero",
             "page.colors.red": "Rosso",
@@ -698,7 +681,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "scala di grigi",
 
             // page.containers
-            "page.containers.header": "Demo delle viste contenitore",
             "page.containers.aCardView": "Una vista Card",
             "page.containers.withPadding": "con spaziatura interna",
             "page.containers.simpleBordered": "Contenuto semplice con bordo",
@@ -725,7 +707,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "Lo stile del bordo è determinato dall'aspetto. Premi 'a' per scorrere.",
 
             // page.overlays
-            "page.overlays.header": "Demo di overlay, modali e notifiche",
             "page.overlays.selectDemo": "Scegli una demo",
             "page.overlays.label.alertStandard": "Avviso (Standard)",
             "page.overlays.label.alertWarning": "Avviso (Avvertenza)",
@@ -790,7 +771,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "mostra",
 
             // page.layout
-            "page.layout.header": "Demo del sistema di layout",
             "page.layout.section.vstack": "VStack (Verticale)",
             "page.layout.item": "Elemento",
             "page.layout.section.hstack": "HStack (Orizzontale)",
@@ -824,7 +804,6 @@ extension ExampleStrings {
         // MARK: - Spanish
         "es": [
             // page.textStyles
-            "page.textStyles.header": "Demo de estilos de texto",
             "page.textStyles.section.basic": "Estilos básicos",
             "page.textStyles.normal": "Texto normal - sin estilo aplicado",
             "page.textStyles.bold": "Texto en negrita",
@@ -866,7 +845,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "Encabezado personalizado",
 
             // page.colors
-            "page.colors.header": "Demo de colores",
             "page.colors.section.standard": "Colores ANSI estándar",
             "page.colors.black": "Negro",
             "page.colors.red": "Rojo",
@@ -900,7 +878,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "escala de grises",
 
             // page.containers
-            "page.containers.header": "Demo de vistas contenedoras",
             "page.containers.aCardView": "Una vista Card",
             "page.containers.withPadding": "con relleno",
             "page.containers.simpleBordered": "Contenido simple con borde",
@@ -927,7 +904,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "El estilo de borde lo determina la apariencia. Pulsa 'a' para alternar.",
 
             // page.overlays
-            "page.overlays.header": "Demo de superposiciones, modales y notificaciones",
             "page.overlays.selectDemo": "Elige una demo",
             "page.overlays.label.alertStandard": "Alerta (Estándar)",
             "page.overlays.label.alertWarning": "Alerta (Advertencia)",
@@ -992,7 +968,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "mostrar",
 
             // page.layout
-            "page.layout.header": "Demo del sistema de diseño",
             "page.layout.section.vstack": "VStack (Vertical)",
             "page.layout.item": "Elemento",
             "page.layout.section.hstack": "HStack (Horizontal)",
@@ -1026,7 +1001,6 @@ extension ExampleStrings {
         // MARK: - Simplified Chinese
         "zh": [
             // page.textStyles
-            "page.textStyles.header": "文本样式演示",
             "page.textStyles.section.basic": "基本样式",
             "page.textStyles.normal": "普通文本 - 未应用样式",
             "page.textStyles.bold": "粗体文本",
@@ -1068,7 +1042,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "主题化标题",
 
             // page.colors
-            "page.colors.header": "颜色演示",
             "page.colors.section.standard": "标准 ANSI 颜色",
             "page.colors.black": "黑色",
             "page.colors.red": "红色",
@@ -1102,7 +1075,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "灰度",
 
             // page.containers
-            "page.containers.header": "容器视图演示",
             "page.containers.aCardView": "一个 Card 视图",
             "page.containers.withPadding": "带内边距",
             "page.containers.simpleBordered": "简单的带边框内容",
@@ -1129,7 +1101,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "边框样式由外观决定。按 'a' 循环切换。",
 
             // page.overlays
-            "page.overlays.header": "浮层、模态框与通知演示",
             "page.overlays.selectDemo": "选择一个演示",
             "page.overlays.label.alertStandard": "警告框（标准）",
             "page.overlays.label.alertWarning": "警告框（警告）",
@@ -1194,7 +1165,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "显示",
 
             // page.layout
-            "page.layout.header": "布局系统演示",
             "page.layout.section.vstack": "VStack（垂直）",
             "page.layout.item": "项",
             "page.layout.section.hstack": "HStack（水平）",
@@ -1228,7 +1198,6 @@ extension ExampleStrings {
         // MARK: - Japanese
         "ja": [
             // page.textStyles
-            "page.textStyles.header": "テキストスタイルのデモ",
             "page.textStyles.section.basic": "基本スタイル",
             "page.textStyles.normal": "通常のテキスト - スタイルなし",
             "page.textStyles.bold": "太字テキスト",
@@ -1270,7 +1239,6 @@ extension ExampleStrings {
             "page.textStyles.themedHeader": "テーマ設定済みヘッダー",
 
             // page.colors
-            "page.colors.header": "カラーのデモ",
             "page.colors.section.standard": "標準ANSIカラー",
             "page.colors.black": "黒",
             "page.colors.red": "赤",
@@ -1304,7 +1272,6 @@ extension ExampleStrings {
             "page.colors.gradient.grayscale": "グレースケール",
 
             // page.containers
-            "page.containers.header": "コンテナビューのデモ",
             "page.containers.aCardView": "Card ビュー",
             "page.containers.withPadding": "パディング付き",
             "page.containers.simpleBordered": "シンプルな枠線付きコンテンツ",
@@ -1331,7 +1298,6 @@ extension ExampleStrings {
             "page.containers.borderStyleHelp": "枠線スタイルは外観によって決まります。'a' キーで切り替えます。",
 
             // page.overlays
-            "page.overlays.header": "オーバーレイ・モーダル・通知のデモ",
             "page.overlays.selectDemo": "デモを選択",
             "page.overlays.label.alertStandard": "アラート（標準）",
             "page.overlays.label.alertWarning": "アラート（警告）",
@@ -1396,7 +1362,6 @@ extension ExampleStrings {
             "page.overlays.status.show": "表示",
 
             // page.layout
-            "page.layout.header": "レイアウトシステムのデモ",
             "page.layout.section.vstack": "VStack（垂直）",
             "page.layout.item": "項目",
             "page.layout.section.hstack": "HStack（水平）",

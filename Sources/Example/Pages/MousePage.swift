@@ -336,7 +336,7 @@ struct MousePage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                L("page.mouse.title"),
+                L("menu.item.mouse"),
                 subtitle:
                     L("page.mouse.subtitle")
             )

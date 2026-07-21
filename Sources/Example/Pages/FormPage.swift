@@ -116,7 +116,7 @@ struct FormPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.form.title"), subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
+            DemoAppHeader(L("menu.item.forms"), subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
         }
     }
 }

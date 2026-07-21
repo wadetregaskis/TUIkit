@@ -81,7 +81,7 @@ struct LifecyclePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.lifecycle.title"))
+            DemoAppHeader(L("menu.item.lifecycle"))
         }
     }
 

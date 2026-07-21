@@ -89,7 +89,7 @@ struct FocusPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.focus.title"))
+            DemoAppHeader(L("menu.item.focus"))
         }
     }
 

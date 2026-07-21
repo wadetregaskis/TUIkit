@@ -146,7 +146,7 @@ struct ContainersPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.containers.header"))
+            DemoAppHeader(L("menu.item.containers"))
         }
     }
 }

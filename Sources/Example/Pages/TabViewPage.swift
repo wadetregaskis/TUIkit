@@ -167,7 +167,7 @@ struct TabViewPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.tabView.title"))
+            DemoAppHeader(L("menu.item.tabViews"))
         }
     }
 }

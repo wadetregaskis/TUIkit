@@ -43,7 +43,7 @@ struct SpinnersPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("page.spinners.title"))
+            DemoAppHeader(L("menu.item.spinners"))
         }
     }
 

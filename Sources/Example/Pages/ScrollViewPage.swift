@@ -195,7 +195,7 @@ struct ScrollViewPage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                L("page.scrollView.title"),
+                L("menu.item.scrollView"),
                 subtitle: L("page.scrollView.subtitle")
             )
         }

@@ -20,7 +20,7 @@ struct TextStylesPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("page.textStyles.header"))
+            DemoAppHeader(L("menu.item.textStyles"))
         }
     }
 

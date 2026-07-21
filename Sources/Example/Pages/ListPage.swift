@@ -87,7 +87,7 @@ struct ListPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("page.list.title"))
+            DemoAppHeader(L("menu.item.lists"))
         }
     }
 

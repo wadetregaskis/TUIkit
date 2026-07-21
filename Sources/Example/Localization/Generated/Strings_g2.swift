@@ -15,7 +15,6 @@ extension ExampleStrings {
     static let g2: [String: [String: String]] = [
         "en": [
             // Buttons
-            "page.buttons.header": "Buttons & Links Demo",
             "page.buttons.section.counter": "Interactive Counter (@State)",
             "page.buttons.reset": "Reset",
             "page.buttons.clicks": "Clicks",
@@ -46,7 +45,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "Use [Tab] to move focus between buttons",
             "page.buttons.help.enterSpace": "Use [Enter] or [Space] to press the focused button",
             // Toggle
-            "page.toggle.header": "Toggle Demo",
             "page.toggle.section.toggles": "Toggles",
             "page.toggle.enableNotifications": "Enable Notifications",
             "page.toggle.darkMode": "Dark Mode",
@@ -129,7 +127,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Enter] Submit (triggers onSubmit)",
             "page.secureField.help.nextField": "[Tab] Move to next field",
             // RadioButton
-            "page.radioButton.header": "Radio Buttons Demo",
             "page.radioButton.section.colorVertical": "Color Selection (Vertical)",
             "page.radioButton.red": "Red",
             "page.radioButton.green": "Green",
@@ -157,7 +154,6 @@ extension ExampleStrings {
         ],
         "de": [
             // Buttons
-            "page.buttons.header": "Schaltflächen- & Links-Demo",
             "page.buttons.section.counter": "Interaktiver Zähler (@State)",
             "page.buttons.reset": "Zurücksetzen",
             "page.buttons.clicks": "Klicks",
@@ -188,7 +184,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "Mit [Tab] den Fokus zwischen Schaltflächen wechseln",
             "page.buttons.help.enterSpace": "Mit [Enter] oder [Leertaste] die fokussierte Schaltfläche betätigen",
             // Toggle
-            "page.toggle.header": "Schalter-Demo",
             "page.toggle.section.toggles": "Schalter",
             "page.toggle.enableNotifications": "Benachrichtigungen aktivieren",
             "page.toggle.darkMode": "Dunkler Modus",
@@ -271,7 +266,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Enter] Senden (löst onSubmit aus)",
             "page.secureField.help.nextField": "[Tab] Zum nächsten Feld wechseln",
             // RadioButton
-            "page.radioButton.header": "Optionsfelder-Demo",
             "page.radioButton.section.colorVertical": "Farbauswahl (vertikal)",
             "page.radioButton.red": "Rot",
             "page.radioButton.green": "Grün",
@@ -299,7 +293,6 @@ extension ExampleStrings {
         ],
         "fr": [
             // Buttons
-            "page.buttons.header": "Démo boutons et liens",
             "page.buttons.section.counter": "Compteur interactif (@State)",
             "page.buttons.reset": "Réinitialiser",
             "page.buttons.clicks": "Clics",
@@ -330,7 +323,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "Utilisez [Tab] pour déplacer le focus entre les boutons",
             "page.buttons.help.enterSpace": "Utilisez [Entrée] ou [Espace] pour activer le bouton ciblé",
             // Toggle
-            "page.toggle.header": "Démo interrupteur",
             "page.toggle.section.toggles": "Interrupteurs",
             "page.toggle.enableNotifications": "Activer les notifications",
             "page.toggle.darkMode": "Mode sombre",
@@ -413,7 +405,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Entrée] Envoyer (déclenche onSubmit)",
             "page.secureField.help.nextField": "[Tab] Passer au champ suivant",
             // RadioButton
-            "page.radioButton.header": "Démo boutons radio",
             "page.radioButton.section.colorVertical": "Sélection de couleur (vertical)",
             "page.radioButton.red": "Rouge",
             "page.radioButton.green": "Vert",
@@ -441,7 +432,6 @@ extension ExampleStrings {
         ],
         "it": [
             // Buttons
-            "page.buttons.header": "Demo pulsanti e collegamenti",
             "page.buttons.section.counter": "Contatore interattivo (@State)",
             "page.buttons.reset": "Reimposta",
             "page.buttons.clicks": "Clic",
@@ -472,7 +462,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "Usa [Tab] per spostare il focus tra i pulsanti",
             "page.buttons.help.enterSpace": "Usa [Invio] o [Spazio] per premere il pulsante attivo",
             // Toggle
-            "page.toggle.header": "Demo interruttore",
             "page.toggle.section.toggles": "Interruttori",
             "page.toggle.enableNotifications": "Abilita notifiche",
             "page.toggle.darkMode": "Modalità scura",
@@ -555,7 +544,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Invio] Invia (attiva onSubmit)",
             "page.secureField.help.nextField": "[Tab] Passa al campo successivo",
             // RadioButton
-            "page.radioButton.header": "Demo pulsanti di opzione",
             "page.radioButton.section.colorVertical": "Selezione colore (verticale)",
             "page.radioButton.red": "Rosso",
             "page.radioButton.green": "Verde",
@@ -583,7 +571,6 @@ extension ExampleStrings {
         ],
         "es": [
             // Buttons
-            "page.buttons.header": "Demo de botones y enlaces",
             "page.buttons.section.counter": "Contador interactivo (@State)",
             "page.buttons.reset": "Restablecer",
             "page.buttons.clicks": "Clics",
@@ -614,7 +601,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "Usa [Tab] para mover el foco entre botones",
             "page.buttons.help.enterSpace": "Usa [Intro] o [Espacio] para pulsar el botón enfocado",
             // Toggle
-            "page.toggle.header": "Demo de interruptor",
             "page.toggle.section.toggles": "Interruptores",
             "page.toggle.enableNotifications": "Activar notificaciones",
             "page.toggle.darkMode": "Modo oscuro",
@@ -697,7 +683,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Intro] Enviar (activa onSubmit)",
             "page.secureField.help.nextField": "[Tab] Pasar al siguiente campo",
             // RadioButton
-            "page.radioButton.header": "Demo de botones de opción",
             "page.radioButton.section.colorVertical": "Selección de color (vertical)",
             "page.radioButton.red": "Rojo",
             "page.radioButton.green": "Verde",
@@ -725,7 +710,6 @@ extension ExampleStrings {
         ],
         "zh": [
             // Buttons
-            "page.buttons.header": "按钮与链接演示",
             "page.buttons.section.counter": "交互式计数器 (@State)",
             "page.buttons.reset": "重置",
             "page.buttons.clicks": "点击次数",
@@ -756,7 +740,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "使用 [Tab] 在按钮之间移动焦点",
             "page.buttons.help.enterSpace": "使用 [Enter] 或 [Space] 按下获得焦点的按钮",
             // Toggle
-            "page.toggle.header": "开关演示",
             "page.toggle.section.toggles": "开关",
             "page.toggle.enableNotifications": "启用通知",
             "page.toggle.darkMode": "深色模式",
@@ -839,7 +822,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Enter] 提交（触发 onSubmit）",
             "page.secureField.help.nextField": "[Tab] 移到下一个字段",
             // RadioButton
-            "page.radioButton.header": "单选按钮演示",
             "page.radioButton.section.colorVertical": "颜色选择（垂直）",
             "page.radioButton.red": "红色",
             "page.radioButton.green": "绿色",
@@ -867,7 +849,6 @@ extension ExampleStrings {
         ],
         "ja": [
             // Buttons
-            "page.buttons.header": "ボタンとリンクのデモ",
             "page.buttons.section.counter": "インタラクティブなカウンター (@State)",
             "page.buttons.reset": "リセット",
             "page.buttons.clicks": "クリック数",
@@ -898,7 +879,6 @@ extension ExampleStrings {
             "page.buttons.help.tab": "[Tab] でボタン間のフォーカスを移動します",
             "page.buttons.help.enterSpace": "[Enter] または [Space] でフォーカス中のボタンを押します",
             // Toggle
-            "page.toggle.header": "トグルのデモ",
             "page.toggle.section.toggles": "トグル",
             "page.toggle.enableNotifications": "通知を有効にする",
             "page.toggle.darkMode": "ダークモード",
@@ -981,7 +961,6 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Enter] 送信（onSubmit をトリガー）",
             "page.secureField.help.nextField": "[Tab] 次のフィールドへ移動",
             // RadioButton
-            "page.radioButton.header": "ラジオボタンのデモ",
             "page.radioButton.section.colorVertical": "色の選択（垂直）",
             "page.radioButton.red": "赤",
             "page.radioButton.green": "緑",

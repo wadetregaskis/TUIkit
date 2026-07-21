@@ -24,7 +24,7 @@ struct SliderPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("page.slider.title"))
+            DemoAppHeader(L("menu.item.sliders"))
         }
     }
 
