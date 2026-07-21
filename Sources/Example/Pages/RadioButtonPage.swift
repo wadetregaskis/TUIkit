@@ -74,6 +74,8 @@ struct RadioButtonPage: View {
                 shortcuts: [
                     L("page.radioButton.help.navVertical"),
                     L("page.radioButton.help.navHorizontal"),
+                    L("page.radioButton.help.jump"),
+                    L("page.radioButton.help.fast"),
                     L("page.radioButton.help.select"),
                 ]
             )

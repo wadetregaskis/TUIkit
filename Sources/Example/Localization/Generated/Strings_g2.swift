@@ -150,6 +150,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "Focus Navigation",
             "page.radioButton.help.navVertical": "Use [↑/↓] to navigate vertically",
             "page.radioButton.help.navHorizontal": "Use [←/→] to navigate horizontally",
+            "page.radioButton.help.jump": "[Home]/[End] or [PageUp]/[PageDown] jump to the first/last option",
+            "page.radioButton.help.fast": "[Shift]+arrow moves several options at once (on the group's axis)",
             "page.radioButton.help.select": "Use [Enter] or [Space] to select",
         ],
         "de": [
