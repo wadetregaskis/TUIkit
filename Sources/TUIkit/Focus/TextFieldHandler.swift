@@ -120,6 +120,12 @@ final class TextFieldHandler: Focusable {
     /// it `false` so those move the window freely.
     var suggestionFollowPending = false
 
+    /// How many suggestion rows a Shift-accelerated Up/Down jumps in the open
+    /// pop-up. Synced from `environment.shiftStepMultiplier` during the field's
+    /// render (default 5), matching the Picker drop-down and radio group; a
+    /// plain arrow still moves one. See ``View/shiftStepMultiplier(_:)``.
+    var shiftStepMultiplier: Int = 5
+
     /// Creates a text field handler.
     ///
     /// - Parameters:
@@ -507,18 +513,42 @@ extension TextFieldHandler {
     /// the event is not menu interaction, so normal field handling proceeds
     /// — typing always keeps editing the field.
     private func handleSuggestionKeyEvent(_ event: KeyEvent) -> Bool? {
-        guard !suggestionCompletions.isEmpty, !event.shift, !event.alt, !event.ctrl else {
-            return nil
-        }
+        guard !suggestionCompletions.isEmpty, !event.alt, !event.ctrl else { return nil }
         guard suggestionsOpen else {
             // Closed: Down is the open gesture (the NSComboBox convention);
             // every other key is ordinary field editing.
-            if event.key == .down {
+            if event.key == .down, !event.shift {
                 openSuggestions(preferFirstRow: true)
                 return true
             }
             return nil
         }
+
+        // Open AND the keyboard is in the MENU (a row is highlighted): the
+        // shared jump gestures — Home/End, PageUp/PageDown, Shift+Up/Down —
+        // move the highlight, clamped, exactly as in a Picker drop-down, Menu
+        // or RadioButtonGroup. Page moves by a visible page of the scrolling
+        // pop-up.
+        //
+        // With NO highlight the keyboard is still at the caret (the combo box's
+        // field/menu duality), so these stay FIELD gestures — Home/End move the
+        // caret, Shift+arrow extends the selection — matching how plain Up
+        // already falls through from the first row back to the caret.
+        if let highlight = suggestionHighlight,
+            let destination = OptionListNavigation.clampedDestination(
+                for: event, from: highlight, count: suggestionCompletions.count,
+                onAxisForward: .down, onAxisBackward: .up,
+                multiplier: shiftStepMultiplier,
+                pageSize: max(1, suggestionScroll.viewportHeight))
+        {
+            suggestionHighlight = destination
+            suggestionFollowPending = true
+            return true
+        }
+        // Any other shifted key is field editing (e.g. Shift+Enter), never menu
+        // interaction — the plain-key menu switch below must not see it.
+        guard !event.shift else { return nil }
+
         switch event.key {
         case .down:
             // Down enters the menu (from the caret) and then walks it,

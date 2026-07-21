@@ -336,6 +336,9 @@ enum TextFieldSuggestions {
         if let highlight = handler.suggestionHighlight, highlight >= completions.count {
             handler.suggestionHighlight = completions.isEmpty ? nil : completions.count - 1
         }
+        // Captured at render so a Shift-accelerated Up/Down in the open pop-up
+        // can jump at event time, when the environment is out of reach.
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
 
         let isOpen = isFocused && handler.suggestionsOpen && !optionRowIndices.isEmpty
         if isOpen, !context.isMeasuring {

@@ -155,6 +155,90 @@ struct TextSuggestionKeyboardTests {
         #expect(handler.cursorPosition == 0)
     }
 
+    // MARK: - Jump navigation (shared with Picker / Menu / RadioButtonGroup)
+
+    @Test("End jumps to the last suggestion, Home back to the first")
+    func homeEndJump() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: ["a", "b", "c", "d", "e"])
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // open, highlight 0
+        #expect(handler.suggestionHighlight == 0)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .end)))
+        #expect(handler.suggestionHighlight == 4)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home)))
+        #expect(handler.suggestionHighlight == 0)
+    }
+
+    @Test("PageDown / PageUp move by a visible page of the pop-up")
+    func pageJump() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: (0..<10).map { "row\($0)" })
+        handler.suggestionScroll.viewportHeight = 3
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // highlight 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown)))
+        #expect(handler.suggestionHighlight == 3)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown)))
+        #expect(handler.suggestionHighlight == 6)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageUp)))
+        #expect(handler.suggestionHighlight == 3)
+    }
+
+    @Test("Shift + Up/Down accelerates by the step multiplier, clamped at the ends")
+    func shiftAccelerated() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: (0..<10).map { "row\($0)" })
+        handler.shiftStepMultiplier = 4
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))  // highlight 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)))
+        #expect(handler.suggestionHighlight == 4)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)))
+        #expect(handler.suggestionHighlight == 8)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)))
+        #expect(handler.suggestionHighlight == 9, "clamps at the last row, never wraps")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up, shift: true)))
+        #expect(handler.suggestionHighlight == 5)
+    }
+
+    /// The combo box's field/menu duality: with no highlight the keyboard is
+    /// still at the caret, so the jump keys must stay FIELD gestures — entering
+    /// the menu from them would steal Home/End from text editing.
+    @Test("With the keyboard at the caret, the jump keys stay field gestures")
+    func caretKeepsFieldGestures() {
+        let box = TextBox()
+        box.value = "typed"
+        let handler = makeHandler(box, completions: ["a", "b", "c"])
+        handler.cursorPosition = 5
+
+        handler.toggleSuggestionsOpen()  // pointer open — no highlight
+        #expect(handler.suggestionsOpen)
+        #expect(handler.suggestionHighlight == nil)
+
+        for key in [Key.home, .end, .pageDown, .pageUp] {
+            _ = handler.handleKeyEvent(KeyEvent(key: key))
+            #expect(
+                handler.suggestionHighlight == nil,
+                "\(key) must not enter the menu while the caret has the keyboard")
+        }
+        _ = handler.handleKeyEvent(KeyEvent(key: .down, shift: true))
+        #expect(
+            handler.suggestionHighlight == nil,
+            "Shift+Down extends the field selection; it doesn't enter the menu")
+    }
+
+    @Test("Shift+Down does not open a closed menu — only a plain Down does")
+    func shiftDoesNotOpenTheMenu() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: ["a", "b"])
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down, shift: true))
+        #expect(!handler.suggestionsOpen, "Shift+Down is a field gesture, not the open gesture")
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.suggestionsOpen)
+    }
+
     @Test("Enter accepts the highlighted suggestion and submits")
     func enterAccepts() {
         let box = TextBox()
@@ -217,13 +301,19 @@ struct TextSuggestionKeyboardTests {
         #expect(editing == [true, false], "onEditingChanged brackets the focus session")
     }
 
-    @Test("Shift+Down keeps its select-to-end meaning while the menu shows")
+    /// Shift+Down over a field that HAS suggestions but a **closed** menu. (The
+    /// name once said "while the menu shows", but nothing here opens it — the
+    /// three states are covered separately: closed here; open-at-the-caret in
+    /// `caretKeepsFieldGestures`; open-with-a-highlight in `shiftAccelerated`,
+    /// where it deliberately jumps the menu instead.)
+    @Test("Shift+Down keeps its select-to-end meaning while the menu is closed")
     func shiftDownStillSelects() {
         let box = TextBox()
         box.value = "abc"
         let handler = makeHandler(box, completions: ["alpha"])
         handler.cursorPosition = 0
 
+        #expect(!handler.suggestionsOpen, "precondition: the menu is closed")
         _ = handler.handleKeyEvent(KeyEvent(key: .down, shift: true))
         #expect(handler.suggestionHighlight == nil)
         #expect(handler.selectionRange == 0..<3)
