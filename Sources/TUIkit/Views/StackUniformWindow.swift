@@ -76,6 +76,15 @@ final class StackWindowState {
         /// How many cells of the anchor row sit above the viewport top.
         var anchorOffsetWithin = 0
 
+        /// The row key a bound `.anchorPosition(.row(id))` last DESIGNATED, or
+        /// `nil` when the anchor is the implicit top-visible row.
+        ///
+        /// Remembered so a designation is *adopted* once, when it changes: the
+        /// key itself is re-asserted every frame (that is what holds the row),
+        /// but re-seeding ``anchorOffsetWithin`` every frame would drag the row
+        /// to the viewport top instead of leaving it where it sits.
+        var designatedAnchorKey: String?
+
         /// The absolute offset the anchor was last derived against. Scroll
         /// input arrives as a new absolute offset; the DIFFERENCE is walked
         /// in row space (one line up looks at one row, §3), so estimates

@@ -208,6 +208,33 @@ extension _VStackCore {
     static var anchoredWindowThreshold: Int { 256 }
 
     /// Renders the window by anchored outward fill, or returns `nil` when a
+    /// Applies a DESIGNATED row anchor (`.anchorPosition(.row(id))`), which
+    /// replaces the implicit top-visible anchor, and returns its key (or `nil`
+    /// when no designation is in force).
+    ///
+    /// The key is re-asserted every frame — that stickiness IS the hold, since
+    /// `rebindAnchor` then finds wherever the row has moved to, so an insert or
+    /// delete around it shifts the scroll position rather than the row.
+    /// `anchorOffsetWithin` is reset only when the designation CHANGES, so
+    /// adopting a row leaves it where it sits rather than yanking it to the
+    /// viewport top.
+    private func applyDesignatedAnchor(
+        state: StackWindowState, context: RenderContext, mode: ScrollAnchorMode
+    ) -> String? {
+        guard mode == .row,
+            let key = context.environment.anchorPosition?.wrappedValue?.rowKey
+        else {
+            state.designatedAnchorKey = nil
+            return nil
+        }
+        if state.designatedAnchorKey != key {
+            state.designatedAnchorKey = key
+            state.anchorOffsetWithin = 0
+        }
+        state.anchorKey = key
+        return key
+    }
+
     /// touched row is a spacer (spacer distribution needs the full walk).
     func renderAnchoredWindow(
         _ children: ChildViewCollection, window: ScrollContentWindow, context: RenderContext
@@ -225,10 +252,12 @@ extension _VStackCore {
             children: children, spacing: spacing, state: state,
             proposal: ProposedSize(width: width, height: nil), context: childContext)
 
-        frame.rebindAnchor(
-            mode: ScrollAnchorMode.effective(
-                boundAnchor: context.environment.anchorPosition?.wrappedValue,
-                defaultScrollAnchor: context.environment.defaultScrollAnchor))
+        let anchorMode = ScrollAnchorMode.effective(
+            boundAnchor: context.environment.anchorPosition?.wrappedValue,
+            defaultScrollAnchor: context.environment.defaultScrollAnchor)
+        let designatedKey = applyDesignatedAnchor(state: state, context: context, mode: anchorMode)
+
+        frame.rebindAnchor(mode: anchorMode)
 
         // A pending scrollTo: pin the anchor to the TARGET (§5e — seek by
         // anchor, not by absolute offset). The estimated y positions only
@@ -275,8 +304,20 @@ extension _VStackCore {
             }
         }
 
-        frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
-        state.anchorKey = children.key(at: state.anchorOrdinal)
+        if designatedKey == nil {
+            frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
+            state.anchorKey = children.key(at: state.anchorOrdinal)
+        } else {
+            // A DESIGNATED row owns the anchor: the scroll position follows the
+            // ROW, not the other way round. So neither walk the anchor by the
+            // offset delta (that is how user scrolling moves it) nor re-derive
+            // the key from whatever ordinal the offset implies — both would
+            // drag the anchor off the designated row every frame, which is
+            // exactly what made `.row` behave as "hold the top visible row".
+            // `lastDerivedOffset` is still synced so no phantom delta
+            // accumulates if the designation is later cleared.
+            state.lastDerivedOffset = window.offset
+        }
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)
 
         // Focus / pending targets, wherever they are (§5d): estimated
