@@ -400,11 +400,14 @@ extension MouseEventDispatcher {
                 }
                 return true
             }
-            // Fall through only for wheel events. Click / drag
-            // / motion stop at the first matching region (and
-            // return its handler's `consumed` result, which is
-            // already `false` here).
-            if !event.button.isWheel {
+            // Fall through for wheel events AND for the secondary (right)
+            // button: a control that doesn't handle a right-click lets it
+            // BUBBLE to an ancestor, exactly like the wheel bubbles past a
+            // Button/TextField to the surrounding scroller. This is what lets a
+            // `.contextMenu` on a container open when you right-click a child
+            // that has no context action of its own. A left click / drag /
+            // motion still stops at the first matching region.
+            if !event.button.isWheel, event.button != .right {
                 return false
             }
         }

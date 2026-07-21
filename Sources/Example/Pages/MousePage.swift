@@ -31,6 +31,7 @@ struct MousePage: View {
     @State var dragDeltaX: Int = 0
     @State var dragDeltaY: Int = 0
     @State var rightClicks: Int = 0
+    @State var contextAction: String = "—"
     @State var lastModifier: String = "—"
     @State var isHovering: Bool = false
     @State var scrollTicks: Int = 0
@@ -249,6 +250,27 @@ struct MousePage: View {
             }
 
             DragScrollDemoSection()
+
+            // .contextMenu — right-click (or Ctrl-click) the target to pop up a
+            // menu of Buttons; choosing one runs its action and closes the menu.
+            DemoSection(L("page.mouse.contextMenuSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.mouse.contextMenuInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.mouse.contextMenuTarget"))
+                        .padding(.horizontal, 1)
+                        .border()
+                        .contextMenu {
+                            Button(L("page.mouse.contextCut")) { contextAction = L("page.mouse.contextCut") }
+                            Button(L("page.mouse.contextCopy")) { contextAction = L("page.mouse.contextCopy") }
+                            Divider()
+                            Button(L("page.mouse.contextDelete"), role: .destructive) {
+                                contextAction = L("page.mouse.contextDelete")
+                            }
+                        }
+                    ValueDisplayRow(L("page.mouse.contextChoice"), contextAction)
+                }
+            }
 
             DemoSection(L("page.mouse.rawEvents")) {
                 VStack(alignment: .leading, spacing: 1) {

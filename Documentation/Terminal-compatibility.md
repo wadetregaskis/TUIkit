@@ -217,7 +217,12 @@ non-default setup.
   (user-reported). **⌘-click is reported to apps as an ⌥-click**
   (user-reported). There is no escape sequence or variable that exposes
   the pointer configuration, so TUIkit cannot detect the setting; the
-  example's Mouse page shows a static note under iTerm2 instead.
+  example's Mouse page shows a static note under iTerm2 instead. This is
+  why TUIkit's `.contextMenu` accepts a **Ctrl-click** as a secondary
+  trigger in addition to a right-click: where iTerm2 swallows the
+  right-click for its own menu, Ctrl-click still reaches the app and
+  opens the TUIkit context menu. (Right-click reaches apps directly in
+  Apple Terminal, Ghostty and Warp — see those sections.)
 - **Modifier-clicks (byte-captured 2026-07-14, one run per modifier):**
   - **⌘-click → +8 (meta), symmetric.** Six deliberate ⌘-clicks arrived
     as SGR button code **8** with the meta bit present on **both** the

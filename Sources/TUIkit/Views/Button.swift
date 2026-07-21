@@ -244,9 +244,20 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             defaultPrefix: "button",
             propertyIndex: StateIndex.focusID
         )
+        // If this button sits inside an open pop-up menu, selecting it should run
+        // its action AND close the menu (SwiftUI's menu auto-dismiss). Capture the
+        // dismiss action into a local now — the environment isn't reachable from
+        // the event closure. `nil` everywhere outside a menu subtree, so a plain
+        // page button is unaffected.
+        let dismissMenu = context.environment.dismissMenu
+        let action = self.action
+        let effectiveAction: () -> Void = {
+            action()
+            dismissMenu?()
+        }
         let handler = ActionHandler(
             focusID: persistedFocusID,
-            action: action,
+            action: effectiveAction,
             canBeFocused: !isDisabled
         )
         FocusRegistration.register(context: context, handler: handler)
@@ -277,7 +288,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let shortcut = assignment.claim()
         {
             context.environment.volatileReadTracker?.recordRenderSideEffect()
-            registry.register(shortcut, action: action)
+            registry.register(shortcut, action: effectiveAction)
         }
 
         let style = context.environment.buttonStyle
@@ -308,7 +319,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
 
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID
-            let captureAction = action
+            let captureAction = effectiveAction
             let captureHoverBox = hoverBox
             let handlerID = mouseDispatcher.register { event in
                 switch event.phase {
