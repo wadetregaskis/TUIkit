@@ -24,11 +24,28 @@ struct SearchableTests {
     func presentsFieldAboveContent() {
         let out = render(Text("CONTENT").searchable(text: binding(QueryBox())))
         let joined = out.joined(separator: "\n")
-        #expect(joined.contains("⌕"), "the search glyph renders")
+        // No emoji chrome in a bare context, so the icon is omitted (the tiny
+        // ⌕ / mis-drawn 🔍 would read as noise) — the "Search" prompt carries
+        // the affordance instead.
         #expect(joined.contains("Search"), "the default prompt renders when the field is empty")
+        #expect(!joined.contains("\u{1F50D}"), "the emoji magnifier is omitted without emoji chrome")
         #expect(joined.contains("CONTENT"), "the searchable content renders too")
 
-        let glyphLine = out.firstIndex { $0.contains("⌕") } ?? Int.max
+        let promptLine = out.firstIndex { $0.contains("Search") } ?? Int.max
+        let contentLine = out.firstIndex { $0.contains("CONTENT") } ?? Int.min
+        #expect(promptLine < contentLine, "the field sits above the content")
+    }
+
+    @Test("Draws the 🔍 magnifier where the terminal renders emoji chrome")
+    func magnifierWithEmojiChrome() {
+        let out = render(
+            Text("CONTENT")
+                .searchable(text: binding(QueryBox()))
+                .environment(\.supportsEmojiChrome, true))
+        let joined = out.joined(separator: "\n")
+        #expect(joined.contains("\u{1F50D}"), "the 🔍 magnifier renders under emoji chrome")
+
+        let glyphLine = out.firstIndex { $0.contains("\u{1F50D}") } ?? Int.max
         let contentLine = out.firstIndex { $0.contains("CONTENT") } ?? Int.min
         #expect(glyphLine < contentLine, "the field sits above the content")
     }

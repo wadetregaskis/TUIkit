@@ -167,6 +167,24 @@ private struct ResolvedAutomaticToggleCharacterSetKey: EnvironmentKey {
     static let defaultValue: ToggleCharacterSet = .unicode
 }
 
+/// Whether this frame's terminal(s) can render emoji chrome glyphs. Universally
+/// safe `false` default (headless / tests / unlisted terminals).
+private struct SupportsEmojiChromeKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the current terminal renders emoji chrome glyphs legibly (the same
+    /// `supportsEmojiChrome` capability the toggle glyph adaptation uses).
+    ///
+    /// Read it to pick an emoji vs. a monochrome affordance — e.g. the
+    /// `.searchable` magnifier uses 🔍 here and no glyph elsewhere.
+    var supportsEmojiChrome: Bool {
+        get { self[SupportsEmojiChromeKey.self] }
+        set { self[SupportsEmojiChromeKey.self] = newValue }
+    }
+}
+
 extension EnvironmentValues {
     /// The glyph repertoire for ``Toggle``s in this environment.
     ///

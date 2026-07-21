@@ -660,6 +660,7 @@ extension RenderLoop {
         environment.toggleCharacterSet = .automatic
         environment.resolvedAutomaticToggleCharacterSet = .automatic(
             emojiChrome: capabilities.emojiChrome)
+        environment.supportsEmojiChrome = capabilities.emojiChrome
         // The writer's tmux skin-tone plane follows the same per-client answer:
         // keep SMP-base tones only when every attached client renders them
         // (Ghostty alone). Set per frame; a change always arrives via the

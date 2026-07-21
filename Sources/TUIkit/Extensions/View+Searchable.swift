@@ -50,10 +50,19 @@ struct SearchableModifier<Content: View>: View {
     let text: Binding<String>
     let prompt: Text?
 
+    /// The bare `⌕` (U+2315 telephone recorder) is drawn tiny and thin-lined by
+    /// Terminal.app, so it reads as noise beside the field rather than a search
+    /// affordance. On terminals that render emoji chrome legibly we use the bold
+    /// 🔍 magnifier instead; elsewhere we draw no icon at all and let the "Search"
+    /// prompt carry the meaning (a mis-drawn glyph is worse than none).
+    @Environment(\.supportsEmojiChrome) private var supportsEmojiChrome
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 1) {
-                Text("⌕")
+                if supportsEmojiChrome {
+                    Text("\u{1F50D}")
+                }
                 TextField("", text: text, prompt: prompt ?? Text("Search"))
             }
             content
