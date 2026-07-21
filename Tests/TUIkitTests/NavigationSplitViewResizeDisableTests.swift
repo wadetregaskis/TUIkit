@@ -1,11 +1,10 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  NavigationSplitViewResizeDisableTests.swift
 //
-//  When a split view isn't resizable — either via navigationSplitViewResizable(false)
-//  or because its style sizes columns to fit content every frame — the divider
-//  must draw no grip dots and register no focus section. A size-to-fit split has
-//  no persisted column width for a drag to act on, so a focusable/handled
-//  divider there was purely misleading (it took Tab focus but resized nothing).
+//  A split view is resizable by default — including under a size-to-fit style,
+//  where the columns fit their content until the user drags/keys one, which pins
+//  it. `navigationSplitViewResizable(false)` is the only thing that removes the
+//  divider grip and its focus section, whatever the style.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -35,21 +34,36 @@ struct NavigationSplitViewResizeDisableTests {
         return mid.distance(from: mid.startIndex, to: r)
     }
 
-    @Test("A size-to-fit style shows no resize handle and no divider focus section")
-    func sizeToFitHasNoDividerHandle() {
-        // Size-to-fit recomputes column widths from content every frame, so there
-        // is nothing for a drag to resize — the divider must draw no grip dots
-        // and take no focus, exactly as navigationSplitViewResizable(false) does.
+    @Test("A size-to-fit style is resizable: it keeps its handle and focus section")
+    func sizeToFitIsResizable() {
+        // Size-to-fit fits the columns to content, but a drag/keyboard resize
+        // pins a column so the user can still tune the layout — so the divider
+        // draws its grip and registers a focus section like any resizable split.
         let context = resizeContext()
         let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
             .navigationSplitViewStyle(.sizeToFitFromLeft)
 
         let buffer = renderToBuffer(view, context: context)
-        #expect(gripX(buffer) == nil, "size-to-fit draws no grip handle")
+        #expect(gripX(buffer) != nil, "size-to-fit draws its resize grip")
+        #expect(
+            fm.section(id: "nav-split-divider-0") != nil,
+            "size-to-fit registers a divider focus section")
+    }
+
+    @Test("resizable(false) removes the divider even under a size-to-fit style")
+    func resizableFalseDisablesSizeToFitDivider() {
+        let context = resizeContext()
+        let fm = context.environment.focusManager!
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .navigationSplitViewStyle(.sizeToFitFromLeft)
+            .navigationSplitViewResizable(false)
+
+        let buffer = renderToBuffer(view, context: context)
+        #expect(gripX(buffer) == nil, "resizable(false) draws no grip under size-to-fit")
         #expect(
             fm.section(id: "nav-split-divider-0") == nil,
-            "size-to-fit registers no divider focus section")
+            "resizable(false) registers no divider focus section under size-to-fit")
     }
 
     @Test("The default (proportional) style keeps its resize handle and focus section")
@@ -94,5 +108,50 @@ struct NavigationSplitViewResizeDisableTests {
         #expect(
             onFM.section(id: "nav-split-divider-0") != nil,
             "resizable(true) restores the divider focus section")
+    }
+}
+
+/// The persisted column-width store's pin + reset semantics, which are what let
+/// a size-to-fit split honour a manual resize and then release it on a token
+/// change (`.navigationSplitViewColumnWidthReset`).
+@MainActor
+@Suite("SplitViewWidths pinning + reset")
+struct SplitViewWidthsTests {
+    @Test("A user resize pins the width; a clamped write-back keeps it pinned")
+    func userResizePins() {
+        let widths = SplitViewWidths()
+        #expect(widths.isUserSet(0) == false)
+        widths.set(30, for: 0)
+        #expect(widths.isUserSet(0) == true)
+        #expect(widths.value(for: 0) == 30)
+        // The per-frame clamp write-back updates the width without un-pinning.
+        widths.setClamped(28, for: 0)
+        #expect(widths.isUserSet(0) == true, "a clamped write-back does not un-pin")
+        #expect(widths.value(for: 0) == 28)
+    }
+
+    @Test("The reset token releases pins only when it changes; the first is recorded")
+    func resetTokenReleasesOnChange() {
+        let widths = SplitViewWidths()
+        widths.set(30, for: 0)
+        // First observation of any token records it WITHOUT resetting, so a stable
+        // token applied on every render never wipes a resize the user just made.
+        widths.applyResetToken(AnyHashable(0))
+        #expect(widths.isUserSet(0) == true, "the first token seen never resets")
+        widths.applyResetToken(AnyHashable(0))
+        #expect(widths.isUserSet(0) == true, "the same token again still doesn't reset")
+        // A changed token releases every pin, so the columns re-flow to defaults.
+        widths.applyResetToken(AnyHashable(1))
+        #expect(widths.isUserSet(0) == false, "a changed token releases the pin")
+        #expect(widths.value(for: 0) == nil)
+    }
+
+    @Test("A constant (nil) token stream never resets")
+    func nilTokenNeverResets() {
+        let widths = SplitViewWidths()
+        widths.set(30, for: 0)
+        widths.applyResetToken(nil)
+        widths.applyResetToken(nil)
+        #expect(widths.isUserSet(0) == true, "no reset modifier (nil token) never releases a pin")
     }
 }

@@ -48,6 +48,53 @@ extension View {
     }
 }
 
+// MARK: - Column-width Reset
+
+/// A token whose change discards a ``NavigationSplitView``'s user-set column
+/// widths so they re-flow to the style / size-to-fit defaults. `nil` (the
+/// default) never resets.
+private struct NavigationSplitViewColumnWidthResetKey: EnvironmentKey {
+    // `nil` constant, so the unchecked isolation is sound (nothing to mutate) —
+    // AnyHashable isn't Sendable, but the shared default never changes.
+    nonisolated(unsafe) static let defaultValue: AnyHashable? = nil
+}
+
+extension EnvironmentValues {
+    var navigationSplitViewColumnWidthResetToken: AnyHashable? {
+        get { self[NavigationSplitViewColumnWidthResetKey.self] }
+        set { self[NavigationSplitViewColumnWidthResetKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Resets a ``NavigationSplitView``'s manually-resized column widths whenever
+    /// `token` changes, so the columns return to their style-derived (or
+    /// size-to-fit) widths.
+    ///
+    /// A split view remembers a column the user drags or arrow-resizes and keeps
+    /// it at that width indefinitely — even a size-to-fit split, which otherwise
+    /// tracks its content. This gives you a programmatic "reset to defaults":
+    /// bump the token (e.g. a counter incremented by a button, or the id of the
+    /// currently-selected layout) and every pinned column is released back to the
+    /// automatic width.
+    ///
+    /// ```swift
+    /// NavigationSplitView { … } detail: { … }
+    ///     .navigationSplitViewColumnWidthReset(resetCounter)   // Button { resetCounter += 1 }
+    /// ```
+    ///
+    /// This is a terminal-specific affordance (SwiftUI persists split widths
+    /// through its own state), so it is a modifier rather than an initializer
+    /// parameter. The first token value seen is recorded without resetting, so
+    /// applying a stable token never disturbs a width the user has set.
+    ///
+    /// - Parameter token: A value whose change triggers the reset.
+    /// - Returns: A view that resets its split columns when `token` changes.
+    public func navigationSplitViewColumnWidthReset(_ token: some Hashable) -> some View {
+        environment(\.navigationSplitViewColumnWidthResetToken, AnyHashable(token))
+    }
+}
+
 // MARK: - Persistent Column Widths
 
 /// The width of each resizable (non-trailing) column of a
@@ -73,6 +120,11 @@ final class SplitViewWidths {
     /// the style default; columns absent here track the style.
     private var userSet: Set<Int> = []
 
+    /// The last reset token seen (see ``applyResetToken(_:)``); `.some(nil)` once
+    /// any token — including an explicit `nil` — has been observed. Kept distinct
+    /// from "never observed" so the first token doesn't wipe a persisted resize.
+    private var lastResetToken: AnyHashable??
+
     func value(for column: Int) -> Int? { widths[column] }
 
     /// Whether `column` has been explicitly resized by the user (so it should
@@ -92,6 +144,20 @@ final class SplitViewWidths {
     /// style-derived column keeps a valid drag/keyboard seed while still
     /// re-deriving from the style when the style changes.
     func setClamped(_ width: Int, for column: Int) { widths[column] = width }
+
+    /// Releases every user-set width so the columns re-derive from the style /
+    /// size-to-fit content on the next render, when `token` differs from the last
+    /// one seen (see ``View/navigationSplitViewColumnWidthReset(_:)``). The first
+    /// token observed is only recorded — a stable token never wipes a resize the
+    /// user has already made.
+    func applyResetToken(_ token: AnyHashable?) {
+        defer { lastResetToken = token }
+        guard let lastResetToken else { return }  // first observation: record only
+        if lastResetToken != token {
+            widths.removeAll()
+            userSet.removeAll()
+        }
+    }
 }
 
 // MARK: - Divider Handler (keyboard + drag)

@@ -42,6 +42,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "Prominent Detail",
             "page.splitView.styleSizeToFit": "Size to Fit (from left)",
             "page.splitView.resizable": "Resizable dividers",
+            "page.splitView.resetWidths": "Reset widths",
             "page.splitView.folders": "Folders",
             "page.splitView.folderInbox": "Inbox",
             "page.splitView.folderStarred": "Starred",

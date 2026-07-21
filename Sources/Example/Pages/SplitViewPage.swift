@@ -129,6 +129,9 @@ struct SplitViewPage: View {
     @State private var visibility: NavigationSplitViewVisibility = .all
     @State private var styleName: String = "balanced"
     @State private var resizable: Bool = true
+    /// Bumped by the Reset button to release any manually-resized column widths
+    /// back to the style / size-to-fit defaults (`.navigationSplitViewColumnWidthReset`).
+    @State private var widthResetToken: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -145,12 +148,16 @@ struct SplitViewPage: View {
             .pickerStyle(.radioGroup)
             .padding(.horizontal, 1)
 
-            // Divider resizing is a configurable option. Size-to-fit recomputes
-            // its widths from content every frame, so it is inherently
-            // non-resizable — the toggle is disabled there to reflect that.
-            Toggle(L("page.splitView.resizable"), isOn: $resizable)
-                .disabled(styleName == "sizeToFit")
-                .padding(.horizontal, 1)
+            // Divider resizing is a configurable option — including under
+            // size-to-fit, where the columns fit their content until you drag or
+            // arrow-resize one, which pins it. Reset releases every pin so the
+            // columns re-flow to the automatic widths.
+            HStack(spacing: 2) {
+                Toggle(L("page.splitView.resizable"), isOn: $resizable)
+                Button(L("page.splitView.resetWidths")) { widthResetToken += 1 }
+                    .disabled(!resizable)
+            }
+            .padding(.horizontal, 1)
 
             styledSplitView
         }
@@ -164,6 +171,7 @@ struct SplitViewPage: View {
     @ViewBuilder private var styledSplitView: some View {
         styledSplitViewCore
             .navigationSplitViewResizable(resizable)
+            .navigationSplitViewColumnWidthReset(widthResetToken)
     }
 
     @ViewBuilder private var styledSplitViewCore: some View {

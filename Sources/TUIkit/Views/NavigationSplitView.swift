@@ -229,38 +229,22 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
         }
 
         // Resizable columns (the default) persist a user-chosen width per
-        // non-trailing column and expose a draggable / focusable divider.
-        // A size-to-fit style recomputes its widths from content every frame, so
-        // there is no persisted width for a drag to act on — a resizable
-        // size-to-fit split is contradictory. Force it non-resizable so the
-        // divider draws no grip dots and takes no focus (the wireDivider /
-        // buildDividerColumn guards below already do this once `resizable` is
-        // false).
+        // non-trailing column and expose a draggable / focusable divider. This
+        // works under a size-to-fit style too: the columns track their content
+        // until the user drags/keys one, which pins it (``isUserSet``) so it
+        // holds that width while the rest keep fitting —
+        // `.navigationSplitViewColumnWidthReset(_:)` releases the pins.
         let resizable =
             context.environment.navigationSplitViewResizable
-            && !style.sizesToFit
             && context.environment.stateStorage != nil
-        let widths: SplitViewWidths? = resizable
-            ? context.environment.stateStorage!.storage(
-                for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
-                default: SplitViewWidths()
-            ).value
-            : nil
-        if resizable {
-            // Keep the persisted widths box AND the divider handlers (all keyed
-            // by this identity) alive across the run loop's per-frame
-            // StateStorage GC. `storage(for:)` does not mark the identity active,
-            // and nothing else marks the split's own identity (the columns mark
-            // their child identities, not the parent), so without this the box
-            // is collected every frame and a drag / arrow resize never sticks.
-            context.environment.stateStorage!.markActive(context.identity)
-        }
+        let widths = resizable ? resolvePersistedWidths(context: context) : nil
 
         // Calculate column widths — content-fit-from-left, or proportional.
         let columnWidths =
             style.sizesToFit
             ? sizeToFitColumnWidths(
-                visibleColumns: visibleColumns, availableWidth: context.availableWidth, context: context)
+                visibleColumns: visibleColumns, availableWidth: context.availableWidth,
+                context: context, widths: widths, writeBack: resizable && !context.isMeasuring)
             : calculateColumnWidths(
                 visibleColumns: visibleColumns,
                 style: style,
@@ -530,6 +514,25 @@ extension _NavigationSplitViewCore {
         }
     }
 
+    /// The persisted per-column width store for a resizable split, having marked
+    /// its identity active (so the box and divider handlers survive the run
+    /// loop's per-frame StateStorage GC — the columns mark their own child
+    /// identities, not the parent's) and applied any width-reset token on a
+    /// render pass (a changed `.navigationSplitViewColumnWidthReset(_:)` releases
+    /// the user-pinned widths; a measure pass never mutates persisted state).
+    fileprivate func resolvePersistedWidths(context: RenderContext) -> SplitViewWidths {
+        let stateStorage = context.environment.stateStorage!
+        let widths = stateStorage.storage(
+            for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
+            default: SplitViewWidths()
+        ).value
+        stateStorage.markActive(context.identity)
+        if !context.isMeasuring {
+            widths.applyResetToken(context.environment.navigationSplitViewColumnWidthResetToken)
+        }
+        return widths
+    }
+
     /// Sizes columns to fit their content from the left: a naturally-narrow
     /// (non-flexible) column takes its content width; the width-flexible columns
     /// share the remainder, the last absorbing rounding. When the fixed columns
@@ -537,7 +540,8 @@ extension _NavigationSplitViewCore {
     /// from the right (their content truncates). Every column keeps at least
     /// `minimumColumnWidth`, and the widths always sum to the usable width.
     fileprivate func sizeToFitColumnWidths(
-        visibleColumns: [NavigationSplitViewColumn], availableWidth: Int, context: RenderContext
+        visibleColumns: [NavigationSplitViewColumn], availableWidth: Int, context: RenderContext,
+        widths: SplitViewWidths? = nil, writeBack: Bool = false
     ) -> [Int] {
         let count = visibleColumns.count
         let usable = availableWidth - max(0, count - 1)
@@ -562,17 +566,32 @@ extension _NavigationSplitViewCore {
             flexible[index] = size.isWidthFlexible
         }
 
-        var widths = [Int](repeating: minimumColumnWidth, count: count)
+        // A column the user has dragged/keyed is PINNED at that width: treat it as
+        // a fixed column of its stored width, so it holds while the untouched
+        // columns keep fitting their content and the trailing one absorbs slack.
+        // (The trailing column is never user-set — it is always the flexible
+        // remainder.) `.navigationSplitViewColumnWidthReset(_:)` clears the pins.
+        if let widths {
+            for index in 0..<max(0, count - 1) where widths.isUserSet(index) {
+                if let pinned = widths.value(for: index) {
+                    natural[index] = max(minimumColumnWidth, pinned)
+                    flexible[index] = false
+                }
+            }
+        }
+
+        var widthsResult = [Int](repeating: minimumColumnWidth, count: count)
         let flexIndices = (0..<count).filter { flexible[$0] }
         let fixedIndices = (0..<count).filter { !flexible[$0] }
-        for index in fixedIndices { widths[index] = natural[index] }
-        var fixedSum = fixedIndices.reduce(0) { $0 + widths[$1] }
+        for index in fixedIndices { widthsResult[index] = natural[index] }
+        var fixedSum = fixedIndices.reduce(0) { $0 + widthsResult[$1] }
 
         guard !flexIndices.isEmpty else {
             // No flexible column — the rightmost absorbs the slack so the split
             // still fills its width.
-            widths[count - 1] += max(0, usable - fixedSum)
-            return widths
+            widthsResult[count - 1] += max(0, usable - fixedSum)
+            writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
+            return widthsResult
         }
 
         // Shrink fixed columns from the right if they'd starve the flexible ones.
@@ -581,23 +600,38 @@ extension _NavigationSplitViewCore {
         if freeForFlex < flexMinTotal {
             var deficit = flexMinTotal - freeForFlex
             for index in fixedIndices.reversed() where deficit > 0 {
-                let give = min(widths[index] - minimumColumnWidth, deficit)
-                widths[index] -= give
+                let give = min(widthsResult[index] - minimumColumnWidth, deficit)
+                widthsResult[index] -= give
                 deficit -= give
             }
-            fixedSum = fixedIndices.reduce(0) { $0 + widths[$1] }
+            fixedSum = fixedIndices.reduce(0) { $0 + widthsResult[$1] }
             freeForFlex = usable - fixedSum
         }
 
         // Split the remainder evenly; the last flexible column absorbs rounding.
         let per = max(minimumColumnWidth, freeForFlex / flexIndices.count)
         for (position, index) in flexIndices.enumerated() {
-            widths[index] =
+            widthsResult[index] =
                 position == flexIndices.count - 1
                 ? max(minimumColumnWidth, freeForFlex - per * (flexIndices.count - 1))
                 : per
         }
-        return widths
+        writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
+        return widthsResult
+    }
+
+    /// Writes the clamped effective width of each user-pinned column back to the
+    /// shared store (render pass only), so the next drag / arrow resize steps
+    /// from the width actually shown rather than a stale intent — the size-to-fit
+    /// counterpart of `calculateColumnWidths`'s write-back. Only user-set columns
+    /// are touched; the style-derived ones re-measure from content every frame.
+    private func writeBackUserSet(
+        _ effective: [Int], widths: SplitViewWidths?, writeBack: Bool
+    ) {
+        guard writeBack, let widths else { return }
+        for index in 0..<max(0, effective.count - 1) where widths.isUserSet(index) {
+            widths.setClamped(effective[index], for: index)
+        }
     }
 
     /// Returns the focus section ID for a column.
