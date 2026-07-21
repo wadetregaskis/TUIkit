@@ -195,6 +195,73 @@ struct ScrollAnchorPositionTests {
         #expect(box.anchor == nil, "a wheel tick that moved nothing isn't a departure")
     }
 
+    // MARK: - Selection → Row (the §1.2 shadow-switch)
+
+    private func listHandler(
+        declared: ScrollAnchorMode, bound: ScrollAnchor<AnyHashable>? = nil
+    ) -> (ItemListHandler<String>, () -> ScrollAnchor<AnyHashable>?) {
+        final class Box { var anchor: ScrollAnchor<AnyHashable>? }
+        let box = Box()
+        let handler = ItemListHandler<String>(
+            focusID: "list", itemCount: 5, viewportHeight: 5, selectionMode: .single)
+        handler.itemIDs = ["a", "b", "c", "d", "e"]
+        handler.declaredAnchorMode = declared
+        box.anchor = bound
+        handler.anchorPositionBinding = Binding(
+            get: { box.anchor }, set: { box.anchor = $0 })
+        return (handler, { box.anchor })
+    }
+
+    @Test("Selecting a row turns a declared Bottom anchor into Row on that row")
+    func selectionSwitchesEdgeToRow() {
+        let (handler, read) = listHandler(declared: .bottom)
+        handler.focusedIndex = 2
+
+        handler.handleSelectionKey(.space)
+        #expect(read() == .row(AnyHashable("c")), "follow-the-log now holds the picked row")
+    }
+
+    @Test("A click selection switches too")
+    func clickSwitchesEdgeToRow() {
+        let (handler, read) = listHandler(declared: .top)
+        handler.handleClickSelection(
+            at: 3, event: MouseEvent(button: .left, phase: .released, x: 0, y: 0))
+        #expect(read() == .row(AnyHashable("d")))
+    }
+
+    /// Scoping negative 1 — the spec switches **Top/Bottom** to Row. A view
+    /// already released to `.window` is being browsed freely; selecting there
+    /// must not silently start holding a row.
+    @Test("Selecting does NOT re-anchor a view already released to .window")
+    func selectionLeavesReleasedViewAlone() {
+        let (handler, read) = listHandler(declared: .bottom, bound: .window)
+        handler.focusedIndex = 1
+
+        handler.handleSelectionKey(.space)
+        #expect(read() == .window, "the user is browsing; selection doesn't re-anchor")
+    }
+
+    /// Scoping negative 2 — with no edge declared there is no edge policy to
+    /// switch away from, so Window stays Window.
+    @Test("Selecting does NOT anchor when the declared mode is Window")
+    func selectionDoesNotAnchorUndeclared() {
+        let (handler, read) = listHandler(declared: .window)
+        handler.focusedIndex = 1
+
+        handler.handleSelectionKey(.space)
+        #expect(read() == nil, "nothing was declared to depart from")
+    }
+
+    @Test("With no bound anchor, selection is inert (no crash, nothing to write)")
+    func selectionWithoutBindingIsInert() {
+        let handler = ItemListHandler<String>(
+            focusID: "list", itemCount: 3, viewportHeight: 3, selectionMode: .single)
+        handler.itemIDs = ["a", "b", "c"]
+        handler.declaredAnchorMode = .bottom
+        handler.focusedIndex = 1
+        handler.handleSelectionKey(.space)  // must not trap
+    }
+
     // MARK: - Rendering through the modifier
 
     @Test("A bound .window anchor reaches the render path and takes effect")

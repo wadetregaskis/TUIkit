@@ -583,6 +583,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // which the spec shadow-switches to Row, not Window — that needs the
         // selection↔anchor wiring and lands with it.)
         handler.anchorPositionBinding = context.environment.anchorPosition
+        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
+            defaultScrollAnchor: context.environment.defaultScrollAnchor)
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // List rows can be any height (the renderer already windows by real
         // line heights), so the focus-reveal AND offset-clamp arithmetic must

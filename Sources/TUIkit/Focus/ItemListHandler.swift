@@ -277,6 +277,11 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
     var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
 
+    /// The anchor mode the view DECLARED (from `defaultScrollAnchor`), synced
+    /// each render. Read by ``anchorOnSelection(at:)`` to scope the §1.2
+    /// shadow-switch to the edge modes the spec names.
+    var declaredAnchorMode: ScrollAnchorMode = .window
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 
@@ -949,6 +954,33 @@ extension ItemListHandler {
             return
         }
         toggleSelectionAtFocusedIndex()
+        anchorOnSelection(at: focusedIndex)
+    }
+
+    /// The §1.2 shadow-switch: **selecting a row turns an EDGE anchor into a
+    /// Row anchor** on that row, so a follow-the-log view stops chasing the
+    /// tail and holds what the user just picked.
+    ///
+    /// Scoped exactly as the spec scopes it — "selecting a row shadow-switches
+    /// **Top/Bottom** modes to Row". Two cases deliberately do nothing:
+    ///
+    /// - Already departed (the binding is non-`nil`, e.g. `.window` after a
+    ///   scroll): the user is browsing freely and never asked for anchoring, so
+    ///   selecting shouldn't silently start holding a row.
+    /// - The declared anchor is Window (no edge declared): there is no edge
+    ///   policy to switch away from.
+    ///
+    /// The id is erased through `AnyHashable`, which preserves the base value —
+    /// so it round-trips back to the app's own `ID`. If the app bound a
+    /// *differently typed* `ScrollAnchor`, the modifier's setter drops the write
+    /// rather than force-casting.
+    func anchorOnSelection(at index: Int) {
+        guard let binding = anchorPositionBinding,
+            binding.wrappedValue == nil,
+            declaredAnchorMode == .top || declaredAnchorMode == .bottom,
+            let id = id(at: index)
+        else { return }
+        binding.wrappedValue = .row(AnyHashable(id))
     }
 
     /// Extends the selection by moving the focus cursor `delta` rows (no
@@ -1020,6 +1052,7 @@ extension ItemListHandler {
     /// Single-selection mode keeps its existing click-to-toggle behaviour;
     /// the keyboard path (Space toggles at the focus cursor) is unchanged.
     func handleClickSelection(at index: Int, event: MouseEvent) {
+        defer { anchorOnSelection(at: index) }
         focusedIndex = index
         // A click is a pointer gesture with its own selection semantics —
         // whatever it does, it ends keyboard extend mode.
