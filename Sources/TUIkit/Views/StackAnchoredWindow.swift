@@ -190,10 +190,24 @@ private final class AnchoredWindowFrame {
             y += pitch(of: ordinal)
         }
         let last = placed.last?.ordinal ?? anchor
-        if anchor > 0 {
-            let above = anchor - 1
-            let aboveY = anchorY - pitch(of: above)
-            if aboveY >= 0 { placed.append((above, aboveY)) }  // top margin row
+        // Fill upward from the anchor, covering the viewport top plus one
+        // margin row for scroll-up reveal. With the implicit top anchor
+        // (`anchorOffsetWithin >= 0`, so `anchorY <= offset`) the anchor is
+        // already the top-visible row, and this places exactly ONE row — the
+        // margin above it — as the single-margin version did. A DESIGNATED row
+        // held BELOW the top (`anchorOffsetWithin < 0`, `anchorY > offset`)
+        // also draws the now-visible rows between the top and the anchor.
+        var upperY = anchorY
+        var above = anchor - 1
+        var reachedTop = anchorY <= window.offset
+        while above >= 0 {
+            let aboveY = upperY - pitch(of: above)
+            if aboveY < 0 { break }  // absolute-space floor (full-height buffer)
+            placed.append((above, aboveY))
+            upperY = aboveY
+            if reachedTop { break }  // just placed the one margin row above the top
+            if aboveY <= window.offset { reachedTop = true }  // this row IS the top-visible one
+            above -= 1
         }
         return (placed, last, y)
     }
@@ -207,19 +221,20 @@ extension _VStackCore {
     /// keeps small stacks byte-exact in absolute space.
     static var anchoredWindowThreshold: Int { 256 }
 
-    /// Renders the window by anchored outward fill, or returns `nil` when a
     /// Applies a DESIGNATED row anchor (`.anchorPosition(.row(id))`), which
     /// replaces the implicit top-visible anchor, and returns its key (or `nil`
     /// when no designation is in force).
     ///
     /// The key is re-asserted every frame — that stickiness IS the hold, since
     /// `rebindAnchor` then finds wherever the row has moved to, so an insert or
-    /// delete around it shifts the scroll position rather than the row.
-    /// `anchorOffsetWithin` is reset only when the designation CHANGES, so
-    /// adopting a row leaves it where it sits rather than yanking it to the
-    /// viewport top.
+    /// delete around it shifts the scroll position rather than the row. When
+    /// the designation CHANGES the row is *adopted*: it keeps the screen line
+    /// it currently occupies (`adoptDesignatedRow`), so designating — or, via
+    /// the §1.2 shadow switch, selecting — a visible row does not jerk the
+    /// viewport to the top.
     private func applyDesignatedAnchor(
-        state: StackWindowState, context: RenderContext, mode: ScrollAnchorMode
+        frame: AnchoredWindowFrame, state: StackWindowState,
+        window: ScrollContentWindow, context: RenderContext, mode: ScrollAnchorMode
     ) -> String? {
         guard mode == .row,
             let key = context.environment.anchorPosition?.wrappedValue?.rowKey
@@ -229,12 +244,120 @@ extension _VStackCore {
         }
         if state.designatedAnchorKey != key {
             state.designatedAnchorKey = key
-            state.anchorOffsetWithin = 0
+            adoptDesignatedRow(frame: frame, state: state, window: window, key: key)
         }
         state.anchorKey = key
         return key
     }
 
+    /// Adopts a newly designated row: it becomes the anchor at the screen line
+    /// it currently occupies, encoded as a SIGNED `anchorOffsetWithin` —
+    /// negative meaning the anchor sits that many lines BELOW the viewport top,
+    /// which `fill` renders by walking upward from it. (The implicit top anchor
+    /// keeps a non-negative `within`: cells hidden ABOVE the top.)
+    private func adoptDesignatedRow(
+        frame: AnchoredWindowFrame, state: StackWindowState,
+        window: ScrollContentWindow, key: String
+    ) {
+        guard
+            let designated = resolveOrdinal(forKey: key, children: frame.children, state: state)
+        else {
+            // The row is not in the data yet; reveal it at the top when it
+            // appears (matches the implicit-anchor default until then).
+            state.anchorOffsetWithin = 0
+            return
+        }
+        let line = adoptedHeldLine(
+            frame: frame, state: state, window: window, designated: designated)
+        state.anchorOrdinal = designated
+        state.anchorOffsetWithin = -line
+    }
+
+    /// The screen line the designated row occupies right now, so adoption holds
+    /// it there rather than at the top. Walked from the current anchor — bounded,
+    /// since a visible row is at most a viewport of rows away. A row farther than
+    /// that is off-screen: there is no line to preserve, so it is revealed at the
+    /// top edge (minimal-movement reveal, as `scrollTo(_:anchor: nil)` does). The
+    /// result is clamped into the viewport, reserving the indicator lines, so an
+    /// off-by-a-little visible row still lands on a real line.
+    private func adoptedHeldLine(
+        frame: AnchoredWindowFrame, state: StackWindowState,
+        window: ScrollContentWindow, designated: Int
+    ) -> Int {
+        let anchor = state.anchorOrdinal
+        guard abs(designated - anchor) <= window.viewportHeight + 2 else {
+            return window.edgeInset
+        }
+        var line = -state.anchorOffsetWithin
+        if designated >= anchor {
+            for ordinal in anchor..<designated { line += frame.pitch(of: ordinal) }
+        } else {
+            for ordinal in designated..<anchor { line -= frame.pitch(of: ordinal) }
+        }
+        let rowHeight =
+            frame.pitch(of: designated) - (designated < frame.children.count - 1 ? spacing : 0)
+        let lastLine = max(window.edgeInset, window.viewportHeight - rowHeight - window.edgeInset)
+        return min(max(line, window.edgeInset), lastLine)
+    }
+
+    /// Sticky top for a below-top hold: a held row cannot sit lower on screen
+    /// than the rows above it can fill. If enough of them were removed, it rides
+    /// up so the topmost row meets the viewport top rather than leaving a blank
+    /// strip above it. Bounded by the held line (≤ one viewport).
+    private func clampDesignatedHold(frame: AnchoredWindowFrame, state: StackWindowState) {
+        guard state.anchorOffsetWithin < 0 else { return }
+        let heldLine = -state.anchorOffsetWithin
+        var available = 0
+        var ordinal = state.anchorOrdinal - 1
+        while ordinal >= 0, available < heldLine {
+            available += frame.pitch(of: ordinal)
+            ordinal -= 1
+        }
+        if available < heldLine { state.anchorOffsetWithin = -available }
+    }
+
+    /// Resolves a pending `scrollTo` against the anchored geometry: pins the
+    /// anchor to the TARGET (§5e — seek by anchor, not by absolute offset) and
+    /// re-aims `window.offset`, returning the offset to report (or `nil` when
+    /// there is no request or its key is absent). The estimated y positions
+    /// only the scrollbar and the clamp; the target row itself lands exactly
+    /// where the anchor walk puts it, estimates notwithstanding.
+    private func resolveAnchoredSeek(
+        frame: AnchoredWindowFrame, state: StackWindowState,
+        window: inout ScrollContentWindow, children: ChildViewCollection
+    ) -> Int? {
+        guard let seek = window.seek else { return nil }
+        window.seek = nil
+        guard let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state)
+        else { return nil }
+        // Nil anchor near the window resolves in WALKED row space: an
+        // already-visible target moves NOTHING, a nearby one moves minimally.
+        // The estimate path below judges visibility by estimate-space y against
+        // the walked offset — two coordinate spaces that drift apart — and
+        // teleported the view (and the scrollbar) for a plainly on-screen row.
+        if seek.anchor == nil,
+            let nearOffset = nilAnchorSeekOffset(
+                target: ordinal, frame: frame, state: state,
+                window: window, seek: seek, count: children.count)
+        {
+            window.offset = nearOffset
+            return nearOffset
+        }
+        let estimate = state.estimatedPitch(spacing: spacing)
+        let estimatedY = ordinal * estimate
+        let rowHeight = frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
+        let newOffset = seek.windowOffset(
+            targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
+            viewportHeight: window.viewportHeight, totalHeight: children.count * estimate - spacing)
+        state.anchorOrdinal = ordinal
+        state.anchorKey = children.key(at: ordinal)
+        state.anchorOffsetWithin = 0
+        state.lastDerivedOffset = estimatedY
+        window.offset = newOffset
+        return newOffset
+    }
+
+    /// Renders the window by anchored outward fill, or returns `nil` when a
     /// touched row is a spacer (spacer distribution needs the full walk).
     func renderAnchoredWindow(
         _ children: ChildViewCollection, window: ScrollContentWindow, context: RenderContext
@@ -255,54 +378,14 @@ extension _VStackCore {
         let anchorMode = ScrollAnchorMode.effective(
             boundAnchor: context.environment.anchorPosition?.wrappedValue,
             defaultScrollAnchor: context.environment.defaultScrollAnchor)
-        let designatedKey = applyDesignatedAnchor(state: state, context: context, mode: anchorMode)
+        let designatedKey = applyDesignatedAnchor(
+            frame: frame, state: state, window: window, context: context, mode: anchorMode)
 
         frame.rebindAnchor(mode: anchorMode)
 
-        // A pending scrollTo: pin the anchor to the TARGET (§5e — seek by
-        // anchor, not by absolute offset). The estimated y positions only
-        // the scrollbar and the clamp; the target row itself lands exactly
-        // where the anchor walk below puts it, estimates notwithstanding.
-        // `advanceAnchor` then walks the (≤ viewport-sized) delta between
-        // the target's top and the anchor-adjusted offset in row space, so
-        // centre/bottom alignment measures real rows, not estimates.
         var window = window
-        var resolvedSeek: Int?
-        if let seek = window.seek {
-            window.seek = nil
-            if let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state) {
-                if seek.anchor == nil,
-                    let nearOffset = nilAnchorSeekOffset(
-                        target: ordinal, frame: frame, state: state,
-                        window: window, seek: seek, count: children.count)
-                {
-                    // Nil anchor near the window resolves in WALKED row
-                    // space: an already-visible target moves NOTHING, a
-                    // nearby one moves minimally. The estimate path below
-                    // judges visibility by estimate-space y against the
-                    // walked offset — two coordinate spaces that drift
-                    // apart — and teleported the view (and the scrollbar)
-                    // for a target that was plainly on screen.
-                    window.offset = nearOffset
-                    resolvedSeek = nearOffset
-                } else {
-                    let estimate = state.estimatedPitch(spacing: spacing)
-                    let estimatedY = ordinal * estimate
-                    let rowHeight =
-                        frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
-                    let newOffset = seek.windowOffset(
-                        targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
-                        viewportHeight: window.viewportHeight,
-                        totalHeight: children.count * estimate - spacing)
-                    state.anchorOrdinal = ordinal
-                    state.anchorKey = children.key(at: ordinal)
-                    state.anchorOffsetWithin = 0
-                    state.lastDerivedOffset = estimatedY
-                    window.offset = newOffset
-                    resolvedSeek = newOffset
-                }
-            }
-        }
+        let resolvedSeek = resolveAnchoredSeek(
+            frame: frame, state: state, window: &window, children: children)
 
         if designatedKey == nil {
             frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
@@ -314,8 +397,10 @@ extension _VStackCore {
             // the key from whatever ordinal the offset implies — both would
             // drag the anchor off the designated row every frame, which is
             // exactly what made `.row` behave as "hold the top visible row".
-            // `lastDerivedOffset` is still synced so no phantom delta
-            // accumulates if the designation is later cleared.
+            // A below-top hold rides up when the content above it shrinks past
+            // its held line; `lastDerivedOffset` is still synced so no phantom
+            // delta accumulates if the designation is later cleared.
+            clampDesignatedHold(frame: frame, state: state)
             state.lastDerivedOffset = window.offset
         }
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)

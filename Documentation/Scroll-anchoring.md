@@ -226,19 +226,25 @@ silently inert exactly as it used to be everywhere else. Use `LazyVStack`
 This was found by running the Example, not by the tests: every unit test used
 `LazyVStack`, so the whole suite passed while the demo did nothing.
 
-### Still inconsistent: adoption on the anchored walk
+### Adoption is now consistent across all three paths (`7a338d0d`)
 
-The two offset-correcting paths adopt by **holding the row where it already
-sits** (and revealing it by minimal movement if off-screen). The anchored walk
-still adopts by slamming the row to the viewport **top** (`anchorOffsetWithin =
-0`). Identical app code therefore jumps or doesn't depending purely on how many
-rows there happen to be — and the §1.2 selection shadow-switch, which
-designates the *selected* row, inherits that jump.
+Every path adopts a designated row by **holding the screen line it already
+occupies** (and revealing an off-screen one by minimal movement). This was the
+last inconsistency: the anchored walk used to slam the row to the viewport
+**top**, so identical app code jumped or didn't depending purely on row count,
+and the §1.2 selection shadow-switch inherited that jump on every first
+arrow-key press.
 
-Aligning it means expressing "the anchor sits BELOW the viewport top", which
-the walk's `anchorY = offset - anchorOffsetWithin` invariant cannot currently
-represent (it would need a negative `anchorOffsetWithin`, and `fill(window:)`
-is not written for that). Left for its own change rather than bolted on.
+The fix generalised `anchorOffsetWithin` to **signed** — negative meaning the
+anchor sits that many lines *below* the viewport top, which is exactly the
+"anchor below the top" the invariant `anchorY = offset - anchorOffsetWithin`
+could not previously express. Adoption walks real pitches from the old anchor to
+find the row's current line (bounded — a visible row is at most a viewport of
+rows away; farther is off-screen and revealed at the top edge), and `fill` walks
+upward from the anchor to draw the now-visible rows above it (collapsing to the
+old single-margin-row behaviour when the anchor is at/above the top). A
+sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
+are deleted past its held line, so it never leaves a blank strip.
 
 ---
 

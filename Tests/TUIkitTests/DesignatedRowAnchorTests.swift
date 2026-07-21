@@ -223,6 +223,43 @@ struct DesignatedRowAnchorTests {
             "adoption moved a visible row: \(before) → \(after)")
     }
 
+    /// The anchored walk (>256 rows, variable heights) must adopt the same way
+    /// the offset-correcting paths do: designating a row that is already
+    /// visible holds it where it sits, not at the viewport top. Without this,
+    /// identical app code jumps or doesn't depending purely on row count, and
+    /// the §1.2 selection shadow-switch — which designates the SELECTED row —
+    /// makes every first arrow-key press jump.
+    @Test("Anchored walk: designating a visible row holds it where it sits")
+    func anchoredWalkAdoptionHoldsAVisibleRow() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let items = Array(0..<400)
+
+        // Settle with row 300 designated (it rides to the top from off-screen),
+        // then read where a row a little below it sits.
+        _ = settle(
+            items: items, anchored: 300, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
+        let settled = renderFrame(
+            items: items, anchored: 300, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
+        guard
+            let target = (302...306).first(where: { (screenLine(of: $0, in: settled) ?? 0) >= 2 }),
+            let lineBefore = screenLine(of: target, in: settled)
+        else {
+            Issue.record("no row sits mid-viewport to re-designate: \(settled)")
+            return
+        }
+
+        // Re-designate that mid-viewport row: it must NOT jump to the top.
+        let after = renderFrame(
+            items: items, anchored: target, uniform: false,
+            tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            screenLine(of: target, in: after) == lineBefore,
+            "row \(target) jumped on adoption: was line \(lineBefore), slice now \(after)")
+    }
+
     /// The complement: designating an OFF-screen row has to bring it into view
     /// — there is no sensible "hold" for a line that isn't on screen, and the
     /// alternative (holding an out-of-range line) forces a blank viewport.
