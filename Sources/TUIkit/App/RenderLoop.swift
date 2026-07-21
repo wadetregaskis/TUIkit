@@ -306,6 +306,26 @@ extension RenderLoop {
         animationScheduler: AnimationScheduler? = nil,
         frameNowNanos: Int64 = 0
     ) -> RenderActivity {
+        // Drag auto-scroll: drive ONE tick against the PREVIOUS frame's zones
+        // and region rects — before `beginRenderPass()` clears the dispatcher's
+        // regions and before the tree re-registers this frame's zones. The drag
+        // cursor is current, so a scroll near an edge shows in the frame we're
+        // about to render, with no visible lag. This must precede
+        // `beginRenderPass()`: that call empties `mouseEventDispatcher.regions`,
+        // and `driveAutoScroll` resolves each zone's on-screen rect through the
+        // dispatcher — run it after, and every `regionRect` lookup is nil and the
+        // viewport never scrolls. While engaged the loop must keep ticking even
+        // if the cursor holds still, so request a grid at the auto-scroll cadence.
+        //
+        // Sourced from `tuiContext` (not `environment`, which isn't built until
+        // below) — the same session either way (see ServiceEnvironment).
+        if tuiContext.dragAndDropSession.driveAutoScroll(
+            nowNanos: UInt64(bitPattern: frameNowNanos))
+        {
+            _ = animationScheduler?.request(
+                "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
+        }
+
         beginRenderPass()
 
         // If an @Published property changed, clear the entire render cache
@@ -337,19 +357,6 @@ extension RenderLoop {
         // it, so a static screen produces no further frames.
         environment.volatileReadTracker = VolatileReadTracker()
         cursorTimer?.beginFrameReadTracking()
-
-        // Drag auto-scroll: BEFORE the tree re-registers this frame's zones,
-        // drive one tick against the still-present previous frame's zones and
-        // (absolute) region rects — the drag cursor is current, so a scroll
-        // near an edge shows this frame with no visible lag. While engaged the
-        // loop must keep ticking even if the cursor holds still, so request a
-        // grid at the auto-scroll cadence.
-        if let dragSession = environment.dragAndDropSession,
-            dragSession.driveAutoScroll(nowNanos: UInt64(bitPattern: frameNowNanos))
-        {
-            _ = animationScheduler?.request(
-                "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
-        }
 
         let scene = evaluateAppBody(environment: environment)
         if let paletteOverrideScene = scene as? any RootPaletteOverrideProvidingScene,

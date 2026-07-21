@@ -189,6 +189,29 @@ struct DragAutoScrollTests {
         #expect(outer.scrollOffset == 30, "the outer zone is left alone")
     }
 
+    @Test("Auto-scroll resolves against the dispatcher's live region rects")
+    func needsDispatcherRegions() {
+        // The driver locates each zone's on-screen rect through the dispatcher.
+        // `RenderLoop.render()` empties those regions in `beginRenderPass()` (via
+        // `MouseEventDispatcher.beginRenderPass()`) at the top of every frame, so
+        // the drive MUST happen first — against the previous frame's geometry —
+        // or every `regionRect` lookup is nil and nothing scrolls. This models
+        // that ordering constraint: clear the regions the way `beginRenderPass`
+        // would, and the very same edge drag becomes a no-op.
+        let handler = scrollHandler(offset: 0, content: 100, viewport: 10)
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9)
+
+        // With the (previous frame's) regions present, the edge drag engages.
+        #expect(harness.drive(nowNanos: 0), "the edge drag engages while the rect is known")
+
+        // Now clear the dispatcher's regions exactly as beginRenderPass does.
+        harness.dispatcher.beginRenderPass()
+        harness.run(ticks: 3)
+        #expect(
+            handler.scrollOffset == 0,
+            "with no region rect the driver can't place the zone, so nothing scrolls")
+    }
+
     @Test("A horizontal scrollable auto-scrolls toward the right edge")
     func horizontalEdgeScrolls() {
         let vertical = scrollHandler(offset: 0, content: 10, viewport: 10)  // can't move vertically
