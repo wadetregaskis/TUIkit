@@ -32,6 +32,7 @@ struct ScrollAnchoringDemo: View {
     @State private var logRows: [Int] = Array(1...30)
     @State private var selection: Int?
     @State private var selAnchor: ScrollAnchor<Int>?
+    @State private var nextLogRow = 200
 
     // MARK: Section 3 — top vs bottom
 
@@ -137,13 +138,17 @@ struct ScrollAnchoringDemo: View {
                 .frame(height: 8)
                 .border(color: .palette.border)
                 // The List declares a Bottom edge anchor, so selecting a row
-                // shadow-switches the bound anchor onto that row (§1.2) — watch
-                // the read-out flip from the edge to "holding row N", and a wheel
-                // scroll release it back to Window.
+                // shadow-switches the bound anchor onto that row (§1.2) — the
+                // read-out flips to "holding row N" and the List then pins it:
+                // inserting rows above holds the selected row on its line. A
+                // wheel scroll releases it back to Window.
                 .defaultScrollAnchor(.bottom)
                 .anchorPosition($selAnchor)
 
-                Button(L("page.scrollView.anchorReset")) { resetSelection() }
+                HStack(spacing: 1) {
+                    Button(L("page.scrollView.anchorInsert")) { insertAboveSelection() }
+                    Button(L("page.scrollView.anchorReset")) { resetSelection() }
+                }
                 ValueDisplayRow(
                     L("page.scrollView.anchorSelSelection"),
                     selection.map(String.init) ?? "—")
@@ -152,8 +157,19 @@ struct ScrollAnchoringDemo: View {
         }
     }
 
+    /// Inserts rows directly above the selected (anchored) row, so the hold is
+    /// visible: the selected row keeps its line while its neighbours change.
+    private func insertAboveSelection() {
+        let target = selection ?? logRows.first
+        guard let value = target, let index = logRows.firstIndex(of: value) else { return }
+        let inserted = (0..<5).map { nextLogRow + $0 }
+        nextLogRow += 5
+        logRows.insert(contentsOf: inserted, at: index)
+    }
+
     private func resetSelection() {
         logRows = Array(1...30)
+        nextLogRow = 200
         selection = nil
         selAnchor = nil
     }

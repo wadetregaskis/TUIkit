@@ -282,6 +282,17 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// shadow-switch to the edge modes the spec names.
     var declaredAnchorMode: ScrollAnchorMode = .window
 
+    /// The screen ROW a bound `.row` anchor is held at (0 = first visible row),
+    /// and the key it was adopted for. Row-based, like ``scrollOffset``: for
+    /// single-line rows it is the screen line; for taller rows it is the
+    /// anchored row's index from the top of the viewport. See
+    /// ``applyRowAnchorHold()`` (in `ItemListHandler+RowAnchor.swift`).
+    var anchorHeldRow = 0
+    var anchorHeldKey: AnyHashable?
+    /// Last resolved ordinal of the held anchor key — an O(1) fast path so the
+    /// per-frame hold doesn't rescan the whole list once the row settles.
+    var anchorHeldOrdinal: Int?
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 
