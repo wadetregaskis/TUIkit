@@ -215,7 +215,7 @@ The two offset-correcting paths share one adoption rule
 reply channel as `seekResolvedOffset` — a designation is, in effect, a seek
 re-issued every frame.
 
-### Still restricted: the stack must be LAZY
+### Still restricted (for a raw stack): it must be LAZY
 
 Anchoring is a property of the **windowed** render paths. A plain `VStack`
 inside a `ScrollView` draws its whole canvas and lets the ScrollView clip it —
@@ -225,6 +225,23 @@ silently inert exactly as it used to be everywhere else. Use `LazyVStack`
 
 This was found by running the Example, not by the tests: every unit test used
 `LazyVStack`, so the whole suite passed while the demo did nothing.
+
+### List / Table hold too (`8ebace6a`)
+
+`List` and `Table` do not use a windowed lazy stack for their rows — they scroll
+through `ItemListHandler`'s own row-based offset — so the LazyVStack hold above
+does not reach them. They had wired the anchor STATE (the §1.2 selection
+shadow-switch set the bound anchor onto the picked row, and a wheel scroll
+released it) but never adjusted the offset, so the row jumped while the read-out
+said "holding row N".
+
+`ItemListHandler.applyRowAnchorHold` (`ItemListHandler+RowAnchor.swift`) closes
+that gap: it is the row-offset counterpart of `offsetHoldingDesignatedRow` —
+resolve the bound `.row(id)` to its ordinal, set `scrollOffset` to keep the row
+on its screen row, adopt on change, sticky re-anchor at the edges, reserve both
+indicator lines. Gated on a bound `.row` anchor, so every list that doesn't use
+`.anchorPosition` is byte-for-byte unaffected. So selecting a List row now both
+flips the read-out AND pins the row as data changes around it.
 
 ### Adoption is now consistent across all three paths (`7a338d0d`)
 
