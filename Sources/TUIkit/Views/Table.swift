@@ -672,6 +672,13 @@ where Value.ID: Hashable {
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
+        // Captured at render so a USER wheel scroll can release a bound anchor
+        // at event time, and so the anchor hold below can resolve its mode.
+        // Mirrors _ListCore.resolvePopulatedHandler — a Table anchors exactly
+        // as a List does.
+        handler.anchorPositionBinding = context.environment.anchorPosition
+        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
+            defaultScrollAnchor: context.environment.defaultScrollAnchor)
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
         // The reveal-on-focus arithmetic (run between renders, on key events)
@@ -688,6 +695,11 @@ where Value.ID: Hashable {
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
+            // A bound `.anchorPosition(.row(id))` pins that row as rows change
+            // around it. Render pass only (it mutates the persistent offset),
+            // and after `idAt` above so the key resolves. A no-op for every
+            // Table without `.anchorPosition`. Mirrors _ListCore.
+            handler.applyRowAnchorHold()
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
@@ -985,6 +997,11 @@ where Value.ID: Hashable {
         // switch between the single-line and multi-line paths across frames.
         handler.scrollGranularity = context.environment.scrollGranularity
         handler.followMargin = context.environment.scrollFollowMargin
+        // Same event-time capture as the multi-line path above: a user wheel
+        // scroll releases a bound anchor, and the hold below reads the mode.
+        handler.anchorPositionBinding = context.environment.anchorPosition
+        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
+            defaultScrollAnchor: context.environment.defaultScrollAnchor)
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
@@ -1015,6 +1032,8 @@ where Value.ID: Hashable {
             if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
                 handler.scrollOffset = 0
             }
+            // Pin a bound `.row` anchor — see the multi-line path above.
+            handler.applyRowAnchorHold()
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
