@@ -37,7 +37,7 @@ struct ScrollAnchoringDemo: View {
     // MARK: Section 3 — top vs bottom
 
     @State private var edgeRows: [Int] = Array(1...14)
-    @State private var followBottom = true
+    @State private var edgeAnchor: ScrollAnchor<Int>? = .bottom
     @State private var nextEdgeRow = 15
 
     var body: some View {
@@ -191,22 +191,47 @@ struct ScrollAnchoringDemo: View {
                 }
                 .frame(height: 8)
                 .border(color: .palette.border)
-                .defaultScrollAnchor(followBottom ? .bottom : .top)
+                // BOUND, not declared: picking an edge writes it into the
+                // binding, which is the code-side `anchor(to:)` — the write
+                // jumps the view to that edge, and it then holds it. A
+                // declaration alone could not demo Top: both edges engage
+                // POSITIONALLY (being at the edge is the engagement), so
+                // switching to Top halfway down the content leaves it nothing
+                // to do, and the section would read as "Top is broken" when it
+                // is only "Top is not engaged".
+                .anchorPosition($edgeAnchor)
 
-                Picker(L("page.scrollView.anchorEdgePick"), selection: $followBottom) {
+                Picker(
+                    L("page.scrollView.anchorEdgePick"),
+                    selection: Binding(
+                        get: { edgeAnchor != .top },
+                        set: { edgeAnchor = $0 ? .bottom : .top })
+                ) {
                     Text(L("page.scrollView.anchorEdgeTop")).tag(false)
                     Text(L("page.scrollView.anchorEdgeBottom")).tag(true)
                 }
                 HStack(spacing: 1) {
                     Button(L("page.scrollView.anchorAppend")) { appendEdgeRow() }
+                    Button(L("page.scrollView.anchorPrepend")) { prependEdgeRow() }
                     Button(L("page.scrollView.anchorReset")) { resetEdge() }
                 }
+                // Scrolling the box by hand flips this to "released" — the
+                // §1.2 shadow-switch, visible. Matches the other two sections.
+                ValueDisplayRow(L("page.scrollView.anchorState"), describe(edgeAnchor))
             }
         }
     }
 
     private func appendEdgeRow() {
         edgeRows.append(nextEdgeRow)
+        nextEdgeRow += 1
+    }
+
+    /// Inserting at the FRONT is what tells the two edges apart. Appending only
+    /// exercises Bottom (Top has nothing to do — the start hasn't moved), so
+    /// without this button Top looked inert next to it.
+    private func prependEdgeRow() {
+        edgeRows.insert(nextEdgeRow, at: 0)
         nextEdgeRow += 1
     }
 
