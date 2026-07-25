@@ -108,4 +108,44 @@ struct ScrollbarModifierWiringTests {
         #expect(paged < 30, ".page moves about one viewport, got row \(paged)")
         #expect(jumped > paged, "the two behaviours are distinct")
     }
+
+    /// `.scrollbarVisibility` is an ENVIRONMENT value, so it reaches nested
+    /// scrollables too — SwiftUI-parity behaviour, matching `.scrollIndicators`.
+    ///
+    /// This is deliberate, and it is worth pinning: it was mistaken for a bug
+    /// when a demo page's page-level `.automatic` gave every scrollable inside
+    /// it a bar, including one whose whole point was to be chrome-free. The
+    /// wrapper was at fault, not the propagation. Both halves are asserted —
+    /// that an inner scrollable inherits an outer setting, and that its own
+    /// explicit setting still wins.
+    @Test("scrollbarVisibility reaches nested scrollables, and the inner one wins")
+    func visibilityPropagatesButInnerWins() {
+        func innerHasBar(outer: ScrollbarVisibility, inner: ScrollbarVisibility?) -> Bool {
+            let tui = TUIContext()
+            var content: any View = ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<60, id: \.self) { Text("row \($0)") }
+                }
+            }
+            .frame(height: 6)
+            if let inner { content = AnyView(content).scrollbarVisibility(inner) }
+            let view = AnyView(content).scrollbarVisibility(outer)
+
+            let buffer = renderToBuffer(view, context: makeContext(tui: tui))
+            // A bar draws its arrows in the last column; the indicators instead
+            // replace a whole line with "N more ... below" text.
+            return buffer.lines.contains { $0.stripped.hasSuffix("\u{25B2}") }
+                || buffer.lines.contains { $0.stripped.hasSuffix("\u{25BC}") }
+        }
+
+        #expect(
+            innerHasBar(outer: .automatic, inner: nil),
+            "an inner scrollable inherits the ancestor's .automatic")
+        #expect(
+            !innerHasBar(outer: .automatic, inner: .hidden),
+            "its own .hidden overrides the ancestor")
+        #expect(
+            innerHasBar(outer: .hidden, inner: .visible),
+            "and its own .visible overrides an ancestor's .hidden")
+    }
 }
