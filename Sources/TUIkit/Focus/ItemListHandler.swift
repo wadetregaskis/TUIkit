@@ -286,12 +286,32 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// and the key it was adopted for. Row-based, like ``scrollOffset``: for
     /// single-line rows it is the screen line; for taller rows it is the
     /// anchored row's index from the top of the viewport. See
-    /// ``applyRowAnchorHold()`` (in `ItemListHandler+RowAnchor.swift`).
+    /// ``applyRowAnchorHold()`` (in `ItemListHandler+Anchor.swift`).
     var anchorHeldRow = 0
     var anchorHeldKey: AnyHashable?
     /// Last resolved ordinal of the held anchor key — an O(1) fast path so the
     /// per-frame hold doesn't rescan the whole list once the row settles.
     var anchorHeldOrdinal: Int?
+
+    /// The bound anchor as of the last render, so a *change* can be detected
+    /// and jumped to (§3.2's `anchor(to:)`). Outer optional = "never seen yet";
+    /// inner = the binding's own `nil`. See ``applyAnchorHold()``.
+    var lastBoundAnchor: ScrollAnchor<AnyHashable>??
+
+    /// Last render's ``maxOffset``, against which "is this view at the bottom?"
+    /// is judged for the Bottom follow.
+    ///
+    /// The test cannot use the CURRENT `maxOffset`: by the time the hold runs,
+    /// `itemCount` has already been re-synced to the new data, so an append has
+    /// moved `maxOffset` out from under an offset that was at the tail a moment
+    /// ago, and the view would read as "not at the bottom" exactly when it
+    /// should follow. Last frame's bound is the one the user's offset was
+    /// actually formed against — including any scrolling they did between
+    /// renders, which is what makes scrolling away release the follow.
+    ///
+    /// Starting at 0 makes the first frame glued by construction (offset 0 ≥ 0),
+    /// which is how a declared `.bottom` list opens at its tail.
+    var bottomFollowBound = 0
 
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?

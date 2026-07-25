@@ -70,8 +70,15 @@ enum ScrollAnchorMode: Equatable {
     static func effective(
         boundAnchor: ErasedScrollAnchor?, defaultScrollAnchor anchor: UnitPoint?
     ) -> Self {
+        effective(boundAnchor: boundAnchor, declared: resolved(defaultScrollAnchor: anchor))
+    }
+
+    /// The same precedence, for callers that already hold the *resolved*
+    /// declaration rather than the raw `UnitPoint` — the scroll handlers, which
+    /// capture `declaredAnchorMode` at render so event-time code can read it.
+    static func effective(boundAnchor: ErasedScrollAnchor?, declared: Self) -> Self {
         switch boundAnchor {
-        case .none: return resolved(defaultScrollAnchor: anchor)
+        case .none: return declared
         case .top: return .top
         case .bottom: return .bottom
         case .row: return .row

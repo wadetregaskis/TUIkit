@@ -677,13 +677,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let dynamicActions = source.allContent ? content as? DynamicViewContentActions : nil
         handler.onDelete = dynamicActions?.deleteAction
         handler.onMove = dynamicActions?.moveAction
-        // A bound `.anchorPosition(.row(id))` (either set directly or via the
-        // §1.2 selection shadow-switch) pins that row: hold it in place as rows
-        // are inserted or removed around it. Render pass only — it mutates the
-        // persistent offset — and after the id resolver above so the key
-        // resolves. A no-op for every list without `.anchorPosition`.
+        // Apply whichever anchor is in effect (§1.1): a `.row` designation pins
+        // that row as data changes around it, a `.bottom` edge follows the tail.
+        // Render pass only — it mutates the persistent offset — and after the id
+        // resolver above so a row key resolves. A no-op for every list with
+        // neither `.anchorPosition` nor `defaultScrollAnchor`.
         if !context.isMeasuring {
-            handler.applyRowAnchorHold()
+            handler.applyAnchorHold()
         }
         return handler
     }

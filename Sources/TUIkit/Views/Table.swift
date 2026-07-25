@@ -695,11 +695,11 @@ where Value.ID: Hashable {
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
-            // A bound `.anchorPosition(.row(id))` pins that row as rows change
-            // around it. Render pass only (it mutates the persistent offset),
-            // and after `idAt` above so the key resolves. A no-op for every
-            // Table without `.anchorPosition`. Mirrors _ListCore.
-            handler.applyRowAnchorHold()
+            // Apply whichever anchor is in effect (§1.1) — a `.row` designation
+            // pins that row, a `.bottom` edge follows the tail. Render pass only
+            // (it mutates the persistent offset), and after `idAt` above so a row
+            // key resolves. A no-op for an unanchored Table. Mirrors _ListCore.
+            handler.applyAnchorHold()
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
@@ -1032,8 +1032,8 @@ where Value.ID: Hashable {
             if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
                 handler.scrollOffset = 0
             }
-            // Pin a bound `.row` anchor — see the multi-line path above.
-            handler.applyRowAnchorHold()
+            // Apply the anchor in effect — see the multi-line path above.
+            handler.applyAnchorHold()
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
