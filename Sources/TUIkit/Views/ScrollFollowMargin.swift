@@ -45,8 +45,14 @@ public struct ScrollFollowMargin: Sendable, Hashable {
         /// The row's first line sits at the centre — the row grows downward
         /// from the middle.
         case top
-        /// The row's middle line sits at the centre — the row straddles the
-        /// midline evenly (the default).
+        /// The row straddles the viewport's midline evenly — equal whole lines
+        /// above and below it (the default).
+        ///
+        /// An even-height row in an even-height viewport has no single line
+        /// that is both the row's middle and the viewport's middle, so it is
+        /// placed half a line HIGH. That is deliberate: it keeps whole rows at
+        /// both edges, where splitting the difference would show half a row at
+        /// each.
         case center
         /// A specific line index within the row sits at the centre (clamped to
         /// the row's height).

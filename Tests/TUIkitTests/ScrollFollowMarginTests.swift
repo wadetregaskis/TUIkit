@@ -350,4 +350,34 @@ struct CenteredAnchorTests {
         handler.ensureFocusedItemVisible()
         #expect(handler.scrollTopClipLines == 0, "row granularity forbids a sub-row clip")
     }
+
+    /// An EVEN viewport of EVEN-height rows — the parity every case above
+    /// misses, because they all use viewport 11.
+    ///
+    /// Centring used to be computed as (viewport centre line) − (row centre
+    /// line), two independent floors. They agree unless the viewport height and
+    /// the row height are both even, where the result is one line short: the
+    /// row sits above centre and half a row shows at each edge instead of whole
+    /// rows. That is the Multi-line Cells demo exactly — a 6-line content area
+    /// of 2-line rows, which fits three whole rows with the focused one in the
+    /// middle.
+    ///
+    /// Asserted on `scrollOffset`/`scrollTopClipLines` directly and NOT through
+    /// `anchorViewportLine`: that helper re-derives the anchor as
+    /// `focusedHeight / 2`, i.e. it encodes the very definition that was wrong,
+    /// so it cannot see this bug.
+    @Test("An even-height row in an even viewport centres on whole rows")
+    func evenRowInEvenViewportCentresWhole() {
+        let heights = Array(repeating: 2, count: 20)
+        let handler = handler(heights: heights, viewport: 6)  // exactly three rows
+        handler.focusedIndex = 5
+        handler.ensureFocusedItemVisible()
+
+        #expect(
+            handler.scrollTopClipLines == 0,
+            "three 2-line rows fit a 6-line viewport exactly — nothing may be clipped")
+        #expect(
+            handler.scrollOffset == 4,
+            "the focused row is the middle of rows 4/5/6")
+    }
 }

@@ -876,28 +876,35 @@ extension ItemListHandler {
         else { return }
 
         let focusedHeight = max(1, rowHeight(focusedIndex))
-        // Which line WITHIN the focused row to hold at the centre.
-        let anchorLine: Int
+        // How many content lines must sit above the focused row's FIRST line.
+        //
+        // `.center` centres the ROW, not a line within it. It must NOT be
+        // computed as (viewport centre line) − (row centre line): that floors
+        // twice, and the two roundings disagree by one whenever the viewport
+        // height and the row height are BOTH even — placing the row a line above
+        // centre and leaving half a row visible at each edge instead of whole
+        // rows. A 6-line viewport of 2-line rows (the Multi-line Cells demo) is
+        // exactly that case. One subtraction, floored once, is correct for every
+        // parity; where the row cannot be exactly centred (even row in an even
+        // viewport has no single middle line) it sits the half-line HIGH, which
+        // keeps whole rows at both edges.
+        var linesAbove: Int
         switch anchor {
-        case .top: anchorLine = 0
-        case .center: anchorLine = focusedHeight / 2
-        case .line(let index): anchorLine = max(0, min(focusedHeight - 1, index))
+        case .top:
+            linesAbove = (contentHeight - 1) / 2
+        case .center:
+            linesAbove = (contentHeight - focusedHeight) / 2
+        case .line(let index):
+            linesAbove = (contentHeight - 1) / 2 - max(0, min(focusedHeight - 1, index))
         }
 
-        // The viewport line the anchor lands on, and how many content lines must
-        // therefore sit above it.
-        let targetLine = (contentHeight - 1) / 2
-        var linesAbove = targetLine
-
-        if anchorLine >= linesAbove {
+        if linesAbove <= 0 {
             // The focused row's own above-anchor lines already overfill the space
             // above the centre — clip into the focused row itself.
             scrollOffset = focusedIndex
-            scrollTopClipLines = anchorLine - linesAbove
+            scrollTopClipLines = -linesAbove
         } else {
-            // Consume the focused row's above-anchor lines, then walk up through
-            // whole rows until the remaining lines are covered.
-            linesAbove -= anchorLine
+            // Walk up through whole rows until the required lines are covered.
             var top = focusedIndex
             var clip = 0
             while top > 0 {
