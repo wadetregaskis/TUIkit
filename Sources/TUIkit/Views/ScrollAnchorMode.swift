@@ -33,11 +33,15 @@ enum ScrollAnchorMode: Equatable {
     /// left on its ordinal (holding the position in LINE coordinates, so an
     /// insert above shifts the content down).
     ///
-    /// Only ``window`` declines the re-bind. ``top`` / ``bottom`` keep it
-    /// because their edge policy lives in the offset/clamp logic, not here —
-    /// this is exactly the one branch the spec's §2 resolution calls for, and
-    /// keeping the shipped edge behaviour byte-identical is the point.
-    var holdsRowIdentity: Bool { self != .window }
+    /// **Only ``row`` re-binds** — it is the one *identity* policy. ``top`` and
+    /// ``bottom`` are **positional** (see ``ScrollAnchor``'s doc comment: they
+    /// name an edge, not a row), so their policy lives entirely in the
+    /// offset/clamp logic and they must leave the ordinal alone. Re-binding
+    /// under ``top`` was a spec violation with teeth: on the anchored walk a
+    /// prepend held the row that happened to be at the top instead of staying
+    /// at the top, i.e. Top silently behaved as Row — the very confusion §1.1
+    /// separates the modes to avoid.
+    var holdsRowIdentity: Bool { self == .row }
 
     /// The mode a scrollable runs in given its ``EnvironmentValues/defaultScrollAnchor``.
     ///
