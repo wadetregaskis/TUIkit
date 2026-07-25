@@ -291,6 +291,34 @@ extension ScrollableOffsetState {
         binding.wrappedValue = .window
     }
 
+    /// Records that this viewport is now anchored to `edge` — the §1.3 user-side
+    /// restore ("**Home** restores an anchor-to-top default; **End** restores
+    /// anchor-to-bottom"), and the counterpart of
+    /// ``releaseAnchorOnUserScroll()``.
+    ///
+    /// Writes **`nil` when the view's own declaration already names that edge**,
+    /// and the explicit edge otherwise. That is not a micro-optimisation: `nil`
+    /// means *no departure from the declaration*, so pressing End on a
+    /// `.defaultScrollAnchor(.bottom)` log must restore `nil`, or the app's
+    /// "am I still following the log?" test (`anchor == nil`) would answer no
+    /// while the view demonstrably is. Departing to an edge the view did not
+    /// declare is a real departure, and says so.
+    ///
+    /// A no-op when nothing is bound: an unbound scrollable has no shadow state
+    /// to keep, and its edge behaviour is positional already.
+    ///
+    /// Internal (not `public` like its sibling) only because `ScrollAnchorMode`
+    /// is: the resolved-policy enum stays out of the public surface until §3.2's
+    /// deferred "read-only effective mode" question is actually asked.
+    func engageEdgeAnchor(_ edge: ScrollAnchor<AnyHashable>, declared: ScrollAnchorMode) {
+        guard let binding = anchorPositionBinding else { return }
+        let restoresDeclaration =
+            (edge == .top && declared == .top) || (edge == .bottom && declared == .bottom)
+        let engaged: ScrollAnchor<AnyHashable>? = restoresDeclaration ? nil : edge
+        // Idempotent: a held End key must not churn `@State` every repeat.
+        if binding.wrappedValue != engaged { binding.wrappedValue = engaged }
+    }
+
     /// Maps "did the wheel move the viewport" onto "is the event consumed",
     /// inserting the edge grace period: a moved event is consumed and re-arms
     /// the grace; a blocked event is consumed while the grace runs and chains

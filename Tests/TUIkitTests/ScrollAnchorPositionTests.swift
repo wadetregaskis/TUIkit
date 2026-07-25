@@ -210,14 +210,55 @@ struct ScrollAnchorPositionTests {
         #expect(read() == .window, "the arrow key scrolled — the anchor is released")
     }
 
-    @Test("Page and Home/End also release the anchor")
-    func pageAndJumpKeysRelease() {
-        for key in [Key.pageDown, .end, .home] {
-            let (handler, read) = boundHandler()
-            if key == .home { handler.scrollOffset = 5 }  // give Home somewhere to go
-            _ = handler.handleKeyEvent(KeyEvent(key: key))
-            #expect(read() == .window, "\(key) is a user scroll — releases the anchor")
-        }
+    @Test("A page-key scroll also releases the anchor")
+    func pageKeyReleases() {
+        let (handler, read) = boundHandler()
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageDown))
+        #expect(read() == .window, "a page scroll is a user scroll — releases the anchor")
+    }
+
+    /// Home and End are the exception to "a user scroll releases": §1.3 makes
+    /// them the user-side RESTORE ("Home restores an anchor-to-top default; End
+    /// restores anchor-to-bottom"). Jumping deliberately to an edge is the
+    /// clearest statement a user can make that they want to sit at it, so they
+    /// ENGAGE that edge instead of releasing to `.window`.
+    ///
+    /// This test previously asserted `.window` for all three keys. That was
+    /// correct only while the edge modes had no behaviour behind them: the
+    /// bottom follow was keyed off the declaration alone, so End landed at the
+    /// tail and the follow re-engaged positionally whatever the binding said.
+    /// Now that the follow reads the EFFECTIVE anchor, releasing on End would
+    /// mean "jump to the tail and stop following the log" — the opposite of
+    /// what pressing End asks for.
+    @Test("Home and End ENGAGE their edge anchor rather than releasing")
+    func homeAndEndEngageTheirEdge() {
+        let (handler, read) = boundHandler()
+        handler.scrollOffset = 5  // give Home somewhere to go
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        #expect(read() == .top, "Home anchors to the top")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .end))
+        #expect(read() == .bottom, "End anchors to the bottom")
+    }
+
+    /// …and engaging the edge the view ALREADY declared restores `nil`, not the
+    /// explicit edge: `nil` means "no departure from the declaration", so
+    /// pressing End on a `.defaultScrollAnchor(.bottom)` log must leave the
+    /// app's "am I still following the log?" test (`anchor == nil`) answering
+    /// yes. Writing `.bottom` there would answer no while the view visibly is.
+    @Test("Engaging the declared edge restores nil, not an explicit edge")
+    func engagingTheDeclaredEdgeRestoresNil() {
+        let (handler, read) = boundHandler()
+        handler.declaredAnchorMode = .bottom
+        handler.releaseAnchorOnUserScroll()
+        #expect(read() == .window, "released by scrolling away")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .end))
+        #expect(read() == nil, "back to following the declaration")
+
+        // The other edge is a genuine departure from a declared bottom.
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        #expect(read() == .top)
     }
 
     /// An arrow key that cannot move the viewport (content fits) must not

@@ -66,6 +66,20 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
     public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
 
+    /// The anchor the view DECLARED (`defaultScrollAnchor`), synced each render
+    /// so Home / End can tell "restored the declaration" (write `nil`) from
+    /// "departed to the other edge" (write that edge). Mirrors
+    /// `ItemListHandler.declaredAnchorMode`.
+    var declaredAnchorMode: ScrollAnchorMode = .window
+
+    /// The bound anchor as of the last render, so a *change* can be detected
+    /// and adopted. The outer optional is "never seen yet"; the inner is the
+    /// binding's own `nil` ("no departure from the declaration"). Writing
+    /// `.top`/`.bottom` into the binding is §3.2's `anchor(to:)`, and it is the
+    /// CHANGE that jumps — thereafter the edge is held positionally, so the
+    /// user can still scroll away from it.
+    var lastBoundAnchor: ScrollAnchor<AnyHashable>??
+
     /// The horizontal scroll axis, used when the ScrollView's `axes` include
     /// `.horizontal`. The handler itself is the vertical axis; this carries the
     /// horizontal offset, content width, and viewport width (plus its own drag /
@@ -181,14 +195,16 @@ extension ScrollViewHandler {
         case .pageDown:
             return userScroll(by: max(1, viewportHeight))
         case .home:
-            // An explicit jump: release the anchor first so it takes effect
-            // (otherwise the next render re-derives the offset from the anchor
-            // and the view never moves), then jump.
-            releaseAnchorOnUserScroll()
+            // §1.3: Home restores the anchor-to-top default (and End
+            // anchor-to-bottom). Note this ENGAGES an edge rather than
+            // releasing to `.window` as an ordinary scroll does — jumping
+            // deliberately to an edge is the clearest statement a user can make
+            // that they want to sit at it.
+            engageEdgeAnchor(.top, declared: declaredAnchorMode)
             scrollToTop()
             return true
         case .end:
-            releaseAnchorOnUserScroll()
+            engageEdgeAnchor(.bottom, declared: declaredAnchorMode)
             scrollToBottom()
             return true
         case .left:

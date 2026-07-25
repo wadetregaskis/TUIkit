@@ -208,36 +208,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     // MARK: Render
 
-    /// Bottom edge affinity (defaultScrollAnchor(.bottom), §5c/§6c): being
-    /// AT the bottom is the engagement — no stored flag. If last frame's
-    /// numbers say the offset sits at (or past) maxOffset, the view is
-    /// glued: the frame renders at the previous tail, the post-render
-    /// re-glue lands on the real new maximum, and `coverSnappedViewport`
-    /// re-renders — O(window) — when the band's margin doesn't already
-    /// cover the difference (it does for the common one-row append).
-    /// Scrolling up breaks the condition (offset < max) and appends stop
-    /// moving the view; any scroll that lands back at the bottom
-    /// re-engages. The very first frame (contentHeight 0, offset 0) is
-    /// glued by construction, giving the initial at-the-tail placement.
-    /// Vertical only.
-    ///
-    /// Deliberately NO pre-render tail estimate: this used to measure the
-    /// whole content tree every glued frame to pre-position the offset, and
-    /// that estimate systematically disagreed with the post-render reply
-    /// total (they come from different estimators), so the coverage
-    /// re-render fired EVERY frame — a full measure plus two band renders
-    /// per frame, 23% of the scrollfollow profile in the second render
-    /// alone.
-    private func isGluedToBottom(handler: ScrollViewHandler, context: RenderContext) -> Bool {
-        let followsBottom = !context.isMeasuring
-            && (context.environment.defaultScrollAnchor?.y ?? 0) >= 0.75
-        // A pending scrollTo supersedes the glue this frame: the explicit
-        // programmatic scroll is exactly the "scrolling away releases the
-        // follow" interaction, expressed in code.
-        return followsBottom && handler.pendingScrollTo == nil
-            && handler.scrollOffset >= handler.maxOffset
-    }
-
     /// Syncs the horizontal axis to the rendered content width and clamps
     /// its offset (render passes only).
     private func syncHorizontalAxis(
@@ -274,6 +244,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Captured at render so a USER scroll can release a bound anchor to
         // `.window` at event time (the environment is out of reach there).
         handler.anchorPositionBinding = context.environment.anchorPosition
+        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
+            defaultScrollAnchor: context.environment.defaultScrollAnchor)
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         return handler
@@ -342,6 +314,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
+
+        // A freshly WRITTEN edge anchor jumps to that edge (see the helper);
+        // must precede the glue check, whose `seekingTail` read is one-shot.
+        adoptWrittenAnchor(handler: handler, context: context)
 
         // A one-shot End/scrollToBottom intent converges exactly like a
         // glued frame (see ScrollViewHandler.seekingTail).
