@@ -368,7 +368,11 @@ private struct ScrollChainingDelayKey: EnvironmentKey {
 }
 
 private struct DragAutoScrollDelayKey: EnvironmentKey {
-    static let defaultValue: Duration = .milliseconds(300)
+    // One second. 300 ms read as trigger-happy in use: crossing the edge region
+    // on the way to a drop target that is already visible would start scrolling
+    // before the user arrived, so the target moved out from under them. Dwell is
+    // a deliberate gesture — it should take deliberately long.
+    static let defaultValue: Duration = .seconds(1)
 }
 
 extension EnvironmentValues {
@@ -401,7 +405,7 @@ extension View {
     /// that scrollable begins auto-scrolling to bring an off-screen drop target
     /// into view (macOS's drag auto-scroll). The rate then ramps with how far
     /// past the edge the cursor is dragged. `.zero` scrolls immediately; the
-    /// default is 300 ms.
+    /// default is 1 second.
     public func dragAutoScrollDelay(_ delay: Duration) -> some View {
         environment(\.dragAutoScrollDelay, delay)
     }
