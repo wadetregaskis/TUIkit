@@ -60,15 +60,15 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 
 | Spec item | State on the `locating-without-drawing` branch |
 |---|---|
-| Bottom mode | **Shipped** as `defaultScrollAnchor(.bottom)`: starts at the tail, follows appends; user scrolling up releases (a shadow-switch to Window, in the spec's terms); **End re-engages**. The code-set mode (the environment value) is inherently preserved — an accidental match with the shadow-settings model. |
-| Top mode | Not distinct yet. Today's top-ish behaviour is the *absence* of the bottom anchor, which is really… |
+| Bottom mode | **Shipped**, on every scrollable (`db848b03`, `2d9931e3`). Starts at the tail and follows appends; scrolling up releases it and scrolling back re-engages, because engagement is POSITIONAL (being at the tail *is* the follow — no stored flag to fall out of step). Available from the declaration *and* from a bound `.anchorPosition`, whose write jumps to the edge (§3.2's `anchor(to:)`). **End re-engages** it explicitly. |
+| Top mode | **Shipped** (`28ef33e6`), and smaller than it looks. Top asks only that the view stay at the start, and a scroll offset of 0 is not moved by *any* data change — so once the edge modes stopped hijacking the row-identity re-bind (below), Top needed no offset logic at all. Writing `.top` into the binding jumps there; after that it is positional like Bottom. It is deliberately indistinguishable from Window once the user has scrolled away — snapping back unconditionally would nail a `.defaultScrollAnchor(.top)` view to the top and make it unscrollable, which is worse than useless. |
 | Window mode (default) | **Resolved (slice 1).** Was divergent: the uniform-extent path behaved as Window, but the anchored (variable-height) path re-bound its anchor to the row's identity every frame (§5f ladder), so an insert-above *held the row* — Row semantics, silently, as the default. Policy is now explicit: `ScrollAnchorMode` (Top/Bottom/Row/Window) is resolved from the environment and passed to `rebindAnchor(mode:)`, which **skips the key re-bind in Window mode**, keeping the ordinal and therefore the position in line coordinates. The ladder machinery is untouched — it now runs only for the row-holding modes, exactly the one branch this row predicted. `AnchorLadderTests` asserts the new default (prepending shifts the view); the test that asserted the placeholder row-holding default was retargeted, not deleted. Note the trade-off the original entry recorded: identity-binding also stabilised against extent-estimate error, so Window leans harder on the estimate — watch for drift on very large variable-height data. |
-| Row mode | **Shipped.** `.anchorPosition(_:)` designates a row, and all three render paths hold it — see §3.4 for how each does it, and for the two remaining restrictions (the stack must be lazy; the anchored walk still adopts by jumping the row to the top). |
+| Row mode | **Shipped.** `.anchorPosition(_:)` designates a row, and every scrollable holds it — the three stack render paths, `List`, and `Table` (`017683fa`; Table had never been wired to the anchor at all). See §3.4. The one remaining restriction is that a raw stack must be LAZY. |
 | Gap avoidance | Partially: clamping (`maxOffset`) prevents scrolling past the end and content shrinkage pulls the view up — but with no over/underscroll allowance to observe. |
 | User adjustability toggle | Not implemented. (`ScrollView.disabled` suppresses keyboard focus but the wheel still scrolls, and chrome doesn't grey out — not the spec's shape.) |
 | Selection → Row shadow-switch | **Shipped** (`04b3034c`). Selecting a row — by key or click — turns a declared Top/Bottom anchor into Row on that row, via `ItemListHandler.anchorOnSelection(at:)`. Scoped by two negatives it also tests: a view already released to `.window` is being browsed and is left alone, and Window declares no edge policy to depart from. |
-| Sticky edges | Not implemented. End/Home exist as jumps; the *push-past* detection (deliberate vs grazing) lives naturally in `ScrollViewHandler`'s event paths, which see each wheel tick / keypress and can distinguish "clamped this event" from "landed exactly". Additive; no conflict. |
-| Code-side restore | The **vehicle shipped**: `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` (SwiftUI parity, all three seek paths, same-frame). The TUI restore extensions themselves (`restoreDefaultAnchor()` etc., §3.2) await this feature. |
+| Sticky edges | **Partly shipped, and partly obsoleted.** Home/End now engage their edge anchor rather than releasing (§1.3's first bullet). The *push-past* half — re-engaging by deliberately scrolling past an edge — is not implemented, but note that the positional engagement above already gives most of it for free: scrolling back to the edge re-engages the follow, with no push required. The spec's "grazing must not stick" caveat therefore does NOT hold today, and is worth re-deciding before building push-past detection: with overscroll (§3.3) the excursion is a clean deliberate-push signal, and without it, grazing-vs-pushing at a hard edge is a distinction the user can barely feel. |
+| Code-side restore | **Shipped** as §3.2 designed it: writing into the bound `.anchorPosition` IS the restore. `.top`/`.bottom` jump to that edge (`anchor(to:)`), `.row(id)` pins that row (`anchor(toRow:)`), `nil` returns to the declaration (`restoreDefaultAnchor()`). No proxy extensions were needed. `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` remains for one-shot SwiftUI-parity seeks. |
 | Over/underscroll | Not implemented. Clamping is centralised (`clampScrollOffset` / `maxOffset`), so the allowance is an additive parameter, not a rework. Note the negative-size crash class: over/underscroll maths must clamp at source and sink like all chrome subtraction. |
 
 **Substrate compatibility:** the locating work *enables* rather than
@@ -226,7 +226,7 @@ silently inert exactly as it used to be everywhere else. Use `LazyVStack`
 This was found by running the Example, not by the tests: every unit test used
 `LazyVStack`, so the whole suite passed while the demo did nothing.
 
-### List / Table hold too (`8ebace6a`)
+### List / Table hold too (`8ebace6a`, `017683fa`)
 
 `List` and `Table` do not use a windowed lazy stack for their rows — they scroll
 through `ItemListHandler`'s own row-based offset — so the LazyVStack hold above
@@ -235,13 +235,63 @@ shadow-switch set the bound anchor onto the picked row, and a wheel scroll
 released it) but never adjusted the offset, so the row jumped while the read-out
 said "holding row N".
 
-`ItemListHandler.applyRowAnchorHold` (`ItemListHandler+RowAnchor.swift`) closes
-that gap: it is the row-offset counterpart of `offsetHoldingDesignatedRow` —
-resolve the bound `.row(id)` to its ordinal, set `scrollOffset` to keep the row
-on its screen row, adopt on change, sticky re-anchor at the edges, reserve both
+`ItemListHandler.applyAnchorHold` (`ItemListHandler+Anchor.swift`) closes that
+gap: it is the row-offset counterpart of `offsetHoldingDesignatedRow` — resolve
+the bound `.row(id)` to its ordinal, set `scrollOffset` to keep the row on its
+screen row, adopt on change, sticky re-anchor at the edges, reserve both
 indicator lines. Gated on a bound `.row` anchor, so every list that doesn't use
 `.anchorPosition` is byte-for-byte unaffected. So selecting a List row now both
 flips the read-out AND pins the row as data changes around it.
+
+> **Correction (`017683fa`).** This section originally said "List / Table hold
+> too" on the strength of Table sharing `ItemListHandler`. That was wrong, and
+> wrong for a reason worth keeping: **sharing a handler TYPE is not sharing
+> behaviour when each view wires its own per-frame inputs.** Neither of Table's
+> two handler-resolution paths captured `environment.anchorPosition`, so the
+> binding never reached the handler and *every* anchor behaviour was dead there
+> — the row hold, the wheel release, the selection shadow-switch — while its
+> twin `List` had them all. `TableRowAnchorHoldTests` now mirrors
+> `ListRowAnchorHoldTests` case for case so the two cannot drift apart again.
+
+### The edge modes are POSITIONAL (`28ef33e6`)
+
+`ScrollAnchorMode.holdsRowIdentity` used to read `self != .window`, so `.top`
+and `.bottom` re-bound the persisted anchor to a row key exactly as Row mode
+does. On the anchored walk that had teeth: under `.top`, a prepend re-bound to
+the row that HAD been at the top and the view followed it *down*, away from the
+top — Top silently behaving as Row. Only `.row` re-binds now. Bottom is
+unaffected in fact as well as in principle: its follow is offset-driven (glue to
+`maxOffset`), never key-driven.
+
+### The bound anchor drives the edges too (`db848b03`, `2d9931e3`)
+
+`isGluedToBottom` read `defaultScrollAnchor` alone, so three of the four edge
+cases were wrong: a bound `.bottom` was inert, and a bound `.window` or `.top`
+did not override a declared `.bottom` — meaning `.window`, the explicit release
+that exists precisely to be distinguishable from `nil`, was a read-out with no
+behaviour behind it. Both now resolve through
+`ScrollAnchorMode.effective(boundAnchor:...)`, and a *newly written* edge jumps
+there (§3.2's `anchor(to:)`) — on the change only, since holding an edge every
+frame would make the view unscrollable.
+
+Two things worth remembering from wiring the List/Table side:
+
+- **The focus cursor comes along.** A follow that moved the offset alone was
+  undone within the same frame: focus registration calls
+  `ensureFocusedItemVisible()`, which drags the viewport back to the cursor
+  (row 0 by default), and row 0 is not visible from the tail. That reveal is the
+  shipped "selection must stay visible" invariant, so the follow carries the
+  cursor to the last row instead — which is what following a log means anyway.
+- **`maxOffset` needs reading twice.** It early-outs to a cheap floor while the
+  offset is far from the tail (so a huge list needn't materialise tail row
+  heights every frame). That floor is a lower bound, so one assignment lands
+  short; the assignment itself brings the offset within reach of the exact walk,
+  so a second read converges. By construction, not a loop.
+
+Home and End engage their edge rather than releasing to `.window` (§1.3), and
+`engageEdgeAnchor` writes **`nil`** when the view's own declaration already names
+that edge — so pressing End on a `.defaultScrollAnchor(.bottom)` log leaves the
+app's "am I still following?" test (`anchor == nil`) answering yes.
 
 ### Adoption is now consistent across all three paths (`7a338d0d`)
 
