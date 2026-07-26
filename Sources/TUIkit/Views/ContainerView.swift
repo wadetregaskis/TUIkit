@@ -719,17 +719,27 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // the capped height and never reveal the overflow.
         var probe = context
         probe.availableHeight = max(availableHeight * 64, 4096)
+        // Measure the tree that will actually be RENDERED, wrapper and all.
+        // `@State` binds by identity and the ScrollView below adds identity
+        // components, so measuring the BARE body resolved every `@State` inside
+        // it to a different box than the render — and reported the body at its
+        // INITIAL state forever. A dialog whose body had since grown (a colour
+        // picker switched to its 256-swatch tab, a disclosure opened) was built
+        // to the size it started at and scrolled its content with most of the
+        // screen still free.
+        //
+        // Neither axis is proposed, so the report comes from the content itself:
+        // a ScrollView passes an unproposed axis straight through to its child
+        // (its ideal size is its content's), which keeps a dialog hugging its
+        // content rather than filling the terminal, and yields the height AT
+        // that hug width — the width it will actually render at, which is the
+        // only width whose answer means anything for wrapped text.
         let natural = measureChild(
-            content.padding(padding),
-            proposal: ProposedSize(width: innerWidth, height: nil),
+            ScrollView(.vertical) { content.padding(padding) },
+            proposal: ProposedSize(width: nil, height: nil),
             context: probe)
+        let naturalWidth = min(max(natural.width, 0), innerWidth)
         let height = min(max(natural.height, 0), availableHeight)
-        // The WIDTH is pinned for the same reason as the height: a ScrollView is
-        // width-flexible and reports the full width it is offered, which would
-        // make every dialog fill the terminal instead of hugging its content.
-        // The probe already answered what the body wants at this width — the
-        // full inner width for a flexible body, the content width for a hugging
-        // one — so pinning to it preserves either behaviour exactly.
         // The ScrollView is ALWAYS in the tree, whether or not the body
         // overflows — only its frame changes. An earlier version wrapped only on
         // overflow, which is a structural difference: crossing the threshold
@@ -746,18 +756,17 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // always worked, which is what made the bug look like it was about
         // *which* tab was clicked.
         //
-        // BOTH axes are pinned to what the probe measured, in both cases. A
-        // ScrollView is flexible on both axes and reports whatever it is
-        // offered, so leaving either free makes the dialog fill the terminal
-        // instead of hugging its content. Pinning the height to the natural
-        // height when the body fits is also what keeps the always-present
-        // ScrollView inert: there is nothing to scroll, so no indicators and no
-        // clipping, and the container's own `clamped(toWidth:)` still does the
+        // BOTH axes are pinned to what the probe measured. A ScrollView takes
+        // any size it is GIVEN, so leaving either axis free would make the
+        // dialog fill the terminal. Pinning the height to the natural height
+        // while the body fits is also what keeps the always-present ScrollView
+        // inert: nothing to scroll, so no indicators, no clipping and no focus
+        // stop, and the container's own `clamped(toWidth:)` still does the
         // horizontal ellipsis.
         let overflows = natural.height > availableHeight && availableHeight > 0
         let scrolled = ScrollView(.vertical) { content.padding(padding) }
             .frame(
-                width: min(max(natural.width, 0), innerWidth),
+                width: naturalWidth,
                 height: overflows ? height : max(natural.height, 0))
         return TUIkit.renderToBuffer(scrolled, context: context)
             .clamped(toWidth: innerWidth, height: availableHeight)
