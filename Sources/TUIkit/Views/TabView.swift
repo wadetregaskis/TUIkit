@@ -279,7 +279,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         for row in rows {
             var col = max(0, alignment.childOffset(childWidth: rowWidthOf(row), in: panelWidth))
             for i in row {
-                let bodyWidth = bordered ? tabs[i].title.count + 2 : tabWidth(i, style: .compact)
+                let bodyWidth = tabWidth(i, style: bordered ? .bordered : .compact)
                 let lead = bordered ? 1 : 0  // bordered: a wall precedes each tab body
                 centers[i] = col + lead + bodyWidth / 2
                 col += lead + bodyWidth
@@ -455,7 +455,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     /// A bordered (folder-tab) row's width: each tab body is `" title "`, and the
     /// tabs share `count + 1` vertical walls.
     private func folderRowWidth(_ row: [Int]) -> Int {
-        row.reduce(0) { $0 + tabs[$1].title.count + 2 } + (row.count + 1)
+        row.reduce(0) { $0 + tabWidth($1, style: .bordered) } + (row.count + 1)
     }
 
     /// A compact row's width: the chips (each `▐ title ▌`) abut with no separator.
@@ -467,8 +467,15 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
     /// Per-tab visible width (cells), excluding inter-tab separators. Compact
     /// tabs carry two extra cells for the ◢ ◣ edge caps.
+    ///
+    /// The title is measured in CELLS, not Characters: a CJK or emoji title
+    /// draws two cells per Character, and every width in the strip — row widths,
+    /// the panel it sizes, the folder-tab walls, the click regions — is derived
+    /// from this one number. Counting Characters here drew a strip wider than it
+    /// measured, so the box came out ragged and the click regions slid left of
+    /// the tabs they belong to.
     private func tabWidth(_ index: Int, style: TabViewStyle) -> Int {
-        let body = tabs[index].title.count + 2   // " title "
+        let body = tabs[index].title.strippedLength + 2   // " title "
         return style == .compact ? body + 2 : body
     }
 
@@ -627,8 +634,9 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
                 line += ANSIRenderer.colorize("▐", foreground: chip)
                 line += ANSIRenderer.colorize(body, foreground: chipFg, background: chip, bold: active)
                 line += ANSIRenderer.colorize("▌", foreground: chip)
-                regions.append((x: x, y: y, width: body.count + 2, index: i))
-                x += body.count + 2
+                let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
+                regions.append((x: x, y: y, width: chipWidth, index: i))
+                x += chipWidth
             }
             if x < width { line += String(repeating: " ", count: width - x) }
             lines.append(line)
@@ -741,7 +749,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             var col = off
             for i in row {
                 wallCols.append(col)
-                let bw = tabs[i].title.count + 2
+                let bw = tabWidth(i, style: .bordered)
                 bodySpans.append((start: col + 1, len: bw, index: i))
                 col += 1 + bw
             }
