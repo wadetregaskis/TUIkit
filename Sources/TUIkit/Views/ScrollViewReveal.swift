@@ -79,11 +79,12 @@ extension _ScrollViewCore {
 
         if shouldSnap, !suppressed,
            let focusedID = currentFocusedID,
-           let region = fullBuffer.hitTestRegions.first(where: { $0.focusID == focusedID })
+           let region = fullBuffer.revealTarget(
+               focusID: focusedID, wholeControl: focusJustChanged)
         {
             // Sliced content (Stage 6): the buffer's regions are band-local;
             // rebase them into content space before comparing to the offset.
-            let regionTop = region.offsetY + regionOriginY
+            let regionTop = region.top + regionOriginY
             let regionBottom = regionTop + region.height
             let viewportTop = handler.scrollOffset
             let viewportBottom = handler.scrollOffset + viewportHeight
