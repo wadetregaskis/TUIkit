@@ -41,19 +41,25 @@ struct DragScrollDemoSection: View {
                         ForEach(folders) { folder in
                             HStack(spacing: 1) {
                                 Text("📁 \(folder.name)")
+                                Spacer()
                                 if filed == folder.name {
-                                    Spacer()
                                     Text("●").foregroundStyle(.palette.accent)
                                 }
                             }
+                            // The Spacer above is what makes the WHOLE row a
+                            // drop target rather than just the label: a row
+                            // hugs its content by default, so the empty space
+                            // to the right of "Folder 7" belonged to no drop
+                            // destination and a release there did nothing.
                             .dropDestination(for: FilingTag.self) { _, _ in
                                 filed = folder.name
                                 return true
                             }
                         }
                     }
+                    // No `.border` here: a List already draws its own container
+                    // border, so adding one boxed the box.
                     .frame(width: 24, height: 6)
-                    .border(color: .palette.border)
                 }
                 if let filed {
                     Text("\(L("page.mouse.dragScrollFiled")) \(filed)")
