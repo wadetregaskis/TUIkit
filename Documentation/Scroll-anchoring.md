@@ -146,16 +146,28 @@ lands with it.
 when the binding is `nil` (it reports "following the declaration", not which
 edge). Deferred until a real use asks.
 
-### 3.3 Over/underscroll API sketch
+### 3.3 Over/underscroll API — SETTLED (owner decision, 2026-07-26)
 
 ```swift
-enum ScrollOverscroll {
+public enum ScrollOverscroll {
     case none
-    case absolute(Int)              // e.g. 5 rows past the edge
-    case viewportRelative(Int)      // e.g. viewport height − 1
+    case rows(Int)              // e.g. 5 rows past the edge
+    case viewport(minus: Int)   // the viewport height, less n — `minus: 0` is a full viewport
 }
-.scrollOverscroll(top: …, bottom: …)
+.scrollOverscroll(top: .rows(5), bottom: .viewport(minus: 1))
 ```
+
+Chosen over the earlier `.absolute` / `.viewportRelative(-1)` sketch because
+the call site reads as prose and the relative case says what it means; per-end
+(`top:` / `bottom:`) rather than one value, since §1.5 specifies both ends
+independently.
+
+**A view whose content already fits may still overscroll** (owner decision).
+The allowance is not gated on overflow: a short view can be pushed its full
+allowance past the edge and stops there. Note this deliberately *diverges* from
+`scroll(by:)`'s existing `extent > viewportHeight` guard, so the excursion
+cannot simply ride on that path — the guard governs the offset, and the
+excursion is a separate quantity (below).
 
 Interacts with: clamp maths, the "N more" indicators (which must not count
 overscroll as content), sticky-edge detection (pushing into overscroll is
