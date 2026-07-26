@@ -131,10 +131,40 @@ public struct TabView<SelectionValue: Hashable, Content: View>: View {
 private enum TabViewStateIndex {
     static let focusID = 0
     static let handler = 1
-    /// Per-tab measured content sizes (`[tab value: ViewSize]`), so the panel can
-    /// size to the widest *and* tallest tab without re-measuring every tab each
-    /// pass.
+    /// Per-tab measured content sizes (``TabSizeCache``), so the panel can size
+    /// to the widest *and* tallest tab without re-measuring every tab each pass.
     static let sizeCache = 2
+}
+
+/// Each tab's natural content size, per width measured at.
+///
+/// The width has to be part of the key because only the *selected* tab is
+/// re-measured each pass. Keyed by tab value alone, every other tab kept
+/// whatever size it had at the width it was first seen at, so after a resize the
+/// panel was built from stale numbers — and since the panel sizes to the tallest
+/// and widest of all tabs, it jumped the instant one of those tabs became
+/// selected and got re-measured.
+///
+/// Several widths get measured within a single frame — a dialog probes its body
+/// at more than one width before settling on one — so a cache that held only the
+/// latest width would flush and re-seed every tab on each probe. Holding a
+/// handful covers a probe sweep and a resize, and evicting the least recently
+/// used keeps it bounded across a long resize drag.
+private struct TabSizeCache {
+    private static let capacity = 8
+
+    /// The widths held, least recently used first.
+    private var order: [Int] = []
+    private var sizes: [Int: [AnyHashable: ViewSize]] = [:]
+
+    subscript(width: Int) -> [AnyHashable: ViewSize]? { sizes[width] }
+
+    mutating func set(_ entry: [AnyHashable: ViewSize], for width: Int) {
+        if let existing = order.firstIndex(of: width) { order.remove(at: existing) }
+        order.append(width)
+        sizes[width] = entry
+        while order.count > Self.capacity { sizes.removeValue(forKey: order.removeFirst()) }
+    }
 }
 
 /// Renders the tab strip plus the selected tab's content.
@@ -174,12 +204,20 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     /// own `@State` (e.g. the 256-grid's "show numbers"), and the panel holds the
     /// widest/tallest of all tabs without re-rendering them.
     ///
-    /// The cache is a pure memo keyed by content identity (it can only ever equal
-    /// what a measure would compute), so writing it during a measure pass is
-    /// benign — it doesn't perturb layout, only avoids recomputation. A single
-    /// `measureChild` already yields both axes, so caching the full ``ViewSize``
-    /// (rather than only the width) lets the panel size to the tallest tab too,
-    /// at no extra measure cost.
+    /// The cache is a pure memo keyed by content identity **and the width it was
+    /// measured at** (it can only ever equal what a measure would compute), so
+    /// writing it during a measure pass is benign — it doesn't perturb layout,
+    /// only avoids recomputation. A single `measureChild` already yields both
+    /// axes, so caching the full ``ViewSize`` (rather than only the width) lets
+    /// the panel size to the tallest tab too, at no extra measure cost.
+    ///
+    /// The width has to be part of the key precisely *because* only the selected
+    /// tab is re-measured: with the sizes keyed by tab value alone, every other
+    /// tab kept whatever it measured at the width it was first seen at. Once the
+    /// terminal (or any enclosing layout) changed width, the panel — sized to
+    /// the tallest and widest of all tabs — was built from stale numbers, and
+    /// jumped the instant you switched to one of them. Re-seeding on a width
+    /// change costs one full measure per resize and nothing in the steady state.
     private func tabContentSizes(
         insets: EdgeInsets, available: Int, context: RenderContext
     ) -> [AnyHashable: ViewSize] {
@@ -194,16 +232,18 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             return [AnyHashable(tabs[selectedIndex].value): measureTab(selectedIndex)]
         }
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.sizeCache)
-        let box: StateBox<[AnyHashable: ViewSize]> = stateStorage.storage(for: key, default: [:])
+        let box: StateBox<TabSizeCache> = stateStorage.storage(for: key, default: TabSizeCache())
         var cache = box.value
-        cache[AnyHashable(tabs[selectedIndex].value)] = measureTab(selectedIndex)
-        for (i, tab) in tabs.enumerated() where cache[AnyHashable(tab.value)] == nil {
-            cache[AnyHashable(tab.value)] = measureTab(i)  // one-time seed per tab
+        var entry = cache[available] ?? [:]
+        entry[AnyHashable(tabs[selectedIndex].value)] = measureTab(selectedIndex)
+        for (i, tab) in tabs.enumerated() where entry[AnyHashable(tab.value)] == nil {
+            entry[AnyHashable(tab.value)] = measureTab(i)  // one-time seed per tab, per width
         }
         let present = Set(tabs.map { AnyHashable($0.value) })
-        cache = cache.filter { present.contains($0.key) }  // drop removed tabs
+        entry = entry.filter { present.contains($0.key) }  // drop removed tabs
+        cache.set(entry, for: available)
         box.value = cache
-        return cache
+        return entry
     }
 
     /// The widest tab's natural (unconstrained) content width — the panel sizes to
