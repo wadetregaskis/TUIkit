@@ -207,18 +207,28 @@ struct _ColorPickerBody: View {
                 // stretched wide by a long single-row strip.
                 .tabViewHeaderWrap(.toContentWidth)
                 // These tabs have wildly different heights (3 slider rows vs the
-                // tall swatch grids, each already scrollable via `tabBody`), so
+                // tall swatch grids; the dialog body scrolls if it must), so
                 // size the panel to the ACTIVE tab — the tallest-tab default
                 // would pad the slim slider tabs out to the 256-grid's height.
                 .tabViewContentSizing(.activeTab)
             }
     }
 
-    /// Wraps a tab's content in a ScrollView so a too-short terminal can scroll the
-    /// tall tabs (the 256-grid, Named, Crayons) into view rather than clipping them.
+    /// A tab's content, unwrapped.
+    ///
+    /// This used to add a per-tab `ScrollView`, because nothing else in the
+    /// dialog could scroll — the body was clipped, so a scrollable tab was the
+    /// only way to reach a tall grid at all. It only worked because `TabView`
+    /// measures each tab with an explicit unbounded proposal, which is why
+    /// scrolling existed inside a tab and nowhere else.
+    ///
+    /// The dialog now scrolls its own body with the title and footer pinned, so
+    /// an inner ScrollView would only add a nested wheel-chaining boundary and a
+    /// second focus stop for content that already scrolls. Kept as a seam so the
+    /// call sites read unchanged.
     @ViewBuilder
     private func tabBody<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        ScrollView { content() }
+        content()
     }
 
     // MARK: Preview

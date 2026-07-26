@@ -94,7 +94,14 @@ public struct Dialog<Content: View, Footer: View>: View {
             titleColor: titleColor,
             padding: padding,
             showFooterSeparator: showFooterSeparator,
-            footerAlignment: footerAlignment
+            footerAlignment: footerAlignment,
+            // A dialog is the one container whose chrome must survive a short
+            // terminal: the title says what you are looking at and the footer
+            // holds Done/Cancel. So the BODY scrolls and they stay pinned,
+            // rather than the whole dialog being clipped (which used to drop
+            // the footer entirely) or the whole dialog scrolling (which would
+            // open with the buttons off-screen).
+            scrollsOverflowingBody: true
         )
         self.content = content()
         self.footer = footer()
@@ -184,7 +191,9 @@ extension Dialog where Footer == EmptyView {
             borderColor: borderColor,
             titleColor: titleColor,
             padding: padding,
-            showFooterSeparator: false
+            showFooterSeparator: false,
+            // Footerless, but the title still has to survive a short terminal.
+            scrollsOverflowingBody: true
         )
         self.content = content()
         self.footer = nil

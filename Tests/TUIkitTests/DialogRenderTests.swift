@@ -198,14 +198,35 @@ struct DialogRenderTests {
         #expect(lines.allSatisfy { $0.count == 12 })
     }
 
-    @Test("Narrow dialog ellipsises over-long body text rather than overflowing")
-    func dialogNarrowBodyEllipsis() {
+    /// A narrow dialog wraps its body and scrolls it, rather than ellipsising.
+    ///
+    /// This test previously asserted the "…". That was the right assertion while
+    /// an over-tall dialog body was CLIPPED: truncating was the only way to say
+    /// "there is more here", because the rest was unreachable. Now the body
+    /// scrolls (with the title and footer pinned), so wrapping loses nothing —
+    /// the whole message is readable — and the scroll indicator says so
+    /// explicitly. Measured, 12x6:
+    ///
+    ///     ╭─ LongTit ╮
+    ///     │          │
+    ///     │  body    │
+    ///     │  text    │
+    ///     │  ▼ 1     │
+    ///     ╰──────────╯
+    ///
+    /// The load-bearing half of the old test — never exceeding the width it was
+    /// given — is unchanged and still asserted.
+    @Test("Narrow dialog wraps and scrolls its body rather than overflowing")
+    func dialogNarrowBodyWrapsAndScrolls() {
         let buffer = renderToBuffer(
             Dialog(title: "LongTitleName") { Text("body text wide") },
             context: createTestContext(width: 12, height: 6))
         let lines = buffer.lines.map { $0.stripped }
-        #expect(lines.contains { $0.contains("…") })
-        #expect(lines.allSatisfy { $0.count <= 12 })
+        #expect(lines.allSatisfy { $0.count <= 12 }, "never wider than offered: \(lines)")
+        #expect(lines.contains { $0.contains("body") }, "the body renders: \(lines)")
+        #expect(
+            lines.contains { $0.contains("\u{25BC}") },
+            "and the rest is reachable by scrolling, not silently cut: \(lines)")
     }
 
     // MARK: Wide

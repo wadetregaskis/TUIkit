@@ -49,6 +49,17 @@ struct ContainerConfig: Sendable, Equatable {
     /// `.listStyle(.plain)` (``PlainListStyle/showsBorder`` is `false`).
     var hasBorder: Bool
 
+    /// Whether an over-tall BODY scrolls instead of being clipped, leaving the
+    /// title and footer pinned.
+    ///
+    /// Off for ordinary containers: a `.border()` or `Card` around arbitrary
+    /// content should not silently become scrollable, gaining a focus stop and
+    /// scroll chrome the author never asked for. `Dialog` turns it on, because a
+    /// dialog is the one container whose chrome — the title and the Done/Cancel
+    /// footer — must stay reachable no matter how short the terminal is, and
+    /// whose body is the part that can afford to scroll.
+    var scrollsOverflowingBody: Bool
+
     /// Creates a container configuration.
     ///
     /// - Parameters:
@@ -59,6 +70,8 @@ struct ContainerConfig: Sendable, Equatable {
     ///   - showFooterSeparator: Show separator before footer (default: true).
     ///   - footerAlignment: How to align the footer (default: leading).
     ///   - hasBorder: Whether to draw a border at all (default: true).
+    ///   - scrollsOverflowingBody: Whether a too-tall body scrolls rather than
+    ///     being clipped, with the title and footer pinned (default: false).
     init(
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
@@ -66,7 +79,8 @@ struct ContainerConfig: Sendable, Equatable {
         padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
         showFooterSeparator: Bool = true,
         footerAlignment: HorizontalAlignment = .leading,
-        hasBorder: Bool = true
+        hasBorder: Bool = true,
+        scrollsOverflowingBody: Bool = false
     ) {
         self.borderStyle = borderStyle
         self.borderColor = borderColor
@@ -75,6 +89,7 @@ struct ContainerConfig: Sendable, Equatable {
         self.showFooterSeparator = showFooterSeparator
         self.footerAlignment = footerAlignment
         self.hasBorder = hasBorder
+        self.scrollsOverflowingBody = scrollsOverflowingBody
     }
 
     /// Default configuration.
@@ -106,6 +121,10 @@ struct ContainerStyle: Sendable, Equatable {
     /// Whether the container draws a border. See ``ContainerConfig/hasBorder``.
     var hasBorder: Bool
 
+    /// Whether an over-tall body scrolls with the title/footer pinned.
+    /// See ``ContainerConfig/scrollsOverflowingBody``.
+    var scrollsOverflowingBody: Bool
+
     /// Creates a container style with the specified options.
     ///
     /// - Parameters:
@@ -115,13 +134,15 @@ struct ContainerStyle: Sendable, Equatable {
     ///   - borderColor: The border color (default: theme border).
     ///   - footerAlignment: How to align the footer (default: leading).
     ///   - hasBorder: Whether to draw a border at all (default: true).
+    ///   - scrollsOverflowingBody: Whether a too-tall body scrolls (default: false).
     init(
         showHeaderSeparator: Bool = true,
         showFooterSeparator: Bool = true,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         footerAlignment: HorizontalAlignment = .leading,
-        hasBorder: Bool = true
+        hasBorder: Bool = true,
+        scrollsOverflowingBody: Bool = false
     ) {
         self.showHeaderSeparator = showHeaderSeparator
         self.showFooterSeparator = showFooterSeparator
@@ -129,6 +150,7 @@ struct ContainerStyle: Sendable, Equatable {
         self.borderColor = borderColor
         self.footerAlignment = footerAlignment
         self.hasBorder = hasBorder
+        self.scrollsOverflowingBody = scrollsOverflowingBody
     }
 
     /// Creates a `ContainerStyle` from a ``ContainerConfig``.
@@ -141,6 +163,7 @@ struct ContainerStyle: Sendable, Equatable {
         self.borderColor = config.borderColor
         self.footerAlignment = config.footerAlignment
         self.hasBorder = config.hasBorder
+        self.scrollsOverflowingBody = config.scrollsOverflowingBody
     }
 
     /// Default container style.
@@ -176,7 +199,8 @@ internal func renderContainer<Content: View, Footer: View>(
         borderStyle: config.borderStyle,
         borderColor: config.borderColor,
         footerAlignment: config.footerAlignment,
-        hasBorder: config.hasBorder
+        hasBorder: config.hasBorder,
+        scrollsOverflowingBody: config.scrollsOverflowingBody
     )
 
     let container = ContainerView(
@@ -229,7 +253,8 @@ internal func measureContainer<Content: View, Footer: View>(
         borderStyle: config.borderStyle,
         borderColor: config.borderColor,
         footerAlignment: config.footerAlignment,
-        hasBorder: config.hasBorder
+        hasBorder: config.hasBorder,
+        scrollsOverflowingBody: config.scrollsOverflowingBody
     )
 
     let container = ContainerView(
@@ -603,8 +628,13 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         let bodyAvailableHeight = max(0, innerAvailableHeight - footerHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
-        let bodyBuffer = TUIkit.renderToBuffer(content.padding(padding), context: bodyContext)
-            .clamped(toWidth: innerContext.availableWidth, height: bodyAvailableHeight)
+        let bodyBuffer =
+            style.scrollsOverflowingBody
+            ? scrollableBody(
+                availableHeight: bodyAvailableHeight, innerWidth: innerContext.availableWidth,
+                context: bodyContext)
+            : TUIkit.renderToBuffer(content.padding(padding), context: bodyContext)
+                .clamped(toWidth: innerContext.availableWidth, height: bodyAvailableHeight)
 
         // Bordering empty content with no footer produces nothing
         // (e.g. `EmptyView().border()`).
@@ -659,6 +689,67 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             )
         // Final guard: never exceed the space the container was given.
         return assembled.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// The body wrapped in a `ScrollView` so an over-tall one scrolls instead of
+    /// being clipped, leaving the title (in the top border) and the footer
+    /// pinned — they are assembled separately, so they are outside the scrolling
+    /// region by construction.
+    ///
+    /// The wrapper is applied UNCONDITIONALLY, not only when the body
+    /// overflows, so the body's identity path does not change as the terminal is
+    /// resized across the overflow threshold. Wrapping conditionally would
+    /// re-key every `@State` inside the dialog on the frame it starts scrolling
+    /// — the colour picker would silently lose its selected tab on a resize.
+    ///
+    /// The explicit `.frame(height:)` is what makes the always-on wrapper safe.
+    /// A `ScrollView` takes any DEFINITE proposed height wholesale, so simply
+    /// nesting one would inflate every short dialog to the full content area
+    /// (measured: `Dialog { 3 rows }` is 9 rows, but wrapping its body naively
+    /// makes it 40 in a 40-row area). Pinning the frame to the body's own
+    /// natural height while it fits keeps a short dialog exactly the size it is
+    /// today — and with nothing to scroll, the ScrollView draws no chrome and
+    /// takes no focus stop, so it is invisible until it is needed.
+    private func scrollableBody(
+        availableHeight: Int, innerWidth: Int, context: RenderContext
+    ) -> FrameBuffer {
+        // The body's NATURAL height, measured against an unbounded budget: a nil
+        // height proposal is not "unbounded" here, because every stack clamps
+        // its report to `availableHeight` — measuring in `context` would return
+        // the capped height and never reveal the overflow.
+        var probe = context
+        probe.availableHeight = max(availableHeight * 64, 4096)
+        let natural = measureChild(
+            content.padding(padding),
+            proposal: ProposedSize(width: innerWidth, height: nil),
+            context: probe)
+        let height = min(max(natural.height, 0), availableHeight)
+        // The WIDTH is pinned for the same reason as the height: a ScrollView is
+        // width-flexible and reports the full width it is offered, which would
+        // make every dialog fill the terminal instead of hugging its content.
+        // The probe already answered what the body wants at this width — the
+        // full inner width for a flexible body, the content width for a hugging
+        // one — so pinning to it preserves either behaviour exactly.
+        // Only wrap when the body actually overflows. Wrapping unconditionally
+        // was tempting (it keeps the body's identity path stable as the terminal
+        // is resized across the threshold) but it changes horizontal behaviour
+        // for every dialog: a ScrollView CLIPS content wider than its viewport,
+        // whereas the container's own `clamped(toWidth:)` ellipsises it. A
+        // narrow dialog would silently lose its "…" and just cut the text.
+        // Overflow is a vertical question, so pay the cost only there.
+        guard natural.height > availableHeight, availableHeight > 0 else {
+            return TUIkit.renderToBuffer(content.padding(padding), context: context)
+                .clamped(toWidth: innerWidth, height: availableHeight)
+        }
+        // The WIDTH is pinned for the same reason as the height: a ScrollView is
+        // width-flexible and reports the full width it is offered, which would
+        // make a scrolling dialog fill the terminal instead of hugging its
+        // content. The probe already answered what the body wants at this width.
+        let width = min(max(natural.width, 0), innerWidth)
+        let scrolled = ScrollView(.vertical) { content.padding(padding) }
+            .frame(width: width, height: height)
+        return TUIkit.renderToBuffer(scrolled, context: context)
+            .clamped(toWidth: innerWidth, height: availableHeight)
     }
 
     // MARK: - Standard Style Rendering
