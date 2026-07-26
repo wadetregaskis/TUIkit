@@ -414,13 +414,28 @@ final class DragAndDropSession: @unchecked Sendable {
     /// rate tops out modestly; when it has room past its edge (a scrollable
     /// smaller than the screen) the cursor can go further and accelerate — the
     /// same distinction macOS makes.
+    static func autoScrollDeltaForTesting(
+        position: Int, start: Int, extent: Int, canBackward: Bool, canForward: Bool
+    ) -> Int {
+        autoScrollDelta(
+            position: position, start: start, extent: extent,
+            canBackward: canBackward, canForward: canForward)
+    }
+
     private static func autoScrollDelta(
         position: Int, start: Int, extent: Int, canBackward: Bool, canForward: Bool
     ) -> Int {
         guard extent > 0 else { return 0 }
         let lastEdge = start + extent - 1
-        let pastStart = (start + AutoScroll.hotMarginRows) - position
-        let pastEnd = position - (lastEdge - AutoScroll.hotMarginRows)
+        // The margin is clamped so the two hot zones can never meet: on a short
+        // scrollable a fixed 2-row margin is more than half the viewport, so
+        // every row lands inside one zone or the other and hovering the MIDDLE
+        // scrolled. Leaving at least one neutral row keeps "near an edge"
+        // meaning near an edge. (A 1-row viewport gets no margin at all —
+        // there is no room for one, and its only row must stay inert.)
+        let margin = Swift.max(0, Swift.min(AutoScroll.hotMarginRows, (extent - 1) / 2))
+        let pastStart = (start + margin) - position
+        let pastEnd = position - (lastEdge - margin)
         if pastStart > 0, canBackward { return -rate(forOvershoot: pastStart) }
         if pastEnd > 0, canForward { return rate(forOvershoot: pastEnd) }
         return 0
