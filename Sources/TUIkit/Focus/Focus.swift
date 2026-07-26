@@ -602,7 +602,18 @@ extension FocusManager {
         switch event.key {
         case .pageUp, .pageDown, .home, .end:
             if scrollActiveSection(for: event.key) {
-                focusedInteractionGeneration &+= 1
+                // Deliberately NOT bumping `focusedInteractionGeneration` here.
+                //
+                // That counter means "the focused control just consumed a key,
+                // so scroll it back into view". This branch is the opposite
+                // case: the focused control did NOT consume the key, and we
+                // scrolled the container on its behalf — the whole point is to
+                // move AWAY from it. Bumping made the reveal snap the viewport
+                // straight back to the focused control on the same frame, so
+                // Page Up/Down/Home/End read as completely dead whenever a
+                // non-scrollable control (a Button, a text field) held focus
+                // inside a scrollable. The scroll was happening and being undone
+                // before it was ever drawn.
                 return true
             }
         default:
