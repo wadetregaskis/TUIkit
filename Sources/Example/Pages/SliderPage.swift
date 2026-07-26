@@ -28,46 +28,43 @@ struct SliderPage: View {
         }
     }
 
+    /// A slider's own label, in the page's quiet caption colour.
+    private func caption(_ text: String) -> some View {
+        Text(text).foregroundStyle(.palette.foregroundSecondary)
+    }
+
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
+            // Each row's caption is the SLIDER'S OWN label, not a `Text`
+            // alongside it: a slider draws its label to the left of the track
+            // and shortens the track to fit, as macOS SwiftUI does. Written as
+            // an adjacent `Text` in an HStack these rows looked identical, but
+            // hand-rolled what the control now does itself.
             DemoSection(L("page.slider.basicSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.volume")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume)
-                    }
+                    Slider(value: $volume, label: { caption(L("page.slider.volume")) })
                 }
             }
 
             DemoSection(L("page.slider.trackStylesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.block")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume).trackStyle(.block)
-                    }
-                    HStack(spacing: 1) {
-                        // Truth in labelling: the row that says "shade" renders
-                        // `.shade`, exactly as the ProgressView demo's "shade"
-                        // row does — a style name must look the same on every
-                        // control. (`.shade`'s ▓ fill reads close to `.block`
-                        // on most fonts by design; the visibly graded look is
-                        // the separate `.shadeRamp` row below.)
-                        Text(L("page.slider.shade")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume).trackStyle(.shade)
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.shadeRamp")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume).trackStyle(.shadeRamp())
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.dot")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume).trackStyle(.dot)
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.bar")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume).trackStyle(.bar)
-                    }
+                    Slider(value: $volume, label: { caption(L("page.slider.block")) })
+                        .trackStyle(.block)
+                    // Truth in labelling: the row that says "shade" renders
+                    // `.shade`, exactly as the ProgressView demo's "shade"
+                    // row does — a style name must look the same on every
+                    // control. (`.shade`'s ▓ fill reads close to `.block`
+                    // on most fonts by design; the visibly graded look is
+                    // the separate `.shadeRamp` row below.)
+                    Slider(value: $volume, label: { caption(L("page.slider.shade")) })
+                        .trackStyle(.shade)
+                    Slider(value: $volume, label: { caption(L("page.slider.shadeRamp")) })
+                        .trackStyle(.shadeRamp())
+                    Slider(value: $volume, label: { caption(L("page.slider.dot")) })
+                        .trackStyle(.dot)
+                    Slider(value: $volume, label: { caption(L("page.slider.bar")) })
+                        .trackStyle(.bar)
                 }
             }
 
@@ -79,18 +76,15 @@ struct SliderPage: View {
 
             DemoSection(L("page.slider.customRangesSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.brightnessLabel")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $brightness, in: 0...100, step: 5)
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.ratingLabel")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $rating, in: 1...5, step: 1)
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.precisionLabel")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $precision, in: 0...1, step: 0.05)
-                    }
+                    Slider(
+                        value: $brightness, in: 0...100, step: 5,
+                        label: { caption(L("page.slider.brightnessLabel")) })
+                    Slider(
+                        value: $rating, in: 1...5, step: 1,
+                        label: { caption(L("page.slider.ratingLabel")) })
+                    Slider(
+                        value: $precision, in: 0...1, step: 0.05,
+                        label: { caption(L("page.slider.precisionLabel")) })
                 }
             }
 
@@ -112,24 +106,15 @@ struct SliderPage: View {
                     //    the digits only, not the padded field);
                     //  • .tint recolours the slider ITSELF — the filled rail and
                     //    the knob draw in the tint (the empty rail stays quiet).
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.default")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume)
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.themed")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume)
-                            .sliderTextStyle {
-                                $0.bold = true
-                                $0.underline = true
-                                $0.foreground = .palette.success
-                            }
-                    }
-                    HStack(spacing: 1) {
-                        Text(L("page.slider.tinted")).foregroundStyle(.palette.foregroundSecondary)
-                        Slider(value: $volume)
-                            .tint(.rgb(255, 130, 40))
-                    }
+                    Slider(value: $volume, label: { caption(L("page.slider.default")) })
+                    Slider(value: $volume, label: { caption(L("page.slider.themed")) })
+                        .sliderTextStyle {
+                            $0.bold = true
+                            $0.underline = true
+                            $0.foreground = .palette.success
+                        }
+                    Slider(value: $volume, label: { caption(L("page.slider.tinted")) })
+                        .tint(.rgb(255, 130, 40))
                 }
             }
 
