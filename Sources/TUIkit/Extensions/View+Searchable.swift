@@ -52,16 +52,28 @@ struct SearchableModifier<Content: View>: View {
 
     /// The bare `⌕` (U+2315 telephone recorder) is drawn tiny and thin-lined by
     /// Terminal.app, so it reads as noise beside the field rather than a search
-    /// affordance. On terminals that render emoji chrome legibly we use the bold
-    /// 🔍 magnifier instead; elsewhere we draw no icon at all and let the "Search"
+    /// affordance. On terminals that render emoji chrome legibly we use a bold
+    /// magnifier instead; elsewhere we draw no icon at all and let the "Search"
     /// prompt carry the meaning (a mis-drawn glyph is worse than none).
     @Environment(\.supportsEmojiChrome) private var supportsEmojiChrome
+
+    /// Which side the icon sits on — and therefore which magnifier it is.
+    @Environment(\.searchFieldIconPlacement) private var iconPlacement
+
+    /// The magnifier that faces the field from `iconPlacement`'s side: 🔎 is
+    /// RIGHT-pointing so it looks rightward into a trailing field, 🔍 is
+    /// LEFT-pointing so it looks leftward into a leading one. (The Unicode
+    /// names read backwards from the rendered shape at a glance — U+1F50E
+    /// RIGHT-POINTING is the one whose lens sits on the right.)
+    private var icon: Text {
+        Text(iconPlacement == .leading ? "\u{1F50E}" : "\u{1F50D}")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 1) {
-                if supportsEmojiChrome {
-                    Text("\u{1F50D}")
+                if supportsEmojiChrome, iconPlacement == .leading {
+                    icon
                 }
                 // Scope ONLY the query field to the `.search` submit role, so a
                 // Return here fires `.onSubmit(of: .search)` — not `.onSubmit(of:
@@ -69,6 +81,9 @@ struct SearchableModifier<Content: View>: View {
                 // consumes `.text`.
                 TextField("", text: text, prompt: prompt ?? Text("Search"))
                     .environment(\.submitTriggerRole, .search)
+                if supportsEmojiChrome, iconPlacement == .trailing {
+                    icon
+                }
             }
             content
         }

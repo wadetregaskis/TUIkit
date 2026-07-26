@@ -24,11 +24,14 @@ struct SearchableTests {
     func presentsFieldAboveContent() {
         let out = render(Text("CONTENT").searchable(text: binding(QueryBox())))
         let joined = out.joined(separator: "\n")
-        // No emoji chrome in a bare context, so the icon is omitted (the tiny
-        // ⌕ / mis-drawn 🔍 would read as noise) — the "Search" prompt carries
-        // the affordance instead.
+        // No emoji chrome in a bare context, so the icon is omitted (a tiny
+        // ⌕ / mis-drawn magnifier would read as noise) — the "Search" prompt
+        // carries the affordance instead. Both magnifiers are checked: the
+        // placement decides WHICH one is drawn, so asserting only one would
+        // silently stop testing anything if the default side ever changed.
         #expect(joined.contains("Search"), "the default prompt renders when the field is empty")
-        #expect(!joined.contains("\u{1F50D}"), "the emoji magnifier is omitted without emoji chrome")
+        #expect(!joined.contains("\u{1F50D}"), "no magnifier at all without emoji chrome")
+        #expect(!joined.contains("\u{1F50E}"), "no magnifier at all without emoji chrome")
         #expect(joined.contains("CONTENT"), "the searchable content renders too")
 
         let promptLine = out.firstIndex { $0.contains("Search") } ?? Int.max
@@ -36,18 +39,53 @@ struct SearchableTests {
         #expect(promptLine < contentLine, "the field sits above the content")
     }
 
-    @Test("Draws the 🔍 magnifier where the terminal renders emoji chrome")
+    @Test("Draws a magnifier where the terminal renders emoji chrome")
     func magnifierWithEmojiChrome() {
         let out = render(
             Text("CONTENT")
                 .searchable(text: binding(QueryBox()))
                 .environment(\.supportsEmojiChrome, true))
         let joined = out.joined(separator: "\n")
-        #expect(joined.contains("\u{1F50D}"), "the 🔍 magnifier renders under emoji chrome")
+        #expect(joined.contains("\u{1F50E}"), "the leading 🔎 magnifier renders under emoji chrome")
 
-        let glyphLine = out.firstIndex { $0.contains("\u{1F50D}") } ?? Int.max
+        let glyphLine = out.firstIndex { $0.contains("\u{1F50E}") } ?? Int.max
         let contentLine = out.firstIndex { $0.contains("CONTENT") } ?? Int.min
         #expect(glyphLine < contentLine, "the field sits above the content")
+    }
+
+    /// The glyph follows the SIDE so the lens always faces the field: 🔎
+    /// (right-pointing) leads, 🔍 (left-pointing) trails.
+    ///
+    /// Both the glyph AND its column are asserted. Checking only the glyph
+    /// would pass for a regression that swapped the characters but left the
+    /// icon on the same side — which is exactly the half-fix this is guarding.
+    @Test("The magnifier's glyph and column follow its placement")
+    func magnifierFollowsPlacement() {
+        func iconColumn(_ placement: SearchFieldIconPlacement, glyph: String) -> Int? {
+            let out = render(
+                Text("CONTENT")
+                    .searchable(text: binding(QueryBox()))
+                    .searchFieldIconPlacement(placement)
+                    .environment(\.supportsEmojiChrome, true))
+            return out.compactMap { line -> Int? in
+                guard let r = line.range(of: glyph) else { return nil }
+                return line.distance(from: line.startIndex, to: r.lowerBound)
+            }.first
+        }
+
+        guard let leading = iconColumn(.leading, glyph: "\u{1F50E}") else {
+            Issue.record("leading placement drew no 🔎")
+            return
+        }
+        guard let trailing = iconColumn(.trailing, glyph: "\u{1F50D}") else {
+            Issue.record("trailing placement drew no 🔍")
+            return
+        }
+        #expect(leading < trailing, "the trailing icon sits to the right of the leading one")
+
+        // …and each side draws only its own glyph.
+        #expect(iconColumn(.leading, glyph: "\u{1F50D}") == nil, "leading must not draw 🔍")
+        #expect(iconColumn(.trailing, glyph: "\u{1F50E}") == nil, "trailing must not draw 🔎")
     }
 
     @Test("The field reflects the bound query text")

@@ -178,7 +178,7 @@ extension EnvironmentValues {
     /// `supportsEmojiChrome` capability the toggle glyph adaptation uses).
     ///
     /// Read it to pick an emoji vs. a monochrome affordance — e.g. the
-    /// `.searchable` magnifier uses 🔍 here and no glyph elsewhere.
+    /// `.searchable` magnifier (🔎 / 🔍 by side) is drawn here and nowhere else.
     var supportsEmojiChrome: Bool {
         get { self[SupportsEmojiChromeKey.self] }
         set { self[SupportsEmojiChromeKey.self] = newValue }
