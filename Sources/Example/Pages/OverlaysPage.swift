@@ -272,7 +272,11 @@ struct OverlaysPage: View {
             // A dialog's body scrolls when the terminal is too short; its footer
             // is pinned. With the button in the body it could be scrolled out of
             // view — the one control the user always needs.
-            Dialog(title: L("page.overlays.dialog.settingsTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
+            Dialog(
+                title: L("page.overlays.dialog.settingsTitle"),
+                borderColor: .palette.border, titleColor: .palette.accent,
+                footerAlignment: .trailing
+            ) {
                 VStack(alignment: .leading) {
                     Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
                     Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
@@ -281,16 +285,18 @@ struct OverlaysPage: View {
             } footer: {
                 dismissButton
             }
-            .frame(width: 50)
 
         case .dialogWithFooter:
-            Dialog(title: L("page.overlays.dialog.confirmTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
+            Dialog(
+                title: L("page.overlays.dialog.confirmTitle"),
+                borderColor: .palette.border, titleColor: .palette.accent,
+                footerAlignment: .trailing
+            ) {
                 Text(L("page.overlays.dialog.confirmBody")).foregroundStyle(.palette.foreground)
                 Text(L("page.overlays.dialog.confirmUndone")).foregroundStyle(.palette.foregroundSecondary)
             } footer: {
                 dismissButton
             }
-            .frame(width: 50)
 
         case .dialogProse:
             // Deliberately NO `.frame(width:)`: the point of this demo is the
@@ -301,12 +307,6 @@ struct OverlaysPage: View {
             // that fits, and only spends more of the screen when the extra
             // width actually buys back vertical room — resize the terminal
             // narrow and tall, then short and wide, to watch it decide.
-            // `footerAlignment: .trailing` with a BARE button, rather than the
-            // shared `dismissButton` (an `HStack { Spacer(); Button }`) the
-            // other demos use: a width-flexible footer reports the full width
-            // it is offered, and the container is as wide as its widest part —
-            // so the Spacer would stretch the box to the whole terminal and
-            // hide the very behaviour this demo exists to show.
             Dialog(
                 title: L("page.overlays.dialog.proseTitle"),
                 borderColor: .palette.border, titleColor: .palette.accent,
@@ -323,12 +323,15 @@ struct OverlaysPage: View {
                         .foregroundStyle(.palette.foreground)
                 }
             } footer: {
-                Button(L("page.overlays.button.dismiss")) { showOverlay = false }
-                    .buttonStyle(.primary)
+                dismissButton
             }
 
         case .dialogAuth:
-            Dialog(title: L("page.overlays.dialog.signInTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
+            Dialog(
+                title: L("page.overlays.dialog.signInTitle"),
+                borderColor: .palette.border, titleColor: .palette.accent,
+                footerAlignment: .trailing
+            ) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.overlays.dialog.enterCredentials"))
                         .foregroundStyle(.palette.foregroundSecondary)
@@ -359,7 +362,6 @@ struct OverlaysPage: View {
                 }
             } footer: {
                 HStack {
-                    Spacer()
                     // Escape cancels, Return/Enter signs in — from anywhere in
                     // the dialog: the credential fields have no onSubmit, so
                     // Return falls through to the default button even while
@@ -379,15 +381,17 @@ struct OverlaysPage: View {
                     .keyboardShortcut(.defaultAction)
                 }
             }
-            .frame(width: 55)
+            // A PREFERENCE, not a fixed frame — and the difference matters.
+            // `TextField` is width-flexible, so it takes whatever it is
+            // offered: left at the 100-cell default this sign-in box renders
+            // 103 wide with 90-cell credential fields, which is silly. Stating
+            // a narrower comfortable width still lets the dialog shrink on a
+            // narrow terminal, still lets it grow if the content ever genuinely
+            // needs the room, and still adapts when a translation runs long —
+            // none of which a `.frame(width: 55)` would do.
+            .dialogPreferredWidth(55)
 
         case .modalCustom:
-            // No explicit frame — the modal sizes to its content. To
-            // right-align the Dismiss button without the usual
-            // `HStack { Spacer; Button }` (whose flexible Spacer stretches
-            // the modal to fill the screen), we push the button right with
-            // an explicit leading-padding equal to the natural max text
-            // width minus the rendered button width.
             modalCustomBody
 
         case .notification:
@@ -406,82 +410,69 @@ struct OverlaysPage: View {
                 message: L("page.overlays.alert.standardMessage"),
                 borderColor: .palette.border,
                 titleColor: .palette.accent
-            ) { EmptyView() }.frame(width: 60)
+            ) { EmptyView() }
         case .alertWarning:
             Alert(
                 title: L("page.overlays.alert.warningTitle"),
                 message: L("page.overlays.alert.warningMessage"),
                 titleColor: .palette.warning
-            ) { EmptyView() }.frame(width: 60)
+            ) { EmptyView() }
         case .alertError:
             Alert(
                 title: L("page.overlays.alert.errorTitle"),
                 message: L("page.overlays.alert.errorMessage"),
                 titleColor: .palette.error
-            ) { EmptyView() }.frame(width: 60)
+            ) { EmptyView() }
         case .alertInfo:
             Alert(
                 title: L("page.overlays.alert.infoTitle"),
                 message: L("page.overlays.alert.infoMessage"),
                 titleColor: .palette.info
-            ) { EmptyView() }.frame(width: 60)
+            ) { EmptyView() }
         case .alertSuccess:
             Alert(
                 title: L("page.overlays.alert.successTitle"),
                 message: L("page.overlays.alert.successMessage"),
                 titleColor: .palette.success
-            ) { EmptyView() }.frame(width: 60)
+            ) { EmptyView() }
         default:
             EmptyView()
         }
     }
 
-    /// Reusable right-aligned dismiss button for the Dialog variants. (The Alert
-    /// variants take no actions — they are dismissed with Escape, shown in the
-    /// status bar — so they pass `EmptyView()` rather than this.)
+    /// Reusable dismiss button for the Dialog variants. (The Alert variants take
+    /// no actions — they are dismissed with Escape, shown in the status bar — so
+    /// they pass `EmptyView()` rather than this.)
+    ///
+    /// No `HStack { Spacer(); … }` around it: a Spacer is width-flexible, so it
+    /// reports whatever width it is offered, and a container is as wide as its
+    /// widest part — one Spacer in a footer stretches the whole dialog to fill
+    /// the terminal. `footerAlignment: .trailing` places the button instead, and
+    /// leaves the dialog free to size itself to its content.
     private var dismissButton: some View {
-        HStack {
-            Spacer()
-            Button(L("page.overlays.button.dismiss")) {
-                showOverlay = false
-            }
-            .buttonStyle(.primary)
+        Button(L("page.overlays.button.dismiss")) {
+            showOverlay = false
         }
+        .buttonStyle(.primary)
     }
 
-    /// The "Modal (Custom)" body. Computes the natural max-text width of
-    /// the body lines and pushes the Dismiss button right by exactly the
-    /// gap that's left after subtracting the rendered button width — so
-    /// the modal sizes to its content but the button still sits at the
-    /// trailing edge of that content. (A regular `HStack { Spacer; Button }`
-    /// would do the same trick, but in TUIkit's current layout model the
-    /// HStack's flexible Spacer stretches the parent VStack to the full
-    /// screen width, defeating the whole point of "size-to-fit".)
+    /// The "Modal (Custom)" body: an ordinary view presented as a modal, with
+    /// no Dialog chrome and no fixed size — it is as big as what is in it.
+    ///
+    /// The Dismiss button simply sits in the stack. An earlier version pushed it
+    /// to the trailing edge with a computed `.padding(.leading,)` — the max text
+    /// width minus the button's rendered width — which meant hard-coding what
+    /// `.primary` adds around a label AND counting Characters rather than cells,
+    /// so any CJK label (this app ships zh and ja) would have mis-aligned it.
+    /// Alignment that has to be computed from string lengths is a sign the
+    /// layout wants expressing differently, not measuring harder.
     private var modalCustomBody: some View {
-        let title = L("page.overlays.modal.title")
-        let line1 = L("page.overlays.modal.line1")
-        let line2 = L("page.overlays.modal.line2")
-        let line3 = L("page.overlays.modal.line3")
-        let dismissLabel = L("page.overlays.button.dismiss")
-        let lines = [title, line1, line2, line3]
-        let maxLineWidth = lines.map(\.count).max() ?? 0
-        // The .primary button style wraps the label in two side caps
-        // (▐ … ▌) and a space of inner padding on each side.
-        let buttonRenderedWidth = dismissLabel.count + 4
-        let leadingPad = max(0, maxLineWidth - buttonRenderedWidth)
-
-        return VStack(alignment: .leading, spacing: 1) {
-            Text(title).bold().foregroundStyle(.palette.accent)
-            Text("")
-            Text(line1).foregroundStyle(.palette.foreground)
-            Text(line2).foregroundStyle(.palette.foregroundSecondary)
-            Text(line3).foregroundStyle(.palette.foregroundSecondary)
-            Text("")
-            Button(dismissLabel) {
-                showOverlay = false
-            }
-            .buttonStyle(.primary)
-            .padding(.leading, leadingPad)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(L("page.overlays.modal.title")).bold().foregroundStyle(.palette.accent)
+            Text(L("page.overlays.modal.line1")).foregroundStyle(.palette.foreground)
+            Text(L("page.overlays.modal.line2")).foregroundStyle(.palette.foregroundSecondary)
+            Text(L("page.overlays.modal.line3")).foregroundStyle(.palette.foregroundSecondary)
+            dismissButton
         }
         .padding(EdgeInsets(horizontal: 2, vertical: 1))
         .border(color: .palette.border)
