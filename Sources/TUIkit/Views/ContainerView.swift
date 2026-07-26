@@ -730,24 +730,35 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // The probe already answered what the body wants at this width — the
         // full inner width for a flexible body, the content width for a hugging
         // one — so pinning to it preserves either behaviour exactly.
-        // Only wrap when the body actually overflows. Wrapping unconditionally
-        // was tempting (it keeps the body's identity path stable as the terminal
-        // is resized across the threshold) but it changes horizontal behaviour
-        // for every dialog: a ScrollView CLIPS content wider than its viewport,
-        // whereas the container's own `clamped(toWidth:)` ellipsises it. A
-        // narrow dialog would silently lose its "…" and just cut the text.
-        // Overflow is a vertical question, so pay the cost only there.
-        guard natural.height > availableHeight, availableHeight > 0 else {
-            return TUIkit.renderToBuffer(content.padding(padding), context: context)
-                .clamped(toWidth: innerWidth, height: availableHeight)
-        }
-        // The WIDTH is pinned for the same reason as the height: a ScrollView is
-        // width-flexible and reports the full width it is offered, which would
-        // make a scrolling dialog fill the terminal instead of hugging its
-        // content. The probe already answered what the body wants at this width.
-        let width = min(max(natural.width, 0), innerWidth)
+        // The ScrollView is ALWAYS in the tree, whether or not the body
+        // overflows — only its frame changes. An earlier version wrapped only on
+        // overflow, which is a structural difference: crossing the threshold
+        // swapped `content` for `ScrollView { content }`, changing the identity
+        // path of everything inside, so every `@State` in the body was recreated
+        // and snapped back to its initial value.
+        //
+        // That was not theoretical. The colour picker's tab selection is a
+        // `@State` in `_ColorPickerBody`; selecting a TALL tab (the 256 grid,
+        // Named, Crayons, …) pushed the body past the threshold, which rebuilt
+        // the state and reset the selection to `.rgb` — so the tab appeared not
+        // to switch, and only a second click (with the wrapper now settled) took
+        // effect. The short channel editors never crossed the threshold and so
+        // always worked, which is what made the bug look like it was about
+        // *which* tab was clicked.
+        //
+        // BOTH axes are pinned to what the probe measured, in both cases. A
+        // ScrollView is flexible on both axes and reports whatever it is
+        // offered, so leaving either free makes the dialog fill the terminal
+        // instead of hugging its content. Pinning the height to the natural
+        // height when the body fits is also what keeps the always-present
+        // ScrollView inert: there is nothing to scroll, so no indicators and no
+        // clipping, and the container's own `clamped(toWidth:)` still does the
+        // horizontal ellipsis.
+        let overflows = natural.height > availableHeight && availableHeight > 0
         let scrolled = ScrollView(.vertical) { content.padding(padding) }
-            .frame(width: width, height: height)
+            .frame(
+                width: min(max(natural.width, 0), innerWidth),
+                height: overflows ? height : max(natural.height, 0))
         return TUIkit.renderToBuffer(scrolled, context: context)
             .clamped(toWidth: innerWidth, height: availableHeight)
     }
