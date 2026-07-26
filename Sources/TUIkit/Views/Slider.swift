@@ -48,10 +48,9 @@
 ///
 /// ## With a Description
 ///
-/// The `label` (or string title) describes the slider's purpose. As in
-/// SwiftUI, it is **not drawn on the track** — only the value readout is. For
-/// a visible caption, place a `Text` (or a `Section` header) next to the
-/// slider:
+/// The `label` (or string title) describes the slider's purpose. TUIkit does
+/// **not** draw it on the track — only the value readout is drawn. For a
+/// visible caption, place a `Text` (or a `Section` header) next to the slider:
 ///
 /// ```swift
 /// VStack(alignment: .leading) {
@@ -59,6 +58,16 @@
 ///     Slider(value: $volume, in: 0...1)
 /// }
 /// ```
+///
+/// > Known deviation from macOS SwiftUI. Measured 2026-07-25 by hosting real
+/// > `Slider`s in an `NSHostingView` and capturing the drawn AppKit controls:
+/// > macOS SwiftUI draws a supplied label to the LEFT of the track on the same
+/// > line, shortening the track to fit; with no label the track spans the full
+/// > width. (Apple's own docs hedge this — "Not all slider styles show the
+/// > label" — because iOS hides it and uses it only for accessibility. On a
+/// > desktop-shaped framework the macOS behaviour is the relevant reference.)
+/// > Matching it is tracked; it changes the width of every existing slider, so
+/// > it is deliberately not a drive-by change.
 ///
 /// ## With Editing Callback
 ///
