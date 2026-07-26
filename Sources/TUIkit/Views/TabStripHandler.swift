@@ -35,13 +35,21 @@ final class TabStripHandler: Focusable {
     }
 
     /// Moves to the tab nearest (by centre) in the row `delta` rows away, or
-    /// returns `false` when there is no such row — so the key bubbles up and
+    /// returns `false` when the strip is a single row — so the key bubbles up and
     /// focus can leave the strip (e.g. to the control above/below the TabView).
+    ///
+    /// The step wraps, because `rows` is the *rendered* geometry and the render
+    /// floats the active row to the bottom (it abuts the content). The current
+    /// row is therefore always the last one, so `row + 1` is always out of
+    /// bounds — taking it literally made Down impossible and the strip a one-way
+    /// trip upwards. The strip is a ring: the row after the bottom one is the
+    /// top one, and stepping either way rotates it back to the bottom, so up and
+    /// down are inverses of each other.
     private func moveVertically(_ delta: Int) -> Bool {
+        guard rows.count > 1 else { return false }
         let current = values.firstIndex(of: selection.wrappedValue) ?? 0
         guard let row = rows.firstIndex(where: { $0.contains(current) }) else { return false }
-        let target = row + delta
-        guard rows.indices.contains(target) else { return false }
+        let target = (row + delta % rows.count + rows.count) % rows.count
         let cx = centers[current] ?? 0
         guard let nearest = rows[target].min(by: {
             abs((centers[$0] ?? 0) - cx) < abs((centers[$1] ?? 0) - cx)

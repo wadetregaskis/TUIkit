@@ -450,69 +450,8 @@ struct TabViewTests {
         #expect(abs(lead - trail) <= 1, "content is centred (lead ≈ trail), got \(lead)/\(trail)")
     }
 
-    @Test("Up/down move between tab rows by nearest centre; past the edge they bubble (#2)")
-    func verticalRowNavigation() {
-        let sel = IntBox(2)
-        let handler = TabStripHandler(
-            focusID: "t",
-            selection: Binding(get: { AnyHashable(sel.value) }, set: { sel.value = ($0.base as? Int) ?? sel.value }),
-            values: [0, 1, 2, 3])
-        // Two rows, [0,1] above [2,3], columns aligned by centre.
-        handler.rows = [[0, 1], [2, 3]]
-        handler.centers = [0: 2, 1: 8, 2: 2, 3: 8]
-
-        // From tab 2 (row 1, left column) up → row 0, nearest centre → tab 0.
-        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == true)
-        #expect(sel.value == 0)
-        // From the top row, up has no row above → bubbles out, selection unchanged.
-        #expect(handler.handleKeyEvent(KeyEvent(key: .up)) == false)
-        #expect(sel.value == 0)
-        // Down → row 1, nearest centre → tab 2.
-        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == true)
-        #expect(sel.value == 2)
-        // From the bottom row, down bubbles out, selection unchanged.
-        #expect(handler.handleKeyEvent(KeyEvent(key: .down)) == false)
-        #expect(sel.value == 2)
-    }
-
-    @Test("A focused wrapped strip moves the selection to another row on up (#2)")
-    func arrowNavMovesBetweenRowsInRender() {
-        let sel = IntBox(0)
-        let ctx = makeRenderContext(width: 18, height: 12)
-        let fm = ctx.environment.focusManager!
-        let view = TabView(selection: sel.binding) {
-            ForEach(0..<6) { i in Tab("Tab\(i)", value: i) { Text("c\(i)") } }
-        }
-        .tabViewStyle(.compact)
-        _ = renderToBuffer(view, context: ctx)          // registers the handler + row geometry
-        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))    // focus the strip (active row floated to bottom)
-        let moved = fm.dispatchKeyEvent(KeyEvent(key: .up))
-        #expect(moved, "up is handled — there is a row above the active (bottom) row")
-        #expect(sel.value != 0, "selection moved to a tab in the row above, was 0 now \(sel.value)")
-    }
-
-    @Test("Repeated up cycles through every row of a wrapped strip (#2 rotation)")
-    func upReachesEveryRow() {
-        // Six tabs wrap to three rows of two ([0,1] [2,3] [4,5]); row = value / 2.
-        let sel = IntBox(0)
-        let ctx = makeRenderContext(width: 14, height: 14)
-        let fm = ctx.environment.focusManager!
-        let view = TabView(selection: sel.binding) {
-            ForEach(0..<6) { i in Tab("T\(i)", value: i) { Text("c\(i)") } }
-        }
-        .tabViewStyle(.compact)
-        _ = renderToBuffer(view, context: ctx)
-        _ = fm.dispatchKeyEvent(KeyEvent(key: .tab))  // focus the strip
-        var seenRows: Set<Int> = [sel.value / 2]
-        for _ in 0..<6 {
-            _ = renderToBuffer(view, context: ctx)    // refresh row geometry for the new selection
-            _ = fm.dispatchKeyEvent(KeyEvent(key: .up))
-            seenRows.insert(sel.value / 2)
-        }
-        // The float-to-bottom-by-removal layout could only ever reach two rows;
-        // rotating the rows lets up walk through all three.
-        #expect(seenRows.count == 3, "up reaches every row; saw rows \(seenRows.sorted())")
-    }
+    // Row navigation (up/down across a wrapped strip) lives in
+    // `TabStripRowNavigationTests`.
 
     @Test("A control inside a bordered tab is clickable (its hit region survives the box chrome)")
     func borderedTabContentClickable() {
