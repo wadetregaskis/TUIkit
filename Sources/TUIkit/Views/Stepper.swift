@@ -161,64 +161,6 @@ private func eraseStepperValue<V: Strideable>(
     return (display, makeHandler, syncValue)
 }
 
-/// Shared treatment for a control's own label views.
-enum _ControlLabel {
-    /// A disabled control dims its label WITH it — the label is part of the
-    /// control, not adjacent content. The dim is the same recipe every
-    /// built-in control uses for its disabled chrome, applied as the
-    /// environment foreground so a label with its own explicit colour still
-    /// wins. Enabled controls get the label back untouched.
-    ///
-    /// - Parameter controlDisabled: The control's OWN `.disabled()` flag —
-    ///   the per-control method bypasses the `\.isEnabled` environment, so
-    ///   callers pass it explicitly; either source of disablement dims.
-    @MainActor
-    static func dimmingWhenDisabled<Label: View>(
-        _ label: Label, context: RenderContext, controlDisabled: Bool = false
-    ) -> AnyView {
-        guard controlDisabled || !context.environment.isEnabled else { return AnyView(label) }
-        let palette = context.environment.palette
-        return AnyView(
-            label.foregroundStyle(
-                palette.foregroundTertiary.opacity(
-                    ViewConstants.disabledForeground, over: palette.background)))
-    }
-}
-
-/// Renders an inline control label followed by one separating space — or
-/// nothing when the label is empty/blank/absent, so the control isn't preceded
-/// by a stray space. Used by ``Stepper`` (and reusable by other inline-labelled
-/// controls).
-private struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
-    let label: Label?
-
-    /// The control's own `.disabled()` flag — it bypasses the environment,
-    /// so the label must be told explicitly.
-    let controlDisabled: Bool
-
-    var body: Never { fatalError("_CollapsingLabel renders via Renderable") }
-
-    /// Size from one render (it drops to nothing for a blank label and adds a
-    /// trailing space otherwise — both need the render), flexibility from the label.
-    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let size = measureFixedByRendering(self, proposal: proposal, context: context)
-        let labelFlexible = label.map {
-            measureChild($0, proposal: proposal, context: context).isWidthFlexible
-        } ?? false
-        return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
-    }
-
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        guard let label, !(label is EmptyView) else { return FrameBuffer() }
-        let buffer = TUIkit.renderToBuffer(
-            _ControlLabel.dimmingWhenDisabled(
-                label, context: context, controlDisabled: controlDisabled),
-            context: context)
-        guard !buffer.isBlank else { return FrameBuffer() }
-        return FrameBuffer(lines: buffer.lines.map { $0 + " " })
-    }
-}
-
 // MARK: - Stepper Initializers (Value Binding)
 
 extension Stepper where Label == Text {

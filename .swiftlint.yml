@@ -206,8 +206,12 @@ type_name:
     - _StopChipCentreCell
     - _StopChipDragHandle
     - _DragHandle
-    # Shared disabled-dimming for controls' own label views.
+    # Shared treatment for controls' own label views: the disabled-dimming
+    # helper, and the inline label every control whose label sits to the LEFT
+    # on the same line uses (Stepper, Slider, Picker) — internal rather than
+    # private to any one of them.
     - _ControlLabel
+    - _CollapsingLabel
     - _RawTab
     - _Color256GridCore
     - _Palette256Editor
