@@ -195,6 +195,30 @@ final class _SplitDividerHandler: Focusable {
     /// drag is in progress. Set on `.pressed`, read on `.dragged`/`.released`.
     var dragStartWidth: Int?
 
+    /// The width the column is rendering at, refreshed by the split view every
+    /// render. It is the base a resize steps from when the store has nothing
+    /// for this column, which under a size-to-fit style is every column the
+    /// user has not yet pinned (`writeBackUserSet` deliberately leaves the
+    /// content-tracking ones out). Falling back to `minimumColumnWidth` instead
+    /// made the first arrow key or drag collapse a column that was merely
+    /// showing its content width.
+    ///
+    /// The store still wins when it has a value: it is written back clamped
+    /// every render, so it is equally truthful, and reading it lets several
+    /// key events in one input batch accumulate rather than all stepping from
+    /// the same last-rendered width.
+    var currentWidth: Int
+
+    /// Whether the cursor has moved since the current drag's `.pressed`. A
+    /// press-and-release that never moved writes no width at all — it must not
+    /// pin a size-to-fit column at its content width (and thereby stop it
+    /// tracking content) just because the user clicked the handle.
+    var dragMoved: Bool = false
+
+    /// The width a resize steps from: the stored (clamped, written-back) width
+    /// when there is one, else the width the column is currently showing.
+    var resizeBaseWidth: Int { widths.value(for: columnIndex) ?? currentWidth }
+
     /// Whether the cursor is currently over the divider. Drives the subtle
     /// hover pulse of the grip dots. Set on `.entered`/`.exited`.
     var isHovered: Bool = false
@@ -211,11 +235,12 @@ final class _SplitDividerHandler: Focusable {
         self.widths = widths
         self.minimumColumnWidth = minimumColumnWidth
         self.canBeFocused = canBeFocused
+        self.currentWidth = minimumColumnWidth
     }
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         let step = event.shift ? 5 : 1
-        let current = widths.value(for: columnIndex) ?? minimumColumnWidth
+        let current = resizeBaseWidth
         switch event.key {
         case .left:
             widths.set(current - step, for: columnIndex)

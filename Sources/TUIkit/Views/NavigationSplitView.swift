@@ -329,6 +329,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                         index: index,
                         resizable: resizable,
                         widths: widths,
+                        currentWidth: columnWidth,
                         context: context,
                         focusManager: focusManager
                     )
@@ -724,10 +725,15 @@ extension _NavigationSplitViewCore {
     /// registers the mouse handler that drags it. Returns the info
     /// `combineColumns` needs to draw and hit-test it. A no-op (returns an
     /// inert divider) while measuring or when the split isn't resizable.
+    ///
+    /// `currentWidth` is the width column `index` is rendering at THIS frame,
+    /// and is what every resize steps from (see
+    /// ``_SplitDividerHandler/currentWidth``).
     fileprivate func wireDivider(
         index: Int,
         resizable: Bool,
         widths: SplitViewWidths?,
+        currentWidth: Int,
         context: RenderContext,
         focusManager: FocusManager?
     ) -> DividerRenderInfo {
@@ -752,6 +758,7 @@ extension _NavigationSplitViewCore {
             )
         ).value
         handler.canBeFocused = true
+        handler.currentWidth = currentWidth
         focusManager.register(handler, inSection: sectionID)
 
         let isActive = focusManager.isActiveSection(sectionID)
@@ -782,21 +789,32 @@ extension _NavigationSplitViewCore {
                 guard event.button == .left else { return false }
                 switch event.phase {
                 case .pressed:
-                    // Anchor: the column's width when the drag began. Also
-                    // focus the divider so a drag and the keyboard agree on
-                    // which handle is active.
-                    captureHandler.dragStartWidth =
-                        captureWidths.value(for: column) ?? minWidth
+                    // Anchor: the column's width when the drag began (see
+                    // `_SplitDividerHandler.resizeBaseWidth` — under size-to-fit
+                    // there is no stored width to read yet). Also focus the
+                    // divider so a drag and the keyboard agree on which handle
+                    // is active.
+                    captureHandler.dragStartWidth = captureHandler.resizeBaseWidth
+                    captureHandler.dragMoved = false
                     captureFocus.activateSection(id: sectionID)
                     return true
                 case .dragged, .released:
                     // `event.x` is localised to the divider's press position,
-                    // so it is exactly the signed cell delta to apply.
-                    if let start = captureHandler.dragStartWidth {
+                    // so it is exactly the signed cell delta to apply. A press
+                    // and release that never left the press column writes
+                    // nothing at all: a bare click on the handle must leave the
+                    // column exactly as it was, and must not pin a size-to-fit
+                    // column (which would stop it tracking its content). The
+                    // flag is sticky, so a drag that wanders away and returns
+                    // still writes — restoring the start width — rather than
+                    // stranding the column where it last moved.
+                    captureHandler.dragMoved = captureHandler.dragMoved || event.x != 0
+                    if captureHandler.dragMoved, let start = captureHandler.dragStartWidth {
                         captureWidths.set(start + event.x, for: column)
                     }
                     if event.phase == .released {
                         captureHandler.dragStartWidth = nil
+                        captureHandler.dragMoved = false
                     }
                     return true
                 default:
