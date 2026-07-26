@@ -18,6 +18,7 @@ private enum OverlayDemo: Int, CaseIterable {
     case dialog
     case dialogWithFooter
     case dialogAuth
+    case dialogProse
     case modalCustom
     case notification
 
@@ -32,6 +33,7 @@ private enum OverlayDemo: Int, CaseIterable {
         case .dialog: L("page.overlays.label.dialog")
         case .dialogWithFooter: L("page.overlays.label.dialogWithFooter")
         case .dialogAuth: L("page.overlays.label.dialogAuth")
+        case .dialogProse: L("page.overlays.label.dialogProse")
         case .modalCustom: L("page.overlays.label.modalCustom")
         case .notification: L("page.overlays.label.notification")
         }
@@ -56,6 +58,8 @@ private enum OverlayDemo: Int, CaseIterable {
             L("page.overlays.desc.dialogWithFooter")
         case .dialogAuth:
             L("page.overlays.desc.dialogAuth")
+        case .dialogProse:
+            L("page.overlays.desc.dialogProse")
         case .modalCustom:
             L("page.overlays.desc.modalCustom")
         case .notification:
@@ -82,6 +86,8 @@ private enum OverlayDemo: Int, CaseIterable {
             ".modal(isPresented: $show) { Dialog(title: \"...\") { content } footer: { buttons } }"
         case .dialogAuth:
             ".modal(isPresented: $show) { Dialog(\"Sign in\") { TextField/SecureField } footer: { Cancel; Sign in } }"
+        case .dialogProse:
+            ".modal(isPresented: $show) { Dialog(\"...\") { Text(paragraphs) } }  .dialogPreferredWidth(100)"
         case .modalCustom:
             ".modal(isPresented: $show) { VStack { ... } }"
         case .notification:
@@ -285,6 +291,41 @@ struct OverlaysPage: View {
                 dismissButton
             }
             .frame(width: 50)
+
+        case .dialogProse:
+            // Deliberately NO `.frame(width:)`: the point of this demo is the
+            // dialog choosing its own width. Prose can technically be laid out
+            // as one enormous line per paragraph, so on a wide terminal a
+            // dialog that simply took what it was offered would be painful to
+            // read. It wraps at `dialogPreferredWidth` (100 by default) while
+            // that fits, and only spends more of the screen when the extra
+            // width actually buys back vertical room — resize the terminal
+            // narrow and tall, then short and wide, to watch it decide.
+            // `footerAlignment: .trailing` with a BARE button, rather than the
+            // shared `dismissButton` (an `HStack { Spacer(); Button }`) the
+            // other demos use: a width-flexible footer reports the full width
+            // it is offered, and the container is as wide as its widest part —
+            // so the Spacer would stretch the box to the whole terminal and
+            // hide the very behaviour this demo exists to show.
+            Dialog(
+                title: L("page.overlays.dialog.proseTitle"),
+                borderColor: .palette.border, titleColor: .palette.accent,
+                footerAlignment: .trailing
+            ) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.overlays.dialog.proseIntro"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.overlays.dialog.proseParagraph1"))
+                        .foregroundStyle(.palette.foreground)
+                    Text(L("page.overlays.dialog.proseParagraph2"))
+                        .foregroundStyle(.palette.foreground)
+                    Text(L("page.overlays.dialog.proseParagraph3"))
+                        .foregroundStyle(.palette.foreground)
+                }
+            } footer: {
+                Button(L("page.overlays.button.dismiss")) { showOverlay = false }
+                    .buttonStyle(.primary)
+            }
 
         case .dialogAuth:
             Dialog(title: L("page.overlays.dialog.signInTitle"), borderColor: .palette.border, titleColor: .palette.accent) {

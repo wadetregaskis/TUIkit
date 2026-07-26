@@ -512,16 +512,35 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             footerFlexibleHeight = size.isHeightFlexible
         }
 
-        // Body into the space the chrome and footer leave.
+        // Body into the space the chrome and footer leave. A scrolling body
+        // goes through the SAME routine the render uses — it measures the
+        // wrapped tree and applies the preferred-width policy, and measuring it
+        // any other way here would put this pass and the render back into
+        // disagreement (see `scrollableBodySize`).
         let bodyAvailableHeight = max(0, innerAvailableHeight - footerNaturalHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
-        let bodySize = measureChild(
-            content.padding(padding),
-            proposal: ProposedSize(width: innerWidthAvailable, height: bodyAvailableHeight),
-            context: bodyContext)
-        let bodyWidth = min(bodySize.width, innerWidthAvailable)
-        let bodyHeight = min(bodySize.height, bodyAvailableHeight)
+        let bodyWidth: Int
+        let bodyHeight: Int
+        // A scrolling body is pinned to a definite height by `scrollableBody`,
+        // so it does not stretch its container. (The wrapped tree cannot answer
+        // this: a ScrollView always reports flexible, masking its content.)
+        var bodyFlexibleHeight = false
+        if style.scrollsOverflowingBody {
+            let size = scrollableBodySize(
+                availableHeight: bodyAvailableHeight, innerWidth: innerWidthAvailable,
+                context: bodyContext)
+            bodyWidth = min(size.width, innerWidthAvailable)
+            bodyHeight = min(size.height, bodyAvailableHeight)
+        } else {
+            let bodySize = measureChild(
+                content.padding(padding),
+                proposal: ProposedSize(width: innerWidthAvailable, height: bodyAvailableHeight),
+                context: bodyContext)
+            bodyWidth = min(bodySize.width, innerWidthAvailable)
+            bodyHeight = min(bodySize.height, bodyAvailableHeight)
+            bodyFlexibleHeight = bodySize.isHeightFlexible
+        }
 
         // Bordering empty content with no footer produces nothing: render's
         // `bodyBuffer.isEmpty` short-circuit returns the (empty) body as-is,
@@ -575,7 +594,7 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
             width: min(totalWidth, max(0, base.availableWidth)),
             height: min(totalHeight, max(0, base.availableHeight)),
             isWidthFlexible: fillsWidth,
-            isHeightFlexible: bodySize.isHeightFlexible || footerFlexibleHeight
+            isHeightFlexible: bodyFlexibleHeight || footerFlexibleHeight
         )
     }
 
@@ -710,34 +729,97 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
     /// natural height while it fits keeps a short dialog exactly the size it is
     /// today — and with nothing to scroll, the ScrollView draws no chrome and
     /// takes no focus stop, so it is invisible until it is needed.
+    /// The size a scrolling body will lay out at, and the width chosen for it.
+    ///
+    /// Shared by `sizeThatFits` and `scrollableBody` so the two passes cannot
+    /// disagree — the whole class of bug this container has already produced
+    /// twice.
+    ///
+    /// Measures the tree that will actually be RENDERED, wrapper and all.
+    /// `@State` binds by identity and the ScrollView adds identity components,
+    /// so measuring the BARE body resolved every `@State` inside it to a
+    /// different box than the render — and reported the body at its INITIAL
+    /// state forever. A dialog whose body had since grown (a colour picker
+    /// switched to its 256-swatch tab, a disclosure opened) was built to the
+    /// size it started at and scrolled with most of the screen still free.
+    ///
+    /// Neither axis is ever proposed, so the report comes from the content
+    /// itself: a ScrollView passes an unproposed axis straight through to its
+    /// child (its ideal size is its content's), which keeps a dialog hugging
+    /// its content rather than filling the terminal, and yields the height AT
+    /// the width being tried — the only width whose answer means anything for
+    /// wrapped text.
+    ///
+    /// ## Choosing the width
+    ///
+    /// A dialog prefers ``EnvironmentValues/dialogPreferredWidth`` (100 cells
+    /// by default) because long prose is unpleasant to read as very long lines.
+    /// It spends more only when that genuinely buys vertical room: a paragraph
+    /// re-wraps shorter as it widens, a fixed-width form does not. So the wider
+    /// layout is taken only if it is actually shorter, and then at the
+    /// NARROWEST width that reaches that height — a dialog that gains nothing
+    /// from the space stays slim.
+    private func scrollableBodySize(
+        availableHeight: Int, innerWidth: Int, context: RenderContext
+    ) -> (width: Int, height: Int) {
+        // Measured against an unbounded budget: a nil height proposal is not
+        // "unbounded" here, because every stack clamps its report to
+        // `availableHeight` — measuring in `context` would return the capped
+        // height and never reveal the overflow.
+        var probe = context
+        probe.availableHeight = max(availableHeight * 64, 4096)
+        let probeView = ScrollView(.vertical) { content.padding(padding) }
+        func measure(at width: Int) -> ViewSize {
+            var sized = probe
+            sized.availableWidth = max(1, width)
+            return measureChild(
+                probeView, proposal: ProposedSize(width: nil, height: nil), context: sized)
+        }
+
+        let preferred = min(innerWidth, max(1, context.environment.dialogPreferredWidth))
+        var chosenWidth = preferred
+        var chosen = measure(at: preferred)
+
+        if chosen.height > availableHeight, innerWidth > preferred, availableHeight > 0 {
+            // It doesn't fit at the comfortable width. Widening is only worth it
+            // if the content actually re-flows shorter.
+            let widest = measure(at: innerWidth)
+            if widest.height < chosen.height {
+                // Aim to fit outright; failing that, for the least height going.
+                let target = max(availableHeight, widest.height)
+                var low = preferred + 1
+                var high = innerWidth
+                chosenWidth = innerWidth
+                chosen = widest
+                // Binary search assumes height never grows as width grows, which
+                // holds for wrapped text and reflowing grids. The result is
+                // checked below rather than trusted, so content that violates it
+                // degrades to the full width instead of laying out wrong.
+                while low <= high {
+                    let mid = low + (high - low) / 2
+                    let size = measure(at: mid)
+                    if size.height <= target {
+                        chosenWidth = mid
+                        chosen = size
+                        high = mid - 1
+                    } else {
+                        low = mid + 1
+                    }
+                }
+                if chosen.height > target {
+                    chosenWidth = innerWidth
+                    chosen = widest
+                }
+            }
+        }
+        return (min(max(chosen.width, 0), chosenWidth), max(chosen.height, 0))
+    }
+
     private func scrollableBody(
         availableHeight: Int, innerWidth: Int, context: RenderContext
     ) -> FrameBuffer {
-        // The body's NATURAL height, measured against an unbounded budget: a nil
-        // height proposal is not "unbounded" here, because every stack clamps
-        // its report to `availableHeight` — measuring in `context` would return
-        // the capped height and never reveal the overflow.
-        var probe = context
-        probe.availableHeight = max(availableHeight * 64, 4096)
-        // Measure the tree that will actually be RENDERED, wrapper and all.
-        // `@State` binds by identity and the ScrollView below adds identity
-        // components, so measuring the BARE body resolved every `@State` inside
-        // it to a different box than the render — and reported the body at its
-        // INITIAL state forever. A dialog whose body had since grown (a colour
-        // picker switched to its 256-swatch tab, a disclosure opened) was built
-        // to the size it started at and scrolled its content with most of the
-        // screen still free.
-        //
-        // Neither axis is proposed, so the report comes from the content itself:
-        // a ScrollView passes an unproposed axis straight through to its child
-        // (its ideal size is its content's), which keeps a dialog hugging its
-        // content rather than filling the terminal, and yields the height AT
-        // that hug width — the width it will actually render at, which is the
-        // only width whose answer means anything for wrapped text.
-        let natural = measureChild(
-            ScrollView(.vertical) { content.padding(padding) },
-            proposal: ProposedSize(width: nil, height: nil),
-            context: probe)
+        let natural = scrollableBodySize(
+            availableHeight: availableHeight, innerWidth: innerWidth, context: context)
         let naturalWidth = min(max(natural.width, 0), innerWidth)
         let height = min(max(natural.height, 0), availableHeight)
         // The ScrollView is ALWAYS in the tree, whether or not the body
