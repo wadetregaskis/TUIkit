@@ -671,6 +671,7 @@ where Value.ID: Hashable {
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        handler.isScrollEnabled = context.environment.isScrollEnabled
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // Captured at render so a USER wheel scroll can release a bound anchor
         // at event time, and so the anchor hold below can resolve its mode.
@@ -1209,13 +1210,16 @@ where Value.ID: Hashable {
 
         // Register the table as a drag auto-scroll zone (sharing the container
         // region id): a drag hovering near its top/bottom edge scrolls the rows
-        // to reveal an off-screen drop target.
-        context.environment.dragAndDropSession?.registerAutoScrollZone(
-            DragAndDropSession.AutoScrollZone(
-                handlerID: mouseHandlerID,
-                vertical: state.handler,
-                horizontal: nil,
-                delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+        // to reveal an off-screen drop target. Auto-scroll is a gesture, so
+        // `.scrollDisabled` withholds the zone entirely.
+        if context.environment.isScrollEnabled {
+            context.environment.dragAndDropSession?.registerAutoScrollZone(
+                DragAndDropSession.AutoScrollZone(
+                    handlerID: mouseHandlerID,
+                    vertical: state.handler,
+                    horizontal: nil,
+                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+        }
 
         // A one-row region at the keyboard cursor's on-screen line, ahead of
         // the whole-table region so an enclosing ScrollView follows the

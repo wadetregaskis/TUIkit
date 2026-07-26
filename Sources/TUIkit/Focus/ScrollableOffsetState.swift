@@ -59,6 +59,16 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``WheelEdgeHold`` and ``handleWheelEvent(_:linesPerTick:)``.
     var wheelEdgeHold: WheelEdgeHold { get set }
 
+    /// Whether the **user** may move this viewport — `false` under
+    /// ``TUIkit/View/scrollDisabled(_:)``, captured from the environment each
+    /// render so event-time code can read it.
+    ///
+    /// It gates *gestures* only. Every programmatic move — a `scrollTo` seek, an
+    /// anchor hold, the reveal that keeps a focused control on screen, the clamp
+    /// that runs after the data shrank — goes through ``scroll(by:)`` /
+    /// ``scrollOffset`` directly and is deliberately unaffected.
+    var isScrollEnabled: Bool { get set }
+
     /// The bound ``TUIkit/View/anchorPosition(_:)`` override, captured from the
     /// environment during render so a *user* scroll can release it at event
     /// time (when the environment is out of reach). `nil` when the app bound
@@ -111,6 +121,8 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var scrollbarDragGrab: Int?
     public var scrollbarRepeat: ScrollbarRepeat?
     public var wheelEdgeHold = WheelEdgeHold()
+    /// Whether the user may scroll this axis (``ScrollableOffsetState``).
+    public var isScrollEnabled = true
     /// A horizontal axis is never anchored (anchoring is a vertical, row-wise
     /// notion), so this stays `nil`.
     public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
@@ -252,11 +264,17 @@ extension ScrollableOffsetState {
     /// making the parent's lower content unreachable by wheel.
     /// A wheel tick that hits the scroller's edge does not chain immediately:
     /// see ``WheelEdgeHold`` for the grace-period model.
+    ///
+    /// Under ``TUIkit/View/scrollDisabled(_:)`` a tick is *not consumed*, so it
+    /// chains straight to the enclosing scroller — a pinned inner pane must not
+    /// trap the wheel over the page behind it, which is the same reasoning that
+    /// makes a scroller with nothing to scroll pass ticks through.
     @discardableResult
     public func handleWheelEvent(
         _ event: MouseEvent,
         linesPerTick: Int = ViewConstants.mouseWheelScrollLines
     ) -> Bool {
+        guard isScrollEnabled else { return false }
         switch event.button {
         case .scrollUp:
             let moved = scrollFine(by: -linesPerTick)
@@ -346,6 +364,7 @@ extension ScrollableOffsetState {
         _ event: MouseEvent,
         columnsPerTick: Int = ViewConstants.mouseWheelScrollLines
     ) -> Bool {
+        guard isScrollEnabled else { return false }
         switch event.button {
         case .scrollLeft:
             let before = scrollOffset

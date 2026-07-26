@@ -578,6 +578,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        handler.isScrollEnabled = context.environment.isScrollEnabled
         // Captured at render so a USER wheel scroll can release a bound anchor
         // to `.window` at event time. (The list's ARROW keys move the selection,
         // which the spec shadow-switches to Row, not Window — that needs the
@@ -998,13 +999,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         // Register the list as a drag auto-scroll zone (sharing the container
         // region id): a drag hovering near its top/bottom edge scrolls the rows
-        // to reveal an off-screen drop target.
-        context.environment.dragAndDropSession?.registerAutoScrollZone(
-            DragAndDropSession.AutoScrollZone(
-                handlerID: mouseHandlerID,
-                vertical: state.handler,
-                horizontal: nil,
-                delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+        // to reveal an off-screen drop target. Auto-scroll is a gesture, so
+        // `.scrollDisabled` withholds the zone entirely.
+        if context.environment.isScrollEnabled {
+            context.environment.dragAndDropSession?.registerAutoScrollZone(
+                DragAndDropSession.AutoScrollZone(
+                    handlerID: mouseHandlerID,
+                    vertical: state.handler,
+                    horizontal: nil,
+                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+        }
 
         // A one-row region at the keyboard cursor's on-screen line, stamped
         // with the SAME focusID and inserted ahead of the container region:

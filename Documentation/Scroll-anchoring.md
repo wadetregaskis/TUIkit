@@ -313,6 +313,46 @@ old single-margin-row behaviour when the anchor is at/above the top). A
 sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
 are deleted past its held line, so it never leaves a blank strip.
 
+### User adjustability shipped as `.scrollDisabled(_:)` (§1.2, first half)
+
+The "whether the end-user may adjust the scroll position at all" half of §1.2
+is done. It needed no new vocabulary: SwiftUI already names it, so the modifier
+is `scrollDisabled(_ disabled: Bool)` exactly, over an internal
+`\.isScrollEnabled` environment value that each scrollable captures onto its
+handler each render (event-time code cannot reach the environment).
+
+The line it draws is **user input versus everything else**:
+
+| Stops | Keeps working |
+|---|---|
+| Wheel / trackpad | `ScrollViewProxy.scrollTo(_:)` |
+| Scrollbar arrows, track, thumb (and any auto-repeat mid-hold) | Anchors — the hold, the edge follow, `.anchorPosition` |
+| Arrows / Page / Home / End on a focused `ScrollView` | Reveal-on-focus, and a List/Table following its selection |
+| Drag auto-scroll (the zone is not registered at all) | The clamp after data shrinks |
+
+Three consequences worth keeping:
+
+- **A blocked wheel tick is not consumed**, so it chains to the enclosing
+  scroller — the same rule as a tick at a scroller's own edge. A pinned inner
+  pane must not trap the wheel over the page behind it. Confirmed live: pinning
+  the Example's configurable demo leaves it on line 1 while the wheel over it
+  scrolls the page.
+- **Selection is not scrolling.** A `List` still moves its cursor under the
+  arrow keys and still reveals it. Gating that too would let the cursor leave
+  the viewport for good, which is unusable — and moving a cursor was never
+  "adjusting the scroll position".
+- **A pinned `ScrollView` leaves the focus ring** (`canBeFocused` gains
+  `isScrollEnabled`), for the same reason a non-overflowing one does: with no
+  scroll command left, the Tab stop is only an obstacle.
+
+The chrome requirement is met literally — `ScrollbarColors.focusIndicating`
+gains a disabled branch one step quieter than the resting bar (tertiary thumb,
+quaternary arrows), so the bar keeps its arrows and thumb and simply reads as
+inert. It must not vanish, or the view reads as having run out of content.
+
+The second half of §1.2 — the shadow/code-set split — is separate and already
+largely landed (selection → Row, scroll → Window; see above).
+
 ---
 
 ## 4. Interim guardrails (in force now)

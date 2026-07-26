@@ -146,6 +146,16 @@ struct ScrollbarColors {
     @MainActor
     static func focusIndicating(isFocused: Bool, context: RenderContext) -> Self {
         let palette = context.environment.palette
+        // §1.2 of the scroll-anchoring spec: when the user may not adjust the
+        // scroll position, the chrome still renders — in a disabled state. One
+        // step quieter than the resting bar, so the view reads as pinned rather
+        // than as having no more content.
+        guard context.environment.isScrollEnabled else {
+            return Self(
+                thumb: palette.foregroundTertiary,
+                track: palette.foregroundQuaternary,
+                arrow: palette.foregroundQuaternary)
+        }
         guard isFocused else {
             return Self(
                 thumb: palette.foregroundSecondary,

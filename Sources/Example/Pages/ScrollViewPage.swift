@@ -35,6 +35,8 @@ struct ScrollViewPage: View {
     @State var barProportional: Bool = true
     @State var barClickBehavior: ScrollbarClickBehavior = .page
     @State var revealFollowMargin = FollowMarginChoice.none.rawValue
+    /// `.scrollDisabled` — the chrome stays, the gestures stop.
+    @State var scrollPinned: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -134,6 +136,7 @@ struct ScrollViewPage: View {
                     .scrollbarClickBehavior(barClickBehavior)
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: revealFollowMargin)?.margin ?? .none)
+                    .scrollDisabled(scrollPinned)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -156,6 +159,9 @@ struct ScrollViewPage: View {
                     // How early the reveal-on-focus scrolls: at the edge
                     // (default), 2 lines early, or keeping the control centred.
                     FollowMarginPicker(selection: $revealFollowMargin)
+                    Toggle(L("page.scrollView.pinned"), isOn: $scrollPinned)
+                    Text(L("page.scrollView.pinnedNote"))
+                    .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 

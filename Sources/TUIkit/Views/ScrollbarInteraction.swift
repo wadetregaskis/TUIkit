@@ -91,6 +91,12 @@ extension ScrollbarRenderer {
         state: ScrollableOffsetState, token: String, context: RenderContext
     ) {
         guard !context.isMeasuring, var repeating = state.scrollbarRepeat else { return }
+        // Scrolling turned off mid-hold: drop the hold rather than let it keep
+        // ticking, and stop asking for animation frames for it.
+        guard state.isScrollEnabled else {
+            state.scrollbarRepeat = nil
+            return
+        }
         // Keep the loop ticking while held so the deadline below is checked.
         context.requestAnimation(token: token, frequency: 20)
         let now = context.environment.frameNowNanos
@@ -217,12 +223,16 @@ extension ScrollbarRenderer {
     /// bar is measured in lines while its offset is in rows, dragging is
     /// proportional rather than exact, acceptable for the uncommon variable-height
     /// case.
+    ///
+    /// Under ``TUIkit/View/scrollDisabled(_:)`` the bar is inert: it still draws
+    /// (in its disabled colours) so the view reads as pinned content rather than
+    /// as content that ran out, but no press on it moves anything.
     static func mouseHandler(
         for state: ScrollableOffsetState, length: Int, vertical: Bool,
         arrows: ScrollbarArrows, proportional: Bool, behavior: ScrollbarClickBehavior
     ) -> (MouseEvent) -> Bool {
         { event in
-            guard event.button == .left else { return false }
+            guard event.button == .left, state.isScrollEnabled else { return false }
             let position = vertical ? event.y : event.x
             let perEnd = (length > arrowReserve(arrows) ? arrowReserve(arrows) : 0) / 2
             let trackLen = max(1, length - 2 * perEnd)

@@ -248,6 +248,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             defaultScrollAnchor: context.environment.defaultScrollAnchor)
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
+        // Both axes: `.scrollDisabled` pins the view, not one direction of it.
+        handler.isScrollEnabled = context.environment.isScrollEnabled
+        handler.horizontal.isScrollEnabled = context.environment.isScrollEnabled
         return handler
     }
 
@@ -408,7 +411,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // measured.
         let hasVerticalOverflow = handler.contentHeight > contentViewportHeight
         let hasHorizontalOverflow = wantsHorizontal && fullBuffer.width > contentWidth
-        handler.canBeFocused = !isDisabled && (hasVerticalOverflow || hasHorizontalOverflow)
+        // `.scrollDisabled` leaves no scroll command for the keys to run, so the
+        // view drops out of the Tab ring for the same reason a non-overflowing
+        // one does: a stop that can do nothing is only an obstacle.
+        handler.canBeFocused =
+            !isDisabled && handler.isScrollEnabled
+            && (hasVerticalOverflow || hasHorizontalOverflow)
 
         // Register so the dispatchKeyEvent → handler chain is wired up; the
         // handler's `canBeFocused` (above) keeps a non-scrollable view out of
@@ -545,6 +553,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Register this viewport as a drag auto-scroll zone (sharing the region
         // id, so the driver can read its absolute rect): a drag hovering near an
         // edge scrolls the content to bring an off-screen drop target into view.
+        // Auto-scroll is a gesture, so `.scrollDisabled` withholds the zone —
+        // the drop targets that are visible stay droppable, the rest stay out of
+        // reach, which is what pinning the view means.
+        guard context.environment.isScrollEnabled else { return }
         context.environment.dragAndDropSession?.registerAutoScrollZone(
             DragAndDropSession.AutoScrollZone(
                 handlerID: mouseHandlerID,
@@ -693,126 +705,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             return (buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset)
         }
         return (buffer, nil, reply?.seekResolvedOffset)
-    }
-
-    /// Registers a mouse handler over the scrollbar's single column so the arrows
-    /// step by one, a track click pages or jumps, and the thumb drags. Inserted at
-    /// the front of the regions array *before* the viewport handler's own
-    /// `insert(at: 0)` pushes it back one, so the bar is hit-tested ahead of the
-    /// viewport for its column (the viewport still wins everywhere else).
-    private func attachScrollbarMouseHandler(
-        to buffer: inout FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, context: RenderContext
-    ) {
-        guard !context.isMeasuring,
-              let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
-        else { return }
-        let barHandler = ScrollbarRenderer.verticalMouseHandler(
-            for: handler, length: buffer.height,
-            arrows: context.environment.scrollbarArrows,
-            proportional: context.environment.scrollbarProportionalThumb,
-            behavior: context.environment.scrollbarClickBehavior)
-        let barHandlerID = mouseDispatcher.register(barHandler)
-        buffer.hitTestRegions.insert(
-            HitTestRegion(
-                offsetX: contentWidth, offsetY: 0, width: 1, height: buffer.height,
-                handlerID: barHandlerID),
-            at: 0
-        )
-        // Keep a held arrow / page-track repeating (the press set the repeat; this
-        // wakes the loop and ticks it until release clears it).
-        ScrollbarRenderer.driveAutoRepeat(
-            state: handler, token: "scrollbar-repeat-\(context.identity.path)", context: context)
-    }
-
-    /// Like ``attachScrollbarMouseHandler`` but for the bottom horizontal bar: a
-    /// one-row hit region over the bar's track drives the *horizontal* axis (arrows
-    /// step, track pages/jumps, thumb drags). The region spans `contentWidth` only,
-    /// so the bottom-right corner cell (when the vertical bar is also present) stays
-    /// inert. A distinct repeat token lets both axes auto-repeat independently.
-    private func attachHorizontalScrollbarMouseHandler(
-        to buffer: inout FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, context: RenderContext
-    ) {
-        guard !context.isMeasuring,
-              let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
-        else { return }
-        let barHandler = ScrollbarRenderer.horizontalMouseHandler(
-            for: handler.horizontal, length: contentWidth,
-            arrows: context.environment.scrollbarArrows,
-            proportional: context.environment.scrollbarProportionalThumb,
-            behavior: context.environment.scrollbarClickBehavior)
-        let barHandlerID = mouseDispatcher.register(barHandler)
-        buffer.hitTestRegions.insert(
-            HitTestRegion(
-                offsetX: 0, offsetY: max(0, buffer.height - 1), width: contentWidth, height: 1,
-                handlerID: barHandlerID),
-            at: 0
-        )
-        ScrollbarRenderer.driveAutoRepeat(
-            state: handler.horizontal, token: "scrollbar-h-repeat-\(context.identity.path)",
-            context: context)
-    }
-
-    /// Appends the trailing vertical scrollbar column to the windowed viewport.
-    /// The content keeps its `contentWidth`; the bar occupies the last column,
-    /// reflecting the handler's scroll position at sub-cell precision. The
-    /// content's hit-test regions sit at `x < contentWidth`, so the appended
-    /// column never disturbs them.
-    private func appendVerticalScrollbar(
-        to buffer: FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
-    ) -> FrameBuffer {
-        let height = buffer.height
-        guard height > 0 else { return buffer }
-        let palette = context.environment.palette
-        let bar = ScrollbarRenderer.verticalScrollbar(
-            height: height,
-            extent: handler.contentHeight,
-            viewport: handler.viewportHeight,
-            offset: handler.scrollOffset,
-            arrows: context.environment.scrollbarArrows,
-            proportional: context.environment.scrollbarProportionalThumb,
-            // The bar is the ScrollView's focus indicator: it pulses the
-            // accent while focused (see ScrollbarColors.focusIndicating).
-            colors: .focusIndicating(isFocused: isFocused, context: context))
-        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
-        var lines = buffer.lines
-        for index in 0..<height {
-            let content = index < lines.count ? lines[index] : ""
-            let pad = max(0, contentWidth - content.strippedLength)
-            let cell = index < bar.count ? bar[index] : emptyCell
-            lines[index] = content + String(repeating: " ", count: pad) + cell
-        }
-        return buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
-    }
-
-    /// Appends the bottom horizontal scrollbar over a reserved row. When the
-    /// vertical bar is also present, a track-styled corner cell fills the
-    /// bottom-right where the two meet.
-    private func appendHorizontalScrollbar(
-        to buffer: FrameBuffer, contentWidth: Int, hasVerticalBar: Bool,
-        handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
-    ) -> FrameBuffer {
-        let palette = context.environment.palette
-        let bar = ScrollbarRenderer.horizontalScrollbar(
-            width: contentWidth,
-            extent: handler.horizontal.extent,
-            viewport: handler.horizontal.viewportHeight,
-            offset: handler.horizontal.scrollOffset,
-            arrows: context.environment.scrollbarArrows,
-            proportional: context.environment.scrollbarProportionalThumb,
-            colors: .focusIndicating(isFocused: isFocused, context: context))
-        let corner =
-            hasVerticalBar
-            ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
-            : ""
-        var lines = buffer.lines
-        lines.append(bar + corner)
-        return buffer.replacingLines(
-            lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
     }
 
     // MARK: Windowing

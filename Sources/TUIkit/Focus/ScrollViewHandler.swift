@@ -61,6 +61,10 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
     /// Wheel-chaining grace state (``ScrollableOffsetState``).
     public var wheelEdgeHold = WheelEdgeHold()
+
+    /// Whether the user may scroll (``ScrollableOffsetState``), synced from
+    /// `environment.isScrollEnabled` each render.
+    public var isScrollEnabled = true
     /// Bound `.anchorPosition` override, captured each render so a USER scroll
     /// can release it to `.window` at event time. See
     /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
@@ -178,9 +182,14 @@ extension ScrollViewHandler {
     /// viewport; Home / End jump to top / bottom. Other keys are
     /// not consumed.
     ///
+    /// Under ``TUIkit/View/scrollDisabled(_:)`` none of them are consumed, so
+    /// they bubble on to whatever else might want them — a scroll view that
+    /// cannot scroll must not silently swallow Home, End or the arrows.
+    ///
     /// - Parameter event: The incoming key event.
     /// - Returns: `true` if the key was a scroll command.
     public func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        guard isScrollEnabled else { return false }
         // A plain arrow steps one line/column; Shift accelerates by the
         // (env-configured) multiplier. Page/Home/End are already large jumps and
         // ignore Shift.
