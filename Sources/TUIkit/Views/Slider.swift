@@ -109,17 +109,32 @@ public struct Slider<Label: View, ValueLabel: View>: View {
     private static var defaultTrackWidth: Int { 20 }
 
     public var body: some View {
-        _SliderCore(
-            value: value,
-            bounds: bounds,
-            step: step,
-            label: label,
-            valueLabel: valueLabel,
-            trackStyle: trackStyle,
-            focusID: focusID,
-            isDisabled: isDisabled,
-            onEditingChanged: onEditingChanged
-        )
+        // The label renders inline to the left of the track (SwiftUI parity):
+        // "Volume ◀ ━━━●─── ▶ 50%". An empty/absent label collapses, so an
+        // unlabelled slider still starts at column 0 with a full-length track.
+        //
+        // Composed as an HStack sibling rather than drawn inside `_SliderCore`
+        // on purpose: the core's geometry — `trackLeft`, the arrow click zones,
+        // the track-drag mapping — is all measured from its OWN buffer, and the
+        // stack shifts its hit regions for us. Prepending the label inside the
+        // core would leave `trackLeft` pointing into the label, so clicking the
+        // label would auto-repeat a decrement. `controlKind` lets the label
+        // resolve `.sliderTextStyle` like the value read-out does.
+        HStack(spacing: 0) {
+            _CollapsingLabel(label: label, controlDisabled: isDisabled)
+            _SliderCore(
+                value: value,
+                bounds: bounds,
+                step: step,
+                label: label,
+                valueLabel: valueLabel,
+                trackStyle: trackStyle,
+                focusID: focusID,
+                isDisabled: isDisabled,
+                onEditingChanged: onEditingChanged
+            )
+        }
+        .environment(\.controlKind, .slider)
     }
 }
 

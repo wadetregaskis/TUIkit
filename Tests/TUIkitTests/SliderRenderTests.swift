@@ -51,14 +51,18 @@ struct SliderRenderTests {
         #expect(out[0].hasPrefix("◀ "), "left arrow then a space leads the row: |\(out[0])|")
     }
 
-    @Test("The string title is a description only — it is NOT drawn on the track (SwiftUI parity)")
-    func titleNotDrawn() {
-        // SwiftUI's Slider label is for accessibility, not display; TUIkit
-        // matches that. The title text must not appear on the rendered track.
+    @Test("The string title is drawn to the LEFT of the track, on the same line (SwiftUI parity)")
+    func titleDrawnInline() {
+        // This test used to assert the opposite, on the stated grounds that
+        // "SwiftUI's Slider label is for accessibility, not display". That is
+        // the iOS behaviour, and Apple's docs hedge accordingly ("Not all
+        // slider styles show the label"). macOS — the relevant reference for a
+        // desktop-shaped framework — DOES draw it, to the left, shortening the
+        // track to fit. Measured against real SwiftUI hosted in an NSHostingView.
         let out = lines(Slider("Volume", value: .constant(0.5)))
         #expect(out.count == 1, "still a single line, got: \(out)")
-        #expect(!out[0].contains("Volume"), "title must not be drawn: |\(out[0])|")
-        #expect(out[0].hasPrefix("◀ "), "row leads with the arrow, not the title: |\(out[0])|")
+        #expect(out[0].hasPrefix("Volume "), "the title leads the row: |\(out[0])|")
+        #expect(out[0].contains("◀"), "the track follows the title: |\(out[0])|")
         #expect(out[0].contains("50%"))
     }
 
