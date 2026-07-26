@@ -32,8 +32,7 @@
 /// Set it for a subtree with ``View/scrollFollowMargin(_:)``.
 public struct ScrollFollowMargin: Sendable, Hashable {
     enum Value: Sendable, Hashable {
-        case lines(Int)
-        case rows(Int)
+        case steps(Int)
         case fraction(Double)
         case centered(RowAnchor)
     }
@@ -63,7 +62,7 @@ public struct ScrollFollowMargin: Sendable, Hashable {
 
     /// No margin: scrolling starts only when the selection reaches the
     /// viewport edge. The default.
-    public static let none = Self(value: .lines(0))
+    public static let none = Self(value: .steps(0))
 
     /// Keep the selection centred while scrolling, holding the row's middle
     /// line at the viewport centre (``RowAnchor/center``).
@@ -82,15 +81,17 @@ public struct ScrollFollowMargin: Sendable, Hashable {
         Self(value: .centered(anchor))
     }
 
-    /// Keep `count` terminal lines visible beyond the selection.
-    public static func lines(_ count: Int) -> Self {
-        Self(value: .lines(max(0, count)))
-    }
-
-    /// Keep `count` rows visible beyond the selection. A multi-line row
-    /// counts once; with single-line rows this is the same as ``lines(_:)``.
-    public static func rows(_ count: Int) -> Self {
-        Self(value: .rows(max(0, count)))
+    /// Keep `count` scroll STEPS visible beyond the selection, where a step is
+    /// whatever the scrollable moves by: a terminal line under
+    /// ``ScrollGranularity/line``, a whole row under ``ScrollGranularity/row``.
+    ///
+    /// One knob rather than separate line and row spellings, because the two
+    /// only ever differ by the granularity already in force — and a margin
+    /// expressed in the *other* unit reads as a bug ("2 rows early" on a
+    /// line-scrolling list moved by an amount nothing else in the layout used).
+    /// With single-line rows the two are identical anyway.
+    public static func steps(_ count: Int) -> Self {
+        Self(value: .steps(max(0, count)))
     }
 
     /// A margin that is `fraction` of the viewport height (clamped to
@@ -103,12 +104,13 @@ public struct ScrollFollowMargin: Sendable, Hashable {
     /// clamped so a selection can always rest strictly inside the window
     /// (at most `(viewportLines - 1) / 2` — a full-half margin pins the
     /// selection to the centre). Line-space consumers (Menu, drop-downs,
-    /// ScrollView reveal) use this directly; row-space consumers treat
-    /// ``rows(_:)`` natively and convert the rest via their row heights.
+    /// ScrollView reveal) use this directly — for them a step IS a line.
+    /// Row-space consumers under row granularity take the step count as a row
+    /// count instead (see `ItemListHandler.followMarginRows`).
     func resolvedLines(viewportLines: Int) -> Int {
         let raw: Int
         switch value {
-        case .lines(let count), .rows(let count):
+        case .steps(let count):
             raw = count
         case .fraction(let fraction):
             raw = Int((Double(viewportLines) * fraction).rounded())
@@ -152,7 +154,7 @@ extension View {
     ///
     /// ```swift
     /// List(items, selection: $selection) { Text($0.name) }
-    ///     .scrollFollowMargin(.lines(2))   // scroll 2 lines early
+    ///     .scrollFollowMargin(.steps(2))   // 2 lines (or rows) early
     ///
     /// Menu(items: entries, selection: $choice)
     ///     .scrollFollowMargin(.centered)   // keep the selection centred

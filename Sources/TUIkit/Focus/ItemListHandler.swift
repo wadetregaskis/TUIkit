@@ -930,16 +930,21 @@ extension ItemListHandler {
 
     /// The number of rows of context the follow margin keeps visible beyond
     /// the cursor in one direction (`step` −1 above / +1 below) — see
-    /// ``followMargin``. `.rows` counts rows directly; `.lines` / `.fraction`
-    /// resolve to terminal lines and convert by walking real row heights
-    /// outward from `index` (1:1 when rows are single-line). Clamped so the
-    /// cursor can always rest strictly inside the visible area.
+    /// ``followMargin``.
+    ///
+    /// A `.steps` margin is expressed in whatever this scrollable moves by, so
+    /// under ``ScrollGranularity/row`` a step IS a row and counts directly.
+    /// Under line granularity — and for `.fraction` / `.centered`, which are
+    /// line-space by definition — it resolves to terminal lines and converts by
+    /// walking real row heights outward from `index` (1:1 when rows are
+    /// single-line). Clamped so the cursor can always rest strictly inside the
+    /// visible area.
     private func followMarginRows(from index: Int, step: Int) -> Int {
         guard let contentHeight, contentHeight > 1 else { return 0 }
         switch followMargin.value {
-        case .rows(let count):
+        case .steps(let count) where scrollGranularity == .row:
             return min(max(0, count), max(0, (contentHeight - 1) / 2))
-        case .lines, .fraction, .centered:
+        case .steps, .fraction, .centered:
             let lines = followMargin.resolvedLines(viewportLines: contentHeight)
             guard lines > 0 else { return 0 }
             guard let rowHeight else { return lines }

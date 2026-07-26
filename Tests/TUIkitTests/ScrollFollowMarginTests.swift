@@ -4,7 +4,7 @@
 //  ScrollFollowMargin semantics: the resolved-lines math, and the Menu's
 //  stateful windowing under each policy — the default is the classic
 //  edge-triggered scroll (the window holds still until the selection
-//  reaches its edge), .lines(n) starts scrolling n lines early, and
+//  reaches its edge), .steps(n) starts scrolling n steps early, and
 //  .centered keeps the selection centred (the old always-centred
 //  behaviour, now opt-in).
 //
@@ -26,8 +26,8 @@ struct ScrollFollowMarginTests {
     @Test("resolvedLines: symbolic values, clamping, and fractions")
     func resolution() {
         #expect(ScrollFollowMargin.none.resolvedLines(viewportLines: 10) == 0)
-        #expect(ScrollFollowMargin.lines(2).resolvedLines(viewportLines: 10) == 2)
-        #expect(ScrollFollowMargin.rows(3).resolvedLines(viewportLines: 10) == 3)
+        #expect(ScrollFollowMargin.steps(2).resolvedLines(viewportLines: 10) == 2)
+        #expect(ScrollFollowMargin.steps(3).resolvedLines(viewportLines: 10) == 3)
         #expect(ScrollFollowMargin.fraction(0.25).resolvedLines(viewportLines: 12) == 3)
         // .centered is its own value (carrying a row anchor), distinct from
         // fraction(0.5), but still resolves to half the viewport in line-space so
@@ -38,14 +38,14 @@ struct ScrollFollowMarginTests {
         #expect(ScrollFollowMargin.centered.resolvedLines(viewportLines: 9) == 4)
         #expect(ScrollFollowMargin.centered.resolvedLines(viewportLines: 10) == 4)
         // Excess margins clamp so a selection can rest strictly inside.
-        #expect(ScrollFollowMargin.lines(99).resolvedLines(viewportLines: 8) == 3)
+        #expect(ScrollFollowMargin.steps(99).resolvedLines(viewportLines: 8) == 3)
         // Out-of-range inputs are sanitized at construction.
-        #expect(ScrollFollowMargin.lines(-5).resolvedLines(viewportLines: 8) == 0)
+        #expect(ScrollFollowMargin.steps(-5).resolvedLines(viewportLines: 8) == 0)
         #expect(ScrollFollowMargin.fraction(2.0) == ScrollFollowMargin.fraction(0.5))
         #expect(ScrollFollowMargin.fraction(-1) == ScrollFollowMargin.fraction(0))
         // Degenerate viewports never produce a negative margin.
         #expect(ScrollFollowMargin.centered.resolvedLines(viewportLines: 1) == 0)
-        #expect(ScrollFollowMargin.lines(1).resolvedLines(viewportLines: 0) == 0)
+        #expect(ScrollFollowMargin.steps(1).resolvedLines(viewportLines: 0) == 0)
     }
 
     // MARK: Menu windowing under each policy
@@ -135,10 +135,10 @@ struct ScrollFollowMarginTests {
         #expect(offsets.count == 1, "constant selection-to-top offset mid-list: \(tops)")
     }
 
-    @Test(".lines(2) starts scrolling two lines before the edge")
+    @Test(".steps(2) starts scrolling two lines before the edge")
     func linesMarginScrollsEarly() {
         let defaultTops = walkTops(margin: nil, from: 0, to: 10)
-        let marginTops = walkTops(margin: .lines(2), from: 0, to: 10)
+        let marginTops = walkTops(margin: .steps(2), from: 0, to: 10)
         let defaultHold = defaultTops.prefix { $0 == 1 }.count
         let marginHold = marginTops.prefix { $0 == 1 }.count
         #expect(
@@ -174,7 +174,7 @@ struct ScrollFollowMarginTests {
         var label: String { "item-\(id)-end" }
     }
 
-    @Test("List cursor with .lines(2) keeps two rows visible beyond it")
+    @Test("List cursor with .steps(2) keeps two rows visible beyond it")
     func listCursorMargin() {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()
@@ -182,7 +182,7 @@ struct ScrollFollowMarginTests {
         let view = List(items, selection: Binding<Int?>.constant(nil)) { item in
             Text(item.label)
         }
-        .scrollFollowMargin(.lines(2))
+        .scrollFollowMargin(.steps(2))
         .frame(height: 10)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 10)
@@ -199,7 +199,7 @@ struct ScrollFollowMarginTests {
             "two rows of context visible beyond the cursor: \(lines)")
     }
 
-    @Test("ScrollView reveal with .lines(2) leaves two lines beyond the control")
+    @Test("ScrollView reveal with .steps(2) leaves two lines beyond the control")
     func scrollViewRevealMargin() {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()
@@ -211,7 +211,7 @@ struct ScrollFollowMarginTests {
             }
         }
         .scrollbarVisibility(.visible)
-        .scrollFollowMargin(.lines(2))
+        .scrollFollowMargin(.steps(2))
         .frame(height: 8)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
@@ -379,5 +379,69 @@ struct CenteredAnchorTests {
         #expect(
             handler.scrollOffset == 4,
             "the focused row is the middle of rows 4/5/6")
+    }
+}
+
+/// `.steps(n)` means n LINES when the scrollable moves by lines and n ROWS when
+/// it moves by rows. Before this the two were separate spellings that resolved
+/// through the same arithmetic, so `.rows(2)` and `.lines(2)` behaved
+/// identically and picking one made no observable difference.
+///
+/// The distinction is only visible with MULTI-LINE rows — with single-line rows
+/// a row is a line — so these use 3-line rows, where "2 steps of context" is
+/// either 2 rows (6 lines) or 2 lines (which does not even clear one row).
+@MainActor
+@Suite("A step is a line or a row, per the scroll granularity")
+struct StepGranularityTests {
+
+    private func handler(granularity: ScrollGranularity, steps: Int) -> ItemListHandler<Int> {
+        let heights = Array(repeating: 3, count: 20)
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: heights.count,
+            viewportHeight: 12, selectionMode: .single)
+        handler.contentHeight = 12
+        handler.rowHeight = { heights[$0] }
+        handler.followMargin = .steps(steps)
+        handler.scrollGranularity = granularity
+        return handler
+    }
+
+    /// Walks the cursor down to `index` and reports the resulting top row.
+    private func topAfterWalking(_ handler: ItemListHandler<Int>, to index: Int) -> Int {
+        for _ in 0..<index { handler.moveFocus(by: 1, wrap: false) }
+        return handler.scrollOffset
+    }
+
+    @Test("row granularity keeps whole ROWS of context, line granularity keeps LINES")
+    func stepsFollowGranularity() {
+        let byRow = handler(granularity: .row, steps: 2)
+        let byLine = handler(granularity: .line, steps: 2)
+        let rowTop = topAfterWalking(byRow, to: 8)
+        let lineTop = topAfterWalking(byLine, to: 8)
+
+        // Two 3-line rows of context is far more than two lines, so the
+        // row-granularity window has to start scrolling earlier and therefore
+        // sits further down the list.
+        #expect(
+            rowTop > lineTop,
+            """
+            .steps(2) must mean 2 ROWS under row granularity and 2 LINES under \
+            line granularity — with 3-line rows those cannot coincide. \
+            row-granularity top=\(rowTop), line-granularity top=\(lineTop)
+            """)
+    }
+
+    @Test("with single-line rows the two granularities agree")
+    func singleLineRowsCoincide() {
+        func flat(_ granularity: ScrollGranularity) -> ItemListHandler<Int> {
+            let handler = ItemListHandler<Int>(
+                focusID: "list", itemCount: 20, viewportHeight: 8, selectionMode: .single)
+            handler.contentHeight = 8
+            handler.rowHeight = { _ in 1 }
+            handler.followMargin = .steps(2)
+            handler.scrollGranularity = granularity
+            return handler
+        }
+        #expect(topAfterWalking(flat(.row), to: 10) == topAfterWalking(flat(.line), to: 10))
     }
 }
