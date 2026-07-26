@@ -262,14 +262,18 @@ struct OverlaysPage: View {
             alertContent(for: demo)
 
         case .dialog:
+            // The button belongs in the FOOTER, not at the bottom of the body.
+            // A dialog's body scrolls when the terminal is too short; its footer
+            // is pinned. With the button in the body it could be scrolled out of
+            // view — the one control the user always needs.
             Dialog(title: L("page.overlays.dialog.settingsTitle"), borderColor: .palette.border, titleColor: .palette.accent) {
                 VStack(alignment: .leading) {
                     Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
                     Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
                     Text(L("page.overlays.dialog.notificationsOn")).foregroundStyle(.palette.foreground)
-                    Text("")
-                    dismissButton
                 }
+            } footer: {
+                dismissButton
             }
             .frame(width: 50)
 
@@ -287,8 +291,21 @@ struct OverlaysPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.overlays.dialog.enterCredentials"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    TextField(L("page.overlays.dialog.username"), text: $authUsername, prompt: Text(L("page.overlays.dialog.usernamePrompt")))
-                    SecureField(L("page.overlays.dialog.password"), text: $authPassword, prompt: Text(L("page.overlays.dialog.passwordPrompt")))
+                    // Labels right-aligned in a shared column so the colons line
+                    // up, which puts the two fields' left edges in line too.
+                    // The column is sized in terminal CELLS, not characters —
+                    // the zh/ja labels are double-width, so a `.count` here
+                    // would misalign them by the number of CJK characters.
+                    credentialRow(
+                        L("page.overlays.dialog.username"),
+                        field: TextField(
+                            "", text: $authUsername,
+                            prompt: Text(L("page.overlays.dialog.usernamePrompt"))))
+                    credentialRow(
+                        L("page.overlays.dialog.password"),
+                        field: SecureField(
+                            "", text: $authPassword,
+                            prompt: Text(L("page.overlays.dialog.passwordPrompt"))))
                 }
             } footer: {
                 HStack {
@@ -366,6 +383,31 @@ struct OverlaysPage: View {
             ) { EmptyView() }.frame(width: 60)
         default:
             EmptyView()
+        }
+    }
+
+    /// The width, in terminal CELLS, of the sign-in dialog's label column:
+    /// the wider of the two localized labels plus its colon.
+    ///
+    /// Cells rather than characters because the zh/ja labels are double-width —
+    /// "用户名" is three characters but six columns, so a `.count`-based column
+    /// would leave the colons (and therefore the fields) misaligned by exactly
+    /// the number of CJK characters.
+    private var credentialLabelWidth: Int {
+        max(
+            "\(L("page.overlays.dialog.username")):".strippedLength,
+            "\(L("page.overlays.dialog.password")):".strippedLength)
+    }
+
+    /// One labelled credential row: a right-aligned "Label:" in the shared
+    /// column, then the field. Aligning the colons is what puts the fields'
+    /// left edges in line.
+    private func credentialRow(_ label: String, field: some View) -> some View {
+        HStack(spacing: 1) {
+            Text("\(label):")
+                .foregroundStyle(.palette.foreground)
+                .frame(width: credentialLabelWidth, alignment: .trailing)
+            field
         }
     }
 
