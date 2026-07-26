@@ -771,7 +771,6 @@ extension _NavigationSplitViewCore {
             let captureWidths = widths
             let captureHandler = handler
             let column = index
-            let minWidth = minimumColumnWidth
             let captureFocus = focusManager
             mouseHandlerID = mouseDispatcher.register { event in
                 // Hover transitions first — these arrive with a non-`.left`
