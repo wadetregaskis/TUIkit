@@ -190,11 +190,31 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         pickerBody.environment(\.controlKind, .picker)
     }
 
+    /// The label sits to the LEFT of the control, on the same line, and an
+    /// empty label reserves nothing at all — SwiftUI parity, measured on macOS
+    /// by hosting real `Picker`s in an `NSHostingView` and capturing the drawn
+    /// AppKit controls:
+    ///
+    /// ```
+    /// Picker("Theme", …)                    ->  "Theme  [ Dark ⌄ ]"
+    /// Picker("", …)                         ->  "[ Dark ⌄ ]"
+    /// Picker("Theme", …).pickerStyle(.radioGroup)
+    ///                                       ->  "Theme  ( ) Light"
+    ///                                          "       (•) Dark"
+    /// ```
+    ///
+    /// Note the radio group: the label is TOP-aligned against the first option,
+    /// not centred on the group — hence `alignment: .top`, which is also what a
+    /// one-line menu picker needs.
+    ///
+    /// `_CollapsingLabel` is the same inline label Stepper and Slider use; it
+    /// supplies the separating space and collapses when blank, which is why
+    /// this is an `HStack(spacing: 0)`.
     @ViewBuilder private var pickerBody: some View {
         let entries = resolvedEntries()
         if pickerStyle.resolvesToMenu {
-            VStack(alignment: .leading, spacing: 0) {
-                _PickerLabel(label: label, controlDisabled: isDisabled)
+            HStack(alignment: .top, spacing: 0) {
+                _CollapsingLabel(label: label, controlDisabled: isDisabled)
                 _PickerMenuCore(
                     entries: entries,
                     selection: selection,
@@ -203,8 +223,8 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
                 )
             }
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                _PickerLabel(label: label, controlDisabled: isDisabled)
+            HStack(alignment: .top, spacing: 0) {
+                _CollapsingLabel(label: label, controlDisabled: isDisabled)
                 radioGroup(entries: entries)
             }
         }
@@ -246,35 +266,6 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         let group = RadioButtonGroup(selection: selection, items: items)
         let identified = focusID.map { group.focusID($0) } ?? group
         return identified.disabled(isDisabled)
-    }
-}
-
-// MARK: - Picker Label
-
-/// Renders a picker's label, collapsing to **zero height** when the label is
-/// empty or all-whitespace — so an unlabelled picker (e.g. `Picker("", …)`)
-/// doesn't show a blank first line above its options.
-private struct _PickerLabel<Label: View>: View, Renderable, Layoutable {
-    let label: Label
-
-    /// The picker's own `.disabled()` flag — it bypasses the environment,
-    /// so the label must be told explicitly.
-    let controlDisabled: Bool
-
-    var body: Never { fatalError("_PickerLabel renders via Renderable") }
-
-    /// The collapsed picker label sizes to its content (it does not fill), so a
-    /// single render is its exact, fixed measure.
-    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
-    }
-
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let buffer = TUIkit.renderToBuffer(
-            _ControlLabel.dimmingWhenDisabled(
-                label, context: context, controlDisabled: controlDisabled),
-            context: context)
-        return buffer.isBlank ? FrameBuffer() : buffer
     }
 }
 

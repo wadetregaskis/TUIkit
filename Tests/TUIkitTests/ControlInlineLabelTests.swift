@@ -88,4 +88,48 @@ struct ControlInlineLabelTests {
         let line = lines(of: Slider(value: .constant(0.5)))[0]
         #expect(line.hasPrefix("◀"), "the track starts at column 0: \(line)")
     }
+
+    // MARK: - Picker
+
+    @Test("a Picker's label sits on the control's line, not above it")
+    func pickerLabelIsInline() {
+        let rendered = lines(
+            of: Picker("Theme", selection: .constant(1)) {
+                Text("Light").tag(0)
+                Text("Dark").tag(1)
+            })
+        #expect(rendered.count == 1, "label and control share one line: \(rendered)")
+        let line = rendered[0]
+        #expect(line.hasPrefix("Theme"), "the label leads the line: \(line)")
+        #expect(line.contains("Dark"), "the selected option is on the same line: \(line)")
+    }
+
+    @Test("an unlabelled Picker reserves nothing — no leading gap, no blank line")
+    func unlabelledPickerHasNoLeadingGap() {
+        let rendered = lines(
+            of: Picker("", selection: .constant(1)) {
+                Text("Light").tag(0)
+                Text("Dark").tag(1)
+            })
+        #expect(rendered.count == 1, "no stray label line: \(rendered)")
+        #expect(
+            !rendered[0].hasPrefix(" "),
+            "an absent label must not leave a leading space: '\(rendered[0])'")
+    }
+
+    @Test("a radio-group Picker's label leads the FIRST option's line")
+    func radioGroupPickerLabelIsTopAligned() {
+        // macOS SwiftUI top-aligns the label with the first radio button,
+        // rather than centring it against the group.
+        let rendered = lines(
+            of: Picker("Theme", selection: .constant(1)) {
+                Text("Light").tag(0)
+                Text("Dark").tag(1)
+                Text("Auto").tag(2)
+            }
+            .pickerStyle(.radioGroup))
+        #expect(rendered.count == 3, "one line per option, label folded in: \(rendered)")
+        #expect(rendered[0].hasPrefix("Theme"), "label leads the first option: \(rendered)")
+        #expect(rendered[0].contains("Light"), "first option shares the label's line: \(rendered)")
+    }
 }

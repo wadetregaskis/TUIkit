@@ -52,8 +52,9 @@ struct PickerTests {
         let buffer = renderToBuffer(picker, context: context)
         let visible = buffer.lines.joined().stripped
 
-        // Heading line + a single collapsed control line.
-        #expect(buffer.height == 2)
+        // One line: the label sits to the LEFT of the collapsed control, as
+        // macOS SwiftUI draws it, rather than on a heading line of its own.
+        #expect(buffer.height == 1)
         #expect(visible.contains("Fruit"))
         #expect(visible.contains("Apple"))
         #expect(!visible.contains("Banana"))
@@ -78,8 +79,9 @@ struct PickerTests {
         #expect(visible.contains("Apple"))
         #expect(visible.contains("Banana"))
         #expect(visible.contains("Cherry"))
-        // Heading + one line per option.
-        #expect(buffer.height >= 4)
+        // One line per option, with the label folded onto the first of them
+        // (top-aligned against it) rather than adding a heading line.
+        #expect(buffer.height == 3)
     }
 
     @Test("Picker extracts options provided by a ForEach")
