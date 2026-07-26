@@ -357,6 +357,29 @@ row-based offset, so — exactly as with the row anchor (`8ebace6a` / `017683fa`
 (it lives on `ScrollableOffsetState`); what they need is the per-frame
 `resolve(...)` and the row-wise render of the excursion.
 
+> **The ScrollView render technique does NOT port over — measured 2026-07-26.**
+> `_ScrollViewCore` appends its scrollbar as a whole column *after* the content
+> buffer exists, so sliding that buffer leaves the bar alone. `_ListCore` merges
+> the bar into each line as it builds it —
+> `lines.append(fitted + pad + barCell(at: lines.count))`
+> (`_ListCore.swift`, in `composeScrollbarRowLines`, and again in the
+> fill-below-last-row loop) — so a post-hoc slide of the finished lines would
+> carry the scrollbar **with** the content, the opposite of the shipped and
+> tested `ScrollView` behaviour.
+>
+> The row-based views therefore need the excursion applied *before* the merge:
+>
+> 1. `composeScrollbarRowLines`: collect content-only row lines, slide them (and
+>    `ranges`) by the excursion, then pair with `barCell(at:)` by absolute line
+>    index so the bar stays put.
+> 2. `composeRowLines` (bar-less): slide only the region *between* the "N more"
+>    indicator lines — those are chrome and, like the bar, must not travel.
+> 3. `Table`: its own equivalent, and mirrored tests, per `017683fa`'s lesson
+>    that sharing a handler type is not sharing behaviour.
+>
+> `VisibleRowRange.yStart` must shift with the rows or clicks land on the wrong
+> row, and ranges pushed out of the region must drop rather than clamp.
+
 ### User adjustability shipped as `.scrollDisabled(_:)` (§1.2, first half)
 
 The "whether the end-user may adjust the scroll position at all" half of §1.2
