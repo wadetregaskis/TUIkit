@@ -317,6 +317,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         handler.viewportHeight = contentViewportHeight
+        // §1.5: how far past its edges this view may be pushed. Re-resolved every
+        // frame because a `.viewport`-relative allowance moves with the terminal,
+        // and an existing excursion is pulled back inside a shrunken one.
+        handler.overscrollState.resolve(
+            top: context.environment.scrollOverscrollTop,
+            bottom: context.environment.scrollOverscrollBottom,
+            viewportHeight: contentViewportHeight)
 
         // A freshly WRITTEN edge anchor jumps to that edge (see the helper);
         // must precede the glue check, whose `seekingTail` read is one-shot.
@@ -438,6 +445,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             horizontalOffset: handler.horizontal.scrollOffset
         )
 
+        visibleBuffer = applyOverscroll(to: visibleBuffer, handler: handler, width: contentWidth)
+
         applyScrollChrome(
             to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
             wantsScrollbar: wantsScrollbar, wantsHorizontalBar: wantsHorizontalBar,
@@ -449,6 +458,34 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             viewportHeight: viewportHeight, wantsHorizontal: wantsHorizontal)
 
         return visibleBuffer
+    }
+
+    /// Slides the windowed content by the overscroll excursion, blank-filling the
+    /// gap that opens and clipping the far side — the render of §1.5.
+    ///
+    /// Applied to the CONTENT only, before the chrome: pushing the content past
+    /// an edge must not carry the scrollbar or the "N more" indicators with it,
+    /// which describe the content's position rather than sitting in it. And it
+    /// is a post-hoc slide rather than an adjusted window origin precisely so
+    /// that no windowing or data-indexing arithmetic has to admit an
+    /// out-of-range offset (see ``ScrollOverscrollState``).
+    ///
+    /// `replacingLines` carries the hit-test regions and overlays along by the
+    /// same shift, so a control pushed down the screen is still clickable where
+    /// it is drawn — and one pushed off it stops being clickable at all.
+    private func applyOverscroll(
+        to buffer: FrameBuffer, handler: ScrollViewHandler, width: Int
+    ) -> FrameBuffer {
+        let excursion = handler.overscrollState.excursion
+        guard excursion != 0, !buffer.lines.isEmpty else { return buffer }
+        let blank = String(repeating: " ", count: max(0, width))
+        let gap = min(abs(excursion), buffer.lines.count)
+        let lines: [String] =
+            excursion < 0
+            ? Array(repeating: blank, count: gap) + buffer.lines.dropLast(gap)
+            : Array(buffer.lines.dropFirst(gap)) + Array(repeating: blank, count: gap)
+        return buffer.replacingLines(
+            lines, width: width, uniformWidth: true, overlayShiftY: -excursion)
     }
 
     /// Composes the scroll chrome over the windowed content: the "N more

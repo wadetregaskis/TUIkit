@@ -59,6 +59,12 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``WheelEdgeHold`` and ``handleWheelEvent(_:linesPerTick:)``.
     var wheelEdgeHold: WheelEdgeHold { get set }
 
+    /// How far past an edge this viewport is currently pushed, and the allowance
+    /// bounding it. See ``TUIkit/View/scrollOverscroll(top:bottom:)``. Zero
+    /// throughout unless an allowance is configured, so every scrollable that
+    /// does not opt in behaves exactly as before.
+    var overscrollState: ScrollOverscrollState { get set }
+
     /// Whether the **user** may move this viewport — `false` under
     /// ``TUIkit/View/scrollDisabled(_:)``, captured from the environment each
     /// render so event-time code can read it.
@@ -121,6 +127,8 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var scrollbarDragGrab: Int?
     public var scrollbarRepeat: ScrollbarRepeat?
     public var wheelEdgeHold = WheelEdgeHold()
+    /// Overscroll excursion + allowance (``ScrollableOffsetState``).
+    public var overscrollState = ScrollOverscrollState()
     /// Whether the user may scroll this axis (``ScrollableOffsetState``).
     public var isScrollEnabled = true
     /// A horizontal axis is never anchored (anchoring is a vertical, row-wise
@@ -242,6 +250,65 @@ extension ScrollableOffsetState {
         return scrollOffset != before
     }
 
+    /// A **user** fine step: like ``scrollFine(by:)``, but it also unwinds and
+    /// extends the overscroll excursion (see
+    /// ``TUIkit/View/scrollOverscroll(top:bottom:)``).
+    ///
+    /// Three cases, in order:
+    ///
+    /// 1. **Unwinding.** A step back toward the content returns from the
+    ///    excursion before the content itself moves — so coming out of an
+    ///    overscroll always lands on the edge, never skips past it. Any part of
+    ///    the step left over after the excursion reaches zero scrolls normally.
+    /// 2. **Ordinary movement**, unchanged.
+    /// 3. **Blocked at an edge**, so the step is spent on the allowance there.
+    ///
+    /// The ordering is what gives §1.3 its graze-versus-push distinction for
+    /// free: a step that merely *reaches* the edge is consumed by case 2, and
+    /// only the next one — which case 2 can no longer satisfy — pushes past. A
+    /// scroll that happens to land on the edge therefore never overscrolls, and
+    /// pushing into the excursion is unambiguously deliberate.
+    ///
+    /// With no allowance configured (the default) case 3 can never change
+    /// anything, so this is exactly ``scrollFine(by:)``.
+    @discardableResult
+    public func userScrollFine(by delta: Int) -> Bool {
+        guard delta != 0 else { return false }
+        let excursion = overscrollState.excursion
+
+        // 1. Returning from an excursion.
+        if excursion != 0, (excursion < 0) == (delta > 0) {
+            let unwind = min(abs(delta), abs(excursion))
+            overscrollState.excursion = excursion + (delta > 0 ? unwind : -unwind)
+            let leftover = delta > 0 ? delta - unwind : delta + unwind
+            if leftover != 0 { scrollFine(by: leftover) }
+            return true
+        }
+
+        // 2. Ordinary movement.
+        if scrollFine(by: delta) { return true }
+
+        // 3. Blocked: push into the allowance at this edge, if there is one.
+        guard overscrollState.isAllowed else { return false }
+        let limit = delta < 0 ? -overscrollState.top : overscrollState.bottom
+        let target = excursion + delta
+        let clamped = delta < 0 ? max(limit, target) : min(limit, target)
+        guard clamped != excursion else { return false }
+        overscrollState.excursion = clamped
+        return true
+    }
+
+    /// Drops any overscroll excursion, putting the content back against its
+    /// edges.
+    ///
+    /// Called wherever the viewport is moved *programmatically* — a `scrollTo`
+    /// seek, an anchor hold, the reveal that keeps a focused control on screen.
+    /// Those position the content precisely; leaving a leftover excursion under
+    /// them would offset the very row they just aimed at.
+    func clearOverscroll() {
+        overscrollState.excursion = 0
+    }
+
     /// Routes a mouse event through the wheel-scroll path.
     ///
     /// Returns `true` only if the event was a wheel event that
@@ -277,11 +344,11 @@ extension ScrollableOffsetState {
         guard isScrollEnabled else { return false }
         switch event.button {
         case .scrollUp:
-            let moved = scrollFine(by: -linesPerTick)
+            let moved = userScrollFine(by: -linesPerTick)
             if moved { releaseAnchorOnUserScroll() }
             return resolveWheelOutcome(moved: moved)
         case .scrollDown:
-            let moved = scrollFine(by: linesPerTick)
+            let moved = userScrollFine(by: linesPerTick)
             if moved { releaseAnchorOnUserScroll() }
             return resolveWheelOutcome(moved: moved)
         default:

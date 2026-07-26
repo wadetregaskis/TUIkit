@@ -325,6 +325,38 @@ old single-margin-row behaviour when the anchor is at/above the top). A
 sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
 are deleted past its held line, so it never leaves a blank strip.
 
+### Overscroll shipped for `ScrollView` (§1.5) — List/Table still to come
+
+`.scrollOverscroll(top:bottom:)` is live on `ScrollView`. The constrained design
+of §3.3 held up: `scrollOffset` never leaves `[0, maxOffset]`, and the excursion
+is a separate signed quantity on `ScrollOverscrollState`. Consequences that fell
+out rather than being built:
+
+- **The indicators needed no work at all.** They read the offset, so "N more
+  below" stays 0 while the view is pushed past the bottom — pushing past an edge
+  does not invent content.
+- **No data-indexing consumer needed auditing**, which was the whole point of
+  not widening the offset's range.
+- **§1.3's graze-versus-push distinction is free.** `userScrollFine(by:)` tries
+  ordinary movement *before* the allowance, so the step that reaches an edge is
+  spent getting there and only the next one pushes. A scroll that happens to
+  land on the edge therefore never sticks.
+
+Rendering is a post-hoc slide of the finished viewport buffer
+(`_ScrollViewCore.applyOverscroll`), applied to the content *before* the chrome
+so the scrollbar and indicators stay put — and via `replacingLines`, so hit
+regions and overlays travel with the content and a control pushed down the
+screen is still clickable where it is drawn.
+
+Verified live: with `top: .rows(2)`, a wheel tick at the top opens exactly two
+blank rows above `Line 1`, and a second tick adds nothing.
+
+**Still to do: `List` and `Table`.** They scroll through `ItemListHandler`'s own
+row-based offset, so — exactly as with the row anchor (`8ebace6a` / `017683fa`)
+— the `ScrollView` work does not reach them. The state machine is already shared
+(it lives on `ScrollableOffsetState`); what they need is the per-frame
+`resolve(...)` and the row-wise render of the excursion.
+
 ### User adjustability shipped as `.scrollDisabled(_:)` (§1.2, first half)
 
 The "whether the end-user may adjust the scroll position at all" half of §1.2

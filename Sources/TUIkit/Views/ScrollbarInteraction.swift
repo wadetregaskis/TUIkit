@@ -114,8 +114,10 @@ extension ScrollbarRenderer {
                     state.scroll(by: max(repeating.delta, remaining))
                 }
             } else {
-                // An arrow hold: fine steps, like the arrow click itself.
-                state.scrollFine(by: repeating.delta)
+                // An arrow hold: fine steps, like the arrow click itself — and
+                // like it, a held arrow at the edge pushes into any overscroll
+                // allowance rather than simply stalling.
+                state.userScrollFine(by: repeating.delta)
             }
             repeating.nextFireNanos = now + autoRepeatIntervalNanos
         }
@@ -268,7 +270,7 @@ extension ScrollbarRenderer {
                     // ``ScrollGranularity/line``: with line granularity a tall
                     // row scrolls in per-line steps, exactly like the wheel;
                     // under row granularity it falls back to a row step.
-                    state.scrollFine(by: delta)
+                    state.userScrollFine(by: delta)
                     state.scrollbarRepeat = ScrollbarRepeat(delta: delta)
                 case .trackBefore, .trackAfter:
                     if behavior == .jump {

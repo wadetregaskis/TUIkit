@@ -62,6 +62,10 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// Wheel-chaining grace state (``ScrollableOffsetState``).
     public var wheelEdgeHold = WheelEdgeHold()
 
+    /// Overscroll excursion + allowance (``ScrollableOffsetState``), resolved
+    /// from the environment each render.
+    public var overscrollState = ScrollOverscrollState()
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render.
     public var isScrollEnabled = true
@@ -164,12 +168,16 @@ extension ScrollViewHandler {
 extension ScrollViewHandler {
 
     /// Jumps to the top of the content.
-    public func scrollToTop() { scrollOffset = 0 }
+    public func scrollToTop() {
+        scrollOffset = 0
+        clearOverscroll()
+    }
 
     /// Jumps to the bottom of the content.
     public func scrollToBottom() {
         scrollOffset = maxOffset
         seekingTail = true
+        clearOverscroll()
     }
 }
 
@@ -241,9 +249,9 @@ extension ScrollViewHandler {
     /// pulled it straight back — the keys appeared dead. Always consumed (it is
     /// a scroll command either way), so an at-the-edge press doesn't bubble.
     private func userScroll(by delta: Int) -> Bool {
-        let before = scrollOffset
-        scroll(by: delta)
-        if scrollOffset != before { releaseAnchorOnUserScroll() }
+        // `userScrollFine` rather than `scroll(by:)`: an arrow at the edge should
+        // push into an overscroll allowance exactly as a wheel tick does.
+        if userScrollFine(by: delta) { releaseAnchorOnUserScroll() }
         return true
     }
 }

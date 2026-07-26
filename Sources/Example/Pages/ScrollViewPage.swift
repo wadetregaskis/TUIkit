@@ -37,6 +37,8 @@ struct ScrollViewPage: View {
     @State var revealFollowMargin = FollowMarginChoice.none.rawValue
     /// `.scrollDisabled` — the chrome stays, the gestures stop.
     @State var scrollPinned: Bool = false
+    /// `.scrollOverscroll` — how far past its edges the view may be pushed.
+    @State var overscroll: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -137,6 +139,9 @@ struct ScrollViewPage: View {
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: revealFollowMargin)?.margin ?? .none)
                     .scrollDisabled(scrollPinned)
+                    .scrollOverscroll(
+                        top: overscroll ? .rows(2) : .none,
+                        bottom: overscroll ? .viewport(minus: 2) : .none)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -161,6 +166,9 @@ struct ScrollViewPage: View {
                     FollowMarginPicker(selection: $revealFollowMargin)
                     Toggle(L("page.scrollView.pinned"), isOn: $scrollPinned)
                     Text(L("page.scrollView.pinnedNote"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(L("page.scrollView.overscroll"), isOn: $overscroll)
+                    Text(L("page.scrollView.overscrollNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
             }

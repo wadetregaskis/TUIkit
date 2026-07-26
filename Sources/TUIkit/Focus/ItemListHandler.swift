@@ -273,6 +273,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// Wheel-chaining grace state (``ScrollableOffsetState``).
     var wheelEdgeHold = WheelEdgeHold()
 
+    /// Overscroll excursion + allowance (``ScrollableOffsetState``), resolved
+    /// from the environment each render.
+    var overscrollState = ScrollOverscrollState()
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render. Selection movement is NOT
     /// gated by it — moving a cursor is not adjusting a scroll position, and the
