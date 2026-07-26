@@ -61,8 +61,28 @@ struct TextFieldContentRenderer {
         // multiplied toward black, rendering dark-on-light fields unreadable.
         let backgroundColor = palette.fieldBackground.resolve(with: palette)
 
-        if isEmpty && !isFocused && prompt != nil {
-            return buildPromptContent(palette: palette, background: backgroundColor, width: contentWidth)
+        if isEmpty, prompt != nil {
+            // SwiftUI (and AppKit) keep the placeholder visible in a focused
+            // empty field — it only disappears once there is something to
+            // read. So the focused-and-empty case renders the prompt too, just
+            // with the caret sitting on it; only typing displaces it.
+            guard isFocused else {
+                return buildPromptContent(palette: palette, background: backgroundColor, width: contentWidth)
+            }
+            return buildTextWithCursor(
+                text: promptString(),
+                cursorPosition: 0,
+                selectionRange: nil,
+                palette: palette,
+                cursorStyle: cursorStyle,
+                cursorTimer: cursorTimer,
+                background: backgroundColor,
+                width: contentWidth,
+                foregroundOverride: palette.foregroundTertiary,
+                displayOverride: { index, text in
+                    text[text.index(text.startIndex, offsetBy: index)]
+                }
+            )
         } else if isFocused {
             return buildTextWithCursor(
                 text: text,
@@ -114,15 +134,18 @@ struct TextFieldContentRenderer {
 
     // MARK: - Prompt
 
-    /// Builds the prompt content (shown when empty and unfocused).
+    /// The prompt's plain text, or `""` when there is no prompt.
+    private func promptString() -> String {
+        guard let prompt else { return "" }
+        let buffer = TUIkit.renderToBuffer(prompt, context: RenderContext(availableWidth: 100, availableHeight: 1))
+        return buffer.lines.first?.stripped ?? ""
+    }
+
+    /// Builds the prompt content for an UNFOCUSED empty field. The focused
+    /// case goes through ``buildTextWithCursor`` instead, so the caret draws
+    /// over the prompt using the ordinary cursor machinery.
     private func buildPromptContent(palette: any Palette, background: Color, width: Int) -> String {
-        let promptText: String
-        if let prompt {
-            let buffer = TUIkit.renderToBuffer(prompt, context: RenderContext(availableWidth: 100, availableHeight: 1))
-            promptText = buffer.lines.first?.stripped ?? ""
-        } else {
-            promptText = ""
-        }
+        let promptText = promptString()
         // Truncate and pad by CELLS, not characters — a wide glyph in the
         // prompt must not push the field wider than its neighbours.
         let (truncated, cells) = promptText.ansiAwarePrefixWithWidth(visibleCount: width)
@@ -182,8 +205,13 @@ struct TextFieldContentRenderer {
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
         background: Color,
-        width: Int
+        width: Int,
+        foregroundOverride: Color? = nil,
+        displayOverride: ((_ index: Int, _ text: String) -> Character)? = nil
     ) -> String {
+        // A SecureField masks its CONTENT, never its prompt — a placeholder
+        // rendered as bullets tells the user nothing.
+        let displayCharacter = displayOverride ?? self.displayCharacter
         let characterCount = text.count
         let clampedPosition = max(0, min(cursorPosition, characterCount))
         let (widths, scrollStart, windowEnd) = scrollWindow(
@@ -208,7 +236,7 @@ struct TextFieldContentRenderer {
         // visible result is identical — just fewer escape sequences.
         // Entered text honours the `.textFieldTextStyle` cascade override; the
         // cursor and selection keep their own colours.
-        let textForeground = resolvedContentForeground(palette)
+        let textForeground = foregroundOverride ?? resolvedContentForeground(palette)
         let selectionBackground = palette.accent.opacity(
             ViewConstants.selectionIndicator, over: background)
         let selectionForeground = palette.readableText(on: selectionBackground)
