@@ -362,6 +362,29 @@ struct ListReorderDragTests {
             "the row is still held, so it is still dim — that part outlives any drop slot")
     }
 
+    @Test("The row a cursor drag carries follows the pointer")
+    func cursorPreviewTracksThePointer() throws {
+        let fixture = Fixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let yA = fixture.rowY(buffer, "a")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: yA))
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 4, y: yA + 1))
+        let first = try #require(fixture.dragSession.previewFrame())
+        #expect(first.y == yA + 1, "grabbed on its first line, so the row rides under the cursor")
+        fixture.render()
+
+        // Two more cells right, two more rows down.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 6, y: yA + 3))
+        let later = try #require(fixture.dragSession.previewFrame())
+        #expect(
+            (later.x - first.x, later.y - first.y) == (2, 2),
+            """
+            the whole point of `.cursor`: without this the row stays wherever \
+            the gesture began, one grab-offset from its own home row, for the \
+            rest of the drag
+            """)
+    }
+
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
     func cursorDragOutCancels() {
         let fixture = Fixture(feedback: .cursor)

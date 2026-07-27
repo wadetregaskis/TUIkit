@@ -1335,19 +1335,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // that looks like is the feedback mode's business.
                     let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
-                    if !wasActive, let session = dragSession,
-                        let floating = captureHandler.reorderFloatingRow,
-                        let row = capturedRows.first(where: { $0.index == floating })
-                    {
-                        // `.cursor`: hand the row's own buffer to the drag
-                        // session, which floats it at the cursor above
-                        // everything else. Its hit regions go — a copy of a row
-                        // riding the cursor must not also be clickable.
-                        var preview = row.row.buffer
-                        preview.hitTestRegions = []
-                        session.begin(
-                            payload: _ListRowReorderPayload(), preview: preview,
-                            grabX: grab.x, grabY: grab.y)
+                    if let session = dragSession, let floating = captureHandler.reorderFloatingRow {
+                        if !wasActive, let row = capturedRows.first(where: { $0.index == floating })
+                        {
+                            // `.cursor`: hand the row's own buffer to the drag
+                            // session, which floats it at the cursor above
+                            // everything else. Its hit regions go — a copy of a
+                            // row riding the cursor must not also be clickable.
+                            var preview = row.row.buffer
+                            preview.hitTestRegions = []
+                            session.begin(
+                                payload: _ListRowReorderPayload(), preview: preview,
+                                grabX: grab.x, grabY: grab.y)
+                        } else {
+                            // …and advance it on every later movement. `begin`
+                            // samples the cursor once; only `dragMoved` tracks
+                            // it, and a reorder drag reaches this closure rather
+                            // than the `.draggable` modifier that normally calls
+                            // it — which is why the row sat at the position the
+                            // drag began for the whole gesture.
+                            session.dragMoved()
+                        }
                     }
                     return true
 
