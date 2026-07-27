@@ -135,8 +135,11 @@ struct ScrollAnchoringDemo: View {
                         Text("\(L("page.scrollView.anchorLogLine")) \(row)")
                     }
                 }
-                .frame(height: 8)
-                .border(color: .palette.border)
+                // No `.border()` here, unlike the two ScrollView demos above and
+                // below: a List draws its own. Its frame height is inclusive of
+                // that border, so 10 puts this box on exactly the same 10 screen
+                // rows as a bordered `ScrollView.frame(height: 8)`.
+                .frame(height: 10)
                 // The List declares a Bottom edge anchor, so selecting a row
                 // shadow-switches the bound anchor onto that row (§1.2) — the
                 // read-out flips to "holding row N" and the List then pins it:
