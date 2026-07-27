@@ -194,25 +194,45 @@ enum DropdownMenu {
         // popup is anchored (region containment is pure arithmetic; nothing
         // clips it to the buffer). Wheel events fall through — the page can
         // still scroll behind an open menu.
-        if !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher {
-            let dismissID = dispatcher.register { event in
-                switch event.phase {
-                case .pressed where !event.button.isWheel:
-                    onDismiss()
-                    return true
-                case .released:
-                    return true  // the consumed press's matching release
-                default:
-                    return false
-                }
-            }
-            buffer.hitTestRegions.insert(
-                HitTestRegion(
-                    offsetX: -4096, offsetY: -4096, width: 8192, height: 8192,
-                    handlerID: dismissID),
-                at: 0)
+        if !context.isMeasuring {
+            attachDismissBackdrop(to: &buffer, context: context, onDismiss: onDismiss)
         }
         return buffer
+    }
+
+    /// Inserts the screen-covering region that dismisses an open menu on a press
+    /// anywhere outside it.
+    ///
+    /// Inserted FIRST, so every region of the menu itself (rows, scrollbar) wins
+    /// over it, while overlay regions composite after the page's, so it still
+    /// beats everything underneath. The generous bounds cover any screen
+    /// wherever the menu is anchored — region containment is pure arithmetic,
+    /// nothing clips it to the buffer. Wheel events fall through, so the page
+    /// can still scroll behind an open menu.
+    ///
+    /// Shared by every menu presentation: the `Picker` drop-down and the combo
+    /// box get it from `popup(_:)` above, and `presentMenuPopover` calls it
+    /// directly for a pull-down `Menu` and `.contextMenu`.
+    @MainActor
+    static func attachDismissBackdrop(
+        to buffer: inout FrameBuffer, context: RenderContext, onDismiss: @escaping () -> Void
+    ) {
+        guard let dispatcher = context.environment.mouseEventDispatcher else { return }
+        let dismissID = dispatcher.register { event in
+            switch event.phase {
+            case .pressed where !event.button.isWheel:
+                onDismiss()
+                return true
+            case .released:
+                return true  // the consumed press's matching release
+            default:
+                return false
+            }
+        }
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: -4096, offsetY: -4096, width: 8192, height: 8192, handlerID: dismissID),
+            at: 0)
     }
 
     // MARK: - Line drawing

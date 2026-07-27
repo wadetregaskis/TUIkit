@@ -130,8 +130,9 @@ func presentMenuPopover<Items: View>(
     dismiss: @escaping () -> Void,
     context: RenderContext
 ) {
-    guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher
-    else { return }
+    // A mouse dispatcher is what makes a presentation possible at all — the
+    // dismiss backdrop and every row's click region go through it.
+    guard !context.isMeasuring, context.environment.mouseEventDispatcher != nil else { return }
 
     context.environment.volatileReadTracker?.recordRenderSideEffect()
     let focusManager = context.environment.focusManager
@@ -194,25 +195,8 @@ func presentMenuPopover<Items: View>(
         borderColor: borderColor)
     guard !menuBuffer.isEmpty else { return }
 
-    // The screen-covering dismiss backdrop, as the drop-down menus do: a
-    // first-registered region that closes the menu on any non-wheel press
-    // outside it, while every region of the menu itself wins over it and the
-    // wheel still falls through to the page.
-    let dismissID = dispatcher.register { event in
-        switch event.phase {
-        case .pressed where !event.button.isWheel:
-            dismiss()
-            return true
-        case .released:
-            return true  // the consumed press's matching release
-        default:
-            return false
-        }
-    }
-    menuBuffer.hitTestRegions.insert(
-        HitTestRegion(
-            offsetX: -4096, offsetY: -4096, width: 8192, height: 8192, handlerID: dismissID),
-        at: 0)
+    // The same screen-covering dismiss backdrop the drop-down menus use.
+    DropdownMenu.attachDismissBackdrop(to: &menuBuffer, context: context, onDismiss: dismiss)
 
     // `.popover` level; `anchorHeight: 0` nudges it on-screen at the edges
     // rather than flipping above a control.
