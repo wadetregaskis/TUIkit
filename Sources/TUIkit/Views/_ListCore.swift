@@ -579,6 +579,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.isScrollEnabled = context.environment.isScrollEnabled
+        // §1.5: how far past its edges this view may be pushed, re-resolved
+        // every frame (a `.viewport`-relative allowance moves with the
+        // terminal) and pulling any existing excursion back inside it.
+        handler.overscrollState.resolve(
+            top: context.environment.scrollOverscrollTop,
+            bottom: context.environment.scrollOverscrollBottom,
+            viewportHeight: handler.viewportHeight)
         // Captured at render so a USER wheel scroll can release a bound anchor
         // to `.window` at event time. (The list's ARROW keys move the selection,
         // which the spec shadow-switches to Row, not Window — that needs the
@@ -704,8 +711,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         palette: any Palette
     ) -> (lines: [String], ranges: [VisibleRowRange]) {
-        var lines: [String] = []
+        // The indicator lines are chrome — they describe where the content sits —
+        // so the rows are collected separately and an overscroll slide moves only
+        // them (§1.5). `lines` is assembled from the three parts at the end.
+        var rowLines: [String] = []
         var ranges: [VisibleRowRange] = []
+        var topIndicator: String?
+        var bottomIndicator: String?
 
         // A focused list with no scrollbar pulses its "N more" indicators as
         // its focus cue (in addition to the pulsing cursor row) — the
@@ -714,7 +726,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let numberLocale = context.environment.locale
 
         if handler.hasContentAbove || handler.scrollTopClipLines > 0 {
-            lines.append(renderScrollIndicator(
+            topIndicator = renderScrollIndicator(
                 direction: .up,
                 count: max(1, handler.rowsAbove),
                 unit: .rows,
@@ -722,14 +734,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette,
                 emphasis: indicatorEmphasis,
                 locale: numberLocale
-            ))
+            )
         }
 
         // Line granularity fills the content area EXACTLY: the bottom row may
         // be partially clipped (as the top row already can be, via
         // `scrollTopClipLines`), so the list's height never changes with
         // which rows happen to be visible. Row granularity keeps whole rows.
-        let indicatorLines = lines.count + (handler.hasContentBelow ? 1 : 0)
+        let indicatorLines =
+            (topIndicator == nil ? 0 : 1) + (handler.hasContentBelow ? 1 : 0)
         let rowLineBudget: Int? =
             context.environment.scrollGranularity == .line
             ? max(1, contentHeight - indicatorLines)
@@ -764,8 +777,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     styledLines.removeLast(styledLines.count - remaining)
                 }
             }
-            let yStart = lines.count
-            lines.append(contentsOf: styledLines)
+            let yStart = rowLines.count
+            rowLines.append(contentsOf: styledLines)
             rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
@@ -777,7 +790,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
 
         if handler.hasContentBelow {
-            lines.append(renderScrollIndicator(
+            bottomIndicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
                 unit: .rows,
@@ -785,9 +798,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette,
                 emphasis: indicatorEmphasis,
                 locale: numberLocale
-            ))
+            )
         }
-        return (lines, ranges)
+
+        // Slide the rows, then wrap the (unmoved) indicators back around them.
+        // The ranges are relative to the assembled lines, so they take the
+        // slide AND the top indicator's offset.
+        let blank = String(repeating: " ", count: max(0, rowWidth))
+        let slidRows = handler.overscrollState.slid(rowLines, blank: blank)
+        let topOffset = topIndicator == nil ? 0 : 1
+        let assembled = [topIndicator].compactMap { $0 } + slidRows
+            + [bottomIndicator].compactMap { $0 }
+        let moved = slidRanges(ranges, handler: handler, lineCount: slidRows.count)
+            .map {
+                (rowIndex: $0.rowIndex, yStart: $0.yStart + topOffset, height: $0.height,
+                 type: $0.type)
+            }
+        return (assembled, moved)
     }
 
     /// The vertical scrollbar cells for a list, one styled single-cell string per
@@ -848,6 +875,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
         func barCell(at line: Int) -> String { line < bar.count ? bar[line] : emptyCell }
 
+        // Content-only row lines. The bar cell is merged in at the END, keyed by
+        // absolute line index, so an overscroll slide moves the rows and leaves
+        // the bar where it is.
         var lines: [String] = []
         var ranges: [VisibleRowRange] = []
         var sectionContentIndex = 0
@@ -890,7 +920,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     ? rowLine.ansiAwarePrefix(visibleCount: contentRowWidth)
                     : rowLine
                 let pad = max(0, contentRowWidth - fitted.strippedLength)
-                lines.append(fitted + String(repeating: " ", count: pad) + barCell(at: lines.count))
+                lines.append(fitted + String(repeating: " ", count: pad))
             }
             ranges.append((
                 rowIndex: rowIndex,
@@ -901,10 +931,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if case .content = row.type { sectionContentIndex += 1 }
         }
         // Fill the area below the last row so the bar spans the full height.
-        while lines.count < contentHeight {
-            lines.append(String(repeating: " ", count: contentRowWidth) + barCell(at: lines.count))
+        let blank = String(repeating: " ", count: contentRowWidth)
+        while lines.count < contentHeight { lines.append(blank) }
+
+        // §1.5: slide the rows within the bar's span, then pair each with its
+        // bar cell by absolute line index — the bar itself never moves.
+        let slid = handler.overscrollState.slid(lines, blank: blank)
+        return (
+            slid.enumerated().map { $0.element + barCell(at: $0.offset) },
+            slidRanges(ranges, handler: handler, lineCount: slid.count))
+    }
+
+    /// The row ranges after an overscroll slide, dropping any pushed off screen.
+    private func slidRanges(
+        _ ranges: [VisibleRowRange], handler: ItemListHandler<SelectionValue>, lineCount: Int
+    ) -> [VisibleRowRange] {
+        guard handler.overscrollState.excursion != 0 else { return ranges }
+        return ranges.compactMap { range in
+            guard
+                let moved = handler.overscrollState.slidRange(
+                    yStart: range.yStart, height: range.height, lineCount: lineCount)
+            else { return nil }
+            return (
+                rowIndex: range.rowIndex, yStart: moved.yStart, height: moved.height,
+                type: range.type)
         }
-        return (lines, ranges)
     }
 
     // MARK: - Mouse handler wiring

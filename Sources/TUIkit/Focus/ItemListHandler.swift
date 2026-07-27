@@ -791,6 +791,11 @@ extension ItemListHandler {
     /// arithmetic is used (the caller has already reserved indicator
     /// space, and the handler's unit tests rely on this form).
     func ensureFocusedItemVisible() {
+        // A reveal positions the viewport precisely on a row; an overscroll
+        // excursion left under it would offset the very row it just aimed at.
+        // Moving the cursor is also the clearest statement that the user is done
+        // pushing past the edge.
+        clearOverscroll()
         guard let contentHeight else {
             ensureFocusedItemVisibleLegacy()
             return

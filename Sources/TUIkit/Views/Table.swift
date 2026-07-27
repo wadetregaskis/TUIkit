@@ -600,8 +600,11 @@ where Value.ID: Hashable {
                 arrow: palette.foregroundTertiary))
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
 
-        var lines: [String] = []
-        lines.reserveCapacity(contentHeight)
+        // Content-only row lines; the bar cell is merged in at the END, keyed by
+        // absolute line index, so an overscroll slide moves the rows and leaves
+        // the bar exactly where it is (§1.5).
+        var rowLines: [String] = []
+        rowLines.reserveCapacity(contentHeight)
         for line in 0..<contentHeight {
             let rowLine: String
             if line < visibleRange.count {
@@ -615,8 +618,12 @@ where Value.ID: Hashable {
                 rowLine = ""
             }
             let pad = max(0, contentInnerWidth - rowLine.strippedLength)
-            lines.append(rowLine + String(repeating: " ", count: pad) + (line < bar.count ? bar[line] : emptyCell))
+            rowLines.append(rowLine + String(repeating: " ", count: pad))
         }
+        let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
+        let lines = handler.overscrollState.slid(rowLines, blank: blankRow)
+            .enumerated()
+            .map { $0.element + ($0.offset < bar.count ? bar[$0.offset] : emptyCell) }
 
         return (
             lines,
@@ -672,6 +679,13 @@ where Value.ID: Hashable {
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         handler.isScrollEnabled = context.environment.isScrollEnabled
+        // §1.5: how far past its edges this view may be pushed, re-resolved
+        // every frame (a `.viewport`-relative allowance moves with the
+        // terminal) and pulling any existing excursion back inside it.
+        handler.overscrollState.resolve(
+            top: context.environment.scrollOverscrollTop,
+            bottom: context.environment.scrollOverscrollBottom,
+            viewportHeight: handler.viewportHeight)
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // Captured at render so a USER wheel scroll can release a bound anchor
         // at event time, and so the anchor hold below can resolve its mode.
@@ -869,6 +883,9 @@ where Value.ID: Hashable {
             ? max(1, contentHeight - lines.count - (window.showBelow ? 1 : 0))
             : nil
         var rowLinesEmitted = 0
+        // The rows are collected apart from the indicator chrome so that only
+        // they take an overscroll slide (§1.5).
+        var slidableRows: [String] = []
         for rowIndex in window.range {
             var rowLines = renderMultiLineRow(
                 item: data[rowIndex],
@@ -888,9 +905,11 @@ where Value.ID: Hashable {
                     rowLines.removeLast(rowLines.count - remaining)
                 }
             }
-            lines.append(contentsOf: rowLines)
+            slidableRows.append(contentsOf: rowLines)
             rowLinesEmitted += rowLines.count
         }
+        lines.append(contentsOf: handler.overscrollState.slid(
+            slidableRows, blank: String(repeating: " ", count: max(0, contentWidth))))
         if window.showBelow {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
@@ -998,6 +1017,19 @@ where Value.ID: Hashable {
         // switch between the single-line and multi-line paths across frames.
         handler.scrollGranularity = context.environment.scrollGranularity
         handler.followMargin = context.environment.scrollFollowMargin
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // Table configures its handler from TWO independent places — here for
+        // single-line rows, and inline in `buildMultiLineContent` for multi-line
+        // ones. Anything captured in only one of them is silently dead on the
+        // other path, which is how `017683fa` found every anchor behaviour
+        // missing from Table while its twin List had them all. These two are the
+        // same class: `.scrollDisabled` reached only the multi-line path when it
+        // shipped, and the overscroll allowance would have had the same hole.
+        handler.isScrollEnabled = context.environment.isScrollEnabled
+        handler.overscrollState.resolve(
+            top: context.environment.scrollOverscrollTop,
+            bottom: context.environment.scrollOverscrollBottom,
+            viewportHeight: provisionalViewport)
         // Same event-time capture as the multi-line path above: a user wheel
         // scroll releases a bound anchor, and the hold below reads the mode.
         handler.anchorPositionBinding = context.environment.anchorPosition
@@ -1086,7 +1118,10 @@ where Value.ID: Hashable {
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
         let numberLocale = context.environment.locale
+        // The "N more" indicators are chrome — they describe where the content
+        // sits — so the rows are collected separately and only they slide (§1.5).
         var lines: [String] = []
+        var rowLines: [String] = []
         if handler.hasContentAbove {
             lines.append(renderScrollIndicator(
                 direction: .up,
@@ -1103,7 +1138,7 @@ where Value.ID: Hashable {
             let item = data[rowIndex]
             let isFocused = handler.isFocused(at: rowIndex) && tableHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
-            lines.append(renderRow(
+            rowLines.append(renderRow(
                 item: item,
                 columnWidths: columnWidths,
                 isFocused: isFocused,
@@ -1113,6 +1148,8 @@ where Value.ID: Hashable {
                 palette: palette
             ))
         }
+        lines.append(contentsOf: handler.overscrollState.slid(
+            rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         if handler.hasContentBelow {
             lines.append(renderScrollIndicator(
                 direction: .down,

@@ -351,34 +351,28 @@ screen is still clickable where it is drawn.
 Verified live: with `top: .rows(2)`, a wheel tick at the top opens exactly two
 blank rows above `Line 1`, and a second tick adds nothing.
 
-**Still to do: `List` and `Table`.** They scroll through `ItemListHandler`'s own
-row-based offset, so — exactly as with the row anchor (`8ebace6a` / `017683fa`)
-— the `ScrollView` work does not reach them. The state machine is already shared
-(it lives on `ScrollableOffsetState`); what they need is the per-frame
-`resolve(...)` and the row-wise render of the excursion.
+**`List` and `Table` now covered too.** They could not reuse the `ScrollView`
+technique: that one slides the finished viewport buffer, which works only
+because the bar is appended as a whole column afterwards. `_ListCore` and
+`Table` merge a bar cell into each line as they build it
+(`lines.append(fitted + pad + barCell(at: lines.count))`) and stitch the "N more"
+indicators in at top and bottom, so sliding the finished lines would carry the
+chrome with the content.
 
-> **The ScrollView render technique does NOT port over — measured 2026-07-26.**
-> `_ScrollViewCore` appends its scrollbar as a whole column *after* the content
-> buffer exists, so sliding that buffer leaves the bar alone. `_ListCore` merges
-> the bar into each line as it builds it —
-> `lines.append(fitted + pad + barCell(at: lines.count))`
-> (`_ListCore.swift`, in `composeScrollbarRowLines`, and again in the
-> fill-below-last-row loop) — so a post-hoc slide of the finished lines would
-> carry the scrollbar **with** the content, the opposite of the shipped and
-> tested `ScrollView` behaviour.
->
-> The row-based views therefore need the excursion applied *before* the merge:
->
-> 1. `composeScrollbarRowLines`: collect content-only row lines, slide them (and
->    `ranges`) by the excursion, then pair with `barCell(at:)` by absolute line
->    index so the bar stays put.
-> 2. `composeRowLines` (bar-less): slide only the region *between* the "N more"
->    indicator lines — those are chrome and, like the bar, must not travel.
-> 3. `Table`: its own equivalent, and mirrored tests, per `017683fa`'s lesson
->    that sharing a handler type is not sharing behaviour.
->
-> `VisibleRowRange.yStart` must shift with the rows or clicks land on the wrong
-> row, and ranges pushed out of the region must drop rather than clamp.
+All five composition sites (List: bar / bar-less; Table: bar / single-line /
+multi-line) now collect **content-only row lines**, slide those, and assemble the
+chrome around them afterwards — the bar re-paired by absolute line index so it
+cannot move. `_ListCore`'s `VisibleRowRange`s take the same slide (clipped, not
+translated, so a partly-visible row stays clickable over the part that is drawn),
+or clicks would land on the wrong row.
+
+> **Table configures its handler from TWO independent places** — `resolveHandler`
+> for single-line rows, and an inline block in `buildMultiLineContent` for
+> multi-line ones. Anything captured in only one is silently dead on the other
+> path. This is `017683fa` recurring, and it caught a **real shipped bug**:
+> `bc3c829d` put `handler.isScrollEnabled` in the multi-line block only, so
+> `.scrollDisabled` never reached a single-line Table. Fixed alongside; both
+> captures now live in `resolveHandler` as well.
 
 ### User adjustability shipped as `.scrollDisabled(_:)` (§1.2, first half)
 

@@ -80,6 +80,46 @@ public struct ScrollOverscrollState: Sendable, Equatable {
     }
 }
 
+// MARK: - Rendering the excursion
+
+extension ScrollOverscrollState {
+    /// Slides `lines` by the excursion, blank-filling the gap it opens and
+    /// clipping the far side, so the count is unchanged.
+    ///
+    /// Callers pass the **content** lines only. `ScrollView` gets this effect
+    /// from `replacingLines` on its finished viewport buffer because it appends
+    /// its scrollbar as a whole column afterwards; the row-based views cannot,
+    /// because they merge a bar cell into each line as they build it and stitch
+    /// the "N more" indicators in at top and bottom. Both are chrome — they
+    /// describe where the content sits — so they must not travel with it, which
+    /// is why `List` and `Table` collect their row lines separately, slide them
+    /// here, and only then assemble.
+    func slid(_ lines: [String], blank: String) -> [String] {
+        guard excursion != 0, !lines.isEmpty else { return lines }
+        let gap = min(abs(excursion), lines.count)
+        return excursion < 0
+            ? Array(repeating: blank, count: gap) + lines.dropLast(gap)
+            : Array(lines.dropFirst(gap)) + Array(repeating: blank, count: gap)
+    }
+
+    /// Where a row that occupied `yStart..<yStart + height` in the unslid
+    /// content lands afterwards, clipped to `0..<lineCount` — or `nil` when the
+    /// slide pushed it off entirely.
+    ///
+    /// Row hit-testing indexes the *drawn* lines, so a range that does not move
+    /// with its row sends clicks to the wrong one. Clipping rather than
+    /// translating keeps a partially-visible row clickable over the part of it
+    /// that is actually on screen.
+    func slidRange(yStart: Int, height: Int, lineCount: Int) -> (yStart: Int, height: Int)? {
+        guard excursion != 0 else { return (yStart, height) }
+        let moved = yStart - excursion
+        let clippedStart = max(0, moved)
+        let clippedEnd = min(lineCount, moved + height)
+        guard clippedEnd > clippedStart else { return nil }
+        return (clippedStart, clippedEnd - clippedStart)
+    }
+}
+
 // MARK: - Environment
 
 private struct ScrollOverscrollTopKey: EnvironmentKey {
