@@ -12,6 +12,11 @@ import TUIkitCore
 final class MenuPopupState {
     /// Whether the menu is currently shown.
     var isOpen = false
+    /// Whether the open in progress should start with an item highlighted —
+    /// true only when the keyboard opened it. A `Button` erases the difference
+    /// (a click and a Return both just run the action), so the trigger asks the
+    /// focus manager which device drove the event.
+    var opensWithSelection = false
 }
 
 /// The body of ``DefaultMenuStyle``: a collapsed label that opens the items as
@@ -47,7 +52,9 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
     /// The menu floats *over* the page, so the layout footprint is the
     /// collapsed label — open or closed.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(trigger(state(in: context)), proposal: proposal, context: triggerContext(context))
+        measureChild(
+            trigger(state(in: context), focusManager: context.environment.focusManager),
+            proposal: proposal, context: triggerContext(context))
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -56,7 +63,9 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         // Keep the box alive across the run loop's per-frame StateStorage GC.
         if !context.isMeasuring { context.environment.stateStorage?.markActive(context.identity) }
 
-        var buffer = TUIkit.renderToBuffer(trigger(state), context: triggerContext(context))
+        var buffer = TUIkit.renderToBuffer(
+            trigger(state, focusManager: context.environment.focusManager),
+            context: triggerContext(context))
         guard state.isOpen, !context.isMeasuring else {
             // Tear down a section left over from a just-dismissed menu so the
             // page's focus is restored rather than stranded.
@@ -69,14 +78,18 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         // `presentMenuPopover` nudges it back on-screen at the edges.
         presentMenuPopover(
             items: content, over: &buffer, sectionID: sectionID, itemsIndex: ChildIndex.items,
-            anchor: (0, buffer.height), dismiss: { state.isOpen = false }, context: context)
+            anchor: (0, buffer.height), opensWithSelection: state.opensWithSelection,
+            dismiss: { state.isOpen = false }, context: context)
         return buffer
     }
 
     /// The collapsed control: the caller's label plus the closed/open caret
     /// every TUIkit drop-down uses.
-    private func trigger(_ state: MenuPopupState) -> some View {
+    private func trigger(_ state: MenuPopupState, focusManager: FocusManager?) -> some View {
         Button {
+            // Opened by the pointer → no row highlighted; from the keyboard →
+            // start on the first, since there is nothing else to point with.
+            state.opensWithSelection = focusManager?.lastInputSource != .pointer
             state.isOpen.toggle()
         } label: {
             HStack(spacing: 1) {

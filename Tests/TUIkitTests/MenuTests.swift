@@ -309,6 +309,73 @@ struct MenuTests {
             "with the animation off, the pulse clock must not reach the row at all")
     }
 
+    // MARK: - Selection on open
+
+    /// Opens `view`'s pop-up by clicking its label, as the given device.
+    ///
+    /// The run loop stamps the input source at its own event funnel (see
+    /// `App.run`), which the harness has to mirror: it dispatches straight to
+    /// the dispatchers, one level below where the stamp happens.
+    private func openPopup(
+        _ view: some View, as source: FocusManager.InputSource, tui: TUIContext,
+        context: RenderContext
+    ) {
+        _ = renderArmed(view, tui: tui, context: context)
+        context.environment.focusManager?.noteInputSource(source)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: 0))
+        _ = renderArmed(view, tui: tui, context: context)
+    }
+
+    private var threeItemMenu: some View {
+        Menu("Actions") {
+            Button("Rename") {}
+            Button("Duplicate") {}
+            Button("Delete") {}
+        }
+    }
+
+    @Test("A pointer-opened pop-up highlights nothing; the first Down takes the top item")
+    func pointerOpenedPopupStartsUnselected() throws {
+        let (tui, context) = harness()
+        let focusManager = try #require(context.environment.focusManager)
+
+        openPopup(threeItemMenu, as: .pointer, tui: tui, context: context)
+        #expect(
+            focusManager.currentFocusedID == nil,
+            "nothing is chosen yet: \(focusManager.currentFocusedID ?? "nil")")
+
+        let items = focusManager.registeredFocusIDsInActiveSection()
+        #expect(items.count == 3, "sanity: the items registered — \(items)")
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .down))
+        #expect(focusManager.currentFocusedID == items.first)
+    }
+
+    @Test("The first Up in an unselected pop-up takes the LAST item")
+    func pointerOpenedPopupUpTakesTheLastItem() throws {
+        let (tui, context) = harness()
+        let focusManager = try #require(context.environment.focusManager)
+
+        openPopup(threeItemMenu, as: .pointer, tui: tui, context: context)
+        let items = focusManager.registeredFocusIDsInActiveSection()
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .up))
+        #expect(focusManager.currentFocusedID == items.last)
+    }
+
+    /// The keyboard has no other way to point at a row, so a keyboard open
+    /// starts on the first item — the counterpart to the pointer rule above.
+    @Test("A keyboard-opened pop-up starts on the first item")
+    func keyboardOpenedPopupStartsOnTheFirstItem() throws {
+        let (tui, context) = harness()
+        let focusManager = try #require(context.environment.focusManager)
+
+        openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
+        let items = focusManager.registeredFocusIDsInActiveSection()
+        #expect(items.count == 3, "sanity: the items registered — \(items)")
+        #expect(focusManager.currentFocusedID == items.first)
+    }
+
     // MARK: - Style plumbing
 
     @Test("menuStyle flows down through a container to the menus inside it")

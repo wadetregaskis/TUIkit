@@ -71,6 +71,36 @@ public final class FocusManager: @unchecked Sendable {
     /// behind the modal; see `InputHandler` and ``activeSectionIsModal``.
     private var modalSectionIDs: Set<String> = []
 
+    /// Which device drove the most recent input event.
+    ///
+    /// A control that behaves differently depending on how it was activated —
+    /// a menu opening with or without a selection — needs this because by the
+    /// time its action runs, a `Button` has erased the difference: a click and
+    /// a Return both just call the action. Kept here because `FocusManager` is
+    /// the object that already decides where focus lands, and every event
+    /// closure that would want this already holds one.
+    private(set) var lastInputSource: InputSource = .keyboard
+
+    /// Where an input event came from — see ``lastInputSource``.
+    enum InputSource {
+        case keyboard
+        case pointer
+    }
+
+    /// Sections that may rest with NOTHING focused.
+    ///
+    /// A menu opened by the POINTER opens with no row highlighted — macOS
+    /// behaviour, and the honest one: the pointer has not chosen anything yet,
+    /// so pre-selecting an item invites a mis-click. The first arrow then
+    /// chooses (Down → first item, Up → last), which the ring already does from
+    /// an empty state. A menu opened from the KEYBOARD does not set this: there
+    /// is no pointer, so it must start somewhere.
+    ///
+    /// Re-marked each render by whatever presents the section and cleared in
+    /// ``beginRenderPass()``, exactly like ``modalSectionIDs`` — a dismissed
+    /// menu simply stops marking and the flag evaporates.
+    private var optionalFocusSectionIDs: Set<String> = []
+
     /// For each section that was activated *over* another, the section to revert
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
     private var sectionRevertTarget: [String: String] = [:]
@@ -255,6 +285,7 @@ extension FocusManager {
         // default lands directly in `endRenderPass`.
         if targetID == activeSectionID && focusedID == nil && element.canBeFocused
             && !hasUnresolvedDefaultFocus
+            && !optionalFocusSectionIDs.contains(targetID)
         {
             focusPreservingPendingIntent(element)
         }
@@ -306,6 +337,7 @@ extension FocusManager {
         sectionFocusMemory.removeAll()
         sectionRevertTarget.removeAll()
         modalSectionIDs.removeAll()
+        optionalFocusSectionIDs.removeAll()
         focusBindings.removeAll()
         focusDefaultValues.removeAll()
         appliedDefaultFocus.removeAll()
@@ -709,6 +741,18 @@ extension FocusManager {
         modalSectionIDs.insert(id)
     }
 
+    /// Records which device drove the event now being dispatched. Called by the
+    /// app's event funnel, before the event reaches any handler.
+    func noteInputSource(_ source: InputSource) {
+        lastInputSource = source
+    }
+
+    /// Declares that `id` may rest with nothing focused — see
+    /// ``optionalFocusSectionIDs``. Re-mark it every render while it applies.
+    func markSectionFocusOptional(id: String) {
+        optionalFocusSectionIDs.insert(id)
+    }
+
     /// Returns the section with the given ID, or nil if not found.
     ///
     /// - Parameter id: The section identifier.
@@ -862,6 +906,7 @@ extension FocusManager {
         // clearing here means a dismissed modal (which no longer renders, so no
         // longer re-marks) stops grabbing input on the very next frame.
         modalSectionIDs.removeAll()
+        optionalFocusSectionIDs.removeAll()
         // A new generation so this pass's @FocusState registrations can be told
         // apart from prior ones (see `pruneFocusRegistry`). The registry itself
         // is NOT cleared here — a body-top read must resolve against last frame's
@@ -914,6 +959,7 @@ extension FocusManager {
         // Auto-focus the first focusable if, after validation and any default,
         // nothing holds focus.
         if focusedID == nil, let section = activeSection,
+            !optionalFocusSectionIDs.contains(section.id),
             let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
         {
             self.focusedID = firstFocusable.focusID

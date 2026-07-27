@@ -432,6 +432,7 @@ extension AppRunner {
         while eventsProcessed < maxEventsPerFrame, let input = terminal.readEvent() {
             switch input {
             case .key(let keyEvent):
+                focusManager.noteInputSource(.keyboard)
                 // "`": dump the current frame to ~/tuikit-frame.ansi (debug
                 // shortcut, not consumed). Force a full repaint first so the
                 // snapshot captures every line.
@@ -445,6 +446,7 @@ extension AppRunner {
                 }
 
             case .mouse(let mouseEvent):
+                focusManager.noteInputSource(.pointer)
                 // Hit-test regions are in content-area coordinates; translate
                 // the terminal-space y by the header height before dispatch.
                 let translated = MouseEvent(

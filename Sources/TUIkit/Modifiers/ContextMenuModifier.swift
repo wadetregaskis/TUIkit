@@ -14,6 +14,10 @@ import TUIkitCore
 final class ContextMenuState {
     /// Whether the menu is currently shown.
     var isOpen = false
+    /// Whether the open that is in progress should start with an item
+    /// highlighted — true only when the keyboard opened it. See
+    /// `presentMenuPopover(…opensWithSelection:…)`.
+    var opensWithSelection = false
     /// The column of the click that opened it, in the modified content's local
     /// coordinate space (composition makes it absolute).
     var anchorX = 0
@@ -94,6 +98,7 @@ extension ContextMenuModifier: Renderable {
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, sectionID: sectionID, itemsIndex: 1,
             anchor: (state.anchorX, state.anchorY),
+            opensWithSelection: state.opensWithSelection,
             dismiss: { state.isOpen = false }, context: context)
         return baseBuffer
     }
@@ -120,6 +125,8 @@ extension ContextMenuModifier: Renderable {
                 state.anchorX = event.x
                 state.anchorY = event.y
                 state.isOpen = true
+                // Opened by the pointer: nothing is chosen yet.
+                state.opensWithSelection = false
                 return true
             default:
                 return false
@@ -167,6 +174,9 @@ extension ContextMenuModifier: Renderable {
             state.anchorX = 0
             state.anchorY = 0
             state.isOpen = true
+            // Opened from the keyboard, which has no other way to point at a
+            // row: start on the first item so the arrows have somewhere to go.
+            state.opensWithSelection = true
             return true
         }
     }
