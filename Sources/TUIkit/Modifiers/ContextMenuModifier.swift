@@ -122,6 +122,16 @@ extension ContextMenuModifier: Renderable {
             .withAvailableHeight(context.environment.overlayContentHeight)
         menuContext.environment.activeFocusSectionID = sectionID
         menuContext.environment.dismissMenu = DismissMenuAction { state.isOpen = false }
+        // The pop-up holds the focus, so say so the way every other focused
+        // container does: the breathing accent that `BorderRenderer` turns into
+        // a ● on the top edge. `FocusSectionModifier` computes this for a
+        // section declared in the view tree; a presented section has no such
+        // modifier around it, so it does the same sum itself.
+        let accent = menuContext.environment.palette.accent
+        let dim = accent.opacity(
+            ViewConstants.focusBorderDim, over: menuContext.environment.palette.background)
+        menuContext.environment.focusIndicatorColor = Color.lerp(
+            dim, accent, phase: context.environment.pulsePhase)
 
         // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
         // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws

@@ -332,4 +332,32 @@ struct ContextMenuTests {
             (was \(before), now \(selection.index))
             """)
     }
+
+    @Test("The open menu's border carries the focus indicator")
+    func openMenuBorderPulses() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = targetView()
+
+        let closed = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(
+            !closed.lines.contains { $0.stripped.contains("●") },
+            "nothing is presented, so nothing claims focus")
+
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+
+        let popup = opened.overlays.first?.content
+        #expect(
+            popup?.lines.contains { $0.stripped.contains("●") } == true,
+            """
+            the pop-up holds the focus and must say so on its border, the way \
+            every other focused container does: \
+            \(popup?.lines.map(\.stripped).joined(separator: "\n") ?? "<no overlay>")
+            """)
+    }
 }
