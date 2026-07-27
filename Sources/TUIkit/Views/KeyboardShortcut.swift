@@ -34,22 +34,93 @@
 /// > terminals don't report the Command key — so this type currently offers
 /// > only the two semantic actions. (Documented deviation from the full
 /// > SwiftUI surface.)
-public struct KeyboardShortcut: Hashable, Sendable {
-    /// The semantic role this shortcut binds.
-    enum Semantic: Hashable, Sendable {
-        case defaultAction
-        case cancelAction
+public struct KeyEquivalent: Hashable, Sendable, ExpressibleByExtendedGraphemeClusterLiteral {
+    /// The character this equivalent matches, compared case-insensitively (the
+    /// case of a typed key is carried by ``EventModifiers/shift``, not by the
+    /// character, exactly as SwiftUI treats it).
+    public let character: Character
+
+    public init(_ character: Character) {
+        self.character = character
     }
 
-    let semantic: Semantic
+    public init(extendedGraphemeClusterLiteral value: Character) {
+        self.init(value)
+    }
+
+    /// The space bar.
+    public static let space = Self(" ")
+}
+
+/// The modifier keys a shortcut requires.
+///
+/// TUI-specific reality: a terminal reports Control, Option/Alt and Shift, and
+/// does **not** report Command — see `Documentation/Terminal-compatibility.md`.
+/// A shortcut declared with ``command`` therefore can never fire here. That is
+/// left deliberately literal rather than quietly rewritten to a bare key: an
+/// app that says ⌘Q should not fire on a lone "q".
+public struct EventModifiers: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    /// Never reported by a terminal — see the type documentation.
+    public static let command = Self(rawValue: 1 << 0)
+    public static let control = Self(rawValue: 1 << 1)
+    public static let option = Self(rawValue: 1 << 2)
+    public static let shift = Self(rawValue: 1 << 3)
+    /// Accepted for source compatibility with SwiftUI; a terminal cannot
+    /// distinguish the numeric pad, so it never matches.
+    public static let numericPad = Self(rawValue: 1 << 4)
+    public static let all: Self = [.command, .control, .option, .shift, .numericPad]
+
+    /// The modifiers a terminal actually reports on `event`.
+    init(_ event: KeyEvent) {
+        var result: Self = []
+        if event.ctrl { result.insert(.control) }
+        if event.alt { result.insert(.option) }
+        if event.shift { result.insert(.shift) }
+        self = result
+    }
+}
+
+public struct KeyboardShortcut: Hashable, Sendable {
+    /// What activates this shortcut.
+    enum Trigger: Hashable, Sendable {
+        case defaultAction
+        case cancelAction
+        case key(KeyEquivalent, EventModifiers)
+    }
+
+    let trigger: Trigger
 
     /// The default button: Return/Enter activates it when the focused control
     /// lets the key fall through.
-    public static let defaultAction = Self(semantic: .defaultAction)
+    public static let defaultAction = Self(trigger: .defaultAction)
 
     /// The cancel button: Escape activates it when nothing closer to the user
     /// (an open drop-down, an app-level back binding) consumes the key first.
-    public static let cancelAction = Self(semantic: .cancelAction)
+    public static let cancelAction = Self(trigger: .cancelAction)
+
+    /// A key equivalent, à la SwiftUI's `KeyboardShortcut(_:modifiers:)`.
+    ///
+    /// The default is SwiftUI's `.command`, which a terminal never reports —
+    /// so a TUI shortcut is almost always written with `modifiers: []`, a bare
+    /// key. That is the form a terminal menu wants anyway: "press 1 for the
+    /// first item".
+    public init(_ key: KeyEquivalent, modifiers: EventModifiers = .command) {
+        self.trigger = .key(key, modifiers)
+    }
+
+    private init(trigger: Trigger) {
+        self.trigger = trigger
+    }
+
+    /// The character this shortcut is triggered by, when it is a key
+    /// equivalent — what a menu row prints as its hint.
+    public var displayCharacter: Character? {
+        if case .key(let key, _) = trigger { return key.character }
+        return nil
+    }
 }
 
 // MARK: - Registry
@@ -67,39 +138,47 @@ public struct KeyboardShortcut: Hashable, Sendable {
 /// (`MouseEventDispatcher`, `KeyEventDispatcher`): touched only from the
 /// main run loop (render pass registration + input dispatch).
 final class KeyboardShortcutRegistry: @unchecked Sendable {
-    private var defaultAction: (() -> Void)?
-    private var cancelAction: (() -> Void)?
+    private var actions: [KeyboardShortcut.Trigger: () -> Void] = [:]
 
     /// Clears the frame's registrations (called from the render loop).
     func beginRenderPass() {
-        defaultAction = nil
-        cancelAction = nil
+        actions.removeAll(keepingCapacity: true)
     }
 
     /// Registers `action` for `shortcut`; the last registration in a frame wins.
     func register(_ shortcut: KeyboardShortcut, action: @escaping () -> Void) {
-        switch shortcut.semantic {
-        case .defaultAction: defaultAction = action
-        case .cancelAction: cancelAction = action
-        }
+        actions[shortcut.trigger] = action
     }
 
     /// Runs the action matching a fallen-through key event, if any.
-    /// Only unmodified Return/Escape qualify.
+    ///
+    /// Unmodified Return/Escape drive the two semantic roles; a character key
+    /// drives a key equivalent whose modifiers match exactly what the terminal
+    /// reported. Exactly, not "at least": a shortcut on plain "q" must not fire
+    /// on Ctrl-Q.
     func trigger(for event: KeyEvent) -> Bool {
-        guard !event.ctrl, !event.alt, !event.shift else { return false }
+        let modifiers = EventModifiers(event)
         switch event.key {
-        case .enter:
-            guard let defaultAction else { return false }
-            defaultAction()
-            return true
-        case .escape:
-            guard let cancelAction else { return false }
-            cancelAction()
-            return true
+        case .enter where modifiers.isEmpty:
+            return run(.defaultAction)
+        case .escape where modifiers.isEmpty:
+            return run(.cancelAction)
+        case .character(let character):
+            // Case-insensitive, with the case itself carried by `.shift` — so
+            // "A" typed with Shift matches a shortcut declared `("a", [.shift])`
+            // and not one declared `("a", [])`.
+            let folded = Character(character.lowercased())
+            return run(.key(KeyEquivalent(folded), modifiers))
         default:
             return false
         }
+    }
+
+    /// Runs the registered action for `trigger`, reporting whether there was one.
+    private func run(_ trigger: KeyboardShortcut.Trigger) -> Bool {
+        guard let action = actions[trigger] else { return false }
+        action()
+        return true
     }
 }
 
@@ -164,5 +243,22 @@ extension View {
     /// single `Button`; see ``KeyboardShortcut`` for the fall-through rules.
     public func keyboardShortcut(_ shortcut: KeyboardShortcut) -> some View {
         environment(\.assignedKeyboardShortcut, KeyboardShortcutAssignment(shortcut))
+    }
+
+    /// Assigns a key-equivalent shortcut to the wrapped control — SwiftUI's
+    /// `keyboardShortcut(_:modifiers:)`.
+    ///
+    /// ```swift
+    /// Button("Text Styles") { page = .textStyles }
+    ///     .keyboardShortcut("1", modifiers: [])
+    /// ```
+    ///
+    /// `modifiers` defaults to SwiftUI's `.command`, which a terminal never
+    /// reports — pass `[]` for the bare-key form a TUI actually wants. See
+    /// ``EventModifiers``.
+    public func keyboardShortcut(
+        _ key: KeyEquivalent, modifiers: EventModifiers = .command
+    ) -> some View {
+        keyboardShortcut(KeyboardShortcut(key, modifiers: modifiers))
     }
 }

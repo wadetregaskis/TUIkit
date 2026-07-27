@@ -207,3 +207,82 @@ struct KeyboardShortcutTests {
         #expect(text == "x", "typing still reached the field")
     }
 }
+
+@MainActor
+@Suite("keyboard shortcut key equivalents")
+struct KeyEquivalentShortcutTests {
+
+    @Test("A bare key equivalent fires on that character alone")
+    func bareKeyFires() {
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        registry.register(KeyboardShortcut("1", modifiers: [])) { fired += 1 }
+
+        #expect(registry.trigger(for: KeyEvent(key: .character("1"))))
+        #expect(fired == 1)
+        #expect(!registry.trigger(for: KeyEvent(key: .character("2"))), "a different key does nothing")
+        #expect(fired == 1)
+    }
+
+    @Test("Modifiers must match exactly, not merely be present")
+    func modifiersMatchExactly() {
+        let registry = KeyboardShortcutRegistry()
+        var bare = 0
+        var ctrl = 0
+        registry.register(KeyboardShortcut("q", modifiers: [])) { bare += 1 }
+        registry.register(KeyboardShortcut("q", modifiers: .control)) { ctrl += 1 }
+
+        _ = registry.trigger(for: KeyEvent(key: .character("q")))
+        #expect((bare, ctrl) == (1, 0))
+        _ = registry.trigger(for: KeyEvent(key: .character("q"), ctrl: true, alt: false, shift: false))
+        #expect((bare, ctrl) == (1, 1), "Ctrl-Q must not fire the plain-q shortcut, or vice versa")
+    }
+
+    @Test("A Command shortcut can never fire — a terminal does not report it")
+    func commandNeverFires() {
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        // SwiftUI's default modifier set. Kept literal rather than quietly
+        // rewritten to a bare key: an app that says ⌘Q must not quit on "q".
+        registry.register(KeyboardShortcut("q")) { fired += 1 }
+
+        #expect(!registry.trigger(for: KeyEvent(key: .character("q"))))
+        #expect(
+            !registry.trigger(
+                for: KeyEvent(key: .character("q"), ctrl: true, alt: true, shift: true)))
+        #expect(fired == 0)
+    }
+
+    @Test("Case is carried by Shift, not by the character")
+    func caseIsAModifier() {
+        let registry = KeyboardShortcutRegistry()
+        var lower = 0
+        var upper = 0
+        registry.register(KeyboardShortcut("a", modifiers: [])) { lower += 1 }
+        registry.register(KeyboardShortcut("a", modifiers: .shift)) { upper += 1 }
+
+        _ = registry.trigger(for: KeyEvent(key: .character("a")))
+        _ = registry.trigger(for: KeyEvent(key: .character("A"), ctrl: false, alt: false, shift: true))
+        #expect((lower, upper) == (1, 1))
+    }
+
+    @Test("The semantic roles still work alongside key equivalents")
+    func semanticsStillWork() {
+        let registry = KeyboardShortcutRegistry()
+        var accepted = 0
+        var cancelled = 0
+        registry.register(.defaultAction) { accepted += 1 }
+        registry.register(.cancelAction) { cancelled += 1 }
+        registry.register(KeyboardShortcut("x", modifiers: [])) { }
+
+        #expect(registry.trigger(for: KeyEvent(key: .enter)))
+        #expect(registry.trigger(for: KeyEvent(key: .escape)))
+        #expect((accepted, cancelled) == (1, 1))
+    }
+
+    @Test("A shortcut reports the character a menu row should print")
+    func displayCharacter() {
+        #expect(KeyboardShortcut("7", modifiers: []).displayCharacter == "7")
+        #expect(KeyboardShortcut.defaultAction.displayCharacter == nil)
+    }
+}
