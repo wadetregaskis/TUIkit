@@ -150,6 +150,7 @@ enum ScrollViewStateIndex {
     static let focusID = 1
     static let lastFocusedID = 2
     static let lastInteractionGen = 3
+    static let lastViewport = 4
 }
 
 /// A lightweight String-box used by ``_ScrollViewCore`` to track
@@ -168,6 +169,18 @@ final class LastFocusedIDBox: @unchecked Sendable {
 /// ``LastFocusedIDBox``.
 final class LastInteractionGenBox: @unchecked Sendable {
     var value: UInt64 = 0
+}
+
+/// The content rect this scroller was last laid out into, on a RENDER pass.
+///
+/// A viewport that changes size — the terminal resized, a split-view divider
+/// moved, a disclosure opened above — invalidates the scroll offset's meaning
+/// while leaving its number intact, which is how a focused control ends up off
+/// screen with nothing to bring it back. See
+/// ``_ScrollViewCore/snapViewportToFocusedControl(handler:fullBuffer:viewportHeight:regionOriginY:indicatorsActive:suppressed:context:)``.
+/// `nil` until the first render: there was nothing on screen to keep in view.
+final class LastViewportBox: @unchecked Sendable {
+    var value: (width: Int, height: Int)?
 }
 
 /// Internal core that performs the windowing, hit-testing, and

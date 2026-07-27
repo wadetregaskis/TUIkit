@@ -73,9 +73,30 @@ extension _ScrollViewCore {
         let currentFocusedID = focusManager.currentFocusedID
         let currentInteractionGen = focusManager.focusedInteractionGeneration
 
+        // The third trigger: the viewport itself changed size. A terminal
+        // resize (or a split-view divider moving, or a disclosure opening
+        // above — hence GEOMETRY, not SIGWINCH) leaves `scrollOffset` a valid
+        // number that now means something else, and the focused control can
+        // end up off screen with nothing to bring it back.
+        //
+        // Deliberately the minimum deviation: the reveal already scrolls as
+        // little as it can, and everything else about a resize keeps its
+        // soft top-left pin. Content only moves when it must — and then only
+        // as far as it must — rather than everything shifting to preserve a
+        // proportional position that means little once the content re-flows
+        // at a new width.
+        let viewportKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.lastViewport)
+        let lastViewportBox: StateBox<LastViewportBox> = stateStorage.storage(
+            for: viewportKey, default: LastViewportBox())
+        let viewport = (width: context.availableWidth, height: viewportHeight)
+        // The first sighting is not a change: nothing was on screen to keep.
+        let viewportJustChanged = lastViewportBox.value.value.map { $0 != viewport } ?? false
+        lastViewportBox.value.value = viewport
+
         let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
         let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
-        let shouldSnap = focusJustChanged || interactionJustFired
+        let shouldSnap = focusJustChanged || interactionJustFired || viewportJustChanged
 
         if shouldSnap, !suppressed,
            let focusedID = currentFocusedID,

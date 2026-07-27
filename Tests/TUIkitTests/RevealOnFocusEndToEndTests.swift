@@ -61,6 +61,65 @@ struct RevealOnFocusEndToEndTests {
         return id0.replacingOccurrences(of: "[0]", with: "[199]")
     }
 
+    /// A viewport that changes size — the terminal resized, a split divider
+    /// moved — leaves `scrollOffset` a valid number that now means something
+    /// else, and the focused control can end up off screen with nothing to
+    /// bring it back. Wheel-scrolling away must still be respected (peek mode);
+    /// only a geometry change re-snaps.
+    @Test("Resizing the viewport brings the focused control back")
+    func resizeRevealsTheFocusedControl() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+
+        /// The same ScrollView at a caller-chosen height.
+        func view(height: Int) -> some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<200, id: \.self) { i in Button("row \(i)") {} }
+                }
+            }
+            .frame(height: height)
+        }
+
+        func render(height: Int) -> [String] {
+            var environment = EnvironmentValues()
+            environment.focusManager = focusManager
+            environment.applyRuntimeServices(from: tuiContext)
+            var context = RenderContext(
+                availableWidth: 30, availableHeight: height,
+                environment: environment, tuiContext: tuiContext)
+            context.hasExplicitHeight = true
+            tuiContext.preferences.beginRenderPass()
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(view(height: height), context: context)
+            focusManager.endRenderPass()
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+            return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+        }
+
+        _ = render(height: 12)
+        let id199 = tailID(from: focusManager)
+        focusManager.focus(id: id199)
+        #expect(
+            render(height: 12).contains { $0.contains("row 199") },
+            "sanity: focusing the tail reveals it")
+
+        // Shrink the viewport. The offset is unchanged and still valid, but it
+        // now describes a shorter window — the focused row sat near its bottom
+        // and falls outside. Nothing about focus changed, so only the geometry
+        // trigger can bring it back.
+        #expect(
+            render(height: 6).contains { $0.contains("row 199") },
+            "the resize re-revealed the focused control")
+
+        // …and a re-render at the SAME size does not re-snap: the trigger is a
+        // change, not the mere fact of having a size.
+        #expect(render(height: 6).contains { $0.contains("row 199") })
+    }
+
     @Test("Focusing row 199 scrolls it into view; focusing row 0 scrolls back")
     func revealFarRowBothDirections() {
         let tuiContext = TUIContext()
