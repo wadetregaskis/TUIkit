@@ -11,15 +11,17 @@ import TUIkit
 /// The three menu idioms TUIkit ships today:
 ///   - `.contextMenu { … }` — a right-click (or Ctrl-click) pop-up of Buttons,
 ///     anchored at the click cell.
-///   - `Menu(_:content:)` — a pop-up button: a collapsed label whose items
-///     open over the page.
+///   - `Menu(_:content:)` — a pull-down button: a collapsed label whose items
+///     open over the page. Its label never changes and it holds no selection
+///     (that is a `Picker`'s job) — SwiftUI draws exactly the same
+///     distinction.
 ///   - `TextField` + `.textInputSuggestions { … }` — a combo box: free text
 ///     with a menu of suggestions beside it.
 ///
 /// Menu-bar demos join them once menu bars exist.
 struct MenusPage: View {
     @State private var contextAction: String = "—"
-    @State private var comboChoice: String = "—"
+    @State private var pullDownChoice: String = "—"
     @State private var editor: String = ""
 
     /// Suggestions for the combo box. Editor names are proper nouns, so the
@@ -27,14 +29,14 @@ struct MenusPage: View {
     /// control, not the words.
     private let editors = ["Vim", "Neovim", "Emacs", "Nano", "Helix", "Xcode", "VS Code"]
 
-    /// The combo button's items — deliberately mixed lengths, so the pop-up
-    /// visibly hugs its widest item.
-    private var comboItems: [String] {
+    /// The pull-down button's items — deliberately mixed lengths, so the
+    /// pop-up visibly hugs its widest item.
+    private var pullDownItems: [String] {
         [
-            L("page.menus.combo.open"),
-            L("page.menus.combo.duplicate"),
-            L("page.menus.combo.rename"),
-            L("page.menus.combo.export"),
+            L("page.menus.pullDown.open"),
+            L("page.menus.pullDown.duplicate"),
+            L("page.menus.pullDown.rename"),
+            L("page.menus.pullDown.export"),
         ]
     }
 
@@ -70,19 +72,19 @@ struct MenusPage: View {
                 }
             }
 
-            DemoSection(L("page.menus.comboSection")) {
+            DemoSection(L("page.menus.pullDownSection")) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.menus.comboInstruction"))
+                    Text(L("page.menus.pullDownInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     // A pop-up Menu: the label is a collapsed control, and
                     // the items — plain Buttons, as in SwiftUI — open over the
                     // page and close again when one fires.
-                    Menu(L("page.menus.comboTitle")) {
-                        ForEach(comboItems, id: \.self) { item in
-                            Button(item) { comboChoice = item }
+                    Menu(L("page.menus.pullDownTitle")) {
+                        ForEach(pullDownItems, id: \.self) { item in
+                            Button(item) { pullDownChoice = item }
                         }
                     }
-                    ValueDisplayRow(L("page.menus.chose"), comboChoice)
+                    ValueDisplayRow(L("page.menus.chose"), pullDownChoice)
                 }
             }
 
