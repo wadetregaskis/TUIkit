@@ -1216,7 +1216,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         case .ghost: body = original ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: original)
         }
-        let slot = rows.firstIndex { $0.index == placeholder.slot } ?? rows.count
+        var slot = rows.firstIndex { $0.index == placeholder.slot } ?? rows.count
+        // Which SIDE of the targeted row, mirroring the drop itself: `move` puts
+        // the row past its target when dragging down and before it when dragging
+        // up (SwiftUI's `move(fromOffsets:toOffset:)` semantics). Inserting
+        // before it either way drew the downward half of every drag one row
+        // higher than it would actually land — the asymmetry the owner saw, and
+        // a preview that lied about exactly half its gestures.
+        if placeholder.slot > placeholder.source { slot += 1 }
         rows.insert((-1, SelectableListRow(type: .footer, buffer: body)), at: slot)
         return rows
     }

@@ -284,6 +284,57 @@ struct ListReorderDragTests {
             "…and it is dimmed")
     }
 
+    /// The item labels down the rendered list, one per line they appear on —
+    /// the drag's preview read back in visual order.
+    private func rowLabels(_ buffer: FrameBuffer, of items: [String]) -> [String] {
+        buffer.lines.compactMap { line in items.first { line.stripped.contains($0) } }
+    }
+
+    /// Presses `source`, drags to `target`, and returns the mid-drag frame plus
+    /// the row the cursor is resting on — so the caller can release right there.
+    private func midDrag(
+        _ fixture: Fixture, from source: String, to target: String
+    ) -> (frame: FrameBuffer, y: Int) {
+        let buffer = fixture.render()
+        let y = fixture.rowY(buffer, target)
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, source)))
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: y))
+        return (fixture.render(), y)
+    }
+
+    @Test("A ghost dragged downward sits after the row under the cursor")
+    func ghostDownSitsAfterTheTarget() {
+        let fixture = Fixture(feedback: .ghost)
+        let labels = fixture.items
+        let (dragging, y) = midDrag(fixture, from: "a", to: "c")
+        #expect(
+            rowLabels(dragging, of: labels) == ["a", "b", "c", "a", "d", "e"],
+            "dropping on 'c' from above puts the row past it, so that is where the copy goes")
+        // And the preview is the promise: what it shows, minus the dimmed row
+        // it is going to vacate, is the order the drop produces.
+        let promised = dragging.lines
+            .filter { !$0.contains(ANSIRenderer.dim) }
+            .compactMap { line in labels.first { line.stripped.contains($0) } }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: y))
+        #expect(rowLabels(fixture.render(), of: labels) == promised)
+    }
+
+    @Test("A ghost dragged upward sits before the row under the cursor")
+    func ghostUpSitsBeforeTheTarget() {
+        let fixture = Fixture(feedback: .ghost)
+        let labels = fixture.items
+        let (dragging, y) = midDrag(fixture, from: "e", to: "b")
+        #expect(
+            rowLabels(dragging, of: labels) == ["a", "e", "b", "c", "d", "e"],
+            "dropping on 'b' from below puts the row before it")
+        let promised = dragging.lines
+            .filter { !$0.contains(ANSIRenderer.dim) }
+            .compactMap { line in labels.first { line.stripped.contains($0) } }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: y))
+        #expect(rowLabels(fixture.render(), of: labels) == promised)
+    }
+
     @Test(
         "Hovering the row it picked up shows no placeholder",
         arguments: [RowReorderFeedback.ghost, .cursor])
