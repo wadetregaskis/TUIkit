@@ -34,21 +34,82 @@ enum Palette256Layout {
         let width: Int
     }
 
-    /// The visual rows of the palette (see the type doc for the section order).
-    static let rows: [[Int?]] = build()
+    /// How the palette's three sections are folded — the knob that lets the
+    /// grid trade width for height when the space on offer is narrow.
+    ///
+    /// The cube's six red slices tile `cubeColumns` blocks across; the two
+    /// strips (system 16, greyscale 24) wrap at `stripColumns` swatches.
+    struct Arrangement: Equatable, Sendable {
+        /// Cube blocks per row: 3 (the preferred 3×2), 2, or 1.
+        var cubeColumns: Int
+        /// Swatches per strip row: 16 (unwrapped), 8, or 4.
+        var stripColumns: Int
+    }
 
-    /// The widest row, in cells — the centring reference and the grid width.
-    static let widthInCells: Int = rows.map(\.count).max() ?? 0
+    /// Widest first — the arrangement chooser walks these and takes the first
+    /// that fits, so the preferred 3-wide cube and unwrapped strips win
+    /// whenever there is room for them.
+    static let arrangements: [Arrangement] = [
+        Arrangement(cubeColumns: 3, stripColumns: 16),
+        Arrangement(cubeColumns: 2, stripColumns: 16),
+        Arrangement(cubeColumns: 2, stripColumns: 8),
+        Arrangement(cubeColumns: 1, stripColumns: 8),
+        Arrangement(cubeColumns: 1, stripColumns: 4),
+    ]
 
-    private static func build() -> [[Int?]] {
+    /// The arrangement this palette is laid out in when nothing constrains it.
+    static let preferred = arrangements[0]
+
+    /// The visual rows of the palette in its preferred arrangement.
+    static let rows: [[Int?]] = rows(preferred)
+
+    /// The widest row of the preferred arrangement, in cells.
+    static let widthInCells: Int = widthInCells(preferred)
+
+    /// The widest row of `arrangement`, in cells — its centring reference and
+    /// the width it needs.
+    static func widthInCells(_ arrangement: Arrangement) -> Int {
+        rows(arrangement).map(\.count).max() ?? 0
+    }
+
+    /// The widest arrangement whose grid fits in `availableWidth` cells, or the
+    /// narrowest one when even that overflows (better a scrollbar than a lie).
+    ///
+    /// `availableWidth` of zero or less means "unconstrained" — a measure pass
+    /// with nothing to go on gets the preferred arrangement rather than the
+    /// most cramped one.
+    static func arrangement(cellWidth: Int, availableWidth: Int) -> Arrangement {
+        guard availableWidth > 0 else { return preferred }
+        return arrangements.first { widthInCells($0) * cellWidth <= availableWidth }
+            ?? arrangements[arrangements.count - 1]
+    }
+
+    /// The visual rows for a given arrangement (see the type doc for the
+    /// section order).
+    static func rows(_ arrangement: Arrangement) -> [[Int?]] {
         var rows: [[Int?]] = []
 
-        // System 16: standard 0–7, a gap, bright 8–15.
-        rows.append((0...7).map { Int?($0) } + [nil] + (8...15).map { Int?($0) })
+        /// A run of swatches wrapped at `perRow`, with the standard/bright gap
+        /// kept when the system 16 fits on one line.
+        func strip(_ values: [Int], perRow: Int, gapAfter: Int? = nil) -> [[Int?]] {
+            stride(from: 0, to: values.count, by: perRow).map { start in
+                let slice = Array(values[start..<min(start + perRow, values.count)])
+                guard let gapAfter, slice.count > gapAfter else { return slice.map { Int?($0) } }
+                return slice[..<gapAfter].map { Int?($0) } + [nil]
+                    + slice[gapAfter...].map { Int?($0) }
+            }
+        }
+
+        // System 16: standard 0–7, a gap, bright 8–15 — the gap only when the
+        // two groups share a line.
+        rows.append(
+            contentsOf: strip(
+                Array(0...15), perRow: arrangement.stripColumns,
+                gapAfter: arrangement.stripColumns >= 16 ? 8 : nil))
         rows.append([])  // spacer
 
         // 6×6×6 cube: index = 16 + 36·r + 6·g + b. Each red slice r is a 6×6
-        // green×blue block; the slices tile as two rows of three.
+        // green×blue block; the slices tile `cubeColumns` across.
         func cubeBlockRow(_ reds: [Int]) -> [[Int?]] {
             (0..<6).map { green -> [Int?] in
                 var row: [Int?] = []
@@ -59,20 +120,27 @@ enum Palette256Layout {
                 return row
             }
         }
-        rows.append(contentsOf: cubeBlockRow([0, 1, 2]))
-        rows.append([])  // spacer
-        rows.append(contentsOf: cubeBlockRow([3, 4, 5]))
-        rows.append([])  // spacer
+        let perRow = max(1, arrangement.cubeColumns)
+        for start in stride(from: 0, to: 6, by: perRow) {
+            rows.append(contentsOf: cubeBlockRow(Array(start..<min(start + perRow, 6))))
+            rows.append([])  // spacer
+        }
 
-        // Greyscale ramp: 232–255 (24 steps).
-        rows.append((232...255).map { Int?($0) })
+        // Greyscale ramp: 232–255 (24 steps). Its natural 24 is wider than the
+        // system strip's 16, so it wraps at a multiple that keeps its rows even.
+        let greyPerRow = arrangement.stripColumns >= 16 ? 24 : arrangement.stripColumns
+        rows.append(contentsOf: strip(Array(232...255), perRow: greyPerRow))
         return rows
     }
 
-    /// Positions every swatch for a given cell width, centring each row within
-    /// the widest. Returns the cells plus the overall pixel width/height.
-    static func place(cellWidth: Int) -> (cells: [Cell], width: Int, height: Int) {
-        let gridWidth = widthInCells * cellWidth
+    /// Positions every swatch for a given cell width and arrangement, centring
+    /// each row within the widest. Returns the cells plus the overall
+    /// width/height in cells.
+    static func place(
+        cellWidth: Int, arrangement: Arrangement = preferred
+    ) -> (cells: [Cell], width: Int, height: Int) {
+        let rows = rows(arrangement)
+        let gridWidth = (rows.map(\.count).max() ?? 0) * cellWidth
         var cells: [Cell] = []
         for (y, row) in rows.enumerated() {
             let lead = max(0, (gridWidth - row.count * cellWidth) / 2)
@@ -235,9 +303,14 @@ struct _Color256GridCore: View, Renderable {
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         let indicator = SelectionIndicator.resolve(isFocused: isFocused, context: context)
 
+        // Fold the palette to whatever the width on offer allows — 3 cube blocks
+        // across and unwrapped strips when there is room, narrower profiles when
+        // there is not. Scrolling is the last resort, not the first.
+        let arrangement = Palette256Layout.arrangement(
+            cellWidth: cellWidth, availableWidth: context.availableWidth)
         let (lines, cells) = Self.renderGrid(
             cursor: handler.cursor, indicator: indicator,
-            cellWidth: cellWidth, showNumbers: showNumbers)
+            cellWidth: cellWidth, showNumbers: showNumbers, arrangement: arrangement)
         handler.placements = cells
 
         var buffer = FrameBuffer(lines: lines)
@@ -320,12 +393,14 @@ struct _Color256GridCore: View, Renderable {
     /// contrasting foreground so it stays visible on any colour, including
     /// mid-grey, and (when focused) animates per ``SelectionIndicatorStyle``.
     static func renderGrid(
-        cursor: Int, indicator: SelectionIndicator.Resolution, cellWidth: Int, showNumbers: Bool
+        cursor: Int, indicator: SelectionIndicator.Resolution, cellWidth: Int, showNumbers: Bool,
+        arrangement: Palette256Layout.Arrangement = Palette256Layout.preferred
     ) -> (lines: [String], cells: [Palette256Layout.Cell]) {
-        let gridWidth = Palette256Layout.widthInCells * cellWidth
+        let rows = Palette256Layout.rows(arrangement)
+        let gridWidth = (rows.map(\.count).max() ?? 0) * cellWidth
         var lines: [String] = []
         var cells: [Palette256Layout.Cell] = []
-        for (y, row) in Palette256Layout.rows.enumerated() {
+        for (y, row) in rows.enumerated() {
             if row.isEmpty {
                 lines.append("")
                 continue
@@ -411,11 +486,18 @@ struct _Color256GridCore: View, Renderable {
 
 extension _Color256GridCore: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        // O(1): the grid's footprint is fixed by the layout, no need to place all
-        // 256 cells just to size it (this is measured for every tab-width probe).
-        ViewSize(
-            width: Palette256Layout.widthInCells * cellWidth,
-            height: Palette256Layout.rows.count,
+        // O(rows): the footprint follows from the arrangement, no need to place
+        // all 256 cells just to size it (this is measured for every tab-width
+        // probe). The width offered decides how far the palette folds, so the
+        // report answers "at THIS width, here is what I need" — the proposal
+        // first, then the context, because a measure with neither is asking for
+        // the natural size.
+        let offered = proposal.width ?? context.availableWidth
+        let arrangement = Palette256Layout.arrangement(
+            cellWidth: cellWidth, availableWidth: offered)
+        return ViewSize(
+            width: Palette256Layout.widthInCells(arrangement) * cellWidth,
+            height: Palette256Layout.rows(arrangement).count,
             isWidthFlexible: false,
             isHeightFlexible: false
         )

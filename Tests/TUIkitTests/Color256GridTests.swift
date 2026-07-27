@@ -322,3 +322,96 @@ struct ColorPickerPanel256TabTests {
         #expect(laterMount.wrappedValue == true, "the numbered-swatch preference persisted")
     }
 }
+
+@MainActor
+@Suite("256 palette reflow")
+struct Palette256ReflowTests {
+
+    @Test("Preferred is 3 cube blocks across with unwrapped strips")
+    func preferredArrangement() {
+        let preferred = Palette256Layout.preferred
+        #expect((preferred.cubeColumns, preferred.stripColumns) == (3, 16))
+        // 3 blocks of 6 with a gap between = 20; the greyscale ramp's 24 is
+        // still the widest row, so that is the grid's width.
+        #expect(Palette256Layout.widthInCells(preferred) == 24)
+    }
+
+    @Test("A narrow offer folds the palette instead of overflowing")
+    func foldsWhenNarrow() {
+        let wide = Palette256Layout.arrangement(cellWidth: 2, availableWidth: 200)
+        #expect(wide == Palette256Layout.preferred, "plenty of room: keep the preferred profile")
+
+        // 2-cell swatches: the preferred profile needs 48 columns. Offer less
+        // and it must pick something narrower rather than run off the edge.
+        let narrow = Palette256Layout.arrangement(cellWidth: 2, availableWidth: 34)
+        #expect(narrow != Palette256Layout.preferred, "it folded")
+        #expect(
+            Palette256Layout.widthInCells(narrow) * 2 <= 34,
+            "…to something that actually fits: \(Palette256Layout.widthInCells(narrow) * 2) cells")
+
+        // Narrower still folds further, and every profile trades width for
+        // height rather than dropping anything.
+        let narrower = Palette256Layout.arrangement(cellWidth: 2, availableWidth: 20)
+        #expect(
+            Palette256Layout.widthInCells(narrower) <= Palette256Layout.widthInCells(narrow))
+        #expect(
+            Palette256Layout.rows(narrower).count >= Palette256Layout.rows(narrow).count,
+            "folding buys width with height")
+    }
+
+    @Test(
+        "Every arrangement places all 256 swatches exactly once",
+        arguments: Palette256Layout.arrangements)
+    func everyArrangementIsComplete(arrangement: Palette256Layout.Arrangement) {
+        let placed = Palette256Layout.place(cellWidth: 2, arrangement: arrangement).cells
+        #expect(
+            Set(placed.map(\.index)) == Set(0...255),
+            "arrangement \(arrangement) placed \(Set(placed.map(\.index)).count) distinct swatches")
+        #expect(placed.count == 256, "…and none of them twice")
+    }
+
+    @Test("The grid core folds to the width it is offered")
+    func coreFoldsToTheOfferedWidth() {
+        let tui = TUIContext()
+        let box = ColorBox(.palette(0))
+
+        func render(width: Int) -> FrameBuffer {
+            let grid = _Color256GridCore(selection: box.binding, focusID: "grid-\(width)")
+            var env = EnvironmentValues()
+            env.focusManager = FocusManager()
+            let ctx = RenderContext(
+                availableWidth: width, availableHeight: 60, environment: env, tuiContext: tui)
+            return renderToBuffer(grid, context: ctx)
+        }
+
+        let wide = render(width: 200)
+        let narrow = render(width: 30)
+        #expect(narrow.width < wide.width, "a narrow offer produced a narrower grid")
+        #expect(narrow.width <= 30, "…that fits: \(narrow.width)")
+        #expect(
+            narrow.lines.count > wide.lines.count,
+            "…by spending height instead: \(narrow.lines.count) rows vs \(wide.lines.count)")
+    }
+
+    @Test("A folded grid is still navigable end to end")
+    func foldedGridNavigates() {
+        // The narrowest profile — the one whose geometry differs most from the
+        // shape the spatial navigation was written against.
+        let arrangement = Palette256Layout.arrangements[Palette256Layout.arrangements.count - 1]
+        let cells = Palette256Layout.place(cellWidth: 2, arrangement: arrangement).cells
+        let box = ColorBox(.palette(0))
+        let handler = Color256GridHandler(focusID: "grid", cursor: 0, selection: box.binding)
+        handler.placements = cells
+
+        // Walk down as far as it will go; the cursor must keep moving and must
+        // never leave the palette.
+        var seen: Set<Int> = [handler.cursor]
+        for _ in 0..<400 {
+            _ = handler.handleKeyEvent(KeyEvent(key: .down))
+            seen.insert(handler.cursor)
+        }
+        #expect(handler.cursor != 0, "Down moved the cursor off the first swatch")
+        #expect(seen.count > 10, "…through many rows: \(seen.count)")
+        #expect(seen.allSatisfy { (0...255).contains($0) })
+    }
+}
