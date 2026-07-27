@@ -42,6 +42,20 @@ enum DropdownMenu {
         /// A horizontal rule between option groups. Never highlighted,
         /// hovered, or clickable.
         case divider
+
+        /// A row that arrives ALREADY DRAWN — its own ANSI, its own highlight,
+        /// its own foreground picked against that highlight.
+        ///
+        /// This is how a view-composed menu (`Menu`, `.contextMenu`) gets into
+        /// the drop-down renderer without giving up being made of views. The
+        /// renderer places it and must not repaint it: the highlight background
+        /// is already on it, and re-applying one would sit UNDER a foreground
+        /// that was chosen for a different backdrop.
+        ///
+        /// `isSelectable` is false for the rows that are not choices — a
+        /// `Divider` the caller drew itself, a heading — which then get no
+        /// hover and no click, exactly like ``divider``.
+        case rendered(String, isSelectable: Bool)
     }
 
     /// The number of rows the popup can show at once: every row when they fit
@@ -289,6 +303,16 @@ enum DropdownMenu {
                 } else {
                     lines.append(verticalBorder + rule + verticalBorder)
                 }
+            case .rendered(let content, _):
+                // Already painted — fitted to the content column and placed,
+                // never re-styled. See ``Row/rendered(_:isSelectable:)``.
+                let fitted = fit(content, to: contentInner)
+                if let barCells {
+                    let cell = local < barCells.count ? barCells[local] : " "
+                    lines.append(verticalBorder + fitted + ANSIRenderer.reset + cell + verticalBorder)
+                } else {
+                    lines.append(verticalBorder + fitted + ANSIRenderer.reset + verticalBorder)
+                }
             case .option(let content):
                 let isHighlighted = index == highlightedRow
                 if let barCells {
@@ -374,7 +398,11 @@ enum DropdownMenu {
         }
 
         for (local, index) in visibleRange.enumerated() {
-            guard case .option = rows[index] else { continue }
+            switch rows[index] {
+            case .option: break
+            case .rendered(_, let isSelectable) where isSelectable: break
+            default: continue
+            }
             let mouseHandlerID = mouseDispatcher.register { event in
                 switch event.phase {
                 case .entered:

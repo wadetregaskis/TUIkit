@@ -27,14 +27,14 @@ import TUIkitCore
 ///   - borderColor: The frame's stroke, or `nil` for the palette's border colour.
 ///     A presented menu passes the breathing accent here — see
 ///     ``presentMenuPopover(items:over:controller:sectionID:itemsIndex:anchor:dismiss:context:)``.
-///   - controller: The open pop-up's highlight, or `nil` for an INLINE menu —
-///     whose rows are the page's own focus stops and must stay that way (see
-///     `Documentation/Unifying the menu implementations.md`). When present the
-///     rows report themselves to it instead of to the focus manager.
+///
+/// This is the INLINE menu's assembly. A pop-up goes through
+/// ``renderMenuPopup(_:context:controller:)`` instead, which hands the same
+/// rows to the `Picker` drop-down's renderer — see
+/// `Documentation/Unifying the menu implementations.md`.
 @MainActor
 func renderMenuColumn(
-    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil,
-    controller: MenuPopupController? = nil
+    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil
 ) -> FrameBuffer {
     // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
     // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
@@ -74,22 +74,6 @@ func renderMenuColumn(
     // border then clipped — invisible while a row was just a left-aligned
     // label, fatal once a row has something at its trailing edge.
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
-    // A pop-up's rows answer to the column, not to the focus ring: each claims
-    // an ordinal here and reports its action back, and the highlighted one is
-    // named as the reveal target so a menu taller than its cap scrolls to it
-    // (the rows have no focus id for the usual reveal to find).
-    //
-    // Set on `sized`, after the width is known: a row that learned its width up
-    // front would report it, and the menu would size itself from its own guess.
-    // Only the render pass claims an ordinal, so the measures either side of it
-    // cannot shift the numbering.
-    if let controller {
-        controller.sink.beginPass()
-        sized.environment.menuRowSink = controller.sink
-        sized.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
-        sized.environment.revealTargetID = controller.revealTargetID
-    }
-    defer { controller?.adoptRenderedRows() }
 
     // Does it fit? Measured against a canvas TALLER than the cap, because a
     // measure is clamped to the context's `availableHeight` — and for an inline
@@ -113,6 +97,104 @@ func renderMenuColumn(
         .frame(height: max(1, capHeight - 2))
         .border(color: borderColor)
     return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
+}
+
+/// Renders `items` as an open POP-UP menu, through the same drop-down renderer
+/// a `Picker` and a combo box use.
+///
+/// The two engines met here. The rows stay VIEWS — that is what gives `Menu`
+/// arbitrary `@ViewBuilder` content, `ButtonRole`, per-row `.disabled()` and key
+/// equivalents — and are drawn by `_MenuItemButtonStyle` exactly as before. But
+/// they are then handed to ``DropdownMenu`` already drawn, so the menu inherits
+/// what only the procedural side had: a scrollbar in its own COLUMN rather than
+/// "N more" lines eating two rows of content, hover-follows-cursor, and a
+/// highlight that spans the whole interior instead of leaving two gutters the
+/// pointer cannot hit.
+///
+/// Slicing a column of views back into rows is possible because each row already
+/// publishes a hit-test region tagged with its ordinal (``menuRowRegionID``), so
+/// the exact line range of every row is known without guessing at heights or
+/// classifying lines by what they look like. Lines no row claims — a `Divider`,
+/// a heading — become unselectable rows: placed as drawn, never highlighted,
+/// never clickable.
+@MainActor
+func renderMenuPopup(
+    _ items: some View, context: RenderContext, controller: MenuPopupController,
+    dismiss: @escaping () -> Void
+) -> FrameBuffer {
+    let rowsOnly = VStack(alignment: .leading, spacing: 0) { items }
+        .buttonStyle(_MenuItemButtonStyle())
+
+    // Size to the content first, exactly as the inline assembly does and for
+    // the same reason: a `Divider` MEASURES as one cell but RENDERS at whatever
+    // width it is offered, so laying out against the screen would inflate the
+    // menu to the terminal. The chrome here is the drop-down's two border
+    // columns plus its one-cell padding on each side.
+    let inset = 1
+    let widthCap = max(1, context.availableWidth - 2 - 2 * inset)
+    let natural = measureChild(
+        rowsOnly, proposal: ProposedSize(width: widthCap, height: nil), context: context)
+    let rowWidth = max(1, min(natural.width, widthCap)) + 2 * inset
+
+    // Rendered against a canvas TALLER than the screen, on purpose: the
+    // renderer below is what windows the menu, and it can only window rows that
+    // exist. Laid out in the space actually available, the column would be
+    // clipped to the overlay's height first and the rows past the fold would
+    // never be drawn at all — so the scrollbar would have nothing to scroll to.
+    var sized = context.withAvailableWidth(rowWidth)
+        .withAvailableHeight(max(context.availableHeight * 64, 4096))
+    sized.environment.menuRowInset = inset
+    // Rows report to the column, not to the focus ring. Only a render pass
+    // claims an ordinal, so the measure above cannot shift the numbering.
+    controller.sink.beginPass()
+    sized.environment.menuRowSink = controller.sink
+    sized.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
+    // The highlight is a bar across the whole row, so the pointer can hit it
+    // anywhere the eye says it can.
+    sized.environment.menuRowWidth = rowWidth
+    let column = TUIkit.renderToBuffer(rowsOnly, context: sized)
+    controller.adoptRenderedRows()
+
+    // Which lines belong to which row, from the regions the rows themselves
+    // published. A line no row claimed is chrome the caller drew.
+    var ordinalByLine: [Int: Int] = [:]
+    for region in column.hitTestRegions {
+        guard let focusID = region.focusID, let ordinal = menuRowOrdinal(fromRegionID: focusID)
+        else { continue }
+        for line in region.offsetY..<(region.offsetY + region.height) {
+            ordinalByLine[line] = ordinal
+        }
+    }
+    let selectable = Set(controller.highlight.selectable)
+    var rows: [DropdownMenu.Row] = []
+    var rowByOrdinal: [Int: Int] = [:]
+    for (line, content) in column.lines.enumerated() {
+        if let ordinal = ordinalByLine[line] {
+            rowByOrdinal[ordinal] = rows.count
+        }
+        rows.append(
+            .rendered(
+                content,
+                isSelectable: ordinalByLine[line].map(selectable.contains) ?? false))
+    }
+
+    let ordinalByRow = Dictionary(
+        uniqueKeysWithValues: rowByOrdinal.map { ($0.value, $0.key) })
+    return DropdownMenu.popup(
+        DropdownMenu.Configuration(
+            rows: rows,
+            highlightedRow: controller.highlightedOrdinal.flatMap { rowByOrdinal[$0] },
+            innerWidth: rowWidth,
+            scroll: controller.scroll,
+            followHighlight: controller.highlight.consumeFollowPending(),
+            autoRepeatToken: "menu-popup-scrollbar-\(context.identity.path)"),
+        context: context,
+        // Hover follows the cursor, which a view-composed menu never did: its
+        // rows had a hover state of their own but nothing joined it up to the
+        // highlight the keyboard was driving.
+        onHover: { row in ordinalByRow[row].map(controller.highlight.point(at:)) },
+        onActivate: { row in ordinalByRow[row].map(controller.sink.activate(ordinal:)) },
+        onDismiss: dismiss)
 }
 
 /// Where a presented menu hangs, and off what.
@@ -203,24 +285,16 @@ func presentMenuPopover<Items: View>(
         .withAvailableHeight(context.environment.overlayContentHeight)
     menuContext.environment.activeFocusSectionID = sectionID
     menuContext.environment.dismissMenu = DismissMenuAction(action: dismiss)
-    // The pop-up holds the focus and the keyboard while it is up, so its whole
-    // FRAME breathes — the same affordance the Picker drop-down uses, on the
-    // same clock (`SelectionEmphasis`), so two menus on one screen agree.
-    //
     // Explicitly NOT the top-border ●: that mark reads as "this titled
     // container has the focus", and a menu has no title, so a lone dot floating
     // in an otherwise dead frame reads as debris. Left nil, which is also what
-    // stops an enclosing section's indicator leaking in.
+    // stops an enclosing section's indicator leaking in. (The FRAME still
+    // breathes — the drop-down renderer draws its own border on the shared
+    // `SelectionEmphasis` clock, so two menus on one screen agree.)
     menuContext.environment.focusIndicatorColor = nil
-    let palette = menuContext.environment.palette
-    let accent = palette.accent
-    let borderColor = SelectionIndicator.resolve(isFocused: true, context: menuContext)
-        .color(dim: accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-               bright: accent)
 
-    var menuBuffer = renderMenuColumn(
-        items, context: menuContext, capHeight: context.environment.overlayContentHeight,
-        borderColor: borderColor, controller: controller)
+    var menuBuffer = renderMenuPopup(
+        items, context: menuContext, controller: controller, dismiss: dismiss)
     guard !menuBuffer.isEmpty else { return }
 
     // The same screen-covering dismiss backdrop the drop-down menus use.

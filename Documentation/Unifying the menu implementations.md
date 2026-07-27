@@ -1,10 +1,9 @@
 # Unifying the menu implementations
 
-**Status:** the controller merge is done. All four menu surfaces now share one
-highlight and one drop-down assembly; what is left is the RENDERER merge (step
-3), which is what would give a pop-up `Menu` the marker column, the scrollbar
-and hover-moves-highlight. This is the working plan, written down so it can be
-picked up cold.
+**Status:** done. All four menu surfaces share one highlight, one drop-down
+assembly and — for the three POP-UPS — one renderer. The inline style keeps the
+focus ring, which was always the plan and is not a deferral (see below). Kept as
+the record of what moved and why.
 
 **Why:** TUIkit has two pop-up-menu implementations, and the differences between
 them are user-visible. Every observable difference the owner named has been
@@ -105,56 +104,43 @@ to touch `_InlineMenuCore` beyond one argument, the design has drifted.
 
 ## Remaining
 
-### 3. Window the pop-up through `DropdownMenu` *(optional; not render-identical)*
+## Also landed: the renderer merge (step 3)
 
-Only if the pop-up is to gain the scrollbar, the marker column and
-hover-moves-highlight. Blocked on `DropdownMenu.Row` being able to carry a
-rendered row: rows rendered as views arrive with their own ANSI and their own
-highlight already applied, and the renderer must **not** re-paint them
-(`withPersistentBackground` would, and it cannot pick a readable foreground the
-way `_MenuItemRow` does with `palette.readableText(on:)`). Its own commit, its
-own re-recorded golden, before/after pasted into the message.
+The blocker was getting per-row buffers out of a `@ViewBuilder`: the rows are
+views, they render as one column, and you cannot tell which lines are which row
+by looking at them. The ordinal-tagged hit regions the ownership flip added
+solve it exactly — every row already publishes a region carrying
+``menuRowRegionID``, so its precise line range is known without guessing heights
+or classifying lines. Lines no row claims (a `Divider`, a heading) become
+unselectable rows: placed as drawn, never highlighted, never clickable.
 
-`anchorHeight` is load-bearing in two places — `OverlayLayer.placed` flips a
-pop-up above its control only when it is > 0, and `ScrollView` culls overlays by
-`offsetY - anchorHeight`. Giving `Menu` the Picker's `1` starts flipping menus
-that today only nudge.
+So `DropdownMenu.Row` gained `.rendered(_:isSelectable:)` — a row that arrives
+already painted and must NOT be repainted (its highlight background is on it,
+and its foreground was chosen against that backdrop) — and `renderMenuPopup`
+slices the column into those.
 
-## Also landed: the controller merge (step 4)
+What a pop-up `Menu` gained, all of it the drop-down's:
 
-Two commits, from the outside in.
+- a **scrollbar in its own column** instead of "N more above/below" lines, which
+  replaced two rows of content;
+- a **highlight spanning the whole interior**, so the pointer can hit the bar
+  everywhere the eye says it can. The row's breathing room moved INSIDE its
+  background as `menuRowInset` (1 for a pop-up, 0 for inline, which is padded as
+  a column instead);
+- a **flush divider** that pulses with the border, rather than an inset static
+  rule.
 
-**The assembly.** `DropdownMenu.Entry` / `OptionMenu` / `attach` — an option is a
-label and "is this the current value", and the marker column, the
-`maxLabel + 4` width, the ordinal↔row maps and the `anchorHeight: 1` overlay all
-follow from that. The `Picker` and the combo box had written that out twice,
-identically, and `innerWidth(for:context:)` is separate because a `Picker`'s
-COLLAPSED control is drawn to the width of the menu it opens.
+Two cells narrower as a result, which the pop-up golden records.
 
-**The walk.** `MenuHighlight` — the highlight is an ordinal, and every gesture
-that moves it (the arrows, Home/End, Page, Shift-accelerated steps, via
-`OptionListNavigation`) is one implementation. Three surfaces had written it out
-three times, and the differences between them had never been decided anywhere:
-the jump keys reached one long before the others.
+One trap: the column must be rendered against a canvas TALLER than the screen.
+The renderer is what windows the menu, and it can only window rows that exist —
+laid out in the space actually available, the column is clipped to the overlay
+height first and the rows past the fold are never drawn, so the scrollbar has
+nothing to scroll to.
 
-The two places they genuinely differ are now **named configurations**, so a
-control given the wrong one is a change the tests can see:
-
-| | `MenuHighlight.popUpMenu()` | `.pickerDropDown()` | `.suggestions()` |
-|---|---|---|---|
-| edge | clamp | **wrap** | clamp |
-| entered from nothing by | any key | any key | **arrows only** |
-| used by | `Menu`, `.contextMenu` | `Picker` | combo box |
-
-The wrap is the `Picker`'s alone because its list is the whole interaction while
-it is up — nothing else is reachable to be jumped away from. The arrows-only
-entry is the combo box's alone because with nothing highlighted its keyboard is
-still at the CARET, so Home/End must move the caret and Shift+arrow must extend
-the selection.
-
-`MenuHighlightTests` is parameterised over those three factories rather than over
-made-up ones, so mutating any shipping config fails it (checked: all four
-mutations do, 2–12 expectations each).
+`onHover` is wired to the highlight (the drop-down calls it per row), but it has
+not been demonstrated end to end — the hover state machine did not fire in the
+test harness, and it is not claimed until it does.
 
 ## Chrome parity, once the assemblies agree
 

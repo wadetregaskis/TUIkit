@@ -44,6 +44,7 @@ private struct _MenuItemRow: View {
     /// The width the highlight bar should span, injected by the menu once it
     /// knows it. See ``EnvironmentValues/menuRowWidth``.
     @Environment(\.menuRowWidth) private var menuRowWidth
+    @Environment(\.menuRowInset) private var menuRowInset
 
     var body: some View {
         // The bar spans the menu's interior — but ONLY once the menu has
@@ -65,6 +66,11 @@ private struct _MenuItemRow: View {
                     .frame(width: hintWidth, alignment: .trailing)
             }
         }
+        // Inside the background, so the highlight covers the breathing room
+        // rather than leaving gutters the eye reads as part of the bar and the
+        // pointer cannot hit. An INLINE menu leaves this 0 and takes its
+        // margin from the column's own padding, which is outside the row.
+        .padding(.horizontal, menuRowInset)
         .background(background)
     }
 
@@ -85,7 +91,7 @@ private struct _MenuItemRow: View {
     /// out as label + gap + hint.
     private var labelWidth: Int? {
         guard let menuRowWidth else { return nil }
-        return max(1, menuRowWidth - hintWidth)
+        return max(1, menuRowWidth - hintWidth - 2 * menuRowInset)
     }
 
     /// The hint's column, gap included. Known without ``menuRowWidth``, so the
@@ -154,6 +160,10 @@ private struct _MenuItemRow: View {
 
 // MARK: - Environment
 
+private struct MenuRowInsetKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
 private struct MenuRowWidthKey: EnvironmentKey {
     static let defaultValue: Int? = nil
 }
@@ -164,6 +174,17 @@ extension EnvironmentValues {
     /// menu's natural width rather than whatever it was offered).
     ///
     /// Set by ``ContextMenuModifier`` between its measure and its render.
+    /// How many cells of breathing room a menu row keeps INSIDE its highlight.
+    ///
+    /// A pop-up sets 1: its rows are placed straight into the drop-down's
+    /// interior, so the margin has to be part of the row or the highlight bar
+    /// runs edge to edge. An inline menu leaves it 0 — its column is padded as
+    /// a whole, outside the rows.
+    var menuRowInset: Int {
+        get { self[MenuRowInsetKey.self] }
+        set { self[MenuRowInsetKey.self] = newValue }
+    }
+
     var menuRowWidth: Int? {
         get { self[MenuRowWidthKey.self] }
         set { self[MenuRowWidthKey.self] = newValue }

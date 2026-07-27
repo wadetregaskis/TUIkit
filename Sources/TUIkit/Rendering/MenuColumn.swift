@@ -92,6 +92,16 @@ func menuRowRegionID(_ ordinal: Int) -> String {
     "menu-row-\(ordinal)"
 }
 
+/// The ordinal a region id names, or `nil` if it names something else.
+///
+/// This is what lets a column of VIEWS be sliced back into rows: each row's own
+/// region says which line range is its, so the menu never has to guess a row's
+/// height or work out what a line is by looking at it.
+func menuRowOrdinal(fromRegionID id: String) -> Int? {
+    guard id.hasPrefix("menu-row-") else { return nil }
+    return Int(id.dropFirst("menu-row-".count))
+}
+
 // MARK: - Environment
 
 private struct MenuRowSinkKey: EnvironmentKey {
@@ -141,6 +151,11 @@ final class MenuPopupController {
 
     /// The highlighted row, and every gesture that moves it.
     let highlight = MenuHighlight.popUpMenu()
+
+    /// The window scroll, when the menu is taller than the screen can show.
+    /// Owned here so it survives the frames between key presses, exactly as a
+    /// `Picker` drop-down's does.
+    let scroll = ScrollAxis()
 
     /// The highlighted row's ordinal, or `nil` for "nothing chosen yet".
     var highlightedOrdinal: Int? { highlight.ordinal }
