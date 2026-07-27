@@ -458,3 +458,70 @@ struct MetaPrefixedKeyTests {
         #expect(event == KeyEvent(key: .escape, alt: true))
     }
 }
+
+// MARK: - Legacy function keys (VT220 F13–F20)
+
+/// The CSI-tilde block above F12. TUIkit decoded nothing above 24, so every one
+/// of these was dropped at the terminal edge — which is why Shift+F10 (Apple
+/// Terminal's `ESC[32~`) did nothing at all: the binding was right, but the
+/// bytes never became an event.
+@MainActor
+@Suite("Legacy function keys")
+struct LegacyFunctionKeyTests {
+    private let esc: UInt8 = 0x1B
+
+    private func parse(_ tail: String) -> KeyEvent? {
+        KeyEvent.parse([esc] + Array(tail.utf8))
+    }
+
+    @Test(
+        "ESC [ n ~ decodes F13…F20",
+        arguments: [(25, Key.f13), (26, .f14), (28, .f15), (29, .f16),
+                    (31, .f17), (32, .f18), (33, .f19), (34, .f20)])
+    func decodesTheBlock(number: Int, key: Key) {
+        #expect(parse("[\(number)~") == KeyEvent(key: key))
+    }
+
+    /// 16, 22, 27 and 30 were never assigned by DEC, so they must stay
+    /// undecodable rather than silently becoming a neighbouring key.
+    @Test("The unassigned numbers stay unassigned", arguments: [16, 22, 27, 30])
+    func gapsDecodeToNothing(number: Int) {
+        #expect(parse("[\(number)~") == nil)
+    }
+
+    @Test("A terminal that DOES send modifiers on them is still understood")
+    func modifiersStillApply() {
+        #expect(parse("[32;2~") == KeyEvent(key: .f18, shift: true))
+    }
+
+    @Test("Normalising reads F13…F20 as Shift+F5…Shift+F12")
+    func normalisation() {
+        #expect(
+            KeyEvent(key: .f18).normalizingLegacyShiftedFunctionKeys()
+                == KeyEvent(key: .f10, shift: true),
+            "Apple Terminal's Shift+F10")
+        #expect(
+            KeyEvent(key: .f13).normalizingLegacyShiftedFunctionKeys()
+                == KeyEvent(key: .f5, shift: true))
+        #expect(
+            KeyEvent(key: .f20).normalizingLegacyShiftedFunctionKeys()
+                == KeyEvent(key: .f12, shift: true))
+    }
+
+    @Test("Normalising leaves every other key alone")
+    func normalisationIsNarrow() {
+        for key in [Key.f10, .f12, .up, .escape, .character("a")] {
+            let event = KeyEvent(key: key, ctrl: true)
+            #expect(event.normalizingLegacyShiftedFunctionKeys() == event)
+        }
+    }
+
+    /// The modern form every other terminal uses must keep working untouched —
+    /// it is already a Shift+F10, so normalising it would be a no-op anyway.
+    @Test("The modern ESC[21;2~ form is unaffected")
+    func modernFormUnchanged() {
+        let event = parse("[21;2~")
+        #expect(event == KeyEvent(key: .f10, shift: true))
+        #expect(event?.normalizingLegacyShiftedFunctionKeys() == event)
+    }
+}

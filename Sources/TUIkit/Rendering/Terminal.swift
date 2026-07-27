@@ -907,7 +907,13 @@ extension Terminal {
         }
 
         if let key = KeyEvent.parse(bytes) {
-            return .key(key)
+            // Apple Terminal encodes Shift on a function key by sending a
+            // DIFFERENT function key (Shift+F5…F12 → the VT220 F13…F20
+            // sequences), so the chord has to be reassembled here rather than
+            // by whoever binds it. Measured; see Terminal-compatibility.md.
+            return .key(
+                TerminalHost.isAppleTerminal
+                    ? key.normalizingLegacyShiftedFunctionKeys() : key)
         }
         return nil
     }

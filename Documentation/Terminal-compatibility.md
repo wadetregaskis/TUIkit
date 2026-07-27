@@ -113,6 +113,11 @@ the emoji-class clusters below unless noted.
 - **Keys:** sends bare `ESC[A/B` for Up/Down — **all modifiers stripped**
   on the vertical arrows (Shift/Opt/Ctrl/Cmd); Left/Right keep their
   modifiers. Shift+Up/Down accelerators can never work here.
+- **Function keys carry no modifier bits at all.** Rather than the
+  `ESC[21;2~` (`;2` = Shift) form every other terminal uses, Terminal.app's
+  shipped key map re-codes **Shift+F5…Shift+F12** as the *VT220 F13…F20*
+  sequences — Shift+F10 arrives as `ESC[32~`, byte-identical to a real F18.
+  See "Shifted function keys are re-coded" below.
 - **Mouse:** SGR (1006) reporting works: click press/release, wheel
   64/65. **Shift+wheel is intercepted** for the terminal's own scrollback
   — apps never see it (the Mouse demo notes this; use a trackpad's
@@ -920,6 +925,41 @@ rather than wondering why one menu item is dead. `.commandKey(.option)` has no
 such collision, at the cost of Option itself being less reliable: Apple
 Terminal composes accented characters unless "Use Option as Meta key" is on.
 
+### Shifted function keys are re-coded (Apple Terminal)
+
+Measured 2026-07-27, `cat -v` in Terminal.app 2.14 (455): **Shift+F10 emits
+`^[[32~`**, not the `ESC[21;2~` that xterm, iTerm2, Ghostty and Warp send.
+Terminal.app has no modifier parameter for function keys in either direction;
+its key map instead substitutes a *different* key:
+
+| Chord | Apple Terminal sends | Which is really | Everyone else sends |
+|---|---|---|---|
+| Shift+F5 | `ESC[25~` | F13 | `ESC[15;2~` |
+| Shift+F6 | `ESC[26~` | F14 | `ESC[17;2~` |
+| Shift+F7 | `ESC[28~` | F15 | `ESC[18;2~` |
+| Shift+F8 | `ESC[29~` | F16 | `ESC[19;2~` |
+| Shift+F9 | `ESC[31~` | F17 | `ESC[20;2~` |
+| **Shift+F10** | **`ESC[32~`** | **F18** | `ESC[21;2~` |
+| Shift+F11 | `ESC[33~` | F19 | `ESC[23;2~` |
+| Shift+F12 | `ESC[34~` | F20 | `ESC[24;2~` |
+
+(The VT220 block is 25–34 with 27 and 30 unassigned, which is where the gaps
+come from. Option+Fn is aliased the same way onto F(n+5).)
+
+The collision is unresolvable from the bytes, so TUIkit picks the reading that
+is reachable on a Mac keyboard: **on Apple Terminal only**, `Terminal.finalize`
+rewrites a decoded F13…F20 as Shift+F5…Shift+F12
+(`KeyEvent.normalizingLegacyShiftedFunctionKeys()`). Elsewhere those sequences
+stay F13…F20, which is what a keyboard that has those keys means by them.
+
+Deliberately NOT normalised: Apple Terminal's **Option**+Fn aliasing. Its
+collision partner is the plain F6…F12 that people press all the time, so
+rewriting it would cost more than it buys.
+
+This is why `.contextMenu`'s Shift+F10 route appeared dead: the binding was
+correct, but `parseExtendedKey` stopped at 24, so `ESC[32~` decoded to nothing
+and never became an event at all.
+
 ## Where the adaptations live
 
 - `TerminalHost` — `TERM_PROGRAM` detection (`Apple_Terminal`,
@@ -930,6 +970,9 @@ Terminal composes accented characters unless "Use Option as Meta key" is on.
   `.ghosttyCursorAdvance` / `.warpCursorAdvance` — the per-host advance
   models (TUIkitCore), each pinned to the table above by
   `GhosttyWarpCompatibilityTests` / `StringTerminalWidthTests`.
+- `KeyEvent.normalizingLegacyShiftedFunctionKeys()` +
+  `Terminal.finalize` — Apple Terminal's shifted-function-key re-coding
+  (F13…F20 read back as Shift+F5…F12), gated on `TerminalHost.isAppleTerminal`.
 - `String+CursorCompensation.swift` — the per-host line rewriters.
   `withCursorForwardCompensation(advance:)` is the shared CUF walk for
   every host whose quirks are pure under-advances (iTerm2, Ghostty, Warp);

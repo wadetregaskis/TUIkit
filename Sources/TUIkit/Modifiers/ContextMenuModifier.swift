@@ -156,8 +156,10 @@ extension ContextMenuModifier: Renderable {
     /// Shift+F10 because it is the one binding every platform with a keyboard
     /// context-menu route agrees on (Windows, GTK, every browser); macOS has no
     /// native equivalent, and a Mac keyboard has no Menu key to offer instead.
-    /// It arrives as `ESC[21;2~`, which the CSI-tilde parser already decodes
-    /// with its modifiers intact — no terminal-specific handling needed.
+    /// It arrives as `ESC[21;2~` in iTerm2, Ghostty, Warp and xterm. Apple
+    /// Terminal has no modifier encoding for function keys and sends `ESC[32~`
+    /// (its alias for F18) instead; `Terminal.finalize` normalises that back to
+    /// Shift+F10 — see `Documentation/Terminal-compatibility.md`.
     ///
     /// The focus stop is the price of the feature: you cannot key a menu open on
     /// a view you cannot reach. It consumes no keys of its own

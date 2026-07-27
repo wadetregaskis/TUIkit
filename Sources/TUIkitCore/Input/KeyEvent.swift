@@ -64,6 +64,15 @@ public enum Key: Hashable, Sendable {
     // Function keys
     case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
 
+    /// VT220's extra function keys, the legacy CSI-tilde block 25…34.
+    ///
+    /// Real keys on DEC and full-size PC keyboards. On a Mac they are also
+    /// what Apple Terminal sends for **Shift+F5…Shift+F12**, because it has no
+    /// modifier encoding for function keys at all and re-codes the chord as a
+    /// different key — see ``normalizingLegacyShiftedFunctionKeys()`` and
+    /// `Documentation/Terminal-compatibility.md`.
+    case f13, f14, f15, f16, f17, f18, f19, f20
+
     // Character key
     case character(Character)
 
@@ -124,6 +133,37 @@ extension KeyEvent {
     /// - Function keys: ESC [ 1~, ESC [ 2~, etc.
     /// - Ctrl+key: ASCII 1-26
     ///
+    /// Reads the VT220 F13…F20 keys as Shift+F5…Shift+F12 instead.
+    ///
+    /// Apple Terminal has no modifier encoding for function keys: rather than
+    /// the `ESC[21;2~` form every other terminal uses, its shipped key map
+    /// re-codes **Shift+Fn** (n = 5…12) as the *F(n+8)* sequence, so Shift+F10
+    /// arrives as `ESC[32~` — byte-identical to a real F18.
+    ///
+    /// The collision cannot be resolved from the bytes, so this picks the
+    /// reading that is reachable on a Mac keyboard: F13…F20 are keys most Macs
+    /// do not have, and Shift+F10 is one anybody can press. Deliberately does
+    /// NOT do the same for Apple Terminal's Option aliasing (Opt+Fn → F(n+5)),
+    /// which overlaps the *plain* F6…F12 that people press all the time.
+    ///
+    /// Pure, so it can be tested without a terminal; the host gate lives at the
+    /// input edge in `Terminal.finalize`.
+    public func normalizingLegacyShiftedFunctionKeys() -> KeyEvent {
+        let base: Key
+        switch key {
+        case .f13: base = .f5
+        case .f14: base = .f6
+        case .f15: base = .f7
+        case .f16: base = .f8
+        case .f17: base = .f9
+        case .f18: base = .f10
+        case .f19: base = .f11
+        case .f20: base = .f12
+        default: return self
+        }
+        return KeyEvent(key: base, ctrl: ctrl, alt: alt, shift: true)
+    }
+
     /// - Parameter bytes: The raw input bytes.
     /// - Returns: The parsed key event, or nil if incomplete.
     public static func parse(_ bytes: [UInt8]) -> KeyEvent? {
@@ -312,7 +352,9 @@ extension KeyEvent {
     ///
     /// These are VT-style sequences where `n` is a numeric key identifier:
     /// - 1=Home, 2=Insert, 3=Delete, 4=End, 5=PageUp, 6=PageDown
-    /// - 11-15=F1-F5, 17-21=F6-F10, 23-24=F11-F12
+    /// - 11-15=F1-F5, 17-21=F6-F10, 23-24=F11-F12, 25-34=F13-F20
+    ///
+    /// The gaps are historical: 16, 22, 27 and 30 were never assigned.
     ///
     /// With modifiers: `ESC [ 3 ; 2 ~` = Shift+Delete
     private static func parseExtendedKey(
@@ -359,6 +401,18 @@ extension KeyEvent {
         case 21: return KeyEvent(key: .f10, ctrl: ctrl, alt: alt, shift: shift)
         case 23: return KeyEvent(key: .f11, ctrl: ctrl, alt: alt, shift: shift)
         case 24: return KeyEvent(key: .f12, ctrl: ctrl, alt: alt, shift: shift)
+
+        // VT220 F13–F20. Modifiers still apply where a terminal sends them:
+        // `ESC[32;2~` means Shift+F18, distinct from the bare `ESC[32~` that
+        // Apple Terminal uses to mean Shift+F10.
+        case 25: return KeyEvent(key: .f13, ctrl: ctrl, alt: alt, shift: shift)
+        case 26: return KeyEvent(key: .f14, ctrl: ctrl, alt: alt, shift: shift)
+        case 28: return KeyEvent(key: .f15, ctrl: ctrl, alt: alt, shift: shift)
+        case 29: return KeyEvent(key: .f16, ctrl: ctrl, alt: alt, shift: shift)
+        case 31: return KeyEvent(key: .f17, ctrl: ctrl, alt: alt, shift: shift)
+        case 32: return KeyEvent(key: .f18, ctrl: ctrl, alt: alt, shift: shift)
+        case 33: return KeyEvent(key: .f19, ctrl: ctrl, alt: alt, shift: shift)
+        case 34: return KeyEvent(key: .f20, ctrl: ctrl, alt: alt, shift: shift)
 
         default: return nil
         }
