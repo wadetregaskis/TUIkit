@@ -502,8 +502,13 @@ extension ItemListHandler {
             }
         }
 
-        // Ensure scroll offset keeps focused item visible
-        ensureFocusedItemVisible()
+        // Deliberately NOT revealing that index here. A list the user has just
+        // left must not scroll itself: clicking a checkbox beside a table the
+        // user had arrowed away from its selection would yank the rows out from
+        // under the click — dozens of rows, whenever cursor and selection had
+        // parted company, which is exactly why it looked intermittent.
+        // ``onFocusReceived()`` reveals it when focus comes back, which is when
+        // the comment above actually cares.
     }
 
     func onFocusReceived() {

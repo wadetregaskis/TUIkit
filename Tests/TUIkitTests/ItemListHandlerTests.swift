@@ -371,6 +371,34 @@ struct ItemListHandlerScrollTests {
         #expect(handler.scrollOffset == 3)  // 5 - 3 + 1 = 3
     }
 
+    /// Losing focus must not move the rows. The handler puts its cursor back
+    /// on the selection then (so returning shows it), but revealing that
+    /// index THERE scrolled a list the user had just clicked away from —
+    /// jumping it by however far the cursor had wandered from the selection,
+    /// which is why it looked intermittent.
+    @Test("Losing focus does not scroll the list")
+    func focusLossLeavesTheViewportAlone() {
+        final class Selection { var value: String? = "item-2" }
+        let selection = Selection()
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: 100, viewportHeight: 10, selectionMode: .single)
+        handler.itemIDs = (0..<100).map { "item-\($0)" }
+        handler.singleSelection = Binding(get: { selection.value }, set: { selection.value = $0 })
+        handler.focusedIndex = 60
+        handler.ensureFocusedItemVisible()
+        let scrolled = handler.scrollOffset
+        #expect(scrolled > 0, "precondition: the cursor scrolled away from the selection")
+
+        handler.onFocusLost()
+
+        #expect(handler.scrollOffset == scrolled, "the unfocused list scrolled itself")
+        #expect(handler.focusedIndex == 2, "the cursor still returns to the selection")
+
+        // Coming back is when the selection should be brought into view.
+        handler.onFocusReceived()
+        #expect(handler.scrollOffset < scrolled, "focus returned without revealing the selection")
+    }
+
     @Test("Scroll offset adjusts when focus moves above viewport")
     func scrollUpOnFocusAboveViewport() {
         let handler = ItemListHandler<String>(
