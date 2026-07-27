@@ -118,7 +118,7 @@ extension ExampleStrings {
             "page.mouse.hover": "Hover (.onHover)",
             "page.mouse.hoverInstruction": "Move the cursor over the box — the label and colour change while hovered.",
             "page.mouse.hovering": "[ hovering ]",
-            "page.mouse.hoverMe": "[ hover me ]",
+            "page.mouse.hoverMe": "[ hover over me ]",
             "page.mouse.stateLabel": "State:",
             "page.mouse.stateHovering": "hovering",
             "page.mouse.stateOutside": "outside",
