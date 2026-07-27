@@ -19,15 +19,44 @@ extension ItemListHandler {
     // MARK: - Geometry
 
     /// The data offset of the **content** row covering `contentY`, or `nil` for
-    /// a section header/footer, a line no row occupies, or a list that hasn't
-    /// published its geometry yet.
+    /// a section header, the reorder drop slot, a line no row occupies, or a
+    /// list that hasn't published its geometry yet.
+    ///
+    /// This is the row the keyboard cursor should sit on. For where a DROP would
+    /// land, ask ``dropTarget(atContentY:)`` — during a drag the two differ.
     ///
     /// `contentY` is in the same space as ``visibleRowBands``: lines from the
     /// first content line of the list's interior.
     func contentRowIndex(atContentY contentY: Int) -> Int? {
-        visibleRowBands.first {
-            $0.isContent && contentY >= $0.yStart && contentY < $0.yStart + $0.height
-        }?.rowIndex
+        band(atContentY: contentY).flatMap { $0.isContent ? $0.rowIndex : nil }
+    }
+
+    /// Where a drop at `contentY` would put the dragged row, or `nil` when that
+    /// line is not a drop target (a section header, or nothing at all).
+    ///
+    /// The answer is a prospective FINAL index, not a data offset: a drag takes
+    /// the row out of the list, so what is drawn is already the post-drop order
+    /// and a line's position in it is exactly where a drop there lands the row.
+    /// `move(from:to:)` is defined to produce that index, so the two agree by
+    /// construction. Outside a drag every band's `dropIndex` is its own
+    /// `rowIndex`, so `.live` and the click path are unaffected.
+    func dropTarget(atContentY contentY: Int) -> Int? {
+        band(atContentY: contentY)?.dropIndex
+    }
+
+    /// The published band covering `contentY`.
+    private func band(atContentY contentY: Int) -> RowBand? {
+        visibleRowBands.first { contentY >= $0.yStart && contentY < $0.yStart + $0.height }
+    }
+
+    /// `index` as it will be numbered once the dragged row has left its place —
+    /// everything after the source shifts down one.
+    ///
+    /// The single piece of index arithmetic the whole feature rests on; the drop
+    /// slot, the drop target and the decoration all derive from it, so it lives
+    /// in one place rather than being re-derived at each site.
+    func reorderClosedUpIndex(_ index: Int, source: Int) -> Int {
+        index - (index > source ? 1 : 0)
     }
 
     // MARK: - The drag
@@ -39,17 +68,19 @@ extension ItemListHandler {
     /// The row a non-`.live` drag has hold of. `nil` when nothing is dragging
     /// or when `.live` is moving the data instead.
     ///
-    /// What the list does with it depends on the mode: `.cursor` draws it dim
-    /// in place (the gap it opens elsewhere is anonymous, so this is the only
-    /// thing that says which row is moving), `.ghost` leaves it alone and puts
-    /// the faint copy at the drop slot instead.
+    /// The row LEAVES its place for the duration of the drag — the list closes
+    /// up behind it, so what is on screen is the order a drop would produce.
+    /// It reappears only at the drop slot, and only in `.dimmed`.
     var reorderSource: Int? {
         guard reorderFeedback != .live, let reorder, reorder.active else { return nil }
         return reorder.currentOffset
     }
 
-    /// Where the dragged row would land — what `.ghost` and `.cursor` open a
-    /// slot for (a ghost of the row, and an empty gap, respectively).
+    /// Where the dragged row would land — what `.dimmed` and `.cursor` open a
+    /// slot for (a faint copy of the row, and an empty gap, respectively).
+    ///
+    /// The slot is a CLOSED-UP index: the row's prospective final position, with
+    /// the source already taken out. See ``reorderClosedUpIndex(_:source:)``.
     ///
     /// `nil` when nothing is dragging, when `.live` is moving the data instead,
     /// when the cursor has left the rows (`.cursor` drops its gap then, so the
@@ -88,7 +119,7 @@ extension ItemListHandler {
         reorder.active = true
         self.reorder = reorder
 
-        guard let contentY, let target = contentRowIndex(atContentY: contentY) else {
+        guard let contentY, let target = dropTarget(atContentY: contentY) else {
             // Off the rows. `.cursor` forgets its slot — the gap disappears and
             // releasing there is a cancel — while the other modes hold the last
             // one, since they have nothing that says "nowhere".
@@ -104,7 +135,10 @@ extension ItemListHandler {
         }
         reorder.targetOffset = target
         self.reorder = reorder
-        focusedIndex = target
+        // The keyboard cursor follows the row the pointer is actually OVER, by
+        // data offset. Over the gap there is no such row, so it stays put —
+        // moving it to the drop target would light up a neighbour instead.
+        if let row = contentRowIndex(atContentY: contentY) { focusedIndex = row }
     }
 
     /// Commits a drop at `contentY`, and reports whether this gesture was a
@@ -125,9 +159,9 @@ extension ItemListHandler {
             return true
         }
         // Released off the rows. `.cursor` shows no drop slot there, so it has
-        // promised the drop would do nothing — keep that promise. `.ghost` still
+        // promised the drop would do nothing — keep that promise. `.dimmed` still
         // shows one (it holds the last), so it commits to it.
-        guard let target = contentY.flatMap({ contentRowIndex(atContentY: $0) })
+        guard let target = contentY.flatMap({ dropTarget(atContentY: $0) })
             ?? reorder.targetOffset
         else {
             focusedIndex = clampedRowIndex(reorder.grabbedOffset)

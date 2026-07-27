@@ -232,7 +232,7 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         var active: Bool
 
         /// Where the row would land if released now, or `nil` when the cursor is
-        /// off the rows entirely. `.ghost` and `.cursor` show this slot — as a
+        /// off the rows entirely. `.dimmed` and `.cursor` show this slot — as a
         /// copy of the row and as a gap respectively — and `nil` is what makes a
         /// drag off the list read as "release here and nothing moves".
         var targetOffset: Int?
@@ -265,9 +265,17 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         var yStart: Int
         /// How many lines it occupies (clipped rows count what's shown).
         var height: Int
-        /// Whether this is a content row — section headers and footers are
-        /// neither draggable nor drop targets.
+        /// Whether this is a content row — a real, selectable row. Section
+        /// headers and the reorder drop slot are not.
         var isContent: Bool
+        /// Where a reorder drop on this line would put the dragged row, or `nil`
+        /// for a line that is not a drop target (a section header).
+        ///
+        /// The same as ``rowIndex`` for a real row. It exists for the one line
+        /// that is a drop target without being a row: the reorder slot, which
+        /// the pointer rests on after every step of a drag. Reading that line as
+        /// "off the rows" is what made a `.cursor` drag cancel its own gap.
+        var dropIndex: Int?
     }
 
     /// The selection mode (single or multi).

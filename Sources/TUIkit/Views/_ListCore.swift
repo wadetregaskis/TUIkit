@@ -420,7 +420,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 overflowing: overflowing
             )
         }
-        // A `.ghost` / `.cursor` drag adds its placeholder row here, AFTER the
+        // A `.dimmed` / `.cursor` drag rewrites the rows here, AFTER the
         // window walk: the drag shows an extra row that is not in the data, so
         // it must not take part in choosing which data rows are visible.
         visibleRows = decorateForReorder(visibleRows, handler: handler, palette: palette)
@@ -1138,65 +1138,54 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
     }
 
-    /// Rewrites the visible rows for an in-flight `.ghost` / `.cursor` reorder:
-    /// the slot the row would land in opens up, showing a ghost of the row under
-    /// `.ghost` and an empty gap under `.cursor`. The list is one row longer for
-    /// the duration of the drag, which is what makes the gesture read as "this
-    /// is where it goes".
+    /// Rewrites the visible rows for an in-flight `.dimmed` / `.cursor` reorder.
     ///
-    /// Exactly ONE thing marks the drop, per mode. Showing a copy of the row on
-    /// the cursor *and* a proposed position in the list at the same time reads
-    /// as clutter — two answers to one question — so `.cursor` says it with the
-    /// gap alone and `.ghost` says it with the ghost alone.
+    /// The dragged row LEAVES its place: the list closes up behind it and a slot
+    /// opens where it would land, holding a faint copy of it under `.dimmed` and
+    /// nothing at all under `.cursor`. So the list keeps its length, and what is
+    /// on screen is exactly the order a drop would produce — the preview IS the
+    /// result, rather than the result plus a leftover.
     ///
-    /// The placeholder is typed as a footer, not as content: it carries no id,
-    /// so selection ignores it, and `publishRowBands` marks it non-content so
-    /// the drag's own hit-testing skips it — the cursor resting on the gap holds
-    /// the current slot rather than trying to target the gap itself.
+    /// Gated on the PLACEHOLDER, not on the drag: with the cursor resting on the
+    /// row it picked up there is nowhere for it to go, releasing would move
+    /// nothing, and the list is left completely untouched to say so.
+    ///
+    /// The slot is typed as a footer, not as content: it carries no id, so
+    /// selection ignores it, and it is not a row the keyboard cursor can sit on.
+    /// It IS a drop target though — `publishRowBands` gives it a `dropIndex` —
+    /// because after every step of the drag the pointer is resting on it.
     private func decorateForReorder(
         _ visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         handler: ItemListHandler<SelectionValue>,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard let source = handler.reorderSource else { return visibleRows }
+        guard let placeholder = handler.reorderPlaceholder else { return visibleRows }
+        let source = placeholder.source
         let original = visibleRows.first { $0.index == source }?.row.buffer
-        // Under `.cursor` the dim in place is the only thing that says which row
-        // is moving — the gap is anonymous. Under `.ghost` it would be the
-        // second faint copy of one row, and two dim rows read as two dragged
-        // rows, so the source stays as it is and the ghost carries the message.
-        var rows = visibleRows
-        if handler.reorderFeedback == .cursor {
-            rows = rows.map { entry -> (index: Int, row: SelectableListRow<SelectionValue>) in
-                guard entry.index == source else { return entry }
-                return (
-                    entry.index,
-                    SelectableListRow(type: entry.row.type, buffer: dimmed(entry.row.buffer))
-                )
-            }
-        }
-        // The placeholder says "it would go HERE", so it appears only once there
-        // is a there. Hovering the row you picked up leaves the list otherwise
-        // untouched, which is exactly what releasing there would do.
-        guard let placeholder = handler.reorderPlaceholder else { return rows }
+        var rows = visibleRows.filter { $0.index != source }
+
         let body: FrameBuffer
         switch handler.reorderFeedback {
-        case .ghost: body = original.map(dimmed) ?? blankRow(like: nil)
+        case .dimmed: body = original.map(dimmed) ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: original)
         }
-        var slot = rows.firstIndex { $0.index == placeholder.slot } ?? rows.count
-        // Which SIDE of the targeted row, mirroring the drop itself: `move` puts
-        // the row past its target when dragging down and before it when dragging
-        // up (SwiftUI's `move(fromOffsets:toOffset:)` semantics). Inserting
-        // before it either way drew the downward half of every drag one row
-        // higher than it would actually land — the asymmetry the owner saw, and
-        // a preview that lied about exactly half its gestures.
-        if placeholder.slot > placeholder.source { slot += 1 }
-        rows.insert((-1, SelectableListRow(type: .footer, buffer: body)), at: slot)
+        // The slot goes at closed-up position `placeholder.slot` — before the
+        // first surviving row that already numbers at or past it. Every index
+        // here is closed-up, which is also what `move(from:to:)` produces, so
+        // the drawn position and the committed position are the same number by
+        // construction rather than by an adjustment.
+        let slot =
+            rows.firstIndex {
+                handler.reorderClosedUpIndex($0.index, source: source) >= placeholder.slot
+            } ?? rows.count
+        rows.insert(
+            (Self.reorderSlotRowIndex, SelectableListRow(type: .footer, buffer: body)),
+            at: slot)
         return rows
     }
 
-    /// The same buffer with every line drawn faint — `.ghost`'s preview at the
-    /// drop slot, and `.cursor`'s mark on the row it has hold of.
+    /// The same buffer with every line drawn faint — `.dimmed`'s preview of the
+    /// row, shown at the slot it would land in.
     private func dimmed(_ buffer: FrameBuffer) -> FrameBuffer {
         FrameBuffer(lines: buffer.lines.map { ANSIRenderer.dim + $0 + ANSIRenderer.reset })
     }
@@ -1217,14 +1206,34 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// cursor, so press-frame bands would describe an order that no longer
     /// exists (and a wheel tick can scroll them out from under any mode).
     private func publishRowBands(state: PopulatedRenderState) {
+        let handler = state.handler
+        let placeholder = handler.reorderPlaceholder
         state.handler.visibleRowBands = state.visibleRowYRanges.map { range in
             var isContent = false
             if case .content = range.type { isContent = true }
+            let dropIndex: Int?
+            if isContent {
+                // A real row still means "put it where this row is", by data
+                // offset — that is what `move(from:to:)` consumes, and it is
+                // unchanged from before the drag.
+                dropIndex = range.rowIndex
+            } else if range.rowIndex == Self.reorderSlotRowIndex, let placeholder {
+                // The gap holds the target it already has. It is the line the
+                // pointer rests on after every step, so reading it as "off the
+                // rows" is what made a `.cursor` drag cancel its own gap.
+                dropIndex = placeholder.slot
+            } else {
+                dropIndex = nil
+            }
             return ItemListHandler<SelectionValue>.RowBand(
                 rowIndex: range.rowIndex, yStart: range.yStart, height: range.height,
-                isContent: isContent)
+                isContent: isContent, dropIndex: dropIndex)
         }
     }
+
+    /// The sentinel row index the reorder drop slot is decorated with — it has
+    /// no data behind it, so it cannot carry a real offset.
+    private static var reorderSlotRowIndex: Int { -1 }
 
     /// Builds the closure that the container-wide hit-test
     /// region invokes. Routes wheel to the handler's scroll
