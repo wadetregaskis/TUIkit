@@ -90,7 +90,15 @@ extension ContextMenuModifier: Renderable {
             focusManager?.registerSection(id: sectionID)
             focusManager?.activateSection(id: sectionID)
             focusManager?.markSectionModal(id: sectionID)
-            context.environment.keyEventDispatcher!.addHandler { event in
+            // Take the keyboard for this section. `isolatedForBackground()`
+            // below silences the CONTENT beneath, but a context menu hangs off
+            // a leaf view — its siblings are elsewhere in the tree and render
+            // into the live dispatcher every frame, keeping their handlers.
+            // `Menu`'s is registered unconditionally and swallows Up/Down, so
+            // the arrows meant for this menu moved the page's combo menu
+            // instead while Tab (a focus-system path, already captured) worked.
+            context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
+            context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
                 if event.key == .escape {
                     state.isOpen = false
                     return true

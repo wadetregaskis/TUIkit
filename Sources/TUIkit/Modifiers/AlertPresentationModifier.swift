@@ -125,6 +125,10 @@ extension AlertPresentationModifier: Renderable {
             // Mark this section input-grabbing so the app's global default key
             // bindings (appearance/theme) don't fire behind the alert.
             focusManager?.markSectionModal(id: sectionID)
+            // …and take the keyboard, so only handlers rendered inside the
+            // alert run. Isolation already covers the page BENEATH; this also
+            // covers a sibling elsewhere in the tree.
+            context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
         }
 
         // Register ESC handler to dismiss the alert (on the real dispatcher; the
@@ -134,7 +138,7 @@ extension AlertPresentationModifier: Renderable {
         // gate as the focus-section side effects above.
         if !context.isMeasuring {
             let isPresentedBinding = isPresented
-            context.environment.keyEventDispatcher!.addHandler { event in
+            context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
                 if event.key == .escape {
                     isPresentedBinding.wrappedValue = false
                     return true

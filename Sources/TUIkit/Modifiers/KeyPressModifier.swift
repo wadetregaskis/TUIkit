@@ -42,7 +42,9 @@ extension KeyPressModifier: Renderable {
         context.environment.volatileReadTracker?.recordRenderSideEffect()
 
         // Register the key handler
-        context.environment.keyEventDispatcher!.addHandler { [keys, handler] event in
+        context.environment.keyEventDispatcher!.addHandler(
+            sectionID: context.environment.activeFocusSectionID
+        ) { [keys, handler] event in
             // Check if we should handle this key
             if let allowedKeys = keys {
                 guard allowedKeys.contains(event.key) else {

@@ -96,6 +96,10 @@ extension ModalPresentationModifier: Renderable {
             // Mark this section input-grabbing so the app's global default key
             // bindings (appearance/theme) don't fire behind the modal.
             focusManager?.markSectionModal(id: sectionID)
+            // …and take the keyboard, so only handlers rendered inside the
+            // modal run. Isolation already covers the page BENEATH; this
+            // also covers a sibling elsewhere in the tree.
+            context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
 
             // While the modal is on screen ESC should close it. Publish an
             // ESC=dismiss item on the status bar tied to the modal section

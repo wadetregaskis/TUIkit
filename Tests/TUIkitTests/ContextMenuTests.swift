@@ -276,4 +276,60 @@ struct ContextMenuTests {
         _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: 0))
         #expect(ran == true, "the button still works with no menu to dismiss")
     }
+
+    // MARK: - The open menu owns the keyboard
+
+    /// The composition the owner hit: a page with BOTH a combo `Menu` and a
+    /// context-menu target. `Menu` registers a global arrow handler that answers
+    /// `true` to Up/Down unconditionally, and a context menu hangs off a leaf, so
+    /// it cannot isolate its siblings the way a root-attached modal can. The
+    /// arrows moved the combo menu's selection instead of the open pop-up — while
+    /// Tab, which goes through the focus system and WAS captured, worked.
+    @Test("An open context menu takes the arrows from a sibling Menu")
+    func openMenuOwnsTheArrows() {
+        final class Selection { var index = 0 }
+        let selection = Selection()
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let page = VStack {
+            Menu(
+                items: [
+                    MenuItem(label: "Open", shortcut: nil),
+                    MenuItem(label: "Rename", shortcut: nil),
+                    MenuItem(label: "Export", shortcut: nil),
+                ],
+                selection: Binding(
+                    get: { selection.index }, set: { selection.index = $0 }))
+            Text("Right-click me").contextMenu {
+                Button("Cut") {}
+                Button("Copy") {}
+            }
+        }
+
+        _ = renderArmed(page, tui: tui, focusManager: focusManager, context: context)
+        // The Menu's handler is live while nothing is presented.
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .down)))
+        #expect(selection.index == 1, "sanity: the combo menu does follow Down normally")
+
+        // Open the context menu by right-clicking the Text, then re-render so the
+        // pop-up is up and the grab is in force.
+        let first = renderArmed(page, tui: tui, focusManager: focusManager, context: context)
+        let targetRow = first.lines.firstIndex { $0.stripped.contains("Right-click me") } ?? 0
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .pressed, x: 3, y: targetRow))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .released, x: 3, y: targetRow))
+        let opened = renderArmed(page, tui: tui, focusManager: focusManager, context: context)
+        #expect(!opened.overlays.isEmpty, "sanity: the pop-up is actually up")
+
+        let before = selection.index
+        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .down))
+        #expect(
+            selection.index == before,
+            """
+            with the pop-up up, Down must not reach the combo Menu behind it \
+            (was \(before), now \(selection.index))
+            """)
+    }
 }

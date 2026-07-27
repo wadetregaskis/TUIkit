@@ -523,7 +523,12 @@ private struct _MenuCore: View, Renderable, Layoutable {
         let selectCallback = onSelect
         let shiftMultiplier = context.environment.shiftStepMultiplier
 
-        context.environment.keyEventDispatcher!.addHandler { event in
+        // Tagged with this menu's section: the handler answers `true` to Up /
+        // Down unconditionally, so while a popover elsewhere on the page owns the
+        // keyboard it must not run at all.
+        context.environment.keyEventDispatcher!.addHandler(
+            sectionID: context.environment.activeFocusSectionID
+        ) { event in
             // Home/End/Page and a Shift-accelerated Up/Down jump to a clamped
             // destination (shared with the radio group and Picker drop-down),
             // then snap to the nearest SELECTABLE item so a landing on a divider
