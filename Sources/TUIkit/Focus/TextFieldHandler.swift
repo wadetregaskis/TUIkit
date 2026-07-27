@@ -563,10 +563,17 @@ extension TextFieldHandler {
             suggestionFollowPending = true
             return true
         case .up:
-            // Up from the first row returns the keyboard to the caret; with
-            // no highlight it falls through to the field's usual Up
-            // behaviour (caret to start).
-            guard let highlight = suggestionHighlight else { return nil }
+            // Up from the first row returns the keyboard to the caret; from
+            // the caret it enters the menu at the BOTTOM, mirroring Down's
+            // entry at the top. (The caret sits between the last row and the
+            // first, so stepping off either end lands on it and stepping off
+            // the caret continues around — the same ring every other TUIkit
+            // menu offers from its unselected state.)
+            guard let highlight = suggestionHighlight else {
+                suggestionHighlight = suggestionCompletions.count - 1
+                suggestionFollowPending = true
+                return true
+            }
             suggestionHighlight = highlight > 0 ? highlight - 1 : nil
             suggestionFollowPending = true
             return true

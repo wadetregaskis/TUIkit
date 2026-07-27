@@ -138,20 +138,38 @@ struct TextSuggestionKeyboardTests {
         #expect(!handler.suggestionsOpen)
     }
 
-    @Test("Up from the first row returns the keyboard to the caret")
-    func upReturnsToCaret() {
+    /// The caret sits between the last row and the first: stepping off either
+    /// end of the menu lands on it, and stepping off the caret continues around
+    /// — the ring every TUIkit menu offers from its unselected state.
+    @Test("Up from the first row returns to the caret, and again to the LAST row")
+    func upReturnsToCaretThenWrapsToTheBottom() {
         let box = TextBox()
         box.value = "abc"
-        let handler = makeHandler(box, completions: ["alpha"])
+        let handler = makeHandler(box, completions: ["alpha", "beta", "gamma"])
         handler.cursorPosition = 3
 
         _ = handler.handleKeyEvent(KeyEvent(key: .down))
         #expect(handler.suggestionHighlight == 0)
         _ = handler.handleKeyEvent(KeyEvent(key: .up))
-        #expect(handler.suggestionHighlight == nil)
-        // A further Up is the field's normal behaviour (caret to start).
+        #expect(handler.suggestionHighlight == nil, "back at the caret")
         _ = handler.handleKeyEvent(KeyEvent(key: .up))
-        #expect(handler.cursorPosition == 0)
+        #expect(handler.suggestionHighlight == 2, "…and on around to the bottom row")
+        #expect(handler.cursorPosition == 3, "the caret did not move — that was menu navigation")
+    }
+
+    /// The counterpart for a menu opened with nothing highlighted (a pointer
+    /// open, or text that matches no row): the FIRST Up must reach the bottom
+    /// row rather than falling through to the field.
+    @Test("The first Up in an unhighlighted open menu takes the last row")
+    func firstUpTakesTheLastRow() {
+        let box = TextBox()
+        box.value = "zzz"
+        let handler = makeHandler(box, completions: ["alpha", "beta", "gamma"])
+        handler.toggleSuggestionsOpen()
+        #expect(handler.suggestionHighlight == nil, "sanity: nothing matches 'zzz'")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .up))
+        #expect(handler.suggestionHighlight == 2)
     }
 
     // MARK: - Jump navigation (shared with Picker / Menu / RadioButtonGroup)
