@@ -644,6 +644,43 @@ struct ListRenderingTests {
         }
     }
 
+    /// …but the snap describes where the viewport comes to REST, so it must let
+    /// go while a drag is auto-scrolling the list one row per tick. Otherwise
+    /// the first tick moves 0→1, the very next render snaps it back, and the
+    /// list can never leave its top for as long as the drag lasts.
+    @Test("The offset-1 snap yields to a drag auto-scrolling the list")
+    func offsetOneSnapYieldsToAutoScroll() throws {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        var context = RenderContext(
+            availableWidth: 24, availableHeight: 8, environment: environment, tuiContext: tui)
+        context.hasExplicitHeight = true
+
+        let items = (0..<20).map { "item-\($0)" }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        _ = renderToBuffer(view, context: context)
+
+        // The list's own auto-scroll registration is the handle the driver uses,
+        // so take it from there rather than reaching around the render.
+        let handler = try #require(tui.dragAndDropSession.autoScrollZones.first?.vertical)
+        handler.isAutoScrolling = true
+        handler.scrollFine(by: 1)
+        _ = renderToBuffer(view, context: context)
+        #expect(
+            handler.scrollOffset == 1,
+            "a driven viewport keeps the row it was moved to — it is not at rest")
+
+        // The gesture ends: the resting rule applies again on the next render.
+        handler.isAutoScrolling = false
+        _ = renderToBuffer(view, context: context)
+        #expect(handler.scrollOffset == 0, "and settling back snaps off the wasted indicator line")
+    }
+
     /// Regression test for "the emoji list won't scroll the last screenful to
     /// its bottom". A `List` with no explicit height that shares vertical space
     /// with a flexible sibling (here a trailing `Spacer`) is *measured* with the

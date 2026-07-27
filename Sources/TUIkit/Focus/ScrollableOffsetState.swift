@@ -65,6 +65,14 @@ public protocol ScrollableOffsetState: AnyObject {
     /// does not opt in behaves exactly as before.
     var overscrollState: ScrollOverscrollState { get set }
 
+    /// Whether drag auto-scroll is currently driving this viewport — set and
+    /// cleared by `DragAndDropSession.driveAutoScroll(nowNanos:)`.
+    ///
+    /// A scroll position that is being *driven* is not a resting position, and
+    /// views that tidy up where the viewport comes to rest have to leave it
+    /// alone until the gesture ends (see `_ListCore`'s offset-1 snap).
+    var isAutoScrolling: Bool { get set }
+
     /// Whether the **user** may move this viewport — `false` under
     /// ``TUIkit/View/scrollDisabled(_:)``, captured from the environment each
     /// render so event-time code can read it.
@@ -140,6 +148,8 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var wheelEdgeHold = WheelEdgeHold()
     /// Overscroll excursion + allowance (``ScrollableOffsetState``).
     public var overscrollState = ScrollOverscrollState()
+    /// Drag auto-scroll drive flag (``ScrollableOffsetState``).
+    public var isAutoScrolling = false
     /// Whether the user may scroll this axis (``ScrollableOffsetState``).
     public var isScrollEnabled = true
     /// A horizontal axis is never anchored (anchoring is a vertical, row-wise

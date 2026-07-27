@@ -652,10 +652,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // there legitimately RESTS at row 1 (e.g. one three-line tick
             // over three-line rows), and the snap would undo the scroll —
             // making the list unscrollable whenever ticks land row-aligned.
+            // …and skip it while a drag is auto-scrolling this list. The snap
+            // describes where the viewport RESTS; a viewport being driven one
+            // row per tick isn't resting, and snapping it back turned the first
+            // tick into a permanent 0↔1 stall — the list could never leave its
+            // top under a drag.
             let lineGranular =
                 handler.scrollGranularity == .line
                 && (handler.scrollTopClipLines > 0 || source.row(at: 0).buffer.height > 1)
-            if overflowing, !showsScrollbar, handler.scrollOffset == 1, !lineGranular {
+            if overflowing, !showsScrollbar, handler.scrollOffset == 1, !lineGranular,
+                !handler.isAutoScrolling
+            {
                 handler.scrollOffset = 0
             }
         }

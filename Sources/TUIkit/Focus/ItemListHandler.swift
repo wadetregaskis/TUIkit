@@ -311,6 +311,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// from the environment each render.
     var overscrollState = ScrollOverscrollState()
 
+    /// Drag auto-scroll drive flag (``ScrollableOffsetState``).
+    var isAutoScrolling = false
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render. Selection movement is NOT
     /// gated by it — moving a cursor is not adjusting a scroll position, and the

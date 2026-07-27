@@ -66,6 +66,9 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// from the environment each render.
     public var overscrollState = ScrollOverscrollState()
 
+    /// Drag auto-scroll drive flag (``ScrollableOffsetState``).
+    public var isAutoScrolling = false
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render.
     public var isScrollEnabled = true

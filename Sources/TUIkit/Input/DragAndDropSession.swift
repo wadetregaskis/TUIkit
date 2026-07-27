@@ -176,6 +176,9 @@ final class DragAndDropSession: @unchecked Sendable {
     /// first tick fires (see ``driveAutoScroll(nowNanos:delayNanos:)``).
     private var autoScrollNextFireNanos: UInt64 = 0
 
+    /// The scrollable currently flagged ``ScrollableOffsetState/isAutoScrolling``.
+    private var autoScrollDriven: (any ScrollableOffsetState)?
+
     /// The drag in flight, or `nil`.
     private(set) var active: ActiveDrag?
 
@@ -298,6 +301,17 @@ final class DragAndDropSession: @unchecked Sendable {
         active?.targeted?.setTargeted(false)
         active = nil
         autoScrollEngagedSinceNanos = nil
+        releaseAutoScrollFlags()
+    }
+
+    /// Clears ``ScrollableOffsetState/isAutoScrolling`` on whatever this session
+    /// last drove. Held as a reference rather than re-derived, because the zone
+    /// that engaged may already be gone (its handler ids reset every render, and
+    /// a scrollable can leave the tree mid-drag) — and a scrollable left flagged
+    /// would never settle again.
+    private func releaseAutoScrollFlags() {
+        autoScrollDriven?.isAutoScrolling = false
+        autoScrollDriven = nil
     }
 
     // MARK: - Auto-scroll
@@ -344,7 +358,16 @@ final class DragAndDropSession: @unchecked Sendable {
                 cursorX: cursor.x, cursorY: cursor.y, dispatcher: dispatcher)
         else {
             autoScrollEngagedSinceNanos = nil
+            releaseAutoScrollFlags()
             return false
+        }
+
+        // Mark the driven scrollable, so a view that tidies up resting scroll
+        // positions leaves this one alone until the gesture ends.
+        if !step.zone.vertical.isAutoScrolling {
+            releaseAutoScrollFlags()
+            step.zone.vertical.isAutoScrolling = true
+            autoScrollDriven = step.zone.vertical
         }
 
         if autoScrollEngagedSinceNanos == nil {
