@@ -288,7 +288,13 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let shortcut = assignment.claim()
         {
             context.environment.volatileReadTracker?.recordRenderSideEffect()
-            registry.register(shortcut, action: effectiveAction)
+            // `.command` is not a key a terminal can report, so it is resolved
+            // to whatever stands in for it here (`.commandKey(_:)`) at the
+            // moment of registration — the one place that both holds the
+            // environment and knows the shortcut.
+            if let resolved = shortcut.resolved(commandKey: context.environment.commandKey) {
+                registry.register(resolved, action: effectiveAction)
+            }
         }
 
         let style = context.environment.buttonStyle

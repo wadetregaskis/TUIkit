@@ -253,17 +253,36 @@ struct KeyEquivalentShortcutTests {
         #expect(fired == 0)
     }
 
-    @Test("Case is carried by Shift, not by the character")
-    func caseIsAModifier() {
+    /// A terminal does not report Shift for a printable key — it sends the
+    /// shifted CHARACTER and no modifier bits (`KeyEvent.parse`'s printable
+    /// branch builds `KeyEvent(character:)` with nothing set). So Shift has to
+    /// be read off the case, or `("a", [.shift])` would be permanently dead
+    /// while `("a", [])` fired for "A" as well.
+    @Test("Shift on a printable key comes from the case, not the event flag")
+    func shiftComesFromTheCase() {
         let registry = KeyboardShortcutRegistry()
         var lower = 0
         var upper = 0
         registry.register(KeyboardShortcut("a", modifiers: [])) { lower += 1 }
         registry.register(KeyboardShortcut("a", modifiers: .shift)) { upper += 1 }
 
+        // Exactly what the parser produces for the two keystrokes: no flags.
         _ = registry.trigger(for: KeyEvent(key: .character("a")))
-        _ = registry.trigger(for: KeyEvent(key: .character("A"), ctrl: false, alt: false, shift: true))
-        #expect((lower, upper) == (1, 1))
+        #expect((lower, upper) == (1, 0), "lower-case a fires only the unshifted binding")
+        _ = registry.trigger(for: KeyEvent(key: .character("A")))
+        #expect((lower, upper) == (1, 1), "…and A fires only the shifted one")
+    }
+
+    @Test("An uppercase literal IS the shifted binding")
+    func uppercaseLiteralImpliesShift() {
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        // SwiftUI's reading of `keyboardShortcut("A")`.
+        registry.register(KeyboardShortcut("A", modifiers: [])) { fired += 1 }
+
+        #expect(!registry.trigger(for: KeyEvent(key: .character("a"))), "not the unshifted key")
+        #expect(registry.trigger(for: KeyEvent(key: .character("A"))))
+        #expect(fired == 1)
     }
 
     @Test("The semantic roles still work alongside key equivalents")
@@ -284,5 +303,85 @@ struct KeyEquivalentShortcutTests {
     func displayCharacter() {
         #expect(KeyboardShortcut("7", modifiers: []).displayCharacter == "7")
         #expect(KeyboardShortcut.defaultAction.displayCharacter == nil)
+    }
+}
+
+@MainActor
+@Suite("command key substitution")
+struct CommandKeySubstitutionTests {
+
+    /// The portability point: SwiftUI source says ⌘S, and it should work here
+    /// without every shared shortcut being rewritten for the terminal.
+    @Test("A Command shortcut is delivered by whatever stands in for Command")
+    func commandResolves() {
+        let shortcut = KeyboardShortcut("s")  // SwiftUI's default: .command
+
+        let asControl = shortcut.resolved(commandKey: .control)
+        #expect(asControl != nil)
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        registry.register(asControl!) { fired += 1 }
+        #expect(
+            registry.trigger(
+                for: KeyEvent(key: .character("s"), ctrl: true, alt: false, shift: false)))
+        #expect(!registry.trigger(for: KeyEvent(key: .character("s"))), "…and not the bare key")
+        #expect(fired == 1)
+    }
+
+    @Test(
+        "Each binding delivers Command as the modifier it names",
+        arguments: [
+            (CommandKeyBinding.control, (ctrl: true, alt: false)),
+            (.option, (ctrl: false, alt: true)),
+            (.bare, (ctrl: false, alt: false)),
+        ])
+    func eachBinding(binding: CommandKeyBinding, flags: (ctrl: Bool, alt: Bool)) {
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        let resolved = KeyboardShortcut("s").resolved(commandKey: binding)
+        registry.register(resolved!) { fired += 1 }
+        #expect(
+            registry.trigger(
+                for: KeyEvent(
+                    key: .character("s"), ctrl: flags.ctrl, alt: flags.alt, shift: false)))
+        #expect(fired == 1)
+    }
+
+    @Test("`.unavailable` binds nothing rather than guessing")
+    func unavailableBindsNothing() {
+        #expect(KeyboardShortcut("s").resolved(commandKey: .unavailable) == nil)
+        // A shortcut that never mentioned Command is untouched either way.
+        let bare = KeyboardShortcut("s", modifiers: [])
+        #expect(bare.resolved(commandKey: .unavailable) == bare)
+    }
+
+    @Test("A shortcut without Command is not rewritten")
+    func nonCommandUntouched() {
+        let ctrl = KeyboardShortcut("s", modifiers: .control)
+        #expect(ctrl.resolved(commandKey: .option) == ctrl, "only .command is substituted")
+    }
+
+    /// `KeyEvent.parse` matches Tab, Return, newline and Escape BEFORE the
+    /// Ctrl-letter range, so those combinations never arrive as a modified
+    /// letter — no amount of remapping can deliver ⌘I as Ctrl-I. Ctrl-C and
+    /// Ctrl-Z belong to job control. Better to be able to ask than to wonder
+    /// why one menu item is dead.
+    @Test("The C0 collisions are reported, not silently dead")
+    func c0CollisionsAreQueryable() {
+        for key: KeyEquivalent in ["i", "j", "m", "c", "z", "["] {
+            let resolved = KeyboardShortcut(key).resolved(commandKey: .control)
+            #expect(
+                resolved?.isDeliverableInTerminal == false,
+                "Ctrl-\(key.character) is spoken for by the C0 range or job control")
+        }
+        for key: KeyEquivalent in ["s", "o", "n", "1"] {
+            let resolved = KeyboardShortcut(key).resolved(commandKey: .control)
+            #expect(resolved?.isDeliverableInTerminal == true)
+        }
+        // Under Option there is no C0 range to collide with.
+        #expect(
+            KeyboardShortcut("i").resolved(commandKey: .option)?.isDeliverableInTerminal == true)
+        // And an unresolved Command shortcut is honestly undeliverable.
+        #expect(KeyboardShortcut("s").isDeliverableInTerminal == false)
     }
 }

@@ -35,13 +35,23 @@
 /// > only the two semantic actions. (Documented deviation from the full
 /// > SwiftUI surface.)
 public struct KeyEquivalent: Hashable, Sendable, ExpressibleByExtendedGraphemeClusterLiteral {
-    /// The character this equivalent matches, compared case-insensitively (the
-    /// case of a typed key is carried by ``EventModifiers/shift``, not by the
-    /// character, exactly as SwiftUI treats it).
+    /// The character this equivalent matches, always folded to lower case.
+    ///
+    /// A terminal does not report Shift for a printable key — it sends the
+    /// shifted *character*: "A" arrives as one byte with no modifier bits at
+    /// all (see `KeyEvent.parse`). So the case of the literal IS the shift,
+    /// and carrying both would let a shortcut be written that can never fire.
+    /// `KeyEquivalent("A")` therefore normalises to `"a"` plus
+    /// ``impliesShift``, which is SwiftUI's reading of an uppercase literal.
     public let character: Character
 
+    /// Whether the literal was uppercase, i.e. the shortcut wants the shifted
+    /// key. Unioned into the shortcut's modifiers at construction.
+    public let impliesShift: Bool
+
     public init(_ character: Character) {
-        self.character = character
+        self.character = Character(character.lowercased())
+        self.impliesShift = character.isUppercase
     }
 
     public init(extendedGraphemeClusterLiteral value: Character) {
@@ -50,6 +60,19 @@ public struct KeyEquivalent: Hashable, Sendable, ExpressibleByExtendedGraphemeCl
 
     /// The space bar.
     public static let space = Self(" ")
+
+    // Identity is the folded character alone. `impliesShift` records how the
+    // literal was written so the initialiser can fold it into the shortcut's
+    // modifiers, and must not survive into the lookup key — otherwise
+    // `KeyEquivalent("A")` and `KeyEquivalent("a")` hash apart and a typed "A"
+    // could never find the binding its own case just created.
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.character == rhs.character
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(character)
+    }
 }
 
 /// The modifier keys a shortcut requires.
@@ -91,7 +114,7 @@ public struct KeyboardShortcut: Hashable, Sendable {
         case key(KeyEquivalent, EventModifiers)
     }
 
-    let trigger: Trigger
+    private(set) var trigger: Trigger
 
     /// The default button: Return/Enter activates it when the focused control
     /// lets the key fall through.
@@ -108,7 +131,42 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// key. That is the form a terminal menu wants anyway: "press 1 for the
     /// first item".
     public init(_ key: KeyEquivalent, modifiers: EventModifiers = .command) {
-        self.trigger = .key(key, modifiers)
+        // An uppercase literal IS the shift — see `KeyEquivalent`.
+        self.trigger = .key(key, key.impliesShift ? modifiers.union(.shift) : modifiers)
+    }
+
+    /// This shortcut with ``EventModifiers/command`` replaced per `binding`,
+    /// ready to register. Non-command shortcuts pass through untouched.
+    func resolved(commandKey binding: CommandKeyBinding) -> Self? {
+        guard case .key(let key, var modifiers) = trigger, modifiers.contains(.command) else {
+            return self
+        }
+        modifiers.remove(.command)
+        switch binding {
+        case .unavailable: return nil
+        case .control: modifiers.insert(.control)
+        case .option: modifiers.insert(.option)
+        case .bare: break
+        }
+        var resolved = self
+        resolved.trigger = .key(key, modifiers)
+        return resolved
+    }
+
+    /// Whether a terminal can actually deliver this shortcut.
+    ///
+    /// `false` for the Control combinations the C0 range spends on other keys:
+    /// Ctrl-I is Tab, Ctrl-J and Ctrl-M are newline and Return, Ctrl-[ is
+    /// Escape — `KeyEvent.parse` matches those *before* the Ctrl-letter range,
+    /// so they never arrive as a modified letter and never can. Ctrl-C and
+    /// Ctrl-Z are taken by the shell's job control. Consult it after
+    /// ``resolved(commandKey:)`` — that is where a ⌘ shortcut becomes a
+    /// Control one and can collide.
+    public var isDeliverableInTerminal: Bool {
+        guard case .key(let key, let modifiers) = trigger else { return true }
+        if modifiers.contains(.command) { return false }
+        guard modifiers.contains(.control) else { return true }
+        return !"cijmz[".contains(key.character)
     }
 
     private init(trigger: Trigger) {
@@ -120,6 +178,68 @@ public struct KeyboardShortcut: Hashable, Sendable {
     public var displayCharacter: Character? {
         if case .key(let key, _) = trigger { return key.character }
         return nil
+    }
+}
+
+// MARK: - Command key
+
+/// How ``EventModifiers/command`` is delivered in a terminal, which cannot
+/// report the Command key itself.
+///
+/// The point is portability: the same `View` source should run under SwiftUI
+/// and under TUIkit, and SwiftUI source says `⌘S`. Rather than making every
+/// shared shortcut spell out a terminal-specific modifier, an app states once —
+/// at its root — which key stands in for Command here.
+///
+/// ```swift
+/// WindowGroup { RootView() }
+///     .commandKey(.control)     // ⌘S is Ctrl-S in the terminal
+/// ```
+///
+/// TUI-specific: SwiftUI has no equivalent, because on its platforms the
+/// question does not arise.
+public enum CommandKeyBinding: Sendable, Hashable {
+    /// Control. The default, and the only modifier every terminal reports for
+    /// letters — but it collides with the C0 range; see
+    /// ``KeyboardShortcut/isDeliverableInTerminal``.
+    case control
+
+    /// Option / Alt. Reported as an ESC prefix or the high bit, and only when
+    /// the terminal is configured for it (Apple Terminal composes accented
+    /// characters instead unless "Use Option as Meta key" is on), so this is
+    /// the less reliable choice — see `Documentation/Terminal-compatibility.md`.
+    case option
+
+    /// The bare key, no modifier. Closest to how a TUI usually binds commands,
+    /// and the most collision-prone: `⌘Q` becomes plain "q".
+    case bare
+
+    /// `.command` shortcuts simply do not fire. Pick this to be certain
+    /// nothing is silently rebound.
+    case unavailable
+}
+
+private struct CommandKeyBindingKey: EnvironmentKey {
+    static let defaultValue = CommandKeyBinding.control
+}
+
+extension EnvironmentValues {
+    /// Which terminal modifier stands in for Command — see
+    /// ``CommandKeyBinding``. Defaults to ``CommandKeyBinding/control``.
+    public var commandKey: CommandKeyBinding {
+        get { self[CommandKeyBindingKey.self] }
+        set { self[CommandKeyBindingKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Chooses which terminal modifier stands in for Command in this subtree,
+    /// so SwiftUI source written with `⌘` shortcuts works unchanged.
+    ///
+    /// - Parameter binding: The stand-in; see ``CommandKeyBinding``.
+    /// - Returns: A view whose `.command` shortcuts bind to `binding`.
+    public func commandKey(_ binding: CommandKeyBinding) -> some View {
+        environment(\.commandKey, binding)
     }
 }
 
@@ -164,11 +284,14 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
         case .escape where modifiers.isEmpty:
             return run(.cancelAction)
         case .character(let character):
-            // Case-insensitive, with the case itself carried by `.shift` — so
-            // "A" typed with Shift matches a shortcut declared `("a", [.shift])`
-            // and not one declared `("a", [])`.
-            let folded = Character(character.lowercased())
-            return run(.key(KeyEquivalent(folded), modifiers))
+            // Shift comes from the CASE, not from `event.shift`: a terminal
+            // sends a shifted printable as the shifted character with no
+            // modifier bits, so trusting the flag would make `("a", [.shift])`
+            // permanently dead and let `("a", [])` fire for "A" as well.
+            var modifiers = modifiers
+            modifiers.remove(.shift)
+            if character.isUppercase { modifiers.insert(.shift) }
+            return run(.key(KeyEquivalent(character), modifiers))
         default:
             return false
         }

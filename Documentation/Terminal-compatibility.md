@@ -863,6 +863,63 @@ negligible: playing-card and domino codepoints in TUI content.
 2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is
 right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
 
+## Keyboard modifiers on key events
+
+Recorded 2026-07-27 alongside `KeyboardShortcut`'s key-equivalent support.
+Read this before designing any binding that depends on a modifier.
+
+### Command is never reported
+
+No terminal forwards the Command key on a **key** event. `⌘S` cannot arrive.
+This is why `CommandKeyBinding` exists: SwiftUI source says `⌘S`, and an app
+states once at its root which terminal modifier stands in for it
+(`.commandKey(.control)`), rather than every shared shortcut being rewritten.
+
+Note the asymmetry with **mouse** reports, where the meta bit is real but means
+different things: iTerm2 forwards ⌘ as meta, Apple Terminal forwards ⌥ (see the
+mouse sections above). The standing rule from that measurement holds here too —
+never design around one specific macOS modifier key being available.
+
+### Shift on a printable key is the character, not a bit
+
+A terminal sends a shifted printable as the shifted **character** with no
+modifier bits: "A" is one byte, 0x41, and `KeyEvent.parse`'s printable branch
+builds `KeyEvent(character:)` with `ctrl`/`alt`/`shift` all false. There is no
+shift flag to read.
+
+So a shortcut's Shift has to be derived from case, both when it is declared and
+when a key arrives. `KeyboardShortcut` does exactly that: `KeyEquivalent("A")`
+normalises to `"a"` + `.shift`, and matching sets `.shift` from
+`character.isUppercase` and ignores `event.shift`. Trusting the flag instead
+would leave `("a", [.shift])` permanently dead while `("a", [])` fired for "A"
+as well.
+
+The flag IS meaningful on **non-printable** keys (arrows, function keys), where
+it arrives in the CSI parameters — and there it is unreliable in a different
+way: Apple Terminal sends bare `ESC[A`/`ESC[B` for Up/Down, dropping every
+modifier, while keeping them on Left/Right. A Shift+Up binding therefore cannot
+work in Apple Terminal. That is a terminal limitation, not a framework bug.
+
+### Control collides with the C0 range
+
+`Ctrl`+letter arrives as 0x01–0x1A and `KeyEvent.parse` maps it back to the
+lower-case letter with `ctrl: true` — but only for the letters the C0 range has
+not already spent:
+
+| Combination | Arrives instead as | Why |
+|---|---|---|
+| Ctrl-I | Tab | 0x09 is HT, matched before the Ctrl range |
+| Ctrl-J | Enter | 0x0A is LF |
+| Ctrl-M | Enter | 0x0D is CR |
+| Ctrl-[ | Escape | 0x1B, outside the 0x01–0x1A range |
+| Ctrl-C, Ctrl-Z | — | taken by the shell's job control |
+
+These cannot be delivered under `.commandKey(.control)` by any means. Ask
+`KeyboardShortcut.isDeliverableInTerminal` (after `resolved(commandKey:)`)
+rather than wondering why one menu item is dead. `.commandKey(.option)` has no
+such collision, at the cost of Option itself being less reliable: Apple
+Terminal composes accented characters unless "Use Option as Meta key" is on.
+
 ## Where the adaptations live
 
 - `TerminalHost` — `TERM_PROGRAM` detection (`Apple_Terminal`,
