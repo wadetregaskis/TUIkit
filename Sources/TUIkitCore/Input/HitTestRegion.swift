@@ -60,6 +60,22 @@ public struct HitTestRegion: Sendable, Equatable {
     /// without any side-channel mapping.
     public let focusID: String?
 
+    /// Rows of chrome an ANCESTOR drew immediately above this region — a
+    /// border rule, typically — that belong to the control for the purpose of
+    /// revealing it.
+    ///
+    /// Purely geometric, and read by ``FrameBuffer/revealTarget(focusID:wholeControl:)``
+    /// alone: hit-testing ignores it, so a border stays inert to clicks while a
+    /// reveal can still bring it on screen. A control that draws its own border
+    /// has no need of this; it exists because `.border()` and friends wrap a
+    /// child in a container that SHIFTS the child's regions without growing
+    /// them, leaving the rule one row outside everything the reveal can see.
+    public var revealOutsetTop: Int = 0
+
+    /// Rows of ancestor-drawn chrome immediately below this region. See
+    /// ``revealOutsetTop``.
+    public var revealOutsetBottom: Int = 0
+
     /// Creates a hit-test region.
     public init(
         offsetX: Int,

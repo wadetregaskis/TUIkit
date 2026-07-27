@@ -78,4 +78,43 @@ struct RevealTargetTests {
         #expect(target?.top == 0 && target?.height == 3, "got \(String(describing: target))")
         #expect(mixed.revealTarget(focusID: "absent", wholeControl: true) == nil)
     }
+
+    /// The cases above hand-build their regions. This one renders a real
+    /// control inside a real `.border()`, which is where the geometry actually
+    /// comes from — and where it was wrong: the container shifts a child's
+    /// regions past the rule without growing them, so the reveal put the
+    /// control's content flush with the viewport edge and left the rule itself
+    /// one row outside.
+    @MainActor
+    @Test("A border drawn by a wrapper is part of the whole-control reveal")
+    func wrapperBorderJoinsTheReveal() throws {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        let focusManager = FocusManager()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 10,
+            environment: environment, tuiContext: tui)
+
+        tui.mouseEventDispatcher.beginRenderPass()
+        focusManager.beginRenderPass()
+        let view = Button("Press") {}.focusID("btn").border()
+        let buffer = renderToBuffer(view, context: context)
+
+        let whole = try #require(buffer.revealTarget(focusID: "btn", wholeControl: true))
+        let inner = try #require(buffer.revealTarget(focusID: "btn", wholeControl: false))
+        #expect(
+            whole.top == inner.top - 1,
+            "the rule above the button belongs to it: whole \(whole), inner \(inner)")
+        #expect(
+            whole.top + whole.height == inner.top + inner.height + 1,
+            "…and the rule below it too")
+        #expect(
+            (inner.top, inner.height) == (1, 1),
+            """
+            the within-control target stays the bare content — a cursor moving \
+            row to row must not keep re-revealing the frame
+            """)
+    }
 }

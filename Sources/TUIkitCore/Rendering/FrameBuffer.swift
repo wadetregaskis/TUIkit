@@ -843,8 +843,13 @@ extension FrameBuffer {
         var bottom = Int.min
         var smallest: HitTestRegion?
         for region in hitTestRegions where region.focusID == focusID {
-            top = Swift.min(top, region.offsetY)
-            bottom = Swift.max(bottom, region.offsetY + region.height)
+            // The union grows by whatever chrome an ancestor drew flush against
+            // the region — the border it is framed by is part of "the control"
+            // when you have just arrived at it. The smallest region, which the
+            // within-control path uses, deliberately ignores the outsets: a
+            // cursor moving row to row is not re-revealing the frame.
+            top = Swift.min(top, region.offsetY - region.revealOutsetTop)
+            bottom = Swift.max(bottom, region.offsetY + region.height + region.revealOutsetBottom)
             if smallest == nil || region.height < smallest!.height { smallest = region }
         }
         guard top <= bottom, let smallest else { return nil }

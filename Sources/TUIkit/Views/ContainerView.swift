@@ -968,11 +968,36 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         // and one column inside the left border; the footer follows
         // the body and its optional separator.
         var carriedOverlays = bodyBuffer.shiftedOverlays(byX: 1, y: 1)
-        var carriedRegions = bodyBuffer.shiftedHitTestRegions(byX: 1, y: 1)
+        // The shift moves the body's regions past the border; it does not grow
+        // them, so the rule itself is outside every rect a reveal can see and a
+        // focused control lands with its frame one row off-screen. Record the
+        // rule against the regions it is flush with — only those, so a row in
+        // the middle of a list is unaffected — and let `revealTarget` add it
+        // back on the whole-control path.
+        let hasFooter = !(footerBuffer?.isEmpty ?? true)
+        /// Marks the rule against the regions it is flush with — only those, so
+        /// a row in the middle of a list is unaffected.
+        func outset(_ regions: [HitTestRegion], top: Int, bottom: Int?) -> [HitTestRegion] {
+            regions.map { region in
+                var region = region
+                if region.offsetY == top { region.revealOutsetTop += 1 }
+                if let bottom, region.offsetY + region.height == bottom {
+                    region.revealOutsetBottom += 1
+                }
+                return region
+            }
+        }
+        var carriedRegions = outset(
+            bodyBuffer.shiftedHitTestRegions(byX: 1, y: 1), top: 1,
+            // With a footer below it, the body's last row is not against the
+            // bottom rule — the footer's is.
+            bottom: hasFooter ? nil : 1 + bodyBuffer.lines.count)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
             carriedOverlays += footerBuf.shiftedOverlays(byX: 1, y: footerRow)
-            carriedRegions += footerBuf.shiftedHitTestRegions(byX: 1, y: footerRow)
+            carriedRegions += outset(
+                footerBuf.shiftedHitTestRegions(byX: 1, y: footerRow), top: -1,
+                bottom: footerRow + footerBuf.lines.count)
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions
