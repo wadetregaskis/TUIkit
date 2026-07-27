@@ -245,8 +245,14 @@ private func attachMenuKeys(
             return true
         case .enter, .space:
             return controller.activateHighlighted()
+        case .left, .right:
+            // On the focus ring these act as Up/Down (`dispatchKeyEvent` treats
+            // the axes alike), which in a vertical menu is simply wrong. The
+            // Picker drop-down has always eaten them.
+            return true
         default:
-            return controller.handle(event, multiplier: multiplier, pageSize: pageSize)
+            return controller.highlight.handle(
+                event, multiplier: multiplier, pageSize: pageSize)
         }
     }
 }

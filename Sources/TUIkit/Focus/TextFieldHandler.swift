@@ -92,10 +92,18 @@ final class TextFieldHandler: Focusable {
     /// render pass; empty when the field has no suggestions.
     var suggestionCompletions: [String] = []
 
+    /// The highlighted suggestion, and every gesture that moves it — shared
+    /// with the `Picker` drop-down and the pop-up `Menu`, so all three answer
+    /// the same key with the same movement. See ``MenuHighlight/suggestions()``
+    /// for why this one clamps and is entered by arrows alone.
+    let suggestionHighlighting = MenuHighlight.suggestions()
+
     /// The highlighted suggestion (an index into ``suggestionCompletions``),
-    /// or `nil` while the keyboard is editing the field text. Down moves the
-    /// highlight into the menu; Up from the first row returns to the caret.
-    var suggestionHighlight: Int?
+    /// or `nil` while the keyboard is editing the field text.
+    var suggestionHighlight: Int? {
+        get { suggestionHighlighting.ordinal }
+        set { suggestionHighlighting.move(to: newValue) }
+    }
 
     /// Whether the suggestions pop-up is showing. Opt-IN: the menu opens
     /// only on an explicit request — the Down key, or a click on the field's
@@ -114,11 +122,6 @@ final class TextFieldHandler: Focusable {
 
     /// The suggestions menu's window scroll (see ``DropdownMenu``).
     let suggestionScroll = ScrollAxis()
-
-    /// Set when keyboard navigation moved the highlight, so the next render
-    /// scrolls the menu window to keep it visible. Wheel/bar scrolling leaves
-    /// it `false` so those move the window freely.
-    var suggestionFollowPending = false
 
     /// How many suggestion rows a Shift-accelerated Up/Down jumps in the open
     /// pop-up. Synced from `environment.shiftStepMultiplier` during the field's
@@ -503,10 +506,10 @@ extension TextFieldHandler {
     /// at the caret for the mouse to take over.
     private func openSuggestions(preferFirstRow: Bool) {
         suggestionsOpen = true
-        suggestionHighlight =
-            suggestionCompletions.firstIndex(of: text.wrappedValue)
-            ?? (preferFirstRow ? 0 : nil)
-        suggestionFollowPending = suggestionHighlight != nil
+        suggestionHighlighting.adopt(count: suggestionCompletions.count)
+        suggestionHighlighting.move(
+            to: suggestionCompletions.firstIndex(of: text.wrappedValue)
+                ?? (preferFirstRow ? 0 : nil))
     }
 
     /// Handles the keys the suggestions menu consumes. Returns `nil` when
@@ -524,64 +527,30 @@ extension TextFieldHandler {
             return nil
         }
 
-        // Open AND the keyboard is in the MENU (a row is highlighted): the
-        // shared jump gestures — Home/End, PageUp/PageDown, Shift+Up/Down —
-        // move the highlight, clamped, exactly as in a Picker drop-down, Menu
-        // or RadioButtonGroup. Page moves by a visible page of the scrolling
-        // pop-up.
+        // The arrows and the jump gestures, through the walk every menu in
+        // TUIkit shares — Home/End, PageUp/PageDown and Shift+Up/Down included,
+        // with a page being a page of the scrolling pop-up.
         //
-        // With NO highlight the keyboard is still at the caret (the combo box's
-        // field/menu duality), so these stay FIELD gestures — Home/End move the
-        // caret, Shift+arrow extends the selection. The menu is only ever
-        // entered by a plain Up or Down.
-        if let highlight = suggestionHighlight,
-            let destination = OptionListNavigation.clampedDestination(
-                for: event, from: highlight, count: suggestionCompletions.count,
-                onAxisForward: .down, onAxisBackward: .up,
-                multiplier: shiftStepMultiplier,
-                pageSize: max(1, suggestionScroll.viewportHeight))
+        // The combo box's field/menu duality is CONFIGURATION on
+        // `suggestionHighlighting` rather than code here: the menu clamps at
+        // both ends (the field sits above the first row, so wrapping past it
+        // would read as a jump — and Up used to fall back out to the caret from
+        // row 0, which combined with the entry rule into a ring that only
+        // turned one way), and from the caret only a plain arrow enters it, so
+        // Home/End still move the caret and Shift+arrow still extends the
+        // selection while nothing is highlighted.
+        suggestionHighlighting.adopt(count: suggestionCompletions.count)
+        if suggestionHighlighting.handle(
+            event, multiplier: shiftStepMultiplier,
+            pageSize: max(1, suggestionScroll.viewportHeight))
         {
-            suggestionHighlight = destination
-            suggestionFollowPending = true
             return true
         }
         // Any other shifted key is field editing (e.g. Shift+Enter), never menu
-        // interaction — the plain-key menu switch below must not see it.
+        // interaction — the plain-key switch below must not see it.
         guard !event.shift else { return nil }
 
         switch event.key {
-        case .down:
-            // Down enters the menu (from the caret) and then walks it,
-            // stopping at the last row — the NSComboBox model, not the
-            // picker's wrap-around: the field "above" the first row makes
-            // wrapping read as a jump.
-            if let highlight = suggestionHighlight {
-                suggestionHighlight = min(highlight + 1, suggestionCompletions.count - 1)
-            } else {
-                suggestionHighlight = 0
-            }
-            suggestionFollowPending = true
-            return true
-        case .up:
-            // From the caret, Up enters the menu at the BOTTOM — the mirror of
-            // Down entering at the top, and what NSComboBox does. Inside the
-            // menu it CLAMPS at the first row, exactly as Down clamps at the
-            // last: the menu is entered from either end and then held, never
-            // wrapped and never left.
-            //
-            // It used to fall back out to the caret from row 0, which combined
-            // with the entry rule into a ring that only turned one way — up
-            // forever, and a hard stop going down. Escape already owns "leave
-            // the menu", and typing goes straight to the field, so nothing is
-            // lost by making Up non-destructive.
-            guard let highlight = suggestionHighlight else {
-                suggestionHighlight = suggestionCompletions.count - 1
-                suggestionFollowPending = true
-                return true
-            }
-            suggestionHighlight = max(0, highlight - 1)
-            suggestionFollowPending = true
-            return true
         case .enter:
             guard let highlight = suggestionHighlight else {
                 // Enter at the caret submits as usual; the menu closes so

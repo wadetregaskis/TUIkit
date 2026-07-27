@@ -320,9 +320,10 @@ enum TextFieldSuggestions {
         }
 
         handler.suggestionCompletions = completions
-        if let highlight = handler.suggestionHighlight, highlight >= completions.count {
-            handler.suggestionHighlight = completions.isEmpty ? nil : completions.count - 1
-        }
+        // The suggestions are rebuilt every frame (that is how filtering them
+        // against the field's text works), so the highlight has to be told what
+        // survived.
+        handler.suggestionHighlighting.adopt(count: completions.count)
         // Captured at render so a Shift-accelerated Up/Down in the open pop-up
         // can jump at event time, when the environment is out of reach.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
@@ -347,19 +348,18 @@ enum TextFieldSuggestions {
         handler: TextFieldHandler,
         context: RenderContext
     ) {
-        let followHighlight = handler.suggestionFollowPending
-        handler.suggestionFollowPending = false
-
         DropdownMenu.attach(
             DropdownMenu.OptionMenu(
                 entries: menu.entries,
                 highlightedOption: handler.suggestionHighlight,
                 scroll: handler.suggestionScroll,
-                followHighlight: followHighlight,
+                followHighlight: handler.suggestionHighlighting.consumeFollowPending(),
                 autoRepeatToken: "textfield-suggestions-\(context.identity.path)"),
             to: &buffer,
             context: context,
-            onHover: { ordinal in handler.suggestionHighlight = ordinal },
+            // The pointer is already looking at the row it is over, so a hover
+            // moves the highlight without asking the window to scroll.
+            onHover: { ordinal in handler.suggestionHighlighting.point(at: ordinal) },
             onActivate: { ordinal in handler.acceptSuggestion(at: ordinal) },
             onDismiss: { handler.suggestionsOpen = false })
     }

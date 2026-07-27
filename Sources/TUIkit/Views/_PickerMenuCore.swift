@@ -130,7 +130,6 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         )
 
         guard isOpen else { return buffer }
-        handler.highlightedIndex = min(max(0, handler.highlightedIndex), optionCount - 1)
         attachOpenPopup(
             to: &buffer, context: context, handler: handler,
             persistedFocusID: persistedFocusID, menuEntries: menuEntries)
@@ -181,6 +180,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         handler.itemValues = itemValues
         handler.canBeFocused = !isDisabled
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        handler.highlight.adopt(count: itemValues.count)
         if isDisabled { handler.isOpen = false }
         return handler
     }
@@ -286,11 +286,6 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
-        // Follow the highlight only when keyboard navigation moved it; wheel/bar
-        // scrolling (which doesn't set the flag) then moves the window freely.
-        let followHighlight = handler.scrollFollowPending
-        handler.scrollFollowPending = false
-
         let focusManager = context.environment.focusManager
         let captureSelection = selection
         let optionTags = entries.compactMap(\.tag)
@@ -300,12 +295,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 entries: menuEntries,
                 highlightedOption: handler.highlightedIndex,
                 scroll: handler.menuScroll,
-                followHighlight: followHighlight,
+                followHighlight: handler.highlight.consumeFollowPending(),
                 autoRepeatToken: "picker-menu-scrollbar-\(context.identity.path)",
                 isEnabled: !isDisabled),
             to: &buffer,
             context: context,
-            onHover: { ordinal in handler.highlightedIndex = ordinal },
+            // The pointer is already looking at the row it is over, so a hover
+            // moves the highlight without asking the window to scroll.
+            onHover: { ordinal in handler.highlight.point(at: ordinal) },
             onActivate: { ordinal in
                 guard optionTags.indices.contains(ordinal) else { return }
                 focusManager?.focus(id: persistedFocusID)
@@ -393,129 +390,5 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             bold: isFocused && !isDisabled
         )
         return openCap + styledContent + closeCap
-    }
-}
-
-// MARK: - Picker Menu Handler
-
-/// The focus and keyboard handler for a menu-style ``Picker``.
-///
-/// Persisted across renders via `StateStorage` so the open/closed state and
-/// the highlighted option survive re-rendering. While closed, Enter, Space,
-/// or Down opens the drop-down; while open, the arrow keys move the
-/// highlight, Enter or Space commits it, and Escape closes without changing
-/// the selection.
-final class _PickerMenuHandler: Focusable {
-    let focusID: String
-    var selection: Binding<AnyHashable>
-    var itemValues: [AnyHashable]
-    var canBeFocused: Bool
-
-    /// Whether the drop-down list is currently expanded.
-    var isOpen: Bool = false
-
-    /// The option index highlighted while the drop-down is open.
-    var highlightedIndex: Int = 0
-
-    /// How many options a Shift-accelerated Up/Down jumps in the open drop-down.
-    /// Synced from `environment.shiftStepMultiplier` during render (default 5);
-    /// a plain arrow moves one. See ``View/shiftStepMultiplier(_:)``.
-    var shiftStepMultiplier: Int = 5
-
-    /// The drop-down's vertical scroll, when the option list is taller than the
-    /// menu can show. `extent` = option count, `viewportHeight` = visible rows,
-    /// `scrollOffset` = first visible option. Drives the menu's scrollbar (the
-    /// shared ``ScrollbarRenderer`` machinery) and its wheel.
-    let menuScroll = ScrollAxis()
-
-    /// Set when keyboard navigation (or opening) moves the highlight, so the next
-    /// render scrolls the window to keep the highlight visible. Wheel/bar scrolling
-    /// leaves it `false` so those move the window freely (the highlight may leave
-    /// the viewport, as in a desktop drop-down).
-    var scrollFollowPending = true
-
-    init(
-        focusID: String,
-        selection: Binding<AnyHashable>,
-        itemValues: [AnyHashable],
-        canBeFocused: Bool
-    ) {
-        self.focusID = focusID
-        self.selection = selection
-        self.itemValues = itemValues
-        self.canBeFocused = canBeFocused
-        if let index = itemValues.firstIndex(of: selection.wrappedValue) {
-            self.highlightedIndex = index
-        }
-    }
-
-    func onFocusLost() {
-        // Closing on focus loss keeps the drop-down from lingering over
-        // unrelated content once the user tabs away.
-        isOpen = false
-        if let index = itemValues.firstIndex(of: selection.wrappedValue) {
-            highlightedIndex = index
-        }
-    }
-
-    func handleKeyEvent(_ event: KeyEvent) -> Bool {
-        guard !itemValues.isEmpty else { return false }
-        highlightedIndex = min(max(0, highlightedIndex), itemValues.count - 1)
-
-        if isOpen {
-            // Home/End/Page and Shift-accelerated Up/Down jump to a clamped
-            // destination (shared with the radio group and menus). PageUp/PageDown
-            // move by a visible page of the scrolling drop-down.
-            if let destination = OptionListNavigation.clampedDestination(
-                for: event, from: highlightedIndex, count: itemValues.count,
-                onAxisForward: .down, onAxisBackward: .up,
-                multiplier: shiftStepMultiplier,
-                pageSize: max(1, menuScroll.viewportHeight))
-            {
-                highlightedIndex = destination
-                scrollFollowPending = true
-                return true
-            }
-
-            switch event.key {
-            case .up:
-                highlightedIndex =
-                    highlightedIndex > 0 ? highlightedIndex - 1 : itemValues.count - 1
-                scrollFollowPending = true
-                return true
-            case .down:
-                highlightedIndex =
-                    highlightedIndex < itemValues.count - 1 ? highlightedIndex + 1 : 0
-                scrollFollowPending = true
-                return true
-            case .enter, .space:
-                selection.wrappedValue = itemValues[highlightedIndex]
-                isOpen = false
-                return true
-            case .escape:
-                isOpen = false
-                return true
-            case .tab:
-                // Close, but let the focus system move on to the next view.
-                isOpen = false
-                return false
-            default:
-                // While open the picker is modal: swallow everything else.
-                return true
-            }
-        } else {
-            switch event.key {
-            case .enter, .space:
-                // Only Enter/Space (or a click) open the drop-down — matching
-                // SwiftUI. Arrow keys must fall through to focus navigation.
-                highlightedIndex = itemValues.firstIndex(of: selection.wrappedValue) ?? 0
-                isOpen = true
-                scrollFollowPending = true
-                return true
-            default:
-                // Closed: let Tab and the arrow keys drive focus navigation.
-                return false
-            }
-        }
     }
 }

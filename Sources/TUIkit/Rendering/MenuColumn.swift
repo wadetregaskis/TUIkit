@@ -126,10 +126,11 @@ extension EnvironmentValues {
 /// The open pop-up menu's own state: which row is highlighted, and which rows
 /// there are to highlight.
 ///
-/// This is the half of the merge that the `Picker` drop-down has always had —
-/// the highlight is an index, so every gesture that moves an index (the arrows,
-/// Home/End, Page, Shift-accelerated steps) is one shared implementation rather
-/// than something each menu re-derives from the focus ring.
+/// The highlight itself is a ``MenuHighlight``, shared with the `Picker`
+/// drop-down and the combo box — the walk is the same walk everywhere, and only
+/// the edge rule differs (a `Menu` clamps; only the `Picker` wraps). What is
+/// particular to a view-composed pop-up lives here: the sink its rows report
+/// to, and the reveal target that scrolls a tall menu to its highlight.
 ///
 /// One per presented menu, living on the presenter's persisted state, so the
 /// highlight survives the frames between key presses.
@@ -138,16 +139,11 @@ final class MenuPopupController {
     /// Collects what the rows report as they render.
     let sink = MenuRowSink()
 
-    /// The highlighted row, or `nil` for "nothing chosen yet" — which is how a
-    /// POINTER-opened menu opens, since the pointer has not chosen anything and
-    /// a pre-selected row invites a mis-click.
-    var highlightedOrdinal: Int?
+    /// The highlighted row, and every gesture that moves it.
+    let highlight = MenuHighlight.popUpMenu()
 
-    /// The rows the last render offered, in visual order. Read back from the
-    /// sink after each render, exactly as a `List` republishes its row bands:
-    /// the highlight has to persist across frames, but what it may rest ON is
-    /// only known once the rows have drawn.
-    private(set) var selectableOrdinals: [Int] = []
+    /// The highlighted row's ordinal, or `nil` for "nothing chosen yet".
+    var highlightedOrdinal: Int? { highlight.ordinal }
 
     /// Records that the menu has just been opened.
     ///
@@ -158,79 +154,34 @@ final class MenuPopupController {
     ///   else to point with. From the unhighlighted state the first Down takes
     ///   the first row and the first Up the last.
     ///
-    /// The first row is `selectableOrdinals.first` when this menu has been open
-    /// before and `0` when it has not — and ordinal 0 is the first BUTTON
-    /// either way, since only a Button claims one. A leading `Divider` costs
-    /// nothing; a leading `.disabled()` row is caught by ``adoptRenderedRows()``
-    /// as soon as the frame draws.
+    /// The first row is the first known selectable ordinal when this menu has
+    /// been open before and `0` when it has not — and ordinal 0 is the first
+    /// BUTTON either way, since only a Button claims one. A leading `Divider`
+    /// costs nothing; a leading `.disabled()` row is caught by
+    /// ``MenuHighlight/adopt(selectable:)`` as soon as the frame draws.
     func opened(withSelection: Bool) {
-        highlightedOrdinal = withSelection ? (selectableOrdinals.first ?? 0) : nil
+        highlight.move(to: withSelection ? (highlight.selectable.first ?? 0) : nil)
     }
 
     /// Records that the menu has closed.
     func closed() {
-        highlightedOrdinal = nil
+        highlight.move(to: nil)
     }
 
-    /// Takes the ordinals the frame just published, and moves a highlight whose
-    /// row is gone — a menu whose content changed under it, or one that opened
-    /// on a row that turned out to be disabled — down to the nearest survivor.
+    /// Takes the ordinals the frame just published.
     func adoptRenderedRows() {
-        selectableOrdinals = sink.selectableOrdinals
-        guard let current = highlightedOrdinal, !selectableOrdinals.contains(current) else {
-            return
-        }
-        highlightedOrdinal = selectableOrdinals.first { $0 > current } ?? selectableOrdinals.last
-    }
-
-    /// Moves the highlight for `event`, or reports that the key was not one of
-    /// ours. Clamps at both ends: a `Menu` never wraps (only a `Picker` does),
-    /// and from nothing the first Down takes the first row and the first Up the
-    /// last — the ring is entered at either end and then held.
-    func handle(_ event: KeyEvent, multiplier: Int, pageSize: Int) -> Bool {
-        guard !selectableOrdinals.isEmpty else { return false }
-
-        // Left/Right would otherwise act as Up/Down on the focus ring, which in
-        // a vertical menu is simply wrong; the drop-down has always eaten them.
-        if event.key == .left || event.key == .right { return true }
-
-        guard let current = highlightedOrdinal.flatMap(selectableOrdinals.firstIndex(of:)) else {
-            switch event.key {
-            case .down: highlightedOrdinal = selectableOrdinals.first
-            case .up, .end: highlightedOrdinal = selectableOrdinals.last
-            case .home, .pageDown: highlightedOrdinal = selectableOrdinals.first
-            case .pageUp: highlightedOrdinal = selectableOrdinals.last
-            default: return false
-            }
-            return true
-        }
-
-        if let destination = OptionListNavigation.clampedDestination(
-            for: event, from: current, count: selectableOrdinals.count,
-            onAxisForward: .down, onAxisBackward: .up,
-            multiplier: multiplier, pageSize: pageSize)
-        {
-            highlightedOrdinal = selectableOrdinals[destination]
-            return true
-        }
-        guard !event.shift else { return false }
-        switch event.key {
-        case .down: highlightedOrdinal = selectableOrdinals[min(current + 1, selectableOrdinals.count - 1)]
-        case .up: highlightedOrdinal = selectableOrdinals[max(current - 1, 0)]
-        default: return false
-        }
-        return true
+        highlight.adopt(selectable: sink.selectableOrdinals)
     }
 
     /// The row a scrolling menu should keep on screen, named the way the row's
     /// own hit-test region is.
     var revealTargetID: String? {
-        highlightedOrdinal.map(menuRowRegionID)
+        highlight.ordinal.map(menuRowRegionID)
     }
 
     /// Runs the highlighted row, if there is one.
     func activateHighlighted() -> Bool {
-        guard let ordinal = highlightedOrdinal else { return false }
+        guard let ordinal = highlight.ordinal else { return false }
         sink.activate(ordinal: ordinal)
         return true
     }

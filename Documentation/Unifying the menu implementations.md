@@ -1,9 +1,10 @@
 # Unifying the menu implementations
 
-**Status:** in progress. The shared pieces, the safety net and the ownership
-flip have landed; the pop-up is not yet WINDOWED through the drop-down, and the
-`Picker`/combo box have not yet been folded onto the controller. This is the
-working plan, written down so it can be picked up cold.
+**Status:** the controller merge is done. All four menu surfaces now share one
+highlight and one drop-down assembly; what is left is the RENDERER merge (step
+3), which is what would give a pop-up `Menu` the marker column, the scrollbar
+and hover-moves-highlight. This is the working plan, written down so it can be
+picked up cold.
 
 **Why:** TUIkit has two pop-up-menu implementations, and the differences between
 them are user-visible. Every observable difference the owner named has been
@@ -119,31 +120,41 @@ pop-up above its control only when it is > 0, and `ScrollView` culls overlays by
 `offsetY - anchorHeight`. Giving `Menu` the Picker's `1` starts flipping menus
 that today only nudge.
 
-### 4. Fold `_PickerMenuCore` and `TextInputSuggestions` onto the controller
+## Also landed: the controller merge (step 4)
 
-`MenuPopupController` is the seat: it already owns the highlight, the clamped
-navigation and the activation. What each caller still holds is its own drop-down
-renderer and its own "opens with" rule.
+Two commits, from the outside in.
 
-The three deliberately different behaviours stay as **config, not code**:
+**The assembly.** `DropdownMenu.Entry` / `OptionMenu` / `attach` — an option is a
+label and "is this the current value", and the marker column, the
+`maxLabel + 4` width, the ordinal↔row maps and the `anchorHeight: 1` overlay all
+follow from that. The `Picker` and the combo box had written that out twice,
+identically, and `innerWidth(for:context:)` is separate because a `Picker`'s
+COLLAPSED control is drawn to the width of the menu it opens.
 
-| | marker | edge | opens with |
+**The walk.** `MenuHighlight` — the highlight is an ordinal, and every gesture
+that moves it (the arrows, Home/End, Page, Shift-accelerated steps, via
+`OptionListNavigation`) is one implementation. Three surfaces had written it out
+three times, and the differences between them had never been decided anywhere:
+the jump keys reached one long before the others.
+
+The two places they genuinely differ are now **named configurations**, so a
+control given the wrong one is a change the tests can see:
+
+| | `MenuHighlight.popUpMenu()` | `.pickerDropDown()` | `.suggestions()` |
 |---|---|---|---|
-| Picker | ✓ | wrap | the selected row |
-| combo box | ✓ | clamp | ✓ row if the text matches, else nothing (pointer) / row 0 (Down) |
-| `Menu` / `.contextMenu` | — | clamp | nothing (pointer) / first (keyboard) |
+| edge | clamp | **wrap** | clamp |
+| entered from nothing by | any key | any key | **arrows only** |
+| used by | `Menu`, `.contextMenu` | `Picker` | combo box |
 
-Note "opens with" resolves per **input source**, not to a single case — collapsing
-that regresses both the combo box and the menu. On the `Menu` side that decision
-now lives in ``MenuPopupController.opened(withSelection:)``, called by the
-trigger at the moment it opens, because only the trigger knows which device
-pressed it.
+The wrap is the `Picker`'s alone because its list is the whole interaction while
+it is up — nothing else is reachable to be jumped away from. The arrows-only
+entry is the combo box's alone because with nothing highlighted its keyboard is
+still at the CARET, so Home/End must move the caret and Shift+arrow must extend
+the selection.
 
-The marker column is *not* the renderer's: `DropdownMenu` never inspects one, and
-both callers hand-roll the same `maxLabel + 4` arithmetic into their row strings.
-That duplication collapses into the column.
-
----
+`MenuHighlightTests` is parameterised over those three factories rather than over
+made-up ones, so mutating any shipping config fails it (checked: all four
+mutations do, 2–12 expectations each).
 
 ## Chrome parity, once the assemblies agree
 
