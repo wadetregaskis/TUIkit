@@ -398,3 +398,69 @@ struct FocusManagerEnvironmentTests {
         #expect(manager2.currentFocusedID == "test-2")
     }
 }
+
+// MARK: - End-of-pass focus must schedule a repaint
+
+/// Every focus decision that depends on the WHOLE registration set — dropping a
+/// dead focus, restoring a section's remembered one, resolving `.defaultFocus`,
+/// auto-focusing the first element — can only be made once the pass has ended,
+/// which is after every view has already drawn itself. So the frame on screen
+/// shows the newly focused control as UNFOCUSED, and in a demand-driven loop
+/// nothing would ever draw it again.
+///
+/// The symptom the owner saw twice over: a page with no `.defaultFocus` came up
+/// with no focus indicator anywhere (an inline `Menu`, a `.contextMenu` target),
+/// and the first Down then moved focus OFF the element it had been sitting on
+/// invisibly — so the second row lit up first.
+@MainActor
+@Suite("End-of-pass focus announces itself")
+struct EndOfRenderPassFocusNotificationTests {
+
+    /// Arriving on a new page. `beginRenderPass` deliberately PRESERVES the old
+    /// `focusedID` (so a re-render mid-page continues seamlessly), which means
+    /// registration sees a non-nil focus and declines to auto-focus — the stale
+    /// id is only dropped, and the new first control only focused, at the end of
+    /// the pass. By then the page has drawn itself with no focus indicator.
+    @Test("Arriving on a new page focuses its first control AND asks to repaint")
+    func pageArrivalNotifies() {
+        let manager = FocusManager()
+        manager.beginRenderPass()
+        manager.registerSection(id: "old-page")
+        manager.register(MockFocusable(id: "old-control"), inSection: "old-page")
+        manager.endRenderPass()
+        #expect(manager.currentFocusedID == "old-control", "sanity: the old page is focused")
+
+        var repaints = 0
+        manager.onFocusChange = { repaints += 1 }
+        manager.beginRenderPass()
+        manager.registerSection(id: "new-page")
+        manager.register(MockFocusable(id: "first-row"), inSection: "new-page")
+        manager.register(MockFocusable(id: "second-row"), inSection: "new-page")
+        manager.endRenderPass()
+
+        #expect(manager.currentFocusedID == "first-row", "the FIRST row, not the second")
+        #expect(
+            repaints >= 1,
+            "the page already drew itself unfocused — without a repaint it stays that way")
+    }
+
+    @Test("A pass that changes nothing requests no repaint")
+    func steadyStateIsQuiet() {
+        let manager = FocusManager()
+        manager.beginRenderPass()
+        manager.registerSection(id: "page")
+        let first = MockFocusable(id: "first")
+        manager.register(first, inSection: "page")
+        manager.endRenderPass()
+
+        var repaints = 0
+        manager.onFocusChange = { repaints += 1 }
+        manager.beginRenderPass()
+        manager.registerSection(id: "page")
+        manager.register(first, inSection: "page")
+        manager.endRenderPass()
+
+        #expect(manager.currentFocusedID == "first")
+        #expect(repaints == 0, "or the loop would re-render forever and never idle")
+    }
+}

@@ -867,11 +867,9 @@ extension FocusManager {
         if let saved = sectionFocusMemory[section.id],
             let element = section.focusables.first(where: { $0.focusID == saved && $0.canBeFocused })
         {
-            focusedID = element.focusID
-            element.onFocusReceived()
+            focusPreservingPendingIntent(element)
         } else if let firstFocusable = section.focusables.first(where: { $0.canBeFocused }) {
-            focusedID = firstFocusable.focusID
-            firstFocusable.onFocusReceived()
+            focusPreservingPendingIntent(firstFocusable)
         }
     }
 
@@ -921,7 +919,20 @@ extension FocusManager {
     /// If the previously active section no longer exists, the first
     /// registered section is activated. If the previously focused element
     /// no longer exists, the first focusable in the active section is focused.
+    ///
+    /// Every focus decision here — drop-the-dead, restore-the-remembered,
+    /// resolve-the-default, focus-the-first — has to happen at the END of the
+    /// pass, because only then is the set of registered elements complete. But
+    /// that means the frame those decisions apply to has ALREADY been drawn:
+    /// the newly focused control rendered itself as unfocused, and in a
+    /// demand-driven loop nothing would ever draw it again. So any focus this
+    /// pass assigns MUST announce itself, which is what schedules the repaint
+    /// (``onFocusChange`` → `appState.setNeedsRender()`). Without it a page
+    /// whose focus lands here — anything with no `.defaultFocus` — sits there
+    /// showing no focus indicator at all until the user presses a key, and that
+    /// keypress then moves focus off the element the user never saw it on.
     func endRenderPass() {
+        let focusOnEntry = focusedID
         // Validate active section. If the active section vanished (e.g. a modal
         // overlay that activated its own section was dismissed), remember its
         // focus, fall back to the first section, and restore THAT section's
@@ -962,8 +973,7 @@ extension FocusManager {
             !optionalFocusSectionIDs.contains(section.id),
             let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
         {
-            self.focusedID = firstFocusable.focusID
-            firstFocusable.onFocusReceived()
+            focusPreservingPendingIntent(firstFocusable)
         }
 
         // Drop `@FocusState` entries whose control left the tree this pass.
@@ -977,6 +987,13 @@ extension FocusManager {
                 pendingFocusID = nil
             }
         }
+
+        // Repaint the frame that was drawn before these decisions were made —
+        // see the note on this method. Guarded on an actual change, or a steady
+        // frame would request another one forever and the loop would never idle.
+        // (The helpers above announce their own moves; this catches the paths
+        // that only DROP focus, which is just as invisible.)
+        if focusedID != focusOnEntry { onFocusChange?() }
     }
 }
 
