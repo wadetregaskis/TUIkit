@@ -81,6 +81,17 @@ public protocol ScrollableOffsetState: AnyObject {
     /// nothing. See ``releaseAnchorOnUserScroll()``.
     var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>? { get set }
 
+    /// The edge this scrollable *declared* (`defaultScrollAnchor`), or `nil` when
+    /// it declared none — Row and Window name no edge.
+    ///
+    /// Deliberately typed with the public ``ScrollAnchor`` rather than the
+    /// resolved-policy enum, which stays internal until §3.2's deferred
+    /// "read-only effective mode" question is actually asked. The shared
+    /// user-scroll path needs only this much: whether an edge it is about to
+    /// engage is the one already declared, in which case engaging means writing
+    /// `nil` ("no departure") rather than the edge.
+    var declaredEdgeAnchor: ScrollAnchor<AnyHashable>? { get }
+
     /// The largest valid ``scrollOffset`` for the current extent and viewport.
     ///
     /// A protocol *requirement* (with the obvious `extent - viewportHeight`
@@ -134,6 +145,8 @@ public final class ScrollAxis: ScrollableOffsetState {
     /// A horizontal axis is never anchored (anchoring is a vertical, row-wise
     /// notion), so this stays `nil`.
     public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?
+    /// …and it therefore declares no edge either.
+    public var declaredEdgeAnchor: ScrollAnchor<AnyHashable>? { nil }
 
     public init() {}
 }
@@ -269,8 +282,18 @@ extension ScrollableOffsetState {
     /// scroll that happens to land on the edge therefore never overscrolls, and
     /// pushing into the excursion is unambiguously deliberate.
     ///
-    /// With no allowance configured (the default) case 3 can never change
-    /// anything, so this is exactly ``scrollFine(by:)``.
+    /// With no allowance configured (the default) case 3 moves nothing, so the
+    /// *scrolling* here is exactly ``scrollFine(by:)``.
+    ///
+    /// This is also the one place that maintains the §1.2/§1.3 shadow anchor,
+    /// so every user-scroll entry point gets the same rule and none can drift:
+    /// ordinary movement **releases** to `.window`, and reaching case 3 —
+    /// a step the content could not absorb — **engages** that edge (§1.3's
+    /// sticky edges). Case 3 is exactly the spec's "deliberate push": the step
+    /// that merely reached the edge was spent by case 2, so a graze can never
+    /// stick. Note the engage happens whether or not an overscroll allowance
+    /// exists — being blocked at the edge is the signal, and the excursion is
+    /// only how far the push is then allowed to show.
     @discardableResult
     public func userScrollFine(by delta: Int) -> Bool {
         guard delta != 0 else { return false }
@@ -282,13 +305,24 @@ extension ScrollableOffsetState {
             overscrollState.excursion = excursion + (delta > 0 ? unwind : -unwind)
             let leftover = delta > 0 ? delta - unwind : delta + unwind
             if leftover != 0 { scrollFine(by: leftover) }
+            releaseAnchorOnUserScroll()
             return true
         }
 
         // 2. Ordinary movement.
-        if scrollFine(by: delta) { return true }
+        if scrollFine(by: delta) {
+            releaseAnchorOnUserScroll()
+            return true
+        }
 
-        // 3. Blocked: push into the allowance at this edge, if there is one.
+        // 3. Blocked: a deliberate push. Stick to that edge — but only if there
+        //    IS one to speak of. A view whose content fits sits at its top and
+        //    its bottom at once, so "pushing past the bottom" of it names
+        //    nothing, and engaging an edge there would drop an anchor the user
+        //    never departed from. Sticking and overscrolling are separable: a
+        //    fitting view may still be pushed (owner's decision), it just has no
+        //    edge to become anchored to.
+        if maxOffset > 0 { engageEdgeAnchor(delta < 0 ? .top : .bottom) }
         guard overscrollState.isAllowed else { return false }
         let limit = delta < 0 ? -overscrollState.top : overscrollState.bottom
         let target = excursion + delta
@@ -344,13 +378,11 @@ extension ScrollableOffsetState {
         guard isScrollEnabled else { return false }
         switch event.button {
         case .scrollUp:
-            let moved = userScrollFine(by: -linesPerTick)
-            if moved { releaseAnchorOnUserScroll() }
-            return resolveWheelOutcome(moved: moved)
+            // The anchor rule (release, or stick at an edge) lives inside
+            // `userScrollFine` so every entry point shares it.
+            return resolveWheelOutcome(moved: userScrollFine(by: -linesPerTick))
         case .scrollDown:
-            let moved = userScrollFine(by: linesPerTick)
-            if moved { releaseAnchorOnUserScroll() }
-            return resolveWheelOutcome(moved: moved)
+            return resolveWheelOutcome(moved: userScrollFine(by: linesPerTick))
         default:
             return false
         }
@@ -392,14 +424,13 @@ extension ScrollableOffsetState {
     /// A no-op when nothing is bound: an unbound scrollable has no shadow state
     /// to keep, and its edge behaviour is positional already.
     ///
-    /// Internal (not `public` like its sibling) only because `ScrollAnchorMode`
-    /// is: the resolved-policy enum stays out of the public surface until §3.2's
-    /// deferred "read-only effective mode" question is actually asked.
-    func engageEdgeAnchor(_ edge: ScrollAnchor<AnyHashable>, declared: ScrollAnchorMode) {
+    /// Internal (not `public` like its sibling) because the shadow-anchor model
+    /// is not yet public surface — see ``declaredEdgeAnchor``, which exists so
+    /// this can compare against the declaration without exposing the internal
+    /// resolved-policy enum.
+    func engageEdgeAnchor(_ edge: ScrollAnchor<AnyHashable>) {
         guard let binding = anchorPositionBinding else { return }
-        let restoresDeclaration =
-            (edge == .top && declared == .top) || (edge == .bottom && declared == .bottom)
-        let engaged: ScrollAnchor<AnyHashable>? = restoresDeclaration ? nil : edge
+        let engaged: ScrollAnchor<AnyHashable>? = edge == declaredEdgeAnchor ? nil : edge
         // Idempotent: a held End key must not churn `@State` every repeat.
         if binding.wrappedValue != engaged { binding.wrappedValue = engaged }
     }

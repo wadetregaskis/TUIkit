@@ -292,6 +292,17 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// shadow-switch to the edge modes the spec names.
     var declaredAnchorMode: ScrollAnchorMode = .window
 
+    /// The declared anchor as an EDGE, for the shared user-scroll path
+    /// (``ScrollableOffsetState/declaredEdgeAnchor``). Row and Window name no
+    /// edge, so they answer `nil`.
+    var declaredEdgeAnchor: ScrollAnchor<AnyHashable>? {
+        switch declaredAnchorMode {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .row, .window: return nil
+        }
+    }
+
     /// The screen ROW a bound `.row` anchor is held at (0 = first visible row),
     /// and the key it was adopted for. Row-based, like ``scrollOffset``: for
     /// single-line rows it is the screen line; for taller rows it is the

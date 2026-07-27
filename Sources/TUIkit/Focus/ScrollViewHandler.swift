@@ -80,6 +80,17 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// `ItemListHandler.declaredAnchorMode`.
     var declaredAnchorMode: ScrollAnchorMode = .window
 
+    /// The declared anchor as an EDGE, for the shared user-scroll path
+    /// (``ScrollableOffsetState/declaredEdgeAnchor``). Row and Window name no
+    /// edge, so they answer `nil`.
+    public var declaredEdgeAnchor: ScrollAnchor<AnyHashable>? {
+        switch declaredAnchorMode {
+        case .top: return .top
+        case .bottom: return .bottom
+        case .row, .window: return nil
+        }
+    }
+
     /// The bound anchor as of the last render, so a *change* can be detected
     /// and adopted. The outer optional is "never seen yet"; the inner is the
     /// binding's own `nil` ("no departure from the declaration"). Writing
@@ -217,11 +228,11 @@ extension ScrollViewHandler {
             // releasing to `.window` as an ordinary scroll does — jumping
             // deliberately to an edge is the clearest statement a user can make
             // that they want to sit at it.
-            engageEdgeAnchor(.top, declared: declaredAnchorMode)
+            engageEdgeAnchor(.top)
             scrollToTop()
             return true
         case .end:
-            engageEdgeAnchor(.bottom, declared: declaredAnchorMode)
+            engageEdgeAnchor(.bottom)
             scrollToBottom()
             return true
         case .left:
@@ -250,8 +261,9 @@ extension ScrollViewHandler {
     /// a scroll command either way), so an at-the-edge press doesn't bubble.
     private func userScroll(by delta: Int) -> Bool {
         // `userScrollFine` rather than `scroll(by:)`: an arrow at the edge should
-        // push into an overscroll allowance exactly as a wheel tick does.
-        if userScrollFine(by: delta) { releaseAnchorOnUserScroll() }
+        // push into an overscroll allowance — and stick to that edge — exactly
+        // as a wheel tick does. It owns the anchor bookkeeping too.
+        userScrollFine(by: delta)
         return true
     }
 }
