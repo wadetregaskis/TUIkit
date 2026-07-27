@@ -1022,21 +1022,28 @@ extension ItemListHandler {
             scrollTopClipLines = -linesAbove
         } else {
             // Walk up through whole rows until the required lines are covered.
+            // If the rows above run out, the row simply rests against the top.
+            let wanted = linesAbove
             var top = focusedIndex
-            var clip = 0
-            while top > 0 {
-                let height = max(1, rowHeight(top - 1))
-                if height >= linesAbove {
-                    top -= 1
-                    clip = height - linesAbove
-                    linesAbove = 0
-                    break
-                }
-                linesAbove -= height
+            var covered = 0
+            while top > 0, covered < wanted {
+                covered += max(1, rowHeight(top - 1))
                 top -= 1
             }
-            // If the rows above ran out (linesAbove still > 0), the row simply
-            // rests against the top — top is 0, clip 0.
+            var clip = max(0, covered - wanted)
+            if clip > 0, scrollGranularity == .row, top < focusedIndex {
+                // Row granularity has no sub-row position — `clampTopClip()`
+                // drops the clip — so the anchor can only land on a row
+                // boundary. Keeping this top leaves the row `clip` lines BELOW
+                // the anchor; dropping the top row lifts it `height - clip`
+                // lines ABOVE. Take whichever is nearer, rather than silently
+                // keeping the low one: that is what left a centred row drifting
+                // a line or three down the viewport, and — when the walk
+                // reached the very top — cancelled the scroll entirely.
+                let height = max(1, rowHeight(top))
+                if height - clip < clip { top += 1 }
+                clip = 0
+            }
             scrollOffset = top
             scrollTopClipLines = clip
         }

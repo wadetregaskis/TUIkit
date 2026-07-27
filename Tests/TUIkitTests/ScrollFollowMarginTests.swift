@@ -259,7 +259,8 @@ struct CenteredAnchorTests {
     /// A line-granularity handler over `heights.count` variable-height rows in a
     /// `viewport`-line content area, centred on `anchor`.
     private func handler(
-        heights: [Int], viewport: Int, anchor: ScrollFollowMargin.RowAnchor = .center
+        heights: [Int], viewport: Int, anchor: ScrollFollowMargin.RowAnchor = .center,
+        granularity: ScrollGranularity = .line
     ) -> ItemListHandler<Int> {
         let handler = ItemListHandler<Int>(
             focusID: "list", itemCount: heights.count,
@@ -267,7 +268,7 @@ struct CenteredAnchorTests {
         handler.contentHeight = viewport
         handler.rowHeight = { heights[$0] }
         handler.followMargin = .centered(anchor: anchor)
-        handler.scrollGranularity = .line
+        handler.scrollGranularity = granularity
         // This harness models the ROW area directly — no "N more" indicator
         // lines are drawn inside `viewport`, so none must be deducted from it.
         handler.drawsScrollIndicators = false
@@ -313,6 +314,33 @@ struct CenteredAnchorTests {
             #expect(
                 anchorViewportLine(handler, heights: heights, anchor: .center) == 5,
                 "focus \(focus): centre line held")
+        }
+    }
+
+    /// Row granularity cannot clip, so the anchor can only land on a row
+    /// boundary — but it must land on the NEAREST one. Keeping the top the line
+    /// walk happened to stop on always errs the same way (row too low), which
+    /// is what pushed a "centred" row to line 10 of 15 and, when the walk ran
+    /// off the top, cancelled the scroll altogether.
+    @Test("Row granularity anchors on the nearest whole-row position")
+    func rowGranularityRoundsToNearest() throws {
+        let heights = (0..<40).map { $0.isMultiple(of: 3) ? 3 : 1 }
+        let handler = handler(heights: heights, viewport: 15, granularity: .row)
+        for focus in 8...20 {
+            handler.focusedIndex = focus
+            handler.ensureFocusedItemVisible()
+            #expect(handler.scrollTopClipLines == 0, "focus \(focus): row granularity never clips")
+
+            let wanted = (15 - heights[focus]) / 2
+            let error = { (top: Int) in abs(heights[top..<focus].reduce(0, +) - wanted) }
+            let best = try #require((0...focus).map(error).min())
+            #expect(
+                error(handler.scrollOffset) == best,
+                """
+                focus \(focus): top \(handler.scrollOffset) leaves \
+                \(heights[handler.scrollOffset..<focus].reduce(0, +)) lines above, \
+                wanted \(wanted) — a nearer whole-row top exists
+                """)
         }
     }
 
