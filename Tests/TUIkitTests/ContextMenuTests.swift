@@ -335,6 +335,37 @@ struct ContextMenuTests {
             """)
     }
 
+    /// `.contextMenu` makes its content a focus stop, and only that content
+    /// knows what part of itself should show it. `\.isFocused` is how it finds
+    /// out — without it, a view is selectable with no way to look selected.
+    @Test("The content is told whether its focus stop holds the focus")
+    func contentLearnsItIsFocused() throws {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        // A second focus stop ahead of it, so the focus starts elsewhere —
+        // otherwise the target is the only focusable and takes the focus on
+        // frame one, which proves nothing.
+        let view = VStack(alignment: .leading, spacing: 0) {
+            Button("Elsewhere") {}.focusID("elsewhere")
+            FocusReporter().contextMenu { Button("Cut") {} }
+        }
+
+        func report(_ buffer: FrameBuffer) -> String? {
+            buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+                .first { $0 == "yes" || $0 == "no" }
+        }
+
+        let unfocused = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(report(unfocused) == "no", "the Button ahead of it holds the focus")
+
+        let target = try #require(
+            focusManager.registeredFocusIDsInActiveSection().first { $0 != "elsewhere" })
+        focusManager.focus(id: target)
+        let focused = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(report(focused) == "yes")
+    }
+
     /// The open menu holds the focus and the keyboard, so it has to say so —
     /// but on its whole FRAME, not with the top-border ● that a titled
     /// container uses. A context menu has no title, and a lone dot floating in
@@ -431,5 +462,17 @@ struct ContextMenuTests {
         _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
         #expect(!tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10)))
         #expect(state.isOpen == false)
+    }
+}
+
+// MARK: - Support
+
+/// Prints whatever ``EnvironmentValues/isFocused`` says — the view-side half of
+/// the focus affordance a `.contextMenu` target has to draw for itself.
+private struct FocusReporter: View {
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        Text(isFocused ? "yes" : "no")
     }
 }

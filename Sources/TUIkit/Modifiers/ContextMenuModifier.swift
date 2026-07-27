@@ -75,12 +75,22 @@ extension ContextMenuModifier: Renderable {
         // down a section left over from a just-dismissed menu so the page's focus
         // / scroll is restored rather than jumping.
         guard state.isOpen else {
-            var buffer = TUIkit.renderToBuffer(content, context: contentContext)
+            // The keyboard trigger runs FIRST, because it is what registers the
+            // focus stop — and the content has to be told whether that stop
+            // holds the focus before it draws itself. Nobody else can say so:
+            // the focusable thing here is the caller's own view, so only the
+            // caller can decide what part of it shows the focus (see
+            // `EnvironmentValues.isFocused`).
+            var contentContext = contentContext
             if !context.isMeasuring {
                 context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
+                contentContext.environment.isFocused = attachKeyboardTrigger(
+                    state: state, context: context)
+            }
+            var buffer = TUIkit.renderToBuffer(content, context: contentContext)
+            if !context.isMeasuring {
                 attachTrigger(to: &buffer, state: state, context: context)
-                attachKeyboardTrigger(state: state, context: context)
             }
             return buffer
         }
@@ -153,8 +163,14 @@ extension ContextMenuModifier: Renderable {
     /// a view you cannot reach. It consumes no keys of its own
     /// (`triggerKeys: []`), so content that is already interactive keeps every
     /// binding it had.
-    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) {
-        guard context.environment.focusManager != nil, context.environment.isEnabled else { return }
+    ///
+    /// - Returns: Whether that focus stop currently holds the focus, for the
+    ///   content to publish as ``EnvironmentValues/isFocused``.
+    @discardableResult
+    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) -> Bool {
+        guard context.environment.focusManager != nil, context.environment.isEnabled else {
+            return false
+        }
         let focusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: nil,
             defaultPrefix: "contextmenu-target", propertyIndex: StateIndex.focusID)
@@ -179,6 +195,7 @@ extension ContextMenuModifier: Renderable {
             state.opensWithSelection = true
             return true
         }
+        return FocusRegistration.isFocused(context: context, focusID: focusID)
     }
 }
 

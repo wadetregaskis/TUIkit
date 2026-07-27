@@ -53,9 +53,7 @@ struct MenusPage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
                     // The items are Buttons — SwiftUI's API — but they render as
                     // menu rows, and the pop-up hugs its widest item.
-                    Text(L("page.menus.contextTarget"))
-                        .padding(.horizontal, 1)
-                        .border()
+                    ContextMenuTarget()
                         .contextMenu {
                             Button(L("page.menus.context.cut")) {
                                 contextAction = L("page.menus.context.cut")
@@ -102,5 +100,38 @@ struct MenusPage: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Context-menu target
+
+/// The `.contextMenu` target — and the answer to "my view is the focusable
+/// thing here, so how does it show that it has the focus?".
+///
+/// `\.isFocused` says whether the focus stop that `.contextMenu` registered
+/// currently holds the focus; `\.selectionEmphasis` turns that into the same
+/// affordance every built-in control uses, on the same clock, honouring
+/// whatever `.selectionIndicatorStyle` is in force — pulse, blink, or a static
+/// accent. Neither decision is made here.
+private struct ContextMenuTarget: View {
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.selectionEmphasis) private var emphasis
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(L("page.menus.contextTarget"))
+            .padding(.horizontal, 1)
+            .border(color: borderColor)
+    }
+
+    /// The same two endpoints the framework's own focused frames breathe
+    /// between — deliberately not `palette.border` at the dim end, or the
+    /// bottom of every pulse would be indistinguishable from not being focused
+    /// at all.
+    private var borderColor: Color {
+        guard isFocused else { return palette.border }
+        return emphasis(true).color(
+            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+            bright: palette.accent)
     }
 }
