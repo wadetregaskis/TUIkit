@@ -462,7 +462,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     ) -> Color {
         guard isFocused else { return surface }
         return Color.lerp(
-            surface, palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: surface),
+            surface, palette.accent.opacity(ViewConstants.focusedChipBackground, over: surface),
             phase: context.environment.pulsePhase)
     }
 

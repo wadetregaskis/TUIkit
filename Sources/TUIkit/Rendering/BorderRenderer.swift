@@ -39,18 +39,21 @@ extension BorderRenderer {
     /// - Returns: A 2-character string: `"● "` (colored) when focused, `"  "` when not.
     static func focusIndicatorPrefix(
         isFocused: Bool,
-        pulsePhase: Double,
+        emphasis: SelectionEmphasis,
         palette: any Palette
     ) -> String {
         guard isFocused else {
             return "  "  // 2 spaces for alignment (matches focusIndicatorWidth)
         }
 
-        let accentColor = palette.accent
-        let dimColor = accentColor.opacity(ViewConstants.focusBorderDim, over: palette.background)
-        let interpolatedColor = Color.lerp(dimColor, accentColor, phase: pulsePhase)
-
-        return ANSIRenderer.colorize(String(focusIndicator), foreground: interpolatedColor) + " "
+        // Through the shared clock, not `pulsePhase` directly: that is the other
+        // timer (2.0 s against the selection clock's 0.8 s), so a plain button
+        // visibly lagged every list cursor and menu row on the same screen — and
+        // `.selectionIndicatorStyle(.none/.blink)` never reached it at all.
+        let color = emphasis.color(
+            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+            bright: palette.accent)
+        return ANSIRenderer.colorize(String(focusIndicator), foreground: color) + " "
     }
 }
 

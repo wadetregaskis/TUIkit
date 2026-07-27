@@ -17,15 +17,15 @@ public enum ViewConstants {
 
     /// Minimum accent opacity during focus pulsing animation (dim phase).
     ///
-    /// The span to ``focusPulseMax`` has to survive quantisation: a terminal
-    /// without truecolor (Apple Terminal ≤ 15 — see
-    /// `Documentation/Terminal-compatibility.md`) rounds every step onto the
-    /// 256-colour cube, and the old 0.35...0.50 span came out as **two**
-    /// distinct colours on the default palette — a flicker rather than a
-    /// breath, and visibly fewer steps than the button cap's 0.20...0.45.
-    /// Widened downwards so the pulse reads as a pulse there too; the bright
-    /// end stays put because it is the one the readability floor is measured
-    /// against (`PaletteContrastAuditTests` fails at 0.54).
+    /// The span to ``focusPulseMax`` is bounded at the bright end by
+    /// readability: this fill sits behind arbitrary row content, which keeps its
+    /// own foreground, and `PaletteContrastAuditTests` measures that pair.
+    ///
+    /// How many *distinct* shades the span yields is a separate question and no
+    /// longer this constant's problem — on a terminal without truecolor the
+    /// pulse walks the rendered steps rather than sampling a continuous lerp
+    /// (see `Color.pulseRamp(from:to:depth:samples:)`), so a narrow span
+    /// degrades to fewer, evenly-timed shades instead of to a stutter.
     public static let focusPulseMin: Double = 0.22
 
     /// Maximum accent opacity during focus pulsing animation (bright phase).
@@ -46,8 +46,13 @@ public enum ViewConstants {
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 
-    /// Accent opacity for focused button caps pulsing bright phase.
-    public static let buttonCapPulseBright: Double = 0.45
+    /// Accent opacity for the bright end of a focused fill that sits BEHIND
+    /// text the framework does not colour itself (a TabView's active chip).
+    ///
+    /// Bounded by readability, unlike a glyph that merely *is* the accent — a
+    /// focused button's end caps breathe to the full accent because nothing is
+    /// written on them.
+    public static let focusedChipBackground: Double = 0.45
 
     /// Accent opacity for the background tint of a control while
     /// the cursor is hovering over it (not focused, not pressed).

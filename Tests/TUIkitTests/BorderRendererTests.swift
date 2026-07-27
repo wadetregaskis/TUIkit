@@ -271,7 +271,7 @@ struct BorderRendererFocusIndicatorTests {
         let palette = SystemPalette(.green)
         let result = BorderRenderer.focusIndicatorPrefix(
             isFocused: true,
-            pulsePhase: 0.5,
+            emphasis: .steady(isFocused: true),
             palette: palette
         )
         #expect(
@@ -286,7 +286,7 @@ struct BorderRendererFocusIndicatorTests {
         let palette = SystemPalette(.green)
         let result = BorderRenderer.focusIndicatorPrefix(
             isFocused: false,
-            pulsePhase: 0.0,
+            emphasis: .steady(isFocused: true),
             palette: palette
         )
         #expect(
@@ -301,12 +301,12 @@ struct BorderRendererFocusIndicatorTests {
         let palette = SystemPalette(.green)
         let focused = BorderRenderer.focusIndicatorPrefix(
             isFocused: true,
-            pulsePhase: 0.5,
+            emphasis: .steady(isFocused: true),
             palette: palette
         )
         let unfocused = BorderRenderer.focusIndicatorPrefix(
             isFocused: false,
-            pulsePhase: 0.0,
+            emphasis: .steady(isFocused: true),
             palette: palette
         )
         #expect(

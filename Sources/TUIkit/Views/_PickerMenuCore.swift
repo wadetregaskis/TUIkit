@@ -434,11 +434,10 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         if isDisabled {
             capColor = buttonBg
         } else if isFocused {
-            capColor = Color.lerp(
-                buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
-                phase: context.environment.pulsePhase
-            )
+            // A glyph, not a fill behind text: it breathes to the full accent,
+            // on the shared clock. Same reasoning as `Button`'s end caps.
+            capColor = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(dim: buttonBg, bright: palette.accent)
         } else {
             capColor = buttonBg
         }

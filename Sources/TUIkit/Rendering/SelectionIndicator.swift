@@ -146,8 +146,27 @@ public struct SelectionEmphasis: Equatable, Sendable {
         switch animation {
         case .none: return bright
         case .blink: return blinkOn ? bright : dim
-        case .pulse: return Color.lerp(dim, bright, phase: phase)
+        case .pulse: return Self.pulsed(dim: dim, bright: bright, phase: phase)
         }
+    }
+
+    /// The pulse position, snapped to the shades this terminal can actually
+    /// show.
+    ///
+    /// A plain `lerp` sampled on an even time grid is right only where the
+    /// colour space is continuous. On a 256-colour terminal it is not: the ramp
+    /// rounds onto a handful of cube entries, so the fade sits still and then
+    /// jumps, and — because the cube has no dark tinted colours — its bottom end
+    /// turns GREY, which reads as a glitch rather than a dim. Walking the
+    /// distinct, in-hue shades at even intervals instead gives every one of them
+    /// the same screen time. See ``Color/pulseRamp(from:to:depth:samples:)``.
+    private static func pulsed(dim: Color, bright: Color, phase: Double) -> Color {
+        let depth = ColorDepth.current
+        guard depth < .truecolor else { return Color.lerp(dim, bright, phase: phase) }
+        let ramp = Color.pulseRamp(from: dim, to: bright, depth: depth)
+        guard ramp.count > 1 else { return ramp[0] }
+        let step = Int((phase * Double(ramp.count)).rounded(.down))
+        return ramp[min(max(0, step), ramp.count - 1)]
     }
 }
 

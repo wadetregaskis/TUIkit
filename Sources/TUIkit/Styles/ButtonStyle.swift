@@ -405,7 +405,8 @@ private struct _ButtonStyleBody: View, Renderable {
 
             let focusPrefix = BorderRenderer.focusIndicatorPrefix(
                 isFocused: isFocused && !isDisabled,
-                pulsePhase: context.environment.pulsePhase,
+                emphasis: SelectionIndicator.resolve(
+                    isFocused: isFocused && !isDisabled, context: context),
                 palette: palette
             )
             let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
@@ -461,11 +462,17 @@ private struct _ButtonStyleBody: View, Renderable {
         if isDisabled {
             resolvedCapColor = buttonBg
         } else if isFocused {
-            resolvedCapColor = Color.lerp(
-                buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
-                phase: context.environment.pulsePhase
-            )
+            // The cap is a half-block GLYPH, not a fill behind text, so it has
+            // no readability ceiling: it breathes all the way to the full
+            // accent, which is also the widest ramp the terminal's palette can
+            // give it. It used to stop at 45% accent, which on a 256-colour
+            // terminal quantised to two or three indices, several of them
+            // off-hue greys. Through the shared clock, so it keeps step with
+            // list cursors and menu rows and honours `.selectionIndicatorStyle`.
+            resolvedCapColor = SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(
+                    dim: buttonBg,
+                    bright: palette.accent)
         } else {
             resolvedCapColor = buttonBg
         }
@@ -531,22 +538,24 @@ private struct _ButtonStyleBody: View, Renderable {
         if appearance.isPlain {
             let focusPrefix = BorderRenderer.focusIndicatorPrefix(
                 isFocused: isFocused && !isDisabled,
-                pulsePhase: context.environment.pulsePhase,
+                emphasis: SelectionIndicator.resolve(
+                    isFocused: isFocused && !isDisabled, context: context),
                 palette: palette)
             let body = TUIkit.renderToBuffer(labelView.foregroundStyle(labelFg), context: context)
             return FrameBuffer(lines: body.lines.map { focusPrefix + $0 })
         }
 
         // Standard: half-block caps around the background-tinted, padded label.
-        let capColor: Color
-        if isFocused && !isDisabled {
-            capColor = Color.lerp(
-                buttonBg,
-                palette.accent.opacity(ViewConstants.buttonCapPulseBright, over: palette.background),
-                phase: context.environment.pulsePhase)
-        } else {
-            capColor = buttonBg
-        }
+        // Full accent at the bright end — see the note on the compact
+        // variant's cap above.
+        let capColor =
+            isFocused && !isDisabled
+            ? SelectionIndicator.resolve(isFocused: true, context: context)
+                .color(
+                    dim: buttonBg,
+                    bright: palette.accent)
+
+            : buttonBg
 
         let composed = HStack(spacing: 0) {
             Text(String(TerminalSymbols.openCap)).foregroundStyle(capColor)
