@@ -22,20 +22,20 @@ public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// result of dropping right here. The default.
     ///
     /// The cost is that `onMove` fires once per slot the row crosses rather
-    /// than once for the whole gesture. Prefer ``ghost`` or ``cursor`` when
+    /// than once for the whole gesture. Prefer ``dimmed`` or ``cursor`` when
     /// each move is expensive or separately undoable.
     case live
 
-    /// The list opens a slot where the row would land and shows a **ghost** of
-    /// it there — a faint copy — while the row itself stays put. The list is
-    /// one row longer for the duration of the drag.
+    /// The row leaves its place and reappears **dimmed** in the slot it would
+    /// land in. The list closes up behind it and keeps its length, so what is on
+    /// screen is exactly the order a drop would produce.
     ///
     /// `onMove` fires once, on release.
-    case ghost
+    case dimmed
 
-    /// Like ``ghost``, but the slot is simply **empty**: a gap the size of the
-    /// row, opening wherever it would land. The row you have hold of goes dim
-    /// where it sits, since the gap alone doesn't say which row is moving.
+    /// Like ``dimmed``, but the slot is simply **empty**: a gap the size of the
+    /// row, opening wherever it would land. The row is not drawn at all while
+    /// it is being dragged.
     ///
     /// Drag out of the list and the gap disappears, so releasing there cancels
     /// the reorder. `onMove` fires once, on release, and not at all when
@@ -73,13 +73,13 @@ extension View {
     ///     ForEach(tracks) { Text($0.title) }
     ///         .onMove { from, to in tracks.move(fromOffsets: from, toOffset: to) }
     /// }
-    /// .rowReorderFeedback(.ghost)
+    /// .rowReorderFeedback(.dimmed)
     /// ```
     ///
     /// The default, ``RowReorderFeedback/live``, calls `onMove` once per slot
     /// the row crosses — the list *is* the preview. Where that is too
     /// expensive, or where each call lands separately on an undo stack,
-    /// ``RowReorderFeedback/ghost`` and ``RowReorderFeedback/cursor`` leave the
+    /// ``RowReorderFeedback/dimmed`` and ``RowReorderFeedback/cursor`` leave the
     /// data alone until the drop.
     ///
     /// - Parameter feedback: What to show while a row is being dragged.

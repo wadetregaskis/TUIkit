@@ -145,8 +145,8 @@ struct ListPage: View {
                     }
                     .frame(height: 8)
                     // Drag a row and watch the difference: .live reorders under
-                    // the cursor, .ghost opens a slot and puts a faint copy of
-                    // the row in it, .cursor opens the same slot and leaves it
+                    // the cursor, .dimmed shows the row itself, faint, in the slot it
+                    // would land in, .cursor opens the same slot and leaves it
                     // empty.
                     .rowReorderFeedback(
                         ReorderFeedbackChoice(rawValue: reorderFeedback)?.feedback ?? .live)
