@@ -127,14 +127,12 @@ struct RenderPerformanceTests {
 
     @Test("Menu render performance is acceptable")
     func menuPerformance() {
-        let view = Menu(
-            title: "Test Menu",
-            items: [
-                MenuItem(label: "Item 1"),
-                MenuItem(label: "Item 2"),
-                MenuItem(label: "Item 3"),
-            ]
-        )
+        let view = Menu("Test Menu") {
+            Button("Item 1") {}
+            Button("Item 2") {}
+            Button("Item 3") {}
+        }
+        .menuStyle(.inline)
 
         let context = testContext()
         let time = measureRenderTime(view, iterations: 500, context: context)

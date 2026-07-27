@@ -201,10 +201,11 @@ struct MeasureRenderEquivalenceTests {
         check(Spinner("Loading"), "Spinner")
         check(ButtonRow { Button("OK") {}; Button("Cancel") {} }, "ButtonRow")
         check(
-            Menu(title: "Actions", items: [
-                MenuItem(label: "New", shortcut: "n"),
-                MenuItem(label: "Open", shortcut: "o"),
-            ]), "Menu")
+            Menu("Actions") {
+                Button("New") {}
+                Button("Open") {}
+            }
+            .menuStyle(.inline), "Menu(inline)")
         check(
             Picker("Theme", selection: .constant(0)) {
                 Text("Light").tag(0)

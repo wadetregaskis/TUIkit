@@ -140,13 +140,11 @@ struct ModifierPropagationTests {
 
     @Test("Menu renders with body: some View pattern")
     func menuRendersCorrectly() {
-        let menu = Menu(
-            title: "Test Menu",
-            items: [
-                MenuItem(label: "Item 1"),
-                MenuItem(label: "Item 2"),
-            ]
-        )
+        let menu = Menu("Test Menu") {
+            Button("Item 1") {}
+            Button("Item 2") {}
+        }
+        .menuStyle(.inline)
 
         let context = testContext()
         let buffer = renderToBuffer(menu, context: context)

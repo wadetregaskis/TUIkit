@@ -292,15 +292,17 @@ struct ContextMenuTests {
         let tui = TUIContext()
         let focusManager = FocusManager()
         let context = context(tui, focusManager: focusManager)
-        let page = VStack {
-            Menu(
-                items: [
-                    MenuItem(label: "Open", shortcut: nil),
-                    MenuItem(label: "Rename", shortcut: nil),
-                    MenuItem(label: "Export", shortcut: nil),
-                ],
-                selection: Binding(
-                    get: { selection.index }, set: { selection.index = $0 }))
+        // Leading-aligned so the target's cells are where the click aims.
+        let page = VStack(alignment: .leading) {
+            // A greedy sibling: an `.onKeyPress` handler that answers Down
+            // unconditionally, wherever it sits in the tree. `Menu`'s own
+            // arrow handler used to be exactly this.
+            Text("Somewhere else on the page")
+                .onKeyPress { event in
+                    guard event.key == .down else { return false }
+                    selection.index += 1
+                    return true
+                }
             Text("Right-click me").contextMenu {
                 Button("Cut") {}
                 Button("Copy") {}
@@ -310,7 +312,7 @@ struct ContextMenuTests {
         _ = renderArmed(page, tui: tui, focusManager: focusManager, context: context)
         // The Menu's handler is live while nothing is presented.
         #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .down)))
-        #expect(selection.index == 1, "sanity: the combo menu does follow Down normally")
+        #expect(selection.index == 1, "sanity: the sibling does follow Down normally")
 
         // Open the context menu by right-clicking the Text, then re-render so the
         // pop-up is up and the grab is in force.
@@ -328,7 +330,7 @@ struct ContextMenuTests {
         #expect(
             selection.index == before,
             """
-            with the pop-up up, Down must not reach the combo Menu behind it \
+            with the pop-up up, Down must not reach the sibling handler behind it \
             (was \(before), now \(selection.index))
             """)
     }

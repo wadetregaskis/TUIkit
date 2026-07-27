@@ -296,14 +296,12 @@ struct RenderBottleneckTests {
         }
 
         // Menu (more complex)
-        let menu = Menu(
-            title: "Menu",
-            items: [
-                MenuItem(label: "A"),
-                MenuItem(label: "B"),
-                MenuItem(label: "C"),
-            ]
-        )
+        let menu = Menu("Menu") {
+            Button("A") {}
+            Button("B") {}
+            Button("C") {}
+        }
+        .menuStyle(.inline)
         _ = measure("Menu (3 items)", iterations: iterations) {
             _ = renderToBuffer(menu, context: context)
         }

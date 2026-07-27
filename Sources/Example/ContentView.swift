@@ -81,7 +81,9 @@ struct ContentView: View {
     /// the Theme page and applied to every page via the styling cascade.
     @Binding var styling: ExampleStyling
     @State var currentPage: DemoPage = .menu
-    @State var menuSelection: Int = 0
+    /// The main menu's last chosen entry — restored as the focused row when
+    /// you come back to the menu, so navigation resumes where you left it.
+    @State var menuSelection: DemoPage = .textStyles
     /// Which built-in preset F2 last loaded — so F2 can cycle from there.
     @State private var presetIndex: Int = 0
     /// Lifecycle-demo counters, owned here so they survive leaving and

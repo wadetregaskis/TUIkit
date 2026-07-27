@@ -11,6 +11,84 @@
 
 import TUIkitCore
 
+/// Renders `items` as a menu: a bordered column of rows, sized to hug its
+/// widest, scrolling inside `capHeight` if it cannot fit.
+///
+/// The shared body of every TUIkit menu — the `.contextMenu` popover, a pop-up
+/// ``Menu``, and an inline one — so all three sit on the same grid and answer
+/// to the same width arithmetic.
+///
+/// - Parameters:
+///   - items: The menu's rows: `Button`s and `Divider`s, plus whatever heading
+///     the caller puts above them.
+///   - context: The context to lay out in; its `availableWidth` is the ceiling.
+///   - capHeight: The height the menu must fit into, or 0 for no cap. A taller
+///     menu scrolls inside it.
+@MainActor
+func renderMenuColumn(_ items: some View, context: RenderContext, capHeight: Int) -> FrameBuffer {
+    // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
+    // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
+    // as menu rows, the same idiom as the Picker drop-down.
+    let column = VStack(alignment: .leading, spacing: 0) { items }
+        .buttonStyle(_MenuItemButtonStyle())
+        .padding(.horizontal, 1)
+    let menuView = column.border()
+    // Size the menu to its own content before rendering it. Laying it out
+    // against the whole screen made a menu of three short items span the
+    // terminal: `Divider` MEASURES as one cell but RENDERS at the width it is
+    // offered, and a VStack takes its width from what its children actually
+    // drew — so one separator inflated the popover to whatever it was handed.
+    // Measuring first (where the divider claims its true one cell and the
+    // buttons hug their labels) yields the natural hug width; rendering at that
+    // width then makes the divider span exactly the menu's interior, which is
+    // the separator look we want anyway.
+    //
+    // Measured through the SAME context the render uses, so `@State` and focus
+    // slots resolve to the same identities either way (362c8839).
+    let natural = measureChild(
+        menuView,
+        proposal: ProposedSize(
+            width: context.availableWidth, height: capHeight > 0 ? capHeight : nil),
+        context: context)
+    let menuWidth = max(1, min(natural.width, context.availableWidth))
+    var sized = context.withAvailableWidth(menuWidth)
+    // Now that the width is known, hand it to the rows so their highlight reads
+    // as a bar across the menu rather than a tag around the label. Deliberately
+    // AFTER the measure: a row that knew its width up front would report it, and
+    // the menu would size itself from its own guess.
+    //
+    // The chrome is 6 cells, not 4: `.border()` is a `ContainerView`, which
+    // insets its content by one cell on each side on top of its two border
+    // columns, and the `.padding(.horizontal, 1)` above adds two more. Getting
+    // this wrong told the rows they had two cells they did not, which the
+    // border then clipped — invisible while a row was just a left-aligned
+    // label, fatal once a row has something at its trailing edge.
+    sized.environment.menuRowWidth = max(1, menuWidth - 6)
+
+    // Does it fit? Measured against a canvas TALLER than the cap, because a
+    // measure is clamped to the context's `availableHeight` — and for an inline
+    // menu the cap IS the available height, so measuring in place always
+    // answers "it fits" and the overflowing rows are simply dropped. The canvas
+    // is the same generous one `ScrollView` measures its own content against.
+    let canvas = sized.withAvailableHeight(max(capHeight * 64, 4096))
+    let fullHeight = measureChild(
+        menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: canvas
+    ).height
+    guard capHeight > 0, fullHeight > capHeight else {
+        return renderToBuffer(menuView, context: sized)
+    }
+    // Taller than its budget: scroll inside it. The scroll goes INSIDE the
+    // border, not around it — a ScrollView's "N more above/below" indicators
+    // replace its first and last visible rows, which around the border would
+    // eat the border itself. The content renders at its full height inside the
+    // viewport, which is what lets the reveal bring an off-screen item back
+    // (`ScrollViewReveal`).
+    let scrolled = ScrollView(.vertical) { column }
+        .frame(height: max(1, capHeight - 2))
+        .border()
+    return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
+}
+
 /// Presents `items` as a floating menu over `base`, anchored at
 /// (`anchorX`, `anchorY`) in `base`'s own coordinate space.
 ///
@@ -77,47 +155,8 @@ func presentMenuPopover<Items: View>(
     menuContext.environment.focusIndicatorColor = Color.lerp(
         dim, accent, phase: context.environment.pulsePhase)
 
-    // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
-    // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
-    // as menu rows, the same idiom as the Picker drop-down.
-    let menuView = VStack(alignment: .leading, spacing: 0) { items }
-        .buttonStyle(_MenuItemButtonStyle())
-        .padding(.horizontal, 1)
-        .border()
-    // Size the menu to its own content before rendering it. Laying it out
-    // against the whole screen made a menu of three short items span the
-    // terminal: `Divider` MEASURES as one cell but RENDERS at the width it is
-    // offered, and a VStack takes its width from what its children actually
-    // drew — so one separator inflated the popover to whatever it was handed.
-    // Measuring first (where the divider claims its true one cell and the
-    // buttons hug their labels) yields the natural hug width; rendering at that
-    // width then makes the divider span exactly the menu's interior, which is
-    // the separator look we want anyway.
-    //
-    // Measured through the SAME context the render uses, so `@State` and focus
-    // slots resolve to the same identities either way (362c8839).
-    let natural = measureChild(
-        menuView,
-        proposal: ProposedSize(
-            width: context.environment.terminalWidth,
-            height: context.environment.overlayContentHeight),
-        context: menuContext)
-    let menuWidth = max(1, min(natural.width, context.environment.terminalWidth))
-    menuContext = menuContext.withAvailableWidth(menuWidth)
-    // Now that the width is known, hand it to the rows so their highlight reads
-    // as a bar across the menu rather than a tag around the label. Deliberately
-    // AFTER the measure: a row that knew its width up front would report it, and
-    // the menu would size itself from its own guess.
-    //
-    // The chrome is 6 cells, not 4: `.border()` is a `ContainerView`, which
-    // insets its content by one cell on each side on top of its two border
-    // columns, and the `.padding(.horizontal, 1)` above adds two more. Getting
-    // this wrong told the rows they had two cells they did not, which the
-    // border then clipped — invisible while a row was just a left-aligned
-    // label, fatal once a row has something at its trailing edge.
-    menuContext.environment.menuRowWidth = max(1, menuWidth - 6)
-    var menuBuffer = renderPresentedDialog(
-        menuView, context: menuContext, capHeight: context.environment.overlayContentHeight)
+    var menuBuffer = renderMenuColumn(
+        items, context: menuContext, capHeight: context.environment.overlayContentHeight)
     guard !menuBuffer.isEmpty else { return }
 
     // The screen-covering dismiss backdrop, as the drop-down menus do: a

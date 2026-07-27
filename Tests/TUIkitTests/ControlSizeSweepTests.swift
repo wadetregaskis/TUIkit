@@ -73,7 +73,9 @@ struct ControlSizeSweepTests {
             }
         }
         check("Picker") { Picker("P", selection: .constant(0)) { ForEach(0..<3) { Text("Opt \($0)").tag($0) } } }
-        check("Menu") { Menu(title: "Menu", items: [MenuItem(label: "A"), MenuItem(label: "B")]) }
+        check("Menu") {
+            Menu("Menu") { Button("A") {}; Button("B") {} }.menuStyle(.inline)
+        }
         check("TextField") { TextField("Placeholder", text: .constant("hello")) }
         check("SecureField") { SecureField("Pass", text: .constant("secret")) }
         check("TextEditor") { TextEditor(text: .constant("line 1\nline 2\nline 3")) }

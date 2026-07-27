@@ -11,15 +11,14 @@ import TUIkit
 /// The three menu idioms TUIkit ships today:
 ///   - `.contextMenu { … }` — a right-click (or Ctrl-click) pop-up of Buttons,
 ///     anchored at the click cell.
-///   - `Menu(title:items:selection:)` — a combo button: a titled control that
-///     pops its items open in place.
+///   - `Menu(_:content:)` — a pop-up button: a collapsed label whose items
+///     open over the page.
 ///   - `TextField` + `.textInputSuggestions { … }` — a combo box: free text
 ///     with a menu of suggestions beside it.
 ///
 /// Menu-bar demos join them once menu bars exist.
 struct MenusPage: View {
     @State private var contextAction: String = "—"
-    @State private var comboSelection: Int = 0
     @State private var comboChoice: String = "—"
     @State private var editor: String = ""
 
@@ -77,16 +76,14 @@ struct MenusPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.menus.comboInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Menu(
-                        title: L("page.menus.comboTitle"),
-                        items: comboItems.map { MenuItem(label: $0, shortcut: nil) },
-                        selection: $comboSelection,
-                        onSelect: { index in
-                            comboChoice = comboItems[index]
-                        },
-                        selectedColor: .palette.accent,
-                        borderColor: .palette.border
-                    )
+                    // A pop-up Menu: the label is a collapsed control, and
+                    // the items — plain Buttons, as in SwiftUI — open over the
+                    // page and close again when one fires.
+                    Menu(L("page.menus.comboTitle")) {
+                        ForEach(comboItems, id: \.self) { item in
+                            Button(item) { comboChoice = item }
+                        }
+                    }
                     ValueDisplayRow(L("page.menus.chose"), comboChoice)
                 }
             }

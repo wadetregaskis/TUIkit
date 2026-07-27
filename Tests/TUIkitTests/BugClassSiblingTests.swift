@@ -30,13 +30,13 @@ struct BugClassSiblingTests {
 
     // MARK: - Measure-pass side effects
 
-    @Test("Measuring an interactive Menu registers no phantom key handler")
-    func menuMeasureRegistersNoKeyHandler() {
-        final class Box { var sel = 0 }
-        let box = Box()
-        let menu = Menu(
-            items: (1...5).map { MenuItem(label: "Item \($0)", shortcut: nil) },
-            selection: Binding(get: { box.sel }, set: { box.sel = $0 }))
+    @Test("Measuring a Menu registers no phantom keyboard shortcut")
+    func menuMeasureRegistersNoShortcut() {
+        var fired = 0
+        let menu = Menu("Menu") {
+            Button("Item") { fired += 1 }.keyboardShortcut("i", modifiers: [])
+        }
+        .menuStyle(.inline)
 
         let tui = TUIContext()
         var env = EnvironmentValues()
@@ -45,17 +45,20 @@ struct BugClassSiblingTests {
             availableWidth: 40, availableHeight: 12, environment: env, tuiContext: tui
         ).isolatingRenderCache()
 
-        // MEASURE only (measureFixedByRendering renders with isMeasuring set) —
-        // a menu measured but never shown (a ViewThatFits rejected candidate)
-        // must not leave a handler that eats arrows against its binding.
+        // MEASURE only. A menu measured but never shown (a ViewThatFits
+        // rejected candidate, a hidden size-to-largest tab) must not leave a
+        // shortcut behind that fires against something invisible — and the
+        // measure DOES resolve each item's shortcut, because it has to reserve
+        // the width of the hint, so "resolved" and "registered" must stay
+        // separate things.
         _ = measureChild(menu, proposal: ProposedSize(width: 40, height: 12), context: context)
-        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .down))
-        #expect(box.sel == 0, "no phantom handler moved the selection, got \(box.sel)")
+        #expect(!tui.keyboardShortcuts.trigger(for: KeyEvent(key: .character("i"))))
+        #expect(fired == 0, "no phantom shortcut fired, got \(fired)")
 
-        // A real RENDER still wires the keys.
+        // A real RENDER still wires it up.
         _ = renderToBuffer(menu, context: context)
-        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .down))
-        #expect(box.sel == 1, "the rendered menu's handler works, got \(box.sel)")
+        #expect(tui.keyboardShortcuts.trigger(for: KeyEvent(key: .character("i"))))
+        #expect(fired == 1, "the rendered menu's shortcut works, got \(fired)")
     }
 
     @Test("Measuring a presented alert registers no duplicate ESC handler")

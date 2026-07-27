@@ -109,7 +109,7 @@ private enum OverlayDemo: Int, CaseIterable {
 /// panel on the right. Pressing Enter shows the selected overlay
 /// with dimmed background content.
 struct OverlaysPage: View {
-    @State var menuSelection: Int = 0
+    @FocusState private var focusedDemo: OverlayDemo?
     @State var showOverlay: Bool = false
     @State var authUsername: String = ""
     @State var authPassword: String = ""
@@ -119,9 +119,10 @@ struct OverlaysPage: View {
     /// Callback to navigate back to the main menu.
     let onBack: () -> Void
 
-    /// The currently selected demo variant.
+    /// The demo the description panel describes: whichever entry holds
+    /// focus, falling back to the first before anything does.
     private var selectedDemo: OverlayDemo {
-        OverlayDemo.allCases[menuSelection]
+        focusedDemo ?? .alertStandard
     }
 
     var body: some View {
@@ -180,24 +181,25 @@ struct OverlaysPage: View {
             // rows, selection included, below the fold on short terminals.
             HStack(alignment: .top, spacing: 3) {
                 // Left: Demo menu
-                Menu(
-                    title: L("page.overlays.selectDemo"),
-                    items: OverlayDemo.allCases.map { demo in
-                        MenuItem(label: demo.label, shortcut: nil)
-                    },
-                    selection: $menuSelection,
-                    onSelect: { _ in
-                        if selectedDemo.isNotification {
-                            NotificationService.current.post(
-                                L("page.overlays.alert.successMessage")
-                            )
-                        } else {
-                            showOverlay = true
+                // An inline Menu: each demo is a Button, and the panel beside
+                // it describes whichever one holds focus. Reading `@FocusState`
+                // in the body is what makes the description follow the arrows
+                // — a menu item's action only runs when you actually pick it.
+                Menu(L("page.overlays.selectDemo")) {
+                    ForEach(OverlayDemo.allCases, id: \.self) { demo in
+                        Button(demo.label) {
+                            if demo.isNotification {
+                                NotificationService.current.post(
+                                    L("page.overlays.alert.successMessage")
+                                )
+                            } else {
+                                showOverlay = true
+                            }
                         }
-                    },
-                    selectedColor: .palette.accent,
-                    borderColor: .palette.border
-                )
+                        .focused($focusedDemo, equals: demo)
+                    }
+                }
+                .menuStyle(.inline)
 
                 // Right: Description of selected demo
                 descriptionPanel

@@ -3,8 +3,7 @@
 //
 //  The combo-box surface: `.textInputSuggestions` menus on TextField
 //  (extraction, keyboard navigation, rendering, mouse), plus divider support
-//  in the shared drop-down machinery — Divider inside Picker content and
-//  MenuItem.divider in Menu.
+//  in the shared drop-down machinery (Divider inside Picker content).
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -604,35 +603,5 @@ struct MenuDividerTests {
             Issue.record("expected a divider entry")
             return
         }
-    }
-
-    @Test("MenuItem.divider renders as a rule and navigation skips it")
-    func menuControlDivider() {
-        let context = makeRenderContext { env, tui in
-            env.keyEventDispatcher = tui.keyEventDispatcher
-        }
-        var selection = 0
-        let menu = Menu(
-            items: [
-                MenuItem(label: "First"),
-                .divider,
-                MenuItem(label: "Second"),
-            ],
-            selection: Binding(get: { selection }, set: { selection = $0 })
-        )
-
-        let buffer = renderToBuffer(menu, context: context)
-        let lines = buffer.lines.map(\.stripped)
-        // Top border, First, rule, Second, bottom border.
-        #expect(lines.count == 5)
-        #expect(lines[2].contains("──"), "the divider renders as a rule: \(lines[2])")
-
-        // Down from First skips the divider straight to Second (index 2),
-        // and Down again wraps past it back to First.
-        let dispatcher = context.environment.keyEventDispatcher!
-        #expect(dispatcher.dispatch(KeyEvent(key: .down)))
-        #expect(selection == 2)
-        #expect(dispatcher.dispatch(KeyEvent(key: .down)))
-        #expect(selection == 0)
     }
 }

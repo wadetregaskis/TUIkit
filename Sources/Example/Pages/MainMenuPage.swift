@@ -42,7 +42,54 @@ struct FeatureBox: View, Equatable {
 /// feature highlight boxes at the bottom.
 struct MainMenuPage: View {
     @Binding var currentPage: DemoPage
-    @Binding var menuSelection: Int
+    @Binding var menuSelection: DemoPage
+
+    /// Which entry holds focus. Bound so returning from a demo puts the cursor
+    /// back on the entry you left from (`.defaultFocus` below) rather than at
+    /// the top of the list.
+    @FocusState private var focusedEntry: DemoPage?
+
+    /// One row of the menu: the page it opens, its localization key, and the
+    /// key that jumps straight to it.
+    private struct Entry {
+        let page: DemoPage
+        let key: String
+        let shortcut: KeyEquivalent
+    }
+
+    private static let entries: [Entry] = [
+        Entry(page: .textStyles, key: "menu.item.textStyles", shortcut: "1"),
+        Entry(page: .colors, key: "menu.item.colors", shortcut: "2"),
+        Entry(page: .containers, key: "menu.item.containers", shortcut: "3"),
+        Entry(page: .overlays, key: "menu.item.overlays", shortcut: "4"),
+        Entry(page: .layout, key: "menu.item.layout", shortcut: "5"),
+        Entry(page: .buttons, key: "menu.item.buttons", shortcut: "6"),
+        Entry(page: .toggles, key: "menu.item.toggles", shortcut: "7"),
+        Entry(page: .textInput, key: "menu.item.textInput", shortcut: "8"),
+        Entry(page: .radioButtons, key: "menu.item.radioButtons", shortcut: "9"),
+        Entry(page: .spinners, key: "menu.item.spinners", shortcut: "0"),
+        Entry(page: .lists, key: "menu.item.lists", shortcut: "-"),
+        Entry(page: .tables, key: "menu.item.tables", shortcut: "="),
+        Entry(page: .scrollView, key: "menu.item.scrollView", shortcut: "s"),
+        Entry(page: .sliders, key: "menu.item.sliders", shortcut: "["),
+        Entry(page: .steppers, key: "menu.item.steppers", shortcut: "]"),
+        Entry(page: .splitView, key: "menu.item.splitView", shortcut: ";"),
+        Entry(page: .imageFile, key: "menu.item.imageFile", shortcut: "'"),
+        Entry(page: .imageURL, key: "menu.item.imageURL", shortcut: ","),
+        Entry(page: .emoji, key: "menu.item.emoji", shortcut: "."),
+        Entry(page: .pickers, key: "menu.item.picker", shortcut: "/"),
+        Entry(page: .progress, key: "menu.item.progress", shortcut: "`"),
+        Entry(page: .mouse, key: "menu.item.mouse", shortcut: "m"),
+        Entry(page: .theme, key: "menu.item.theme", shortcut: "t"),
+        Entry(page: .emptyState, key: "menu.item.emptyState", shortcut: "e"),
+        Entry(page: .tabViews, key: "menu.item.tabViews", shortcut: "v"),
+        Entry(page: .forms, key: "menu.item.forms", shortcut: "f"),
+        Entry(page: .statePersistence, key: "menu.item.statePersistence", shortcut: "p"),
+        Entry(page: .lifecycle, key: "menu.item.lifecycle", shortcut: "l"),
+        Entry(page: .preferences, key: "menu.item.preferences", shortcut: "r"),
+        Entry(page: .focus, key: "menu.item.focus", shortcut: "k"),
+        Entry(page: .menus, key: "menu.item.menus", shortcut: "n"),
+    ]
 
     /// Subtitle for the SF Symbols feature box: a few thematic glyphs — the
     /// Swift logo, a terminal, and the ⌘ key, resolved through the very API the
@@ -65,52 +112,23 @@ struct MainMenuPage: View {
 
             HStack {
                 Spacer()
-                Menu(
-                    title: L("menu.title"),
-                    items: [
-                        MenuItem(label: L("menu.item.textStyles"), shortcut: "1"),
-                        MenuItem(label: L("menu.item.colors"), shortcut: "2"),
-                        MenuItem(label: L("menu.item.containers"), shortcut: "3"),
-                        MenuItem(label: L("menu.item.overlays"), shortcut: "4"),
-                        MenuItem(label: L("menu.item.layout"), shortcut: "5"),
-                        MenuItem(label: L("menu.item.buttons"), shortcut: "6"),
-                        MenuItem(label: L("menu.item.toggles"), shortcut: "7"),
-                        MenuItem(label: L("menu.item.textInput"), shortcut: "8"),
-                        MenuItem(label: L("menu.item.radioButtons"), shortcut: "9"),
-                        MenuItem(label: L("menu.item.spinners"), shortcut: "0"),
-                        MenuItem(label: L("menu.item.lists"), shortcut: "-"),
-                        MenuItem(label: L("menu.item.tables"), shortcut: "="),
-                        MenuItem(label: L("menu.item.scrollView"), shortcut: "s"),
-                        MenuItem(label: L("menu.item.sliders"), shortcut: "["),
-                        MenuItem(label: L("menu.item.steppers"), shortcut: "]"),
-                        MenuItem(label: L("menu.item.splitView"), shortcut: ";"),
-                        MenuItem(label: L("menu.item.imageFile"), shortcut: "'"),
-                        MenuItem(label: L("menu.item.imageURL"), shortcut: ","),
-                        MenuItem(label: L("menu.item.emoji"), shortcut: "."),
-                        MenuItem(label: L("menu.item.picker"), shortcut: "/"),
-                        MenuItem(label: L("menu.item.progress"), shortcut: "`"),
-                        MenuItem(label: L("menu.item.mouse"), shortcut: "m"),
-                        MenuItem(label: L("menu.item.theme"), shortcut: "t"),
-                        MenuItem(label: L("menu.item.emptyState"), shortcut: "e"),
-                        MenuItem(label: L("menu.item.tabViews"), shortcut: "v"),
-                        MenuItem(label: L("menu.item.forms"), shortcut: "f"),
-                        MenuItem(label: L("menu.item.statePersistence"), shortcut: "p"),
-                        MenuItem(label: L("menu.item.lifecycle"), shortcut: "l"),
-                        MenuItem(label: L("menu.item.preferences"), shortcut: "r"),
-                        MenuItem(label: L("menu.item.focus"), shortcut: "k"),
-                        MenuItem(label: L("menu.item.menus"), shortcut: "n"),
-                    ],
-                    selection: $menuSelection,
-                    onSelect: { index in
-                        // Navigate to the selected page
-                        if let page = DemoPage(rawValue: index + 1) {
-                            currentPage = page
+                // Each entry is an ordinary Button carrying its own action and
+                // key equivalent — SwiftUI's `Menu` API — rendered expanded in
+                // place by `.menuStyle(.inline)`. Arrows and Tab walk the rows;
+                // the shortcut characters jump straight to a page; the menu
+                // scrolls itself if the terminal is too short for all 31.
+                Menu(L("menu.title")) {
+                    ForEach(Self.entries, id: \.page) { entry in
+                        Button(L(entry.key)) {
+                            menuSelection = entry.page
+                            currentPage = entry.page
                         }
-                    },
-                    selectedColor: .palette.accent,
-                    // borderStyle uses appearance default
-                    borderColor: .palette.border
-                )
+                        .keyboardShortcut(entry.shortcut, modifiers: [])
+                        .focused($focusedEntry, equals: entry.page)
+                    }
+                }
+                .menuStyle(.inline)
+                .defaultFocus($focusedEntry, menuSelection)
                 Spacer()
             }
 

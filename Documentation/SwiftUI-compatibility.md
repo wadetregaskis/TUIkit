@@ -378,7 +378,8 @@ SwiftUI API (the CLAUDE.md rule).
 | `.textCursor(_:animation:speed:)` | text-field cursor shape/blink |
 | `.dimmed()`, `Text.dim()/.blink()/.inverted()` | ANSI display attributes |
 | Image: `.imageCharacterSet`/`.imageColorMode`/`.imageDithering`/… | raster→ASCII conversion controls |
-| `Card`, `Panel`, `RadioButton`/`RadioButtonGroup`, `Spinner`, `Menu` (keyboard-driven), `TrackStyle`, `IndeterminateStyle` | terminal-idiomatic containers/controls/styles |
+| `Card`, `Panel`, `RadioButton`/`RadioButtonGroup`, `Spinner`, `TrackStyle`, `IndeterminateStyle` | terminal-idiomatic containers/controls/styles |
+| `MenuStyle.inline` (+ `.menuStyle(_:)`) | a `Menu` rendered expanded in place under its label, rather than collapsed behind it. SwiftUI has no inline menu style; a terminal app's landing screen often *is* a menu, and making the user open the only thing on the page would be perverse. The rows are the same `Button`s either way, and each prints its `keyboardShortcut` at its trailing edge (`^S` for Control, `M-s` for Option — not ⌃⌥, whose width is ambiguous). A menu taller than its space scrolls inside its border, with the focus reveal following the arrows. |
 | `TrackStyle.custom(TrackConfiguration)` | fully-configurable progress/slider/gauge fill (glyphs, sub-cell ramp, solid-background unfilled, gradient); the named styles are presets of it |
 | `List`/`Table` `.onRowActivate(_:)`, `MouseEvent.clickCount` | row activation — double-click OR Return/Enter on the focused row (Space keeps selecting); the closest SwiftUI analogue is `contextMenu(forSelectionType:…primaryAction:)`. Terminals report no double-click, so the dispatcher synthesises `clickCount` by timing |
 | `.radioButtonGroupEdgeBehavior(_:)` | what an on-axis edge-arrow in a `RadioButtonGroup` does: `.contain` (stay in the group, the default — like `List`/`Table`; use Tab to leave), `.escape` (relinquish to the next control), or `.wrap` (cycle within the group) |
