@@ -24,15 +24,20 @@ import TUIkitCore
 ///   - context: The context to lay out in; its `availableWidth` is the ceiling.
 ///   - capHeight: The height the menu must fit into, or 0 for no cap. A taller
 ///     menu scrolls inside it.
+///   - borderColor: The frame's stroke, or `nil` for the palette's border colour.
+///     A presented menu passes the breathing accent here — see
+///     ``presentMenuPopover(items:over:sectionID:itemsIndex:anchor:opensWithSelection:dismiss:context:)``.
 @MainActor
-func renderMenuColumn(_ items: some View, context: RenderContext, capHeight: Int) -> FrameBuffer {
+func renderMenuColumn(
+    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil
+) -> FrameBuffer {
     // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
     // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
     // as menu rows, the same idiom as the Picker drop-down.
     let column = VStack(alignment: .leading, spacing: 0) { items }
         .buttonStyle(_MenuItemButtonStyle())
         .padding(.horizontal, 1)
-    let menuView = column.border()
+    let menuView = column.border(color: borderColor)
     // Size the menu to its own content before rendering it. Laying it out
     // against the whole screen made a menu of three short items span the
     // terminal: `Divider` MEASURES as one cell but RENDERS at the width it is
@@ -85,7 +90,7 @@ func renderMenuColumn(_ items: some View, context: RenderContext, capHeight: Int
     // (`ScrollViewReveal`).
     let scrolled = ScrollView(.vertical) { column }
         .frame(height: max(1, capHeight - 2))
-        .border()
+        .border(color: borderColor)
     return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
 }
 
@@ -105,6 +110,12 @@ func renderMenuColumn(_ items: some View, context: RenderContext, capHeight: Int
 ///   - itemsIndex: The child-identity index for `items` under `context`, so its
 ///     `@State` and focus slots stay distinct from the presenter's own.
 ///   - anchor: Where the menu's top-left goes, in `base`'s coordinates.
+///   - opensWithSelection: Whether to open with an item already highlighted.
+///     `false` for a pointer-opened menu (macOS behaviour: the pointer has
+///     chosen nothing yet, so highlighting an item invites a mis-click); `true`
+///     when the keyboard opened it, since there is no pointer to choose with.
+///     From the unselected state the first Down takes the first item and the
+///     first Up takes the last.
 ///   - dismiss: Closes the menu — run by Escape, by an outside click, and by
 ///     any item that fires.
 ///   - context: The presenter's render context.
@@ -115,6 +126,7 @@ func presentMenuPopover<Items: View>(
     sectionID: String,
     itemsIndex: Int,
     anchor: (x: Int, y: Int),
+    opensWithSelection: Bool,
     dismiss: @escaping () -> Void,
     context: RenderContext
 ) {
@@ -127,6 +139,10 @@ func presentMenuPopover<Items: View>(
     focusManager?.activateSection(id: sectionID)
     // Input-grabbing so global chrome hotkeys don't fire behind the menu.
     focusManager?.markSectionModal(id: sectionID)
+    // Marked BEFORE the items render (they register during `renderMenuColumn`
+    // below, and registration is one of the two places that would otherwise
+    // auto-focus the first of them).
+    if !opensWithSelection { focusManager?.markSectionFocusOptional(id: sectionID) }
     // Take the keyboard for this section. Isolating the presenter's own subtree
     // silences what is BENEATH the menu, but a menu hangs off one view — its
     // siblings are elsewhere in the tree and render into the live dispatcher
@@ -144,19 +160,24 @@ func presentMenuPopover<Items: View>(
         .withAvailableHeight(context.environment.overlayContentHeight)
     menuContext.environment.activeFocusSectionID = sectionID
     menuContext.environment.dismissMenu = DismissMenuAction(action: dismiss)
-    // The pop-up holds the focus, so say so the way every other focused
-    // container does: the breathing accent that `BorderRenderer` turns into a ●
-    // on the top edge. `FocusSectionModifier` computes this for a section
-    // declared in the view tree; a presented section has no such modifier around
-    // it, so it does the same sum itself.
-    let accent = menuContext.environment.palette.accent
-    let dim = accent.opacity(
-        ViewConstants.focusBorderDim, over: menuContext.environment.palette.background)
-    menuContext.environment.focusIndicatorColor = Color.lerp(
-        dim, accent, phase: context.environment.pulsePhase)
+    // The pop-up holds the focus and the keyboard while it is up, so its whole
+    // FRAME breathes — the same affordance the Picker drop-down uses, on the
+    // same clock (`SelectionEmphasis`), so two menus on one screen agree.
+    //
+    // Explicitly NOT the top-border ●: that mark reads as "this titled
+    // container has the focus", and a menu has no title, so a lone dot floating
+    // in an otherwise dead frame reads as debris. Left nil, which is also what
+    // stops an enclosing section's indicator leaking in.
+    menuContext.environment.focusIndicatorColor = nil
+    let palette = menuContext.environment.palette
+    let accent = palette.accent
+    let borderColor = SelectionIndicator.resolve(isFocused: true, context: menuContext)
+        .color(dim: accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+               bright: accent)
 
     var menuBuffer = renderMenuColumn(
-        items, context: menuContext, capHeight: context.environment.overlayContentHeight)
+        items, context: menuContext, capHeight: context.environment.overlayContentHeight,
+        borderColor: borderColor)
     guard !menuBuffer.isEmpty else { return }
 
     // The screen-covering dismiss backdrop, as the drop-down menus do: a

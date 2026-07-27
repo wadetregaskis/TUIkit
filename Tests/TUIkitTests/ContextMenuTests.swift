@@ -335,32 +335,44 @@ struct ContextMenuTests {
             """)
     }
 
-    @Test("The open menu's border carries the focus indicator")
-    func openMenuBorderPulses() {
-        let tui = TUIContext()
-        let focusManager = FocusManager()
-        let context = context(tui, focusManager: focusManager)
-        let view = targetView()
+    /// The open menu holds the focus and the keyboard, so it has to say so —
+    /// but on its whole FRAME, not with the top-border ● that a titled
+    /// container uses. A context menu has no title, and a lone dot floating in
+    /// an otherwise dead frame reads as debris rather than as focus.
+    @Test("The open menu's border pulses, and shows no ● where a title would go")
+    func openMenuBorderPulses() throws {
+        /// The presented menu, rendered at a given point in the pulse cycle.
+        func popup(pulsePhase: Double) -> FrameBuffer? {
+            let tui = TUIContext()
+            let focusManager = FocusManager()
+            var context = context(tui, focusManager: focusManager)
+            context.environment.pulsePhase = pulsePhase
+            let view = targetView()
 
-        let closed = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+            _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+            return renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+                .overlays.first?.content
+        }
+
+        let dim = try #require(popup(pulsePhase: 0))
+        let bright = try #require(popup(pulsePhase: 1))
         #expect(
-            !closed.lines.contains { $0.stripped.contains("●") },
-            "nothing is presented, so nothing claims focus")
-
-        _ = tui.mouseEventDispatcher.dispatch(
-            MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
-        _ = tui.mouseEventDispatcher.dispatch(
-            MouseEvent(button: .right, phase: .released, x: 3, y: 0))
-        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
-
-        let popup = opened.overlays.first?.content
-        #expect(
-            popup?.lines.contains { $0.stripped.contains("●") } == true,
+            !dim.lines.contains { $0.stripped.contains("●") },
             """
-            the pop-up holds the focus and must say so on its border, the way \
-            every other focused container does: \
-            \(popup?.lines.map(\.stripped).joined(separator: "\n") ?? "<no overlay>")
+            an untitled menu shows nothing in its top border: \
+            \(dim.lines.map(\.stripped).joined(separator: "\n"))
             """)
+        // The colour, not the glyphs: the frame is the same box either way.
+        #expect(
+            dim.lines.map(\.stripped) == bright.lines.map(\.stripped),
+            "the pulse must not move any glyph")
+        #expect(
+            dim.lines[0] != bright.lines[0],
+            "…only recolour the border, which must breathe: \(dim.lines[0].debugDescription)")
     }
 
     /// The measure pass has to see the shortcuts too, or the menu is sized for
