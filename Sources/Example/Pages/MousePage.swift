@@ -303,6 +303,7 @@ struct MousePage: View {
                     Text(isHovering ? L("page.mouse.hovering") : L("page.mouse.hoverMe"))
                         .bold()
                         .foregroundStyle(isHovering ? .palette.accent : .palette.foregroundSecondary)
+                        .frame(width: hoverLabelWidth, alignment: .center)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(color: isHovering ? .palette.accent : .palette.border)
                         .onHover { hovering in
@@ -504,6 +505,22 @@ struct MousePage: View {
         case .moved: return L("page.mouse.phaseMoved")
         case .ended: return L("page.mouse.phaseEnded")
         }
+    }
+
+    /// The wider of the two hover captions, in cells.
+    ///
+    /// The caption swaps when the cursor arrives, and a box that sizes to its
+    /// content would resize under the cursor — correct framework behaviour, but
+    /// it makes the demo look like the hover moved something. Pinning to the
+    /// wider caption keeps the box still while the text inside it changes.
+    ///
+    /// Measured rather than hard-coded because the two run to very different
+    /// lengths across the seven translations, and in cells rather than
+    /// characters, so the CJK captions are counted at the two columns they
+    /// actually occupy.
+    private var hoverLabelWidth: Int {
+        func cells(_ text: String) -> Int { text.reduce(0) { $0 + $1.terminalWidth } }
+        return max(cells(L("page.mouse.hovering")), cells(L("page.mouse.hoverMe")))
     }
 
     private func describeScroll(_ direction: ScrollDirection) -> String {
