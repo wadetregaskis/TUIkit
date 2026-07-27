@@ -131,6 +131,29 @@ struct ContextMenuTests {
         #expect(rule.strippedLength == popover.width, "the divider fills the menu's width")
     }
 
+    @Test("Items render as menu rows, not as buttons")
+    func itemsRenderAsMenuRows() throws {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = targetView()
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+
+        let popover = try #require(opened.overlays.first).content
+        let rows = popover.lines.map(\.stripped).filter { $0.contains("Cut") || $0.contains("Copy") }
+        #expect(rows.count == 2, "both items render")
+        for row in rows {
+            // The default button chrome is half-block caps around the label; a
+            // menu row is the bare label on a highlight bar.
+            #expect(
+                !row.contains("▐") && !row.contains("▌") && !row.contains("["),
+                "a menu row carries no button chrome, got \(row.debugDescription)")
+        }
+    }
+
     @Test("Ctrl-click opens the menu (fallback where right-click is swallowed)")
     func ctrlClickOpens() {
         let tui = TUIContext()

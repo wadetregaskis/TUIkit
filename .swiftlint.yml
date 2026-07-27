@@ -179,6 +179,10 @@ type_name:
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier
+    # Applied by ContextMenuModifier so a menu's Buttons render as menu rows;
+    # internal (not private) because the style and the modifier that applies it
+    # live in different files.
+    - _MenuItemButtonStyle
     - _PickerEntry
     - _PickerMenuCore
     - _PickerMenuHandler

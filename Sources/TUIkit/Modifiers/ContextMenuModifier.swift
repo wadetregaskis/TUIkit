@@ -115,7 +115,11 @@ extension ContextMenuModifier: Renderable {
         menuContext.environment.activeFocusSectionID = sectionID
         menuContext.environment.dismissMenu = DismissMenuAction { state.isOpen = false }
 
+        // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
+        // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws
+        // them as menu rows, the same idiom as the Picker drop-down.
         let menuView = VStack(alignment: .leading, spacing: 0) { menuItems }
+            .buttonStyle(_MenuItemButtonStyle())
             .padding(.horizontal, 1)
             .border()
         // Size the menu to its own content before rendering it. Laying it out
@@ -136,8 +140,14 @@ extension ContextMenuModifier: Renderable {
                 width: context.environment.terminalWidth,
                 height: context.environment.overlayContentHeight),
             context: menuContext)
-        menuContext = menuContext.withAvailableWidth(
-            max(1, min(natural.width, context.environment.terminalWidth)))
+        let menuWidth = max(1, min(natural.width, context.environment.terminalWidth))
+        menuContext = menuContext.withAvailableWidth(menuWidth)
+        // Now that the width is known, hand it to the rows so their highlight
+        // reads as a bar across the menu rather than a tag around the label.
+        // Deliberately AFTER the measure: a row that knew its width up front
+        // would report it, and the menu would size itself from its own guess.
+        // (2 border columns + the 1-cell padding on each side.)
+        menuContext.environment.menuRowWidth = max(1, menuWidth - 4)
         var menuBuffer = renderPresentedDialog(
             menuView, context: menuContext, capHeight: context.environment.overlayContentHeight)
         guard !menuBuffer.isEmpty else { return baseBuffer }
