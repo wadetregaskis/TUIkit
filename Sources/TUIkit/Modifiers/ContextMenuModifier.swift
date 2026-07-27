@@ -81,106 +81,20 @@ extension ContextMenuModifier: Renderable {
             return buffer
         }
 
-        // OPEN: grab focus into the menu's own section (so the page beneath can't
-        // steal it), register an Escape-to-dismiss handler, and mark the section
-        // input-grabbing so global chrome hotkeys don't fire behind the menu —
-        // exactly like Alert/Modal. Render-pass only (a measure-by-render ancestor
-        // must not register a phantom section).
-        if !context.isMeasuring {
-            context.environment.volatileReadTracker?.recordRenderSideEffect()
-            let focusManager = context.environment.focusManager
-            focusManager?.registerSection(id: sectionID)
-            focusManager?.activateSection(id: sectionID)
-            focusManager?.markSectionModal(id: sectionID)
-            // Take the keyboard for this section. `isolatedForBackground()`
-            // below silences the CONTENT beneath, but a context menu hangs off
-            // a leaf view — its siblings are elsewhere in the tree and render
-            // into the live dispatcher every frame, keeping their handlers.
-            // `Menu`'s is registered unconditionally and swallows Up/Down, so
-            // the arrows meant for this menu moved the page's combo menu
-            // instead while Tab (a focus-system path, already captured) worked.
-            context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
-            context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
-                if event.key == .escape {
-                    state.isOpen = false
-                    return true
-                }
-                return false
-            }
-        }
-
-        // The content beneath becomes an inert backdrop (isolated from focus /
-        // key / state), so its controls can't steal the menu's focus. NOT dimmed
-        // (a context menu is a popover, not a modal), so no dimsBackground.
-        var baseBuffer = TUIkit.renderToBuffer(content, context: contentContext.isolatedForBackground())
-
-        // Build the menu: the ViewBuilder Buttons stacked vertically in a border,
-        // with `dismissMenu` set so selecting any button closes the menu. Wrapped
-        // in renderPresentedDialog so an over-tall menu scrolls instead of clipping
-        // under the status bar.
-        var menuContext = context
-            .withChildIdentity(erasedType: MenuItems.self, index: 1)
-            .withAvailableWidth(context.environment.terminalWidth)
-            .withAvailableHeight(context.environment.overlayContentHeight)
-        menuContext.environment.activeFocusSectionID = sectionID
-        menuContext.environment.dismissMenu = DismissMenuAction { state.isOpen = false }
-        // The pop-up holds the focus, so say so the way every other focused
-        // container does: the breathing accent that `BorderRenderer` turns into
-        // a ● on the top edge. `FocusSectionModifier` computes this for a
-        // section declared in the view tree; a presented section has no such
-        // modifier around it, so it does the same sum itself.
-        let accent = menuContext.environment.palette.accent
-        let dim = accent.opacity(
-            ViewConstants.focusBorderDim, over: menuContext.environment.palette.background)
-        menuContext.environment.focusIndicatorColor = Color.lerp(
-            dim, accent, phase: context.environment.pulsePhase)
-
-        // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
-        // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws
-        // them as menu rows, the same idiom as the Picker drop-down.
-        let menuView = VStack(alignment: .leading, spacing: 0) { menuItems }
-            .buttonStyle(_MenuItemButtonStyle())
-            .padding(.horizontal, 1)
-            .border()
-        // Size the menu to its own content before rendering it. Laying it out
-        // against the whole screen made a menu of three short items span the
-        // terminal: `Divider` MEASURES as one cell but RENDERS at the width it
-        // is offered, and a VStack takes its width from what its children
-        // actually drew — so one separator inflated the popover to whatever it
-        // was handed. Measuring first (where the divider claims its true one
-        // cell and the buttons hug their labels) yields the natural hug width;
-        // rendering at that width then makes the divider span exactly the
-        // menu's interior, which is the separator look we want anyway.
-        //
-        // Measured through the SAME context the render uses, so `@State` and
-        // focus slots resolve to the same identities either way (362c8839).
-        let natural = measureChild(
-            menuView,
-            proposal: ProposedSize(
-                width: context.environment.terminalWidth,
-                height: context.environment.overlayContentHeight),
-            context: menuContext)
-        let menuWidth = max(1, min(natural.width, context.environment.terminalWidth))
-        menuContext = menuContext.withAvailableWidth(menuWidth)
-        // Now that the width is known, hand it to the rows so their highlight
-        // reads as a bar across the menu rather than a tag around the label.
-        // Deliberately AFTER the measure: a row that knew its width up front
-        // would report it, and the menu would size itself from its own guess.
-        // (2 border columns + the 1-cell padding on each side.)
-        menuContext.environment.menuRowWidth = max(1, menuWidth - 4)
-        var menuBuffer = renderPresentedDialog(
-            menuView, context: menuContext, capHeight: context.environment.overlayContentHeight)
-        guard !menuBuffer.isEmpty else { return baseBuffer }
-
-        attachDismissBackdrop(to: &menuBuffer, state: state, context: context)
-
-        // Float the menu at the click point (content-local anchor → absolute in
-        // composition). `.popover` level; `anchorHeight: 0` nudges it on-screen at
-        // the edges rather than flipping above a control.
-        baseBuffer.overlays.append(
-            OverlayLayer(
-                offsetX: state.anchorX, offsetY: state.anchorY, content: menuBuffer,
-                level: .popover, anchorHeight: 0))
+        // OPEN: render the content beneath as an inert backdrop (isolated from
+        // focus / key / state) so its controls can't steal the menu's focus. NOT
+        // dimmed — a context menu is a popover, not a modal.
+        var baseBuffer = TUIkit.renderToBuffer(
+            content, context: contentContext.isolatedForBackground())
+        // The presentation itself is shared with the pop-up `Menu`: same
+        // bordered column of Buttons, same focus/keyboard grab, same dismiss
+        // backdrop. Only the trigger and the anchor differ — here, the cell the
+        // secondary click landed on (content-local; composition makes it
+        // absolute).
+        presentMenuPopover(
+            items: menuItems, over: &baseBuffer, sectionID: sectionID, itemsIndex: 1,
+            anchor: (state.anchorX, state.anchorY),
+            dismiss: { state.isOpen = false }, context: context)
         return baseBuffer
     }
 
@@ -255,32 +169,6 @@ extension ContextMenuModifier: Renderable {
             state.isOpen = true
             return true
         }
-    }
-
-    /// Inserts the screen-covering dismiss backdrop (as the drop-down menus do):
-    /// a first-registered region that closes the menu on any non-wheel press
-    /// outside it, while every region of the menu itself wins over it and the
-    /// wheel still falls through to the page.
-    private func attachDismissBackdrop(
-        to buffer: inout FrameBuffer, state: ContextMenuState, context: RenderContext
-    ) {
-        guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher
-        else { return }
-        let dismissID = dispatcher.register { event in
-            switch event.phase {
-            case .pressed where !event.button.isWheel:
-                state.isOpen = false
-                return true
-            case .released:
-                return true  // the consumed press's matching release
-            default:
-                return false
-            }
-        }
-        buffer.hitTestRegions.insert(
-            HitTestRegion(
-                offsetX: -4096, offsetY: -4096, width: 8192, height: 8192, handlerID: dismissID),
-            at: 0)
     }
 }
 
