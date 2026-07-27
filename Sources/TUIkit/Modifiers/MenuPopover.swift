@@ -148,11 +148,25 @@ func presentMenuPopover<Items: View>(
     // siblings are elsewhere in the tree and render into the live dispatcher
     // every frame, keeping their handlers.
     context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
+    // Escape closes the MENU, not the page. Claiming the label is what makes
+    // that true as well as discoverable: `InputHandler` routes ESC to the focus
+    // system before the status bar when an override is posted, and without it
+    // the status bar's own "⎋ back" won — so Escape in an open Menu dismissed
+    // the whole page behind it. The Picker drop-down has always claimed it;
+    // this is the same claim, from the presentation both share.
+    context.environment.statusBar.escapeLabelOverride = "close menu"
     context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
         guard event.key == .escape else { return false }
         dismiss()
         return true
     }
+    // Home / End / PageUp / PageDown / Shift+arrow — the jump gestures every
+    // other list-like control in TUIkit answers, via the same helper the Picker
+    // drop-down and RadioButtonGroup use. The FocusManager ring implements plain
+    // arrows only, and its Page/Home/End fall-through looks for a scroller in
+    // the section, finds none, and drops the key. Registered on the menu's own
+    // section so it runs before that fall-through.
+    attachMenuJumpKeys(sectionID: sectionID, context: context)
 
     var menuContext = context
         .withChildIdentity(erasedType: Items.self, index: itemsIndex)
@@ -206,4 +220,44 @@ func presentMenuPopover<Items: View>(
         OverlayLayer(
             offsetX: anchor.x, offsetY: anchor.y, content: menuBuffer,
             level: .popover, anchorHeight: 0))
+}
+
+/// Gives an open menu the jump gestures — Home, End, PageUp, PageDown and
+/// Shift+arrow — that a `Picker` drop-down, a `List` and a `RadioButtonGroup`
+/// all answer.
+///
+/// The rows of a view-composed menu are real `Button`s in the focus ring, so
+/// their "highlight" is `FocusManager.focusedID` and the only navigation they
+/// inherit is `focusNext/PreviousInSection`. This maps the jump keys onto the
+/// same ring through ``OptionListNavigation/clampedDestination(for:from:count:onAxisForward:onAxisBackward:multiplier:pageSize:)``,
+/// so a menu and a drop-down move identically for the same keystroke.
+///
+/// Also swallows Left/Right: on the ring they act as Up/Down (`dispatchKeyEvent`
+/// treats the axes alike), which in a vertical menu is just wrong — the Picker
+/// drop-down already consumes them.
+@MainActor
+private func attachMenuJumpKeys(sectionID: String, context: RenderContext) {
+    guard let focusManager = context.environment.focusManager,
+        let dispatcher = context.environment.keyEventDispatcher
+    else { return }
+    let multiplier = context.environment.shiftStepMultiplier
+    // A page is the menu's visible rows; the cap is what the column was given.
+    let pageSize = max(1, context.environment.overlayContentHeight - 2)
+
+    dispatcher.addHandler(sectionID: sectionID) { event in
+        if event.key == .left || event.key == .right { return true }
+        let rows = focusManager.focusableIDsInActiveSection()
+        guard !rows.isEmpty else { return false }
+        // No row highlighted yet (a pointer-opened menu): a jump key enters at
+        // the end it names, the same way the first Down/Up enters the ring.
+        let current = focusManager.currentFocusedID.flatMap { rows.firstIndex(of: $0) } ?? 0
+        guard
+            let destination = OptionListNavigation.clampedDestination(
+                for: event, from: current, count: rows.count,
+                onAxisForward: .down, onAxisBackward: .up,
+                multiplier: multiplier, pageSize: pageSize)
+        else { return false }
+        focusManager.focus(id: rows[destination])
+        return true
+    }
 }

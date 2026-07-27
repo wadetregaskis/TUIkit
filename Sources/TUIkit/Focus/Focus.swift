@@ -1095,6 +1095,17 @@ extension FocusManager {
         activeSection?.focusables.map(\.focusID) ?? []
     }
 
+    /// The active section's focus IDs that can actually BE focused, in ring
+    /// order — what an arrow or a jump key walks.
+    ///
+    /// Distinct from ``registeredFocusIDsInActiveSection()``, which reports
+    /// everything that registered: a disabled row registers but declines focus,
+    /// and a menu that overflows also registers its `ScrollView`. Either would
+    /// make "jump to the last item" land somewhere that is not an item.
+    func focusableIDsInActiveSection() -> [String] {
+        activeSection?.focusables.filter(\.canBeFocused).map(\.focusID) ?? []
+    }
+
     /// Diagnostic one-line summary of the focus manager's section
     /// state. Used by the gated logging across the framework when
     /// `TUIKIT_DEBUG_FOCUS=1`; not part of the public API.

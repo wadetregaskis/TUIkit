@@ -376,6 +376,65 @@ struct MenuTests {
         #expect(focusManager.currentFocusedID == items.first)
     }
 
+    // MARK: - Jump navigation
+
+    /// The gestures a `Picker` drop-down, a `List` and a `RadioButtonGroup` all
+    /// answer, which a menu did not: its rows are Buttons in the focus ring, and
+    /// the ring implements plain arrows only. Home/End/Page reached the focus
+    /// manager's scroll fall-through, found no scroller in the menu's section,
+    /// and died unhandled.
+    @Test(
+        "An open menu answers the jump keys",
+        arguments: [
+            (KeyEvent(key: .end), 3), (KeyEvent(key: .home), 0),
+            (KeyEvent(key: .pageDown), 3), (KeyEvent(key: .pageUp), 0),
+            (KeyEvent(key: .down, shift: true), 3), (KeyEvent(key: .up, shift: true), 0),
+        ])
+    func jumpKeys(key: KeyEvent, expected: Int) throws {
+        let (tui, context) = harness()
+        let focusManager = try #require(context.environment.focusManager)
+        let view = Menu("Actions") {
+            Button("One") {}
+            Button("Two") {}
+            Button("Three") {}
+            Button("Four") {}
+        }
+
+        openPopup(view, as: .keyboard, tui: tui, context: context)
+        let rows = focusManager.focusableIDsInActiveSection()
+        #expect(rows.count == 4, "sanity: four rows in the ring — \(rows)")
+        // Start in the middle so a jump in either direction is a real move.
+        focusManager.focus(id: rows[1])
+
+        #expect(tui.keyEventDispatcher.dispatch(key), "the menu must consume it")
+        #expect(focusManager.currentFocusedID == rows[expected])
+    }
+
+    /// Left/Right act as Up/Down on the focus ring, which in a vertical menu is
+    /// simply wrong — the Picker drop-down has always swallowed them.
+    @Test("An open menu swallows Left and Right", arguments: [Key.left, .right])
+    func horizontalArrowsAreInert(key: Key) throws {
+        let (tui, context) = harness()
+        let focusManager = try #require(context.environment.focusManager)
+
+        openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
+        let before = focusManager.currentFocusedID
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: key)))
+        #expect(focusManager.currentFocusedID == before)
+    }
+
+    /// Escape closes the MENU. Without the status-bar claim the page's own "⎋
+    /// back" item won and the whole page was dismissed behind the open menu.
+    @Test("An open menu claims the Escape label")
+    func escapeLabelClaimed() {
+        let (tui, context) = harness()
+        // The status bar is shared per-app state, so start from a known point
+        // rather than assuming no earlier test in this process claimed it.
+        context.environment.statusBar.escapeLabelOverride = nil
+        openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
+        #expect(context.environment.statusBar.escapeLabelOverride != nil)
+    }
+
     // MARK: - Style plumbing
 
     @Test("menuStyle flows down through a container to the menus inside it")
