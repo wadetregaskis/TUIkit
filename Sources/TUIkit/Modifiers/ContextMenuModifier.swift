@@ -118,6 +118,26 @@ extension ContextMenuModifier: Renderable {
         let menuView = VStack(alignment: .leading, spacing: 0) { menuItems }
             .padding(.horizontal, 1)
             .border()
+        // Size the menu to its own content before rendering it. Laying it out
+        // against the whole screen made a menu of three short items span the
+        // terminal: `Divider` MEASURES as one cell but RENDERS at the width it
+        // is offered, and a VStack takes its width from what its children
+        // actually drew — so one separator inflated the popover to whatever it
+        // was handed. Measuring first (where the divider claims its true one
+        // cell and the buttons hug their labels) yields the natural hug width;
+        // rendering at that width then makes the divider span exactly the
+        // menu's interior, which is the separator look we want anyway.
+        //
+        // Measured through the SAME context the render uses, so `@State` and
+        // focus slots resolve to the same identities either way (362c8839).
+        let natural = measureChild(
+            menuView,
+            proposal: ProposedSize(
+                width: context.environment.terminalWidth,
+                height: context.environment.overlayContentHeight),
+            context: menuContext)
+        menuContext = menuContext.withAvailableWidth(
+            max(1, min(natural.width, context.environment.terminalWidth)))
         var menuBuffer = renderPresentedDialog(
             menuView, context: menuContext, capHeight: context.environment.overlayContentHeight)
         guard !menuBuffer.isEmpty else { return baseBuffer }

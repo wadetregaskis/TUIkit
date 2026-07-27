@@ -99,6 +99,38 @@ struct ContextMenuTests {
         #expect(!opened.overlays.isEmpty, "the open menu renders a popover overlay")
     }
 
+    @Test("The menu hugs its widest item — a Divider does not stretch it to the screen")
+    func menuHugsItsContent() throws {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        // A separator is the case that broke: `Divider` measures as one cell but
+        // renders at whatever width it is offered, and a VStack takes its width
+        // from what its children DREW — so a menu laid out against the screen
+        // came back screen-wide, however short its items.
+        let view = Text("Right-click me").contextMenu {
+            Button("Cut") {}
+            Button("Copy") {}
+            Divider()
+            Button("Delete") {}
+        }
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+
+        let popover = try #require(opened.overlays.first).content
+        #expect(
+            popover.width < context.availableWidth,
+            """
+            the menu must hug its items, not fill the terminal — got \(popover.width) \
+            of \(context.availableWidth) cells for "Cut"/"Copy"/"Delete"
+            """)
+        // …and the separator still spans the menu's own interior.
+        let rule = try #require(popover.lines.first { $0.stripped.contains("─") && !$0.stripped.contains("╭") })
+        #expect(rule.strippedLength == popover.width, "the divider fills the menu's width")
+    }
+
     @Test("Ctrl-click opens the menu (fallback where right-click is swallowed)")
     func ctrlClickOpens() {
         let tui = TUIContext()
