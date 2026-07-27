@@ -8,17 +8,25 @@ import TUIkit
 
 /// Menus demo page.
 ///
-/// The two menu idioms TUIkit ships today:
+/// The three menu idioms TUIkit ships today:
 ///   - `.contextMenu { … }` — a right-click (or Ctrl-click) pop-up of Buttons,
 ///     anchored at the click cell.
 ///   - `Menu(title:items:selection:)` — a combo button: a titled control that
 ///     pops its items open in place.
+///   - `TextField` + `.textInputSuggestions { … }` — a combo box: free text
+///     with a menu of suggestions beside it.
 ///
 /// Menu-bar demos join them once menu bars exist.
 struct MenusPage: View {
     @State private var contextAction: String = "—"
     @State private var comboSelection: Int = 0
     @State private var comboChoice: String = "—"
+    @State private var editor: String = ""
+
+    /// Suggestions for the combo box. Editor names are proper nouns, so the
+    /// menu reads the same in every language — the point on show is the
+    /// control, not the words.
+    private let editors = ["Vim", "Neovim", "Emacs", "Nano", "Helix", "Xcode", "VS Code"]
 
     /// The combo button's items — deliberately mixed lengths, so the pop-up
     /// visibly hugs its widest item.
@@ -80,6 +88,20 @@ struct MenusPage: View {
                         borderColor: .palette.border
                     )
                     ValueDisplayRow(L("page.menus.chose"), comboChoice)
+                }
+            }
+
+            DemoSection(L("page.menus.boxSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.menus.boxInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    TextField(L("page.menus.boxLabel"), text: $editor)
+                        .textInputSuggestions {
+                            ForEach(editors, id: \.self) { Text($0) }
+                        }
+                        .frame(width: 24)
+                    ValueDisplayRow(
+                        L("page.menus.typed"), editor.isEmpty ? "—" : editor)
                 }
             }
         }

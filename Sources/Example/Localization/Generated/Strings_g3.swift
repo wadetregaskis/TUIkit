@@ -52,6 +52,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "Rename…",
             "page.menus.combo.export": "Export as Markdown…",
             "page.menus.chose": "Chose",
+            "page.menus.boxSection": "Combo Box · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "A field you can type anything into, with a menu of suggestions beside it: Down opens the menu, Up from the first row returns to the caret, Enter takes the highlighted row — and anything you type that is not on the list is kept.",
+            "page.menus.boxLabel": "Editor",
+            "page.menus.typed": "Typed",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
@@ -237,6 +241,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "Umbenennen…",
             "page.menus.combo.export": "Als Markdown exportieren…",
             "page.menus.chose": "Gewählt",
+            "page.menus.boxSection": "Kombinationsfeld · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "Ein Feld für beliebige Eingaben mit einem Vorschlagsmenü: Abwärts öffnet das Menü, Aufwärts aus der ersten Zeile führt zum Cursor zurück, Enter übernimmt die markierte Zeile — Eingaben außerhalb der Liste bleiben erhalten.",
+            "page.menus.boxLabel": "Editor",
+            "page.menus.typed": "Eingegeben",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Bearbeitbar · .onMove / .onDelete",
@@ -422,6 +430,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "Renommer…",
             "page.menus.combo.export": "Exporter en Markdown…",
             "page.menus.chose": "Choisi",
+            "page.menus.boxSection": "Liste modifiable · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "Un champ de saisie libre accompagné d'un menu de suggestions : Bas ouvre le menu, Haut depuis la première ligne revient au curseur, Entrée valide la ligne surlignée — et tout texte hors liste est conservé.",
+            "page.menus.boxLabel": "Éditeur",
+            "page.menus.typed": "Saisi",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modifiable · .onMove / .onDelete",
@@ -607,6 +619,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "Rinomina…",
             "page.menus.combo.export": "Esporta come Markdown…",
             "page.menus.chose": "Scelto",
+            "page.menus.boxSection": "Casella combinata · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "Un campo a testo libero con un menu di suggerimenti: Giù apre il menu, Su dalla prima riga torna al cursore, Invio conferma la riga evidenziata — e quanto digiti fuori elenco viene mantenuto.",
+            "page.menus.boxLabel": "Editor",
+            "page.menus.typed": "Digitato",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modificabile · .onMove / .onDelete",
@@ -792,6 +808,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "Renombrar…",
             "page.menus.combo.export": "Exportar como Markdown…",
             "page.menus.chose": "Elegido",
+            "page.menus.boxSection": "Cuadro combinado · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "Un campo de texto libre con un menú de sugerencias: Abajo abre el menú, Arriba desde la primera fila vuelve al cursor, Intro acepta la fila resaltada, y lo que escribas fuera de la lista se conserva.",
+            "page.menus.boxLabel": "Editor",
+            "page.menus.typed": "Escrito",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
@@ -977,6 +997,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "重命名…",
             "page.menus.combo.export": "导出为 Markdown…",
             "page.menus.chose": "已选择",
+            "page.menus.boxSection": "组合框 · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "可任意输入的文本框，旁边带有建议菜单：向下键打开菜单，在首行按向上键回到光标，回车键选用高亮行；列表之外的输入同样保留。",
+            "page.menus.boxLabel": "编辑器",
+            "page.menus.typed": "已输入",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "可编辑 · .onMove / .onDelete",
@@ -1162,6 +1186,10 @@ extension ExampleStrings {
             "page.menus.combo.rename": "名前を変更…",
             "page.menus.combo.export": "Markdown として書き出す…",
             "page.menus.chose": "選択",
+            "page.menus.boxSection": "コンボボックス · TextField + .textInputSuggestions",
+            "page.menus.boxInstruction": "自由に入力できるフィールドと候補メニュー：下矢印でメニューを開き、先頭行で上矢印を押すとカーソルに戻り、Enter でハイライト行を確定します。一覧にない入力もそのまま残ります。",
+            "page.menus.boxLabel": "エディタ",
+            "page.menus.typed": "入力",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "編集可能 · .onMove / .onDelete",
