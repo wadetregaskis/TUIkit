@@ -235,48 +235,69 @@ struct ListReorderDragTests {
         #expect(fixture.moves == 1, "one move for the whole gesture")
     }
 
-    @Test("A ghost drag floats the row itself at the cursor")
-    func ghostFloatsTheRow() throws {
+    @Test("A ghost drag leaves the row dimmed and shows a copy at the drop slot")
+    func ghostShowsCopyAtTheDropSlot() throws {
         let fixture = Fixture(feedback: .ghost)
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
-        // The column the row's own content starts at — where a correctly
-        // anchored ghost's left edge sits, whatever cell within the row was
-        // grabbed.
-        let rowContentLeft = buffer.lines[yA].stripped.distance(
-            from: buffer.lines[yA].stripped.startIndex,
-            to: buffer.lines[yA].stripped.firstIndex(of: "a")!)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        let dragging = fixture.render()
+
+        let rows = dragging.lines.filter { $0.stripped.contains("a") }
+        #expect(
+            rows.count == 2,
+            "the row appears twice mid-drag: dimmed where it still is, solid where it would land")
+        #expect(
+            rows.contains { $0.contains(ANSIRenderer.dim) },
+            "…and exactly the one left behind is faint")
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "the data has not moved yet")
+        #expect(
+            fixture.dragSession.active == nil,
+            "a ghost lives in the list, not on the cursor — nothing floats")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "c")))
+        #expect(fixture.items == ["b", "c", "a", "d", "e"], "and the drop commits it")
+    }
+
+    @Test("A cursor drag floats the row and leaves a gap where it would land")
+    func cursorFloatsAndGaps() throws {
+        let fixture = Fixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let yA = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: yA))
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .dragged, x: 4, y: fixture.rowY(buffer, "c")))
+        let dragging = fixture.render()
 
         let drag = try #require(fixture.dragSession.active)
         #expect(
             drag.preview.lines.contains { $0.stripped.contains("a") },
-            "the floating copy is the grabbed row")
-        #expect(drag.preview.hitTestRegions.isEmpty, "a copy riding the cursor must not be clickable")
-        let frame = try #require(fixture.dragSession.previewFrame())
+            "the row itself rides the cursor")
         #expect(
-            frame.x == rowContentLeft,
-            """
-            grab-point anchoring: the pressed cell stays under the cursor, so a \
-            press 2 cells into the row leaves the ghost's left edge 2 cells left \
-            of the cursor — still lined up with the column it came from.
-            """)
-        #expect(fixture.items == ["a", "b", "c", "d", "e"], "and the list itself has not moved")
+            dragging.lines.filter { $0.stripped.contains("a") }.count == 1,
+            "the list keeps only the dimmed original — the copy is on the pointer")
+        #expect(
+            dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
+            "…and it is dimmed")
     }
 
-    @Test("Dropping a ghost commits the move and stops floating it")
-    func ghostDropEndsTheDrag() {
-        let fixture = Fixture(feedback: .ghost)
+    @Test("Dragging a cursor-mode row out of the list cancels the drop")
+    func cursorDragOutCancels() {
+        let fixture = Fixture(feedback: .cursor)
         let buffer = fixture.render()
-        fixture.drag(from: "a", to: "c")
-        _ = buffer
-        #expect(fixture.items == ["b", "c", "a", "d", "e"])
-        #expect(fixture.moves == 1)
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        // Out of the rows entirely — the gap goes, so the drop must do nothing.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 0, y: 0))
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 0, y: 0))
         #expect(
-            fixture.dragSession.active == nil,
-            "a ghost left floating after the drop would sit over the app forever")
+            fixture.items == ["a", "b", "c", "d", "e"],
+            "releasing where no slot is shown leaves the order alone")
     }
 
     @Test("A ghost is only raised once a drag actually begins")

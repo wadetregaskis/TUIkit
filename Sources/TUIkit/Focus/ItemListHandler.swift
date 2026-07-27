@@ -231,6 +231,12 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         /// press/release with no motion is a click (selection), not a reorder.
         var active: Bool
 
+        /// Where the row would land if released now, or `nil` when the cursor is
+        /// off the rows entirely. `.ghost` and `.cursor` show this slot — as a
+        /// copy of the row and as a gap respectively — and `nil` is what makes a
+        /// drag off the list read as "release here and nothing moves".
+        var targetOffset: Int?
+
         init(grabbedOffset: Int, active: Bool) {
             self.grabbedOffset = grabbedOffset
             self.currentOffset = grabbedOffset

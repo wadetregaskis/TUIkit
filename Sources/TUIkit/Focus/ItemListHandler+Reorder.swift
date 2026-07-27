@@ -36,11 +36,24 @@ extension ItemListHandler {
     /// separates a reorder from a plain click.
     var isReordering: Bool { reorder?.active == true }
 
-    /// The row a `.ghost` drag is carrying, or `nil` when no drag is in flight.
-    /// The floating copy is drawn from this row's buffer by `_ListCore`.
-    var reorderGhostRow: Int? {
-        guard reorderFeedback == .ghost, let reorder, reorder.active else { return nil }
+    /// The row a `.cursor` drag is carrying on the pointer, or `nil` when no
+    /// such drag is in flight. `_ListCore` draws the floating copy from this
+    /// row's buffer.
+    var reorderFloatingRow: Int? {
+        guard reorderFeedback == .cursor, let reorder, reorder.active else { return nil }
         return reorder.currentOffset
+    }
+
+    /// The row being dragged and where it would land — what `.ghost` and
+    /// `.cursor` draw in the list itself (a full-brightness copy, and a gap,
+    /// respectively). `nil` when nothing is dragging, when `.live` is moving the
+    /// data instead, or when the cursor has left the rows: `.cursor` drops its
+    /// gap then, so the list reads as "let go here and nothing moves".
+    var reorderPlaceholder: (source: Int, slot: Int)? {
+        guard reorderFeedback != .live, let reorder, reorder.active,
+            let slot = reorder.targetOffset
+        else { return nil }
+        return (reorder.currentOffset, slot)
     }
 
     /// Picks up the row at `offset` for a possible reorder. Not yet a
@@ -67,12 +80,22 @@ extension ItemListHandler {
         reorder.active = true
         self.reorder = reorder
 
-        guard let contentY, let target = contentRowIndex(atContentY: contentY) else { return }
+        guard let contentY, let target = contentRowIndex(atContentY: contentY) else {
+            // Off the rows. `.cursor` forgets its slot — the gap disappears and
+            // releasing there is a cancel — while the other modes hold the last
+            // one, since they have nothing that says "nowhere".
+            if reorderFeedback == .cursor {
+                reorder.targetOffset = nil
+                self.reorder = reorder
+            }
+            return
+        }
         if reorderFeedback == .live, target != reorder.currentOffset {
             move(from: reorder.currentOffset, to: target)
             reorder.currentOffset = target
-            self.reorder = reorder
         }
+        reorder.targetOffset = target
+        self.reorder = reorder
         focusedIndex = target
     }
 
@@ -93,10 +116,15 @@ extension ItemListHandler {
             focusedIndex = clampedRowIndex(reorder.currentOffset)
             return true
         }
-        // Dropping off the rows entirely means the end of the list — the
-        // gesture that pulls a row past the last one.
-        let target =
-            contentY.flatMap { contentRowIndex(atContentY: $0) } ?? max(0, itemCount - 1)
+        // Released off the rows. `.cursor` shows no drop slot there, so it has
+        // promised the drop would do nothing — keep that promise. `.ghost` still
+        // shows one (it holds the last), so it commits to it.
+        guard let target = contentY.flatMap({ contentRowIndex(atContentY: $0) })
+            ?? reorder.targetOffset
+        else {
+            focusedIndex = clampedRowIndex(reorder.grabbedOffset)
+            return true
+        }
         focusedIndex = clampedRowIndex(move(from: reorder.grabbedOffset, to: target))
         return true
     }

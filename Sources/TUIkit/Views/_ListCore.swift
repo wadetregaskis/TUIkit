@@ -423,7 +423,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // ends (which used to push the "N more below" indicator one
         // row too high), and no overflow in the middle. With a bar,
         // the whole content area is the viewport (no reservation).
-        let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
+        var visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
         if wantsScrollbar {
             visibleRows = calculateVisibleRows(
                 source: source, handler: handler, viewportHeight: targetContentHeight)
@@ -435,6 +435,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 overflowing: overflowing
             )
         }
+        // A `.ghost` / `.cursor` drag adds its placeholder row here, AFTER the
+        // window walk: the drag shows an extra row that is not in the data, so
+        // it must not take part in choosing which data rows are visible.
+        visibleRows = decorateForReorder(visibleRows, handler: handler, palette: palette)
         // Sync the viewport to the rows actually shown so the
         // handler's indicator predicates match the rendering.
         handler.viewportHeight = max(1, visibleRows.count)
@@ -1175,6 +1179,57 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
     }
 
+    /// Rewrites the visible rows for an in-flight `.ghost` / `.cursor` reorder:
+    /// the dragged row goes DIM where it still sits, and a placeholder appears
+    /// at the slot it would land in — a full-brightness copy of the row under
+    /// `.ghost`, an empty gap under `.cursor` (whose copy is riding the cursor
+    /// instead). The list is one row longer for the duration of the drag, which
+    /// is what makes the gesture read as "this is where it goes".
+    ///
+    /// The placeholder is typed as a footer, not as content: it carries no id,
+    /// so selection ignores it, and `publishRowBands` marks it non-content so
+    /// the drag's own hit-testing skips it — the cursor resting on the gap holds
+    /// the current slot rather than trying to target the gap itself.
+    private func decorateForReorder(
+        _ visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
+        handler: ItemListHandler<SelectionValue>,
+        palette: any Palette
+    ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
+        guard let placeholder = handler.reorderPlaceholder else { return visibleRows }
+        // The copy is taken BEFORE the source is dimmed — the placeholder is the
+        // row at full brightness, the row left behind is the faint one.
+        let original = visibleRows.first { $0.index == placeholder.source }?.row.buffer
+        var rows = visibleRows.map { entry -> (index: Int, row: SelectableListRow<SelectionValue>) in
+            guard entry.index == placeholder.source else { return entry }
+            return (
+                entry.index,
+                SelectableListRow(type: entry.row.type, buffer: dimmed(entry.row.buffer))
+            )
+        }
+        let body: FrameBuffer
+        switch handler.reorderFeedback {
+        case .ghost: body = original ?? blankRow(like: nil)
+        case .cursor, .live: body = blankRow(like: original)
+        }
+        let slot = rows.firstIndex { $0.index == placeholder.slot } ?? rows.count
+        rows.insert((-1, SelectableListRow(type: .footer, buffer: body)), at: slot)
+        return rows
+    }
+
+    /// The same buffer with every line drawn faint — the dragged row's own place
+    /// while a copy of it is elsewhere.
+    private func dimmed(_ buffer: FrameBuffer) -> FrameBuffer {
+        FrameBuffer(lines: buffer.lines.map { ANSIRenderer.dim + $0 + ANSIRenderer.reset })
+    }
+
+    /// A gap the size of the dragged row — `.cursor`'s "it lands here".
+    private func blankRow(like buffer: FrameBuffer?) -> FrameBuffer {
+        let height = max(1, buffer?.height ?? 1)
+        let width = max(1, buffer?.width ?? 1)
+        return FrameBuffer(
+            lines: Array(repeating: String(repeating: " ", count: width), count: height))
+    }
+
     /// Hands this frame's row geometry to the handler for the reorder drag to
     /// hit-test against.
     ///
@@ -1269,10 +1324,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
                     if !wasActive, let session = dragSession,
-                        let ghost = captureHandler.reorderGhostRow,
-                        let row = capturedRows.first(where: { $0.index == ghost })
+                        let floating = captureHandler.reorderFloatingRow,
+                        let row = capturedRows.first(where: { $0.index == floating })
                     {
-                        // `.ghost`: hand the row's own buffer to the drag
+                        // `.cursor`: hand the row's own buffer to the drag
                         // session, which floats it at the cursor above
                         // everything else. Its hit regions go — a copy of a row
                         // riding the cursor must not also be clickable.

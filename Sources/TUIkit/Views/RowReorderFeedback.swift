@@ -26,17 +26,21 @@ public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// each move is expensive or separately undoable.
     case live
 
-    /// A floating copy of the row rides the cursor while the list stays put;
-    /// the row cursor marks where it would land.
+    /// The row stays where it is but goes **dim**, and a full-brightness copy
+    /// of it appears at the slot it would land in — so the list is one row
+    /// longer for the duration of the drag.
     ///
     /// `onMove` fires once, on release.
     case ghost
 
-    /// The row cursor alone marks where the row would land; nothing moves
-    /// until the drop.
+    /// Like ``ghost`` — the row dims where it still sits — except the copy
+    /// rides the **cursor** instead of sitting in the list, and the drop slot
+    /// shows as an empty gap.
     ///
-    /// The quietest option, and the cheapest to redraw. `onMove` fires once,
-    /// on release.
+    /// Drag out of the list and the gap disappears: the row is still on the
+    /// pointer, but releasing there cancels the reorder (or drops into whatever
+    /// else accepts it). `onMove` fires once, on release, and not at all when
+    /// released away from the rows.
     case cursor
 }
 
