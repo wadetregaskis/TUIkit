@@ -44,16 +44,28 @@ extension ItemListHandler {
         return reorder.currentOffset
     }
 
-    /// The row being dragged and where it would land — what `.ghost` and
-    /// `.cursor` draw in the list itself (a full-brightness copy, and a gap,
-    /// respectively). `nil` when nothing is dragging, when `.live` is moving the
-    /// data instead, or when the cursor has left the rows: `.cursor` drops its
-    /// gap then, so the list reads as "let go here and nothing moves".
+    /// The row a non-`.live` drag has hold of — the one drawn dim in its own
+    /// place, whether or not it currently has anywhere else to land. `nil` when
+    /// nothing is dragging or when `.live` is moving the data instead.
+    var reorderSource: Int? {
+        guard reorderFeedback != .live, let reorder, reorder.active else { return nil }
+        return reorder.currentOffset
+    }
+
+    /// Where the dragged row would land — what `.ghost` and `.cursor` draw in
+    /// the list itself (a full-brightness copy, and a gap, respectively).
+    ///
+    /// `nil` when nothing is dragging, when `.live` is moving the data instead,
+    /// when the cursor has left the rows (`.cursor` drops its gap then, so the
+    /// list reads as "let go here and nothing moves"), or when the row would
+    /// land exactly where it already is. That last case is the same statement
+    /// as the others: releasing on the row you picked up moves nothing, so
+    /// there is nothing to preview — and drawing a copy of the row against
+    /// itself only made the list look like it had gained a duplicate.
     var reorderPlaceholder: (source: Int, slot: Int)? {
-        guard reorderFeedback != .live, let reorder, reorder.active,
-            let slot = reorder.targetOffset
+        guard let source = reorderSource, let slot = reorder?.targetOffset, slot != source
         else { return nil }
-        return (reorder.currentOffset, slot)
+        return (source, slot)
     }
 
     /// Picks up the row at `offset` for a possible reorder. Not yet a

@@ -284,6 +284,33 @@ struct ListReorderDragTests {
             "…and it is dimmed")
     }
 
+    @Test(
+        "Hovering the row it picked up shows no placeholder",
+        arguments: [RowReorderFeedback.ghost, .cursor])
+    func noPlaceholderOverTheSourceRow(feedback: RowReorderFeedback) {
+        let fixture = Fixture(feedback: feedback)
+        let buffer = fixture.render()
+        let yA = fixture.rowY(buffer, "a")
+        let yE = fixture.rowY(buffer, "e")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
+        // Out to another row — which DOES earn a placeholder — and back again.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yA))
+        let dragging = fixture.render()
+
+        #expect(
+            dragging.lines.filter { $0.stripped.contains("a") }.count == 1,
+            "releasing here would move nothing, so there is nothing to preview")
+        #expect(
+            fixture.rowY(dragging, "e") == yE,
+            "…and no gap either: a placeholder of any kind would have pushed 'e' down a line")
+        #expect(
+            dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
+            "the row is still held, so it is still dim — that part outlives any drop slot")
+    }
+
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
     func cursorDragOutCancels() {
         let fixture = Fixture(feedback: .cursor)

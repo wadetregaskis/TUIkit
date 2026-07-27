@@ -1195,17 +1195,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard let placeholder = handler.reorderPlaceholder else { return visibleRows }
+        guard let source = handler.reorderSource else { return visibleRows }
         // The copy is taken BEFORE the source is dimmed — the placeholder is the
         // row at full brightness, the row left behind is the faint one.
-        let original = visibleRows.first { $0.index == placeholder.source }?.row.buffer
+        let original = visibleRows.first { $0.index == source }?.row.buffer
         var rows = visibleRows.map { entry -> (index: Int, row: SelectableListRow<SelectionValue>) in
-            guard entry.index == placeholder.source else { return entry }
+            guard entry.index == source else { return entry }
             return (
                 entry.index,
                 SelectableListRow(type: entry.row.type, buffer: dimmed(entry.row.buffer))
             )
         }
+        // The dim says "you have hold of this" and outlives any particular drop
+        // slot; the placeholder says "it would go HERE", so it appears only once
+        // there is a there. Hovering the row you picked up leaves the list
+        // otherwise untouched, which is exactly what releasing there would do.
+        guard let placeholder = handler.reorderPlaceholder else { return rows }
         let body: FrameBuffer
         switch handler.reorderFeedback {
         case .ghost: body = original ?? blankRow(like: nil)
