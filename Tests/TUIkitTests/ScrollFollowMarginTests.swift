@@ -268,6 +268,9 @@ struct CenteredAnchorTests {
         handler.rowHeight = { heights[$0] }
         handler.followMargin = .centered(anchor: anchor)
         handler.scrollGranularity = .line
+        // This harness models the ROW area directly — no "N more" indicator
+        // lines are drawn inside `viewport`, so none must be deducted from it.
+        handler.drawsScrollIndicators = false
         return handler
     }
 
@@ -443,5 +446,31 @@ struct StepGranularityTests {
             return handler
         }
         #expect(topAfterWalking(flat(.row), to: 10) == topAfterWalking(flat(.line), to: 10))
+    }
+
+    /// The centre must be measured in the lines the ROWS get. Counting the
+    /// "N more" indicator lines as part of the area put the row one line low for
+    /// each indicator above it — the reported "settles on line 9 of 15".
+    @Test("Centring measures the row area, not the whole content height")
+    func centringExcludesIndicatorLines() {
+        let heights = Array(repeating: 1, count: 40)
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: heights.count, viewportHeight: 15,
+            selectionMode: .single)
+        handler.contentHeight = 17  // 15 for rows, 2 for the indicators
+        handler.drawsScrollIndicators = true
+        handler.rowHeight = { heights[$0] }
+        handler.followMargin = .centered(anchor: .center)
+        handler.scrollGranularity = .line
+
+        handler.focusedIndex = 20
+        handler.ensureFocusedItemVisible()
+
+        // 1-based line within the 15-line row area: 7 above → line 8, the exact
+        // middle (7 above, 7 below).
+        let linesAbove = 20 - handler.scrollOffset - handler.scrollTopClipLines
+        #expect(
+            linesAbove == 7,
+            "a one-line row centres on line 8 of 15; got line \(linesAbove + 1)")
     }
 }

@@ -993,14 +993,20 @@ extension ItemListHandler {
         // parity; where the row cannot be exactly centred (even row in an even
         // viewport has no single middle line) it sits the half-line HIGH, which
         // keeps whole rows at both edges.
+        //
+        // Measured in the lines the ROWS get, not the whole content area: the
+        // "N more" indicators own the rest, and counting them centred the row
+        // against a taller area than it lives in — one line low for every
+        // indicator drawn above it.
+        let area = rowLineBudget
         var linesAbove: Int
         switch anchor {
         case .top:
-            linesAbove = (contentHeight - 1) / 2
+            linesAbove = (area - 1) / 2
         case .center:
-            linesAbove = (contentHeight - focusedHeight) / 2
+            linesAbove = (area - focusedHeight) / 2
         case .line(let index):
-            linesAbove = (contentHeight - 1) / 2 - max(0, min(focusedHeight - 1, index))
+            linesAbove = (area - 1) / 2 - max(0, min(focusedHeight - 1, index))
         }
 
         if linesAbove <= 0 {
