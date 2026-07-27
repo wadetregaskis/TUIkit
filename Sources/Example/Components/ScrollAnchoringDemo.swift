@@ -84,6 +84,10 @@ struct ScrollAnchoringDemo: View {
         }
     }
 
+    /// One row of the list. The plain rows are indented to line up under the
+    /// anchored row's "▶ " marker — but only while a marker is actually on
+    /// screen. With nothing anchored, every row was hanging two cells off the
+    /// border to leave room for a marker that no row was going to draw.
     @ViewBuilder
     private func rowLine(_ row: Int) -> some View {
         if row == anchoredValue {
@@ -91,7 +95,8 @@ struct ScrollAnchoringDemo: View {
             .bold()
             .foregroundStyle(.palette.accent)
         } else {
-            Text("  \(L("page.scrollView.anchorRowPlain")) \(row)")
+            let indent = anchoredValue == nil ? "" : "  "
+            Text("\(indent)\(L("page.scrollView.anchorRowPlain")) \(row)")
         }
     }
 
