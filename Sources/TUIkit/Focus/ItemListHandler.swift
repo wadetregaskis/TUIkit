@@ -301,9 +301,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// off the top edge — the sub-row position that makes
     /// ``ScrollGranularity/line`` scrolling line-precise while
     /// ``scrollOffset`` / ``maxOffset`` / ``extent`` stay row-based (O(1) for
-    /// any list size). Always `0` under ``ScrollGranularity/row``, for
-    /// single-line rows, and at the very bottom (``maxOffset`` is the last
-    /// row-aligned top). Clamped each render by ``clampTopClip()``.
+    /// any list size). Always `0` for single-line rows and at the very bottom
+    /// (``maxOffset`` is the last row-aligned top). Clamped each render by
+    /// ``clampTopClip()``.
+    ///
+    /// Under ``ScrollGranularity/row`` a scroll STEP always leaves this at `0`
+    /// (``scrollFine(by:)``), but a reveal or a centred anchor may still set
+    /// it: those position the viewport on a row the user chose, and forcing
+    /// them onto a row boundary moves the row off the position they computed.
     var scrollTopClipLines: Int = 0
 
     /// The scroll granularity, synced from `environment.scrollGranularity`
@@ -784,9 +789,15 @@ extension ItemListHandler {
     @discardableResult
     func scrollFine(by delta: Int) -> Bool {
         guard scrollGranularity == .line, let rowHeight else {
-            let before = scrollOffset
+            let before = (scrollOffset, scrollTopClipLines)
+            // Row granularity is a promise about this gesture: a step lands on
+            // a row boundary. It is the ONLY place that promise is kept — a
+            // reveal or a centred anchor may well have left the viewport
+            // mid-row, and snapping here is what returns it to the lattice
+            // without forbidding those positions in the first place.
+            scrollTopClipLines = 0
             scroll(by: delta)
-            return scrollOffset != before
+            return (scrollOffset, scrollTopClipLines) != before
         }
         guard delta != 0, viewportHeight > 0, maxOffset > 0 else { return false }
         var moved = false
@@ -826,14 +837,21 @@ extension ItemListHandler {
         return moved
     }
 
-    /// Clamps ``scrollTopClipLines`` to its valid range for the current rows
-    /// and granularity: zero under ``ScrollGranularity/row``, zero at the
-    /// bottom (``maxOffset``), and always inside the top row's height. Called
-    /// alongside ``ScrollableOffsetState/clampScrollOffset()`` on the render
-    /// pass.
+    /// Clamps ``scrollTopClipLines`` to its valid range for the current rows:
+    /// zero at the bottom (``maxOffset``), and always inside the top row's
+    /// height. Called alongside ``ScrollableOffsetState/clampScrollOffset()``
+    /// on the render pass.
+    ///
+    /// Deliberately NOT conditioned on ``scrollGranularity``. Granularity is
+    /// how far one scroll STEP moves — see ``scrollFine(by:)``, which is where
+    /// row granularity re-aligns to a row boundary. It is not a constraint on
+    /// where the viewport may sit, and zeroing the clip here made it one:
+    /// every position a reveal or an anchor computed was quantised to the
+    /// lattice of row-height prefix sums, which with variable row heights
+    /// almost never contains the line a centred row needs.
     func clampTopClip() {
         guard scrollTopClipLines > 0 else { return }
-        guard scrollGranularity == .line, let rowHeight else {
+        guard let rowHeight else {
             scrollTopClipLines = 0
             return
         }
@@ -983,9 +1001,14 @@ extension ItemListHandler {
     /// accumulating real row heights until it has covered the lines that must
     /// sit above the anchor, so it is O(viewport) whatever the list size. Near
     /// the top the row still rests against the edge; near the bottom
-    /// ``clampScrollOffset()`` pulls it back, and under
-    /// ``ScrollGranularity/row`` ``clampTopClip()`` zeroes the sub-row clip so
-    /// the centring degrades gracefully to row precision.
+    /// ``clampScrollOffset()`` pulls it back.
+    ///
+    /// Line-precise under BOTH granularities. Arrow keys move the selection, so
+    /// the anchor runs identically either way, and the row they land on is the
+    /// same row — quantising the resulting viewport to a row boundary under
+    /// ``ScrollGranularity/row`` only moved the row off the centre it had just
+    /// been given, by a different amount for each neighbourhood of row heights.
+    /// Granularity is the size of a scroll STEP; see ``scrollFine(by:)``.
     private func anchorFocusedRow(anchor: ScrollFollowMargin.RowAnchor) {
         guard let rowHeight, let contentHeight, contentHeight > 0,
             focusedIndex >= 0, focusedIndex < itemCount
@@ -1035,20 +1058,13 @@ extension ItemListHandler {
                 covered += max(1, rowHeight(top - 1))
                 top -= 1
             }
-            var clip = max(0, covered - wanted)
-            if clip > 0, scrollGranularity == .row, top < focusedIndex {
-                // Row granularity has no sub-row position — `clampTopClip()`
-                // drops the clip — so the anchor can only land on a row
-                // boundary. Keeping this top leaves the row `clip` lines BELOW
-                // the anchor; dropping the top row lifts it `height - clip`
-                // lines ABOVE. Take whichever is nearer, rather than silently
-                // keeping the low one: that is what left a centred row drifting
-                // a line or three down the viewport, and — when the walk
-                // reached the very top — cancelled the scroll entirely.
-                let height = max(1, rowHeight(top))
-                if height - clip < clip { top += 1 }
-                clip = 0
-            }
+            // Whatever the walk overshot by is clipped off the top row, so the
+            // anchor lands on the exact line it asked for. No granularity test:
+            // the row a centred anchor puts under the cursor is the same row
+            // either way, and rounding it to a row boundary — which is what the
+            // clip-zeroing forced — is what made `.row` drift by a line or
+            // three from row to row while `.line` sat still.
+            let clip = max(0, covered - wanted)
             scrollOffset = top
             scrollTopClipLines = clip
         }

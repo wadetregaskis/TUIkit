@@ -317,30 +317,28 @@ struct CenteredAnchorTests {
         }
     }
 
-    /// Row granularity cannot clip, so the anchor can only land on a row
-    /// boundary — but it must land on the NEAREST one. Keeping the top the line
-    /// walk happened to stop on always errs the same way (row too low), which
-    /// is what pushed a "centred" row to line 10 of 15 and, when the walk ran
-    /// off the top, cancelled the scroll altogether.
-    @Test("Row granularity anchors on the nearest whole-row position")
-    func rowGranularityRoundsToNearest() throws {
+    /// The owner's own statement of the contract: an arrow key moves the
+    /// SELECTION, so the anchor that follows it runs identically whatever the
+    /// scroll granularity — "I don't think there should be any visible
+    /// difference". Granularity sizes a scroll STEP; it is not a lattice the
+    /// viewport must sit on.
+    @Test("The centred anchor is the same under either granularity")
+    func centringIgnoresGranularity() {
         let heights = (0..<40).map { $0.isMultiple(of: 3) ? 3 : 1 }
-        let handler = handler(heights: heights, viewport: 15, granularity: .row)
+        let byLine = handler(heights: heights, viewport: 15, granularity: .line)
+        let byRow = handler(heights: heights, viewport: 15, granularity: .row)
         for focus in 8...20 {
-            handler.focusedIndex = focus
-            handler.ensureFocusedItemVisible()
-            #expect(handler.scrollTopClipLines == 0, "focus \(focus): row granularity never clips")
-
-            let wanted = (15 - heights[focus]) / 2
-            let error = { (top: Int) in abs(heights[top..<focus].reduce(0, +) - wanted) }
-            let best = try #require((0...focus).map(error).min())
+            byLine.focusedIndex = focus
+            byLine.ensureFocusedItemVisible()
+            byRow.focusedIndex = focus
+            byRow.ensureFocusedItemVisible()
             #expect(
-                error(handler.scrollOffset) == best,
-                """
-                focus \(focus): top \(handler.scrollOffset) leaves \
-                \(heights[handler.scrollOffset..<focus].reduce(0, +)) lines above, \
-                wanted \(wanted) — a nearer whole-row top exists
-                """)
+                (byRow.scrollOffset, byRow.scrollTopClipLines)
+                    == (byLine.scrollOffset, byLine.scrollTopClipLines),
+                "focus \(focus): the two granularities must land on the same line")
+            #expect(
+                anchorViewportLine(byRow, heights: heights, anchor: .center) == 7,
+                "focus \(focus): …which is the centre of a 15-line area")
         }
     }
 
@@ -372,14 +370,23 @@ struct CenteredAnchorTests {
         #expect(handler.scrollOffset == handler.maxOffset, "centring past the end clamps down")
     }
 
-    @Test("Under row granularity the sub-row clip is zeroed (row-precise centring)")
-    func rowGranularityZeroesClip() {
+    @Test("A row-granularity scroll step re-aligns to a row boundary")
+    func rowGranularityStepRealigns() {
         let heights = Array(repeating: 3, count: 20)
         let handler = handler(heights: heights, viewport: 11)
-        handler.scrollGranularity = .row  // clampTopClip zeroes the clip here
+        handler.scrollGranularity = .row
         handler.focusedIndex = 10
         handler.ensureFocusedItemVisible()
-        #expect(handler.scrollTopClipLines == 0, "row granularity forbids a sub-row clip")
+        #expect(
+            handler.scrollTopClipLines > 0,
+            "the anchor centres exactly, which on 3-line rows in 11 lines means mid-row")
+
+        // Row granularity is a promise about the STEP, and this is where it is
+        // kept: one tick leaves the viewport row-aligned again.
+        let before = handler.scrollOffset
+        handler.scrollFine(by: 1)
+        #expect(handler.scrollTopClipLines == 0, "a row step lands on a row boundary")
+        #expect(handler.scrollOffset == before + 1, "…exactly one row further on")
     }
 
     /// An EVEN viewport of EVEN-height rows — the parity every case above

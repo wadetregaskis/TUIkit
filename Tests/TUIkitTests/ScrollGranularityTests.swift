@@ -114,13 +114,19 @@ struct ScrollGranularityTests {
         #expect(handler.scrollOffset == 0)
     }
 
-    @Test("clampTopClip zeroes the clip under row granularity and at the bottom")
+    @Test("clampTopClip keeps a sub-row position under either granularity")
     func clampTopClipRules() {
         let handler = makeHandler(count: 10, rowHeight: 3, contentHeight: 9, granularity: .line)
         handler.scrollTopClipLines = 2
         handler.scrollGranularity = .row
         handler.clampTopClip()
-        #expect(handler.scrollTopClipLines == 0)
+        #expect(
+            handler.scrollTopClipLines == 2,
+            """
+            row granularity sizes a scroll STEP; it is not a lattice the \
+            viewport must sit on. A reveal or a centred anchor may legitimately \
+            leave it mid-row, and `scrollFine` is what re-aligns.
+            """)
 
         handler.scrollGranularity = .line
         // maxOffset short-circuits to a cheap floor until the offset nears
