@@ -69,8 +69,16 @@ public struct OverlayLayer: Sendable, Equatable {
     /// When the layer would overflow the bottom edge of the screen the
     /// compositor flips it to sit *above* the anchor instead. This value
     /// lets it compute the flipped position: the layer's bottom is placed
-    /// flush with the top of the anchor. A value of `0` disables flipping
-    /// (the layer is simply clamped on screen).
+    /// flush with the top of the anchor.
+    ///
+    /// `0` does NOT disable flipping — it says there is nothing above
+    /// ``offsetY`` to clear, so the layer's bottom lands flush with `offsetY`
+    /// itself. That is right for a layer anchored AT a point (a context menu at
+    /// the clicked cell) and wrong for one anchored BELOW a control, which
+    /// would then be covered by its own menu. It also feeds `ScrollView`'s
+    /// overlay culling, which measures a layer's extent from
+    /// `offsetY - anchorHeight`, so a control on the last visible row must
+    /// declare its height or its popover is discarded unseen.
     public var anchorHeight: Int
 
     /// When `true`, the layer ignores ``offsetX`` / ``offsetY`` and is centred

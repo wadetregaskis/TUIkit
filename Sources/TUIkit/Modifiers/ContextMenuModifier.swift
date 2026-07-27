@@ -107,7 +107,9 @@ extension ContextMenuModifier: Renderable {
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, controller: state.controller,
             sectionID: sectionID, itemsIndex: 1,
-            anchor: (state.anchorX, state.anchorY),
+            // Anchored AT the clicked cell, not below a control: there is
+            // nothing above it for a flip to clear.
+            anchor: MenuAnchor(x: state.anchorX, y: state.anchorY, controlHeight: 0),
             dismiss: {
                 state.isOpen = false
                 state.controller.closed()

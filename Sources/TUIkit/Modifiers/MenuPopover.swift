@@ -115,8 +115,27 @@ func renderMenuColumn(
     return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
 }
 
+/// Where a presented menu hangs, and off what.
+struct MenuAnchor {
+    /// The menu's top-left column, in the presenter's own coordinate space.
+    let x: Int
+
+    /// The menu's top row, likewise.
+    let y: Int
+
+    /// How many rows the control immediately above ``y`` occupies.
+    ///
+    /// `1` for a pop-up ``Menu``, whose trigger is the row above it; `0` for a
+    /// `.contextMenu`, which hangs off the cell that was clicked and has
+    /// nothing above it to clear. The number does two jobs — the flip when
+    /// there is no room below, and an enclosing `ScrollView`'s overlay culling
+    /// — and both go wrong when it is understated. See
+    /// ``OverlayLayer/anchorHeight``.
+    let controlHeight: Int
+}
+
 /// Presents `items` as a floating menu over `base`, anchored at
-/// (`anchorX`, `anchorY`) in `base`'s own coordinate space.
+/// (`anchor.x`, `anchor.y`) in `base`'s own coordinate space.
 ///
 /// Takes the focus section, the keyboard, and the screen-covering dismiss
 /// backdrop; renders the items as menu rows sized to hug their widest; and
@@ -133,7 +152,8 @@ func renderMenuColumn(
 ///   - sectionID: The focus section this menu owns while it is up.
 ///   - itemsIndex: The child-identity index for `items` under `context`, so its
 ///     `@State` and focus slots stay distinct from the presenter's own.
-///   - anchor: Where the menu's top-left goes, in `base`'s coordinates.
+///   - anchor: Where the menu's top-left goes, and how tall the control above
+///     it is — see ``MenuAnchor``.
 ///   - dismiss: Closes the menu — run by Escape, by an outside click, and by
 ///     any item that fires.
 ///   - context: The presenter's render context.
@@ -144,7 +164,7 @@ func presentMenuPopover<Items: View>(
     controller: MenuPopupController,
     sectionID: String,
     itemsIndex: Int,
-    anchor: (x: Int, y: Int),
+    anchor: MenuAnchor,
     dismiss: @escaping () -> Void,
     context: RenderContext
 ) {
@@ -206,12 +226,19 @@ func presentMenuPopover<Items: View>(
     // The same screen-covering dismiss backdrop the drop-down menus use.
     DropdownMenu.attachDismissBackdrop(to: &menuBuffer, context: context, onDismiss: dismiss)
 
-    // `.popover` level; `anchorHeight: 0` nudges it on-screen at the edges
-    // rather than flipping above a control.
+    // `.popover` level, declaring the control above it. That number does two
+    // jobs, and getting it wrong broke both: an enclosing `ScrollView` culls an
+    // overlay by `offsetY - anchorHeight`, so a menu whose trigger is the last
+    // visible row starts exactly AT the viewport's bottom edge and was thrown
+    // away before the compositor saw it (the `Picker` drop-down's version of
+    // this is why `anchorHeight` exists); and with no room below, the flip puts
+    // the menu's bottom flush with the anchor's TOP, which without a height is
+    // flush with the trigger itself — landing the menu on the control that
+    // opened it.
     base.overlays.append(
         OverlayLayer(
             offsetX: anchor.x, offsetY: anchor.y, content: menuBuffer,
-            level: .popover, anchorHeight: 0))
+            level: .popover, anchorHeight: anchor.controlHeight))
 }
 
 /// Gives the open menu the whole keyboard: the arrows, the jump gestures every

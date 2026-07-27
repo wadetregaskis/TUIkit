@@ -77,7 +77,7 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         presentMenuPopover(
             items: content, over: &buffer, controller: state.controller, sectionID: sectionID,
             itemsIndex: ChildIndex.items,
-            anchor: (0, buffer.height),
+            anchor: MenuAnchor(x: 0, y: buffer.height, controlHeight: buffer.height),
             dismiss: {
                 state.isOpen = false
                 state.controller.closed()
