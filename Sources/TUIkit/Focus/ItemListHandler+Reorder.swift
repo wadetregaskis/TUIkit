@@ -36,24 +36,20 @@ extension ItemListHandler {
     /// separates a reorder from a plain click.
     var isReordering: Bool { reorder?.active == true }
 
-    /// The row a `.cursor` drag is carrying on the pointer, or `nil` when no
-    /// such drag is in flight. `_ListCore` draws the floating copy from this
-    /// row's buffer.
-    var reorderFloatingRow: Int? {
-        guard reorderFeedback == .cursor, let reorder, reorder.active else { return nil }
-        return reorder.currentOffset
-    }
-
-    /// The row a non-`.live` drag has hold of — the one drawn dim in its own
-    /// place, whether or not it currently has anywhere else to land. `nil` when
-    /// nothing is dragging or when `.live` is moving the data instead.
+    /// The row a non-`.live` drag has hold of. `nil` when nothing is dragging
+    /// or when `.live` is moving the data instead.
+    ///
+    /// What the list does with it depends on the mode: `.cursor` draws it dim
+    /// in place (the gap it opens elsewhere is anonymous, so this is the only
+    /// thing that says which row is moving), `.ghost` leaves it alone and puts
+    /// the faint copy at the drop slot instead.
     var reorderSource: Int? {
         guard reorderFeedback != .live, let reorder, reorder.active else { return nil }
         return reorder.currentOffset
     }
 
-    /// Where the dragged row would land — what `.ghost` and `.cursor` draw in
-    /// the list itself (a full-brightness copy, and a gap, respectively).
+    /// Where the dragged row would land — what `.ghost` and `.cursor` open a
+    /// slot for (a ghost of the row, and an empty gap, respectively).
     ///
     /// `nil` when nothing is dragging, when `.live` is moving the data instead,
     /// when the cursor has left the rows (`.cursor` drops its gap then, so the

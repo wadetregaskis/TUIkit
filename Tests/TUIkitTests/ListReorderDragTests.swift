@@ -4,11 +4,11 @@
 //  Mouse drag-to-reorder for an editable `List { ForEach(...).onMove }`: a
 //  press picks up a row, the drag shows where it would land, and the row ends
 //  up there. What the drag SHOWS is ``RowReorderFeedback``'s business — the
-//  default `.live` reorders as the cursor moves, `.ghost` floats a copy of the
-//  row at the cursor, `.cursor` marks the target and moves nothing until the
-//  drop — so the tests below cover the common gestures once and then each
-//  mode's own contract. Driven end-to-end through the real mouse dispatcher,
-//  like the run loop.
+//  default `.live` reorders as the cursor moves, while `.ghost` and `.cursor`
+//  open a slot where the row would land (a faint copy of it, and an empty gap,
+//  respectively) and move nothing until the drop — so the tests below cover the
+//  common gestures once and then each mode's own contract. Driven end-to-end
+//  through the real mouse dispatcher, like the run loop.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -53,7 +53,6 @@ struct ListReorderDragTests {
         }
 
         var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
-        var dragSession: DragAndDropSession { tui.dragAndDropSession }
 
         /// Renders the current order and arms the dispatcher.
         @discardableResult
@@ -235,8 +234,8 @@ struct ListReorderDragTests {
         #expect(fixture.moves == 1, "one move for the whole gesture")
     }
 
-    @Test("A ghost drag leaves the row dimmed and shows a copy at the drop slot")
-    func ghostShowsCopyAtTheDropSlot() throws {
+    @Test("A ghost drag shows a FAINT copy at the drop slot, leaving the row itself alone")
+    func ghostShowsAFaintCopyAtTheDropSlot() throws {
         let fixture = Fixture(feedback: .ghost)
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
@@ -246,42 +245,46 @@ struct ListReorderDragTests {
         let dragging = fixture.render()
 
         let rows = dragging.lines.filter { $0.stripped.contains("a") }
+        #expect(rows.count == 2, "the row appears twice mid-drag: where it is, and where it'd land")
+        // WHICH one is faint is the whole change: the ghost is the preview, so
+        // it is the faint one, and the row you picked up is untouched. (An
+        // assertion that merely counted a dim line either way passed before and
+        // after — position and brightness both have to be pinned.)
         #expect(
-            rows.count == 2,
-            "the row appears twice mid-drag: dimmed where it still is, solid where it would land")
+            rows.first?.contains(ANSIRenderer.dim) == false,
+            "the row itself stays as it was")
+        #expect(rows.last?.contains(ANSIRenderer.dim) == true, "…and the copy below is the ghost")
         #expect(
-            rows.contains { $0.contains(ANSIRenderer.dim) },
-            "…and exactly the one left behind is faint")
+            rowLabels(dragging, of: fixture.items) == ["a", "b", "c", "a", "d", "e"],
+            "the ghost sits at the slot the drop would use")
         #expect(fixture.items == ["a", "b", "c", "d", "e"], "the data has not moved yet")
-        #expect(
-            fixture.dragSession.active == nil,
-            "a ghost lives in the list, not on the cursor — nothing floats")
 
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "c")))
         #expect(fixture.items == ["b", "c", "a", "d", "e"], "and the drop commits it")
     }
 
-    @Test("A cursor drag floats the row and leaves a gap where it would land")
-    func cursorFloatsAndGaps() throws {
+    @Test("A cursor drag leaves an EMPTY gap at the drop slot and dims the row it holds")
+    func cursorLeavesAGapAtTheDropSlot() throws {
         let fixture = Fixture(feedback: .cursor)
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
+        let yE = fixture.rowY(buffer, "e")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: yA))
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .dragged, x: 4, y: fixture.rowY(buffer, "c")))
         let dragging = fixture.render()
 
-        let drag = try #require(fixture.dragSession.active)
-        #expect(
-            drag.preview.lines.contains { $0.stripped.contains("a") },
-            "the row itself rides the cursor")
         #expect(
             dragging.lines.filter { $0.stripped.contains("a") }.count == 1,
-            "the list keeps only the dimmed original — the copy is on the pointer")
+            "no copy of the row anywhere — the gap is what marks the drop")
         #expect(
-            dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
-            "…and it is dimmed")
+            dragging.lines.first { $0.stripped.contains("a") }?.contains(ANSIRenderer.dim) == true,
+            "…so the dim in place is what says which row is moving")
+        #expect(
+            rowLabels(dragging, of: fixture.items) == ["a", "b", "c", "d", "e"],
+            "the gap carries no label, so the labels themselves are undisturbed")
+        #expect(fixture.rowY(dragging, "e") == yE + 1, "…and it pushed the rows below it down")
     }
 
     /// The item labels down the rendered list, one per line they appear on —
@@ -311,11 +314,9 @@ struct ListReorderDragTests {
         #expect(
             rowLabels(dragging, of: labels) == ["a", "b", "c", "a", "d", "e"],
             "dropping on 'c' from above puts the row past it, so that is where the copy goes")
-        // And the preview is the promise: what it shows, minus the dimmed row
-        // it is going to vacate, is the order the drop produces.
-        let promised = dragging.lines
-            .filter { !$0.contains(ANSIRenderer.dim) }
-            .compactMap { line in labels.first { line.stripped.contains($0) } }
+        // And the preview is the promise: what it shows, minus the place the
+        // row is going to vacate, is the order the drop produces.
+        let promised = ghostPromise(dragging, labels: labels, source: "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: y))
         #expect(rowLabels(fixture.render(), of: labels) == promised)
     }
@@ -328,11 +329,25 @@ struct ListReorderDragTests {
         #expect(
             rowLabels(dragging, of: labels) == ["a", "e", "b", "c", "d", "e"],
             "dropping on 'b' from below puts the row before it")
-        let promised = dragging.lines
-            .filter { !$0.contains(ANSIRenderer.dim) }
-            .compactMap { line in labels.first { line.stripped.contains($0) } }
+        let promised = ghostPromise(dragging, labels: labels, source: "e")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: y))
         #expect(rowLabels(fixture.render(), of: labels) == promised)
+    }
+
+    /// What a mid-drag `.ghost` frame promises: the order it shows, minus the
+    /// row's OLD place. That is the FULL-BRIGHTNESS occurrence — the faint one
+    /// is the ghost, and the ghost is where the row ends up.
+    private func ghostPromise(
+        _ frame: FrameBuffer, labels: [String], source: String
+    ) -> [String] {
+        var removedOldPlace = false
+        return frame.lines.compactMap { line -> String? in
+            guard let label = labels.first(where: { line.stripped.contains($0) }) else { return nil }
+            guard label == source, !line.contains(ANSIRenderer.dim), !removedOldPlace
+            else { return label }
+            removedOldPlace = true
+            return nil
+        }
     }
 
     @Test(
@@ -358,30 +373,10 @@ struct ListReorderDragTests {
             fixture.rowY(dragging, "e") == yE,
             "…and no gap either: a placeholder of any kind would have pushed 'e' down a line")
         #expect(
-            dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
-            "the row is still held, so it is still dim — that part outlives any drop slot")
-    }
-
-    @Test("The row a cursor drag carries follows the pointer")
-    func cursorPreviewTracksThePointer() throws {
-        let fixture = Fixture(feedback: .cursor)
-        let buffer = fixture.render()
-        let yA = fixture.rowY(buffer, "a")
-        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: yA))
-        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 4, y: yA + 1))
-        let first = try #require(fixture.dragSession.previewFrame())
-        #expect(first.y == yA + 1, "grabbed on its first line, so the row rides under the cursor")
-        fixture.render()
-
-        // Two more cells right, two more rows down.
-        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 6, y: yA + 3))
-        let later = try #require(fixture.dragSession.previewFrame())
-        #expect(
-            (later.x - first.x, later.y - first.y) == (2, 2),
+            dragging.lines.contains { $0.contains(ANSIRenderer.dim) } == (feedback == .cursor),
             """
-            the whole point of `.cursor`: without this the row stays wherever \
-            the gesture began, one grab-offset from its own home row, for the \
-            rest of the drag
+            `.cursor` still dims the row it holds — that outlives any drop slot — \
+            while `.ghost` says everything with the ghost, and there is no ghost here
             """)
     }
 
@@ -407,11 +402,11 @@ struct ListReorderDragTests {
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
+        let pressed = fixture.render()
         #expect(
-            fixture.dragSession.active == nil,
-            "a press alone might still turn out to be a click")
+            pressed.lines.filter { $0.stripped.contains("a") }.count == 1,
+            "a press alone might still turn out to be a click, so it shows nothing")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yA))
-        #expect(fixture.dragSession.active == nil)
         #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 }
