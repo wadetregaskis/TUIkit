@@ -360,4 +360,28 @@ struct ContextMenuTests {
             \(popup?.lines.map(\.stripped).joined(separator: "\n") ?? "<no overlay>")
             """)
     }
+
+    @Test("Shift+F10 opens the menu on the focused target")
+    func keyboardOpens() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = targetView()
+
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        // The target is a focus stop, so Tab can reach it — without that there
+        // is no keyboard route to a menu at all.
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .tab))
+        let state = menuState(tui, context)
+        #expect(state.isOpen == false, "sanity: focusing alone does not open it")
+
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10, shift: true)))
+        #expect(state.isOpen == true, "Shift+F10 on the focused target opens the menu")
+
+        // Plain F10 is somebody else's business.
+        state.isOpen = false
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(!tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10)))
+        #expect(state.isOpen == false)
+    }
 }

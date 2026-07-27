@@ -45,6 +45,7 @@ public struct ContextMenuModifier<Content: View, MenuItems: View>: View {
 /// the modifier is generic (which can't hold static stored properties).
 private enum StateIndex {
     static let state = 0
+    static let focusID = 1
 }
 
 // MARK: - Renderable
@@ -75,6 +76,7 @@ extension ContextMenuModifier: Renderable {
                 context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
                 attachTrigger(to: &buffer, state: state, context: context)
+                attachKeyboardTrigger(state: state, context: context)
             }
             return buffer
         }
@@ -216,6 +218,45 @@ extension ContextMenuModifier: Renderable {
                 handlerID: handlerID))
     }
 
+    /// Makes the content a focus stop and opens the menu on **Shift+F10** while
+    /// it holds focus — the keyboard route to a menu that otherwise only a
+    /// right-click can reach.
+    ///
+    /// Shift+F10 because it is the one binding every platform with a keyboard
+    /// context-menu route agrees on (Windows, GTK, every browser); macOS has no
+    /// native equivalent, and a Mac keyboard has no Menu key to offer instead.
+    /// It arrives as `ESC[21;2~`, which the CSI-tilde parser already decodes
+    /// with its modifiers intact — no terminal-specific handling needed.
+    ///
+    /// The focus stop is the price of the feature: you cannot key a menu open on
+    /// a view you cannot reach. It consumes no keys of its own
+    /// (`triggerKeys: []`), so content that is already interactive keeps every
+    /// binding it had.
+    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) {
+        guard context.environment.focusManager != nil, context.environment.isEnabled else { return }
+        let focusID = FocusRegistration.persistFocusID(
+            context: context, explicitFocusID: nil,
+            defaultPrefix: "contextmenu-target", propertyIndex: StateIndex.focusID)
+        FocusRegistration.register(
+            context: context,
+            handler: ActionHandler(focusID: focusID, action: {}, triggerKeys: []))
+
+        context.environment.keyEventDispatcher!.addHandler(
+            sectionID: context.environment.activeFocusSectionID
+        ) { event in
+            guard event.key == .f10, event.shift,
+                FocusRegistration.isFocused(context: context, focusID: focusID)
+            else { return false }
+            // Anchored at the view's own top-left: there is no pointer to
+            // anchor to, and a menu that appears ON the thing it belongs to is
+            // the least surprising place for it.
+            state.anchorX = 0
+            state.anchorY = 0
+            state.isOpen = true
+            return true
+        }
+    }
+
     /// Inserts the screen-covering dismiss backdrop (as the drop-down menus do):
     /// a first-registered region that closes the menu on any non-wheel press
     /// outside it, while every region of the menu itself wins over it and the
@@ -277,6 +318,13 @@ extension View {
     /// where the terminal swallows that (iTerm2 does by default) a **Ctrl-click**
     /// opens it too. Right-clicking works reliably in Apple Terminal, Ghostty and
     /// Warp (see `Documentation/Terminal-compatibility.md`).
+    ///
+    /// From the keyboard: the modified view becomes a focus stop, and
+    /// **Shift+F10** opens the menu while it is focused — the binding every
+    /// platform that has a keyboard context-menu route agrees on (macOS has
+    /// none of its own, and Mac keyboards have no Menu key). TUI-specific: it
+    /// is the reason a `.contextMenu` adds a Tab stop, which SwiftUI's does
+    /// not, because a menu reachable only by mouse is not reachable at all.
     ///
     /// - Parameter menuItems: A view builder of the menu's `Button`s (and
     ///   `Divider`s).
