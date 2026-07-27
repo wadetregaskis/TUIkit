@@ -1008,6 +1008,10 @@ where Value.ID: Hashable {
         // A scrollbar reserves no indicator line, so the focus-reveal / offset
         // arithmetic must claim the full content height (matches the List path).
         handler.showsScrollbar = showsScrollbar
+        // Unlike a List, a Table draws its "N more" indicators even when the
+        // scrollbar is shown — the bar takes a column, the indicators take
+        // lines — so the reveal must budget for them either way.
+        handler.drawsScrollIndicators = overflowing
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction

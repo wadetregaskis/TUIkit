@@ -129,6 +129,13 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// row-height). With this set, that reservation is skipped.
     var showsScrollbar = false
 
+    /// Whether this frame's render spends content lines on "▲/▼ N more"
+    /// indicators. Synced by the owning view, because only it knows: a `List`
+    /// swaps its indicators for a scrollbar, while a `Table` draws both (the bar
+    /// takes a column, the indicators take lines). The reveal budgets rows
+    /// against `contentHeight` MINUS these — see ``rowLineBudget``.
+    var drawsScrollIndicators = true
+
     /// A closure giving the height in lines of row `i`, for rows that can span
     /// multiple lines — `List` rows are arbitrary views and `Table` cells can
     /// wrap, so both wire this. `nil` (single-line tables, plus the handler's
@@ -872,10 +879,10 @@ extension ItemListHandler {
             scrollTopClipLines = 0
         }
 
-        // Scroll down: keep the focused row within the visible rows. The
-        // conservative both-indicators budget (contentHeight - 2) keeps the
-        // focused row off an indicator line; clampScrollOffset() pulls the offset
-        // back to the true bottom near the end.
+        // Scroll down: keep the focused row within the visible rows.
+        // `rowLineBudget` is how many of those lines rows actually get once the
+        // "N more" indicators have taken theirs; clampScrollOffset() pulls the
+        // offset back to the true bottom near the end.
         if let rowHeight, focusedIndex < itemCount {
             // Multi-line rows: pull the top down only as far as needed for the
             // focused row (plus as much of the follow margin below it as the
@@ -883,7 +890,7 @@ extension ItemListHandler {
             // heights. The top row's height counts net of any line-granularity
             // clip. A scrollbar reserves no indicator lines, so it gets the
             // full area.
-            let budget = max(1, showsScrollbar ? contentHeight : contentHeight - 2)
+            let budget = rowLineBudget
             var used = rowHeight(focusedIndex)
             var tail = focusedIndex
             let marginTail = min(
@@ -892,17 +899,33 @@ extension ItemListHandler {
                 used += rowHeight(tail + 1)
                 tail += 1
             }
-            var top = focusedIndex
-            while top > 0, used + rowHeight(top - 1) <= budget {
-                used += rowHeight(top - 1)
+            // Land the LAST row this reveal must show flush against the bottom
+            // edge, rather than scrolling the least that fits it. Scrolling the
+            // least leaves the leftover lines below the row — and the renderer
+            // fills them from the row AFTER it, so arrowing onto a row revealed
+            // that row *and a slice of the next one*. Walking up from the tail
+            // instead spends the slack above, where it hides content the user
+            // has already passed.
+            var top = tail
+            var covered = rowHeight(tail)
+            while covered < budget, top > 0 {
+                covered += rowHeight(top - 1)
                 top -= 1
             }
-            // A top clip only frees MORE lines below, so it can never hide a
-            // focused row this arithmetic says fits — reset it only when the
-            // reveal actually repositions the top.
-            if scrollOffset < top {
+            // Whatever overshoots the budget is clipped off the TOP row. Row
+            // granularity has no sub-row position, so it drops that row whole
+            // and accepts the slack at the bottom instead.
+            var clip = max(0, covered - budget)
+            if clip > 0, scrollGranularity == .row, top < tail {
+                top += 1
+                clip = 0
+            }
+            // Only ever scroll DOWN here — the scroll-up branch above owns the
+            // other direction, and re-deciding it would fight a user who has
+            // scrolled away and is arrowing back.
+            if top > scrollOffset || (top == scrollOffset && clip > scrollTopClipLines) {
                 scrollOffset = top
-                scrollTopClipLines = 0
+                scrollTopClipLines = clip
             }
         } else {
             let safeRows =
@@ -921,6 +944,25 @@ extension ItemListHandler {
 
         clampScrollOffset()
         clampTopClip()
+    }
+
+    /// How many of ``contentHeight``'s lines the ROWS actually get — the area
+    /// minus whatever the "▲/▼ N more" indicators take.
+    ///
+    /// The reveal has to reason in these, not in the whole content height, or it
+    /// counts lines the renderer has already spent on chrome: a `Table` showing
+    /// both indicators gives its rows two fewer lines than the reveal assumed,
+    /// so the reveal placed the top a row too high and the renderer filled the
+    /// difference from below — the row after the one being revealed.
+    ///
+    /// A scrollbar is not an indicator: it takes a *column*, so it costs rows no
+    /// lines. Both ends are assumed to need one while scrolling, which is what
+    /// makes this a bound rather than an exact count: at the very top or bottom
+    /// one of them is absent, and `clampScrollOffset()` reclaims that line.
+    private var rowLineBudget: Int {
+        guard let contentHeight else { return 1 }
+        let indicators = drawsScrollIndicators ? 2 : 0
+        return max(1, contentHeight - indicators)
     }
 
     /// Positions the viewport so a chosen LINE of the focused row lands on the

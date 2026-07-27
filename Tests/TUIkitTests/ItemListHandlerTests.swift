@@ -613,4 +613,57 @@ struct ItemListHandlerScrollTests {
             handler.scrollOffset == 15,
             "last item should sit at the true bottom (offset 15); got \(handler.scrollOffset)")
     }
+
+    /// Arrowing onto a row must reveal THAT row and nothing more: the row lands
+    /// flush against the bottom edge, and the slack the scroll creates is spent
+    /// above (where it hides rows the cursor has already passed) rather than
+    /// below (where the renderer fills it from the row AFTER the one being
+    /// revealed — the reported "it also shows the first line of the next row").
+    @Test("Revealing a row lands it flush at the bottom, not mid-viewport")
+    func revealLandsFocusedRowAtTheBottom() {
+        // Heights chosen so the running sums never align by luck.
+        let heights = [1, 1, 3, 3, 1, 1, 1, 3, 1, 3, 1, 1, 3, 1, 1]
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: heights.count, viewportHeight: 15,
+            selectionMode: .single)
+        handler.contentHeight = 17  // 15 for rows once both indicators show
+        handler.rowHeight = { heights[$0] }
+        handler.drawsScrollIndicators = true
+
+        handler.focusedIndex = 9
+        handler.ensureFocusedItemVisible()
+
+        // Lines from the (clipped) top row through the focused row must fill the
+        // row area EXACTLY — no remainder for the renderer to fill from below.
+        let shown =
+            (handler.scrollOffset...9).reduce(0) { $0 + heights[$1] } - handler.scrollTopClipLines
+        #expect(
+            shown == 15,
+            """
+            the focused row must end on the last row line: covered \(shown) of 15 \
+            (offset \(handler.scrollOffset), clip \(handler.scrollTopClipLines))
+            """)
+    }
+
+    /// …and under row granularity, where there is no sub-row position to clip
+    /// with, the top row stays whole — the slack moves to the bottom instead of
+    /// slicing a row in half.
+    @Test("Row granularity reveals whole rows only")
+    func revealKeepsWholeRowsUnderRowGranularity() {
+        let heights = [1, 1, 3, 3, 1, 1, 1, 3, 1, 3, 1, 1, 3, 1, 1]
+        let handler = ItemListHandler<String>(
+            focusID: "test", itemCount: heights.count, viewportHeight: 15,
+            selectionMode: .single)
+        handler.contentHeight = 17
+        handler.rowHeight = { heights[$0] }
+        handler.drawsScrollIndicators = true
+        handler.scrollGranularity = .row
+
+        handler.focusedIndex = 9
+        handler.ensureFocusedItemVisible()
+
+        #expect(handler.scrollTopClipLines == 0, "row granularity never clips a row")
+        let shown = (handler.scrollOffset...9).reduce(0) { $0 + heights[$1] }
+        #expect(shown <= 15, "…and never overflows the row area either; got \(shown)")
+    }
 }

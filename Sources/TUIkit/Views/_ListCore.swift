@@ -588,6 +588,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // arithmetic must not reserve one (else the bottom over-scrolls, leaving
         // a blank row-height remainder). Threaded from `wantsScrollbar`.
         handler.showsScrollbar = showsScrollbar
+        // A List swaps its indicators for the bar: the scrollbar compose path
+        // emits no "N more" lines at all.
+        handler.drawsScrollIndicators = !showsScrollbar
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         // Captured at render so Shift+arrow can accelerate the focus cursor at
