@@ -53,7 +53,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Export as Markdown…",
             "page.menus.chose": "Chose",
             "page.menus.boxSection": "Combo Box · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "A field you can type anything into, with a menu of suggestions beside it: Down opens the menu, Up from the first row returns to the caret, Enter takes the highlighted row — and anything you type that is not on the list is kept.",
+            "page.menus.boxInstruction": "A field you can type anything into, with a menu of suggestions beside it: Down opens the menu at the top and Up at the bottom, both then stop at the far end, Enter takes the highlighted row — and anything you type that is not on the list is kept.",
             "page.menus.boxLabel": "Editor",
             "page.menus.typed": "Typed",
 
@@ -242,7 +242,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Als Markdown exportieren…",
             "page.menus.chose": "Gewählt",
             "page.menus.boxSection": "Kombinationsfeld · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "Ein Feld für beliebige Eingaben mit einem Vorschlagsmenü: Abwärts öffnet das Menü, Aufwärts aus der ersten Zeile führt zum Cursor zurück, Enter übernimmt die markierte Zeile — Eingaben außerhalb der Liste bleiben erhalten.",
+            "page.menus.boxInstruction": "Ein Feld für beliebige Eingaben mit einem Vorschlagsmenü: Abwärts öffnet das Menü oben, Aufwärts unten, beide halten dann am jeweiligen Ende, Enter übernimmt die markierte Zeile — Eingaben außerhalb der Liste bleiben erhalten.",
             "page.menus.boxLabel": "Editor",
             "page.menus.typed": "Eingegeben",
 
@@ -431,7 +431,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Exporter en Markdown…",
             "page.menus.chose": "Choisi",
             "page.menus.boxSection": "Liste modifiable · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "Un champ de saisie libre accompagné d'un menu de suggestions : Bas ouvre le menu, Haut depuis la première ligne revient au curseur, Entrée valide la ligne surlignée — et tout texte hors liste est conservé.",
+            "page.menus.boxInstruction": "Un champ de saisie libre accompagné d'un menu de suggestions : Bas ouvre le menu en haut et Haut en bas, tous deux s'arrêtent ensuite à l'extrémité, Entrée valide la ligne surlignée — et tout texte hors liste est conservé.",
             "page.menus.boxLabel": "Éditeur",
             "page.menus.typed": "Saisi",
 
@@ -620,7 +620,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Esporta come Markdown…",
             "page.menus.chose": "Scelto",
             "page.menus.boxSection": "Casella combinata · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "Un campo a testo libero con un menu di suggerimenti: Giù apre il menu, Su dalla prima riga torna al cursore, Invio conferma la riga evidenziata — e quanto digiti fuori elenco viene mantenuto.",
+            "page.menus.boxInstruction": "Un campo a testo libero con un menu di suggerimenti: Giù apre il menu in cima e Su in fondo, poi entrambi si fermano all'estremità, Invio conferma la riga evidenziata — e quanto digiti fuori elenco viene mantenuto.",
             "page.menus.boxLabel": "Editor",
             "page.menus.typed": "Digitato",
 
@@ -809,7 +809,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Exportar como Markdown…",
             "page.menus.chose": "Elegido",
             "page.menus.boxSection": "Cuadro combinado · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "Un campo de texto libre con un menú de sugerencias: Abajo abre el menú, Arriba desde la primera fila vuelve al cursor, Intro acepta la fila resaltada, y lo que escribas fuera de la lista se conserva.",
+            "page.menus.boxInstruction": "Un campo de texto libre con un menú de sugerencias: Abajo abre el menú por arriba y Arriba por abajo, ambos se detienen luego en el extremo, Intro acepta la fila resaltada, y lo que escribas fuera de la lista se conserva.",
             "page.menus.boxLabel": "Editor",
             "page.menus.typed": "Escrito",
 
@@ -998,7 +998,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "导出为 Markdown…",
             "page.menus.chose": "已选择",
             "page.menus.boxSection": "组合框 · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "可任意输入的文本框，旁边带有建议菜单：向下键打开菜单，在首行按向上键回到光标，回车键选用高亮行；列表之外的输入同样保留。",
+            "page.menus.boxInstruction": "可任意输入的文本框，旁边带有建议菜单：向下键从顶部打开菜单，向上键从底部打开，之后都停在末端，回车键选用高亮行；列表之外的输入同样保留。",
             "page.menus.boxLabel": "编辑器",
             "page.menus.typed": "已输入",
 
@@ -1187,7 +1187,7 @@ extension ExampleStrings {
             "page.menus.pullDown.export": "Markdown として書き出す…",
             "page.menus.chose": "選択",
             "page.menus.boxSection": "コンボボックス · TextField + .textInputSuggestions",
-            "page.menus.boxInstruction": "自由に入力できるフィールドと候補メニュー：下矢印でメニューを開き、先頭行で上矢印を押すとカーソルに戻り、Enter でハイライト行を確定します。一覧にない入力もそのまま残ります。",
+            "page.menus.boxInstruction": "自由に入力できるフィールドと候補メニュー：下矢印は先頭から、上矢印は末尾からメニューを開き、以後はどちらも端で止まります。Enter でハイライト行を確定します。一覧にない入力もそのまま残ります。",
             "page.menus.boxLabel": "エディタ",
             "page.menus.typed": "入力",
 

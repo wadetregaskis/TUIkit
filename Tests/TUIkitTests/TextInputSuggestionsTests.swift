@@ -138,11 +138,12 @@ struct TextSuggestionKeyboardTests {
         #expect(!handler.suggestionsOpen)
     }
 
-    /// The caret sits between the last row and the first: stepping off either
-    /// end of the menu lands on it, and stepping off the caret continues around
-    /// — the ring every TUIkit menu offers from its unselected state.
-    @Test("Up from the first row returns to the caret, and again to the LAST row")
-    func upReturnsToCaretThenWrapsToTheBottom() {
+    /// The menu is entered from either end and then held: Down clamps at the
+    /// last row, Up clamps at the first. Up used to fall back out to the caret
+    /// from row 0, which together with the entry rule below made a ring that
+    /// only turned one way — endlessly upward, a hard stop downward.
+    @Test("Up clamps at the first row rather than falling back to the caret")
+    func upClampsAtTheFirstRow() {
         let box = TextBox()
         box.value = "abc"
         let handler = makeHandler(box, completions: ["alpha", "beta", "gamma"])
@@ -150,11 +151,20 @@ struct TextSuggestionKeyboardTests {
 
         _ = handler.handleKeyEvent(KeyEvent(key: .down))
         #expect(handler.suggestionHighlight == 0)
-        _ = handler.handleKeyEvent(KeyEvent(key: .up))
-        #expect(handler.suggestionHighlight == nil, "back at the caret")
-        _ = handler.handleKeyEvent(KeyEvent(key: .up))
-        #expect(handler.suggestionHighlight == 2, "…and on around to the bottom row")
-        #expect(handler.cursorPosition == 3, "the caret did not move — that was menu navigation")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up)), "consumed by the menu")
+        #expect(handler.suggestionHighlight == 0, "held at the top")
+        #expect(
+            handler.cursorPosition == 3,
+            "and NOT leaked to the field, where Up means 'caret to start'")
+    }
+
+    /// The symmetry that would have caught the one-way ring: both ends clamp.
+    @Test("Down clamps at the last row")
+    func downClampsAtTheLastRow() {
+        let box = TextBox()
+        let handler = makeHandler(box, completions: ["alpha", "beta", "gamma"])
+        for _ in 0..<5 { _ = handler.handleKeyEvent(KeyEvent(key: .down)) }
+        #expect(handler.suggestionHighlight == 2)
     }
 
     /// The counterpart for a menu opened with nothing highlighted (a pointer

@@ -532,8 +532,8 @@ extension TextFieldHandler {
         //
         // With NO highlight the keyboard is still at the caret (the combo box's
         // field/menu duality), so these stay FIELD gestures — Home/End move the
-        // caret, Shift+arrow extends the selection — matching how plain Up
-        // already falls through from the first row back to the caret.
+        // caret, Shift+arrow extends the selection. The menu is only ever
+        // entered by a plain Up or Down.
         if let highlight = suggestionHighlight,
             let destination = OptionListNavigation.clampedDestination(
                 for: event, from: highlight, count: suggestionCompletions.count,
@@ -563,18 +563,23 @@ extension TextFieldHandler {
             suggestionFollowPending = true
             return true
         case .up:
-            // Up from the first row returns the keyboard to the caret; from
-            // the caret it enters the menu at the BOTTOM, mirroring Down's
-            // entry at the top. (The caret sits between the last row and the
-            // first, so stepping off either end lands on it and stepping off
-            // the caret continues around — the same ring every other TUIkit
-            // menu offers from its unselected state.)
+            // From the caret, Up enters the menu at the BOTTOM — the mirror of
+            // Down entering at the top, and what NSComboBox does. Inside the
+            // menu it CLAMPS at the first row, exactly as Down clamps at the
+            // last: the menu is entered from either end and then held, never
+            // wrapped and never left.
+            //
+            // It used to fall back out to the caret from row 0, which combined
+            // with the entry rule into a ring that only turned one way — up
+            // forever, and a hard stop going down. Escape already owns "leave
+            // the menu", and typing goes straight to the field, so nothing is
+            // lost by making Up non-destructive.
             guard let highlight = suggestionHighlight else {
                 suggestionHighlight = suggestionCompletions.count - 1
                 suggestionFollowPending = true
                 return true
             }
-            suggestionHighlight = highlight > 0 ? highlight - 1 : nil
+            suggestionHighlight = max(0, highlight - 1)
             suggestionFollowPending = true
             return true
         case .enter:
