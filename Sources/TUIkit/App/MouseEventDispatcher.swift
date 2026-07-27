@@ -441,8 +441,17 @@ extension MouseEventDispatcher {
     /// carries the size too — the drag auto-scroll driver compares the cursor
     /// against a scrollable's *edges*, which needs its width/height, not just
     /// its top-left.
+    ///
+    /// The **largest** region wins, because one handler may own several. A
+    /// `List` stamps an extra one-row region over its cursor row with the
+    /// container's own handler id (so an enclosing `ScrollView` can find the
+    /// row to reveal), and it sits ahead of the container in the array — so
+    /// taking the *first* match measured the list's edges as that single row.
+    /// Everything below the cursor row then read as "dragged past the bottom",
+    /// which armed auto-scroll from the middle of a list whose cursor was still
+    /// at its top.
     func regionRect(for id: HitTestRegion.HandlerID) -> HitTestRegion? {
-        regions.first { $0.handlerID == id }
+        regions.filter { $0.handlerID == id }.max { $0.width * $0.height < $1.width * $1.height }
     }
 
     /// Processes a bare cursor-motion event by synthesising

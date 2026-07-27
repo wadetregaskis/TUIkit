@@ -212,6 +212,35 @@ struct DragAutoScrollTests {
             "with no region rect the driver can't place the zone, so nothing scrolls")
     }
 
+    @Test("A list's cursor-row region does not shrink the zone it measures")
+    func cursorRowRegionDoesNotShrinkTheZone() {
+        // A `List` stamps an extra ONE-ROW region over its keyboard cursor,
+        // carrying the container's own handler id (that is how an enclosing
+        // ScrollView finds the row to reveal), and inserts it AHEAD of the
+        // container. Measuring the zone against the first match therefore
+        // measured a single row: with the cursor at the top of the list, every
+        // row below it read as "dragged past the bottom", so a drag anywhere in
+        // the list armed auto-scroll — and by the time the cursor reached the
+        // real hot margin the dwell had already elapsed and it scrolled at once.
+        // Exactly the reported symptom, and exactly why it only happened while
+        // the list was scrolled to the top (elsewhere the cursor row is off
+        // screen and no extra region exists).
+        let handler = scrollHandler(offset: 0, content: 100, viewport: 10)
+        let harness = Harness()
+        harness.setRegions([
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: 40, height: 1, handlerID: Self.zoneID),
+            Self.viewport,
+        ])
+        harness.addZone(Self.zoneID, vertical: handler)
+        harness.beginDrag(x: 20, y: 5)  // mid-viewport: clear of both hot margins
+        #expect(
+            !harness.drive(nowNanos: 0),
+            "the middle of the list is not an edge, whatever the cursor row's region says")
+        harness.run(ticks: 3)
+        #expect(handler.scrollOffset == 0)
+    }
+
     @Test("A horizontal scrollable auto-scrolls toward the right edge")
     func horizontalEdgeScrolls() {
         let vertical = scrollHandler(offset: 0, content: 10, viewport: 10)  // can't move vertically
