@@ -223,8 +223,19 @@ struct Color256GridFocusTests {
         let buffer = renderToBuffer(grid, context: ctx)
         fm.endRenderPass()
 
-        // Every swatch is a hit region now.
-        #expect(buffer.hitTestRegions.count == 256, "one clickable region per swatch")
+        // Every swatch is a clickable region, plus the two inert regions the
+        // reveal contract needs (the whole grid, and the cursor swatch) — see
+        // `publishRevealRegions`.
+        #expect(
+            buffer.hitTestRegions.count == 258,
+            "one clickable region per swatch, plus the two reveal regions")
+        #expect(
+            buffer.hitTestRegions.filter { $0.focusID != nil }.count == 2,
+            """
+            ONLY the reveal regions carry the focusID: 256 identical one-line \
+            regions under one id make `revealTarget`'s smallest-region rule \
+            resolve to whichever came first, never the cursor swatch
+            """)
         // Click the greyscale row's last cell (index 255), bottom-right of the
         // grid. Swatches are two cells wide, so place with that width.
         let cells = Palette256Layout.place(cellWidth: 2).cells
@@ -235,6 +246,46 @@ struct Color256GridFocusTests {
         _ = tui.mouseEventDispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: target.x, y: target.y))
         #expect(box.color == .palette(255), "the clicked swatch is selected, got \(box.color)")
+    }
+
+    /// Arrow-keying around the swatches must scroll the enclosing ScrollView to
+    /// keep the cursor visible. That works off `revealTarget`, which resolves a
+    /// within-control move to the SMALLEST region carrying the focusID — so the
+    /// grid must publish exactly one cursor-sized region, not 256 identical ones.
+    @Test("The within-control reveal target follows the cursor swatch")
+    func revealTargetFollowsTheCursor() throws {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let box = ColorBox(.palette(0))
+        let grid = _Color256GridCore(selection: box.binding, focusID: "grid-reveal")
+
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let ctx = RenderContext(
+            availableWidth: 64, availableHeight: 24, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            fm.beginRenderPass()
+            let buffer = renderToBuffer(grid, context: ctx)
+            fm.endRenderPass()
+            return buffer
+        }
+
+        let top = try #require(render().revealTarget(focusID: "grid-reveal", wholeControl: false))
+        // Walk the cursor down the palette; the grid is many rows tall, so the
+        // reveal target must move with it.
+        for _ in 0..<8 { _ = fm.dispatchKeyEvent(KeyEvent(key: .down)) }
+        let lower = try #require(render().revealTarget(focusID: "grid-reveal", wholeControl: false))
+        #expect(
+            lower.top > top.top,
+            "the target moved down with the cursor (was \(top), now \(lower))")
+        #expect(lower.height == 1, "…and is one swatch tall, not the whole grid")
+
+        let whole = try #require(render().revealTarget(focusID: "grid-reveal", wholeControl: true))
+        #expect(
+            whole.height > lower.height,
+            "arriving at the grid still reveals all of it")
     }
 }
 

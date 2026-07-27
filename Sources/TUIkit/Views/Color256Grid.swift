@@ -257,14 +257,60 @@ struct _Color256GridCore: View, Renderable {
                     handler.commit(to: index)
                     return true
                 }
+                // Mouse-only: no `focusID`. Carrying it on all 256 identical
+                // one-line cells is what broke arrow-key reveal —
+                // `revealTarget` resolves a within-control move to the SMALLEST
+                // region under the id, and with 256 of the same height that is
+                // whichever came first (the top-left swatch), never the cursor.
+                // Nothing else reads a region's focusID, and the click closure
+                // focuses the grid explicitly, so dropping it costs nothing.
                 buffer.hitTestRegions.append(
                     HitTestRegion(
                         offsetX: cell.x, offsetY: cell.y, width: cell.width, height: 1,
-                        handlerID: handlerID, focusID: persistedFocusID))
+                        handlerID: handlerID))
             }
+            publishRevealRegions(
+                to: &buffer, cells: cells, cursor: handler.cursor,
+                focusID: persistedFocusID, dispatcher: dispatcher)
         }
 
         return buffer
+    }
+
+    /// Publishes the two regions the reveal contract asks for — the same shape
+    /// `List` and `Table` publish, and for the same reason.
+    ///
+    /// `FrameBuffer.revealTarget` reads the UNION of the id's regions when focus
+    /// has just arrived (show the whole grid) and the SMALLEST when focus moved
+    /// WITHIN the control (show only what changed — here, the swatch the arrow
+    /// keys just landed on). So the grid needs exactly one whole-grid region and
+    /// one cursor-sized region, not one per swatch.
+    ///
+    /// Both carry an inert handler: these exist to be measured, not clicked —
+    /// the per-cell regions above own the mouse, and they are registered after
+    /// these so they win the hit test.
+    private func publishRevealRegions(
+        to buffer: inout FrameBuffer, cells: [Palette256Layout.Cell], cursor: Int,
+        focusID: String, dispatcher: MouseEventDispatcher
+    ) {
+        guard !cells.isEmpty else { return }
+        let inert = dispatcher.register { _ in false }
+        let top = cells.map(\.y).min() ?? 0
+        let bottom = cells.map(\.y).max() ?? 0
+        let left = cells.map(\.x).min() ?? 0
+        let right = cells.map { $0.x + $0.width }.max() ?? 0
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: left, offsetY: top, width: max(1, right - left),
+                height: bottom - top + 1, handlerID: inert, focusID: focusID),
+            at: 0)
+        if let cell = cells.first(where: { $0.index == cursor }) {
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: cell.x, offsetY: cell.y, width: cell.width, height: 1,
+                    handlerID: inert, focusID: focusID),
+                at: 1)
+        }
     }
 
     // MARK: Rendering
