@@ -93,26 +93,20 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let renderedLabels: [String?] = entries.map { entry in
             entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
         }
-        let optionRowIndices = entries.indices.filter { entries[$0].tag != nil }
-        let maxLabelWidth = renderedLabels.compactMap { $0?.strippedLength }.max() ?? 0
+        // The drop-down's own model: an option is a label plus "is this the
+        // current value". The marker column, the width arithmetic and the
+        // ordinal↔row mapping all come from `DropdownMenu` — the combo box's
+        // suggestions menu is assembled from the same call.
+        let menuEntries: [DropdownMenu.Entry] = entries.indices.map { index in
+            guard let tag = entries[index].tag else { return .divider }
+            return .option(
+                label: renderedLabels[index] ?? "", isSelected: tag == selection.wrappedValue)
+        }
+        // The collapsed control is drawn to the width of the menu it opens.
+        let innerWidth = DropdownMenu.innerWidth(for: menuEntries, context: context)
+        let optionCount = menuEntries.count { if case .option = $0 { return true } else { return false } }
 
-        // Inner width = label + selection marker + a space + 1 char padding
-        // on each side. When the option list overflows, the drop-down shows a
-        // scrollbar in its rightmost interior column; reserve one more column so
-        // there's a blank gap between the option text and the bar (rather than the
-        // text running flush against it) without truncating any label. The
-        // overflow test mirrors the drop-down's windowing.
-        let wantsScrollbar = DropdownMenu.wantsScrollbar(
-            rowCount: entries.count, context: context)
-        let desiredInner = maxLabelWidth + 4 + (wantsScrollbar ? 1 : 0)
-        // The drop-down is an overlay: it may grow WIDER than its control to
-        // fit its options, up to the screen. It anchors at the control's left
-        // edge (preferring to grow rightward); the overlay compositor nudges
-        // it left only when the screen's right edge forces it.
-        let widthCap = max(context.availableWidth, context.environment.terminalWidth)
-        let innerWidth = max(6, min(desiredInner, max(6, widthCap - 2)))
-
-        let isOpen = handler.isOpen && !optionRowIndices.isEmpty
+        let isOpen = handler.isOpen && optionCount > 0
         publishOpenEscapeLabel(context: context, isOpen: isOpen)
 
         let collapsed = collapsedLine(
@@ -136,18 +130,10 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         )
 
         guard isOpen else { return buffer }
-        handler.highlightedIndex = min(
-            max(0, handler.highlightedIndex), optionRowIndices.count - 1)
+        handler.highlightedIndex = min(max(0, handler.highlightedIndex), optionCount - 1)
         attachOpenPopup(
-            to: &buffer,
-            context: context,
-            handler: handler,
-            persistedFocusID: persistedFocusID,
-            innerWidth: innerWidth,
-            renderedLabels: renderedLabels,
-            optionRowIndices: optionRowIndices,
-            palette: palette
-        )
+            to: &buffer, context: context, handler: handler,
+            persistedFocusID: persistedFocusID, menuEntries: menuEntries)
         return buffer
     }
 
@@ -286,52 +272,20 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         )
     }
 
-    /// Builds the open drop-down popup via the shared ``DropdownMenu``
-    /// machinery and attaches it as an overlay layer anchored one row below
-    /// the collapsed control. The in-flow control stays a single line so
-    /// opening the picker never disturbs the layout of sibling views and the
-    /// list draws on top of whatever sits beneath it.
+    /// Attaches the open drop-down beneath the collapsed control, via the
+    /// shared ``DropdownMenu`` assembly — the same call the combo box's
+    /// suggestions menu makes, so the two sit on one grid and answer the
+    /// pointer identically.
     private func attachOpenPopup(
         to buffer: inout FrameBuffer,
         context: RenderContext,
         handler: _PickerMenuHandler,
         persistedFocusID: String,
-        innerWidth: Int,
-        renderedLabels: [String?],
-        optionRowIndices: [Int],
-        palette: any Palette
+        menuEntries: [DropdownMenu.Entry]
     ) {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
-
-        // Row content: ` ✓ label` for the selected option, ` · label` rows
-        // otherwise (the marker column keeps labels aligned); dividers pass
-        // through as rules.
-        let rows: [DropdownMenu.Row] = entries.indices.map { index in
-            switch entries[index] {
-            case .divider:
-                return .divider
-            case .option(let tag, _):
-                let marker =
-                    tag == selection.wrappedValue
-                    ? ANSIRenderer.colorize(
-                        DropdownMenu.selectedMarker,
-                        foreground: palette.accent
-                    )
-                    : " "
-                return .option(" " + marker + " " + (renderedLabels[index] ?? ""))
-            }
-        }
-
-        // The handler's highlight is an option ordinal; the drop-down wants a
-        // row index (and reports row indices back from hover/click).
-        let ordinalByRow = Dictionary(
-            uniqueKeysWithValues: optionRowIndices.enumerated().map { ($1, $0) })
-        let highlightedRow =
-            optionRowIndices.indices.contains(handler.highlightedIndex)
-            ? optionRowIndices[handler.highlightedIndex] : nil
-
         // Follow the highlight only when keyboard navigation moved it; wheel/bar
         // scrolling (which doesn't set the flag) then moves the window freely.
         let followHighlight = handler.scrollFollowPending
@@ -339,45 +293,27 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         let focusManager = context.environment.focusManager
         let captureSelection = selection
-        let captureEntries = entries
-        var popupBuffer = DropdownMenu.popup(
-            DropdownMenu.Configuration(
-                rows: rows,
-                highlightedRow: highlightedRow,
-                innerWidth: innerWidth,
+        let optionTags = entries.compactMap(\.tag)
+
+        DropdownMenu.attach(
+            DropdownMenu.OptionMenu(
+                entries: menuEntries,
+                highlightedOption: handler.highlightedIndex,
                 scroll: handler.menuScroll,
                 followHighlight: followHighlight,
-                autoRepeatToken: "picker-menu-scrollbar-\(context.identity.path)"),
+                autoRepeatToken: "picker-menu-scrollbar-\(context.identity.path)",
+                isEnabled: !isDisabled),
+            to: &buffer,
             context: context,
-            onHover: { row in
-                guard let ordinal = ordinalByRow[row] else { return }
-                handler.highlightedIndex = ordinal
-            },
-            onActivate: { row in
-                guard let ordinal = ordinalByRow[row],
-                    let tag = captureEntries[row].tag
-                else { return }
+            onHover: { ordinal in handler.highlightedIndex = ordinal },
+            onActivate: { ordinal in
+                guard optionTags.indices.contains(ordinal) else { return }
                 focusManager?.focus(id: persistedFocusID)
-                captureSelection.wrappedValue = tag
+                captureSelection.wrappedValue = optionTags[ordinal]
                 handler.highlightedIndex = ordinal
                 handler.isOpen = false
             },
-            onDismiss: { handler.isOpen = false }
-        )
-        // A disabled picker never opens (the handler closes it), but belt and
-        // braces: drop the popup's interactivity if we got here disabled.
-        if isDisabled {
-            popupBuffer.hitTestRegions.removeAll()
-        }
-        buffer.overlays = [
-            OverlayLayer(
-                offsetX: 0,
-                offsetY: 1,
-                content: popupBuffer,
-                level: .popover,
-                anchorHeight: 1
-            )
-        ]
+            onDismiss: { handler.isOpen = false })
     }
 
     // MARK: Collapsed Control

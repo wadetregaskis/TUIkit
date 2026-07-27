@@ -269,14 +269,8 @@ func extractTextSuggestions<S: View>(_ view: S) -> [_TextSuggestionEntry] {
 enum TextFieldSuggestions {
     /// The prepared menu model for one render pass.
     struct Menu {
-        /// The drop-down rows (options carry their rendered content).
-        let rows: [DropdownMenu.Row]
-
-        /// The row index of each option, in option order.
-        let optionRowIndices: [Int]
-
-        /// The widest option label, for sizing the popup.
-        let maxLabelWidth: Int
+        /// The drop-down's entries, in display order.
+        let entries: [DropdownMenu.Entry]
 
         /// Whether the popup is showing this frame (focused, not dismissed,
         /// at least one option).
@@ -299,36 +293,29 @@ enum TextFieldSuggestions {
             handler.suggestionHighlight = nil
             return nil
         }
-        let palette = context.environment.palette
-
         // Labels render at the SCREEN width, not the field's: the pop-up is
         // an overlay that may grow wider than its control, so a narrow field
         // must not wrap/truncate its option labels.
         let labelContext = context.withAvailableWidth(
             max(context.availableWidth, context.environment.terminalWidth))
 
-        var rows: [DropdownMenu.Row] = []
+        // The drop-down's own model — the same one the `Picker` builds, so the
+        // marker column, the width and the pointer handling are one
+        // implementation rather than two that drift.
+        var menuEntries: [DropdownMenu.Entry] = []
         var completions: [String] = []
-        var optionRowIndices: [Int] = []
-        var maxLabelWidth = 0
         for entry in entries {
             switch entry {
             case .divider:
-                rows.append(.divider)
+                menuEntries.append(.divider)
             case .option(let explicit, let label):
                 let rendered = label.renderToBuffer(context: labelContext).lines.first ?? ""
                 let completion = explicit ?? rendered.stripped
-                // The row whose completion is the field's current text gets
-                // the ✓ marker — the field's value is "selected".
-                let marker =
-                    completion == currentText
-                    ? ANSIRenderer.colorize(
-                        DropdownMenu.selectedMarker, foreground: palette.accent)
-                    : " "
-                optionRowIndices.append(rows.count)
-                rows.append(.option(" " + marker + " " + rendered))
+                // The option whose completion is the field's current text is
+                // the "selected" one: the field's value IS the selection.
+                menuEntries.append(
+                    .option(label: rendered, isSelected: completion == currentText))
                 completions.append(completion)
-                maxLabelWidth = max(maxLabelWidth, rendered.strippedLength)
             }
         }
 
@@ -340,77 +327,40 @@ enum TextFieldSuggestions {
         // can jump at event time, when the environment is out of reach.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
 
-        let isOpen = isFocused && handler.suggestionsOpen && !optionRowIndices.isEmpty
+        let isOpen = isFocused && handler.suggestionsOpen && !completions.isEmpty
         if isOpen, !context.isMeasuring {
             // The menu's Escape (close) takes precedence over any page-level
             // ESC handler while open — surface that in the status bar, as the
             // picker's drop-down does.
             context.environment.statusBar.escapeLabelOverride = "close suggestions"
         }
-        return Menu(
-            rows: rows,
-            optionRowIndices: optionRowIndices,
-            maxLabelWidth: maxLabelWidth,
-            isOpen: isOpen)
+        return Menu(entries: menuEntries, isOpen: isOpen)
     }
 
     /// Renders the open popup and attaches it to the field's buffer as an
-    /// overlay anchored one row beneath the field.
+    /// overlay anchored one row beneath the field — through the same
+    /// ``DropdownMenu`` assembly the `Picker` uses, so the two menus sit on one
+    /// grid, size themselves by one rule and answer the pointer identically.
     static func attach(
         menu: Menu,
         to buffer: inout FrameBuffer,
         handler: TextFieldHandler,
         context: RenderContext
     ) {
-        // Same width recipe as the picker's drop-down: marker column + label
-        // + padding, plus a gap column when the scrollbar takes the rightmost
-        // interior column. The popup is an overlay, so it may grow WIDER than
-        // its field to fit its options — capped by the screen, anchored at
-        // the field's left edge (growing rightward; the overlay compositor
-        // nudges it left only when the screen's right edge forces it).
-        let wantsBar = DropdownMenu.wantsScrollbar(
-            rowCount: menu.rows.count, context: context)
-        let desiredInner = menu.maxLabelWidth + 4 + (wantsBar ? 1 : 0)
-        let widthCap = max(context.availableWidth, context.environment.terminalWidth)
-        let innerWidth = max(6, min(desiredInner, max(6, widthCap - 2)))
-
-        let highlightedRow = handler.suggestionHighlight.flatMap { ordinal in
-            menu.optionRowIndices.indices.contains(ordinal)
-                ? menu.optionRowIndices[ordinal] : nil
-        }
-        let ordinalByRow = Dictionary(
-            uniqueKeysWithValues: menu.optionRowIndices.enumerated().map { ($1, $0) })
-
         let followHighlight = handler.suggestionFollowPending
         handler.suggestionFollowPending = false
 
-        let popupBuffer = DropdownMenu.popup(
-            DropdownMenu.Configuration(
-                rows: menu.rows,
-                highlightedRow: highlightedRow,
-                innerWidth: innerWidth,
+        DropdownMenu.attach(
+            DropdownMenu.OptionMenu(
+                entries: menu.entries,
+                highlightedOption: handler.suggestionHighlight,
                 scroll: handler.suggestionScroll,
                 followHighlight: followHighlight,
                 autoRepeatToken: "textfield-suggestions-\(context.identity.path)"),
+            to: &buffer,
             context: context,
-            onHover: { row in
-                guard let ordinal = ordinalByRow[row] else { return }
-                handler.suggestionHighlight = ordinal
-            },
-            onActivate: { row in
-                guard let ordinal = ordinalByRow[row] else { return }
-                handler.acceptSuggestion(at: ordinal)
-            },
-            onDismiss: { handler.suggestionsOpen = false }
-        )
-        buffer.overlays.append(
-            OverlayLayer(
-                offsetX: 0,
-                offsetY: 1,
-                content: popupBuffer,
-                level: .popover,
-                anchorHeight: 1
-            )
-        )
+            onHover: { ordinal in handler.suggestionHighlight = ordinal },
+            onActivate: { ordinal in handler.acceptSuggestion(at: ordinal) },
+            onDismiss: { handler.suggestionsOpen = false })
     }
 }
