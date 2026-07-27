@@ -723,11 +723,14 @@ where Value.ID: Hashable {
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
 
-        let topClip = handler.scrollTopClipLines
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
-            contentHeight: contentHeight, topClip: topClip,
+            contentHeight: contentHeight, topClip: handler.scrollTopClipLines,
             lineGranularity: context.environment.scrollGranularity == .line, height: heightOf)
+        // The window may have absorbed a top clip (or a whole first row) that
+        // an indicator would otherwise have announced — the rows are drawn
+        // from ITS position, so the mouse mapping must measure from it too.
+        let topClip = window.topClip
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth,
@@ -811,9 +814,29 @@ where Value.ID: Hashable {
     private func rowWindow(
         scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0,
         lineGranularity: Bool = false, height: (Int) -> Int
-    ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool) {
-        guard count > 0 else { return (0..<0, false, false) }
-        let offset = min(max(0, scrollOffset), count - 1)
+    ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int) {
+        guard count > 0 else { return (0..<0, false, false, 0) }
+        var offset = min(max(0, scrollOffset), count - 1)
+        var topClip = topClip
+        // An "▲ N more" indicator spends a line to report that content is
+        // hidden. Where no more lines are hidden than the indicator itself
+        // costs, that is pure loss — it says "1 more row above" in the very
+        // line the row would have occupied. Start the window one row earlier
+        // instead and show the content itself; the freed indicator line pays
+        // for it exactly, so nothing below moves.
+        //
+        // Only an offset of 0 or 1 can qualify (every row is at least one
+        // line), which keeps this O(1) — no walking a tall table's rows.
+        let hiddenAbove =
+            switch offset {
+            case 0: topClip
+            case 1: height(0) + topClip
+            default: 2  // ">= 2", enough to earn the indicator
+            }
+        if hiddenAbove == 1 {
+            offset = 0
+            topClip = 0
+        }
         // A line-granularity clip partially hides the top row — content above.
         let showAbove = offset > 0 || topClip > 0
 
@@ -843,12 +866,12 @@ where Value.ID: Hashable {
         if end < count {
             end = fill(budget: contentHeight - (showAbove ? 1 : 0) - 1)
         }
-        return (offset..<min(count, end), showAbove, end < count)
+        return (offset..<min(count, end), showAbove, end < count, topClip)
     }
 
     /// Stitches scroll indicators around the visible multi-line rows.
     private func composeMultiLineRows(
-        window: (range: Range<Int>, showAbove: Bool, showBelow: Bool),
+        window: (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int),
         handler: ItemListHandler<Value.ID>,
         tableHasFocus: Bool,
         columnWidths: [Int],
@@ -923,7 +946,7 @@ where Value.ID: Hashable {
         // must not breathe as rows of different heights scroll through.
         // A non-overflowing table (no indicators, no clip) keeps its
         // natural, content-sized height.
-        if window.showAbove || window.showBelow || handler.scrollTopClipLines > 0 {
+        if window.showAbove || window.showBelow || window.topClip > 0 {
             while lines.count < contentHeight {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
