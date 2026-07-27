@@ -74,6 +74,7 @@ struct ListPage: View {
     @State private var editableItems = [
         "🍎 Apple", "🍌 Banana", "🍒 Cherry", "🍇 Grape", "🍑 Peach", "🍋 Lemon",
     ]
+    @State private var reorderFeedback = ReorderFeedbackChoice.live.rawValue
 
     private static let fruits = [
         "Apple", "Apricot", "Banana", "Blueberry", "Cherry",
@@ -132,12 +133,22 @@ struct ListPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.list.editableInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
+                        ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
+                            Text(choice.label).tag(choice.rawValue)
+                        }
+                    }
                     List {
                         ForEach(editableItems, id: \.self) { Text($0) }
                             .onMove { editableItems.move(fromOffsets: $0, toOffset: $1) }
                             .onDelete { editableItems.remove(atOffsets: $0) }
                     }
                     .frame(height: 8)
+                    // Drag a row and watch the difference: .live reorders under
+                    // the cursor, .ghost floats a copy of the row, .cursor only
+                    // marks the target.
+                    .rowReorderFeedback(
+                        ReorderFeedbackChoice(rawValue: reorderFeedback)?.feedback ?? .live)
                 }
             }
 

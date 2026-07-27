@@ -34,6 +34,14 @@ extension ExampleStrings {
             "page.list.boundValue": "Bound value:",
             "page.list.stylesSection": "List styles (.listStyle)",
             "page.list.multiLineSection": "Multi-line cells (scrollable)",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "Editable · .onMove / .onDelete",
+            "page.list.editableInstruction": "Drag a row with the mouse to reorder it; the picker below chooses what the drag shows. Tab to the list, then press Delete or Backspace to remove the focused row.",
+            "page.list.reorderFeedback": "Reorder feedback",
+            "page.list.reorderFeedback.live": "Live · rows shuffle as you drag",
+            "page.list.reorderFeedback.ghost": "Ghost · a copy follows the cursor",
+            "page.list.reorderFeedback.cursor": "Cursor only · nothing moves until the drop",
             "demo.scrollGranularity.line": "Scroll by line (off: by row)",
             "demo.followMargin": "Follow margin",
             "demo.followMargin.none": "None (scroll at the edge)",
@@ -193,6 +201,14 @@ extension ExampleStrings {
             "page.list.boundValue": "Gebundener Wert:",
             "page.list.stylesSection": "Listenstile (.listStyle)",
             "page.list.multiLineSection": "Mehrzeilige Zellen (scrollbar)",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "Bearbeitbar · .onMove / .onDelete",
+            "page.list.editableInstruction": "Ziehe eine Zeile mit der Maus, um sie umzusortieren; die Auswahl darunter bestimmt, was dabei zu sehen ist. Wechsle mit Tab zur Liste und drücke Entf oder Rücktaste, um die fokussierte Zeile zu entfernen.",
+            "page.list.reorderFeedback": "Umsortier-Rückmeldung",
+            "page.list.reorderFeedback.live": "Live · Zeilen wandern beim Ziehen",
+            "page.list.reorderFeedback.ghost": "Schemen · eine Kopie folgt dem Zeiger",
+            "page.list.reorderFeedback.cursor": "Nur Cursor · nichts bewegt sich bis zum Loslassen",
             "demo.scrollGranularity.line": "Zeilenweise scrollen (aus: reihenweise)",
             "demo.followMargin": "Folgeabstand",
             "demo.followMargin.none": "Keiner (am Rand scrollen)",
@@ -352,6 +368,14 @@ extension ExampleStrings {
             "page.list.boundValue": "Valeur liée :",
             "page.list.stylesSection": "Styles de liste (.listStyle)",
             "page.list.multiLineSection": "Cellules multilignes (défilables)",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "Modifiable · .onMove / .onDelete",
+            "page.list.editableInstruction": "Faites glisser une ligne avec la souris pour la réordonner ; le sélecteur ci-dessous choisit ce que montre le glisser. Passez à la liste avec Tab, puis appuyez sur Suppr ou Retour arrière pour supprimer la ligne ciblée.",
+            "page.list.reorderFeedback": "Retour visuel du réarrangement",
+            "page.list.reorderFeedback.live": "Direct · les lignes se réorganisent pendant le glisser",
+            "page.list.reorderFeedback.ghost": "Fantôme · une copie suit le curseur",
+            "page.list.reorderFeedback.cursor": "Curseur seul · rien ne bouge avant le dépôt",
             "demo.scrollGranularity.line": "Défilement par ligne (désactivé : par rangée)",
             "demo.followMargin": "Marge de suivi",
             "demo.followMargin.none": "Aucune (défile au bord)",
@@ -511,6 +535,14 @@ extension ExampleStrings {
             "page.list.boundValue": "Valore associato:",
             "page.list.stylesSection": "Stili di elenco (.listStyle)",
             "page.list.multiLineSection": "Celle multiriga (scorrevoli)",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "Modificabile · .onMove / .onDelete",
+            "page.list.editableInstruction": "Trascina una riga con il mouse per riordinarla; il selettore qui sotto sceglie cosa mostra il trascinamento. Passa alla lista con Tab, poi premi Canc o Backspace per rimuovere la riga attiva.",
+            "page.list.reorderFeedback": "Feedback del riordino",
+            "page.list.reorderFeedback.live": "Dal vivo · le righe si riordinano mentre trascini",
+            "page.list.reorderFeedback.ghost": "Fantasma · una copia segue il cursore",
+            "page.list.reorderFeedback.cursor": "Solo cursore · nulla si muove fino al rilascio",
             "demo.scrollGranularity.line": "Scorrimento per riga di testo (off: per elemento)",
             "demo.followMargin": "Margine di scorrimento",
             "demo.followMargin.none": "Nessuno (scorre al bordo)",
@@ -670,6 +702,14 @@ extension ExampleStrings {
             "page.list.boundValue": "Valor enlazado:",
             "page.list.stylesSection": "Estilos de lista (.listStyle)",
             "page.list.multiLineSection": "Celdas multilínea (desplazables)",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "Editable · .onMove / .onDelete",
+            "page.list.editableInstruction": "Arrastra una fila con el ratón para reordenarla; el selector de abajo elige qué muestra el arrastre. Ve a la lista con Tab y pulsa Supr o Retroceso para eliminar la fila enfocada.",
+            "page.list.reorderFeedback": "Respuesta al reordenar",
+            "page.list.reorderFeedback.live": "En vivo · las filas se reordenan al arrastrar",
+            "page.list.reorderFeedback.ghost": "Fantasma · una copia sigue al cursor",
+            "page.list.reorderFeedback.cursor": "Solo cursor · nada se mueve hasta soltar",
             "demo.scrollGranularity.line": "Desplazar por línea (desactivado: por fila)",
             "demo.followMargin": "Margen de seguimiento",
             "demo.followMargin.none": "Ninguno (desplaza en el borde)",
@@ -829,6 +869,14 @@ extension ExampleStrings {
             "page.list.boundValue": "绑定值：",
             "page.list.stylesSection": "列表样式 (.listStyle)",
             "page.list.multiLineSection": "多行单元格（可滚动）",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "可编辑 · .onMove / .onDelete",
+            "page.list.editableInstruction": "用鼠标拖动某一行即可重新排序；下方的选择器决定拖动时显示什么。按 Tab 切换到列表，再按 Delete 或 Backspace 删除当前行。",
+            "page.list.reorderFeedback": "重排反馈",
+            "page.list.reorderFeedback.live": "实时 · 拖动时行随即重排",
+            "page.list.reorderFeedback.ghost": "残影 · 副本跟随光标",
+            "page.list.reorderFeedback.cursor": "仅光标 · 松手前不移动",
             "demo.scrollGranularity.line": "按行滚动（关闭：按条目滚动）",
             "demo.followMargin": "跟随边距",
             "demo.followMargin.none": "无（到边缘才滚动）",
@@ -988,6 +1036,14 @@ extension ExampleStrings {
             "page.list.boundValue": "バインドされた値：",
             "page.list.stylesSection": "リストスタイル (.listStyle)",
             "page.list.multiLineSection": "複数行セル（スクロール可能）",
+
+            // ForEach .onMove / .onDelete + .rowReorderFeedback
+            "page.list.editableSection": "編集可能 · .onMove / .onDelete",
+            "page.list.editableInstruction": "行をマウスでドラッグすると並べ替えられます。ドラッグ中に何を見せるかは下のピッカーで選べます。Tab でリストに移動し、Delete または Backspace でフォーカス中の行を削除します。",
+            "page.list.reorderFeedback": "並べ替えの表示",
+            "page.list.reorderFeedback.live": "ライブ · ドラッグ中に行が入れ替わる",
+            "page.list.reorderFeedback.ghost": "ゴースト · 複製がカーソルに追従",
+            "page.list.reorderFeedback.cursor": "カーソルのみ · 離すまで動かない",
             "demo.scrollGranularity.line": "行単位でスクロール（オフ: 項目単位）",
             "demo.followMargin": "追従マージン",
             "demo.followMargin.none": "なし（端でスクロール）",
