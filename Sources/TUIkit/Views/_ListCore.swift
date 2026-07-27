@@ -19,6 +19,21 @@ import Foundation
 /// still fits the interior after composition.
 private let listRowGutter = 2
 
+/// Where inside the grabbed row a reorder drag was pressed, in the row's own
+/// cells. A class so the press-captured mouse closure can fill it in on the
+/// press and read it back on the drag that follows.
+@MainActor
+private final class _ListRowGrabPoint {
+    var x = 0
+    var y = 0
+}
+
+/// The payload a ``RowReorderFeedback/ghost`` drag carries. Private and empty on
+/// purpose: it exists only to satisfy ``DragAndDropSession``, and no
+/// `dropDestination` can name — and therefore accept — it, so floating a row
+/// over the app can never be mistaken for a drop.
+private struct _ListRowReorderPayload {}
+
 // MARK: - Row Source (windowed materialisation)
 
 /// A windowed view over a `List`'s rows.
@@ -608,6 +623,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.scrollGranularity = context.environment.scrollGranularity
         // Same event-time capture: the reveal runs on key events.
         handler.followMargin = context.environment.scrollFollowMargin
+        // …and again for a reorder drag, which runs entirely on mouse events.
+        handler.reorderFeedback = context.environment.rowReorderFeedback
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing
@@ -983,6 +1000,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // borderless click up a row — clicking row 2 selected row 1.)
         let topInset = (context.environment.listStyle.showsBorder ? 1 : 0) + paddingTop
 
+        publishRowBands(state: state)
+
         // The scrollbar's own handler goes in first so the container's later
         // insert(at: 0) pushes it to a higher index — hit-tested ahead of the
         // container (reverse iteration) for its single column. The bar's metrics
@@ -1024,7 +1043,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,
+                dragSession: context.environment.dragAndDropSession,
                 topInset: topInset,
+                // Where a row's own content starts: past the border, the
+                // style's leading padding, and `renderPlainLine`'s 1-cell
+                // gutter. A `.ghost` measures its grab point from here, so it
+                // rides the cursor on the exact cell that was pressed.
+                rowContentLeft: borderInset + context.environment.listStyle.rowPadding.leading + 1,
                 contentColumns: contentColumns
             )
         )
@@ -1140,6 +1165,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
     }
 
+    /// Hands this frame's row geometry to the handler for the reorder drag to
+    /// hit-test against.
+    ///
+    /// It has to come from the handler rather than the mouse closure's captured
+    /// copy: a ``RowReorderFeedback/live`` drag reorders the rows underneath the
+    /// cursor, so press-frame bands would describe an order that no longer
+    /// exists (and a wheel tick can scroll them out from under any mode).
+    private func publishRowBands(state: PopulatedRenderState) {
+        state.handler.visibleRowBands = state.visibleRowYRanges.map { range in
+            var isContent = false
+            if case .content = range.type { isContent = true }
+            return ItemListHandler<SelectionValue>.RowBand(
+                rowIndex: range.rowIndex, yStart: range.yStart, height: range.height,
+                isContent: isContent)
+        }
+    }
+
     /// Builds the closure that the container-wide hit-test
     /// region invokes. Routes wheel to the handler's scroll
     /// position (never the selection), left-release to row hit-
@@ -1147,13 +1189,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func containerMouseHandler(
         state: PopulatedRenderState,
         focusManager: FocusManager?,
+        dragSession: DragAndDropSession?,
         topInset: Int,
+        rowContentLeft: Int,
         contentColumns: Range<Int>
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
         let rowRanges = state.visibleRowYRanges
         let capturedPrimaryAction = primaryAction
+        let capturedRows = state.visibleRows
+        // Where inside the grabbed row the press landed — the cell a `.ghost`
+        // keeps under the cursor. Held in the closure because the closure IS
+        // the gesture: the dispatcher captures it at press and routes the whole
+        // drag back here, however many renders intervene.
+        let grab = _ListRowGrabPoint()
         return { event in
             // Wheel scrolling moves the viewport, NEVER the
             // selection — same model as Finder / Explorer /
@@ -1164,9 +1214,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
             if event.button == .left {
                 // Row at the cursor (content columns only), from the press-frame
-                // bands. Those stay valid for the whole gesture: a reorder drag
-                // commits only on release, so the list order — and thus these
-                // bands — never shifts mid-drag.
+                // bands. Those are exact for the CLICK path — a press and its
+                // release describe one unchanging layout — and it is the only
+                // path that needs a row's type, and so its selection id. The
+                // reorder path deliberately reads the handler's freshly
+                // published bands instead: `.live` feedback moves the rows out
+                // from under this captured copy as the drag goes.
                 func rowAt(y: Int) -> (rowIndex: Int, type: ListRowType<SelectionValue>)? {
                     let yInLines = y - topInset
                     guard contentColumns.contains(event.x),
@@ -1177,6 +1230,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     return (hit.rowIndex, hit.type)
                 }
 
+                /// The drag's position in the handler's content-line space, or
+                /// `nil` once the cursor leaves the content columns — which
+                /// holds the current drop target rather than snapping it
+                /// somewhere the user isn't pointing.
+                var dragContentY: Int? {
+                    contentColumns.contains(event.x) ? event.y - topInset : nil
+                }
+
                 switch event.phase {
                 case .pressed:
                     // Pick up the row for a possible reorder (only when the
@@ -1185,52 +1246,42 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     if captureHandler.onMove != nil, let hit = rowAt(y: event.y),
                         case .content = hit.type
                     {
-                        captureHandler.reorder = ItemListHandler<SelectionValue>.RowReorder(
-                            grabbedOffset: hit.rowIndex, active: false)
-                        // Highlight the grabbed row via the focus cursor so the
-                        // user sees what they've picked up (no new render path).
-                        captureHandler.focusedIndex = hit.rowIndex
+                        captureHandler.beginReorder(grabbing: hit.rowIndex)
+                        let band = captureHandler.visibleRowBands.first { $0.rowIndex == hit.rowIndex }
+                        grab.x = max(0, event.x - rowContentLeft)
+                        grab.y = max(0, event.y - topInset - (band?.yStart ?? 0))
                     }
                     return true
 
                 case .dragged:
-                    // Any motion during a grab is a reorder, not a click. Track
-                    // the row under the cursor with the focus highlight so it
-                    // reads as a drop target; the data moves on release.
-                    guard captureHandler.onMove != nil,
-                        var reorder = captureHandler.reorder
-                    else { return true }
-                    reorder.active = true
-                    captureHandler.reorder = reorder
-                    if let hit = rowAt(y: event.y), case .content = hit.type {
-                        captureHandler.focusedIndex = hit.rowIndex
+                    // Any motion during a grab is a reorder, not a click. What
+                    // that looks like is the feedback mode's business.
+                    let wasActive = captureHandler.isReordering
+                    captureHandler.dragReorder(toContentY: dragContentY)
+                    if !wasActive, let session = dragSession,
+                        let ghost = captureHandler.reorderGhostRow,
+                        let row = capturedRows.first(where: { $0.index == ghost })
+                    {
+                        // `.ghost`: hand the row's own buffer to the drag
+                        // session, which floats it at the cursor above
+                        // everything else. Its hit regions go — a copy of a row
+                        // riding the cursor must not also be clickable.
+                        var preview = row.row.buffer
+                        preview.hitTestRegions = []
+                        session.begin(
+                            payload: _ListRowReorderPayload(), preview: preview,
+                            grabX: grab.x, grabY: grab.y)
                     }
                     return true
 
                 case .released:
-                    // A reorder drop: commit one onMove from the grabbed row to
-                    // where the cursor landed, then clear the drag.
-                    if let reorder = captureHandler.reorder, reorder.active,
-                        let onMove = captureHandler.onMove
-                    {
-                        captureHandler.reorder = nil
-                        let target = rowAt(y: event.y)?.rowIndex ?? (captureHandler.itemCount - 1)
-                        let destination = Self.reorderDestination(
-                            grabbed: reorder.grabbedOffset, target: target)
-                        // Skip a no-op (dropping a row onto itself or the slot
-                        // just after it) so an aimless drag doesn't churn state.
-                        if destination != reorder.grabbedOffset,
-                            destination != reorder.grabbedOffset + 1
-                        {
-                            onMove(IndexSet(integer: reorder.grabbedOffset), destination)
-                        }
-                        captureHandler.focusedIndex = min(
-                            max(0, destination > reorder.grabbedOffset ? destination - 1 : destination),
-                            max(0, captureHandler.itemCount - 1))
+                    // A reorder drop. `.live` has already moved the row; the
+                    // other modes move it exactly here.
+                    if captureHandler.dropReorder(atContentY: dragContentY) {
+                        dragSession?.end()
                         focusManager?.focus(id: captureFocusID)
                         return true
                     }
-                    captureHandler.reorder = nil
 
                     // Not a reorder — the original click / selection path.
                     // Translate event.y → row index by walking the captured
@@ -1258,14 +1309,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
             return false
         }
-    }
-
-    /// The SwiftUI `move(fromOffsets:toOffset:)` destination for dropping the
-    /// `grabbed` row onto `target`: after the target when moving down (insert
-    /// past it), before the target when moving up. `toOffset` is measured
-    /// against the collection *before* the move — exactly what `onMove` expects.
-    private static func reorderDestination(grabbed: Int, target: Int) -> Int {
-        grabbed < target ? target + 1 : target
     }
 
     // MARK: - Row Extraction

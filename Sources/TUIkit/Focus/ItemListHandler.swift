@@ -208,19 +208,53 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// See ``RowReorder`` and `_ListCore`'s mouse handler.
     var onMove: ((IndexSet, Int) -> Void)?
 
-    /// The state of an in-flight mouse reorder drag, or `nil`. The row order is
-    /// left UNCHANGED until the drop (`onMove` fires once on release), so the
-    /// press-frame row geometry the drag closure captured stays valid for the
-    /// whole gesture — no live re-layout to chase.
+    /// The state of an in-flight mouse reorder drag, or `nil`. See
+    /// ``ItemListHandler/dragReorder(toContentY:)`` for the state machine.
     var reorder: RowReorder?
 
     /// One in-flight row-reorder drag.
     struct RowReorder: Equatable {
         /// The data offset of the row picked up on press.
         var grabbedOffset: Int
+        /// Where that row sits *now*. Only ``RowReorderFeedback/live`` moves it
+        /// mid-drag; the other modes leave the data alone until the drop, so
+        /// this stays equal to ``grabbedOffset`` throughout.
+        var currentOffset: Int
         /// Whether the cursor has actually moved since the press — a plain
         /// press/release with no motion is a click (selection), not a reorder.
         var active: Bool
+
+        init(grabbedOffset: Int, active: Bool) {
+            self.grabbedOffset = grabbedOffset
+            self.currentOffset = grabbedOffset
+            self.active = active
+        }
+    }
+
+    /// What a reorder drag shows, synced from `environment.rowReorderFeedback`
+    /// during render; read at event time, when the environment is out of reach.
+    var reorderFeedback: RowReorderFeedback = .live
+
+    /// Where each visible row sits in the rendered content, republished every
+    /// render (see ``RowBand``). A drag reads the CURRENT bands rather than the
+    /// press-frame copy its closure captured, because under
+    /// ``RowReorderFeedback/live`` the rows genuinely move underneath the cursor
+    /// — and a wheel tick can scroll them under any mode.
+    var visibleRowBands: [RowBand] = []
+
+    /// One visible row's extent within the list's rendered content, in lines
+    /// measured from the first content line (i.e. below the border and padding,
+    /// and below the "N more above" indicator when one is drawn).
+    struct RowBand: Equatable, Sendable {
+        /// The row's data offset.
+        var rowIndex: Int
+        /// The row's first line.
+        var yStart: Int
+        /// How many lines it occupies (clipped rows count what's shown).
+        var height: Int
+        /// Whether this is a content row — section headers and footers are
+        /// neither draggable nor drop targets.
+        var isContent: Bool
     }
 
     /// The selection mode (single or multi).
