@@ -509,3 +509,65 @@ struct StepGranularityTests {
             "a one-line row centres on line 8 of 15; got line \(linesAbove + 1)")
     }
 }
+
+/// A reveal shows the cursor plus exactly the follow margin — never a row
+/// beyond it, whatever the scroll granularity.
+@MainActor
+@Suite("follow-margin reveal extent")
+struct FollowMarginRevealTests {
+
+    /// Row heights whose repeat (1, 2, 3 → six lines per three rows) does not
+    /// divide the fifteen-line viewport, so the walk up from the margin row
+    /// routinely overshoots and has lines left over to dispose of. That
+    /// leftover is where the over-reveal came from; a pattern that happens to
+    /// tile the viewport never produces any and proves nothing.
+    private let heights = (0..<60).map { 1 + ($0 * 7) % 3 }
+
+    private func handler(granularity: ScrollGranularity) -> ItemListHandler<Int> {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: heights.count,
+            viewportHeight: 15, selectionMode: .single)
+        handler.contentHeight = 15
+        handler.drawsScrollIndicators = false  // the harness models the row area
+        handler.rowHeight = { self.heights[$0] }
+        handler.followMargin = .steps(1)
+        handler.scrollGranularity = granularity
+        return handler
+    }
+
+    /// The last row with any line inside the 15-line area.
+    private func lastVisibleRow(_ handler: ItemListHandler<Int>) -> Int {
+        var used = -handler.scrollTopClipLines
+        for row in handler.scrollOffset..<heights.count {
+            used += heights[row]
+            if used >= 15 { return row }
+        }
+        return heights.count - 1
+    }
+
+    @Test(
+        "A one-step margin reveals exactly one row past the cursor",
+        arguments: [ScrollGranularity.line, .row])
+    func revealsOnlyTheMargin(granularity: ScrollGranularity) {
+        let handler = handler(granularity: granularity)
+        var scrolled = 0
+        for focus in 1..<40 {
+            handler.focusedIndex = focus
+            handler.ensureFocusedItemVisible()
+            // Until the list has had to scroll, everything below the cursor is
+            // on screen because it always was — that is not an over-reveal.
+            guard handler.scrollOffset > 0 || handler.scrollTopClipLines > 0 else { continue }
+            scrolled += 1
+            let last = lastVisibleRow(handler)
+            #expect(
+                last <= focus + 1,
+                """
+                cursor \(focus) revealed as far as row \(last) — the margin \
+                asked for \(focus + 1). Rounding the reveal onto a row \
+                boundary leaves its leftover lines as slack at the BOTTOM, \
+                and slack is filled from the row after the margin.
+                """)
+        }
+        #expect(scrolled > 20, "the walk must actually scroll, or it proves nothing")
+    }
+}

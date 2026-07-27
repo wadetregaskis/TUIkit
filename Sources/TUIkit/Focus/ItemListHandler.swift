@@ -941,14 +941,17 @@ extension ItemListHandler {
                 covered += rowHeight(top - 1)
                 top -= 1
             }
-            // Whatever overshoots the budget is clipped off the TOP row. Row
-            // granularity has no sub-row position, so it drops that row whole
-            // and accepts the slack at the bottom instead.
-            var clip = max(0, covered - budget)
-            if clip > 0, scrollGranularity == .row, top < tail {
-                top += 1
-                clip = 0
-            }
+            // Whatever overshoots the budget is clipped off the TOP row, which
+            // is what lands `tail` exactly flush against the bottom edge.
+            //
+            // Dropping the top row whole instead — which row granularity used
+            // to do, having no sub-row position to clip with — leaves those
+            // lines as slack at the BOTTOM, and the renderer fills slack from
+            // the row after `tail`. So the reveal showed a row the follow
+            // margin never asked for: with a margin of 1, arrowing onto row 19
+            // revealed 21. Granularity sizes a scroll step; it does not get to
+            // round off a reveal.
+            let clip = max(0, covered - budget)
             // Only ever scroll DOWN here — the scroll-up branch above owns the
             // other direction, and re-deciding it would fight a user who has
             // scrolled away and is arrowing back.

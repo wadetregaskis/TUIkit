@@ -647,8 +647,10 @@ struct ItemListHandlerScrollTests {
     /// above (where it hides rows the cursor has already passed) rather than
     /// below (where the renderer fills it from the row AFTER the one being
     /// revealed — the reported "it also shows the first line of the next row").
-    @Test("Revealing a row lands it flush at the bottom, not mid-viewport")
-    func revealLandsFocusedRowAtTheBottom() {
+    @Test(
+        "Revealing a row lands it flush at the bottom, not mid-viewport",
+        arguments: [ScrollGranularity.line, .row])
+    func revealLandsFocusedRowAtTheBottom(granularity: ScrollGranularity) {
         // Heights chosen so the running sums never align by luck.
         let heights = [1, 1, 3, 3, 1, 1, 1, 3, 1, 3, 1, 1, 3, 1, 1]
         let handler = ItemListHandler<String>(
@@ -657,6 +659,7 @@ struct ItemListHandlerScrollTests {
         handler.contentHeight = 17  // 15 for rows once both indicators show
         handler.rowHeight = { heights[$0] }
         handler.drawsScrollIndicators = true
+        handler.scrollGranularity = granularity
 
         handler.focusedIndex = 9
         handler.ensureFocusedItemVisible()
@@ -671,27 +674,5 @@ struct ItemListHandlerScrollTests {
             the focused row must end on the last row line: covered \(shown) of 15 \
             (offset \(handler.scrollOffset), clip \(handler.scrollTopClipLines))
             """)
-    }
-
-    /// …and under row granularity, where there is no sub-row position to clip
-    /// with, the top row stays whole — the slack moves to the bottom instead of
-    /// slicing a row in half.
-    @Test("Row granularity reveals whole rows only")
-    func revealKeepsWholeRowsUnderRowGranularity() {
-        let heights = [1, 1, 3, 3, 1, 1, 1, 3, 1, 3, 1, 1, 3, 1, 1]
-        let handler = ItemListHandler<String>(
-            focusID: "test", itemCount: heights.count, viewportHeight: 15,
-            selectionMode: .single)
-        handler.contentHeight = 17
-        handler.rowHeight = { heights[$0] }
-        handler.drawsScrollIndicators = true
-        handler.scrollGranularity = .row
-
-        handler.focusedIndex = 9
-        handler.ensureFocusedItemVisible()
-
-        #expect(handler.scrollTopClipLines == 0, "row granularity never clips a row")
-        let shown = (handler.scrollOffset...9).reduce(0) { $0 + heights[$1] }
-        #expect(shown <= 15, "…and never overflows the row area either; got \(shown)")
     }
 }
