@@ -1082,16 +1082,12 @@ where Value.ID: Hashable {
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
-            // An "above" indicator that hides exactly one row wastes its
-            // line: that line could just show the row. So never rest at
-            // offset 1 — snap to 0, where the first row shows with no
-            // indicator (the freed line keeps the bottom row visible).
-            // Mirrors _ListCore. A scrollbar shows no such indicator line,
-            // so it has nothing to waste — and the snap would otherwise undo a
-            // single down-arrow click (0→1→0). Skip it when the bar is shown.
-            if overflowing, !showsScrollbar, handler.scrollOffset == 1 {
-                handler.scrollOffset = 0
-            }
+            // Never rest at offset 1 — see `settleRestingOffset`, shared with
+            // _ListCore. Rows on this path are one line each, so the
+            // line-granularity exception can never apply here; the shared rule
+            // is what keeps a drag auto-scroll able to leave the top.
+            handler.settleRestingOffset(
+                overflowing: overflowing, showsScrollbar: showsScrollbar, firstRowHeight: 1)
             // Apply the anchor in effect — see the multi-line path above.
             handler.applyAnchorHold()
         }

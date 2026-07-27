@@ -647,31 +647,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
-            // An "above" indicator that hides exactly one row wastes its
-            // line: that line could just show the row. So never rest at
-            // offset 1 — snap to 0, where the first row shows with no
-            // indicator. Removing the indicator frees a line, so the row
-            // that was at the bottom of the viewport is still shown. A
-            // scrollbar shows no such indicator line, so it has nothing to
-            // save — and the snap would otherwise undo a single up/down-arrow
-            // click on the bar (0↔1). Skip it when the bar is shown. Also
-            // skip under line granularity with multi-line rows: a wheel step
-            // there legitimately RESTS at row 1 (e.g. one three-line tick
-            // over three-line rows), and the snap would undo the scroll —
-            // making the list unscrollable whenever ticks land row-aligned.
-            // …and skip it while a drag is auto-scrolling this list. The snap
-            // describes where the viewport RESTS; a viewport being driven one
-            // row per tick isn't resting, and snapping it back turned the first
-            // tick into a permanent 0↔1 stall — the list could never leave its
-            // top under a drag.
-            let lineGranular =
-                handler.scrollGranularity == .line
-                && (handler.scrollTopClipLines > 0 || source.row(at: 0).buffer.height > 1)
-            if overflowing, !showsScrollbar, handler.scrollOffset == 1, !lineGranular,
-                !handler.isAutoScrolling
-            {
-                handler.scrollOffset = 0
-            }
+            // Never rest at offset 1 — see `settleRestingOffset`, which both
+            // List and Table call so the rule cannot drift between them again.
+            handler.settleRestingOffset(
+                overflowing: overflowing, showsScrollbar: showsScrollbar,
+                firstRowHeight: source.row(at: 0).buffer.height)
         }
 
         // Wire up id resolution + the selectable-index set. For an all-content

@@ -256,3 +256,106 @@ struct DragAutoScrollTests {
         #expect(vertical.scrollOffset == 0, "the un-scrollable vertical axis stays put")
     }
 }
+
+// MARK: - Against a real render
+
+/// The tests above drive the session against fabricated region rects and a
+/// bare handler, so they never run the code a real frame runs *after* the
+/// tick: the view's own render, which re-resolves its handler and may move the
+/// offset back. That is the gap #401 fell through — the scroll and the thing
+/// that undoes it live in different files, and only a real render puts them in
+/// the same frame.
+///
+/// The loop below is the run loop's order (`RenderLoop.render`): drive one
+/// auto-scroll tick, then render, then publish the regions the next tick
+/// resolves against.
+@MainActor
+@Suite("drag auto-scroll through a render")
+struct DragAutoScrollRenderTests {
+
+    private struct Row: Identifiable {
+        let id: Int
+        var name: String { "row-\(id)" }
+    }
+
+    private static let rows = (0..<40).map(Row.init(id:))
+
+    /// Renders `view` frame by frame with an auto-scroll tick ahead of each,
+    /// returning the first data row visible after every frame.
+    private func topRows(_ view: some View, frames: Int, height: Int) -> [String] {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: height, environment: environment,
+            tuiContext: tui)
+        let session = tui.dragAndDropSession
+        session.dispatcher = tui.mouseEventDispatcher
+
+        func frame() -> [String] {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            session.beginFrame()
+            let buffer = renderToBuffer(view, context: context)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            tui.stateStorage.endRenderPass()
+            return buffer.lines.map(\.stripped)
+        }
+
+        _ = frame()  // register the zone and publish its region
+        // Park the drag on the control's last line: inside the bottom hot
+        // margin, at the base rate — the rate that lands exactly on offset 1.
+        session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 10, y: height - 1)
+        session.begin(payload: "x", preview: FrameBuffer(text: "x"))
+
+        var tops: [String] = []
+        for tick in 0...frames {
+            session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            let lines = frame()
+            tops.append(lines.first { $0.contains("row-") } ?? "— \(lines)")
+        }
+        return tops
+    }
+
+    /// The first data row of each frame, as an integer, for compact assertions.
+    private func topIndices(_ view: some View, frames: Int, height: Int) -> [Int] {
+        topRows(view, frames: frames, height: height).map { line in
+            guard let range = line.range(of: "row-") else { return -1 }
+            return Int(line[range.upperBound...].prefix { $0.isNumber }) ?? -1
+        }
+    }
+
+    @Test("A Table auto-scrolls away from its top instead of stalling at offset 1")
+    func tableEscapesTheRestingSnap() {
+        let table = Table(Self.rows, selection: .constant(Int?.none)) {
+            TableColumn("Name", value: \Row.name)
+        }
+        .frame(height: 10)
+
+        let tops = topIndices(table, frames: 5, height: 10)
+        #expect(
+            tops == tops.sorted() && tops.last! > tops.first!,
+            """
+            the viewport must advance one row per tick, not flip 0↔1 — \
+            got \(tops)
+            """)
+    }
+
+    /// The List is the twin that already had the guard (7f9fc5b4); it is here
+    /// so the two are asserted together and cannot drift apart again.
+    @Test("A List auto-scrolls away from its top instead of stalling at offset 1")
+    func listEscapesTheRestingSnap() {
+        let list = List {
+            ForEach(Self.rows) { Text($0.name) }
+        }
+        .frame(height: 10)
+
+        let tops = topIndices(list, frames: 5, height: 10)
+        #expect(
+            tops == tops.sorted() && tops.last! > tops.first!,
+            "the list advances one row per tick — got \(tops)")
+    }
+}
