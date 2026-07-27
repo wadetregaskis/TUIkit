@@ -63,7 +63,20 @@ func assertSnapshot(
     height: Int,
     of view: some View
 ) {
-    let actual = snapshotText(renderToBuffer(view, context: makeRenderContext(width: width, height: height)))
+    assertSnapshot(
+        name,
+        of: renderToBuffer(view, context: makeRenderContext(width: width, height: height)))
+}
+
+/// Compares an ALREADY-RENDERED buffer to its golden.
+///
+/// The view-taking overload above renders for you, which cannot reach a buffer
+/// that only exists part-way through a frame — a presented menu lives in an
+/// overlay, and getting at it means driving a click between two renders. Those
+/// callers render themselves and hand the buffer here.
+@MainActor
+func assertSnapshot(_ name: String, of buffer: FrameBuffer) {
+    let actual = snapshotText(buffer)
     let dir = snapshotsDirectory()
     let url = dir.appendingPathComponent("\(name).txt")
     let actualURL = dir.appendingPathComponent("\(name).actual.txt")
