@@ -167,6 +167,38 @@ struct TextWhitespaceTests {
         #expect(render("  a\n    b", width: 40) == ["  a", "    b"])
     }
 
+    /// `.textCase` is applied when the text is DRAWN, so it must be applied
+    /// when the text is MEASURED too: the German ß uppercases to two
+    /// characters, so a measure of the untransformed string reserves one cell
+    /// too few and the render is clipped.
+    @Test("A width-changing text case is measured as it will be drawn")
+    func textCaseIsMeasured() {
+        let view = Text("straße").textCase(.uppercase)
+        let context = context(width: 40)
+        let size = measureChild(
+            view, proposal: ProposedSize(width: 40, height: nil), context: context)
+        let drawn = renderToBuffer(view, context: context).lines.map(\.stripped)
+
+        #expect(drawn == ["STRASSE"], "sanity: the render uppercases, got \(drawn)")
+        #expect(
+            size.width == drawn[0].strippedLength,
+            "measured \(size.width), drew \(drawn[0].strippedLength) cells")
+    }
+
+    /// A width budget of zero means the render draws nothing (every line goes
+    /// through `truncatedToWidth(0)`), so the measure must not claim cells the
+    /// parent would then reserve for text that never appears.
+    @Test("A zero width budget measures as zero, matching what is drawn")
+    func zeroWidthMeasuresZero() {
+        let view = Text("Hello")
+        let context = context(width: 0)
+        let size = view.sizeThatFits(proposal: .unspecified, context: context)
+        let drawn = renderToBuffer(view, context: context).lines.map(\.stripped)
+
+        #expect(drawn.allSatisfy { $0.isEmpty }, "sanity: nothing is drawn, got \(drawn)")
+        #expect(size.width == 0, "measured \(size.width) cells for text that draws none")
+    }
+
     /// An indent wider than the width is emitted and left to the caller to
     /// truncate — the same contract a single over-long word has.
     @Test("An indent wider than the width does not produce a blank line")

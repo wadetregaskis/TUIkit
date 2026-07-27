@@ -276,19 +276,66 @@ extension TextStyle {
 // MARK: - Text Rendering
 
 extension Text: Renderable, Layoutable {
+    /// The style cascade's attributes for this `Text` — the scopes it matches
+    /// (`.all`/`.text`, its semantic colour role, its chrome role, its control
+    /// kind and variant) resolved over the chrome role's defaults.
+    ///
+    /// Used by BOTH passes. The render needs every attribute; the measure needs
+    /// only ``StyleAttributes/textCase``, but it must get that from the same
+    /// resolution — a case that changes width (ß → SS) measured from the
+    /// untransformed string reserves the wrong number of cells.
+    ///
+    /// Returns empty attributes — every field `nil`, so every caller's `??`
+    /// falls through — when nothing cascades and there is no chrome role, which
+    /// is the common case and the reason this early-outs rather than resolving.
+    func cascadedAttributes(context: RenderContext) -> StyleAttributes {
+        let cascade = context.environment.styleCascade
+        let chromeRole = context.environment.chromeRole
+        guard !cascade.isEmpty || chromeRole != nil else { return StyleAttributes() }
+
+        var scopes: Set<StyleScope> = [.all, .text]
+        if let role = Self.semanticRole(
+            explicit: style.foregroundColor, environment: context.environment) {
+            scopes.insert(.semanticColor(role))
+        }
+        if let chromeRole {
+            scopes.insert(.chrome(chromeRole))
+        }
+        // A control's label (set by the control around its label subtree)
+        // matches `.control(kind)` and, with a variant, `.controlVariant`.
+        if let controlKind = context.environment.controlKind {
+            scopes.insert(.control(controlKind))
+            if let variant = context.environment.controlVariant {
+                scopes.insert(.controlVariant(controlKind, variant))
+            }
+        }
+        let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
+        return cascade.resolve(for: scopes).merged(over: base)
+    }
+
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Text has a fixed size based on its content.
         // If a width is proposed, we may word-wrap.
         let maxWidth = proposal.width ?? context.availableWidth
-        let wrapped = TextWrapping.wrapMeasured(content, width: maxWidth)
+        // Measure the string the render will DRAW, not the one that was
+        // written: `.textCase(.uppercase)` can change the width (ß → SS, ﬁ →
+        // FI), and a measure of the untransformed text would reserve the wrong
+        // number of cells for it.
+        let wrapped = TextWrapping.wrapMeasured(
+            Self.applyingCase(cascadedAttributes(context: context).textCase, to: content),
+            width: maxWidth)
 
         // Reuse the per-line widths the wrap already computed instead of
         // re-`strippedLength`-ing every line.
         let naturalWidth = wrapped.widths.max() ?? 0
         // Never advertise a width wider than the wrap boundary: a word
         // longer than `maxWidth` is truncated at render time, so claiming
-        // its full width would make the parent reserve unusable space.
-        let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : naturalWidth
+        // its full width would make the parent reserve unusable space. A
+        // budget of zero (or less — a container squeezed past its chrome)
+        // means the render draws nothing at all, so report nothing: claiming
+        // the natural width there had the parent reserve space for text that
+        // `truncatedToWidth(0)` then wiped.
+        let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : 0
         // A line limit caps the reported height so a parent allocates only
         // the rows the text is allowed to occupy.
         let height = min(wrapped.lines.count, style.lineLimit.map { max(1, $0) } ?? wrapped.lines.count)
@@ -309,35 +356,14 @@ extension Text: Renderable, Layoutable {
         // `.semanticColor` entries match; its chrome role lets `.chrome(...)`
         // entries match.
         let cascade = context.environment.styleCascade
-        let chromeRole = context.environment.chromeRole
-        var cascaded = StyleAttributes()
-        if !cascade.isEmpty || chromeRole != nil {
-            var scopes: Set<StyleScope> = [.all, .text]
-            if let role = Self.semanticRole(
-                explicit: style.foregroundColor, environment: context.environment) {
-                scopes.insert(.semanticColor(role))
-            }
-            if let chromeRole {
-                scopes.insert(.chrome(chromeRole))
-            }
-            // A control's label (set by the control around its label subtree)
-            // matches `.control(kind)` and, with a variant, `.controlVariant`.
-            if let controlKind = context.environment.controlKind {
-                scopes.insert(.control(controlKind))
-                if let variant = context.environment.controlVariant {
-                    scopes.insert(.controlVariant(controlKind, variant))
-                }
-            }
-            let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
-            cascaded = cascade.resolve(for: scopes).merged(over: base)
-            effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
-            effectiveStyle.isItalic = effectiveStyle.isItalic || (cascaded.italic ?? false)
-            effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (cascaded.underline ?? false)
-            effectiveStyle.isStrikethrough =
-                effectiveStyle.isStrikethrough || (cascaded.strikethrough ?? false)
-            effectiveStyle.isDim = effectiveStyle.isDim || (cascaded.dim ?? false)
-            effectiveCase = cascaded.textCase
-        }
+        let cascaded = cascadedAttributes(context: context)
+        effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
+        effectiveStyle.isItalic = effectiveStyle.isItalic || (cascaded.italic ?? false)
+        effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (cascaded.underline ?? false)
+        effectiveStyle.isStrikethrough =
+            effectiveStyle.isStrikethrough || (cascaded.strikethrough ?? false)
+        effectiveStyle.isDim = effectiveStyle.isDim || (cascaded.dim ?? false)
+        effectiveCase = cascaded.textCase
 
         // Foreground precedence: an explicit *concrete* colour on this Text wins;
         // an explicit *semantic* colour (a palette-role reference) may be remapped
