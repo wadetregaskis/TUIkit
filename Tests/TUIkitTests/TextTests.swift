@@ -105,6 +105,78 @@ struct TextLineBreakTests {
     }
 }
 
+// MARK: - Whitespace
+
+/// Spaces the author wrote are content. The word walk in
+/// `TextWrapping.wrapParagraph` used to lose the LEADING run — splitting
+/// `" Cut"` yields `["", "Cut"]`, and an empty first token was
+/// indistinguishable from "nothing on this line yet" — so `Text("  Item")`
+/// drew `"Item"` and indentation was impossible.
+@MainActor
+@Suite("Text whitespace")
+struct TextWhitespaceTests {
+
+    private func context(width: Int, height: Int = 24) -> RenderContext {
+        makeBareRenderContext(width: width, height: height)
+    }
+
+    private func render(_ text: String, width: Int) -> [String] {
+        renderToBuffer(Text(text), context: context(width: width)).lines.map(\.stripped)
+    }
+
+    @Test("A leading space is drawn, not swallowed")
+    func leadingSpaceSurvives() {
+        #expect(render(" Cut", width: 40) == [" Cut"])
+        #expect(render("   deeply indented", width: 40) == ["   deeply indented"])
+    }
+
+    @Test("Trailing and interior spaces are preserved as written")
+    func otherSpacesSurvive() {
+        #expect(render("Cut ", width: 40) == ["Cut "])
+        #expect(render("a  b", width: 40) == ["a  b"])
+        #expect(render("  ", width: 40) == ["  "], "an all-space line is space, not empty")
+    }
+
+    /// The measure and the render must agree, or a parent reserves the wrong
+    /// number of cells and the text is clipped (or floats in dead space).
+    @Test("The measured width matches the rendered width")
+    func measureMatchesRender() {
+        for text in [" Cut", "   x", "Cut ", "a  b", "  ", "", "plain"] {
+            let size = Text(text).sizeThatFits(
+                proposal: .unspecified, context: context(width: 40))
+            let drawn = render(text, width: 40).map(\.strippedLength).max() ?? 0
+            #expect(
+                size.width == drawn,
+                "\(text.debugDescription): measured \(size.width), drew \(drawn)")
+        }
+    }
+
+    /// The indent belongs to the first line only — a soft-wrapped continuation
+    /// starts at the margin, as it does in every other text system.
+    @Test("A wrapped continuation line is not re-indented")
+    func continuationIsNotIndented() {
+        let lines = render("  one two three four", width: 10)
+        #expect(lines.first == "  one two", "the indent eats into the first line's room: \(lines)")
+        #expect(
+            lines.dropFirst().allSatisfy { !$0.hasPrefix(" ") },
+            "continuations start at the margin: \(lines)")
+    }
+
+    @Test("Explicit line breaks each get their own indent")
+    func perParagraphIndent() {
+        #expect(render("  a\n    b", width: 40) == ["  a", "    b"])
+    }
+
+    /// An indent wider than the width is emitted and left to the caller to
+    /// truncate — the same contract a single over-long word has.
+    @Test("An indent wider than the width does not produce a blank line")
+    func indentWiderThanWidth() {
+        let lines = TextWrapping.wrap("    x", width: 3)
+        #expect(lines.count == 1, "no phantom blank first line: \(lines)")
+        #expect(lines[0] == "    x")
+    }
+}
+
 // MARK: - Text Truncation Tests
 
 @MainActor

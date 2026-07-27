@@ -145,7 +145,34 @@ enum TextWrapping {
     /// Wraps a single paragraph (no embedded line breaks) on word boundaries so
     /// each returned line fits `width` terminal cells, returning each line's
     /// visible width alongside (tracked for free while wrapping). Never empty.
+    ///
+    /// Leading spaces are preserved as an indent on the first line (see below);
+    /// interior and trailing spaces are preserved as written.
     private static func wrapParagraph(_ text: String, width: Int) -> Wrapped {
+        // A leading space is content — an indent — not a wrap opportunity, and
+        // the word walk below cannot say so on its own: splitting `" Cut"` on
+        // spaces yields `["", "Cut"]`, and an empty FIRST token is
+        // indistinguishable from "nothing on this line yet", so the indent was
+        // silently swallowed (`Text("  Item")` drew `"Item"`). Interior and
+        // trailing spaces never had the problem — only the leading run, which
+        // is exactly the one an author writes on purpose.
+        //
+        // Peel the run off, wrap the rest in the room that leaves, and put it
+        // back on the FIRST line only: a soft-wrapped continuation starts at
+        // the margin, as it does everywhere else. As with a single over-long
+        // word, an indent wider than `width` is emitted anyway and left for the
+        // caller to truncate.
+        let indent = text.prefix { $0 == " " }
+        if !indent.isEmpty {
+            let wrapped = wrapParagraph(
+                String(text.dropFirst(indent.count)), width: max(1, width - indent.count))
+            var lines = wrapped.lines
+            var widths = wrapped.widths
+            lines[0] = indent + lines[0]
+            widths[0] += indent.count
+            return Wrapped(lines: lines, widths: widths)
+        }
+
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var lines: [String] = []
         var widths: [Int] = []

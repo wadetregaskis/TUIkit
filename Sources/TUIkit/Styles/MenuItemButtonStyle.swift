@@ -54,9 +54,9 @@ private struct _MenuItemRow: View {
             row.frame(width: labelWidth, alignment: .leading)
             if !hint.isEmpty {
                 // The gap before the hint is the frame's, not a leading space
-                // in the string: `Text` strips leading whitespace at render
-                // while still measuring it, so `Text(" ^X")` would size the
-                // menu for 3 cells and then draw 2.
+                // in the string: the frame is what right-aligns the hint into
+                // a column of its own, and it keeps the gap out of the string
+                // the row would otherwise have to measure and draw identically.
                 Text(hint)
                     .foregroundStyle(hintForeground)
                     .frame(width: hintWidth, alignment: .trailing)
@@ -98,12 +98,19 @@ private struct _MenuItemRow: View {
         return palette.foregroundSecondary
     }
 
+    /// The row's label — the string one, or the caller's `@ViewBuilder` one.
+    ///
+    /// No leading space of its own: the menu's border and its one cell of
+    /// padding already inset every row, and a `@ViewBuilder` label would not
+    /// get the extra space anyway, so adding it here would only make the two
+    /// kinds of row disagree. (It used to be written `Text(" \(label)")`, which
+    /// drew nothing at all until `Text` stopped swallowing leading spaces.)
     @ViewBuilder
     private var label: some View {
         if let labelView = configuration.labelView {
             labelView
         } else {
-            Text(" \(configuration.label)")
+            Text(configuration.label)
         }
     }
 
