@@ -67,6 +67,15 @@ public struct ButtonStyleConfiguration {
     ///   environment value. A disabled button renders dimmed.
     public let isEnabled: Bool
 
+    /// The button's ``KeyboardShortcut``, already resolved for this terminal
+    /// (so a `⌘` shortcut appears as whatever ``EnvironmentValues/commandKey``
+    /// binds it to), or `nil` when the button has none.
+    ///
+    /// - Note: Terminal-specific addition. AppKit draws a menu item's key
+    ///   equivalent for you; here a menu-row style has to draw it, so it needs
+    ///   to know. ``KeyboardShortcut/displayString`` is the printable form.
+    public let keyboardShortcut: KeyboardShortcut?
+
     // Configurations are produced by ``Button`` during rendering, never by
     // client code — the compiler-synthesized memberwise initializer
     // (internal access level) is exactly what's needed.

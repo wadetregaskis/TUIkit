@@ -361,6 +361,40 @@ struct ContextMenuTests {
             """)
     }
 
+    /// The measure pass has to see the shortcuts too, or the menu is sized for
+    /// the labels alone and the render then has to eat into them to fit the
+    /// hints. (`⌘X` resolves to Ctrl-X here — see `CommandKeyBinding`.)
+    @Test("Menu rows print their key equivalents in an aligned trailing column")
+    func rowsPrintTheirShortcuts() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = Text("Right-click me").contextMenu {
+            Button("Cut") {}.keyboardShortcut("x")
+            Button("Duplicate") {}.keyboardShortcut("v")
+        }
+
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        let lines = (opened.overlays.first?.content.lines ?? []).map(\.stripped)
+        let rendered = lines.joined(separator: "\n")
+
+        let cut = try? #require(lines.first { $0.contains("Cut") })
+        let duplicate = try? #require(lines.first { $0.contains("Duplicate") })
+        #expect(cut?.contains("^X") == true, "the shortcut is printed:\n\(rendered)")
+        #expect(duplicate?.contains("^V") == true, "…on every row:\n\(rendered)")
+        // Aligned: each row pads its own label so the hints share a column,
+        // and the longest label is intact rather than squeezed by its hint.
+        #expect(
+            cut?.range(of: "^X")?.lowerBound.utf16Offset(in: cut ?? "")
+                == duplicate?.range(of: "^V")?.lowerBound.utf16Offset(in: duplicate ?? ""),
+            "the hints line up in one column:\n\(rendered)")
+    }
+
     @Test("Shift+F10 opens the menu on the focused target")
     func keyboardOpens() {
         let tui = TUIContext()

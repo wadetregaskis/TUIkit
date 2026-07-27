@@ -282,18 +282,28 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         // render side effect — declared so the value memos don't cache it away
         // (a memoised button that skipped this would leave the default button
         // dead from the second frame on).
-        if !isDisabled, !context.isMeasuring,
+        var resolvedShortcut: KeyboardShortcut?
+        if !isDisabled,
             let assignment = context.environment.assignedKeyboardShortcut,
-            let registry = context.environment.keyboardShortcutRegistry,
-            let shortcut = assignment.claim()
+            let shortcut = assignment.claim(by: context.identity)
         {
-            context.environment.volatileReadTracker?.recordRenderSideEffect()
             // `.command` is not a key a terminal can report, so it is resolved
-            // to whatever stands in for it here (`.commandKey(_:)`) at the
-            // moment of registration — the one place that both holds the
-            // environment and knows the shortcut.
-            if let resolved = shortcut.resolved(commandKey: context.environment.commandKey) {
-                registry.register(resolved, action: effectiveAction)
+            // to whatever stands in for it here (`.commandKey(_:)`) — the one
+            // place that both holds the environment and knows the shortcut.
+            // Resolved on EVERY pass, because it is handed to the style so a
+            // menu row can print its hint (as AppKit draws a menu item's key
+            // equivalent), and a measure that didn't see the hint would size
+            // the menu too narrow for the render to fit it.
+            resolvedShortcut = shortcut.resolved(commandKey: context.environment.commandKey)
+            // Registration, though, is a per-frame render side effect —
+            // declared so the value memos don't cache it away (a memoised
+            // button that skipped this would leave the default button dead
+            // from the second frame on).
+            if let resolvedShortcut, !context.isMeasuring,
+                let registry = context.environment.keyboardShortcutRegistry
+            {
+                context.environment.volatileReadTracker?.recordRenderSideEffect()
+                registry.register(resolvedShortcut, action: effectiveAction)
             }
         }
 
@@ -305,7 +315,8 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             isPressed: false,
             isFocused: isFocused && !isDisabled,
             isHovered: isHovered,
-            isEnabled: !isDisabled
+            isEnabled: !isDisabled,
+            keyboardShortcut: resolvedShortcut
         )
         var buffer = style.makeBuffer(configuration: configuration, context: context)
 

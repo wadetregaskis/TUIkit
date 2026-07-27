@@ -6,34 +6,8 @@
 
 // MARK: - KeyboardShortcut
 
-/// A semantic keyboard shortcut a control can adopt, mirroring SwiftUI's
-/// `KeyboardShortcut`.
-///
-/// Attach with ``SwiftUICore/View/keyboardShortcut(_:)``:
-///
-/// ```swift
-/// Dialog("Sign in") {
-///     TextField("User", text: $user)
-///     SecureField("Password", text: $pass)
-/// } footer: {
-///     Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-///     Button("Sign in") { signIn() }.keyboardShortcut(.defaultAction)
-/// }
-/// ```
-///
-/// ``defaultAction`` makes its button the *default button*: Return/Enter
-/// activates it whenever the focused control doesn't handle the key itself.
-/// A multi-line ``TextEditor`` (Return inserts a newline), a list with a row
-/// activation, or a focused `Button` all keep their Return — the default
-/// fires only when the key falls through, macOS responder-chain style. A
-/// ``TextField`` *without* an `onSubmit` handler lets Return fall through, so
-/// pressing Return in a dialog's field triggers the default button.
-///
-/// > Note: SwiftUI's arbitrary key equivalents
-/// > (`keyboardShortcut("s", modifiers: .command)`) are not yet supported —
-/// > terminals don't report the Command key — so this type currently offers
-/// > only the two semantic actions. (Documented deviation from the full
-/// > SwiftUI surface.)
+/// The key a ``KeyboardShortcut`` is triggered by, mirroring SwiftUI's
+/// `KeyEquivalent`.
 public struct KeyEquivalent: Hashable, Sendable, ExpressibleByExtendedGraphemeClusterLiteral {
     /// The character this equivalent matches, always folded to lower case.
     ///
@@ -106,6 +80,34 @@ public struct EventModifiers: OptionSet, Hashable, Sendable {
     }
 }
 
+/// A keyboard shortcut a control can adopt, mirroring SwiftUI's
+/// `KeyboardShortcut`: either a key equivalent (``init(_:modifiers:)``) or one
+/// of the two semantic roles.
+///
+/// Attach with ``SwiftUICore/View/keyboardShortcut(_:)``:
+///
+/// ```swift
+/// Dialog("Sign in") {
+///     TextField("User", text: $user)
+///     SecureField("Password", text: $pass)
+/// } footer: {
+///     Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+///     Button("Sign in") { signIn() }.keyboardShortcut(.defaultAction)
+/// }
+/// ```
+///
+/// ``defaultAction`` makes its button the *default button*: Return/Enter
+/// activates it whenever the focused control doesn't handle the key itself.
+/// A multi-line ``TextEditor`` (Return inserts a newline), a list with a row
+/// activation, or a focused `Button` all keep their Return — the default
+/// fires only when the key falls through, macOS responder-chain style. A
+/// ``TextField`` *without* an `onSubmit` handler lets Return fall through, so
+/// pressing Return in a dialog's field triggers the default button.
+///
+/// > Note: A terminal never reports the Command key, so SwiftUI's default
+/// > `modifiers: .command` is remapped at registration to whatever
+/// > ``EnvironmentValues/commandKey`` says stands in for it here — see
+/// > ``CommandKeyBinding``.
 public struct KeyboardShortcut: Hashable, Sendable {
     /// What activates this shortcut.
     enum Trigger: Hashable, Sendable {
@@ -173,11 +175,28 @@ public struct KeyboardShortcut: Hashable, Sendable {
         self.trigger = trigger
     }
 
-    /// The character this shortcut is triggered by, when it is a key
-    /// equivalent — what a menu row prints as its hint.
-    public var displayCharacter: Character? {
-        if case .key(let key, _) = trigger { return key.character }
-        return nil
+    /// The printable form of this shortcut — what a menu row prints as its
+    /// hint — or `nil` for the semantic roles, which have no key to show.
+    ///
+    /// Terminal conventions, not Apple's key glyphs: `^S` for Control (what
+    /// every TUI menu from nano to htop prints) and `M-s` for Option/Alt (its
+    /// Meta name). ⌃⌥⇧⌘ would read better on a Mac but are ambiguous-width
+    /// characters, so a CJK-configured terminal would advance two cells and
+    /// shear the column they are aligned in.
+    ///
+    /// Call it on a *resolved* shortcut (see ``resolved(commandKey:)``);
+    /// `.command` has no printable form here because it is never what actually
+    /// fires.
+    public var displayString: String? {
+        guard case .key(let key, let modifiers) = trigger else { return nil }
+        var prefix = ""
+        if modifiers.contains(.control) { prefix += "^" }
+        if modifiers.contains(.option) { prefix += "M-" }
+        // Shift is the character's case — a terminal has no other way to say
+        // it — and a Control shortcut is conventionally printed uppercase too.
+        let shifted = modifiers.contains(.shift) || modifiers.contains(.control)
+        let character = shifted ? String(key.character).uppercased() : String(key.character)
+        return prefix + character
     }
 }
 
@@ -318,16 +337,24 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
 /// Main-loop-confined like the registry it feeds.
 final class KeyboardShortcutAssignment: @unchecked Sendable {
     let shortcut: KeyboardShortcut
-    private(set) var isClaimed = false
+    private var claimant: ViewIdentity?
 
     init(_ shortcut: KeyboardShortcut) {
         self.shortcut = shortcut
     }
 
-    /// Claims the assignment for one control; returns nil if already claimed.
-    func claim() -> KeyboardShortcut? {
-        guard !isClaimed else { return nil }
-        isClaimed = true
+    /// Claims the assignment for the control at `identity`; returns nil if
+    /// some other control already holds it.
+    ///
+    /// Keyed by identity rather than a bare "claimed" flag because a control
+    /// asks more than once per frame: the measure pass needs the shortcut to
+    /// size the space its hint occupies, and the render pass then needs it
+    /// again to register the action. A one-shot claim would hand it to the
+    /// measure and leave the render — the pass that actually registers — with
+    /// nothing.
+    func claim(by identity: ViewIdentity) -> KeyboardShortcut? {
+        if let claimant, claimant != identity { return nil }
+        claimant = identity
         return shortcut
     }
 }

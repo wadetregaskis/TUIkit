@@ -50,12 +50,52 @@ private struct _MenuItemRow: View {
         // screen (the same trap `Divider` sprang). A fixed width measures as
         // itself, and it is absent during the sizing pass, so the rows hug
         // while the menu is being measured and fill once it is being drawn.
-        row.frame(width: menuRowWidth, alignment: .leading)
-            .background(background)
+        HStack(spacing: 0) {
+            row.frame(width: labelWidth, alignment: .leading)
+            if !hint.isEmpty {
+                // The gap before the hint is the frame's, not a leading space
+                // in the string: `Text` strips leading whitespace at render
+                // while still measuring it, so `Text(" ^X")` would size the
+                // menu for 3 cells and then draw 2.
+                Text(hint)
+                    .foregroundStyle(hintForeground)
+                    .frame(width: hintWidth, alignment: .trailing)
+            }
+        }
+        .background(background)
     }
 
     private var row: some View {
         label.foregroundStyle(foreground)
+    }
+
+    /// The button's key equivalent, printed at the trailing edge the way a
+    /// menu item's key equivalent is on every desktop platform.
+    private var hint: String {
+        configuration.keyboardShortcut?.displayString ?? ""
+    }
+
+    /// The label's share of the row: everything the hint doesn't take. The
+    /// hints line up in a column because every row is the same total width and
+    /// each pads its own label to leave room for its own hint. `nil` while the
+    /// menu is still measuring, so the label hugs and the natural width comes
+    /// out as label + gap + hint.
+    private var labelWidth: Int? {
+        guard let menuRowWidth else { return nil }
+        return max(1, menuRowWidth - hintWidth)
+    }
+
+    /// The hint's column, gap included. Known without ``menuRowWidth``, so the
+    /// measuring pass reserves exactly what the render draws.
+    private var hintWidth: Int {
+        hint.isEmpty ? 0 : hint.strippedLength + 1
+    }
+
+    /// The hint is secondary information — dimmed, except on the highlight bar
+    /// where it has to share the label's readable-against-accent colour.
+    private var hintForeground: Color {
+        guard configuration.isEnabled, !configuration.isFocused else { return foreground }
+        return palette.foregroundSecondary
     }
 
     @ViewBuilder

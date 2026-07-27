@@ -107,9 +107,15 @@ func presentMenuPopover<Items: View>(
     // Now that the width is known, hand it to the rows so their highlight reads
     // as a bar across the menu rather than a tag around the label. Deliberately
     // AFTER the measure: a row that knew its width up front would report it, and
-    // the menu would size itself from its own guess. (2 border columns + the
-    // 1-cell padding on each side.)
-    menuContext.environment.menuRowWidth = max(1, menuWidth - 4)
+    // the menu would size itself from its own guess.
+    //
+    // The chrome is 6 cells, not 4: `.border()` is a `ContainerView`, which
+    // insets its content by one cell on each side on top of its two border
+    // columns, and the `.padding(.horizontal, 1)` above adds two more. Getting
+    // this wrong told the rows they had two cells they did not, which the
+    // border then clipped — invisible while a row was just a left-aligned
+    // label, fatal once a row has something at its trailing edge.
+    menuContext.environment.menuRowWidth = max(1, menuWidth - 6)
     var menuBuffer = renderPresentedDialog(
         menuView, context: menuContext, capHeight: context.environment.overlayContentHeight)
     guard !menuBuffer.isEmpty else { return }

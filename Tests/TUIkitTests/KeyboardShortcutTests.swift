@@ -299,10 +299,36 @@ struct KeyEquivalentShortcutTests {
         #expect((accepted, cancelled) == (1, 1))
     }
 
-    @Test("A shortcut reports the character a menu row should print")
-    func displayCharacter() {
-        #expect(KeyboardShortcut("7", modifiers: []).displayCharacter == "7")
-        #expect(KeyboardShortcut.defaultAction.displayCharacter == nil)
+    @Test("A shortcut prints itself the way a TUI menu prints shortcuts")
+    func displayString() {
+        #expect(KeyboardShortcut("7", modifiers: []).displayString == "7")
+        #expect(KeyboardShortcut("s", modifiers: []).displayString == "s")
+        // nano/htop convention: ^ for Control, and the letter uppercased.
+        #expect(KeyboardShortcut("s", modifiers: .control).displayString == "^S")
+        // Meta, the terminal's name for Option/Alt — no ⌥, whose width is
+        // ambiguous and would shear the column the hints align in.
+        #expect(KeyboardShortcut("s", modifiers: .option).displayString == "M-s")
+        // Shift is the case, both when written that way and when asked for.
+        #expect(KeyboardShortcut("S", modifiers: []).displayString == "S")
+        #expect(KeyboardShortcut("s", modifiers: .shift).displayString == "S")
+        // The semantic roles have no key to print.
+        #expect(KeyboardShortcut.defaultAction.displayString == nil)
+        #expect(KeyboardShortcut.cancelAction.displayString == nil)
+    }
+
+    /// The measure pass asks for the shortcut too — it has to reserve the
+    /// width the hint will occupy — so a one-shot claim would hand the
+    /// shortcut to the measure and leave the render, the pass that actually
+    /// registers the action, with nothing.
+    @Test("One control can claim its shortcut on every pass of a frame")
+    func claimIsIdempotentForOneControl() {
+        let identity = ViewIdentity(path: "Root/Button")
+        let other = ViewIdentity(path: "Root/OtherButton")
+        let assignment = KeyboardShortcutAssignment(KeyboardShortcut("s", modifiers: []))
+
+        #expect(assignment.claim(by: identity) != nil, "measure pass")
+        #expect(assignment.claim(by: identity) != nil, "render pass, same control")
+        #expect(assignment.claim(by: other) == nil, "a second control gets nothing")
     }
 }
 
