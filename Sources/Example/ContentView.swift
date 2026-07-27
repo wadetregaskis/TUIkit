@@ -41,6 +41,7 @@ enum DemoPage: Int, CaseIterable {
     case lifecycle
     case preferences
     case focus
+    case menus
 }
 
 // MARK: - App-wide styling
@@ -216,6 +217,8 @@ struct ContentView: View {
             ProgressViewPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .mouse:
             MousePage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .menus:
+            MenusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .theme:
             ThemePage(palette: $palette, styling: $styling)
                 .statusBarItems(subPageItems(pageSetter: pageSetter))
@@ -262,7 +265,7 @@ struct ContentView: View {
             "m": .mouse, "t": .theme, "e": .emptyState,
             "v": .tabViews,
             "p": .statePersistence, "l": .lifecycle,
-            "r": .preferences, "k": .focus,
+            "r": .preferences, "k": .focus, "n": .menus,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {

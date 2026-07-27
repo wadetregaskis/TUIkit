@@ -35,6 +35,24 @@ extension ExampleStrings {
             "page.list.stylesSection": "List styles (.listStyle)",
             "page.list.multiLineSection": "Multi-line cells (scrollable)",
 
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "Menus",
+            "page.menus.title": "Menus",
+            "page.menus.contextSection": "Context Menu · .contextMenu",
+            "page.menus.contextInstruction": "Right-click (or Ctrl-click, where a terminal keeps right-click for itself) the box below. The items are Buttons, but they draw as menu rows and the pop-up hugs its widest one.",
+            "page.menus.contextTarget": "Right-click me",
+            "page.menus.context.cut": "Cut",
+            "page.menus.context.copy": "Copy",
+            "page.menus.context.delete": "Delete",
+            "page.menus.comboSection": "Combo Button · Menu",
+            "page.menus.comboInstruction": "A titled control that pops its items open in place: Enter or a click opens it, arrows move, Enter chooses, Escape closes.",
+            "page.menus.comboTitle": "Actions",
+            "page.menus.combo.open": "Open",
+            "page.menus.combo.duplicate": "Duplicate",
+            "page.menus.combo.rename": "Rename…",
+            "page.menus.combo.export": "Export as Markdown…",
+            "page.menus.chose": "Chose",
+
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
             "page.list.editableInstruction": "Drag a row with the mouse to reorder it; the picker below chooses what the drag shows. Tab to the list, then press Delete or Backspace to remove the focused row.",
@@ -201,6 +219,24 @@ extension ExampleStrings {
             "page.list.boundValue": "Gebundener Wert:",
             "page.list.stylesSection": "Listenstile (.listStyle)",
             "page.list.multiLineSection": "Mehrzeilige Zellen (scrollbar)",
+
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "Menüs",
+            "page.menus.title": "Menüs",
+            "page.menus.contextSection": "Kontextmenü · .contextMenu",
+            "page.menus.contextInstruction": "Rechtsklicke (oder Strg-klicke, wo ein Terminal den Rechtsklick selbst behält) auf das Feld unten. Die Einträge sind Buttons, werden aber als Menüzeilen gezeichnet, und das Menü schmiegt sich an den breitesten an.",
+            "page.menus.contextTarget": "Rechtsklick auf mich",
+            "page.menus.context.cut": "Ausschneiden",
+            "page.menus.context.copy": "Kopieren",
+            "page.menus.context.delete": "Löschen",
+            "page.menus.comboSection": "Kombinationsschaltfläche · Menu",
+            "page.menus.comboInstruction": "Ein benanntes Steuerelement, das seine Einträge an Ort und Stelle öffnet: Enter oder Klick öffnet, Pfeile bewegen, Enter wählt, Escape schließt.",
+            "page.menus.comboTitle": "Aktionen",
+            "page.menus.combo.open": "Öffnen",
+            "page.menus.combo.duplicate": "Duplizieren",
+            "page.menus.combo.rename": "Umbenennen…",
+            "page.menus.combo.export": "Als Markdown exportieren…",
+            "page.menus.chose": "Gewählt",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Bearbeitbar · .onMove / .onDelete",
@@ -369,6 +405,24 @@ extension ExampleStrings {
             "page.list.stylesSection": "Styles de liste (.listStyle)",
             "page.list.multiLineSection": "Cellules multilignes (défilables)",
 
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "Menus",
+            "page.menus.title": "Menus",
+            "page.menus.contextSection": "Menu contextuel · .contextMenu",
+            "page.menus.contextInstruction": "Faites un clic droit (ou Ctrl-clic, là où le terminal garde le clic droit pour lui) sur la boîte ci-dessous. Les éléments sont des Buttons, mais s'affichent comme des lignes de menu, et la fenêtre épouse le plus large.",
+            "page.menus.contextTarget": "Clic droit ici",
+            "page.menus.context.cut": "Couper",
+            "page.menus.context.copy": "Copier",
+            "page.menus.context.delete": "Supprimer",
+            "page.menus.comboSection": "Bouton combiné · Menu",
+            "page.menus.comboInstruction": "Un contrôle intitulé qui déroule ses éléments sur place : Entrée ou un clic l'ouvre, les flèches déplacent, Entrée choisit, Échap ferme.",
+            "page.menus.comboTitle": "Actions",
+            "page.menus.combo.open": "Ouvrir",
+            "page.menus.combo.duplicate": "Dupliquer",
+            "page.menus.combo.rename": "Renommer…",
+            "page.menus.combo.export": "Exporter en Markdown…",
+            "page.menus.chose": "Choisi",
+
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modifiable · .onMove / .onDelete",
             "page.list.editableInstruction": "Faites glisser une ligne avec la souris pour la réordonner ; le sélecteur ci-dessous choisit ce que montre le glisser. Passez à la liste avec Tab, puis appuyez sur Suppr ou Retour arrière pour supprimer la ligne ciblée.",
@@ -535,6 +589,24 @@ extension ExampleStrings {
             "page.list.boundValue": "Valore associato:",
             "page.list.stylesSection": "Stili di elenco (.listStyle)",
             "page.list.multiLineSection": "Celle multiriga (scorrevoli)",
+
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "Menu",
+            "page.menus.title": "Menu",
+            "page.menus.contextSection": "Menu contestuale · .contextMenu",
+            "page.menus.contextInstruction": "Fai clic destro (o Ctrl-clic, dove il terminale tiene per sé il clic destro) sul riquadro qui sotto. Le voci sono Button, ma vengono disegnate come righe di menu, e il pop-up si adatta alla più larga.",
+            "page.menus.contextTarget": "Clic destro qui",
+            "page.menus.context.cut": "Taglia",
+            "page.menus.context.copy": "Copia",
+            "page.menus.context.delete": "Elimina",
+            "page.menus.comboSection": "Pulsante combinato · Menu",
+            "page.menus.comboInstruction": "Un controllo con titolo che apre le sue voci sul posto: Invio o un clic lo apre, le frecce si spostano, Invio sceglie, Esc chiude.",
+            "page.menus.comboTitle": "Azioni",
+            "page.menus.combo.open": "Apri",
+            "page.menus.combo.duplicate": "Duplica",
+            "page.menus.combo.rename": "Rinomina…",
+            "page.menus.combo.export": "Esporta come Markdown…",
+            "page.menus.chose": "Scelto",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modificabile · .onMove / .onDelete",
@@ -703,6 +775,24 @@ extension ExampleStrings {
             "page.list.stylesSection": "Estilos de lista (.listStyle)",
             "page.list.multiLineSection": "Celdas multilínea (desplazables)",
 
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "Menús",
+            "page.menus.title": "Menús",
+            "page.menus.contextSection": "Menú contextual · .contextMenu",
+            "page.menus.contextInstruction": "Haz clic derecho (o Ctrl-clic, donde el terminal se reserva el clic derecho) en el recuadro de abajo. Los elementos son Buttons, pero se dibujan como filas de menú, y el menú se ajusta al más ancho.",
+            "page.menus.contextTarget": "Clic derecho aquí",
+            "page.menus.context.cut": "Cortar",
+            "page.menus.context.copy": "Copiar",
+            "page.menus.context.delete": "Eliminar",
+            "page.menus.comboSection": "Botón combinado · Menu",
+            "page.menus.comboInstruction": "Un control con título que despliega sus elementos en el sitio: Intro o un clic lo abre, las flechas mueven, Intro elige, Escape cierra.",
+            "page.menus.comboTitle": "Acciones",
+            "page.menus.combo.open": "Abrir",
+            "page.menus.combo.duplicate": "Duplicar",
+            "page.menus.combo.rename": "Renombrar…",
+            "page.menus.combo.export": "Exportar como Markdown…",
+            "page.menus.chose": "Elegido",
+
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
             "page.list.editableInstruction": "Arrastra una fila con el ratón para reordenarla; el selector de abajo elige qué muestra el arrastre. Ve a la lista con Tab y pulsa Supr o Retroceso para eliminar la fila enfocada.",
@@ -870,6 +960,24 @@ extension ExampleStrings {
             "page.list.stylesSection": "列表样式 (.listStyle)",
             "page.list.multiLineSection": "多行单元格（可滚动）",
 
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "菜单",
+            "page.menus.title": "菜单",
+            "page.menus.contextSection": "上下文菜单 · .contextMenu",
+            "page.menus.contextInstruction": "在下方方框上点击右键（在终端自己占用右键的情况下用 Ctrl+点击）。菜单项本身是 Button，但会绘制成菜单行，弹出框也会贴合最宽的一项。",
+            "page.menus.contextTarget": "右键点我",
+            "page.menus.context.cut": "剪切",
+            "page.menus.context.copy": "复制",
+            "page.menus.context.delete": "删除",
+            "page.menus.comboSection": "组合按钮 · Menu",
+            "page.menus.comboInstruction": "带标题的控件，就地展开其菜单项：回车或点击打开，方向键移动，回车选择，Esc 关闭。",
+            "page.menus.comboTitle": "操作",
+            "page.menus.combo.open": "打开",
+            "page.menus.combo.duplicate": "复制副本",
+            "page.menus.combo.rename": "重命名…",
+            "page.menus.combo.export": "导出为 Markdown…",
+            "page.menus.chose": "已选择",
+
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "可编辑 · .onMove / .onDelete",
             "page.list.editableInstruction": "用鼠标拖动某一行即可重新排序；下方的选择器决定拖动时显示什么。按 Tab 切换到列表，再按 Delete 或 Backspace 删除当前行。",
@@ -1036,6 +1144,24 @@ extension ExampleStrings {
             "page.list.boundValue": "バインドされた値：",
             "page.list.stylesSection": "リストスタイル (.listStyle)",
             "page.list.multiLineSection": "複数行セル（スクロール可能）",
+
+            // Menus page (.contextMenu + the Menu combo button)
+            "menu.item.menus": "メニュー",
+            "page.menus.title": "メニュー",
+            "page.menus.contextSection": "コンテキストメニュー · .contextMenu",
+            "page.menus.contextInstruction": "下のボックスを右クリック（端末が右クリックを横取りする場合は Ctrl+クリック）してください。項目は Button ですが、メニュー行として描かれ、ポップアップは最も広い項目に合わせて縮みます。",
+            "page.menus.contextTarget": "右クリックしてください",
+            "page.menus.context.cut": "カット",
+            "page.menus.context.copy": "コピー",
+            "page.menus.context.delete": "削除",
+            "page.menus.comboSection": "コンボボタン · Menu",
+            "page.menus.comboInstruction": "タイトル付きのコントロールで、その場で項目を開きます。Enter またはクリックで開き、矢印で移動、Enter で決定、Esc で閉じます。",
+            "page.menus.comboTitle": "アクション",
+            "page.menus.combo.open": "開く",
+            "page.menus.combo.duplicate": "複製",
+            "page.menus.combo.rename": "名前を変更…",
+            "page.menus.combo.export": "Markdown として書き出す…",
+            "page.menus.chose": "選択",
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "編集可能 · .onMove / .onDelete",
