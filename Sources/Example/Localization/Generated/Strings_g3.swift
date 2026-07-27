@@ -59,7 +59,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "File Browser (Name sized to fit, Type fills, opt-in scrollbar)",
             "page.table.multiSelectionCaption": "Multi-Selection + multi-line Details (.lineLimit(2))",
-            "page.table.wrappingCaption": "Fixed height, hundreds of rows, varied wrapping & truncation (.lineLimit(3))",
+            "page.table.wrappingCaption": "Fixed height",
             "page.table.ratioCaption": "Ratio widths (.width(.ratio(_:))) — each column a share of the table)",
             "page.table.liveCaption": "Live activity — string cells animated by a ticking @State (250 ms)",
             "page.table.column.name": "Name",
@@ -226,7 +226,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "Datei-Browser (Name an Inhalt angepasst, Typ füllt aus, optionale Bildlaufleiste)",
             "page.table.multiSelectionCaption": "Mehrfachauswahl + mehrzeilige Details (.lineLimit(2))",
-            "page.table.wrappingCaption": "Feste Höhe, Hunderte Zeilen, unterschiedlicher Umbruch & Abschneiden (.lineLimit(3))",
+            "page.table.wrappingCaption": "Feste Höhe",
             "page.table.ratioCaption": "Verhältnisbreiten (.width(.ratio(_:))) — jede Spalte ein Anteil der Tabelle)",
             "page.table.liveCaption": "Live-Aktivität — Zellen animiert über tickenden @State (250 ms)",
             "page.table.column.name": "Name",
@@ -393,7 +393,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "Explorateur de fichiers (Nom ajusté au contenu, Type remplit, barre de défilement optionnelle)",
             "page.table.multiSelectionCaption": "Sélection multiple + Détails sur plusieurs lignes (.lineLimit(2))",
-            "page.table.wrappingCaption": "Hauteur fixe, des centaines de lignes, retour à la ligne et troncature variés (.lineLimit(3))",
+            "page.table.wrappingCaption": "Hauteur fixe",
             "page.table.ratioCaption": "Largeurs proportionnelles (.width(.ratio(_:))) — chaque colonne une part du tableau)",
             "page.table.liveCaption": "Activité en direct — cellules animées par un @State cadencé (250 ms)",
             "page.table.column.name": "Nom",
@@ -560,7 +560,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "Browser di file (Nome adattato al contenuto, Tipo riempie, barra di scorrimento opzionale)",
             "page.table.multiSelectionCaption": "Selezione multipla + Dettagli su più righe (.lineLimit(2))",
-            "page.table.wrappingCaption": "Altezza fissa, centinaia di righe, a capo e troncamento vari (.lineLimit(3))",
+            "page.table.wrappingCaption": "Altezza fissa",
             "page.table.ratioCaption": "Larghezze proporzionali (.width(.ratio(_:))) — ogni colonna una quota della tabella)",
             "page.table.liveCaption": "Attività in tempo reale — celle animate da uno @State a impulsi (250 ms)",
             "page.table.column.name": "Nome",
@@ -727,7 +727,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "Explorador de archivos (Nombre ajustado al contenido, Tipo rellena, barra de desplazamiento opcional)",
             "page.table.multiSelectionCaption": "Selección múltiple + Detalles de varias líneas (.lineLimit(2))",
-            "page.table.wrappingCaption": "Altura fija, cientos de filas, ajuste y truncamiento variados (.lineLimit(3))",
+            "page.table.wrappingCaption": "Altura fija",
             "page.table.ratioCaption": "Anchos proporcionales (.width(.ratio(_:))) — cada columna una parte de la tabla)",
             "page.table.liveCaption": "Actividad en vivo — celdas animadas por un @State con pulsos (250 ms)",
             "page.table.column.name": "Nombre",
@@ -894,7 +894,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "文件浏览器（名称按内容自适应，类型填充，可选滚动条）",
             "page.table.multiSelectionCaption": "多选 + 多行详情 (.lineLimit(2))",
-            "page.table.wrappingCaption": "固定高度，数百行，多样的换行与截断 (.lineLimit(3))",
+            "page.table.wrappingCaption": "固定高度",
             "page.table.ratioCaption": "比例宽度 (.width(.ratio(_:))) — 每列占表格的一部分）",
             "page.table.liveCaption": "实时活动 — 由定时 @State 驱动的动画单元格（250 毫秒）",
             "page.table.column.name": "名称",
@@ -1061,7 +1061,7 @@ extension ExampleStrings {
             // Table
             "page.table.fileBrowserCaption": "ファイルブラウザ（名前は内容に合わせ、種類は埋め、オプトインのスクロールバー）",
             "page.table.multiSelectionCaption": "複数選択 + 複数行の詳細 (.lineLimit(2))",
-            "page.table.wrappingCaption": "固定高さ、数百行、さまざまな折り返しと切り詰め (.lineLimit(3))",
+            "page.table.wrappingCaption": "固定高さ",
             "page.table.ratioCaption": "比率幅 (.width(.ratio(_:))) — 各列がテーブルの一定割合）",
             "page.table.liveCaption": "ライブアクティビティ — ティックする @State で動くセル（250 ミリ秒）",
             "page.table.column.name": "名前",
