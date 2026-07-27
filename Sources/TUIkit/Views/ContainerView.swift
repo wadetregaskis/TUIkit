@@ -780,14 +780,27 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         var chosenWidth = preferred
         var chosen = measure(at: preferred)
 
-        if chosen.height > availableHeight, innerWidth > preferred, availableHeight > 0 {
+        // A body that reports back WIDER than the width it was offered has a
+        // definite natural width and cannot re-flow into anything narrower —
+        // the 256-swatch grid with its numbers showing is 120 cells, full stop.
+        // The preferred width is a ceiling on how wide a dialog should get for
+        // COMFORT; applied to such a body it is not a ceiling but a guillotine,
+        // and the grid lost every column past the 100th (visibly: the top row
+        // stopped after the swatch for 14). Give it what it asked for, up to
+        // the space that actually exists.
+        if chosen.width > chosenWidth, innerWidth > chosenWidth {
+            chosenWidth = min(innerWidth, chosen.width)
+            chosen = measure(at: chosenWidth)
+        }
+
+        if chosen.height > availableHeight, innerWidth > chosenWidth, availableHeight > 0 {
             // It doesn't fit at the comfortable width. Widening is only worth it
             // if the content actually re-flows shorter.
             let widest = measure(at: innerWidth)
             if widest.height < chosen.height {
                 // Aim to fit outright; failing that, for the least height going.
                 let target = max(availableHeight, widest.height)
-                var low = preferred + 1
+                var low = chosenWidth + 1
                 var high = innerWidth
                 chosenWidth = innerWidth
                 chosen = widest
