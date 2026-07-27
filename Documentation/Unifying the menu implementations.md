@@ -1,8 +1,9 @@
 # Unifying the menu implementations
 
-**Status:** in progress. The shared pieces and the safety net have landed; the
-ownership flip has not. This is the working plan, written down so it can be
-picked up cold.
+**Status:** in progress. The shared pieces, the safety net and the ownership
+flip have landed; the pop-up is not yet WINDOWED through the drop-down, and the
+`Picker`/combo box have not yet been folded onto the controller. This is the
+working plan, written down so it can be picked up cold.
 
 **Why:** TUIkit has two pop-up-menu implementations, and the differences between
 them are user-visible. Every observable difference the owner named has been
@@ -67,55 +68,41 @@ to touch `_InlineMenuCore` beyond one argument, the design has drifted.
   `.disabled` row, a CJK label) in both styles, plus the four invariants a golden
   cannot express. **This is the instrument every remaining commit is read
   against.**
+- **the ownership flip** — `Rendering/MenuColumn.swift`: a pop-up's rows claim
+  an ORDINAL from a `MenuRowSink` and report their action to it, and a
+  `MenuPopupController` owns the highlight, the navigation and the activation.
+  `_ButtonCore` branches on the sink; the inline style never sets one, so its
+  rows are still page focus stops. Neither golden moved.
+
+  Four things that were not obvious going in:
+
+  - **Only a RENDER pass may claim.** A measure runs the same rows through
+    `_ButtonCore` with its own identities, so letting it claim spends the
+    ordinals the render then wants, and the highlight points at a row that never
+    drew. (`FocusRegistration.register` is already measure-gated, so the
+    non-menu path a measure falls back to registers nothing either.)
+  - **`FocusRegistration.register` bundles three things.** Skipping it must not
+    skip `stateStorage.markActive` (else the row's hover box and any `@State` in
+    a `@ViewBuilder` label are collected at the end of the frame) nor
+    `recordRenderSideEffect()` (else the row is cacheable, and a cached row
+    freezes the highlight — the `ForEach` memo hole again).
+  - **A tall menu still has to scroll to its highlight.** The reveal finds a
+    control by matching a rendered region's `focusID` against the focused id, and
+    a pop-up row now has neither. So the row's region is named from its ordinal
+    (`menuRowRegionID`) and the column publishes `\.revealTargetID`, which
+    `snapViewportToFocusedControl` prefers over the focus manager's answer.
+    Everything downstream of that is unchanged.
+  - **`markSectionFocusOptional` is now unconditional**, not the
+    pointer-opened special case. The section holds no focus at all — but a tall
+    menu's own `ScrollView` still registers in it, and without the mark the end
+    of the render pass hands that scroller the focus for want of anything better.
+
+  Rewritten, and each proven to fail on the unflipped code: the `MenuTests`
+  cases that asserted ring membership now read the highlight out of the DRAWN
+  frame instead (with `.selectionIndicatorStyle(.none)`, or the wall-clock pulse
+  makes every frame differ), which is what a user sees and is engine-agnostic.
 
 ## Remaining
-
-### 1. `_ButtonCore` gains a menu-row mode
-
-Driven by three internal environment values — `menuRowOrdinal`,
-`menuHighlightedOrdinal`, `menuRowSink`. When an ordinal is set the row:
-
-- does **not** call `FocusRegistration.register` — but **must still**
-  `stateStorage.markActive(context.identity)`, which that helper currently
-  bundles in (skipping it collects the row's hover box and any `@State` in a
-  `@ViewBuilder` label);
-- takes `isFocused` from `ordinal == highlightedOrdinal`;
-- publishes `{action, isEnabled, shortcut}` to the sink **and still registers the
-  shortcut globally**. Both writes — they are independent, and dropping the
-  global one is what would kill the accelerators;
-- calls `recordRenderSideEffect()`. Losing `FocusRegistration.register`'s own
-  side-effect record makes the row cacheable, and a cached row freezes the
-  highlight — the `ForEach` memo hole again.
-
-Two traps in the discovery itself: you **cannot** decide which children are
-selectable by type (`.keyboardShortcut`/`.disabled`/`.focused` wrap the Button in
-modifier views, so the child is a `ModifiedView`), so hand every child a
-candidate ordinal, render it, and treat the ordinals that actually published as
-the selectable set. And one child can publish twice (a custom row containing two
-Buttons) — make the claim first-wins, identity-keyed and re-entrant, because the
-measure pass runs the publish path too, potentially twice.
-
-### 2. The pop-up column owns the highlight
-
-`MenuPopupState`/`ContextMenuState` gain `highlightedOrdinal: Int?`.
-`presentMenuPopover` stamps the ordinals and installs ONE section-keyed key
-handler that absorbs `attachMenuJumpKeys` and the arrow walk.
-
-**Keep the focus section.** It is what silences the page, and
-`KeyEventDispatcher.grabInput` is section-keyed — a controller owning no section
-cannot grab, and without a grab a sibling `.onKeyPress` eats Down before the menu
-sees it (`keyEventDispatcher` is layer 2, `focusManager.dispatchKeyEvent` layer
-3). The section simply ends up with no focusables in it, which also retires
-`optionalFocusSectionIDs` for the pop-up.
-
-Preserve exactly: pointer-opened highlights nothing, keyboard-opened starts on
-the first, first Down takes the first and first Up the last; `Menu` **clamps**
-(only the Picker wraps — do not unify these by accident).
-
-Not render-identical in one respect, and the commit message must say so: the
-pop-up's rows leave `focusableIDsInActiveSection()`, so the `MenuTests` cases
-asserting ring membership must be re-expressed against the ordinal. The DRAWN
-frame must not move, which is what the pop-up golden asserts.
 
 ### 3. Window the pop-up through `DropdownMenu` *(optional; not render-identical)*
 
@@ -134,6 +121,10 @@ that today only nudge.
 
 ### 4. Fold `_PickerMenuCore` and `TextInputSuggestions` onto the controller
 
+`MenuPopupController` is the seat: it already owns the highlight, the clamped
+navigation and the activation. What each caller still holds is its own drop-down
+renderer and its own "opens with" rule.
+
 The three deliberately different behaviours stay as **config, not code**:
 
 | | marker | edge | opens with |
@@ -143,7 +134,10 @@ The three deliberately different behaviours stay as **config, not code**:
 | `Menu` / `.contextMenu` | — | clamp | nothing (pointer) / first (keyboard) |
 
 Note "opens with" resolves per **input source**, not to a single case — collapsing
-that regresses both the combo box and the menu.
+that regresses both the combo box and the menu. On the `Menu` side that decision
+now lives in ``MenuPopupController.opened(withSelection:)``, called by the
+trigger at the moment it opens, because only the trigger knows which device
+pressed it.
 
 The marker column is *not* the renderer's: `DropdownMenu` never inspects one, and
 both callers hand-roll the same `maxLabel + 4` arithmetic into their row strings.

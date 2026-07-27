@@ -18,11 +18,14 @@ struct MenuTests {
 
     // MARK: - Harness
 
-    private func harness(width: Int = 40, height: Int = 24) -> (TUIContext, RenderContext) {
+    private func harness(width: Int = 40, height: Int = 24, overlayContentHeight: Int? = nil)
+        -> (TUIContext, RenderContext)
+    {
         let tui = TUIContext()
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tui)
+        if let overlayContentHeight { environment.overlayContentHeight = overlayContentHeight }
         return (
             tui,
             RenderContext(
@@ -328,39 +331,86 @@ struct MenuTests {
         _ = renderArmed(view, tui: tui, context: context)
     }
 
+    /// The menu the navigation tests drive.
+    ///
+    /// `.selectionIndicatorStyle(.none)` because the highlight (and the open
+    /// menu's border) otherwise breathes on a WALL-CLOCK timer: two frames taken
+    /// at different moments then differ in every styled cell, and reading the
+    /// highlight out of the drawn frame would be reading the clock. With the
+    /// animation off the emphasis resolves to one steady colour, and the only
+    /// thing that can differ between two frames is which row is highlighted.
     private var threeItemMenu: some View {
         Menu("Actions") {
             Button("Rename") {}
             Button("Duplicate") {}
             Button("Delete") {}
         }
+        .selectionIndicatorStyle(.none)
+    }
+
+    /// The open pop-up's own buffer.
+    private func popup(_ view: some View, tui: TUIContext, context: RenderContext) throws
+        -> FrameBuffer
+    {
+        try #require(renderArmed(view, tui: tui, context: context).overlays.first).content
+    }
+
+    /// The same menu with nothing highlighted, to read the highlight against.
+    /// Laid out in the same space as the frame it will be compared with — a
+    /// menu that scrolls in one and not the other has nothing to compare.
+    private func unhighlightedPopup(
+        _ view: some View, height: Int = 24, overlayContentHeight: Int? = nil
+    ) throws -> FrameBuffer {
+        let (tui, context) = harness(height: height, overlayContentHeight: overlayContentHeight)
+        openPopup(view, as: .pointer, tui: tui, context: context)
+        return try popup(view, tui: tui, context: context)
+    }
+
+    /// The label of the highlighted row, or `nil` if none is.
+    ///
+    /// Read from the DRAWN frame — the row that differs from the same menu with
+    /// nothing highlighted — rather than from whatever owns the highlight. That
+    /// owner is precisely what moved when the pop-up engines merged (from
+    /// `FocusManager.focusedID` to the column's own ordinal), and what the user
+    /// sees did not move at all. A test that asserted the owner would have had
+    /// to be rewritten; this one did not.
+    private func highlightedRow(_ drawn: FrameBuffer, versus plain: FrameBuffer) -> String? {
+        for (row, unhighlighted) in zip(drawn.lines, plain.lines) where row != unhighlighted {
+            var label = row.stripped.filter { !"│╭╮╰╯".contains($0) }
+            while label.first == " " { label.removeFirst() }
+            while label.last == " " { label.removeLast() }
+            return label
+        }
+        return nil
     }
 
     @Test("A pointer-opened pop-up highlights nothing; the first Down takes the top item")
     func pointerOpenedPopupStartsUnselected() throws {
         let (tui, context) = harness()
-        let focusManager = try #require(context.environment.focusManager)
+        let plain = try unhighlightedPopup(threeItemMenu)
 
         openPopup(threeItemMenu, as: .pointer, tui: tui, context: context)
         #expect(
-            focusManager.currentFocusedID == nil,
-            "nothing is chosen yet: \(focusManager.currentFocusedID ?? "nil")")
+            highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
+                == nil,
+            "nothing is chosen yet")
 
-        let items = focusManager.registeredFocusIDsInActiveSection()
-        #expect(items.count == 3, "sanity: the items registered — \(items)")
-        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .down))
-        #expect(focusManager.currentFocusedID == items.first)
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .down)))
+        #expect(
+            highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
+                == "Rename")
     }
 
     @Test("The first Up in an unselected pop-up takes the LAST item")
     func pointerOpenedPopupUpTakesTheLastItem() throws {
         let (tui, context) = harness()
-        let focusManager = try #require(context.environment.focusManager)
+        let plain = try unhighlightedPopup(threeItemMenu)
 
         openPopup(threeItemMenu, as: .pointer, tui: tui, context: context)
-        let items = focusManager.registeredFocusIDsInActiveSection()
-        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .up))
-        #expect(focusManager.currentFocusedID == items.last)
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .up)))
+        #expect(
+            highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
+                == "Delete")
     }
 
     /// The keyboard has no other way to point at a row, so a keyboard open
@@ -368,46 +418,96 @@ struct MenuTests {
     @Test("A keyboard-opened pop-up starts on the first item")
     func keyboardOpenedPopupStartsOnTheFirstItem() throws {
         let (tui, context) = harness()
+        let plain = try unhighlightedPopup(threeItemMenu)
+
+        openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
+        #expect(
+            highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
+                == "Rename")
+    }
+
+    /// A pop-up's rows are NOT page focus stops: the menu grabs the keyboard
+    /// while it is up, so putting its rows in the ring only ever meant the ring
+    /// had to be taught what a menu already knew. (An INLINE menu's rows still
+    /// are — see `MenuColumnRenderTests`.)
+    @Test("A pop-up's rows stay out of the focus ring")
+    func popupRowsAreNotFocusStops() throws {
+        let (tui, context) = harness()
         let focusManager = try #require(context.environment.focusManager)
 
         openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
-        let items = focusManager.registeredFocusIDsInActiveSection()
-        #expect(items.count == 3, "sanity: the items registered — \(items)")
-        #expect(focusManager.currentFocusedID == items.first)
+        #expect(
+            focusManager.registeredFocusIDsInActiveSection().isEmpty,
+            "the menu's section holds no focusable rows")
+        #expect(focusManager.currentFocusedID == nil, "and nothing in it has the focus")
     }
 
     // MARK: - Jump navigation
 
     /// The gestures a `Picker` drop-down, a `List` and a `RadioButtonGroup` all
-    /// answer, which a menu did not: its rows are Buttons in the focus ring, and
+    /// answer, which a menu did not: its rows were Buttons in the focus ring, and
     /// the ring implements plain arrows only. Home/End/Page reached the focus
     /// manager's scroll fall-through, found no scroller in the menu's section,
     /// and died unhandled.
     @Test(
         "An open menu answers the jump keys",
         arguments: [
-            (KeyEvent(key: .end), 3), (KeyEvent(key: .home), 0),
-            (KeyEvent(key: .pageDown), 3), (KeyEvent(key: .pageUp), 0),
-            (KeyEvent(key: .down, shift: true), 3), (KeyEvent(key: .up, shift: true), 0),
+            (KeyEvent(key: .end), "Four"), (KeyEvent(key: .home), "One"),
+            (KeyEvent(key: .pageDown), "Four"), (KeyEvent(key: .pageUp), "One"),
+            (KeyEvent(key: .down, shift: true), "Four"), (KeyEvent(key: .up, shift: true), "One"),
         ])
-    func jumpKeys(key: KeyEvent, expected: Int) throws {
+    func jumpKeys(key: KeyEvent, expected: String) throws {
         let (tui, context) = harness()
-        let focusManager = try #require(context.environment.focusManager)
         let view = Menu("Actions") {
             Button("One") {}
             Button("Two") {}
             Button("Three") {}
             Button("Four") {}
         }
+        .selectionIndicatorStyle(.none)
+        let plain = try unhighlightedPopup(view)
 
         openPopup(view, as: .keyboard, tui: tui, context: context)
-        let rows = focusManager.focusableIDsInActiveSection()
-        #expect(rows.count == 4, "sanity: four rows in the ring — \(rows)")
         // Start in the middle so a jump in either direction is a real move.
-        focusManager.focus(id: rows[1])
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .down)))
+        #expect(
+            highlightedRow(try popup(view, tui: tui, context: context), versus: plain) == "Two",
+            "sanity: the highlight starts in the middle")
 
         #expect(tui.keyEventDispatcher.dispatch(key), "the menu must consume it")
-        #expect(focusManager.currentFocusedID == rows[expected])
+        #expect(highlightedRow(try popup(view, tui: tui, context: context), versus: plain) == expected)
+    }
+
+    /// A menu taller than the screen scrolls, and the highlighted row has to
+    /// come with it. It used to for free: the row held the focus, and the reveal
+    /// finds whatever holds the focus. A pop-up's rows no longer hold anything,
+    /// so the column names its highlighted row as the reveal target instead —
+    /// and if it stopped doing so, the arrows would walk the highlight straight
+    /// off the bottom of a menu that never moved.
+    @Test("A tall menu scrolls to keep the highlighted row on screen")
+    func tallMenuFollowsTheHighlight() throws {
+        let (tui, context) = harness(height: 12, overlayContentHeight: 10)
+        let view = Menu("Actions") {
+            ForEach(0..<30, id: \.self) { index in
+                Button("Item \(index)") {}
+            }
+        }
+        .selectionIndicatorStyle(.none)
+
+        openPopup(view, as: .keyboard, tui: tui, context: context)
+        for _ in 0..<11 { #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .down))) }
+
+        // Asserted as "is it on screen", not "is it highlighted": once the menu
+        // scrolls, its indicator rows move too, and which row carries the
+        // highlight is what the tests above pin. What only this test can catch
+        // is a highlight that walked past the bottom of a menu that never moved.
+        let drawn = lines(try popup(view, tui: tui, context: context))
+        #expect(
+            drawn.contains { $0.contains("Item 11") },
+            "the 12th row scrolled into view:\n\(drawn.joined(separator: "\n"))")
+        #expect(
+            !drawn.contains { $0.contains("Item 0 ") },
+            "…and the first row scrolled out:\n\(drawn.joined(separator: "\n"))")
     }
 
     /// Left/Right act as Up/Down on the focus ring, which in a vertical menu is
@@ -415,12 +515,14 @@ struct MenuTests {
     @Test("An open menu swallows Left and Right", arguments: [Key.left, .right])
     func horizontalArrowsAreInert(key: Key) throws {
         let (tui, context) = harness()
-        let focusManager = try #require(context.environment.focusManager)
+        let plain = try unhighlightedPopup(threeItemMenu)
 
         openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
-        let before = focusManager.currentFocusedID
+        let before = highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
         #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: key)))
-        #expect(focusManager.currentFocusedID == before)
+        #expect(
+            highlightedRow(try popup(threeItemMenu, tui: tui, context: context), versus: plain)
+                == before)
     }
 
     /// Escape closes the MENU. Without the status-bar claim the page's own "⎋

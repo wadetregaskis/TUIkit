@@ -9,14 +9,12 @@ import TUIkitCore
 /// The open/closed state of one pop-up ``Menu`` — a manual StateStorage box
 /// (not `@State`) marked active each frame, the same pattern the context menu
 /// and the Picker drop-down use.
+@MainActor
 final class MenuPopupState {
     /// Whether the menu is currently shown.
     var isOpen = false
-    /// Whether the open in progress should start with an item highlighted —
-    /// true only when the keyboard opened it. A `Button` erases the difference
-    /// (a click and a Return both just run the action), so the trigger asks the
-    /// focus manager which device drove the event.
-    var opensWithSelection = false
+    /// The open menu's highlight and its rows — see ``MenuPopupController``.
+    let controller = MenuPopupController()
 }
 
 /// The body of ``DefaultMenuStyle``: a collapsed label that opens the items as
@@ -77,9 +75,13 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         // Anchored on the row below the label, like every other drop-down;
         // `presentMenuPopover` nudges it back on-screen at the edges.
         presentMenuPopover(
-            items: content, over: &buffer, sectionID: sectionID, itemsIndex: ChildIndex.items,
-            anchor: (0, buffer.height), opensWithSelection: state.opensWithSelection,
-            dismiss: { state.isOpen = false }, context: context)
+            items: content, over: &buffer, controller: state.controller, sectionID: sectionID,
+            itemsIndex: ChildIndex.items,
+            anchor: (0, buffer.height),
+            dismiss: {
+                state.isOpen = false
+                state.controller.closed()
+            }, context: context)
         return buffer
     }
 
@@ -87,10 +89,14 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
     /// every TUIkit drop-down uses.
     private func trigger(_ state: MenuPopupState, focusManager: FocusManager?) -> some View {
         Button {
-            // Opened by the pointer → no row highlighted; from the keyboard →
-            // start on the first, since there is nothing else to point with.
-            state.opensWithSelection = focusManager?.lastInputSource != .pointer
             state.isOpen.toggle()
+            // A `Button` erases how it was pressed (a click and a Return both
+            // just run the action), so ask the focus manager which device drove
+            // the event — that is what decides whether the menu opens with a row
+            // highlighted.
+            if state.isOpen {
+                state.controller.opened(withSelection: focusManager?.lastInputSource != .pointer)
+            }
         } label: {
             HStack(spacing: 1) {
                 label

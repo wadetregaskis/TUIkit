@@ -234,6 +234,37 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
+    /// Reports this button to whatever owns its highlight, and answers whether
+    /// it is the highlighted one.
+    ///
+    /// Two owners, one question. Inside an open pop-up menu that is the menu's
+    /// column, which holds an ordinal; anywhere else — including inside an
+    /// INLINE menu, whose rows really are page focus stops — it is the focus
+    /// manager, exactly as before.
+    private func claimHighlight(
+        menuOrdinal: Int?, focusID: String, action: @escaping () -> Void, isDisabled: Bool,
+        context: RenderContext
+    ) -> Bool {
+        guard let menuOrdinal else {
+            let handler = ActionHandler(
+                focusID: focusID, action: action, canBeFocused: !isDisabled)
+            FocusRegistration.register(context: context, handler: handler)
+            return FocusRegistration.isFocused(context: context, focusID: focusID)
+        }
+        // `FocusRegistration.register` bundles three things; skipping it must
+        // not skip the other two. `markActive` is state-GC, not focus — without
+        // it the row's hover box and any `@State` in a `@ViewBuilder` label are
+        // collected at the end of the frame. And the side-effect record is what
+        // keeps the row out of a value memo: a cached row would serve last
+        // frame's highlight forever, which is the same hole a memoised `ForEach`
+        // row falls into.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        context.environment.stateStorage?.markActive(context.identity)
+        context.environment.menuRowSink?.publish(
+            ordinal: menuOrdinal, action: action, isEnabled: !isDisabled)
+        return menuOrdinal == context.environment.menuHighlightedOrdinal
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         // Combine this button's own disabled state with the cascading
         // `.disabled(_:)` environment value (a container can disable it).
@@ -255,13 +286,25 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             action()
             dismissMenu?()
         }
-        let handler = ActionHandler(
-            focusID: persistedFocusID,
-            action: effectiveAction,
-            canBeFocused: !isDisabled
-        )
-        FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Inside an open pop-up menu a row does NOT join the page's focus ring:
+        // the menu owns an ordinal instead, which is what gives it the jump keys
+        // and the windowed scrolling a `Picker` drop-down has always had. On the
+        // page — and inside an INLINE menu, whose rows really are page focus
+        // stops — this is nil and nothing changes. See
+        // `Documentation/Unifying the menu implementations.md`.
+        //
+        // Claimed on the RENDER pass only. A measure runs the same rows through
+        // here, and the identities it hands them are its own — so letting a
+        // measure claim would spend the ordinals the render then wants, and the
+        // highlight would point at a row that never drew. On a measure this is
+        // nil and the row takes the ordinary path, which registers nothing while
+        // measuring anyway.
+        let menuOrdinal =
+            context.isMeasuring
+            ? nil : context.environment.menuRowSink?.claimOrdinal(for: context.identity)
+        let isFocused = claimHighlight(
+            menuOrdinal: menuOrdinal, focusID: persistedFocusID, action: effectiveAction,
+            isDisabled: isDisabled, context: context)
 
         // Hover state persists across renders via StateStorage —
         // the dispatcher flips it on .entered / .exited events
@@ -334,7 +377,10 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             // hover state machine.
             mouseDispatcher.requestFeature(.motion)
 
-            let focusManager = context.environment.focusManager
+            // A menu row is not a focus stop, so clicking one must not try to
+            // move the focus onto an id nothing registered; the click just runs
+            // the row, which closes the menu anyway.
+            let focusManager = menuOrdinal == nil ? context.environment.focusManager : nil
             let captureFocusID = persistedFocusID
             let captureAction = effectiveAction
             let captureHoverBox = hoverBox
@@ -366,7 +412,10 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     width: buffer.width,
                     height: buffer.height,
                     handlerID: handlerID,
-                    focusID: persistedFocusID
+                    // A menu row names itself by its ordinal: it has no focus id
+                    // to be found by, and a tall menu still has to scroll its
+                    // highlighted row into view.
+                    focusID: menuOrdinal.map(menuRowRegionID) ?? persistedFocusID
                 )
             )
         }

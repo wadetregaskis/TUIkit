@@ -26,10 +26,15 @@ import TUIkitCore
 ///     menu scrolls inside it.
 ///   - borderColor: The frame's stroke, or `nil` for the palette's border colour.
 ///     A presented menu passes the breathing accent here — see
-///     ``presentMenuPopover(items:over:sectionID:itemsIndex:anchor:opensWithSelection:dismiss:context:)``.
+///     ``presentMenuPopover(items:over:controller:sectionID:itemsIndex:anchor:dismiss:context:)``.
+///   - controller: The open pop-up's highlight, or `nil` for an INLINE menu —
+///     whose rows are the page's own focus stops and must stay that way (see
+///     `Documentation/Unifying the menu implementations.md`). When present the
+///     rows report themselves to it instead of to the focus manager.
 @MainActor
 func renderMenuColumn(
-    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil
+    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil,
+    controller: MenuPopupController? = nil
 ) -> FrameBuffer {
     // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
     // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
@@ -69,6 +74,22 @@ func renderMenuColumn(
     // border then clipped — invisible while a row was just a left-aligned
     // label, fatal once a row has something at its trailing edge.
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
+    // A pop-up's rows answer to the column, not to the focus ring: each claims
+    // an ordinal here and reports its action back, and the highlighted one is
+    // named as the reveal target so a menu taller than its cap scrolls to it
+    // (the rows have no focus id for the usual reveal to find).
+    //
+    // Set on `sized`, after the width is known: a row that learned its width up
+    // front would report it, and the menu would size itself from its own guess.
+    // Only the render pass claims an ordinal, so the measures either side of it
+    // cannot shift the numbering.
+    if let controller {
+        controller.sink.beginPass()
+        sized.environment.menuRowSink = controller.sink
+        sized.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
+        sized.environment.revealTargetID = controller.revealTargetID
+    }
+    defer { controller?.adoptRenderedRows() }
 
     // Does it fit? Measured against a canvas TALLER than the cap, because a
     // measure is clamped to the context's `availableHeight` — and for an inline
@@ -106,16 +127,13 @@ func renderMenuColumn(
 /// - Parameters:
 ///   - items: The menu's content: `Button`s and `Divider`s.
 ///   - base: The buffer to float the menu over; the overlay is appended to it.
+///   - controller: The menu's highlight, persisted by the caller across frames.
+///     The caller tells it how the menu was opened (``MenuPopupController/opened(withSelection:)``)
+///     at the moment it opens, when only the caller knows which device did it.
 ///   - sectionID: The focus section this menu owns while it is up.
 ///   - itemsIndex: The child-identity index for `items` under `context`, so its
 ///     `@State` and focus slots stay distinct from the presenter's own.
 ///   - anchor: Where the menu's top-left goes, in `base`'s coordinates.
-///   - opensWithSelection: Whether to open with an item already highlighted.
-///     `false` for a pointer-opened menu (macOS behaviour: the pointer has
-///     chosen nothing yet, so highlighting an item invites a mis-click); `true`
-///     when the keyboard opened it, since there is no pointer to choose with.
-///     From the unselected state the first Down takes the first item and the
-///     first Up takes the last.
 ///   - dismiss: Closes the menu — run by Escape, by an outside click, and by
 ///     any item that fires.
 ///   - context: The presenter's render context.
@@ -123,10 +141,10 @@ func renderMenuColumn(
 func presentMenuPopover<Items: View>(
     items: Items,
     over base: inout FrameBuffer,
+    controller: MenuPopupController,
     sectionID: String,
     itemsIndex: Int,
     anchor: (x: Int, y: Int),
-    opensWithSelection: Bool,
     dismiss: @escaping () -> Void,
     context: RenderContext
 ) {
@@ -140,10 +158,11 @@ func presentMenuPopover<Items: View>(
     focusManager?.activateSection(id: sectionID)
     // Input-grabbing so global chrome hotkeys don't fire behind the menu.
     focusManager?.markSectionModal(id: sectionID)
-    // Marked BEFORE the items render (they register during `renderMenuColumn`
-    // below, and registration is one of the two places that would otherwise
-    // auto-focus the first of them).
-    if !opensWithSelection { focusManager?.markSectionFocusOptional(id: sectionID) }
+    // The section deliberately holds NO focus: a pop-up's rows report to the
+    // controller, not to the focus ring. Something may still register in here
+    // (a tall menu's own ScrollView does), and without this the end of the
+    // render pass would hand it the focus for want of anything better.
+    focusManager?.markSectionFocusOptional(id: sectionID)
     // Take the keyboard for this section. Isolating the presenter's own subtree
     // silences what is BENEATH the menu, but a menu hangs off one view — its
     // siblings are elsewhere in the tree and render into the live dispatcher
@@ -156,18 +175,7 @@ func presentMenuPopover<Items: View>(
     // the whole page behind it. The Picker drop-down has always claimed it;
     // this is the same claim, from the presentation both share.
     context.environment.statusBar.escapeLabelOverride = "close menu"
-    context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
-        guard event.key == .escape else { return false }
-        dismiss()
-        return true
-    }
-    // Home / End / PageUp / PageDown / Shift+arrow — the jump gestures every
-    // other list-like control in TUIkit answers, via the same helper the Picker
-    // drop-down and RadioButtonGroup use. The FocusManager ring implements plain
-    // arrows only, and its Page/Home/End fall-through looks for a scroller in
-    // the section, finds none, and drops the key. Registered on the menu's own
-    // section so it runs before that fall-through.
-    attachMenuJumpKeys(sectionID: sectionID, context: context)
+    attachMenuKeys(controller: controller, sectionID: sectionID, dismiss: dismiss, context: context)
 
     var menuContext = context
         .withChildIdentity(erasedType: Items.self, index: itemsIndex)
@@ -192,7 +200,7 @@ func presentMenuPopover<Items: View>(
 
     var menuBuffer = renderMenuColumn(
         items, context: menuContext, capHeight: context.environment.overlayContentHeight,
-        borderColor: borderColor)
+        borderColor: borderColor, controller: controller)
     guard !menuBuffer.isEmpty else { return }
 
     // The same screen-covering dismiss backdrop the drop-down menus use.
@@ -206,42 +214,39 @@ func presentMenuPopover<Items: View>(
             level: .popover, anchorHeight: 0))
 }
 
-/// Gives an open menu the jump gestures — Home, End, PageUp, PageDown and
-/// Shift+arrow — that a `Picker` drop-down, a `List` and a `RadioButtonGroup`
-/// all answer.
+/// Gives the open menu the whole keyboard: the arrows, the jump gestures every
+/// other list-like control in TUIkit answers (Home, End, PageUp, PageDown,
+/// Shift+arrow), Enter/Space to choose a row, and Escape to close.
 ///
-/// The rows of a view-composed menu are real `Button`s in the focus ring, so
-/// their "highlight" is `FocusManager.focusedID` and the only navigation they
-/// inherit is `focusNext/PreviousInSection`. This maps the jump keys onto the
-/// same ring through ``OptionListNavigation/clampedDestination(for:from:count:onAxisForward:onAxisBackward:multiplier:pageSize:)``,
-/// so a menu and a drop-down move identically for the same keystroke.
+/// One handler, because the menu owns an ordinal rather than a focus id — there
+/// is no ring underneath to implement half of this. The gestures themselves come
+/// from ``OptionListNavigation``, the same helper the `Picker` drop-down, the
+/// combo box and `RadioButtonGroup` use, so a menu and a drop-down move
+/// identically for the same keystroke.
 ///
-/// Also swallows Left/Right: on the ring they act as Up/Down (`dispatchKeyEvent`
-/// treats the axes alike), which in a vertical menu is just wrong — the Picker
-/// drop-down already consumes them.
+/// Only what the menu acts on is swallowed — exactly what the focus ring
+/// swallowed for it before. A key equivalent typed with the menu open must still
+/// reach the shortcut registry (`InputHandler` layer 3.5, below this one), which
+/// is how a menu row's accelerator fires while its own menu is showing.
 @MainActor
-private func attachMenuJumpKeys(sectionID: String, context: RenderContext) {
-    guard let focusManager = context.environment.focusManager,
-        let dispatcher = context.environment.keyEventDispatcher
-    else { return }
+private func attachMenuKeys(
+    controller: MenuPopupController, sectionID: String, dismiss: @escaping () -> Void,
+    context: RenderContext
+) {
+    guard let dispatcher = context.environment.keyEventDispatcher else { return }
     let multiplier = context.environment.shiftStepMultiplier
     // A page is the menu's visible rows; the cap is what the column was given.
     let pageSize = max(1, context.environment.overlayContentHeight - 2)
 
     dispatcher.addHandler(sectionID: sectionID) { event in
-        if event.key == .left || event.key == .right { return true }
-        let rows = focusManager.focusableIDsInActiveSection()
-        guard !rows.isEmpty else { return false }
-        // No row highlighted yet (a pointer-opened menu): a jump key enters at
-        // the end it names, the same way the first Down/Up enters the ring.
-        let current = focusManager.currentFocusedID.flatMap { rows.firstIndex(of: $0) } ?? 0
-        guard
-            let destination = OptionListNavigation.clampedDestination(
-                for: event, from: current, count: rows.count,
-                onAxisForward: .down, onAxisBackward: .up,
-                multiplier: multiplier, pageSize: pageSize)
-        else { return false }
-        focusManager.focus(id: rows[destination])
-        return true
+        switch event.key {
+        case .escape:
+            dismiss()
+            return true
+        case .enter, .space:
+            return controller.activateHighlighted()
+        default:
+            return controller.handle(event, multiplier: multiplier, pageSize: pageSize)
+        }
     }
 }

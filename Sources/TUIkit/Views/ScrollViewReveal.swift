@@ -70,7 +70,10 @@ extension _ScrollViewCore {
 
         // No focus system → nothing to reveal-on-focus.
         guard let focusManager = context.environment.focusManager else { return }
-        let currentFocusedID = focusManager.currentFocusedID
+        // Usually "what has the focus", but a subtree may name its own target
+        // instead — an open pop-up menu owns an ordinal rather than a focus id,
+        // and its highlighted row still has to be scrolled into view.
+        let currentFocusedID = context.environment.revealTargetID ?? focusManager.currentFocusedID
         let currentInteractionGen = focusManager.focusedInteractionGeneration
 
         // The third trigger: the viewport itself changed size. A terminal
@@ -213,5 +216,27 @@ extension _ScrollViewCore {
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         handler.contentHeightIsEstimate = contentSlice?.totalIsEstimate ?? false
         handler.clampScrollOffset()
+    }
+}
+
+// MARK: - Overriding what gets revealed
+
+private struct RevealTargetIDKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+    /// The hit-test region a scroller in this subtree should keep on screen,
+    /// instead of whatever holds the focus.
+    ///
+    /// Set by a presentation whose "selected thing" is not a focus stop — today
+    /// only an open pop-up menu, whose highlight is an ordinal (see
+    /// ``MenuPopupController``). Everything downstream of the reveal is
+    /// unchanged: it is still a region id matched against the rendered buffer,
+    /// so a subtree that sets this gets exactly the scrolling behaviour a
+    /// focused control would have got.
+    var revealTargetID: String? {
+        get { self[RevealTargetIDKey.self] }
+        set { self[RevealTargetIDKey.self] = newValue }
     }
 }
