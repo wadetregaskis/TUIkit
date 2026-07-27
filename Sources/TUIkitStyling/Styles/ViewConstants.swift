@@ -16,7 +16,17 @@ public enum ViewConstants {
     // MARK: - Focus & Selection Opacity
 
     /// Minimum accent opacity during focus pulsing animation (dim phase).
-    public static let focusPulseMin: Double = 0.35
+    ///
+    /// The span to ``focusPulseMax`` has to survive quantisation: a terminal
+    /// without truecolor (Apple Terminal ≤ 15 — see
+    /// `Documentation/Terminal-compatibility.md`) rounds every step onto the
+    /// 256-colour cube, and the old 0.35...0.50 span came out as **two**
+    /// distinct colours on the default palette — a flicker rather than a
+    /// breath, and visibly fewer steps than the button cap's 0.20...0.45.
+    /// Widened downwards so the pulse reads as a pulse there too; the bright
+    /// end stays put because it is the one the readability floor is measured
+    /// against (`PaletteContrastAuditTests` fails at 0.54).
+    public static let focusPulseMin: Double = 0.22
 
     /// Maximum accent opacity during focus pulsing animation (bright phase).
     public static let focusPulseMax: Double = 0.50

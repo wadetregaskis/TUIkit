@@ -271,6 +271,44 @@ struct MenuTests {
         #expect(tui.keyEventDispatcher.handlerCount == 0, "a measure registers nothing")
     }
 
+    // MARK: - Focus emphasis
+
+    /// The highlight must resolve through the shared focus-emphasis clock, not
+    /// read `pulsePhase` itself. Two symptoms of getting this wrong, both of
+    /// which the owner saw: the row breathes on a 2.0 s cycle while every other
+    /// focused control on screen is on 0.8 s, and `.selectionIndicatorStyle`
+    /// does not reach it.
+    @Test("The highlighted row honours .selectionIndicatorStyle(.none)")
+    func highlightHonoursTheIndicatorStyle() {
+        let view = Menu("Menu") {
+            Button("First") {}
+            Button("Second") {}
+        }
+        .menuStyle(.inline)
+        .selectionIndicatorStyle(.none)
+
+        func frame(pulsePhase: Double) -> [String] {
+            let tui = TUIContext()
+            var environment = EnvironmentValues()
+            environment.focusManager = FocusManager()
+            environment.applyRuntimeServices(from: tui)
+            environment.pulsePhase = pulsePhase
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 24, environment: environment,
+                tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            context.environment.focusManager?.beginRenderPass()
+            let buffer = renderToBuffer(view, context: context)
+            tui.stateStorage.endRenderPass()
+            return buffer.lines
+        }
+
+        #expect(
+            frame(pulsePhase: 0) == frame(pulsePhase: 1),
+            "with the animation off, the pulse clock must not reach the row at all")
+    }
+
     // MARK: - Style plumbing
 
     @Test("menuStyle flows down through a container to the menus inside it")

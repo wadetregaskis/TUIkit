@@ -34,9 +34,12 @@ private struct _MenuItemRow: View {
 
     @Environment(\.palette) private var palette
 
-    /// Volatile: reading it keeps the row out of any render memo, so the
-    /// highlight pulses instead of freezing on its first frame.
-    @Environment(\.pulsePhase) private var pulsePhase
+    /// The shared focus-emphasis clock — the same one the `Picker` drop-down,
+    /// `List` rows and every other focused control resolve through, so a menu
+    /// row breathes in step with them and honours `.selectionIndicatorStyle`.
+    /// Reading it while focused is also volatile, which keeps the row out of any
+    /// render memo so the highlight animates instead of freezing on frame one.
+    @Environment(\.selectionEmphasis) private var emphasis
 
     /// The width the highlight bar should span, injected by the menu once it
     /// knows it. See ``EnvironmentValues/menuRowWidth``.
@@ -136,13 +139,16 @@ private struct _MenuItemRow: View {
         return palette.background
     }
 
-    /// The focused bar, pulsing between the same two endpoints the `Picker`
-    /// drop-down uses, so both menus breathe together.
+    /// The focused bar, between the same two endpoints the `Picker` drop-down
+    /// uses — and now on the same clock as well. It used to read `pulsePhase`
+    /// directly, which is a different timer: 2.0 s per cycle against the
+    /// selection clock's 0.8 s, so a menu row visibly lagged every other
+    /// highlight on screen, and `.selectionIndicatorStyle(.none/.blink)` did
+    /// not reach it at all.
     private var highlight: Color {
-        Color.lerp(
-            palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-            palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background),
-            phase: pulsePhase)
+        emphasis(configuration.isFocused).color(
+            dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
     }
 }
 
