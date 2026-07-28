@@ -10,6 +10,10 @@ DerivedData/
 # DocC generated output
 /docs-output/
 /docc-output/
+# `docc preview` builds INTO the catalog it is serving, so this lands under
+# Sources/ where nothing else does. Ignored by name rather than by path, since
+# a second catalog would do the same.
+.docc-build/
 
 # Profiling: raw Instruments traces are large (~14 MB each) and are NEVER
 # committed — the profiling record lives in commit messages (see CLAUDE.md).
