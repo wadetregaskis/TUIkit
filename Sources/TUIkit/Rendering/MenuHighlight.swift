@@ -54,11 +54,12 @@ final class MenuHighlight {
         /// nothing is highlighted to jump *from*.
         case anyKey
 
-        /// Only a plain Up or Down. The combo box's caret is still in the FIELD
-        /// while nothing is highlighted, so Home/End must move the caret and
-        /// Shift+arrow must extend the selection; only an arrow means "into the
-        /// menu".
-        case arrowsOnly
+        /// Any UNSHIFTED key. A combo box's caret is still in the field while
+        /// nothing is highlighted, and Shift+arrow there means "extend the
+        /// selection" — a text gesture, not a menu one. Everything else,
+        /// Home/End and Page included, belongs to the menu the moment it is
+        /// open, whether or not a row happens to be highlighted yet.
+        case unshiftedOnly
     }
 
     /// What an arrow does at the ends.
@@ -112,11 +113,13 @@ final class MenuHighlight {
 
     /// How a text field's suggestions menu — the combo box — walks.
     ///
-    /// Clamped, because the field sits above the first row. Arrows-only,
-    /// because with nothing highlighted the keyboard is still AT the caret:
-    /// Home/End must move the caret and Shift+arrow must extend the selection.
+    /// Clamped, because the field sits above the first row. Unshifted-only,
+    /// because Shift+arrow at the caret extends the text selection — but
+    /// everything else reaches the menu as soon as it is open, so Home, End and
+    /// the Page keys do not depend on whether a row happens to be highlighted
+    /// yet.
     static func suggestions() -> MenuHighlight {
-        MenuHighlight(edge: .clamp, entry: .arrowsOnly)
+        MenuHighlight(edge: .clamp, entry: .unshiftedOnly)
     }
 
     // MARK: - What there is to highlight
@@ -223,9 +226,7 @@ final class MenuHighlight {
     /// whichever end you came at it from, which is the same rule at both ends
     /// and is what NSComboBox and every pop-up menu do.
     private func enterFromNothing(_ event: KeyEvent) -> Bool {
-        if entry == .arrowsOnly {
-            guard !event.shift, event.key == .down || event.key == .up else { return false }
-        }
+        if entry == .unshiftedOnly, event.shift { return false }
         switch event.key {
         case .down, .home, .pageDown:
             move(to: selectable.first)

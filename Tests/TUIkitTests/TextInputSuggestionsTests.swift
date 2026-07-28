@@ -229,30 +229,45 @@ struct TextSuggestionKeyboardTests {
         #expect(handler.suggestionHighlight == 5)
     }
 
-    /// The combo box's field/menu duality: with no highlight the keyboard is
-    /// still at the caret, so the jump keys must stay FIELD gestures — entering
-    /// the menu from them would steal Home/End from text editing.
-    @Test("With the keyboard at the caret, the jump keys stay field gestures")
-    func caretKeepsFieldGestures() {
+    /// The jump keys belong to the OPEN menu, however it was opened.
+    ///
+    /// They used to depend on whether a row happened to be highlighted yet,
+    /// which made them work or not work depending on the opening gesture: a
+    /// Down-open put the highlight on row 0 and Home/End then drove the menu,
+    /// while a pointer-open whose text matched nothing left it nil and the same
+    /// keys moved the caret instead. Same menu, same keys, different answers.
+    @Test(
+        "Every unshifted key reaches a pointer-opened menu",
+        arguments: [(Key.home, 0), (.end, 2), (.pageDown, 0), (.pageUp, 2), (.down, 0), (.up, 2)])
+    func jumpKeysReachAPointerOpenedMenu(key: Key, expected: Int) {
+        let box = TextBox()
+        box.value = "typed"  // matches no completion, so the menu opens unhighlighted
+        let handler = makeHandler(box, completions: ["a", "b", "c"])
+        handler.cursorPosition = 5
+
+        handler.toggleSuggestionsOpen()
+        #expect(handler.suggestionsOpen)
+        #expect(handler.suggestionHighlight == nil, "a pointer open highlights nothing")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: key)), "the open menu takes it")
+        #expect(handler.suggestionHighlight == expected)
+    }
+
+    /// The one key that stays with the field: at the caret, Shift+arrow means
+    /// "extend the selection", which is a text gesture and not a menu one.
+    @Test(
+        "A shifted arrow at the caret still belongs to the field",
+        arguments: [KeyEvent(key: .down, shift: true), KeyEvent(key: .up, shift: true)])
+    func caretKeepsShiftedArrows(key: KeyEvent) {
         let box = TextBox()
         box.value = "typed"
         let handler = makeHandler(box, completions: ["a", "b", "c"])
         handler.cursorPosition = 5
 
-        handler.toggleSuggestionsOpen()  // pointer open — no highlight
-        #expect(handler.suggestionsOpen)
+        handler.toggleSuggestionsOpen()
         #expect(handler.suggestionHighlight == nil)
-
-        for key in [Key.home, .end, .pageDown, .pageUp] {
-            _ = handler.handleKeyEvent(KeyEvent(key: key))
-            #expect(
-                handler.suggestionHighlight == nil,
-                "\(key) must not enter the menu while the caret has the keyboard")
-        }
-        _ = handler.handleKeyEvent(KeyEvent(key: .down, shift: true))
-        #expect(
-            handler.suggestionHighlight == nil,
-            "Shift+Down extends the field selection; it doesn't enter the menu")
+        _ = handler.handleKeyEvent(key)
+        #expect(handler.suggestionHighlight == nil, "it did not enter the menu")
     }
 
     @Test("Shift+Down does not open a closed menu — only a plain Down does")

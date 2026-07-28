@@ -160,21 +160,36 @@ struct MenuHighlightTests {
         #expect(viaUp.ordinal == 3, "\(config.name)")
     }
 
-    /// The other deliberate difference. With nothing highlighted, a combo box's
-    /// keyboard is still in the FIELD: Home/End must move the caret and
-    /// Shift+arrow must extend the selection, so only a plain arrow means "into
-    /// the menu". A pop-up menu has no field, so a jump key may enter it —
-    /// which is what makes Home and End work in a menu the pointer opened.
+    /// The other deliberate difference, and a narrow one. A combo box's caret is
+    /// still in the FIELD while nothing is highlighted, and Shift+arrow there
+    /// means "extend the text selection" — so that one key stays with the field.
+    ///
+    /// Everything else reaches the menu the moment it is open. It used to
+    /// depend on whether a row happened to be highlighted YET, which made the
+    /// jump keys work or not work depending on how the menu had been opened:
+    /// Down-opened put the highlight on row 0 and Home/End then drove the menu,
+    /// while a pointer-opened menu with unmatched text left it nil and the same
+    /// keys moved the caret instead. "Is the menu open" is the question; "is a
+    /// row highlighted" never was.
     @Test(
-        "Only a plain arrow enters the combo box's menu",
+        "Every unshifted key enters the combo box's menu",
         arguments: [
-            KeyEvent(key: .home), KeyEvent(key: .end),
-            KeyEvent(key: .pageUp), KeyEvent(key: .pageDown),
-            KeyEvent(key: .down, shift: true), KeyEvent(key: .up, shift: true),
+            (KeyEvent(key: .home), 0), (KeyEvent(key: .end), 3),
+            (KeyEvent(key: .pageUp), 3), (KeyEvent(key: .pageDown), 0),
+            (KeyEvent(key: .down), 0), (KeyEvent(key: .up), 3),
         ])
-    func entryRule(key: KeyEvent) {
+    func unshiftedKeysEnterTheMenu(key: KeyEvent, expected: Int) {
         let combo = make(Self.suggestions, at: nil)
-        #expect(!press(combo, key), "the field keeps it")
+        #expect(press(combo, key), "the open menu takes it")
+        #expect(combo.ordinal == expected)
+    }
+
+    @Test(
+        "A shifted arrow stays with the combo box's field",
+        arguments: [KeyEvent(key: .down, shift: true), KeyEvent(key: .up, shift: true)])
+    func shiftedArrowsStayWithTheField(key: KeyEvent) {
+        let combo = make(Self.suggestions, at: nil)
+        #expect(!press(combo, key), "the field keeps it, to extend the selection")
         #expect(combo.ordinal == nil, "and the menu was not entered")
 
         let menu = make(Self.popUp, at: nil)
