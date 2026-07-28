@@ -153,6 +153,69 @@ struct AlertDismissalTests {
         #expect(!presented.value, "and nothing was presented to dismiss")
     }
 
+    // MARK: - One identity per action
+
+    /// Every action button needs its OWN focus identity. Rendered from one
+    /// shared context they all resolved to a single id, and the focus system
+    /// treated the dialog as having one control: both buttons drew focused, Tab
+    /// could not move between them, and Return ran whichever action that id
+    /// resolved to — always the same one, whatever the user had highlighted.
+    /// (The mouse was unaffected: a click routes by hit region to a per-button
+    /// handler, which is why clicking Cancel worked while Return did not.)
+    @Test(
+        "Each action button gets its own focus identity",
+        arguments: [true, false])
+    func actionsHaveDistinctFocusIDs(verticalButtons: Bool) throws {
+        let (tui, context) = harness()
+        let presented = Flag(true)
+        // `.confirmationDialog` stacks its buttons; `.alert` puts them in a row.
+        // Both build the same modifier, and both had the defect.
+        let view: any View =
+            verticalButtons
+            ? Text("Page").confirmationDialog(
+                "Sure?", isPresented: presented.binding,
+                actions: {
+                    Button("Delete", role: .destructive) {}
+                    Button("Cancel", role: .cancel) {}
+                })
+            : Text("Page").alert(
+                "Sure?", isPresented: presented.binding,
+                actions: {
+                    Button("Delete", role: .destructive) {}
+                    Button("Cancel", role: .cancel) {}
+                }, message: { Text("Really?") })
+
+        let screen = renderArmed(AnyView(view), tui: tui, context: context)
+        let focusIDs = Set(screen.hitTestRegions.compactMap(\.focusID))
+        #expect(
+            focusIDs.count == 2,
+            "two buttons, two identities — got \(focusIDs.count): \(focusIDs.sorted())")
+    }
+
+    /// The consequence the user actually feels: Return runs the action of the
+    /// button that has focus, not a fixed one.
+    @Test("Return activates the focused action, not always the first")
+    func returnActivatesTheFocusedAction() throws {
+        let (tui, context) = harness()
+        let presented = Flag(true)
+        var chose = "—"
+        let view = Text("Page").confirmationDialog(
+            "Sure?", isPresented: presented.binding,
+            actions: {
+                Button("Delete", role: .destructive) { chose = "Delete" }
+                Button("Cancel", role: .cancel) { chose = "Cancel" }
+            })
+
+        renderArmed(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        // Move off whatever auto-focused, onto the second (Cancel) button.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .tab))
+        renderArmed(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))
+
+        #expect(chose == "Cancel", "Return ran the focused button's action, got \(chose)")
+    }
+
     // MARK: - Escape
 
     /// The crux of the reported bug, and the reason no existing test caught it:

@@ -191,10 +191,12 @@ struct AlertButtonRow: View, Renderable {
             return false  // Keep original order otherwise
         }
 
-        // Render each button
+        // Render each button under its OWN child identity — see the note in
+        // `AlertButtonColumn`, which had the identical defect.
         var buttonBuffers: [FrameBuffer] = []
-        for button in sortedButtons {
-            let buffer = TUIkit.renderToBuffer(button, context: context)
+        for (index, button) in sortedButtons.enumerated() {
+            let childContext = context.withChildIdentity(type: Button.self, index: index)
+            let buffer = TUIkit.renderToBuffer(button, context: childContext)
             buttonBuffers.append(buffer)
         }
 
@@ -282,8 +284,21 @@ struct AlertButtonColumn: View, Renderable {
         var lines: [String] = []
         var regions: [HitTestRegion] = []
 
-        for button in sortedButtons {
-            let buffer = TUIkit.renderToBuffer(button, context: context)
+        // Each button renders under its OWN child identity. A `Button`'s
+        // default focus ID is derived from `context.identity.path`, so rendering
+        // them all from the SAME context gives every button in the dialog one
+        // identity: the focus system then sees a single control — they all pulse
+        // together, Tab cannot move between them, and Return runs whichever
+        // action that one id resolves to, whatever the pointer or the arrows
+        // said. (Clicking still works, because a click routes by hit region to a
+        // handler id, which is per-button.) `ButtonRow` has always done this;
+        // the alert's two containers had not.
+        //
+        // Indexed by SORTED position, which is both the drawn order and the
+        // order the focus ring walks, so Tab runs top to bottom.
+        for (index, button) in sortedButtons.enumerated() {
+            let childContext = context.withChildIdentity(type: Button.self, index: index)
+            let buffer = TUIkit.renderToBuffer(button, context: childContext)
             let leftPadding = max(0, (width - buffer.width) / 2)
             let pad = String(repeating: " ", count: leftPadding)
             let startY = lines.count
