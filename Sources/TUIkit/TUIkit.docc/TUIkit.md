@@ -42,14 +42,6 @@ struct MyApp: App {
 
 ## Topics
 
-> Note: `import TUIkit` re-exports `TUIkitCore`, `TUIkitStyling`, `TUIkitView`
-> and `TUIkitImage`, so everything below is one import away. The reference
-> pages, though, follow the module a symbol is *declared* in: the entries here
-> for core types — `View`, `Color`, `Binding`, `State`, `EnvironmentValues`,
-> `FrameBuffer`, `Palette` and their neighbours — resolve only in a
-> documentation build that covers those targets too. Building this catalog
-> alone leaves them as plain text.
-
 ### Essentials
 
 - <doc:GettingStarted>

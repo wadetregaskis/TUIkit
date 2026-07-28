@@ -313,6 +313,8 @@ Tests/                    ~3,350 tests across ~510 suites in 341 files
 └── TUIkitImageTests/
 
 Tools/
+├── BuildDocs/            Builds the DocC reference as ONE archive covering every
+│                         module (the module split is not the reader's problem)
 ├── Diagrams/             Generates the DocC architecture / lifecycle diagrams from source
 ├── EmojiBenchmark/       Benchmarks emoji classification strategies
 ├── EmojiBugScanner/      Probes Terminal.app for emoji cursor-advance quirks

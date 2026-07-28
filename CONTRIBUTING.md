@@ -29,9 +29,14 @@ swiftlint
 # Format (configured but not enforced in CI)
 swift-format format -i -r Sources Tests
 
-# Build the documentation, and report unresolved links
-swift package generate-documentation --target TUIkit --analyze
+# Build the documentation (one archive covering every module)
+Tools/BuildDocs/build-docs.sh            # add --analyze for every diagnostic
 ```
+
+> Use the script, not `swift package generate-documentation --target TUIkit`.
+> The latter documents only what the umbrella module itself declares, which
+> silently omits `View`, `Color`, `Binding` and everything else the sibling
+> modules define — see [`Tools/BuildDocs/README.md`](Tools/BuildDocs/README.md).
 
 ## Pull Request Requirements
 
