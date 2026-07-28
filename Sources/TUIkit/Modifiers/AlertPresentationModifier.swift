@@ -17,12 +17,16 @@
 ///     Text("Main content")
 /// }
 /// .alert("Warning", isPresented: $showAlert) {
-///     Button("Yes") { showAlert = false }
-///     Button("No") { showAlert = false }
+///     Button("Yes") { save() }
+///     Button("No", role: .cancel) {}
 /// } message: {
 ///     Text("Are you sure?")
 /// }
 /// ```
+///
+/// Choosing any action closes the alert, as it does in SwiftUI — an action does
+/// not need to flip `isPresented` itself. Escape closes it too, and says so on
+/// the status bar while it is up.
 public struct AlertPresentationModifier<Content: View, Actions: View, Message: View>: View {
     /// The base content to render.
     let content: Content
@@ -129,13 +133,28 @@ extension AlertPresentationModifier: Renderable {
             // alert run. Isolation already covers the page BENEATH; this also
             // covers a sibling elsewhere in the tree.
             context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
+
+            // ESC closes the alert — and saying so on the STATUS BAR is what
+            // makes that true, not merely discoverable. `InputHandler` runs the
+            // status bar (layer 1) BEFORE the view key handlers (layer 2), so a
+            // page carrying its own "⎋ back" item would otherwise eat the key
+            // and navigate away with the alert still on screen. Publishing this
+            // item takes the key first AND stops the bar lying about where it
+            // goes. Section items are cleared each render pass, so dismissing
+            // restores the page's own item. Same mechanism, and the same
+            // reasoning, as `ModalPresentationModifier`.
+            let isPresented = self.isPresented
+            let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
+                isPresented.wrappedValue = false
+            }
+            context.environment.statusBar.registerSectionItems(
+                sectionID: sectionID, items: [dismissItem], composition: .merge)
         }
 
-        // Register ESC handler to dismiss the alert (on the real dispatcher; the
-        // page beneath renders with a throwaway one, so only the alert's ESC
-        // fires). Render-pass only: an ancestor measuring by rendering (a Card's
-        // container measure, say) must not register a phantom duplicate — same
-        // gate as the focus-section side effects above.
+        // The same dismissal, as a key handler, for a tree rendered without the
+        // app's status bar (a test harness, an embedded surface): there is no
+        // layer 1 to claim ESC there, so this is the only route. In a running
+        // app the item above fires first and this never runs.
         if !context.isMeasuring {
             let isPresentedBinding = isPresented
             context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
@@ -170,6 +189,18 @@ extension AlertPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.overlayContentHeight)
         alertContext.environment.activeFocusSectionID = sectionID
+        // Choosing an action dismisses the alert, as it does in SwiftUI: an
+        // alert is a question, and any of its buttons is an answer. `Button`
+        // reads this and runs it after the caller's own action, so the action
+        // does not have to (and no longer should) flip the binding itself —
+        // writing `false` twice is harmless, so existing code keeps working.
+        //
+        // Deliberately set on the ALERT's context only: the page beneath is
+        // rendered from `contentContext`, so its buttons never see it.
+        let dismissAlert = isPresented
+        alertContext.environment.dismissMenu = DismissMenuAction {
+            dismissAlert.wrappedValue = false
+        }
         var alertBuffer = renderPresentedDialog(
             alert, context: alertContext,
             capHeight: context.environment.overlayContentHeight)
