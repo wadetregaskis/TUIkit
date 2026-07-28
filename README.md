@@ -70,8 +70,12 @@ struct ContentView: View {
 - **Layout containers**: `VStack`, `HStack`, `ZStack` (with `.zIndex` for draw order and overlay layers for floating content), `LazyVStack`, `LazyHStack`, `Group`, `ViewThatFits`, and `TabView` / `Tab`
 - **Interactive controls**: `Button`, `ButtonRow`, `Toggle`, `Menu`, `Picker`, `TextField` (with combo-box-style suggestion menus via `.textInputSuggestions(_:)`), `SecureField`, `TextEditor`, `DatePicker`, `Slider`, `Stepper`, `RadioButtonGroup`, `Link` (with the `openURL` environment action), and `ColorPicker` (with a rich `ColorPickerPanel` offering RGB/HSL/HSB/CMYK editing, a 256-colour grid, and named / web-safe / crayon palettes) — all with keyboard navigation and focus
   - `Picker` styles: `.automatic` (default), `.menu`, `.inline`, `.radioGroup`
+  - `Menu` takes a `@ViewBuilder` of `Button`s (as SwiftUI's does) and is styled with `.menuStyle(_:)`: `.automatic` — a collapsed pull-down that opens a pop-up — or `.inline`, the items expanded in place. Click-and-hold works like a Mac menu: the highlight tracks the pointer and releasing over an item chooses it.
+  - `.contextMenu(menuItems:)` attaches a right-click pop-up to any view (Ctrl-click where the terminal keeps right-click for itself; Shift+F10 opens it from the keyboard)
   - `Toggle` styles: `.automatic`, `.checkbox` (a checkbox; customise its glyphs with `ToggleCharacterSet` — `.unicode` (■/□), `.emoji` (⬛︎/⬜︎), or `.ascii` (`[x]`/`[ ]`) — via `.toggleCharacterSet(_:)`; the default adapts to the terminal: emoji under Apple's Terminal.app and iTerm2, unicode elsewhere), and `.switch` (a two-position switch — a knob over a coloured track, following the same glyph repertoire)
 - **Data views**: `List`, `Table`, `Section`, `ForEach`, `Form` (with `LabeledContent` rows and columns / grouped layouts via `.formStyle(_:)`), `NavigationSplitView`, `ContentUnavailableView`
+  - **Editing**: `ForEach` takes `.onMove(perform:)` / `.onDelete(perform:)` — rows then drag to reorder, and <kbd>Delete</kbd> removes the row at the cursor; `EditButton` and the `\.editMode` environment gate it. `.rowReorderFeedback(_:)` picks what a drag shows: `.live` (the rows shuffle under the pointer), `.dimmed` (the row stays put and greys out), or `.cursor` (it leaves its place and rides the pointer).
+  - **Search**: `.searchable(text:placement:prompt:)` composes a magnifier glyph and a bound field above the content; `.searchFieldIconPlacement(_:)` moves the glyph and turns it to face the field
   - `List` rows render lazily — only the visible window is materialised, so very large lists stay O(visible) — with `.plain` / `.insetGrouped` styles and `.badge()` rows
   - `Table` supports per-column sizing (`.width(.fixed(n) | .flexible | .ratio(r) | .fit)`, where `.fit` sizes to the widest header/cell value), multi-line wrapping cells (`.lineLimit(_:)`), per-column alignment and truncation, and row selection
   - `Set`-bound selections follow the macOS model: plain / shift- / ctrl-click for sole / range / toggle selection, Shift+arrows extend the range where the terminal reports Shift, `v` toggles an extend mode so plain arrows extend in any terminal, Ctrl+A selects all, and Escape clears — consuming the key only when there is something to clear, so it never blocks app navigation
@@ -87,6 +91,8 @@ struct ContentView: View {
 
 - **`ScrollView`** scrolls both vertically and horizontally (`ScrollView(.horizontal)` / `[.horizontal, .vertical]`), and `List`, `Table`, and `Picker` pop-ups scroll too.
 - **Scrollbars** are opt-in (hidden by default). Configure with `.scrollbarVisibility(.automatic | .visible | .hidden)`, `.scrollbarArrows(.none | .single | .double)`, `.scrollbarProportionalThumb(_:)`, and `.scrollbarClickBehavior(.page | .jump)`. They are fully interactive: a sub-cell-precise proportional thumb, drag-to-scroll, click-to-page/jump on the track, end-arrow stepping, and auto-repeat while a button is held.
+- **What stays put** when the content or the terminal changes size is a policy, not an accident: `.anchorPosition(_:)` pins the viewport to `.top`, `.bottom`, a specific `.row(id)`, or the default `.window` (whatever is on screen stays on screen). `.scrollFollowMargin(_:)` says how much context to keep around a cursor that scrolls into view, `.scrollGranularity(_:)` sizes a step in lines or whole rows, and `.scrollOverscroll(_:)` allows (or forbids) scrolling past the end.
+- **`ScrollViewReader`** hands you a `ScrollViewProxy` for imperative `scrollTo(_:anchor:)`, as in SwiftUI. Focusing a control also reveals it — including its border — in every scrollable ancestor.
 
 ### Mouse & trackpad
 
@@ -98,8 +104,9 @@ struct ContentView: View {
 ### Presentation
 
 - **Alerts**: `.alert(_:isPresented:actions:message:)` (and a no-message overload), with optional `borderStyle` / `borderColor` / `titleColor`.
+- **Confirmation dialogs**: `.confirmationDialog(_:isPresented:titleVisibility:actions:message:)` — the same host with its buttons stacked as an action sheet and the `.cancel` role sorted last.
 - **Modals / sheets**: `.modal(isPresented:content:)`, an always-on `.modal { … }`, and `.sheet(isPresented:content:)` (a SwiftUI-compatible alias for `.modal`).
-- Alerts and modals present a **centred overlay that dims the whole screen and captures keyboard input** from any attachment point; <kbd>ESC</kbd> dismisses.
+- Alerts and modals present a **centred overlay that dims the whole screen and captures keyboard input** from any attachment point, and are draggable by their title or border. Choosing any alert action dismisses it (as in SwiftUI — the action does not flip the binding itself), and <kbd>ESC</kbd> *is* the `.cancel`-role button: it runs that action if there is one, and closes either way.
 - **Notifications**: toast-style transient messages drawn by `.notificationHost(width:)`, posted out-of-band via `NotificationService.current.post(...)` — they overlay without dimming or blocking the background.
 
 ### Styling
@@ -107,7 +114,7 @@ struct ContentView: View {
 - **Text styling**: `.bold()`, `.italic()`, `.underline()`, `.strikethrough()`, `.fontWeight(_:)`, `.textCase(_:)` on any view; plus `.dim()`, `.blink()`, and `.inverted()` on `Text`.
 - **Colour**: `.foregroundStyle(_:)` and `.background(_:)`. `Color` supports the 8 standard + 8 bright ANSI colours, the 256-colour palette (`Color.palette(_:)`), 24-bit RGB (`Color.rgb(_:_:_:)`), hex (`Color.hex(0xFF5500)` / `Color.hex("#FF5500")`), and the HSL / HSB / CMYK colour spaces. Palette-aware semantic colours resolve against the active palette at render time.
 - **Border styles** (`BorderStyle`): `.line`, `.rounded`, `.doubleLine`, `.heavy`, `.none`, plus a public initialiser for fully custom border characters; applied with `.border(_:color:)`.
-- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.toggleCharacterSet`, `.listStyle`, `.formStyle`, `.gaugeStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, plus per-control text-style builders.
+- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.toggleCharacterSet`, `.menuStyle`, `.listStyle`, `.formStyle`, `.gaugeStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, plus per-control text-style builders.
 - **Badges**: `.badge(_ count: Int)` (0 hides) or `.badge(_ label:)` on list rows.
 
 ### Internationalization (i18n)
@@ -121,10 +128,11 @@ struct ContentView: View {
 ### Advanced
 
 - **Lifecycle modifiers**: `.onAppear()`, `.onDisappear()`, `.task()`, `.onChange(of:initial:)`
-- **Key handling**: `.onKeyPress()` (a raw handler, a key-set handler, and a single-key action), with modifier keys (ctrl, alt, shift) and function keys F1–F12
+- **Key handling**: `.onKeyPress()` (a raw handler, a key-set handler, and a single-key action), with modifier keys (ctrl, alt, shift) and function keys F1–F12 (plus the VT220 F13–F20, which Apple's Terminal.app sends for Shift+F5–F12)
+- **Keyboard shortcuts**: `.keyboardShortcut(_:modifiers:)` with `KeyEquivalent` / `EventModifiers`, and the semantic `.defaultAction` (Return) / `.cancelAction` (Escape) roles. A terminal never reports ⌘, so SwiftUI's default `modifiers: .command` is remapped at registration to whatever `.commandKey(_:)` names — `.control` (default), `.option`, `.bare`, or `.unavailable` — which is what lets one `View` source carry ⌘-shortcuts under both frameworks
 - **Storage**: `@AppStorage`, backed by `UserDefaults` on Apple platforms (the preferences domain, like SwiftUI — `~/Library/Preferences/<id>.plist`) and a JSON file under the XDG config dir on Linux
 - **Preferences**: bottom-up data flow with `PreferenceKey` — `.preference(key:value:)`, `.onPreferenceChange(_:perform:)`, `.navigationTitle(_:)`
-- **Focus system**: Tab / Shift+Tab navigation, `.focusSection(_:)` for grouped areas, and `.focusID(_:)` to set an explicit identity on a control
+- **Focus system**: Tab / Shift+Tab navigation, `.focusSection(_:)` for grouped areas, and `.focusID(_:)` to set an explicit identity on a control. `@FocusState` + `.focused($x)` / `.focused($field, equals:)` read and move focus programmatically, `.defaultFocus($field, value)` picks what starts focused, and `.focusable(_:interactions:)` makes any view a Tab stop. The focused control pulses on a shared clock; `\.isFocused` and `\.selectionEmphasis` let your own views join in
 - **Accelerated stepping**: `.shiftStepMultiplier(_:)` controls how far a Shift-accelerated key press moves (scrolling, list/table cursor movement, and `Stepper` / `Slider` value changes; default 5)
 - **Render caching**: `.equatable()` for subtree memoization
 
@@ -224,7 +232,7 @@ struct MyView: View {
 
             // Switch language at runtime
             Button("Deutsch") {
-                AppState.shared.setLanguage(.german)
+                LocalizationService.shared.setLanguage(.german)
             }
         }
     }
@@ -296,9 +304,13 @@ Sources/
 ├── Example/        Example app (executable target)
 └── Stress/         Performance stress harness, also a complex-TUI demo (executable)
 
-Tests/
-└── TUIkitTests/          ~2,850 tests across ~410 suites in 256 files
-                          (incl. i18n consistency, localization & golden-snapshot tests)
+Tests/                    ~3,350 tests across ~510 suites in 341 files
+├── TUIkitTests/          The umbrella module's suite (incl. i18n consistency,
+│                         localization & golden-snapshot tests)
+├── TUIkitCoreTests/      One suite per library module, so a module's tests
+├── TUIkitStylingTests/   cannot lean on the umbrella's API — the boundary is
+├── TUIkitViewTests/      enforced by Tools/validate-test-boundaries.sh
+└── TUIkitImageTests/
 
 Tools/
 ├── Diagrams/             Generates the DocC architecture / lifecycle diagrams from source
@@ -309,6 +321,8 @@ Tools/
 ├── Profiling/            Instruments Time Profiler tooling (record.sh, drive.py,
 │                         analyze_timeprofile.py, idle_cpu.py) and the RenderHarness
 │                         executable (no-PTY render loop for `xctrace --launch`)
+├── Smoke/                Drives the Example and Stress apps through a PTY and walks
+│                         every page, to catch crashes only reachable interactively
 └── TerminalProbes/       Reproducible terminal-behaviour probes backing
                           Documentation/Terminal-compatibility.md
 
@@ -327,7 +341,7 @@ The package also vends each library as an individual product. `import TUIkit` re
 
 ## Developer notes
 
-- Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~2,850 tests across ~410 suites in 256 files.
+- Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~3,350 tests across ~510 suites in 341 files.
 - Most tests run in parallel; a small subset that mutates global state is serialised, so the whole suite runs in a few seconds.
 - Benchmarks: `TUIKIT_BENCHMARKS=1 swift package benchmark` (full suite) — see `Benchmarks/TUIkitBenchmarks`. The `TUIKIT_BENCHMARKS` flag opts the `ordo-one/benchmark` dependency into the graph; without it the default build/test stays benchmark-free (no jemalloc requirement, no plugin deprecation warnings).
 - Profiling: see [Tools/Profiling/README.md](Tools/Profiling/README.md) (Instruments Time Profiler via a PTY, plus the no-PTY `RenderHarness` for `xctrace --launch`).
