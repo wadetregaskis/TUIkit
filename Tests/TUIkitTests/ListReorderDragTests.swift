@@ -365,28 +365,47 @@ struct ListReorderDragTests {
         #expect(rowLabels(fixture.render(), of: labels) == promised)
     }
 
-    /// A drag that has not reached another row would move nothing, so the list
-    /// is left completely alone — no gap, no faint copy, nothing dimmed. That is
-    /// also the only state in which the dragged row is still drawn in its place;
-    /// once it has somewhere to go, it leaves.
+    /// The row's own place is a destination like any other, and the preview
+    /// shows it like any other: the row leaves its place and the slot opens
+    /// where it was. Putting a row back where it came from is a thing a user may
+    /// want to do, and mid-drag it is the only way to change their mind — so the
+    /// preview has to keep tracking the cursor across that row rather than going
+    /// inert over it.
     @Test(
-        "A drag still over its own row disturbs nothing",
+        "A drag over its own row previews dropping it back",
         arguments: [RowReorderFeedback.dimmed, .cursor])
-    func nothingDisturbedOverTheSourceRow(feedback: RowReorderFeedback) {
+    func sourceRowIsADropTarget(feedback: RowReorderFeedback) {
         let fixture = Fixture(feedback: feedback)
         let buffer = fixture.render()
         let labels = fixture.items
         let yA = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
-        // Movement within the same row: a reorder gesture, but with no target.
+        // Movement within the same row: a reorder gesture, targeting the row's
+        // own slot.
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 6, y: yA))
         let dragging = fixture.render()
 
-        #expect(rowLabels(dragging, of: labels) == labels, "the order is untouched")
-        #expect(dragging.height == buffer.height, "…and so is the height")
-        #expect(
-            !dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
-            "nothing is dimmed either — there is nothing to preview")
+        #expect(dragging.height == buffer.height, "the list keeps its height")
+        switch feedback {
+        case .dimmed:
+            #expect(
+                rowLabels(dragging, of: labels) == labels,
+                "the row previews back in its own place, so the order reads unchanged")
+            #expect(
+                dragging.lines.contains { $0.contains(ANSIRenderer.dim) },
+                "…and it is the dimmed preview, not the row itself")
+        case .cursor:
+            #expect(
+                rowLabels(dragging, of: labels) == ["b", "c", "d", "e"],
+                "the row is carried, leaving a blank slot where it would land")
+        case .live:
+            break
+        }
+
+        // Releasing there changes nothing, which is the point of being able to
+        // do it.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 6, y: yA))
+        #expect(rowLabels(fixture.render(), of: labels) == labels)
     }
 
     @Test("Dragging a cursor-mode row out of the list cancels the drop")

@@ -83,15 +83,19 @@ extension ItemListHandler {
     /// the source already taken out. See ``reorderClosedUpIndex(_:source:)``.
     ///
     /// `nil` when nothing is dragging, when `.live` is moving the data instead,
-    /// when the cursor has left the rows (`.cursor` drops its gap then, so the
-    /// list reads as "let go here and nothing moves"), or when the row would
-    /// land exactly where it already is. That last case is the same statement
-    /// as the others: releasing on the row you picked up moves nothing, so
-    /// there is nothing to preview — and drawing a copy of the row against
-    /// itself only made the list look like it had gained a duplicate.
+    /// or when the cursor has left the rows (`.cursor` drops its gap then, so
+    /// the list reads as "let go here and nothing moves").
+    ///
+    /// The row's OWN place is a legitimate destination, and the preview shows it
+    /// like any other: putting the row back where it came from is a thing a user
+    /// may want to do, and mid-drag it is the only way to change their mind. It
+    /// was suppressed once, on the grounds that a copy of the row drawn against
+    /// itself made the list look like it had gained a duplicate — true while the
+    /// source row stayed put, and untrue since it started LEAVING its place for
+    /// the duration of the drag. Suppressing it now just makes the preview stop
+    /// tracking the cursor over one row for no reason the user can see.
     var reorderPlaceholder: (source: Int, slot: Int)? {
-        guard let source = reorderSource, let slot = reorder?.targetOffset, slot != source
-        else { return nil }
+        guard let source = reorderSource, let slot = reorder?.targetOffset else { return nil }
         return (source, slot)
     }
 
