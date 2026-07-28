@@ -105,6 +105,12 @@ public struct Button: View {
     /// Set with the ``disabled(_:)`` modifier.
     var isDisabled: Bool
 
+    /// Whether this button is a pop-up menu's trigger, and so runs its action on
+    /// the PRESS rather than the release — see ``menuTrigger()``.
+    ///
+    /// Internal: the only thing that wants it is a menu's own collapsed control.
+    var isMenuTrigger = false
+
     /// Creates a button with a label and action.
     ///
     /// - Parameters:
@@ -199,7 +205,8 @@ public struct Button: View {
             action: action,
             role: role,
             focusID: focusID,
-            isDisabled: isDisabled
+            isDisabled: isDisabled,
+            isMenuTrigger: isMenuTrigger
         )
     }
 }
@@ -218,6 +225,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
     let role: ButtonRole?
     let focusID: String?
     let isDisabled: Bool
+    var isMenuTrigger = false
 
     var body: Never {
         fatalError("_ButtonCore renders via Renderable")
@@ -393,11 +401,28 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     captureHoverBox.value = false
                     return true
                 case .pressed where event.button == .left:
-                    // Claim the press so the dispatcher routes the
-                    // matching release back here even if the cursor
-                    // drifts off the button before it lifts.
+                    guard isMenuTrigger else {
+                        // Claim the press so the dispatcher routes the
+                        // matching release back here even if the cursor
+                        // drifts off the button before it lifts.
+                        return true
+                    }
+                    // A menu trigger fires on the press and then gets out of
+                    // the way: the menu it just opened is what the drag and
+                    // release belong to, so the press hands the rest of the
+                    // gesture back to live hit-testing. That is what makes
+                    // press-drag-release pick a row, the way a Mac menu does.
+                    focusManager?.focus(id: captureFocusID)
+                    captureAction()
+                    mouseDispatcher.handOffGesture()
                     return true
                 case .released where event.button == .left:
+                    // The trigger already fired on the press. This release only
+                    // arrives when the menu did not take it (it opens on the
+                    // frame after the press, so a press and release in one input
+                    // batch both land here) — consumed, but never a second
+                    // activation, which would toggle the menu straight shut.
+                    guard !isMenuTrigger else { return true }
                     focusManager?.focus(id: captureFocusID)
                     captureAction()
                     return true
@@ -427,6 +452,24 @@ private struct _ButtonCore: View, Renderable, Layoutable {
 // MARK: - Button Convenience Modifiers
 
 extension Button {
+    /// Makes this button a pop-up menu's trigger: its action runs on the mouse
+    /// PRESS, and the drag and release that follow are handed back to live
+    /// hit-testing so they reach the menu the action opened.
+    ///
+    /// That is the whole of macOS menu tracking — press and hold to open, drag
+    /// to highlight, release to choose — and it only makes sense for a control
+    /// whose action opens something under the pointer, which is why this is
+    /// internal rather than a general "activate on press" knob. An ordinary
+    /// button keeps firing on release, so you can still slide off one to change
+    /// your mind.
+    ///
+    /// - Returns: A button that opens its menu on the press.
+    func menuTrigger() -> Button {
+        var copy = self
+        copy.isMenuTrigger = true
+        return copy
+    }
+
     /// Creates a disabled version of this button.
     ///
     /// - Parameter disabled: Whether the button is disabled.

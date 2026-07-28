@@ -93,6 +93,12 @@ enum TextFieldMouseHandler {
                     // The `▾` disclosure: toggle the suggestions menu; the
                     // caret stays where it was.
                     handler.toggleSuggestionsOpen()
+                    if handler.suggestionsActive {
+                        // Opened — so the drag and release that follow belong to
+                        // the menu, not to the field. Click-and-hold, drag down
+                        // the suggestions, release on one to choose it.
+                        mouseDispatcher.handOffGesture()
+                    }
                     return true
                 }
                 if event.shift {

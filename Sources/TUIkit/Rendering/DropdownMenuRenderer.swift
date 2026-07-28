@@ -378,9 +378,12 @@ enum DropdownMenu {
         guard !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
-        // Hover-follows-cursor needs motion reports (the collapsed control
-        // usually requested them already; this is idempotent).
+        // Hover-follows-cursor needs motion reports, and press-and-hold
+        // tracking needs DRAG reports — a held move is reported as a drag, not
+        // as motion. (The collapsed control usually asked for both already;
+        // this is idempotent.)
         mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.drag)
         let rows = config.rows
         let scroll = config.scroll
         let innerWidth = config.innerWidth
@@ -427,6 +430,12 @@ enum DropdownMenu {
                     return true
                 case .exited:
                     // Leave the highlight where it is when the cursor leaves.
+                    return true
+                case .dragged where event.button == .left:
+                    // The same thing with the button held — a Mac menu tracks
+                    // press-and-hold, and a terminal reports a held move as a
+                    // DRAG, not as motion, so `.entered` never fires for it.
+                    onHover(index)
                     return true
                 case .pressed where event.button == .left:
                     return true

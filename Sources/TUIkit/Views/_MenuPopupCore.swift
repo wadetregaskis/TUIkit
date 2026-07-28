@@ -103,6 +103,11 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
                 Text(state.isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret)
             }
         }
+        // Opens on the mouse PRESS, and hands the rest of that gesture to the
+        // menu — click-and-hold, drag down the rows, release on one to choose
+        // it, exactly as a Mac pull-down button behaves. A plain click still
+        // works: the menu simply stays up until the next click.
+        .menuTrigger()
     }
 
     private func triggerContext(_ context: RenderContext) -> RenderContext {

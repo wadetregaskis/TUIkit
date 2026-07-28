@@ -240,22 +240,31 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 hoverBox.value = false
                 return true
             case .pressed where event.button == .left:
-                return true
-            case .released where event.button == .left:
-                // Capture the open/close intent BEFORE focusing. Focusing the
-                // (already-focused) picker fires its own `onFocusLost`, which
-                // sets `isOpen = false`; reading `isOpen` *after* that and
-                // toggling it would flip false→true and reopen a drop-down the
-                // user clicked the control to close. Setting the intended state
-                // explicitly after the focus call is immune to that.
+                // The drop-down opens on the PRESS, like a Mac pop-up button:
+                // click and hold, drag down the options, release on one to
+                // choose it. Capture the open/close intent BEFORE focusing —
+                // focusing the (already-focused) picker fires its own
+                // `onFocusLost`, which sets `isOpen = false`; reading `isOpen`
+                // *after* that and toggling it would flip false→true and reopen
+                // a drop-down the user clicked the control to close. Setting the
+                // intended state explicitly after the focus call is immune to
+                // that.
                 let shouldOpen = !handler.isOpen
                 focusManager?.focus(id: persistedFocusID)
                 handler.isOpen = shouldOpen
-                if handler.isOpen {
+                if shouldOpen {
                     handler.highlightedIndex =
                         handler.itemValues.firstIndex(
                             of: handler.selection.wrappedValue) ?? 0
+                    // The rest of this gesture belongs to the open menu, not to
+                    // the control that opened it.
+                    mouseDispatcher.handOffGesture()
                 }
+                return true
+            case .released where event.button == .left:
+                // Already acted on, on the press. Only reached when the menu did
+                // not take the release (press and release in one input batch, so
+                // no frame in between) — consumed, never a second toggle.
                 return true
             default: return false
             }

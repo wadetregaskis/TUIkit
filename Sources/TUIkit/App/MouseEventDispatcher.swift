@@ -77,6 +77,11 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// `.released`.
     private var pressedHandlers: [MouseButton: PressCapture] = [:]
 
+    /// Set by the handler currently taking a `.pressed` event to say it wants
+    /// no drag capture — see ``handOffGesture()``. Read (and cleared) around
+    /// each handler call, so it can only ever speak for that one press.
+    private var gestureHandedOff = false
+
     /// The list of hit-test regions in absolute screen coordinates for
     /// the current frame.
     ///
@@ -273,6 +278,23 @@ extension MouseEventDispatcher {
         handlers[id]
     }
 
+    /// Called by a handler *while it is consuming a press* to give the rest of
+    /// the gesture away: the `.dragged` / `.released` events that follow are
+    /// hit-tested live, against whatever is on screen by then, instead of being
+    /// routed back here by drag capture.
+    ///
+    /// This is how a pop-up button tracks like a Mac menu. The press opens the
+    /// menu, and from that moment the gesture belongs to the MENU — dragging
+    /// highlights the row under the pointer and releasing over one chooses it.
+    /// Capture is exactly wrong for that: it would send every later event back
+    /// to the button, which is no longer the control the user is pointing at.
+    ///
+    /// The ordinary press keeps its capture, and should: it is what lets you
+    /// press a button, slide off it, and release to cancel.
+    func handOffGesture() {
+        gestureHandedOff = true
+    }
+
     /// Dispatches one mouse event to the appropriate handler.
     ///
     /// Coordinates in the event passed to the handler are **localised
@@ -389,9 +411,13 @@ extension MouseEventDispatcher {
             guard let handler = handlers[region.handlerID] else { continue }
             let localized = localize(
                 event, byOffsetX: region.offsetX, offsetY: region.offsetY)
+            gestureHandedOff = false
             let consumed = handler(localized)
             if consumed {
-                if event.phase == .pressed {
+                // A press captures the rest of the gesture — unless the handler
+                // handed it off (``handOffGesture()``), which a menu-opening
+                // press does so the drag and release find the open menu.
+                if event.phase == .pressed, !gestureHandedOff {
                     pressedHandlers[event.button] = PressCapture(
                         handler: handler,
                         regionOffsetX: region.offsetX,
