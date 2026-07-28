@@ -40,7 +40,7 @@ Text(localized: LocalizationKey.Button.save)
 ### Switch Language at Runtime
 
 ```swift
-AppState.shared.setLanguage(.german)
+LocalizationService.shared.setLanguage(.german)
 // UI automatically re-renders with German strings
 ```
 
@@ -187,18 +187,14 @@ let text = service.string(for: LocalizationKey.Button.ok)
 ### Get Current Language
 
 ```swift
-let current = AppState.shared.currentLanguage
+let current = LocalizationService.shared.currentLanguage
 print(current.displayName)  // "English", "Deutsch", etc.
 ```
 
 ### Change Language
 
 ```swift
-// Via AppState
-AppState.shared.setLanguage(.german)
-
-// Or directly via service
-LocalizationService.shared.setLanguage(.french)
+LocalizationService.shared.setLanguage(.german)
 ```
 
 ### Language Persistence
@@ -419,7 +415,7 @@ This provides type safety, IDE autocomplete, and compile-time verification.
 ```swift
 // Safe to call from any thread
 DispatchQueue.global().async {
-    AppState.shared.setLanguage(.german)
+    LocalizationService.shared.setLanguage(.german)
 }
 ```
 
@@ -507,7 +503,7 @@ swift test --filter LocalizationKeyConsistencyTests
 
 ### Wrong Language Showing
 
-- Verify language was set: `AppState.shared.currentLanguage`
+- Verify language was set: `LocalizationService.shared.currentLanguage`
 - Confirm language is supported (en, de, fr, it, es, zh, ja)
 - Check translation file exists for that language
 

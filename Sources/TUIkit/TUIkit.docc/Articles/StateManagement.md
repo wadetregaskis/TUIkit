@@ -31,10 +31,14 @@ struct CounterView: View {
 
 ```swift
 struct ParentView: View {
-    @State var selectedIndex = 0
+    @State var selection = "medium"
 
     var body: some View {
-        Menu(items: menuItems, selection: $selectedIndex)
+        Picker("Size", selection: $selection) {
+            Text("Small").tag("small")
+            Text("Medium").tag("medium")
+            Text("Large").tag("large")
+        }
     }
 }
 ```
