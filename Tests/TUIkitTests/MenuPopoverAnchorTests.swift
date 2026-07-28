@@ -139,6 +139,50 @@ struct MenuPopoverAnchorTests {
         #expect(flipped.y + 4 <= 20, "the flipped menu ends at or above the trigger's row")
     }
 
+    /// Every popover surface, flipped, must clear the thing it hangs off — and
+    /// they hang off different things, so the arithmetic differs and is worth
+    /// stating once for all four rather than trusting each caller.
+    ///
+    /// A `Picker` drop-down, a combo box's suggestions and a pull-down `Menu`
+    /// all sit one row BELOW a one-row control, so flipped they must end on the
+    /// row above it. A `.contextMenu` hangs off the clicked CELL with nothing
+    /// above it, so flipped it ends on the row above the click.
+    @Test(
+        "A flipped popover clears whatever it hangs off",
+        arguments: [
+            ("Picker drop-down / combo box / pull-down Menu", 1),
+            ("context menu", 0),
+        ])
+    func flippedPopoverClearsItsAnchor(surface: String, anchorHeight: Int) {
+        let screen = 24
+        let height = 5
+        // The control (or clicked cell) is low enough that the popup cannot fit
+        // beneath it.
+        let controlRow = screen - 2
+        let layer = OverlayLayer(
+            offsetX: 0, offsetY: controlRow + anchorHeight,
+            content: FrameBuffer(lines: Array(repeating: "x", count: height)),
+            level: .popover, anchorHeight: anchorHeight)
+
+        let placed = layer.placed(maxWidth: 40, maxHeight: screen)
+        #expect(placed.y + height <= controlRow, "\(surface): it ends above the anchor")
+        #expect(placed.y >= 0, "\(surface): and stays on screen")
+    }
+
+    /// When it fits neither below nor above there is nowhere left to put it, so
+    /// it is clamped on screen and overlaps — which is what every desktop menu
+    /// does in the same corner. Pinned so the clamp is not mistaken for the
+    /// flip being broken.
+    @Test("A popover too tall for either side is clamped on screen")
+    func tooTallToFitEitherSideIsClamped() {
+        let layer = OverlayLayer(
+            offsetX: 0, offsetY: 5, content: FrameBuffer(lines: Array(repeating: "x", count: 9)),
+            level: .popover, anchorHeight: 1)
+        let placed = layer.placed(maxWidth: 40, maxHeight: 10)
+        #expect(placed.y == 1, "flush with the bottom edge")
+        #expect(placed.y + 9 <= 10, "and wholly on screen")
+    }
+
     /// A `.contextMenu` is the other case, and its 0 is right: it is anchored
     /// AT the cell that was clicked, with no control above it to clear. Pinned
     /// so the pop-up menu's fix does not get copied onto it by symmetry.
