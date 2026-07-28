@@ -1185,9 +1185,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard let source = handler.reorderSource,
-            handler.reorderFeedback == .cursor || handler.reorderPlaceholder != nil
-        else { return visibleRows }
+        guard let source = handler.reorderRemovedRow else { return visibleRows }
         let original = visibleRows.first { $0.index == source }?.row.buffer
         var rows = visibleRows.filter { $0.index != source }
         guard let placeholder = handler.reorderPlaceholder else { return rows }
@@ -1241,10 +1239,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if case .content = range.type { isContent = true }
             let dropIndex: Int?
             if isContent {
-                // A real row still means "put it where this row is", by data
-                // offset — that is what `move(from:to:)` consumes, and it is
-                // unchanged from before the drag.
-                dropIndex = range.rowIndex
+                // A real row means "put it where this row is" — as the row is
+                // DRAWN, not as its data is numbered. Mid-drag the list has
+                // closed up behind the dragged row and opened a slot elsewhere,
+                // so the two differ, and it is the drawn position the pointer is
+                // actually resting on.
+                dropIndex = handler.reorderDrawnPosition(of: range.rowIndex)
             } else if range.rowIndex == Self.reorderSlotRowIndex, let placeholder {
                 // The gap holds the target it already has. It is the line the
                 // pointer rests on after every step, so reading it as "off the

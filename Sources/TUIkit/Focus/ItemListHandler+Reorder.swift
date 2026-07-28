@@ -59,6 +59,46 @@ extension ItemListHandler {
         index - (index > source ? 1 : 0)
     }
 
+    /// The row a non-`.live` drag has taken OUT of the list, or `nil` when the
+    /// list is drawn in its plain data order.
+    ///
+    /// The two conditions have to be asked together, and by everything that
+    /// cares, or the drawing and the hit-testing disagree about what is on
+    /// screen. `.dimmed` draws the row only at the drop slot, so with nowhere to
+    /// drop it there is nothing to draw and the list is left exactly as it was;
+    /// `.cursor` has the row on the pointer for the whole drag, so it is out of
+    /// the list for the whole drag, slot or no slot.
+    var reorderRemovedRow: Int? {
+        guard let source = reorderSource else { return nil }
+        guard reorderFeedback == .cursor || reorderPlaceholder != nil else { return nil }
+        return source
+    }
+
+    /// Where the row with data offset `index` sits in the order currently
+    /// DRAWN: closed up behind the dragged row, then pushed past the drop slot.
+    ///
+    /// This is what a drop on that row has to produce. A prospective FINAL index
+    /// is the same currency ``move(from:to:)`` takes, so the slot opens on the
+    /// very line the pointer is on, whichever direction the pointer arrived
+    /// from — and every position, including the row's own, can be named.
+    ///
+    /// Reading the row's DATA offset instead agrees only while the pointer is
+    /// below the slot. Above it every row named the position one past itself, so
+    /// dragging back up moved the slot a row late; and the source's own place —
+    /// the one destination a user is most likely to want back, and mid-drag the
+    /// only way to change their mind — could not be named at all, because the
+    /// line it came from is occupied by its successor, which names its own
+    /// offset, which is one too far.
+    ///
+    /// Returns `index` unchanged outside such a drag, where the list is drawn in
+    /// data order and the two are the same number.
+    func reorderDrawnPosition(of index: Int) -> Int {
+        guard let source = reorderRemovedRow else { return index }
+        let closedUp = reorderClosedUpIndex(index, source: source)
+        guard let slot = reorderPlaceholder?.slot else { return closedUp }
+        return closedUp >= slot ? closedUp + 1 : closedUp
+    }
+
     // MARK: - The drag
 
     /// Whether a reorder drag is in flight *and* has moved — the test that

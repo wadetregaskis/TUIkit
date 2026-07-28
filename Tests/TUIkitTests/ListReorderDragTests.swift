@@ -505,6 +505,59 @@ struct ListReorderDragTests {
             "releasing where no slot is shown leaves the order alone")
     }
 
+    /// The reported hole: once the row leaves its place, the line it came from is
+    /// occupied by its successor — and dragging back over that line did nothing,
+    /// because the successor still named its own DATA offset as the drop target.
+    /// Its own place is the one destination a user is most likely to want back,
+    /// and it was the only one they could not reach.
+    @Test(
+        "Dragging back over the row's own line previews putting it back",
+        arguments: [RowReorderFeedback.dimmed, .cursor])
+    func draggingBackToTheStartPutsItBack(feedback: RowReorderFeedback) {
+        let fixture = Fixture(feedback: feedback)
+        let buffer = fixture.render()
+        let yA = fixture.rowY(buffer, "a")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yA + 3))
+        #expect(slotLine(fixture.render(), feedback: feedback) == 3, "sanity: the slot went with it")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yA))
+        #expect(
+            slotLine(fixture.render(), feedback: feedback) == 0,
+            "\(feedback): the slot comes back to the line the pointer is on")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yA))
+        #expect(
+            fixture.items == ["a", "b", "c", "d", "e"],
+            "\(feedback): and the drop honours the preview — the row goes back where it was")
+    }
+
+    /// The general rule the above is one case of: the slot is always on the line
+    /// the pointer is on, whichever way the pointer came. Walking down and back
+    /// up is what separates a drop target that means "the position under the
+    /// cursor" from one that means "this row's data offset", which only agree
+    /// while the pointer is below the slot.
+    @Test("The slot follows the pointer back up, one row per step")
+    func slotFollowsThePointerBackUp() {
+        for feedback in [RowReorderFeedback.dimmed, .cursor] {
+            let fixture = Fixture(feedback: feedback)
+            let buffer = fixture.render()
+            let yA = fixture.rowY(buffer, "a")
+            fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
+            for step in 1...4 {
+                fixture.dispatcher.dispatch(
+                    MouseEvent(button: .left, phase: .dragged, x: 2, y: yA + step))
+                fixture.render()
+            }
+            var slots: [Int] = []
+            for step in stride(from: 3, through: 0, by: -1) {
+                fixture.dispatcher.dispatch(
+                    MouseEvent(button: .left, phase: .dragged, x: 2, y: yA + step))
+                slots.append(slotLine(fixture.render(), feedback: feedback))
+            }
+            #expect(slots == [3, 2, 1, 0], "\(feedback): coming back up — got \(slots)")
+        }
+    }
+
     @Test("Nothing is disturbed until a drag actually begins")
     func decorationNeedsMotion() {
         let fixture = Fixture(feedback: .dimmed)

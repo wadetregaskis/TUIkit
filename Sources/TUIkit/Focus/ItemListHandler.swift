@@ -271,10 +271,17 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         /// Where a reorder drop on this line would put the dragged row, or `nil`
         /// for a line that is not a drop target (a section header).
         ///
-        /// The same as ``rowIndex`` for a real row. It exists for the one line
-        /// that is a drop target without being a row: the reorder slot, which
-        /// the pointer rests on after every step of a drag. Reading that line as
-        /// "off the rows" is what made a `.cursor` drag cancel its own gap.
+        /// A line's position in the order currently DRAWN, which is a
+        /// prospective final index — see ``dropTarget(atContentY:)``. Outside a
+        /// non-`.live` drag that is simply ``rowIndex``; during one the list has
+        /// closed up behind the dragged row and opened a slot elsewhere, so the
+        /// two part company (``reorderDrawnPosition(of:)``).
+        ///
+        /// It is separate from ``rowIndex`` for two reasons, then: that, and the
+        /// one line that is a drop target without being a row at all — the
+        /// reorder slot, which the pointer rests on after every step of a drag.
+        /// Reading that line as "off the rows" is what made a `.cursor` drag
+        /// cancel its own gap.
         var dropIndex: Int?
     }
 
