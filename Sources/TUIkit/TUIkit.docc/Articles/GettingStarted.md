@@ -31,7 +31,9 @@ let package = Package(
 
 ## Creating Your First App
 
-Create a `main.swift` file with the ``App`` protocol as your entry point:
+Adopt the ``App`` protocol and mark it `@main`. Put it in a file called
+anything **except** `main.swift` — `App.swift` is the convention, and the
+`tuikit` scaffold generates exactly that:
 
 ```swift
 import TUIkit
@@ -60,6 +62,20 @@ struct ContentView: View {
     }
 }
 ```
+
+> Important: A file named `main.swift` holds top-level code, and Swift refuses
+> `@main` in a module that has any — *"'main' attribute cannot be used in a
+> module that contains top-level code"*. If you would rather have a
+> `main.swift` (to run setup before the first frame, as this package's own
+> `Example` target does), drop the attribute and call the entry point yourself:
+>
+> ```swift
+> // main.swift — no @main on the type
+> struct MyApp: App { … }
+>
+> registerMyLocalizations()
+> await MyApp.main()
+> ```
 
 ## Using State
 
