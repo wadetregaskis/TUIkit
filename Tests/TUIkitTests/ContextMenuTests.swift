@@ -340,6 +340,76 @@ struct ContextMenuTests {
         #expect(!rows.contains { $0.contains("Cut") }, "and the first one closed: \(rows)")
     }
 
+    /// The same-target half of the rule above. macOS: a right-click on a target
+    /// whose own menu is already up closes that menu and opens it again where the
+    /// new click landed — usually a no-op to look at, and a small hop when the
+    /// click moved. Anything else makes the second click behave differently from
+    /// the first for no reason the user can see.
+    @Test("Right-clicking the same target again re-opens its menu at the new cell")
+    func rightClickSameTargetReopens() throws {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = Text("Right-click me, this is a wide target").contextMenu {
+            Button("Cut") {}
+            Button("Copy") {}
+        }
+
+        func renderComposited() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.keyEventDispatcher.clearHandlers()
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(view, context: context)
+            tui.mouseEventDispatcher.setRegions(
+                buffer.compositingOverlays(
+                    maxWidth: context.availableWidth, maxHeight: context.availableHeight,
+                    palette: context.environment.palette
+                ).hitTestRegions)
+            return buffer
+        }
+
+        func rightClick(x: Int) {
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .pressed, x: x, y: 0))
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .released, x: x, y: 0))
+        }
+
+        _ = renderComposited()
+        rightClick(x: 3)
+        let first = renderComposited()
+        #expect(try #require(first.overlays.first).offsetX == 3, "sanity: anchored at the click")
+
+        rightClick(x: 9)
+        let second = renderComposited()
+        #expect(menuState(tui, context).isOpen == true, "one click, still open")
+        #expect(second.overlays.count == 1, "and exactly one menu, not two")
+        #expect(
+            try #require(second.overlays.first).offsetX == 9,
+            "…re-anchored where the second click landed")
+    }
+
+    /// A `.contextMenu` must be transparent to every gesture that is not a
+    /// secondary click. Its trigger covers the whole content, so registering it
+    /// ahead of the content's own regions makes it the first thing a left click
+    /// meets — and a declined left click stops there rather than bubbling.
+    @Test("A .contextMenu does not swallow ordinary clicks on its content")
+    func leftClickReachesTheContent() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        var ran = false
+        let view = Button("Go") { ran = true }.contextMenu { Button("Cut") {} }
+
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: 0))
+        #expect(ran == true, "the button under the context menu still works")
+    }
+
     /// A right-click anchors the menu AT the clicked cell: the pointer is about
     /// to pick from it, so the rows want to be in a predictable place under
     /// itself. Shift+F10 has no pointer to be predictable for, so the menu

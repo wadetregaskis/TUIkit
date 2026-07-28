@@ -155,11 +155,19 @@ extension ContextMenuModifier: Renderable {
         }
     }
 
-    /// Attaches the whole-content secondary-click trigger. Registered normally
-    /// (so a right-click bubbling past the content's own regions reaches it —
-    /// see `MouseEventDispatcher.dispatch`'s right-button fall-through); it opens
-    /// on a right-click or Ctrl-click PRESS and records the click cell as the
-    /// menu anchor.
+    /// Attaches the whole-content secondary-click trigger: a right-click or
+    /// Ctrl-click PRESS opens the menu and records the click cell as its anchor.
+    ///
+    /// Registered UNDERNEATH the content's own regions (inserted first, so the
+    /// dispatcher's innermost-first walk reaches it last). Two things depend on
+    /// that. A right-click on an interactive child bubbles down to here when the
+    /// child does not want it, which is how a `.contextMenu` on a container
+    /// answers a click on its contents. And, less obviously, a LEFT click must
+    /// pass straight through: the dispatcher stops at the first region that
+    /// declines a left click rather than bubbling it, so a trigger registered on
+    /// TOP of the content would decline every ordinary click and the button
+    /// underneath would never see one — a `.contextMenu` would silently make its
+    /// own content unclickable.
     ///
     /// On the press, not the release, because that is the gesture a Mac context
     /// menu answers: press and hold, drag down the rows, release on one to run
@@ -196,11 +204,12 @@ extension ContextMenuModifier: Renderable {
                 return false
             }
         }
-        buffer.hitTestRegions.append(
+        buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0, offsetY: 0,
                 width: max(1, buffer.width), height: max(1, buffer.height),
-                handlerID: handlerID))
+                handlerID: handlerID),
+            at: 0)
     }
 
     /// Makes the content a focus stop and opens the menu on **Shift+F10** while
