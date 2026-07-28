@@ -42,6 +42,14 @@ struct MyApp: App {
 
 ## Topics
 
+> Note: `import TUIkit` re-exports `TUIkitCore`, `TUIkitStyling`, `TUIkitView`
+> and `TUIkitImage`, so everything below is one import away. The reference
+> pages, though, follow the module a symbol is *declared* in: the entries here
+> for core types — `View`, `Color`, `Binding`, `State`, `EnvironmentValues`,
+> `FrameBuffer`, `Palette` and their neighbours — resolve only in a
+> documentation build that covers those targets too. Building this catalog
+> alone leaves them as plain text.
+
 ### Essentials
 
 - <doc:GettingStarted>
@@ -103,10 +111,11 @@ struct MyApp: App {
 - ``DatePicker``
 - ``ColorPicker``
 - ``Menu``
-- ``MenuItem``
 - ``Link``
 - ``ProgressView``
 - ``Gauge``
+- ``EditButton``
+- ``EditMode``
 
 ### Layout
 
@@ -146,6 +155,51 @@ struct MyApp: App {
 - ``TableColumn``
 - ``ColumnWidth``
 - ``SelectionMode``
+- ``RowReorderFeedback``
+
+### Scrolling
+
+- ``ScrollViewReader``
+- ``ScrollViewProxy``
+- ``ScrollAnchor``
+- ``ScrollFollowMargin``
+- ``ScrollGranularity``
+- ``ScrollOverscroll``
+- ``ScrollbarVisibility``
+- ``ScrollbarArrows``
+- ``ScrollbarEdges``
+- ``ScrollbarClickBehavior``
+- ``ScrollbarRepeat``
+
+### Focus
+
+- ``FocusState``
+- ``FocusInteractions``
+- ``DefaultFocusEvaluationPriority``
+- ``SelectionEmphasis``
+- ``SelectionIndicatorStyle``
+
+### Keyboard
+
+- ``KeyboardShortcut``
+- ``KeyEquivalent``
+- ``EventModifiers``
+- ``CommandKeyBinding``
+- ``SubmitLabel``
+- ``SubmitTriggers``
+
+### Mouse & Drag and Drop
+
+- ``MouseSupport``
+- ``MouseFeature``
+- ``DragGestureEvent``
+- ``DragPreviewAnchor``
+- ``DropInfo``
+
+### Search
+
+- ``SearchFieldPlacement``
+- ``SearchFieldIconPlacement``
 
 ### State Management
 
@@ -193,8 +247,16 @@ struct MyApp: App {
 - ``DefaultToggleStyle``
 - ``CheckboxToggleStyle``
 - ``SwitchToggleStyle``
-- ``CheckboxStyle``
+- ``ToggleCharacterSet``
+- ``MenuStyle``
+- ``MenuStyleConfiguration``
+- ``DefaultMenuStyle``
+- ``InlineMenuStyle``
+- ``GaugeStyle``
+- ``FormStyle``
+- ``FormStyleConfiguration``
 - ``TrackStyle``
+- ``TrackConfiguration``
 - ``IndeterminateStyle``
 - ``ListStyle``
 - ``PlainListStyle``
