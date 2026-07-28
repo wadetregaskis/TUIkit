@@ -74,6 +74,40 @@ content
 Horizontal scrolling (`.left` / `.right`) is produced by a trackpad swipe or a
 shifted mouse wheel.
 
+## Context Menus
+
+`contextMenu(menuItems:)` attaches a pop-up of `Button`s to any view, anchored
+at the click point:
+
+```swift
+Text("Right-click me")
+    .contextMenu {
+        Button("Duplicate") { duplicate() }
+        Button("Delete", role: .destructive) { delete() }
+    }
+```
+
+Selection, <kbd>Esc</kbd>, or a click outside dismisses it. A right-click that a
+view does not handle bubbles to an ancestor menu, the way the wheel does.
+
+Not every terminal will give you the right button: iTerm2 keeps it for its own
+menu by default, so TUIkit also accepts <kbd>Ctrl</kbd>-click, and
+<kbd>Shift</kbd>+<kbd>F10</kbd> opens the menu of whatever is focused. See
+`Documentation/Terminal-compatibility.md` for what each terminal forwards.
+
+## Press-and-Hold
+
+Pop-up menus — ``Menu``, a `.menu`-style ``Picker``, a `TextField`'s suggestion
+list, and `contextMenu` — track the pointer while the button is held, the way a
+Mac menu does: press to open, drag to move the highlight, release over an item
+to choose it. Releasing outside dismisses without choosing. Click-then-click
+works too; both gestures drive the same highlight.
+
+A pointer-opened menu deliberately starts with **nothing** highlighted, so a
+release straight after the press cannot choose an item you never pointed at. The
+first <kbd>↓</kbd> lands on the first item and the first <kbd>↑</kbd> on the
+last.
+
 ## Drag and Drop
 
 Views can act as drag sources and drop targets, in the style of SwiftUI's
