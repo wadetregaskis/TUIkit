@@ -13,6 +13,9 @@ extension View {
     /// `isPresented` is `true`, the base content is dimmed and the alert is
     /// displayed centered on top.
     ///
+    /// Choosing any action closes the alert, so an action does not flip
+    /// `isPresented` itself. Escape chooses the `.cancel`-role button.
+    ///
     /// ## Example
     ///
     /// ```swift
@@ -22,8 +25,8 @@ extension View {
     ///     Button("Show Alert") { showAlert = true }
     /// }
     /// .alert("Warning", isPresented: $showAlert) {
-    ///     Button("Yes") { showAlert = false }
-    ///     Button("Cancel", role: .cancel) { showAlert = false }
+    ///     Button("Yes") { save() }
+    ///     Button("Cancel", role: .cancel) {}
     /// } message: {
     ///     Text("Are you sure?")
     /// }
