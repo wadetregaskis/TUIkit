@@ -33,9 +33,10 @@ public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// `onMove` fires once, on release.
     case dimmed
 
-    /// Like ``dimmed``, but the slot is simply **empty**: a gap the size of the
-    /// row, opening wherever it would land. The row is not drawn at all while
-    /// it is being dragged.
+    /// Like ``dimmed``, but the row rides the **pointer**: a copy of it floats
+    /// at the cursor, above every other view, and the slot it would land in is
+    /// simply an empty gap. So the gesture reads as carrying the row rather
+    /// than as the list rearranging itself around an invisible hand.
     ///
     /// Drag out of the list and the gap disappears, so releasing there cancels
     /// the reorder. `onMove` fires once, on release, and not at all when

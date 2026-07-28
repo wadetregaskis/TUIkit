@@ -19,6 +19,21 @@ import Foundation
 /// still fits the interior after composition.
 private let listRowGutter = 2
 
+/// Where inside the grabbed row a reorder drag was pressed, in the row's own
+/// cells. A class so the press-captured mouse closure can fill it in on the
+/// press and read it back on the drag that follows.
+@MainActor
+private final class _ListRowGrabPoint {
+    var x = 0
+    var y = 0
+}
+
+/// The payload a ``RowReorderFeedback/cursor`` drag carries. Private and empty
+/// on purpose: it exists only to satisfy ``DragAndDropSession``, and no
+/// `dropDestination` can name — and therefore accept — it, so floating a row
+/// over the app can never be mistaken for a drop.
+private struct _ListRowReorderPayload {}
+
 // MARK: - Row Source (windowed materialisation)
 
 /// A windowed view over a `List`'s rows.
@@ -1022,7 +1037,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,
+                dragSession: context.environment.dragAndDropSession,
                 topInset: topInset,
+                // Where a row's own content starts: past the border, the style's
+                // leading padding, and `renderPlainLine`'s 1-cell gutter — the
+                // same column the row's hit regions are translated by. A
+                // `.cursor` drag measures its grab point from here, so the row
+                // rides the cursor on the exact cell that was pressed.
+                rowContentLeft: borderInset + context.environment.listStyle.rowPadding.leading + 1,
                 contentColumns: contentColumns
             )
         )
@@ -1146,9 +1168,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// on screen is exactly the order a drop would produce — the preview IS the
     /// result, rather than the result plus a leftover.
     ///
-    /// Gated on the PLACEHOLDER, not on the drag: with the cursor resting on the
-    /// row it picked up there is nowhere for it to go, releasing would move
-    /// nothing, and the list is left completely untouched to say so.
+    /// What "no slot" means differs by mode, and that is what the two guards
+    /// below say. `.dimmed` draws the row only at the slot, so with nowhere to
+    /// drop it there is nothing to draw and the list is left untouched.
+    /// `.cursor` has the row on the pointer for the whole drag, so it must be
+    /// out of the list for the whole drag too — drawn in both places at once it
+    /// would read as a duplicate — and the missing gap is what says releasing
+    /// here would put it back.
     ///
     /// The slot is typed as a footer, not as content: it carries no id, so
     /// selection ignores it, and it is not a row the keyboard cursor can sit on.
@@ -1159,10 +1185,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard let placeholder = handler.reorderPlaceholder else { return visibleRows }
-        let source = placeholder.source
+        guard let source = handler.reorderSource,
+            handler.reorderFeedback == .cursor || handler.reorderPlaceholder != nil
+        else { return visibleRows }
         let original = visibleRows.first { $0.index == source }?.row.buffer
         var rows = visibleRows.filter { $0.index != source }
+        guard let placeholder = handler.reorderPlaceholder else { return rows }
 
         let body: FrameBuffer
         switch handler.reorderFeedback {
@@ -1242,13 +1270,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func containerMouseHandler(
         state: PopulatedRenderState,
         focusManager: FocusManager?,
+        dragSession: DragAndDropSession?,
         topInset: Int,
+        rowContentLeft: Int,
         contentColumns: Range<Int>
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
         let rowRanges = state.visibleRowYRanges
         let capturedPrimaryAction = primaryAction
+        let capturedRows = state.visibleRows
+        // Where inside the grabbed row the press landed — the cell a `.cursor`
+        // drag keeps under the pointer. Held in the closure because the closure
+        // IS the gesture: the dispatcher captures it at press and routes the
+        // whole drag back here, however many renders intervene.
+        let grab = _ListRowGrabPoint()
         return { event in
             // Wheel scrolling moves the viewport, NEVER the
             // selection — same model as Finder / Explorer /
@@ -1292,22 +1328,59 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         case .content = hit.type
                     {
                         captureHandler.beginReorder(grabbing: hit.rowIndex)
+                        let band = captureHandler.visibleRowBands.first { $0.rowIndex == hit.rowIndex }
+                        grab.x = max(0, event.x - rowContentLeft)
+                        grab.y = max(0, event.y - topInset - (band?.yStart ?? 0))
                     }
                     return true
 
                 case .dragged:
                     // Any motion during a grab is a reorder, not a click. What
-                    // that looks like is the feedback mode's business — and it
-                    // is entirely the LIST's business: no mode rides a copy of
-                    // the row on the cursor, so nothing here touches the drag
-                    // session.
+                    // that looks like is the feedback mode's business — and
+                    // `.cursor`'s business reaches outside the list: its row is
+                    // carried on the pointer, above every other view, which only
+                    // the drag session can draw.
+                    let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
+                    if let dragSession, let floating = captureHandler.reorderFloatingRow {
+                        if !wasActive, let row = capturedRows.first(where: { $0.index == floating })
+                        {
+                            // Hand the row's own buffer to the session, which
+                            // floats it at the cursor above everything else. Its
+                            // hit regions go — a copy of a row riding the pointer
+                            // must not also be clickable.
+                            var preview = row.row.buffer
+                            preview.hitTestRegions = []
+                            // Clamped into the preview: a row's buffer is only
+                            // as wide as its own content, so a press on the
+                            // padding past the end of a short row would anchor
+                            // the floating copy off to one side of the pointer
+                            // instead of under it.
+                            dragSession.begin(
+                                payload: _ListRowReorderPayload(), preview: preview,
+                                grabX: min(grab.x, max(0, preview.width - 1)),
+                                grabY: min(grab.y, max(0, preview.height - 1)))
+                        } else {
+                            // …and advance it on every later movement. `begin`
+                            // samples the cursor once; only `dragMoved` tracks
+                            // it, and a reorder drag reaches this closure rather
+                            // than the `.draggable` modifier that normally calls
+                            // it — which is why the row once sat at the position
+                            // the drag began for the whole gesture.
+                            dragSession.dragMoved()
+                        }
+                    }
                     return true
 
                 case .released:
                     // A reorder drop. `.live` has already moved the row; the
                     // other modes move it exactly here.
                     if captureHandler.dropReorder(atContentY: dragContentY) {
+                        // The row is back in the list — nothing left to float.
+                        // `end`, never `performDrop`: the payload is private and
+                        // unnameable, so no `dropDestination` could take it, and
+                        // the list has already placed the row itself.
+                        dragSession?.end()
                         focusManager?.focus(id: captureFocusID)
                         return true
                     }

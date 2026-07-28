@@ -76,6 +76,18 @@ extension ItemListHandler {
         return reorder.currentOffset
     }
 
+    /// The row a ``RowReorderFeedback/cursor`` drag is carrying on the pointer,
+    /// or `nil` when no such drag is in flight. `_ListCore` hands this row's
+    /// buffer to the drag session, which floats it at the cursor.
+    ///
+    /// Held for the WHOLE drag, including while the cursor is off the rows and
+    /// there is no drop slot: the row is in the user's hand either way, and the
+    /// absent slot is what says releasing here would put it back.
+    var reorderFloatingRow: Int? {
+        guard reorderFeedback == .cursor else { return nil }
+        return reorderSource
+    }
+
     /// Where the dragged row would land — what `.dimmed` and `.cursor` open a
     /// slot for (a faint copy of the row, and an empty gap, respectively).
     ///

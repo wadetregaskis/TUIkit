@@ -6,10 +6,11 @@
 //  up there. What the drag SHOWS is ``RowReorderFeedback``'s business — the
 //  default `.live` reorders as the cursor moves, while `.dimmed` and `.cursor`
 //  take the row OUT of the list and open a slot where it would land (holding a
-//  faint copy of it, and nothing, respectively) — so what is on screen is
-//  already the order a drop would produce. The tests below cover the common
-//  gestures once and then each mode's own contract, driven end-to-end through
-//  the real mouse dispatcher like the run loop.
+//  faint copy of it, and nothing, respectively — `.cursor` puts the row on the
+//  pointer instead) — so what is on screen is already the order a drop would
+//  produce. The tests below cover the common gestures once and then each mode's
+//  own contract, driven end-to-end through the real mouse dispatcher like the
+//  run loop.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -406,6 +407,86 @@ struct ListReorderDragTests {
         // do it.
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 6, y: yA))
         #expect(rowLabels(fixture.render(), of: labels) == labels)
+    }
+
+    /// `.cursor`'s whole distinction from `.dimmed`: the row you have hold of is
+    /// drawn ON the pointer, so the gesture reads as carrying it rather than as
+    /// the list rearranging itself around an invisible hand. The list draws the
+    /// gap; the drag session draws the row, above every other view.
+    @Test("A cursor drag carries the row on the pointer")
+    func cursorFloatsTheRowAtThePointer() throws {
+        // Multi-cell labels, so the press can land in the MIDDLE of a row and
+        // the grab point is something other than its corner.
+        let fixture = Fixture(items: ["alpha", "bravo", "charlie", "delta"], feedback: .cursor)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        // A row's content starts at column 2 — past the border and the gutter
+        // `renderPlainLine` prefixes — so this press lands on the label's third
+        // cell.
+        let grabbedCell = 2
+        let pressX = 2 + grabbedCell
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: pressX, y: fixture.rowY(buffer, "alpha")))
+        #expect(session.active == nil, "a press alone may still be a click — nothing floats yet")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(
+                button: .left, phase: .dragged, x: pressX, y: fixture.rowY(buffer, "charlie")))
+        fixture.render()
+        let drag = try #require(session.active, "the dragged row is riding the pointer")
+        #expect(
+            drag.preview.lines.contains { $0.stripped.contains("alpha") },
+            "…and it is the row that was grabbed")
+        #expect(drag.preview.hitTestRegions.isEmpty, "a floating copy must not be clickable")
+
+        // It TRACKS: the preview frame follows every movement rather than
+        // sitting where the drag began — and it tracks by the GRABBED cell, so
+        // the row stays put under the pointer instead of jumping to align its
+        // corner there.
+        let first = try #require(session.previewFrame())
+        #expect(first.x + grabbedCell == pressX, "the pressed cell is under the pointer")
+
+        let movedX = pressX + 1
+        fixture.dispatcher.dispatch(
+            MouseEvent(
+                button: .left, phase: .dragged, x: movedX, y: fixture.rowY(buffer, "delta")))
+        fixture.render()
+        let second = try #require(session.previewFrame())
+        #expect(second.x == first.x + 1 && second.y == first.y + 1, "the row moves with the pointer")
+        #expect(second.x + grabbedCell == movedX, "…and still by the cell that was grabbed")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(
+                button: .left, phase: .released, x: movedX, y: fixture.rowY(buffer, "delta")))
+        #expect(session.active == nil, "the drop puts the row back in the list — nothing floats on")
+        #expect(fixture.items == ["bravo", "charlie", "delta", "alpha"])
+    }
+
+    /// With the pointer off the rows there is no drop slot, but the row is still
+    /// in the user's hand — so it stays on the pointer, and stays out of the
+    /// list. Drawn in both places it would read as a duplicate.
+    @Test("A cursor drag off the rows keeps carrying the row")
+    func cursorOffTheRowsStillFloats() throws {
+        let fixture = Fixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        fixture.render()
+        // Out of the content columns entirely — the gap goes with it.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 0, y: 0))
+        let dragging = fixture.render()
+
+        #expect(session.active != nil, "still carrying it")
+        #expect(
+            !dragging.lines.contains { $0.stripped.contains("a") },
+            "and still out of the list, so the row is never drawn twice")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 0, y: 0))
+        #expect(session.active == nil, "the cancelled drop ends the drag too")
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
