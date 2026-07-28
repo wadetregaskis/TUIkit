@@ -43,7 +43,8 @@ swift run --package-path Tools/Diagrams diagrams --output <dir>    # write elsew
 
 ## Edit or add a diagram
 
-Diagrams are described in Swift in `Sources/diagrams/Diagrams.swift`:
+Diagrams are described in Swift in
+`Tools/Diagrams/Sources/diagrams/Diagrams.swift`:
 
 ```swift
 let lifecycleMainLoop = Diagram(

@@ -16,17 +16,21 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 # Build
 swift build
 
-# Run all tests (~2,850 tests, Swift Testing framework)
+# Run all tests (~3,350 tests, Swift Testing framework)
 swift test
 
-# Run a single test suite
+# Run a single test suite. NOTE: --filter matches the Swift TYPE name, not the
+# @Suite display string — `--filter AlertDismissalTests`, not "Alert dismissal".
 swift test --filter <TestSuiteName>
 
-# Lint
+# Lint (must report zero violations)
 swiftlint
 
 # Format (configured but not enforced in CI)
 swift-format format -i -r Sources Tests
+
+# Build the documentation, and report unresolved links
+swift package generate-documentation --target TUIkit --analyze
 ```
 
 ## Pull Request Requirements
@@ -76,8 +80,14 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 ## Testing
 
 - Uses Swift Testing framework (`@Test`, `#expect`, `@Suite`)
-- Tests run in parallel
+- Tests run in parallel; the few that mutate global state are serialised
 - Test files mirror source structure in `Tests/TUIkitTests/`
+- Each library module also has its own test target (`TUIkitCoreTests`,
+  `TUIkitStylingTests`, `TUIkitViewTests`, `TUIkitImageTests`) that links **only
+  that module**, so a module test cannot reach across a layer boundary. Put a
+  test in the module target it belongs to; `Tests/TUIkitTests` is for
+  integration tests and everything in the umbrella module.
+  `Tools/validate-test-boundaries.sh` checks this and runs in CI.
 
 ## The `project-template/` directory
 
