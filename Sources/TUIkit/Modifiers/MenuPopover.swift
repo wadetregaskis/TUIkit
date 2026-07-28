@@ -205,6 +205,16 @@ struct MenuAnchor {
     /// The menu's top row, likewise.
     let y: Int
 
+    /// The width to centre the menu within, starting at ``x``, or `nil` to put
+    /// its left edge at ``x``.
+    ///
+    /// A pointer-opened menu is anchored at the cell that was clicked, because
+    /// the pointer is about to pick from it and wants the rows in a predictable
+    /// place under itself. A KEYBOARD-opened one has no pointer to be
+    /// predictable for, so it centres on the view it belongs to and reads as
+    /// that view's menu rather than as something that landed in the corner.
+    var centredWithin: Int?
+
     /// How many rows the control immediately above ``y`` occupies.
     ///
     /// `1` for a pop-up ``Menu``, whose trigger is the row above it; `0` for a
@@ -214,6 +224,13 @@ struct MenuAnchor {
     /// — and both go wrong when it is understated. See
     /// ``OverlayLayer/anchorHeight``.
     let controlHeight: Int
+
+    init(x: Int, y: Int, controlHeight: Int, centredWithin: Int? = nil) {
+        self.x = x
+        self.y = y
+        self.controlHeight = controlHeight
+        self.centredWithin = centredWithin
+    }
 }
 
 /// Presents `items` as a floating menu over `base`, anchored at
@@ -309,9 +326,15 @@ func presentMenuPopover<Items: View>(
     // the menu's bottom flush with the anchor's TOP, which without a height is
     // flush with the trigger itself — landing the menu on the control that
     // opened it.
+    // Centring can only happen here: the menu's width is not known until it has
+    // been laid out to its own content.
+    var offsetX = anchor.x
+    if let span = anchor.centredWithin {
+        offsetX = anchor.x + max(0, (span - menuBuffer.width) / 2)
+    }
     base.overlays.append(
         OverlayLayer(
-            offsetX: anchor.x, offsetY: anchor.y, content: menuBuffer,
+            offsetX: offsetX, offsetY: anchor.y, content: menuBuffer,
             level: .popover, anchorHeight: anchor.controlHeight))
 }
 

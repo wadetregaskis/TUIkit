@@ -22,6 +22,9 @@ final class ContextMenuState {
     var anchorX = 0
     /// The row of the opening click, content-local.
     var anchorY = 0
+    /// Whether the keyboard opened it, which changes where it is anchored —
+    /// see ``MenuAnchor/centredWithin``.
+    var openedByKeyboard = false
 }
 
 // MARK: - Context menu modifier
@@ -104,12 +107,23 @@ extension ContextMenuModifier: Renderable {
         // backdrop. Only the trigger and the anchor differ — here, the cell the
         // secondary click landed on (content-local; composition makes it
         // absolute).
+        // Where it hangs depends on what opened it. A right-click anchors AT the
+        // clicked cell — the pointer is about to pick from the menu, so the rows
+        // want to be in a predictable place under it, and there is nothing above
+        // that cell for a flip to clear. Shift+F10 has no pointer to be
+        // predictable for, so the menu centres on the view and hangs beneath it
+        // like a pull-down: it reads as that view's menu instead of as something
+        // that landed in the corner, and the whole view is what a flip must
+        // clear.
+        let anchor =
+            state.openedByKeyboard
+            ? MenuAnchor(
+                x: 0, y: baseBuffer.height, controlHeight: baseBuffer.height,
+                centredWithin: baseBuffer.width)
+            : MenuAnchor(x: state.anchorX, y: state.anchorY, controlHeight: 0)
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, controller: state.controller,
-            sectionID: sectionID, itemsIndex: 1,
-            // Anchored AT the clicked cell, not below a control: there is
-            // nothing above it for a flip to clear.
-            anchor: MenuAnchor(x: state.anchorX, y: state.anchorY, controlHeight: 0),
+            sectionID: sectionID, itemsIndex: 1, anchor: anchor,
             dismiss: {
                 state.isOpen = false
                 state.controller.closed()
@@ -163,6 +177,7 @@ extension ContextMenuModifier: Renderable {
                 state.anchorX = event.x
                 state.anchorY = event.y
                 state.isOpen = true
+                state.openedByKeyboard = false
                 // Opened by the pointer: nothing is chosen yet.
                 state.controller.opened(withSelection: false)
                 return true
@@ -214,12 +229,8 @@ extension ContextMenuModifier: Renderable {
             guard event.key == .f10, event.shift,
                 FocusRegistration.isFocused(context: context, focusID: focusID)
             else { return false }
-            // Anchored at the view's own top-left: there is no pointer to
-            // anchor to, and a menu that appears ON the thing it belongs to is
-            // the least surprising place for it.
-            state.anchorX = 0
-            state.anchorY = 0
             state.isOpen = true
+            state.openedByKeyboard = true
             // Opened from the keyboard, which has no other way to point at a
             // row: start on the first item so the arrows have somewhere to go.
             state.controller.opened(withSelection: true)

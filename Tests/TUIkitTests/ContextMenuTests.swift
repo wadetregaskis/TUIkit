@@ -284,6 +284,48 @@ struct ContextMenuTests {
     /// `true` to Up/Down unconditionally, and a context menu hangs off a leaf, so
     /// it cannot isolate its siblings the way a root-attached modal can. The
     /// arrows moved the combo menu's selection instead of the open pop-up — while
+    /// A right-click anchors the menu AT the clicked cell: the pointer is about
+    /// to pick from it, so the rows want to be in a predictable place under
+    /// itself. Shift+F10 has no pointer to be predictable for, so the menu
+    /// centres on the view and hangs beneath it — it reads as that view's menu
+    /// rather than as something that landed in the corner.
+    @Test("A keyboard-opened menu centres on its view; a click anchors at the click")
+    func anchorDependsOnWhatOpenedIt() throws {
+        func openedMenu(byKeyboard: Bool) throws -> (overlay: OverlayLayer, content: Int) {
+            let tui = TUIContext()
+            let focusManager = FocusManager()
+            let context = context(tui, focusManager: focusManager)
+            // A view much wider than the menu, so centring is unmistakable.
+            let view = Text("Right-click me, this is a wide target indeed").contextMenu {
+                Button("Cut") {}
+                Button("Copy") {}
+            }
+            let closed = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+            if byKeyboard {
+                _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10, shift: true))
+            } else {
+                _ = tui.mouseEventDispatcher.dispatch(
+                    MouseEvent(button: .right, phase: .pressed, x: 4, y: 0))
+                _ = tui.mouseEventDispatcher.dispatch(
+                    MouseEvent(button: .right, phase: .released, x: 4, y: 0))
+            }
+            let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+            return (try #require(opened.overlays.first), closed.width)
+        }
+
+        let keyboard = try openedMenu(byKeyboard: true)
+        let expectedX = (keyboard.content - keyboard.overlay.content.width) / 2
+        #expect(keyboard.overlay.offsetX == expectedX, "centred on the view")
+        #expect(keyboard.overlay.offsetY > 0, "and hangs beneath it, not over it")
+        #expect(
+            keyboard.overlay.anchorHeight == keyboard.overlay.offsetY,
+            "the whole view is what a flip has to clear")
+
+        let pointer = try openedMenu(byKeyboard: false)
+        #expect(pointer.overlay.offsetX == 4, "at the clicked column")
+        #expect(pointer.overlay.offsetY == 0, "and the clicked row")
+    }
+
     /// Shift+F10 is the keyboard's whole vocabulary for this menu, so pressing
     /// it again has to undo it — the way clicking a pull-down button a second
     /// time closes its menu. Escape closes too; this is the symmetry, not the
