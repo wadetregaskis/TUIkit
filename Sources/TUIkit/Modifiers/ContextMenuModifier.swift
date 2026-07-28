@@ -121,6 +121,19 @@ extension ContextMenuModifier: Renderable {
                 x: 0, y: baseBuffer.height, controlHeight: baseBuffer.height,
                 centredWithin: baseBuffer.width)
             : MenuAnchor(x: state.anchorX, y: state.anchorY, controlHeight: 0)
+        // The trigger stays live under the open menu, so a second right-click on
+        // the target closes and re-opens it — usually invisible, and a small hop
+        // when the click moved, which is what macOS does. The two halves are
+        // already there: the dismiss backdrop closes the menu on a right press
+        // and then DECLINES it (see `attachDismissBackdrop`), so the press
+        // bubbles down to whatever it landed on. Without a trigger to bubble to,
+        // the target's own second click was the one gesture that could only ever
+        // dismiss — while the same click on a *different* target opened that
+        // one's menu, which is an inconsistency with no explanation a user could
+        // find.
+        if !context.isMeasuring {
+            attachTrigger(to: &baseBuffer, state: state, context: context)
+        }
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, controller: state.controller,
             sectionID: sectionID, itemsIndex: 1, anchor: anchor,
