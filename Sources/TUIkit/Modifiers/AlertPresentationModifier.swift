@@ -25,8 +25,9 @@
 /// ```
 ///
 /// Choosing any action closes the alert, as it does in SwiftUI — an action does
-/// not need to flip `isPresented` itself. Escape closes it too, and says so on
-/// the status bar while it is up.
+/// not need to flip `isPresented` itself. Escape is the `.cancel`-role button:
+/// it runs that action, if there is one, and closes the alert either way. The
+/// status bar says so while the alert is up.
 public struct AlertPresentationModifier<Content: View, Actions: View, Message: View>: View {
     /// The base content to render.
     let content: Content
@@ -134,35 +135,49 @@ extension AlertPresentationModifier: Renderable {
             // covers a sibling elsewhere in the tree.
             context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
 
-            // ESC closes the alert — and saying so on the STATUS BAR is what
-            // makes that true, not merely discoverable. `InputHandler` runs the
-            // status bar (layer 1) BEFORE the view key handlers (layer 2), so a
-            // page carrying its own "⎋ back" item would otherwise eat the key
-            // and navigate away with the alert still on screen. Publishing this
-            // item takes the key first AND stops the bar lying about where it
-            // goes. Section items are cleared each render pass, so dismissing
-            // restores the page's own item. Same mechanism, and the same
-            // reasoning, as `ModalPresentationModifier`.
+            // Escape ANSWERS the alert with its cancel button, rather than
+            // merely closing it. An alert is a question; a `.cancel`-role button
+            // is its "no", and Escape is how a keyboard says no — which is why
+            // macOS gives Cancel the Escape key equivalent, and what
+            // ``ButtonRole/cancel`` has always documented. Closing without
+            // running that action is a different outcome: the caller is never
+            // told what the user chose, so a dialog escaped rather than clicked
+            // silently reports nothing at all.
+            //
+            // A disabled cancel button cannot be chosen by pointer or keyboard,
+            // so Escape does not choose it either; nor is one invented when the
+            // alert has no cancel role. Both cases just close.
             let isPresented = self.isPresented
-            let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
+            let cancel = alertActionButtons(from: actions).first {
+                $0.role == .cancel && !$0.isDisabled
+            }
+            let dismiss = {
+                cancel?.action()
                 isPresented.wrappedValue = false
             }
+
+            // Saying so on the STATUS BAR is what makes Escape work at all, not
+            // merely discoverable. `InputHandler` runs the status bar (layer 1)
+            // BEFORE the view key handlers (layer 2), so a page carrying its own
+            // "⎋ back" item would otherwise eat the key and navigate away with
+            // the alert still on screen. Publishing this item takes the key
+            // first AND stops the bar lying about where it goes. Section items
+            // are cleared each render pass, so dismissing restores the page's
+            // own item. Same mechanism, and the same reasoning, as
+            // `ModalPresentationModifier`.
+            let dismissItem = StatusBarItem(
+                shortcut: Shortcut.escape, label: "dismiss", action: dismiss)
             context.environment.statusBar.registerSectionItems(
                 sectionID: sectionID, items: [dismissItem], composition: .merge)
-        }
 
-        // The same dismissal, as a key handler, for a tree rendered without the
-        // app's status bar (a test harness, an embedded surface): there is no
-        // layer 1 to claim ESC there, so this is the only route. In a running
-        // app the item above fires first and this never runs.
-        if !context.isMeasuring {
-            let isPresentedBinding = isPresented
+            // The same dismissal, as a key handler, for a tree rendered without
+            // the app's status bar (a test harness, an embedded surface): there
+            // is no layer 1 to claim ESC there, so this is the only route. In a
+            // running app the item above fires first and this never runs.
             context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
-                if event.key == .escape {
-                    isPresentedBinding.wrappedValue = false
-                    return true
-                }
-                return false
+                guard event.key == .escape else { return false }
+                dismiss()
+                return true
             }
         }
 

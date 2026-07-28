@@ -218,25 +218,21 @@ struct AlertDismissalTests {
 
     // MARK: - Escape
 
-    /// The crux of the reported bug, and the reason no existing test caught it:
-    /// the alert DID register an Escape handler, on the key dispatcher — but
-    /// `InputHandler` runs the status bar FIRST, so a page carrying its own
-    /// "⎋ back" item ate the key and navigated away with the dialog still up.
-    ///
-    /// Driven through the real `InputHandler`, because dispatching straight to
-    /// the key dispatcher (as a narrower test would) skips the very layer that
-    /// was winning and passes against the broken code.
-    @Test("Escape closes the dialog instead of the page's own ⎋ item")
-    func escapeClosesTheDialogNotThePage() {
+    /// The whole input stack a running app has: a status bar already carrying
+    /// the page's own "⎋ back" item, and the `InputHandler` that runs in front
+    /// of it. Escape has to be driven through this, not straight at the key
+    /// dispatcher: layer 1 (the bar) is the layer that decides, and a narrower
+    /// test skips it and passes against broken code.
+    private func inputHarness(pageEscape: @escaping () -> Void = {}) -> (
+        tui: TUIContext, context: RenderContext, statusBar: StatusBarState,
+        handler: InputHandler
+    ) {
         let tui = TUIContext()
         let focus = FocusManager()
         let statusBar = StatusBarState()
         statusBar.focusManager = focus
-
-        // The page declares ESC = go back, exactly as the Example's pages do.
-        var wentBack = 0
         statusBar.setItemsSilently([
-            StatusBarItem(shortcut: Shortcut.escape, label: "back") { wentBack += 1 }
+            StatusBarItem(shortcut: Shortcut.escape, label: "back", action: pageEscape)
         ])
 
         var environment = EnvironmentValues()
@@ -246,11 +242,6 @@ struct AlertDismissalTests {
         let context = RenderContext(
             availableWidth: 60, availableHeight: 24, environment: environment, tuiContext: tui)
 
-        let presented = Flag(true)
-        let view = Text("Page").confirmationDialog(
-            "Delete this item?", isPresented: presented.binding,
-            actions: { Button("Delete", role: .destructive) {} })
-
         let handler = InputHandler(
             statusBar: statusBar,
             keyEventDispatcher: tui.keyEventDispatcher,
@@ -259,9 +250,25 @@ struct AlertDismissalTests {
             appearanceManager: ThemeManager(items: [StubTheme()]),
             keyboardShortcuts: tui.keyboardShortcuts,
             onQuit: {})
+        return (tui, context, statusBar, handler)
+    }
 
-        renderArmed(view, tui: tui, context: context)
-        #expect(handler.handle(KeyEvent(key: .escape)), "the key is consumed by something")
+    /// The crux of the reported bug, and the reason no existing test caught it:
+    /// the alert DID register an Escape handler, on the key dispatcher — but
+    /// `InputHandler` runs the status bar FIRST, so a page carrying its own
+    /// "⎋ back" item ate the key and navigated away with the dialog still up.
+    @Test("Escape closes the dialog instead of the page's own ⎋ item")
+    func escapeClosesTheDialogNotThePage() {
+        var wentBack = 0
+        let harness = inputHarness { wentBack += 1 }
+
+        let presented = Flag(true)
+        let view = Text("Page").confirmationDialog(
+            "Delete this item?", isPresented: presented.binding,
+            actions: { Button("Delete", role: .destructive) {} })
+
+        renderArmed(view, tui: harness.tui, context: harness.context)
+        #expect(harness.handler.handle(KeyEvent(key: .escape)), "the key is consumed by something")
 
         #expect(!presented.value, "Escape closed the dialog")
         #expect(wentBack == 0, "…and did NOT also run the page's ⎋ back item")
@@ -272,29 +279,84 @@ struct AlertDismissalTests {
     /// this went unnoticed: the label and the behaviour agreed — both wrong.
     @Test("The status bar advertises the dialog's Escape, not the page's")
     func statusBarLabelsTheDialogsEscape() {
-        let tui = TUIContext()
-        let focus = FocusManager()
-        let statusBar = StatusBarState()
-        statusBar.focusManager = focus
-        statusBar.setItemsSilently([
-            StatusBarItem(shortcut: Shortcut.escape, label: "back") {}
-        ])
-
-        var environment = EnvironmentValues()
-        environment.focusManager = focus
-        environment.applyRuntimeServices(from: tui)
-        environment.statusBar = statusBar
-        let context = RenderContext(
-            availableWidth: 60, availableHeight: 24, environment: environment, tuiContext: tui)
-
+        let harness = inputHarness()
         let presented = Flag(true)
         let view = Text("Page").confirmationDialog(
             "Sure?", isPresented: presented.binding, actions: { Button("Yes") {} })
 
-        renderArmed(view, tui: tui, context: context)
-        let escapeLabels: [String] = statusBar.currentItems
+        renderArmed(view, tui: harness.tui, context: harness.context)
+        let escapeLabels: [String] = harness.statusBar.currentItems
             .filter { $0.shortcut == Shortcut.escape }
             .map { $0.label }
         #expect(escapeLabels == ["dismiss"], "one ESC item, and it is the dialog's: \(escapeLabels)")
+    }
+
+    // MARK: - Escape is the cancel button
+
+    /// Escape ANSWERS the dialog rather than just closing it: it chooses the
+    /// `.cancel`-role button, running that action exactly as clicking it would.
+    /// macOS gives Cancel the Escape key equivalent for the same reason, and
+    /// ``ButtonRole/cancel`` documented it long before it was true. Closing
+    /// without it is a different outcome — the caller is never told what the
+    /// user chose, so a dialog escaped rather than clicked silently reported
+    /// nothing at all.
+    @Test("Escape runs the cancel button's action")
+    func escapeChoosesTheCancelAction() {
+        let harness = inputHarness()
+        let presented = Flag(true)
+        var chose = "—"
+        let view = Text("Page").confirmationDialog(
+            "Delete this item?", isPresented: presented.binding,
+            actions: {
+                Button("Delete", role: .destructive) { chose = "Delete" }
+                Button("Cancel", role: .cancel) { chose = "Cancel" }
+            })
+
+        renderArmed(view, tui: harness.tui, context: harness.context)
+        _ = harness.handler.handle(KeyEvent(key: .escape))
+
+        #expect(chose == "Cancel", "Escape chose Cancel, got \(chose)")
+        #expect(!presented.value, "…and the dialog closed")
+    }
+
+    /// No cancel role, nothing to run: Escape still closes, and no other action
+    /// is conscripted into the job. Escaping a dialog whose only buttons are
+    /// destructive must not perform one.
+    @Test("With no cancel button, Escape closes and runs nothing")
+    func escapeWithoutACancelActionJustCloses() {
+        let harness = inputHarness()
+        let presented = Flag(true)
+        var runs = 0
+        let view = Text("Page").confirmationDialog(
+            "Delete this item?", isPresented: presented.binding,
+            actions: { Button("Delete", role: .destructive) { runs += 1 } })
+
+        renderArmed(view, tui: harness.tui, context: harness.context)
+        _ = harness.handler.handle(KeyEvent(key: .escape))
+
+        #expect(runs == 0, "no action ran")
+        #expect(!presented.value, "but the dialog closed")
+    }
+
+    /// A disabled Cancel cannot be chosen by pointer or keyboard, so Escape
+    /// does not choose it either — the keyboard shortcut for a button must obey
+    /// the same gate the button does.
+    @Test("A disabled cancel button is not run by Escape")
+    func escapeSkipsADisabledCancelAction() {
+        let harness = inputHarness()
+        let presented = Flag(true)
+        var cancelled = 0
+        let view = Text("Page").confirmationDialog(
+            "Sure?", isPresented: presented.binding,
+            actions: {
+                Button("Delete", role: .destructive) {}
+                Button("Cancel", role: .cancel) { cancelled += 1 }.disabled(true)
+            })
+
+        renderArmed(view, tui: harness.tui, context: harness.context)
+        _ = harness.handler.handle(KeyEvent(key: .escape))
+
+        #expect(cancelled == 0, "the disabled action stayed disabled")
+        #expect(!presented.value, "and the dialog still closed")
     }
 }

@@ -126,7 +126,7 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
         if let width = proposal.width {
             alertProposal = ProposedSize(width: min(width, Self.maxWidth), height: proposal.height)
         }
-        let buttons = extractButtons(from: actions)
+        let buttons = alertActionButtons(from: actions)
         if verticalButtons {
             return measureContainer(
                 title: title, config: config, content: Text(message),
@@ -144,7 +144,7 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
         var alertContext = context
         alertContext.availableWidth = min(context.availableWidth, Self.maxWidth)
 
-        let buttons = extractButtons(from: actions)
+        let buttons = alertActionButtons(from: actions)
         if verticalButtons {
             return renderContainer(
                 title: title, config: config, content: Text(message),
@@ -155,14 +155,6 @@ struct _AlertCore<Actions: View>: View, Renderable, Layoutable {
             title: title, config: config, content: Text(message),
             footer: buttons.isEmpty ? nil : AlertButtonRow(buttons: buttons),
             context: alertContext)
-    }
-
-    /// Extracts Button instances from a view hierarchy using the `ButtonProvider` protocol.
-    private func extractButtons<V: View>(from view: V) -> [Button] {
-        if let provider = view as? ButtonProvider {
-            return provider.extractButtons()
-        }
-        return []
     }
 }
 
@@ -467,6 +459,16 @@ extension Alert where Actions == EmptyView {
 protocol ButtonProvider {
     /// Extracts all `Button` instances contained in this view.
     func extractButtons() -> [Button]
+}
+
+/// The `Button`s an alert's `actions` builder produced, in declaration order.
+///
+/// Shared by ``_AlertCore``, which lays them out, and
+/// ``AlertPresentationModifier``, which needs the `.cancel`-role one to answer
+/// Escape with.
+@MainActor
+func alertActionButtons(from view: some View) -> [Button] {
+    (view as? ButtonProvider)?.extractButtons() ?? []
 }
 
 // MARK: - ButtonProvider Conformances
