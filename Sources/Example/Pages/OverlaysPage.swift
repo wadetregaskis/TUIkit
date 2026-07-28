@@ -125,10 +125,20 @@ struct OverlaysPage: View {
         focusedDemo ?? .alertStandard
     }
 
+    /// The demo the OPEN overlay is showing.
+    ///
+    /// Deliberately not `selectedDemo`. Presenting a modal isolates the page
+    /// beneath it, so the menu rows stop registering and `focusedDemo` goes
+    /// nil — one frame after the overlay appears, a focus-derived choice falls
+    /// back to `.alertStandard` and the overlay swaps to the wrong demo in
+    /// front of you. What is being SHOWN has to be decided when it is opened,
+    /// not re-derived from a focus the act of opening took away.
+    @State private var presentedDemo: OverlayDemo = .alertStandard
+
     var body: some View {
         backgroundContent
             .modal(isPresented: $showOverlay) {
-                overlayContent(for: selectedDemo)
+                overlayContent(for: presentedDemo)
             }
             .confirmationDialog(
                 L("page.overlays.confirm.title"),
@@ -193,6 +203,7 @@ struct OverlaysPage: View {
                                     L("page.overlays.alert.successMessage")
                                 )
                             } else {
+                                presentedDemo = demo
                                 showOverlay = true
                             }
                         }
