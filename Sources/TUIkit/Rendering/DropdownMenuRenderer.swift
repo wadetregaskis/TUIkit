@@ -241,20 +241,21 @@ enum DropdownMenu {
                 // that one, in the one gesture. Declining lets the press bubble
                 // to the region underneath (the dispatcher already bubbles a
                 // declined right-click, which is how a `.contextMenu` on a
-                // container catches a click on a child), and the matching
-                // release then routes to whoever claimed it rather than here.
+                // container catches a click on a child).
                 onDismiss()
                 return false
             case .pressed where !event.button.isWheel:
                 // A LEFT click is spent entirely on closing the menu.
                 onDismiss()
                 return true
-            case .released where event.button != .right:
-                return true  // the consumed press's matching release
+            case .released where !event.button.isWheel:
+                // The matching release of a press this menu — or the target the
+                // press bubbled to — has already answered. Eaten either way:
+                // a context menu opens on the PRESS, so by the time its release
+                // arrives the gesture is spent, and letting it bubble would
+                // deliver a release nobody pressed for to the page beneath.
+                return true
             default:
-                // A right release bubbles too. The target underneath opens its
-                // menu on the RELEASE, not the press, so eating this would let
-                // the click close one menu and open nothing.
                 return false
             }
         }
@@ -431,15 +432,15 @@ enum DropdownMenu {
                 case .exited:
                     // Leave the highlight where it is when the cursor leaves.
                     return true
-                case .dragged where event.button == .left:
+                case .dragged where tracks(event.button):
                     // The same thing with the button held — a Mac menu tracks
                     // press-and-hold, and a terminal reports a held move as a
                     // DRAG, not as motion, so `.entered` never fires for it.
                     onHover(index)
                     return true
-                case .pressed where event.button == .left:
+                case .pressed where tracks(event.button):
                     return true
-                case .released where event.button == .left:
+                case .released where tracks(event.button):
                     onActivate(index)
                     return true
                 default:
@@ -454,6 +455,17 @@ enum DropdownMenu {
                     height: 1,
                     handlerID: mouseHandlerID))
         }
+    }
+
+    /// Whether a button drives menu tracking — highlighting rows as it drags and
+    /// choosing one when it lifts.
+    ///
+    /// Both of them, because a `.contextMenu` is opened by the RIGHT button and
+    /// tracked with it still held: press, drag down the rows, release on one.
+    /// The other menus are opened with the left, and a menu does not care which
+    /// button is carrying the gesture it is already in the middle of.
+    private static func tracks(_ button: MouseButton) -> Bool {
+        button == .left || button == .right
     }
 
     /// Truncates or pads a plain string to exactly `width` visible columns.

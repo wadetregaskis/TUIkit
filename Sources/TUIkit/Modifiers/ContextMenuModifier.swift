@@ -158,8 +158,15 @@ extension ContextMenuModifier: Renderable {
     /// Attaches the whole-content secondary-click trigger. Registered normally
     /// (so a right-click bubbling past the content's own regions reaches it —
     /// see `MouseEventDispatcher.dispatch`'s right-button fall-through); it opens
-    /// on a right-click or Ctrl-click release and records the click cell as the
+    /// on a right-click or Ctrl-click PRESS and records the click cell as the
     /// menu anchor.
+    ///
+    /// On the press, not the release, because that is the gesture a Mac context
+    /// menu answers: press and hold, drag down the rows, release on one to run
+    /// it. The press hands the rest of the gesture back to live hit-testing
+    /// (``MouseEventDispatcher/handOffGesture()``) so the drag and release reach
+    /// the menu rather than routing back here — see ``Button/menuTrigger()``,
+    /// which is the same move for a pull-down.
     private func attachTrigger(
         to buffer: inout FrameBuffer, state: ContextMenuState, context: RenderContext
     ) {
@@ -172,14 +179,18 @@ extension ContextMenuModifier: Renderable {
             guard isSecondary else { return false }
             switch event.phase {
             case .pressed:
-                return true  // claim so the matching release routes back here
-            case .released:
                 state.anchorX = event.x
                 state.anchorY = event.y
                 state.isOpen = true
                 state.openedByKeyboard = false
                 // Opened by the pointer: nothing is chosen yet.
                 state.controller.opened(withSelection: false)
+                dispatcher.handOffGesture()
+                return true
+            case .released:
+                // Spent on the press. Only reached when the menu did not take
+                // the release — a press and release in one input batch, with no
+                // frame in between for the menu to register its regions.
                 return true
             default:
                 return false
@@ -269,11 +280,15 @@ extension View {
     ///     }
     /// ```
     ///
-    /// Selecting an item runs its action and closes the menu; Escape or an
-    /// outside click also dismisses it. The primary trigger is a right-click;
-    /// where the terminal swallows that (iTerm2 does by default) a **Ctrl-click**
-    /// opens it too. Right-clicking works reliably in Apple Terminal, Ghostty and
-    /// Warp (see `Documentation/Terminal-compatibility.md`).
+    /// The menu opens on the right-button **press**, and the rest of that
+    /// gesture belongs to it: keep the button down, drag over the rows to
+    /// highlight them, and release on one to run it — the way a Mac context
+    /// menu tracks. A quick right-click works too; the menu simply stays up
+    /// until the next click. Escape or an outside click also dismisses it.
+    ///
+    /// Where the terminal swallows right-click (iTerm2 does by default) a
+    /// **Ctrl-click** opens it instead. Right-clicking works reliably in Apple
+    /// Terminal, Ghostty and Warp (see `Documentation/Terminal-compatibility.md`).
     ///
     /// From the keyboard: the modified view becomes a focus stop, and
     /// **Shift+F10** opens the menu while it is focused — the binding every

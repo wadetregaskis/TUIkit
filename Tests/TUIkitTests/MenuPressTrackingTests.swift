@@ -76,14 +76,22 @@ struct MenuPressTrackingTests {
             MouseEvent(button: .left, phase: .pressed, x: x, y: y))
     }
 
-    private func drag(_ tui: TUIContext, x: Int, y: Int) {
+    /// The same, with the SECONDARY button — what opens a `.contextMenu`, and
+    /// what then carries its whole gesture.
+    private func rightPress(_ tui: TUIContext, _ context: RenderContext, x: Int, y: Int) {
+        context.environment.focusManager?.noteInputSource(.pointer)
         _ = tui.mouseEventDispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: x, y: y))
+            MouseEvent(button: .right, phase: .pressed, x: x, y: y))
     }
 
-    private func release(_ tui: TUIContext, x: Int, y: Int) {
+    private func drag(_ tui: TUIContext, x: Int, y: Int, button: MouseButton = .left) {
         _ = tui.mouseEventDispatcher.dispatch(
-            MouseEvent(button: .left, phase: .released, x: x, y: y))
+            MouseEvent(button: button, phase: .dragged, x: x, y: y))
+    }
+
+    private func release(_ tui: TUIContext, x: Int, y: Int, button: MouseButton = .left) {
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: button, phase: .released, x: x, y: y))
     }
 
     private func release(_ tui: TUIContext, _ context: RenderContext, x: Int, y: Int) {
@@ -252,6 +260,68 @@ struct MenuPressTrackingTests {
         #expect(
             renderArmed(view, tui: tui, context: context).overlays.isEmpty,
             "and the drop-down closed")
+    }
+
+    // MARK: - `.contextMenu`
+
+    /// The right button opens a context menu and then carries the same gesture:
+    /// press, drag down the rows, release on one. Same model as a pull-down —
+    /// the only difference is which button is holding it.
+    @Test("A context menu opens on the right press and its release runs the item")
+    func contextMenuPressDragRelease() throws {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = Text("Right-click me")
+            .contextMenu {
+                Button("Cut") { chosen = "Cut" }
+                Button("Copy") { chosen = "Copy" }
+                Button("Paste") { chosen = "Paste" }
+            }
+            .selectionIndicatorStyle(.none)
+
+        renderArmed(view, tui: tui, context: context)
+        rightPress(tui, context, x: 3, y: 0)
+        let opened = renderArmed(view, tui: tui, context: context)
+        #expect(!opened.overlays.isEmpty, "the menu is up with the button still down")
+
+        let target = try row(opened, "Paste")
+        drag(tui, x: target.x, y: target.y, button: .right)
+        let dragged = renderArmed(view, tui: tui, context: context)
+        #expect(
+            try highlightedRow(dragged, versus: opened) == "Paste",
+            "the right-drag tracks like any other")
+
+        release(tui, x: target.x, y: target.y, button: .right)
+        #expect(chosen == "Paste", "and the right-release runs the item it landed on")
+        #expect(
+            renderArmed(view, tui: tui, context: context).overlays.isEmpty,
+            "the menu closed behind the choice")
+    }
+
+    /// The sticky half, for the right button too: a click that does not move
+    /// leaves the menu up to be picked from. The release lands on the menu's own
+    /// top border — a context menu is anchored AT the clicked cell — which must
+    /// neither choose anything nor dismiss it.
+    @Test("A right-click that does not move leaves the context menu open")
+    func contextMenuClickWithoutDraggingLeavesItOpen() {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = Text("Right-click me")
+            .contextMenu {
+                Button("Cut") { chosen = "Cut" }
+                Button("Copy") { chosen = "Copy" }
+            }
+
+        renderArmed(view, tui: tui, context: context)
+        rightPress(tui, context, x: 3, y: 0)
+        let held = renderArmed(view, tui: tui, context: context)
+        #expect(!held.overlays.isEmpty, "open on the press, before the button comes up")
+
+        release(tui, x: 3, y: 0, button: .right)
+        let after = renderArmed(view, tui: tui, context: context)
+
+        #expect(!after.overlays.isEmpty, "still open, waiting to be picked from")
+        #expect(chosen == "—", "and nothing ran")
     }
 
     // MARK: - Combo box
