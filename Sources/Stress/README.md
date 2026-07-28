@@ -54,6 +54,7 @@ scale live · `a` toggle autopilot.
 | id | Stresses |
 |---|---|
 | `megalist` | `List`/`ForEach` windowing, row-id resolution, lazy row content, per-row memo |
+| `scrollfollow` | bottom-anchored `ScrollView` over variable-height rows with one appended per tick — windowed band render, anchor advance, tail estimate, O(window) at any N |
 | `table` | `Table` column-width computation, row windowing, per-cell value closures |
 | `table-multiline` | multi-line cell wrapping, lazy row sizing (visible window + bottom suffix only), variable-height windowing |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
