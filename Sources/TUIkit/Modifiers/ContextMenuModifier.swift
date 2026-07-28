@@ -114,7 +114,31 @@ extension ContextMenuModifier: Renderable {
                 state.isOpen = false
                 state.controller.closed()
             }, context: context)
+        attachKeyboardCloser(state: state, sectionID: sectionID, context: context)
         return baseBuffer
+    }
+
+    /// Closes the menu on **Shift+F10** while it is open.
+    ///
+    /// The gesture is a toggle: it is the keyboard's whole vocabulary for this
+    /// menu, so pressing it again has to undo it, the way clicking a pull-down
+    /// button a second time closes its menu. Escape already closes too — this is
+    /// the symmetry, not the only way out.
+    ///
+    /// Registered on the MENU's section rather than the page's: the menu grabs
+    /// the keyboard while it is up, so the trigger that opened it is not
+    /// listening any more.
+    private func attachKeyboardCloser(
+        state: ContextMenuState, sectionID: String, context: RenderContext
+    ) {
+        guard !context.isMeasuring, let dispatcher = context.environment.keyEventDispatcher
+        else { return }
+        dispatcher.addHandler(sectionID: sectionID) { event in
+            guard event.key == .f10, event.shift else { return false }
+            state.isOpen = false
+            state.controller.closed()
+            return true
+        }
     }
 
     /// Attaches the whole-content secondary-click trigger. Registered normally

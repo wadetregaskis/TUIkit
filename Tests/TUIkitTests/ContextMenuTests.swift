@@ -284,6 +284,30 @@ struct ContextMenuTests {
     /// `true` to Up/Down unconditionally, and a context menu hangs off a leaf, so
     /// it cannot isolate its siblings the way a root-attached modal can. The
     /// arrows moved the combo menu's selection instead of the open pop-up — while
+    /// Shift+F10 is the keyboard's whole vocabulary for this menu, so pressing
+    /// it again has to undo it — the way clicking a pull-down button a second
+    /// time closes its menu. Escape closes too; this is the symmetry, not the
+    /// only way out.
+    @Test("Shift+F10 closes the menu it opened")
+    func shiftF10Toggles() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = Text("Right-click me").contextMenu {
+            Button("Cut") {}
+            Button("Copy") {}
+        }
+
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10, shift: true)), "opens")
+        let opened = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(!opened.overlays.isEmpty, "the menu is up")
+
+        #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10, shift: true)), "closes")
+        let closed = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        #expect(closed.overlays.isEmpty, "and the same key put it away")
+    }
+
     /// Tab, which goes through the focus system and WAS captured, worked.
     @Test("An open context menu takes the arrows from a sibling Menu")
     func openMenuOwnsTheArrows() {
