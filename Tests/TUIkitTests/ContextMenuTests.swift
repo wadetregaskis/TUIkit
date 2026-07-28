@@ -284,6 +284,62 @@ struct ContextMenuTests {
     /// `true` to Up/Down unconditionally, and a context menu hangs off a leaf, so
     /// it cannot isolate its siblings the way a root-attached modal can. The
     /// arrows moved the combo menu's selection instead of the open pop-up — while
+    /// macOS: a LEFT click outside an open menu is spent entirely on closing
+    /// it, but a RIGHT click closes it and is still handled by whatever it
+    /// landed on. So right-clicking a second target closes the first menu and
+    /// opens that target's, in one gesture rather than two.
+    @Test("A right-click outside dismisses the menu and still lands")
+    func rightClickOutsideAlsoLands() throws {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let page = VStack(alignment: .leading, spacing: 0) {
+            Text("First target").contextMenu { Button("Cut") {} }
+            Text("Second target").contextMenu { Button("Paste") {} }
+        }
+
+        // This one must arm from the COMPOSITED frame: the dismiss backdrop
+        // lives inside the popup's overlay, so a harness that arms from the page
+        // buffer alone never registers it and every click goes straight to the
+        // page — which is not what the run loop does.
+        func renderComposited() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.keyEventDispatcher.clearHandlers()
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(page, context: context)
+            tui.mouseEventDispatcher.setRegions(
+                buffer.compositingOverlays(
+                    maxWidth: context.availableWidth, maxHeight: context.availableHeight,
+                    palette: context.environment.palette
+                ).hitTestRegions)
+            return buffer
+        }
+
+        func rightClick(row: Int) {
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .pressed, x: 2, y: row))
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .right, phase: .released, x: 2, y: row))
+        }
+
+        _ = renderComposited()
+        rightClick(row: 0)
+        let first = renderComposited()
+        #expect(
+            try #require(first.overlays.first).content.lines
+                .contains { $0.stripped.contains("Cut") },
+            "the first target's menu is up")
+
+        // One right-click on the OTHER target, with the first menu still open.
+        rightClick(row: 1)
+        let second = renderComposited()
+        let rows = second.overlays.flatMap { $0.content.lines.map(\.stripped) }
+        #expect(rows.contains { $0.contains("Paste") }, "the second target's menu opened: \(rows)")
+        #expect(!rows.contains { $0.contains("Cut") }, "and the first one closed: \(rows)")
+    }
+
     /// A right-click anchors the menu AT the clicked cell: the pointer is about
     /// to pick from it, so the rows want to be in a predictable place under
     /// itself. Shift+F10 has no pointer to be predictable for, so the menu

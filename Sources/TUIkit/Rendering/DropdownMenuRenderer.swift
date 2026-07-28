@@ -234,12 +234,27 @@ enum DropdownMenu {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         let dismissID = dispatcher.register { event in
             switch event.phase {
+            case .pressed where event.button == .right:
+                // macOS: a right-click outside an open menu closes it AND is
+                // still handled by whatever it landed on — right-clicking a
+                // second context-menu target closes the first menu and opens
+                // that one, in the one gesture. Declining lets the press bubble
+                // to the region underneath (the dispatcher already bubbles a
+                // declined right-click, which is how a `.contextMenu` on a
+                // container catches a click on a child), and the matching
+                // release then routes to whoever claimed it rather than here.
+                onDismiss()
+                return false
             case .pressed where !event.button.isWheel:
+                // A LEFT click is spent entirely on closing the menu.
                 onDismiss()
                 return true
-            case .released:
+            case .released where event.button != .right:
                 return true  // the consumed press's matching release
             default:
+                // A right release bubbles too. The target underneath opens its
+                // menu on the RELEASE, not the press, so eating this would let
+                // the click close one menu and open nothing.
                 return false
             }
         }
