@@ -118,6 +118,23 @@ enum DropdownMenu {
         let autoRepeatToken: String
     }
 
+    /// How this frame's rows are windowed — one answer, worked out once and
+    /// handed to everything that has to agree with it. Drawing the rows and
+    /// placing their hit regions from separately-derived windows is how a menu
+    /// ends up highlighting one row and activating another.
+    private struct RowWindow {
+        /// The row indices actually on screen.
+        let visible: Range<Int>
+
+        /// How many rows the popup can show at once — its interior height,
+        /// which is also the height of the scrollbar column.
+        let maxVisible: Int
+
+        /// Whether the rows overflow the window, and so whether the rightmost
+        /// interior column is the scrollbar's rather than content's.
+        let wantsBar: Bool
+    }
+
     /// Renders the bordered popup — windowed against the overlay budget, with
     /// a scrollbar when the rows overflow — and wires its mouse handlers.
     ///
@@ -129,7 +146,9 @@ enum DropdownMenu {
     ///   - onActivate: Called with the row index when an option row is
     ///     clicked.
     ///   - onDismiss: Called when the user clicks OUTSIDE the popup — close
-    ///     the menu (the click itself is consumed, macOS-style).
+    ///     the menu (the click itself is consumed, macOS-style) — and when a
+    ///     press-and-hold is released anywhere that is not a row, the popup's
+    ///     own chrome included.
     /// - Returns: The popup buffer, ready to attach as an ``OverlayLayer``.
     static func popup(
         _ config: Configuration,
@@ -141,7 +160,6 @@ enum DropdownMenu {
         let rows = config.rows
         let scroll = config.scroll
         let maxVisible = maxVisibleRows(rowCount: rows.count, context: context)
-        let wantsBar = rows.count > maxVisible
 
         scroll.extent = rows.count
         scroll.viewportHeight = maxVisible
@@ -163,7 +181,11 @@ enum DropdownMenu {
         }
         scroll.clampScrollOffset()
         let scrollOffset = scroll.scrollOffset
-        let visibleRange = scrollOffset..<min(rows.count, scrollOffset + maxVisible)
+        let window = RowWindow(
+            visible: scrollOffset..<min(rows.count, scrollOffset + maxVisible),
+            maxVisible: maxVisible,
+            wantsBar: rows.count > maxVisible)
+        let wantsBar = window.wantsBar
 
         let palette = context.environment.palette
         let barCells: [String]? =
@@ -181,19 +203,18 @@ enum DropdownMenu {
             lines: lines(
                 rows: rows,
                 highlightedRow: config.highlightedRow,
-                visibleRange: visibleRange,
+                visibleRange: window.visible,
                 innerWidth: config.innerWidth,
                 barCells: barCells,
                 context: context))
         attachMouseHandlers(
             to: &buffer,
             config: config,
-            visibleRange: visibleRange,
-            wantsBar: wantsBar,
-            maxVisible: maxVisible,
+            window: window,
             context: context,
             onHover: onHover,
-            onActivate: onActivate)
+            onActivate: onActivate,
+            onDismiss: onDismiss)
         if wantsBar {
             ScrollbarRenderer.driveAutoRepeat(
                 state: scroll, token: config.autoRepeatToken, context: context)
@@ -249,11 +270,15 @@ enum DropdownMenu {
                 onDismiss()
                 return true
             case .released where !event.button.isWheel:
-                // The matching release of a press this menu — or the target the
-                // press bubbled to — has already answered. Eaten either way:
-                // a context menu opens on the PRESS, so by the time its release
-                // arrives the gesture is spent, and letting it bubble would
-                // deliver a release nobody pressed for to the page beneath.
+                // The end of a press-and-HOLD, away from every row: the user
+                // tracked out of the menu and let go, which is how a Mac menu is
+                // dismissed without choosing. A release that did not move is the
+                // sticky click's — the menu stays up to be picked from.
+                if dispatcher.endsHeldGesture(event) { onDismiss() }
+                // Eaten either way: a context menu opens on the PRESS, so by the
+                // time its release arrives the gesture is spent, and letting it
+                // bubble would deliver a release nobody pressed for to the page
+                // beneath.
                 return true
             default:
                 return false
@@ -369,12 +394,11 @@ enum DropdownMenu {
     private static func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         config: Configuration,
-        visibleRange: Range<Int>,
-        wantsBar: Bool,
-        maxVisible: Int,
+        window: RowWindow,
         context: RenderContext,
         onHover: @escaping (Int) -> Void,
-        onActivate: @escaping (Int) -> Void
+        onActivate: @escaping (Int) -> Void,
+        onDismiss: @escaping () -> Void
     ) {
         guard !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
@@ -388,35 +412,44 @@ enum DropdownMenu {
         let rows = config.rows
         let scroll = config.scroll
         let innerWidth = config.innerWidth
-        let contentInner = wantsBar ? max(1, innerWidth - 1) : innerWidth
+        let contentInner = window.wantsBar ? max(1, innerWidth - 1) : innerWidth
 
         // Wheel anywhere over the popup scrolls the window freely (it does
         // not follow the highlight — like a desktop drop-down). Left clicks
         // on chrome/empty area are consumed so they don't fall through.
         let wheelID = mouseDispatcher.register { event in
             if scroll.handleWheelEvent(event) { return true }
+            // The popup's own chrome — its frame, its padding, a divider — is
+            // not a row, so a held gesture ending here ends the way it would
+            // over the page behind: no choice, menu closed. The backdrop cannot
+            // answer for these cells; they are inside the popup, where its
+            // regions win.
+            if mouseDispatcher.endsHeldGesture(event) {
+                onDismiss()
+                return true
+            }
             return event.button == .left
         }
         buffer.hitTestRegions.append(
             HitTestRegion(
-                offsetX: 0, offsetY: 0, width: innerWidth + 2, height: maxVisible + 2,
+                offsetX: 0, offsetY: 0, width: innerWidth + 2, height: window.maxVisible + 2,
                 handlerID: wheelID))
 
         // The scrollbar column (rightmost interior column over the rows).
-        if wantsBar {
+        if window.wantsBar {
             let barHandler = ScrollbarRenderer.verticalMouseHandler(
-                for: scroll, length: maxVisible,
+                for: scroll, length: window.maxVisible,
                 arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
                 behavior: context.environment.scrollbarClickBehavior)
             let barID = mouseDispatcher.register(barHandler)
             buffer.hitTestRegions.append(
                 HitTestRegion(
-                    offsetX: innerWidth, offsetY: 1, width: 1, height: maxVisible,
+                    offsetX: innerWidth, offsetY: 1, width: 1, height: window.maxVisible,
                     handlerID: barID))
         }
 
-        for (local, index) in visibleRange.enumerated() {
+        for (local, index) in window.visible.enumerated() {
             switch rows[index] {
             case .option: break
             case .rendered(_, let isSelectable) where isSelectable: break
@@ -439,6 +472,14 @@ enum DropdownMenu {
                     onHover(index)
                     return true
                 case .pressed where tracks(event.button):
+                    // The press is not the commitment — the release is. Handing
+                    // the rest of the gesture back to live hit-testing
+                    // (``MouseEventDispatcher/handOffGesture()``) is what lets
+                    // you press one row, slide onto another and get the one you
+                    // let go on; drag capture would send every later event back
+                    // to the row you started on, so sliding off the menu
+                    // entirely would still have run it.
+                    mouseDispatcher.handOffGesture()
                     return true
                 case .released where tracks(event.button):
                     onActivate(index)

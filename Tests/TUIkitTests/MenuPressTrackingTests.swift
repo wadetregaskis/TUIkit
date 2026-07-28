@@ -223,6 +223,92 @@ struct MenuPressTrackingTests {
         #expect(chosen == "—", "and nothing was chosen by letting go of the label")
     }
 
+    /// The other end of tracking: having taken the gesture, the menu owes the
+    /// user an answer to letting go of it. Releasing on a row runs the row;
+    /// releasing anywhere else — the page behind, the menu's own frame, a
+    /// divider — closes the menu without choosing, exactly as a Mac menu does.
+    @Test(
+        "Releasing a held menu away from every row closes it, choosing nothing",
+        arguments: [(30, 20), (0, 0)])
+    func releaseOffTheRowsCloses(x: Int, y: Int) throws {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = actionsMenu { chosen = $0 }
+
+        renderArmed(view, tui: tui, context: context)
+        press(tui, context, x: 2, y: 0)
+        let opened = renderArmed(view, tui: tui, context: context)
+        // Onto a row first, so the gesture is unambiguously a press-and-hold
+        // and not the click that leaves the menu up.
+        let target = try row(opened, "Rename")
+        drag(tui, x: target.x, y: target.y)
+        renderArmed(view, tui: tui, context: context)
+
+        drag(tui, x: x, y: y)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, x: x, y: y)
+
+        #expect(chosen == "—", "letting go away from the rows chooses nothing")
+        #expect(
+            renderArmed(view, tui: tui, context: context).overlays.isEmpty,
+            "…and puts the menu away — it does not sit there ignoring the release")
+    }
+
+    /// The menu's own chrome counts as "not a row": its border, its padding, and
+    /// any divider between the items. Those cells are inside the pop-up, so the
+    /// backdrop never sees the release — the pop-up's own catcher has to.
+    @Test("Releasing on the menu's border closes it too")
+    func releaseOnTheMenuFrameCloses() throws {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = actionsMenu { chosen = $0 }
+
+        renderArmed(view, tui: tui, context: context)
+        press(tui, context, x: 2, y: 0)
+        let opened = renderArmed(view, tui: tui, context: context)
+        let target = try row(opened, "Rename")
+        drag(tui, x: target.x, y: target.y)
+        let dragged = renderArmed(view, tui: tui, context: context)
+
+        // The pop-up's bottom border — inside the overlay, outside every row.
+        let overlay = try #require(dragged.overlays.first)
+        let border = (x: overlay.offsetX, y: overlay.offsetY + overlay.content.height - 1)
+        drag(tui, x: border.x, y: border.y)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, x: border.x, y: border.y)
+
+        #expect(chosen == "—", "the frame is not an item")
+        #expect(
+            renderArmed(view, tui: tui, context: context).overlays.isEmpty,
+            "and the release still ends the gesture")
+    }
+
+    /// Once the menu is up, a press that starts on one row and lifts on another
+    /// belongs to the row it LIFTS on — the press is not a commitment, which is
+    /// what lets you change your mind without letting go.
+    @Test("A press on one row that lifts on another chooses the one it lifted on")
+    func releaseChoosesTheRowItLiftedOn() throws {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = actionsMenu { chosen = $0 }
+
+        renderArmed(view, tui: tui, context: context)
+        press(tui, context, x: 2, y: 0)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, context, x: 2, y: 0)
+        let open = renderArmed(view, tui: tui, context: context)
+
+        let first = try row(open, "Rename")
+        let second = try row(open, "Delete")
+        press(tui, context, x: first.x, y: first.y)
+        renderArmed(view, tui: tui, context: context)
+        drag(tui, x: second.x, y: second.y)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, x: second.x, y: second.y)
+
+        #expect(chosen == "Delete", "the row under the pointer at the release, not at the press")
+    }
+
     // MARK: - `Picker` drop-down
 
     @Test("A picker's drop-down opens on the press and its release picks an option")

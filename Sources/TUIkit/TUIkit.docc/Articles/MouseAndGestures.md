@@ -100,8 +100,17 @@ menu by default, so TUIkit also accepts <kbd>Ctrl</kbd>-click, and
 Pop-up menus — ``Menu``, a `.menu`-style ``Picker``, a `TextField`'s suggestion
 list, and `contextMenu` — track the pointer while the button is held, the way a
 Mac menu does: press to open, drag to move the highlight, release over an item
-to choose it. Releasing outside dismisses without choosing. Click-then-click
-works too; both gestures drive the same highlight.
+to choose it. Releasing anywhere else — the page behind, the menu's own frame, a
+divider — dismisses without choosing. Once the menu is up, a press that starts on
+one item and lifts on another chooses the one it *lifted* on: the press is not a
+commitment.
+
+Click-then-click works too; both gestures drive the same highlight. The two are
+told apart by whether the pointer moved: a release that never left the cell it
+was pressed on completes a **click**, and leaves the menu up to be picked from at
+leisure. Without that rule a quick click would open and shut the menu in one
+gesture, since the cell it lands on is the trigger or (for a `contextMenu`,
+anchored where you clicked) the menu's own top border — never an item.
 
 A pointer-opened menu deliberately starts with **nothing** highlighted, so a
 release straight after the press cannot choose an item you never pointed at. The

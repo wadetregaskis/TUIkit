@@ -154,6 +154,15 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// increments the count.
     private var lastClick: LastClick?
 
+    /// The cell the button currently down was pressed on, or `nil` when no
+    /// press is in flight. Only the ORIGIN is kept: what a held gesture needs
+    /// to know is whether it has moved at all, not how far.
+    private var pressOrigin: (x: Int, y: Int)?
+
+    /// Whether the cursor has left the cell it was pressed on, for the gesture
+    /// currently in flight. See ``endsHeldGesture(_:)``.
+    private var pointerMovedSincePress = false
+
     /// The maximum gap between successive clicks for them to count as one
     /// multi-click sequence (400 ms — a common desktop double-click threshold).
     private static let multiClickWindowNanos: UInt64 = 400_000_000
@@ -295,6 +304,52 @@ extension MouseEventDispatcher {
         gestureHandedOff = true
     }
 
+    /// Whether `event` is a button-release that ends a press-and-**hold** rather
+    /// than one that merely completes a click.
+    ///
+    /// The distinction an open menu lives on. A menu opened by a press owns the
+    /// rest of that gesture — drag down the rows, release on one to run it — so
+    /// letting the button up is the user's answer, and away from every row the
+    /// answer is "never mind": the menu goes. But a menu opened by a plain CLICK
+    /// is sticky, staying up to be picked from at leisure, and the release that
+    /// ends *that* click also lands away from every row (on the trigger, or on
+    /// the menu's own top border, which is where a context menu anchors itself).
+    /// Closing on that one would make a quick click open and shut the menu in a
+    /// single gesture.
+    ///
+    /// Nothing in the event stream separates the two except whether the pointer
+    /// moved, which only the dispatcher sees whole: a terminal reports a held
+    /// move as a `.dragged` at the new cell, and the handler that would ask has
+    /// no memory across the frames a gesture spans. So the bookkeeping lives
+    /// here, beside the drag capture and the click count.
+    ///
+    /// A hold that never moves therefore reads as a click. That is the right way
+    /// round: there is no clock in the event stream either, and treating a
+    /// motionless gesture as a click leaves the menu up, which is recoverable —
+    /// treating it as a hold would shut the menu under a user who was still
+    /// deciding.
+    func endsHeldGesture(_ event: MouseEvent) -> Bool {
+        event.phase == .released && !event.button.isWheel && pointerMovedSincePress
+    }
+
+    /// Updates the press-and-hold bookkeeping ``endsHeldGesture(_:)`` reads.
+    ///
+    /// Called for every event the dispatcher accepts, before any routing, so the
+    /// record covers the whole gesture however it is routed — captured, handed
+    /// off, or consumed by nobody at all.
+    private func trackHeldGesture(_ event: MouseEvent) {
+        switch event.phase {
+        case .pressed:
+            pressOrigin = (event.x, event.y)
+            pointerMovedSincePress = false
+        case .dragged:
+            guard let origin = pressOrigin else { return }
+            if origin.x != event.x || origin.y != event.y { pointerMovedSincePress = true }
+        default:
+            break
+        }
+    }
+
     /// Dispatches one mouse event to the appropriate handler.
     ///
     /// Coordinates in the event passed to the handler are **localised
@@ -344,6 +399,17 @@ extension MouseEventDispatcher {
         // Synthesise the click count before any routing so every handler —
         // including a drag-captured one — sees the double-click.
         let event = stampClickCount(event)
+
+        // Likewise the press-and-hold record: it has to be up to date before
+        // any handler runs, and stay readable *through* the release that ends
+        // the gesture, so it is cleared only once that release is fully routed.
+        trackHeldGesture(event)
+        defer {
+            if event.phase == .released {
+                pressOrigin = nil
+                pointerMovedSincePress = false
+            }
+        }
 
         // Give the drag-and-drop session the absolute cursor before any
         // localisation (drop targeting hit-tests screen coordinates).

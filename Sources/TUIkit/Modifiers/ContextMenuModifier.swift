@@ -283,8 +283,10 @@ extension View {
     /// The menu opens on the right-button **press**, and the rest of that
     /// gesture belongs to it: keep the button down, drag over the rows to
     /// highlight them, and release on one to run it — the way a Mac context
-    /// menu tracks. A quick right-click works too; the menu simply stays up
-    /// until the next click. Escape or an outside click also dismisses it.
+    /// menu tracks. Letting go anywhere else puts the menu away without running
+    /// anything. A quick right-click works too — a release that never moved
+    /// completes a *click*, and leaves the menu up until the next one. Escape or
+    /// an outside click also dismisses it.
     ///
     /// Where the terminal swallows right-click (iTerm2 does by default) a
     /// **Ctrl-click** opens it instead. Right-clicking works reliably in Apple
