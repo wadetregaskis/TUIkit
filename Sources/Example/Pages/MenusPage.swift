@@ -53,21 +53,45 @@ struct MenusPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.menus.contextInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
-                    // The items are Buttons — SwiftUI's API — but they render as
-                    // menu rows, and the pop-up hugs its widest item.
-                    ContextMenuTarget()
-                        .contextMenu {
-                            Button(L("page.menus.context.cut")) {
-                                contextAction = L("page.menus.context.cut")
+                    // TWO targets, because the gestures worth trying are the ones
+                    // that involve a menu already being up: right-clicking the
+                    // other box swaps to its menu in the one click, and
+                    // right-clicking the same box re-opens its own where the
+                    // click landed. Neither is visible with a single target.
+                    // Their items differ — and so, deliberately, do their widths
+                    // — so the read-out below says which menu you picked from.
+                    HStack(spacing: 2) {
+                        // The items are Buttons — SwiftUI's API — but they render
+                        // as menu rows, and the pop-up hugs its widest item.
+                        ContextMenuTarget(L("page.menus.contextTarget"))
+                            .contextMenu {
+                                Button(L("page.menus.context.cut")) {
+                                    contextAction = L("page.menus.context.cut")
+                                }
+                                Button(L("page.menus.context.copy")) {
+                                    contextAction = L("page.menus.context.copy")
+                                }
+                                Divider()
+                                Button(L("page.menus.context.delete"), role: .destructive) {
+                                    contextAction = L("page.menus.context.delete")
+                                }
                             }
-                            Button(L("page.menus.context.copy")) {
-                                contextAction = L("page.menus.context.copy")
+                        ContextMenuTarget(L("page.menus.contextTarget2"))
+                            .contextMenu {
+                                Button(L("page.menus.context.paste")) {
+                                    contextAction = L("page.menus.context.paste")
+                                }
+                                Button(L("page.menus.context.selectAll")) {
+                                    contextAction = L("page.menus.context.selectAll")
+                                }
+                                Divider()
+                                Button(L("page.menus.context.properties")) {
+                                    contextAction = L("page.menus.context.properties")
+                                }
                             }
-                            Divider()
-                            Button(L("page.menus.context.delete"), role: .destructive) {
-                                contextAction = L("page.menus.context.delete")
-                            }
-                        }
+                    }
+                    Text(L("page.menus.contextSwapNote"))
+                        .foregroundStyle(.palette.foregroundSecondary)
                     ValueDisplayRow(L("page.menus.chose"), contextAction)
                 }
             }
@@ -116,12 +140,18 @@ struct MenusPage: View {
 /// whatever `.selectionIndicatorStyle` is in force — pulse, blink, or a static
 /// accent. Neither decision is made here.
 private struct ContextMenuTarget: View {
+    let title: String
+
     @Environment(\.isFocused) private var isFocused
     @Environment(\.selectionEmphasis) private var emphasis
     @Environment(\.palette) private var palette
 
+    init(_ title: String) {
+        self.title = title
+    }
+
     var body: some View {
-        Text(L("page.menus.contextTarget"))
+        Text(title)
             .padding(.horizontal, 1)
             .border(color: borderColor)
     }
