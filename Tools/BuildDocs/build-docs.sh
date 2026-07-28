@@ -9,10 +9,23 @@
 #
 # Usage:
 #   Tools/BuildDocs/build-docs.sh [--output <dir>] [--static-hosting] [--analyze]
+#   Tools/BuildDocs/build-docs.sh --preview [--port <n>]
 #
 #   --output <dir>     where to write TUIkit.doccarchive (default: .build/docs)
 #   --static-hosting   emit a tree servable from a plain web server (GitHub Pages)
 #   --analyze          report every diagnostic DocC can produce, not just errors
+#   --preview          serve the docs locally instead of writing an archive,
+#                      and print the URL to open (default port 8080)
+#
+# To read the docs:
+#   --preview                     browse them; this runs DocC's own server
+#   open <output>/TUIkit.doccarchive   read them in Xcode's documentation window
+#
+# A plain `python3 -m http.server` will NOT work on the built archive: the
+# renderer is a single-page app, so a deep link like /documentation/tuikit has
+# to be answered with index.html rather than a 404 or a redirect. Static hosts
+# need the 404.html fallback that the CI publish step sets up; locally, use
+# --preview.
 #
 # Exit status is DocC's: non-zero on error. Warnings do not fail the build.
 
@@ -22,13 +35,17 @@ cd "$(dirname "$0")/../.."
 OUTPUT=".build/docs"
 STATIC_HOSTING=()
 ANALYZE=()
+PREVIEW=0
+PORT=8080
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --output) OUTPUT="$2"; shift 2 ;;
         --static-hosting) STATIC_HOSTING=(--transform-for-static-hosting); shift ;;
         --analyze) ANALYZE=(--analyze); shift ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        --preview) PREVIEW=1; shift ;;
+        --port) PORT="$2"; shift 2 ;;
+        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -56,6 +73,15 @@ STAGED="$(mktemp -d)"
 trap 'rm -f "$DUMP_LOG"; rm -rf "$STAGED"' EXIT
 python3 Tools/BuildDocs/unify_symbol_graphs.py "$SYMBOL_GRAPHS" "$STAGED"
 
+if [ "$PREVIEW" -eq 1 ]; then
+    echo "==> Serving — open http://localhost:$PORT/documentation/tuikit"
+    exec "$DOCC" preview Sources/TUIkit/TUIkit.docc \
+        --port "$PORT" \
+        --fallback-display-name TUIkit \
+        --fallback-bundle-identifier dev.tuikit.TUIkit \
+        --additional-symbol-graph-dir "$STAGED"
+fi
+
 echo "==> Converting the catalog"
 mkdir -p "$OUTPUT"
 ARCHIVE="$OUTPUT/TUIkit.doccarchive"
@@ -65,7 +91,14 @@ rm -rf "$ARCHIVE"
     --fallback-bundle-identifier dev.tuikit.TUIkit \
     --additional-symbol-graph-dir "$STAGED" \
     --output-path "$ARCHIVE" \
+    --emit-lmdb-index \
     ${STATIC_HOSTING[@]+"${STATIC_HOSTING[@]}"} ${ANALYZE[@]+"${ANALYZE[@]}"}
+    # `--emit-lmdb-index` writes index/navigator.index + data.mdb. Xcode's
+    # documentation window reads THAT, not index.json: without it Xcode opens
+    # the archive and shows an empty navigator, which looks exactly like the
+    # archive failing to load. The swift-docc-plugin passes it as a matter of
+    # course, which is why an archive built by hand behaves differently.
+    #
     # (the `[@]+` guards are for macOS's bash 3.2, where `set -u` treats an
     # empty array expansion as an unbound variable)
 

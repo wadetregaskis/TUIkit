@@ -4,11 +4,30 @@ Builds the DocC reference as **one archive covering the whole package**, with
 every public symbol under `/documentation/tuikit/`.
 
 ```bash
-Tools/BuildDocs/build-docs.sh                      # → .build/docs/TUIkit.doccarchive
-Tools/BuildDocs/build-docs.sh --analyze            # every diagnostic, for a docs audit
+Tools/BuildDocs/build-docs.sh --preview             # read them: serves on :8080
+Tools/BuildDocs/build-docs.sh                       # → .build/docs/TUIkit.doccarchive
+Tools/BuildDocs/build-docs.sh --analyze             # every diagnostic, for a docs audit
 Tools/BuildDocs/build-docs.sh --static-hosting \
-    --output docc-output                           # servable from a plain web server
+    --output docc-output                            # for publishing
 ```
+
+## Reading the docs
+
+**`--preview`** is the one to reach for. It runs DocC's own server and prints
+the URL; open <http://localhost:8080/documentation/tuikit>.
+
+**Xcode**: `open .build/docs/TUIkit.doccarchive`. This needs the archive to
+carry an LMDB navigator index (`index/navigator.index` + `data.mdb`), which is
+why the script passes `--emit-lmdb-index`. Without it Xcode opens its
+documentation window on the generic landing page with the archive nowhere in
+the navigator — indistinguishable from the archive failing to load.
+
+**Not** `python3 -m http.server`. The renderer is a single-page app: it needs
+a server that answers unknown deep paths with `index.html`, and the site root
+`/` is not a route at all, so a dumb static server lands you on DocC's own
+"The page you're looking for can't be found." A real static host needs the
+`404.html` fallback (copy `index.html` to `404.html`), which is what the
+publish step sets up.
 
 ## Why this exists (don't replace it with `generate-documentation`)
 
