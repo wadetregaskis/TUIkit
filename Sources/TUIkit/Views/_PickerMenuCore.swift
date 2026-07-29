@@ -257,8 +257,11 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                         handler.itemValues.firstIndex(
                             of: handler.selection.wrappedValue) ?? 0
                     // The rest of this gesture belongs to the open menu, not to
-                    // the control that opened it.
+                    // the control that opened it — except its release, which is
+                    // already spent on opening (the menu may well be placed over
+                    // this very control, and must not read the release as a pick).
                     mouseDispatcher.handOffGesture()
+                    mouseDispatcher.pressOpenedPopup()
                 }
                 return true
             case .released where event.button == .left:

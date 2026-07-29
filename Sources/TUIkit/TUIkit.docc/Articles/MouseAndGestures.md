@@ -108,9 +108,13 @@ commitment.
 Click-then-click works too; both gestures drive the same highlight. The two are
 told apart by whether the pointer moved: a release that never left the cell it
 was pressed on completes a **click**, and leaves the menu up to be picked from at
-leisure. Without that rule a quick click would open and shut the menu in one
-gesture, since the cell it lands on is the trigger or (for a `contextMenu`,
-anchored where you clicked) the menu's own top border — never an item.
+leisure. It also chooses nothing — not even when it lands squarely on an item.
+The cell an opening click comes back up on is usually chrome (the trigger, or for
+a `contextMenu`, anchored where you clicked, the menu's own top border), but a
+drop-down with more options than fit below its control is placed *over* the
+control, exactly as on a Mac, and then that cell is an item nobody aimed at.
+Without both halves of the rule a quick click would open and shut the menu in one
+gesture, leaving whatever happened to be under the pointer as the new value.
 
 A pointer-opened menu deliberately starts with **nothing** highlighted, so a
 release straight after the press cannot choose an item you never pointed at. The

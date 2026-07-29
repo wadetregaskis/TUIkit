@@ -482,6 +482,13 @@ enum DropdownMenu {
                     mouseDispatcher.handOffGesture()
                     return true
                 case .released where tracks(event.button):
+                    // Not every release over a row is a choice. A menu tall
+                    // enough is placed OVER the control that opened it — a Mac
+                    // pop-up button's menu covers it deliberately — so the
+                    // release ending the opening click lands on a row it was
+                    // never aimed at. That click is spent on opening the menu;
+                    // consumed here, it leaves the menu up to be picked from.
+                    guard !mouseDispatcher.endsPopupOpeningClick(event) else { return true }
                     onActivate(index)
                     return true
                 default:

@@ -207,6 +207,7 @@ extension ContextMenuModifier: Renderable {
                 // Opened by the pointer: nothing is chosen yet.
                 state.controller.opened(withSelection: false)
                 dispatcher.handOffGesture()
+                dispatcher.pressOpenedPopup()
                 return true
             case .released:
                 // Spent on the press. Only reached when the menu did not take

@@ -32,6 +32,10 @@ struct MenuPressTrackingTests {
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tui)
         environment.terminalWidth = width
+        // The area overlays composite into. A drop-down sizes its window to
+        // this, so it has to agree with the height the frame is rendered at —
+        // otherwise a menu "too tall to fit" in one and not the other.
+        environment.overlayContentHeight = height
         // Drag reports are a mouse-support CATEGORY: without this the dispatcher
         // drops every `.dragged` event before any handler sees it, and the whole
         // gesture under test is invisible.
@@ -346,6 +350,58 @@ struct MenuPressTrackingTests {
         #expect(
             renderArmed(view, tui: tui, context: context).overlays.isEmpty,
             "and the drop-down closed")
+    }
+
+    /// A drop-down with more options than there is room below it is placed OVER
+    /// its own control — a Mac pop-up button's menu covers it too. The click that
+    /// opened it therefore comes back up on a row the user never aimed at, and
+    /// choosing that row would make the menu open and shut in one flick, with the
+    /// value changed to whatever happened to be under the pointer.
+    @Test("The click that opens a drop-down over its own control picks nothing")
+    func openingClickOverARowPicksNothing() throws {
+        // Twenty options into a twelve-row content area: the pop-up fills it, so
+        // wherever it is placed it covers the control on the third row.
+        let (tui, context) = harness(height: 12)
+        var choice = 1
+        let view = VStack(alignment: .leading, spacing: 0) {
+            Text("above")
+            Text("above")
+            Picker("Number", selection: Binding(get: { choice }, set: { choice = $0 })) {
+                ForEach(1...20, id: \.self) { value in
+                    Text("Number \(value)").tag(value)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .selectionIndicatorStyle(.none)
+
+        let closed = renderArmed(view, tui: tui, context: context)
+        let control = closed.lines[2].stripped
+        let controlX = try #require(
+            control.firstIndex(of: "▐").map { control.distance(from: control.startIndex, to: $0) })
+
+        press(tui, context, x: controlX + 1, y: 2)
+        let opened = renderArmed(view, tui: tui, context: context)
+        let overlay = try #require(opened.overlays.first, "the drop-down is up")
+        // Where the pop-up actually LANDS, which is what the dispatcher was armed
+        // with: the layer's own offset is the wish (one row under its control),
+        // and the compositor moves it up to keep the whole menu on screen.
+        let placed = overlay.placed(
+            maxWidth: context.availableWidth, maxHeight: context.availableHeight)
+        let localRow = 2 - placed.y
+        #expect(
+            localRow > 0 && localRow < placed.content.height - 1,
+            """
+            the pop-up covers the control with one of its OPTION rows — without \
+            that this test is not testing anything (local row \(localRow) of \
+            \(placed.content.height))
+            """)
+
+        release(tui, context, x: controlX + 1, y: 2)
+        let after = renderArmed(view, tui: tui, context: context)
+
+        #expect(choice == 1, "the opening click chose nothing — it only opened the menu")
+        #expect(!after.overlays.isEmpty, "and left it open to be picked from")
     }
 
     // MARK: - `.contextMenu`

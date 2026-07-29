@@ -415,6 +415,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     focusManager?.focus(id: captureFocusID)
                     captureAction()
                     mouseDispatcher.handOffGesture()
+                    mouseDispatcher.pressOpenedPopup()
                     return true
                 case .released where event.button == .left:
                     // The trigger already fired on the press. This release only

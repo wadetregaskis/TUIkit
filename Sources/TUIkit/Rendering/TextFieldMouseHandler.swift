@@ -98,6 +98,7 @@ enum TextFieldMouseHandler {
                         // the menu, not to the field. Click-and-hold, drag down
                         // the suggestions, release on one to choose it.
                         mouseDispatcher.handOffGesture()
+                        mouseDispatcher.pressOpenedPopup()
                     }
                     return true
                 }

@@ -163,6 +163,12 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// currently in flight. See ``endsHeldGesture(_:)``.
     private var pointerMovedSincePress = false
 
+    /// Whether the press in flight opened a pop-up menu — see
+    /// ``pressOpenedPopup()``. Unlike ``gestureHandedOff`` this stands for the
+    /// whole gesture, not for one handler call, because the question it answers
+    /// is asked by a *different* handler on the release.
+    private var pressOpenedPopupMenu = false
+
     /// The maximum gap between successive clicks for them to count as one
     /// multi-click sequence (400 ms — a common desktop double-click threshold).
     private static let multiClickWindowNanos: UInt64 = 400_000_000
@@ -304,6 +310,13 @@ extension MouseEventDispatcher {
         gestureHandedOff = true
     }
 
+    /// Called by a handler *while it is consuming a press* to say that press
+    /// OPENED a pop-up menu, so the release ending the same click is already
+    /// spoken for. See ``endsPopupOpeningClick(_:)``.
+    func pressOpenedPopup() {
+        pressOpenedPopupMenu = true
+    }
+
     /// Whether `event` is a button-release that ends a press-and-**hold** rather
     /// than one that merely completes a click.
     ///
@@ -332,6 +345,24 @@ extension MouseEventDispatcher {
         event.phase == .released && !event.button.isWheel && pointerMovedSincePress
     }
 
+    /// Whether `event` is the release that merely ends the CLICK which opened a
+    /// pop-up menu — the other half of ``endsHeldGesture(_:)``.
+    ///
+    /// A menu may be placed over the control that opened it: a drop-down taller
+    /// than the space below it covers its own pop-up button, exactly as it does
+    /// on a Mac, so the release ending the opening click lands on a menu ROW.
+    /// That release must not choose it. The press was spent on opening the menu;
+    /// only a release that went somewhere first (``endsHeldGesture(_:)``) is the
+    /// user answering the menu they were just shown.
+    ///
+    /// - Precondition: the opening handler said so, via ``pressOpenedPopup()``.
+    ///   Without that this cannot be distinguished from an ordinary click on a
+    ///   row of a menu that was already open, which of course *does* choose it.
+    func endsPopupOpeningClick(_ event: MouseEvent) -> Bool {
+        event.phase == .released && !event.button.isWheel
+            && pressOpenedPopupMenu && !pointerMovedSincePress
+    }
+
     /// Updates the press-and-hold bookkeeping ``endsHeldGesture(_:)`` reads.
     ///
     /// Called for every event the dispatcher accepts, before any routing, so the
@@ -342,6 +373,9 @@ extension MouseEventDispatcher {
         case .pressed:
             pressOrigin = (event.x, event.y)
             pointerMovedSincePress = false
+            // Cleared before the press is routed, so the handler about to
+            // consume it can set it (see ``pressOpenedPopup()``).
+            pressOpenedPopupMenu = false
         case .dragged:
             guard let origin = pressOrigin else { return }
             if origin.x != event.x || origin.y != event.y { pointerMovedSincePress = true }
@@ -408,6 +442,7 @@ extension MouseEventDispatcher {
             if event.phase == .released {
                 pressOrigin = nil
                 pointerMovedSincePress = false
+                pressOpenedPopupMenu = false
             }
         }
 
