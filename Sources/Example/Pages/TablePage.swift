@@ -129,6 +129,24 @@ private struct TransferEntry: Identifiable, Sendable {
     }
 }
 
+/// A playlist row for the drag-to-reorder demo — short, ordinary rows, so the
+/// drag itself is what the section is about.
+private struct Track: Identifiable, Sendable {
+    let id: String
+    let title: String
+    let artist: String
+    let length: String
+
+    static let playlist: [Self] = [
+        Self(id: "1", title: "Aurora", artist: "Kite Season", length: "3:41"),
+        Self(id: "2", title: "Bloom", artist: "Vela", length: "4:07"),
+        Self(id: "3", title: "Cinder", artist: "Low Ceiling", length: "2:58"),
+        Self(id: "4", title: "Drift", artist: "Kite Season", length: "5:12"),
+        Self(id: "5", title: "Ember", artist: "Hollow Coast", length: "3:26"),
+        Self(id: "6", title: "Fathom", artist: "Vela", length: "6:03"),
+    ]
+}
+
 // MARK: - Table Page
 
 /// Table component demo page.
@@ -151,6 +169,10 @@ struct TablePage: View {
     @State var liveSelection: Int?
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
     @State var liveTick: Int = 0
+    @State var playlistSelection: String?
+    @State var reorderFeedback = ReorderFeedbackChoice.live.rawValue
+    /// The reorderable table's rows — `@State`, because `onMove` writes to them.
+    @State fileprivate var playlist = Track.playlist
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -278,6 +300,35 @@ struct TablePage: View {
                     .alignment(.trailing)
             }
             .frame(height: 5)
+
+            // Drag-to-reorder, the Table half of the Lists page's `.onMove`
+            // section: same state machine, same feedback modes, and here the
+            // modifier goes on the Table (its rows are values, not views, so
+            // there is no ForEach to hang it on).
+            DemoSection(L("page.table.reorderSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.table.reorderInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
+                        ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
+                            Text(choice.label).tag(choice.rawValue)
+                        }
+                    }
+                    Table(playlist, selection: $playlistSelection) {
+                        TableColumn(L("page.table.column.track"), value: \Track.title)
+                            .width(.fit)
+                        TableColumn(L("page.table.column.artist"), value: \Track.artist)
+                            .width(.flexible)
+                        TableColumn(L("page.table.column.length"), value: \Track.length)
+                            .width(.fixed(6))
+                            .alignment(.trailing)
+                    }
+                    .onMove { playlist.move(fromOffsets: $0, toOffset: $1) }
+                    .frame(height: 8)
+                    .rowReorderFeedback(
+                        ReorderFeedbackChoice(rawValue: reorderFeedback)?.feedback ?? .live)
+                }
+            }
 
             DemoSection(L("page.table.currentSelections")) {
                 VStack(alignment: .leading, spacing: 1) {

@@ -53,7 +53,7 @@ private struct RowReorderFeedbackKey: EnvironmentKey {
 extension EnvironmentValues {
     /// What a drag-to-reorder gesture shows in this subtree.
     ///
-    /// Set by ``TUIkit/View/rowReorderFeedback(_:)``. Lists capture it each
+    /// Set by ``TUIkit/View/rowReorderFeedback(_:)``. Lists and tables capture it each
     /// render onto their persistent handler, so the drag can consult it at
     /// event time, when the environment is out of reach.
     public var rowReorderFeedback: RowReorderFeedback {

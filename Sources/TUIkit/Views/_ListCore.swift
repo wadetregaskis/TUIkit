@@ -19,21 +19,6 @@ import Foundation
 /// still fits the interior after composition.
 private let listRowGutter = 2
 
-/// Where inside the grabbed row a reorder drag was pressed, in the row's own
-/// cells. A class so the press-captured mouse closure can fill it in on the
-/// press and read it back on the drag that follows.
-@MainActor
-private final class _ListRowGrabPoint {
-    var x = 0
-    var y = 0
-}
-
-/// The payload a ``RowReorderFeedback/cursor`` drag carries. Private and empty
-/// on purpose: it exists only to satisfy ``DragAndDropSession``, and no
-/// `dropDestination` can name — and therefore accept — it, so floating a row
-/// over the app can never be mistaken for a drop.
-private struct _ListRowReorderPayload {}
-
 // MARK: - Row Source (windowed materialisation)
 
 /// A windowed view over a `List`'s rows.
@@ -1185,29 +1170,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard let source = handler.reorderRemovedRow else { return visibleRows }
-        let original = visibleRows.first { $0.index == source }?.row.buffer
-        var rows = visibleRows.filter { $0.index != source }
-        guard let placeholder = handler.reorderPlaceholder else { return rows }
-
+        let original = handler.reorderRemovedRow
+            .flatMap { source in visibleRows.first { $0.index == source }?.row.buffer }
         let body: FrameBuffer
         switch handler.reorderFeedback {
         case .dimmed: body = original.map(dimmed) ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: original)
         }
-        // The slot goes at closed-up position `placeholder.slot` — before the
-        // first surviving row that already numbers at or past it. Every index
-        // here is closed-up, which is also what `move(from:to:)` produces, so
-        // the drawn position and the committed position are the same number by
-        // construction rather than by an adjustment.
-        let slot =
-            rows.firstIndex {
-                handler.reorderClosedUpIndex($0.index, source: source) >= placeholder.slot
-            } ?? rows.count
-        rows.insert(
-            (Self.reorderSlotRowIndex, SelectableListRow(type: .footer, buffer: body)),
-            at: slot)
-        return rows
+        // Which rows to draw, and where the slot goes among them, is the shared
+        // arithmetic — `Table` asks the same question of the same handler.
+        let byIndex = Dictionary(visibleRows.map { ($0.index, $0.row) }, uniquingKeysWith: { first, _ in first })
+        return handler.reorderDrawnRows(visibleRows.map(\.index)).compactMap { drawn in
+            switch drawn {
+            case .row(let index):
+                return byIndex[index].map { (index: index, row: $0) }
+            case .slot:
+                return (Self.reorderSlotRowIndex, SelectableListRow(type: .footer, buffer: body))
+            }
+        }
     }
 
     /// The same buffer with every line drawn faint — `.dimmed`'s preview of the
@@ -1284,7 +1264,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // drag keeps under the pointer. Held in the closure because the closure
         // IS the gesture: the dispatcher captures it at press and routes the
         // whole drag back here, however many renders intervene.
-        let grab = _ListRowGrabPoint()
+        let grab = RowReorderGrabPoint()
         return { event in
             // Wheel scrolling moves the viewport, NEVER the
             // selection — same model as Finder / Explorer /
@@ -1357,7 +1337,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                             // the floating copy off to one side of the pointer
                             // instead of under it.
                             dragSession.begin(
-                                payload: _ListRowReorderPayload(), preview: preview,
+                                payload: RowReorderPayload(), preview: preview,
                                 grabX: min(grab.x, max(0, preview.width - 1)),
                                 grabY: min(grab.y, max(0, preview.height - 1)))
                         } else {

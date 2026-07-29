@@ -99,6 +99,49 @@ extension ItemListHandler {
         return closedUp >= slot ? closedUp + 1 : closedUp
     }
 
+    // MARK: - What to draw
+
+    /// One entry in the order a view actually draws during a reorder drag.
+    enum DrawnRow: Equatable {
+        /// A real row, by data offset.
+        case row(Int)
+
+        /// The drop slot — a gap the size of the dragged row (`.cursor`), or a
+        /// faint copy of it (`.dimmed`). It has no data behind it: the keyboard
+        /// cursor cannot sit on it and selection ignores it, but it IS a drop
+        /// target, because after every step of the drag the pointer is on it.
+        case slot
+    }
+
+    /// The rows to draw for `visible`, with the dragged row taken out and the
+    /// drop slot opened where it would land.
+    ///
+    /// So a drag never changes how much is on screen, and what IS on screen is
+    /// exactly the order a drop would produce — the preview is the result rather
+    /// than the result plus a leftover.
+    ///
+    /// Returns `visible` unchanged (every entry a `.row`) when nothing is
+    /// dragging, or when ``RowReorderFeedback/live`` is moving the data instead,
+    /// or when a `.dimmed` drag has nowhere to drop — see ``reorderRemovedRow``
+    /// for why those three are one question.
+    ///
+    /// Shared by `List` and `Table`: the index arithmetic is the same for both,
+    /// and it is subtle enough (every index here is CLOSED-UP, which is also what
+    /// `move(from:to:)` produces) that having it twice is how the two drift.
+    func reorderDrawnRows(_ visible: some Sequence<Int>) -> [DrawnRow] {
+        guard let source = reorderRemovedRow else { return visible.map { .row($0) } }
+        let rows = visible.filter { $0 != source }
+        guard let placeholder = reorderPlaceholder else { return rows.map { .row($0) } }
+        // The slot goes at closed-up position `placeholder.slot` — before the
+        // first surviving row that already numbers at or past it.
+        let slot =
+            rows.firstIndex { reorderClosedUpIndex($0, source: source) >= placeholder.slot }
+            ?? rows.count
+        var drawn = rows.map { DrawnRow.row($0) }
+        drawn.insert(.slot, at: slot)
+        return drawn
+    }
+
     // MARK: - The drag
 
     /// Whether a reorder drag is in flight *and* has moved — the test that

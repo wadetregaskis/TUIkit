@@ -10,6 +10,8 @@
 // splitting them across files purely to satisfy the length ceiling would scatter
 // that model for no clarity gain — the same rationale by which `type_body_length`
 // is disabled project-wide and `_ListCore` keeps its `file_length` disable.
+
+import Foundation
 // swiftlint:disable file_length
 
 // MARK: - Table
@@ -87,6 +89,10 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
     /// views), this is how a row gets an "open" action.
     var primaryAction: ((Value.ID) -> Void)?
 
+    /// The action that reorders the data, set via ``onMove(_:)``. Present means
+    /// the rows can be dragged into a new order.
+    var moveAction: ((IndexSet, Int) -> Void)?
+
     public var body: some View {
         _TableCore(
             data: data,
@@ -98,7 +104,8 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
             isDisabled: isDisabled,
             emptyPlaceholder: emptyPlaceholder,
             columnSpacing: columnSpacing,
-            primaryAction: primaryAction
+            primaryAction: primaryAction,
+            moveAction: moveAction
         )
     }
 }
@@ -118,6 +125,36 @@ extension Table {
     public func onRowActivate(_ action: @escaping (Value.ID) -> Void) -> Table {
         var copy = self
         copy.primaryAction = action
+        return copy
+    }
+
+    /// Lets the rows be dragged into a new order, calling `action` to perform the
+    /// move — the same signature as SwiftUI's `DynamicViewContent.onMove(perform:)`
+    /// and satisfied the same way, with `move(fromOffsets:toOffset:)`:
+    ///
+    /// ```swift
+    /// Table(tasks, selection: $selected) {
+    ///     TableColumn("Task", value: \.title)
+    /// }
+    /// .onMove { tasks.move(fromOffsets: $0, toOffset: $1) }
+    /// ```
+    ///
+    /// The drag shows whatever ``View/rowReorderFeedback(_:)`` asks for, exactly as
+    /// a `List`'s does: they share one state machine.
+    ///
+    /// This is a modifier on the `Table` rather than on its rows, because a
+    /// `Table`'s rows are values and its cells are not views — there is no
+    /// `ForEach` to attach SwiftUI's row-level `onMove` to. A **multi-line**
+    /// table (any column with a `lineLimit` above 1) reorders too, but always
+    /// with ``RowReorderFeedback/live`` feedback: a drop slot there would have to
+    /// take part in the line-budget arithmetic that lets a tall row be partially
+    /// clipped, and moving the rows themselves needs no slot.
+    ///
+    /// - Parameter action: Called with the offsets being moved and the
+    ///   destination offset, measured against the collection before the move.
+    public func onMove(_ action: @escaping (IndexSet, Int) -> Void) -> Table {
+        var copy = self
+        copy.moveAction = action
         return copy
     }
 }
@@ -231,6 +268,7 @@ where Value.ID: Hashable {
     let emptyPlaceholder: String
     let columnSpacing: Int
     var primaryAction: ((Value.ID) -> Void)?
+    var moveAction: ((IndexSet, Int) -> Void)?
 
     var body: Never {
         fatalError("_TableCore renders via Renderable")
@@ -399,6 +437,12 @@ where Value.ID: Hashable {
         /// Whether a single-line scrollbar column was drawn (only the single-line
         /// path shows one). Drives the bar's mouse handler in `attachMouseHandlers`.
         var hasScrollbar = false
+
+        /// This frame's rendered row lines, in `visibleRange` order — the source
+        /// of a ``RowReorderFeedback/cursor`` drag's floating preview. Populated
+        /// only for a reorderable table (`onMove` set), since nothing else reads
+        /// it; empty on the multi-line path, which reorders `.live`.
+        var visibleRowLines: [String] = []
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -532,7 +576,7 @@ where Value.ID: Hashable {
             reserveIndicatorLines(handler: handler, contentHeight: contentHeight)
         }
 
-        let lines = composeRowLines(
+        let composed = composeRowLines(
             handler: handler,
             tableHasFocus: tableHasFocus,
             columnWidths: columnWidths,
@@ -542,7 +586,7 @@ where Value.ID: Hashable {
         )
 
         return (
-            lines: lines,
+            lines: composed.lines,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -550,7 +594,8 @@ where Value.ID: Hashable {
                 scrollOffsetAbove: handler.hasContentAbove ? 1 : 0,
                 // Single-line rows: leave empty (no per-frame array); the click
                 // handler maps the line offset straight to the row.
-                visibleRowHeights: []
+                visibleRowHeights: [],
+                visibleRowLines: composed.rowLines
             )
         )
     }
@@ -603,18 +648,27 @@ where Value.ID: Hashable {
         // Content-only row lines; the bar cell is merged in at the END, keyed by
         // absolute line index, so an overscroll slide moves the rows and leaves
         // the bar exactly where it is (§1.5).
+        //
+        // Drawn in reorder order (the dragged row out, a slot where it would
+        // land) — see `composeRowLines` for the same two lines of it.
+        let drawn = handler.reorderDrawnRows(visibleRange)
+        publishRowBands(handler: handler, drawn: drawn)
         var rowLines: [String] = []
         rowLines.reserveCapacity(contentHeight)
         for line in 0..<contentHeight {
             let rowLine: String
-            if line < visibleRange.count {
-                let rowIndex = visibleRange.lowerBound + line
+            switch line < drawn.count ? drawn[line] : nil {
+            case .row(let rowIndex):
                 rowLine = renderRow(
                     item: data[rowIndex], columnWidths: columnWidths,
                     isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     rowWidth: contentInnerWidth, context: context, palette: palette)
-            } else {
+            case .slot:
+                rowLine = reorderSlotLine(
+                    handler: handler, columnWidths: columnWidths, rowWidth: contentInnerWidth,
+                    context: context, palette: palette)
+            case nil:
                 rowLine = ""
             }
             let pad = max(0, contentInnerWidth - rowLine.strippedLength)
@@ -629,7 +683,8 @@ where Value.ID: Hashable {
             lines,
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
-                scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true))
+                scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true,
+                visibleRowLines: handler.onMove == nil ? [] : rowLines))
     }
 
     // MARK: - Multi-line content (variable row heights)
@@ -675,6 +730,12 @@ where Value.ID: Hashable {
         handler.contentHeight = contentHeight
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
+        handler.onMove = moveAction
+        // Multi-line rows reorder with `.live` feedback only: a drop slot would
+        // have to take part in the line-budget arithmetic below that lets a tall
+        // row be partially clipped, and moving the rows themselves needs no slot.
+        // Stated in ``Table/onMove(_:)``.
+        handler.reorderFeedback = .live
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
@@ -1038,6 +1099,8 @@ where Value.ID: Hashable {
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
+        handler.onMove = moveAction
+        handler.reorderFeedback = context.environment.rowReorderFeedback
         handler.rowHeight = nil  // single-line path: uniform-height scroll math
         // With uniform rows lines == rows, so granularity is moot here — but
         // sync it (and zero any stale clip below) in case the table's rows
@@ -1136,7 +1199,7 @@ where Value.ID: Hashable {
         innerWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
+    ) -> (lines: [String], rowLines: [String]) {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
@@ -1157,20 +1220,30 @@ where Value.ID: Hashable {
             ))
         }
         let visibleRange = handler.visibleRange
-        for rowIndex in visibleRange {
-            let item = data[rowIndex]
-            let isFocused = handler.isFocused(at: rowIndex) && tableHasFocus
-            let isSelected = handler.isSelected(at: rowIndex)
-            rowLines.append(renderRow(
-                item: item,
-                columnWidths: columnWidths,
-                isFocused: isFocused,
-                isSelected: isSelected,
-                rowWidth: contentWidth,
-                context: context,
-                palette: palette
-            ))
+        // A reorder drag takes the dragged row out and opens a slot where it
+        // would land, so what is DRAWN is the order a drop would produce. The
+        // sequence (and the arithmetic behind it) is the handler's, shared with
+        // `List`; outside a drag it is just the visible range.
+        let drawn = handler.reorderDrawnRows(visibleRange)
+        for entry in drawn {
+            switch entry {
+            case .row(let rowIndex):
+                rowLines.append(renderRow(
+                    item: data[rowIndex],
+                    columnWidths: columnWidths,
+                    isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
+                    isSelected: handler.isSelected(at: rowIndex),
+                    rowWidth: contentWidth,
+                    context: context,
+                    palette: palette
+                ))
+            case .slot:
+                rowLines.append(reorderSlotLine(
+                    handler: handler, columnWidths: columnWidths, rowWidth: contentWidth,
+                    context: context, palette: palette))
+            }
         }
+        publishRowBands(handler: handler, drawn: drawn)
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         if handler.hasContentBelow {
@@ -1184,7 +1257,64 @@ where Value.ID: Hashable {
                 locale: numberLocale
             ))
         }
-        return lines
+        // The row lines are handed back separately for a `.cursor` drag's
+        // floating preview; the press frame is drawn in plain data order, so
+        // indexing them by `visibleRange` offset is exact.
+        return (lines, handler.onMove == nil ? [] : rowLines)
+    }
+
+    // MARK: - Reorder drag
+
+    /// The drop slot's line: a faint copy of the dragged row under
+    /// ``RowReorderFeedback/dimmed``, and a gap the row's size under
+    /// ``RowReorderFeedback/cursor`` (which has the row itself on the pointer, so
+    /// drawing it here too would read as a duplicate).
+    private func reorderSlotLine(
+        handler: ItemListHandler<Value.ID>,
+        columnWidths: [Int],
+        rowWidth: Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> String {
+        guard handler.reorderFeedback == .dimmed,
+            let source = handler.reorderRemovedRow, data.indices.contains(source)
+        else { return String(repeating: " ", count: max(0, rowWidth)) }
+        let line = renderRow(
+            item: data[source], columnWidths: columnWidths,
+            isFocused: false, isSelected: false, rowWidth: rowWidth,
+            context: context, palette: palette)
+        return ANSIRenderer.dim + line + ANSIRenderer.reset
+    }
+
+    /// Hands this frame's drawn row geometry to the handler for the reorder drag
+    /// to hit-test against — the Table's mirror of `_ListCore.publishRowBands`.
+    ///
+    /// `yStart` counts lines from the first ROW line (past the "N more above"
+    /// indicator), which is the same space the mouse handler's `lineOffset` is in.
+    /// Every row is one line on the single-line paths, which is the only place
+    /// this is called from; the multi-line path reorders with `.live` feedback,
+    /// where the data itself moves and there is no slot to hit-test.
+    private func publishRowBands(
+        handler: ItemListHandler<Value.ID>,
+        drawn: [ItemListHandler<Value.ID>.DrawnRow]
+    ) {
+        let placeholder = handler.reorderPlaceholder
+        handler.visibleRowBands = drawn.enumerated().map { line, entry in
+            switch entry {
+            case .row(let rowIndex):
+                // A real row means "put it where this row is" — as DRAWN, which
+                // mid-drag is not how its data is numbered.
+                return ItemListHandler<Value.ID>.RowBand(
+                    rowIndex: rowIndex, yStart: line, height: 1, isContent: true,
+                    dropIndex: handler.reorderDrawnPosition(of: rowIndex))
+            case .slot:
+                // The gap keeps the target it already has: it is the line the
+                // pointer rests on after every step of the drag.
+                return ItemListHandler<Value.ID>.RowBand(
+                    rowIndex: -1, yStart: line, height: 1, isContent: false,
+                    dropIndex: placeholder?.slot)
+            }
+        }
     }
 
     // MARK: - Mouse handler wiring
@@ -1247,6 +1377,7 @@ where Value.ID: Hashable {
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
+                context: context,
                 focusManager: focusManager,
                 firstRowY: firstRowY,
                 contentColumns: contentColumns
@@ -1319,6 +1450,7 @@ where Value.ID: Hashable {
     /// + focus, and rejects everything else.
     private func containerMouseHandler(
         state: PopulatedRenderState,
+        context: RenderContext,
         focusManager: FocusManager?,
         firstRowY: Int,
         contentColumns: Range<Int>
@@ -1327,8 +1459,14 @@ where Value.ID: Hashable {
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
         let visibleRowHeights = state.visibleRowHeights
+        let visibleRowLines = state.visibleRowLines
         let rowIDs = data.map(\.id)
         let capturedPrimaryAction = primaryAction
+        let dragSession = context.environment.dragAndDropSession
+        // Where inside the grabbed row the press landed — the cell a `.cursor`
+        // drag keeps under the pointer. Held in the closure because the closure
+        // IS the gesture (see RowReorderGrabPoint).
+        let grab = RowReorderGrabPoint()
         return { event in
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
@@ -1338,9 +1476,91 @@ where Value.ID: Hashable {
             if captureHandler.handleWheelEvent(event) { return true }
 
             if event.button == .left {
-                guard event.phase == .released else {
-                    return event.phase == .pressed
+                /// The clicked line's data row, from the press-frame geometry.
+                /// Single-line tables leave `visibleRowHeights` empty (no
+                /// per-frame array) — the line offset is the row. Multi-line
+                /// tables walk the visible rows' heights, so a click anywhere in
+                /// a tall row hits it.
+                func rowAt(y: Int) -> Int? {
+                    let lineOffset = y - firstRowY
+                    guard lineOffset >= 0 else { return nil }
+                    if visibleRowHeights.isEmpty {
+                        return lineOffset < visibleRange.count
+                            ? visibleRange.lowerBound + lineOffset : nil
+                    }
+                    var accumulated = 0
+                    for (offset, height) in visibleRowHeights.enumerated() {
+                        if lineOffset < accumulated + height {
+                            return visibleRange.lowerBound + offset
+                        }
+                        accumulated += height
+                    }
+                    return nil
                 }
+
+                /// The drag's position in the handler's band space (lines from the
+                /// first row line), or `nil` once the cursor leaves the content
+                /// columns — which holds the current drop target rather than
+                /// snapping it somewhere the user isn't pointing.
+                var dragContentY: Int? {
+                    contentColumns.contains(event.x) ? event.y - firstRowY : nil
+                }
+
+                switch event.phase {
+                case .pressed:
+                    // Pick up the row for a possible reorder (only when the table
+                    // is reorderable). Claim the press either way so the matching
+                    // drag / release routes back here.
+                    if captureHandler.onMove != nil, contentColumns.contains(event.x),
+                        let index = rowAt(y: event.y)
+                    {
+                        captureHandler.beginReorder(grabbing: index)
+                        grab.x = max(0, event.x - contentColumns.lowerBound)
+                        grab.y = 0  // one line per row on every reorderable path
+                    }
+                    return true
+
+                case .dragged:
+                    // Any motion during a grab is a reorder, not a click. What it
+                    // looks like is the feedback mode's business — and `.cursor`'s
+                    // reaches outside the table: its row rides the pointer above
+                    // every other view, which only the drag session can draw.
+                    let wasActive = captureHandler.isReordering
+                    captureHandler.dragReorder(toContentY: dragContentY)
+                    if let dragSession, let floating = captureHandler.reorderFloatingRow {
+                        let offset = floating - visibleRange.lowerBound
+                        if !wasActive, visibleRowLines.indices.contains(offset) {
+                            // The row's own line, floated at the cursor. No hit
+                            // regions to strip: it is a plain rendered line.
+                            let preview = FrameBuffer(lines: [visibleRowLines[offset]])
+                            dragSession.begin(
+                                payload: RowReorderPayload(), preview: preview,
+                                grabX: min(grab.x, max(0, preview.width - 1)), grabY: 0)
+                        } else {
+                            // `begin` samples the cursor once; only `dragMoved`
+                            // tracks it — see the same call in _ListCore.
+                            dragSession.dragMoved()
+                        }
+                    }
+                    return true
+
+                case .released:
+                    break
+
+                default:
+                    return false
+                }
+
+                // A reorder drop. `.live` has already moved the row; the other
+                // modes move it exactly here. `end`, never `performDrop`: the
+                // payload is unnameable, so no `dropDestination` could take it,
+                // and the table has already placed the row itself.
+                if captureHandler.dropReorder(atContentY: dragContentY) {
+                    dragSession?.end()
+                    focusManager?.focus(id: captureFocusID)
+                    return true
+                }
+
                 // Border columns are chrome: a click there shares a row's y but
                 // nobody clicking the frame means "select that row" — focus the
                 // table (below) and stop. Mirrors _ListCore's x-guard.
@@ -1348,27 +1568,7 @@ where Value.ID: Hashable {
                     focusManager?.focus(id: captureFocusID)
                     return true
                 }
-                // Map the clicked line to its data row. Single-line tables leave
-                // `visibleRowHeights` empty (no per-frame array) — the line offset
-                // is the row. Multi-line tables walk the visible rows' heights, so
-                // a click anywhere in a tall row selects it.
-                let lineOffset = event.y - firstRowY
-                var clickedIndex: Int?
-                if visibleRowHeights.isEmpty {
-                    if lineOffset >= 0, lineOffset < visibleRange.count {
-                        clickedIndex = visibleRange.lowerBound + lineOffset
-                    }
-                } else if lineOffset >= 0 {
-                    var accumulated = 0
-                    for (offset, height) in visibleRowHeights.enumerated() {
-                        if lineOffset < accumulated + height {
-                            clickedIndex = visibleRange.lowerBound + offset
-                            break
-                        }
-                        accumulated += height
-                    }
-                }
-                if let index = clickedIndex {
+                if let index = rowAt(y: event.y) {
                     // A double-click fires the row's primary action ("open");
                     // a single click selects with macOS semantics (plain =
                     // sole selection, shift = range, ctrl/option = toggle) —
