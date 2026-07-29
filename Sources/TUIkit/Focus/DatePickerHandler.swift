@@ -11,10 +11,12 @@ import Foundation
 /// The focus/keyboard behaviour behind ``DatePicker``, persisted across renders
 /// so the active component and any half-typed digits survive re-render.
 ///
-/// Left/Right move between components; Up/Down adjust the active component ±1;
-/// typing digits sets it and auto-advances when full. Tab/Enter/Escape are not
-/// consumed, so focus can leave the control. All calendar math is delegated to
-/// the value-type ``DateFieldModel``.
+/// Left/Right move between components; Up/Down adjust the active component ±1
+/// and Page Up/Down by its coarse step (``DateFieldModel/pageStep(_:)``);
+/// Home/End send it to the ends of its own range; typing digits sets it and
+/// auto-advances when full. Tab/Enter/Escape are not consumed, so focus can
+/// leave the control. All calendar math is delegated to the value-type
+/// ``DateFieldModel``.
 final class DatePickerHandler: Focusable {
     let focusID: String
     var canBeFocused: Bool
@@ -60,6 +62,18 @@ final class DatePickerHandler: Focusable {
             selection.wrappedValue = model.adjusted(date: selection.wrappedValue, kind: activeKind, by: -1)
             digitBuffer = ""
             return true
+        case .pageUp:
+            adjust(by: model.pageStep(activeKind))
+            return true
+        case .pageDown:
+            adjust(by: -model.pageStep(activeKind))
+            return true
+        case .home:
+            jump(to: \.lowerBound)
+            return true
+        case .end:
+            jump(to: \.upperBound)
+            return true
         case .character(let character) where character.isWholeNumber:
             typeDigit(character)
             return true
@@ -67,6 +81,24 @@ final class DatePickerHandler: Focusable {
             // Tab/Enter/Escape and everything else propagate so focus can leave.
             return false
         }
+    }
+
+    /// Moves the active component by `delta`, wrapping within the field exactly
+    /// as Up/Down do — Page Up from December is March, not next year.
+    private func adjust(by delta: Int) {
+        selection.wrappedValue = model.adjusted(
+            date: selection.wrappedValue, kind: activeKind, by: delta)
+        digitBuffer = ""
+    }
+
+    /// Sends the active component to one end of its own range (Home/End), the
+    /// same move `Slider`/`Stepper` make for those keys.
+    private func jump(to bound: KeyPath<ClosedRange<Int>, Int>) {
+        let kind = activeKind
+        let bounds = model.fieldBounds(kind, of: selection.wrappedValue)
+        selection.wrappedValue = model.setting(
+            date: selection.wrappedValue, kind: kind, to: bounds[keyPath: bound])
+        digitBuffer = ""
     }
 
     private func typeDigit(_ character: Character) {

@@ -42,6 +42,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Use [Tab] to move focus between pickers",
             "page.picker.help.openMenu": "Use [Enter], [Space] or [↓] to open a menu picker",
             "page.picker.help.moveChoose": "Use [↑/↓] to move, [Enter] to choose, [Esc] to cancel",
+            "page.picker.help.dateFields": "Use [←/→] to pick a date field, [↑/↓] to adjust, [PgUp/PgDn] for a coarse step, [Home/End] for its limits",
             // ProgressView
             "page.progressView.determinate": "Determinate",
             "component.trackEditor.fill": "Fill",
@@ -212,6 +213,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Mit [Tab] den Fokus zwischen Auswahlfeldern bewegen",
             "page.picker.help.openMenu": "Mit [Enter], [Leertaste] oder [↓] ein Menü-Auswahlfeld öffnen",
             "page.picker.help.moveChoose": "Mit [↑/↓] bewegen, [Enter] zum Wählen, [Esc] zum Abbrechen",
+            "page.picker.help.dateFields": "Mit [←/→] ein Datumsfeld wählen, [↑/↓] ändern, [Bild↑/Bild↓] in großen Schritten, [Pos1/Ende] zu den Grenzen",
             // ProgressView
             "page.progressView.determinate": "Bestimmt",
             "component.trackEditor.fill": "Füllung",
@@ -382,6 +384,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Utilisez [Tab] pour déplacer le focus entre les sélecteurs",
             "page.picker.help.openMenu": "Utilisez [Entrée], [Espace] ou [↓] pour ouvrir un sélecteur menu",
             "page.picker.help.moveChoose": "Utilisez [↑/↓] pour vous déplacer, [Entrée] pour choisir, [Échap] pour annuler",
+            "page.picker.help.dateFields": "Utilisez [←/→] pour choisir un champ de date, [↑/↓] pour ajuster, [Pg.préc/Pg.suiv] pour un grand pas, [Début/Fin] pour ses limites",
             // ProgressView
             "page.progressView.determinate": "Déterminé",
             "component.trackEditor.fill": "Remplissage",
@@ -552,6 +555,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Usa [Tab] per spostare il focus tra i selettori",
             "page.picker.help.openMenu": "Usa [Invio], [Spazio] o [↓] per aprire un selettore a menu",
             "page.picker.help.moveChoose": "Usa [↑/↓] per spostarti, [Invio] per scegliere, [Esc] per annullare",
+            "page.picker.help.dateFields": "Usa [←/→] per scegliere un campo della data, [↑/↓] per regolarlo, [PgSu/PgGiù] per un passo ampio, [Inizio/Fine] per i suoi limiti",
             // ProgressView
             "page.progressView.determinate": "Determinato",
             "component.trackEditor.fill": "Riempimento",
@@ -722,6 +726,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "Usa [Tab] para mover el foco entre selectores",
             "page.picker.help.openMenu": "Usa [Intro], [Espacio] o [↓] para abrir un selector de menú",
             "page.picker.help.moveChoose": "Usa [↑/↓] para moverte, [Intro] para elegir, [Esc] para cancelar",
+            "page.picker.help.dateFields": "Usa [←/→] para elegir un campo de fecha, [↑/↓] para ajustarlo, [RePág/AvPág] para un paso amplio, [Inicio/Fin] para sus límites",
             // ProgressView
             "page.progressView.determinate": "Determinado",
             "component.trackEditor.fill": "Relleno",
@@ -892,6 +897,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "使用 [Tab] 在选择器之间移动焦点",
             "page.picker.help.openMenu": "使用 [Enter]、[空格] 或 [↓] 打开菜单选择器",
             "page.picker.help.moveChoose": "使用 [↑/↓] 移动，[Enter] 选择，[Esc] 取消",
+            "page.picker.help.dateFields": "使用 [←/→] 选择日期字段，[↑/↓] 调整，[PgUp/PgDn] 大步调整，[Home/End] 跳到上下限",
             // ProgressView
             "page.progressView.determinate": "确定",
             "component.trackEditor.fill": "填充",
@@ -1062,6 +1068,7 @@ extension ExampleStrings {
             "page.picker.help.moveFocus": "[Tab] でピッカー間のフォーカスを移動",
             "page.picker.help.openMenu": "[Enter]、[Space] または [↓] でメニューピッカーを開く",
             "page.picker.help.moveChoose": "[↑/↓] で移動、[Enter] で選択、[Esc] でキャンセル",
+            "page.picker.help.dateFields": "[←/→] で日付フィールドを選択、[↑/↓] で調整、[PgUp/PgDn] で大きく調整、[Home/End] で上限・下限へ",
             // ProgressView
             "page.progressView.determinate": "確定",
             "component.trackEditor.fill": "塗り",

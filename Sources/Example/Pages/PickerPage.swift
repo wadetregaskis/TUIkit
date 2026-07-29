@@ -65,7 +65,8 @@ struct PickerPage: View {
 
             // A DatePicker is a picker for a date/time, so it belongs here. It
             // renders as an inline field: Left/Right pick a component, Up/Down
-            // or typing digits edit it (the active field pulses when focused).
+            // or typing digits edit it, Page Up/Down move it by a coarse step
+            // and Home/End to its limits (the active field pulses when focused).
             DemoSection(L("page.picker.dateSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     DatePicker(L("page.newControls.dateBoth"), selection: $date)
@@ -89,6 +90,7 @@ struct PickerPage: View {
                     L("page.picker.help.moveFocus"),
                     L("page.picker.help.openMenu"),
                     L("page.picker.help.moveChoose"),
+                    L("page.picker.help.dateFields"),
                 ]
             )
 

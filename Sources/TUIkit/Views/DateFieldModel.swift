@@ -57,6 +57,42 @@ struct DateFieldModel {
     /// The number of digit columns a component occupies (year is 4, the rest 2).
     func width(_ kind: Kind) -> Int { kind == .year ? 4 : 2 }
 
+    /// How far Page Up / Page Down moves a component — the coarse step to
+    /// Up/Down's fine one.
+    ///
+    /// A quarter of the next larger unit, which is the step people already
+    /// think in: a quarter-hour, a quarter-day, a quarter-year. The day is the
+    /// exception, because a quarter-month is not a unit anyone uses and a week
+    /// is; and the year has no larger unit to take a quarter of, so it moves by
+    /// a decade.
+    func pageStep(_ kind: Kind) -> Int {
+        switch kind {
+        case .year: return 10  // a decade
+        case .month: return 3  // a quarter
+        case .day: return 7  // a week
+        case .hour: return 6  // a quarter of a day
+        case .minute: return 15  // a quarter of an hour
+        }
+    }
+
+    /// The values a component can hold, which is where Home and End send it.
+    ///
+    /// The day's upper bound depends on the month it is in, so this is asked of
+    /// a *date*, not of a kind alone. These are the component's own limits; the
+    /// resulting date is still clamped to any `in:` range, so a bounded picker's
+    /// End lands on the range's edge rather than on 9999.
+    func fieldBounds(_ kind: Kind, of date: Date) -> ClosedRange<Int> {
+        switch kind {
+        case .year: return 1...9999
+        case .month: return 1...12
+        case .day:
+            let parts = calendar.dateComponents([.year, .month], from: date)
+            return 1...daysInMonth(year: parts.year ?? 2000, month: parts.month ?? 1)
+        case .hour: return 0...23
+        case .minute: return 0...59
+        }
+    }
+
     /// The integer value of a component within `date`.
     func value(_ kind: Kind, of date: Date) -> Int {
         let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)

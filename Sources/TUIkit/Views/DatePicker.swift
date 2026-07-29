@@ -26,7 +26,9 @@ public struct DatePickerComponents: OptionSet, Sendable {
 ///
 /// It renders inline as an editable field — `YYYY-MM-DD HH:MM`, or just the date
 /// or time components requested. When focused, Left/Right move between the
-/// components, Up/Down adjust the active one, and typing digits sets it:
+/// components, Up/Down adjust the active one, Page Up/Down move it by a coarse
+/// step (a decade, a quarter, a week — see ``DateFieldModel/pageStep(_:)``),
+/// Home/End send it to the ends of its own range, and typing digits sets it:
 ///
 /// ```swift
 /// @State private var when = Date()
