@@ -153,6 +153,12 @@ struct ListPage: View {
                 }
             }
 
+            // The other way rows move: a value the app defines, dragged to
+            // wherever accepts it. Reordering and moving between lists, in one
+            // section — see RowTransferDemoSection for why it cannot be the
+            // section above with extra modifiers.
+            RowTransferDemoSection()
+
             // Bottom-aligned: the browser column is one line taller (its path
             // caption sits above the list), and both lists are equally tall —
             // aligning bottoms therefore aligns the LIST tops exactly.

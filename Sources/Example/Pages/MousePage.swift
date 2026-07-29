@@ -220,6 +220,14 @@ struct MousePage: View {
                             .foregroundStyle(.palette.foregroundSecondary)
                         Text(L("page.mouse.dragOutHint"))
                             .foregroundStyle(.palette.foregroundSecondary)
+                        // Three drag demos, one per layer, and none of them
+                        // spare: this section is the API, the auto-scroll
+                        // section below is what a SCROLLABLE does during a
+                        // drag, and the Lists page is what ROWS do. The note
+                        // says so, so the overlap doesn't read as duplication.
+                        Text(L("page.mouse.dragDropRowsNote"))
+                            .foregroundStyle(.palette.foregroundTertiary)
+                            .dim()
                         HStack(alignment: .top, spacing: 4) {
                             shelfZone
                             basketZone
