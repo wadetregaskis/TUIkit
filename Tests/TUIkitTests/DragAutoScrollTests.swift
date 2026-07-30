@@ -109,6 +109,32 @@ struct DragAutoScrollTests {
         #expect(handler.scrollOffset < 50, "hovering the top edge scrolls toward the start")
     }
 
+    /// A row reorder carries no payload, so `.live` and `.dimmed` never open a
+    /// drag — and the driver's "is a drag in flight" gate silently excluded the
+    /// two feedback modes people actually use. `armAutoScroll()` is how a
+    /// gesture with nothing to float says it wants the edges anyway.
+    @Test("An armed gesture with no payload scrolls at the edge")
+    func armedGestureWithoutAPayloadScrolls() {
+        let harness = Harness()
+        harness.setRegions([Self.viewport])
+        let vertical = scrollHandler(offset: 0, content: 100, viewport: 10)
+        harness.addZone(Self.zoneID, vertical: vertical)
+        // No `begin`: exactly what a `.live` reorder does.
+        harness.session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 5, y: 9)
+        #expect(!harness.drive(nowNanos: 0), "unarmed, the driver does nothing")
+        #expect(vertical.scrollOffset == 0)
+
+        harness.session.armAutoScroll()
+        harness.run(ticks: 3)
+        #expect(vertical.scrollOffset > 0, "armed, the edge scrolls it")
+
+        let reached = vertical.scrollOffset
+        harness.session.disarmAutoScroll()
+        harness.run(ticks: 3)
+        #expect(vertical.scrollOffset == reached, "and disarming stops it")
+    }
+
     @Test("A drag comfortably inside the viewport does not scroll")
     func middleDoesNotScroll() {
         let handler = scrollHandler(offset: 30, content: 100, viewport: 10)

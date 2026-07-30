@@ -1596,6 +1596,10 @@ where Value.ID: Hashable {
                         let index = rowAt(y: event.y)
                     {
                         captureHandler.beginReorder(grabbing: index)
+                        // Edge auto-scroll applies to reordering too, and the
+                        // two feedback modes that open no drag session
+                        // (`.live`, `.dimmed`) have to say so explicitly.
+                        dragSession?.armAutoScroll()
                         // Relative to the ROW LINE, which is what the preview
                         // is — not to the first clickable column.
                         grab.x = max(0, event.x - rowContentLeft)
@@ -1627,7 +1631,10 @@ where Value.ID: Hashable {
                     return true
 
                 case .released:
-                    break
+                    // Whatever this turns out to be — a drop, or a click that
+                    // never moved — the gesture is over, so let go of the edge
+                    // auto-scroll. (`end()` below only runs for a real drop.)
+                    dragSession?.disarmAutoScroll()
 
                 default:
                     return false

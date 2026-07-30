@@ -1336,6 +1336,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         case .content = hit.type
                     {
                         captureHandler.beginReorder(grabbing: hit.rowIndex)
+                        // Edge auto-scroll applies to reordering too, and the
+                        // two feedback modes that open no drag session
+                        // (`.live`, `.dimmed`) have to say so explicitly.
+                        dragSession?.armAutoScroll()
                         let band = captureHandler.visibleRowBands.first { $0.rowIndex == hit.rowIndex }
                         grab.x = max(0, event.x - rowContentLeft)
                         grab.y = max(0, event.y - topInset - (band?.yStart ?? 0))
@@ -1379,6 +1383,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     return true
 
                 case .released:
+                    // Whatever this turns out to be — a drop, or a click that
+                    // never moved — the gesture is over, so let go of the edge
+                    // auto-scroll. (`end()` below only runs for a real drop.)
+                    dragSession?.disarmAutoScroll()
                     // A reorder drop. `.live` has already moved the row; the
                     // other modes move it exactly here.
                     if captureHandler.dropReorder(atContentY: dragContentY) {

@@ -495,6 +495,30 @@ struct ListReorderDragTests {
         #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 
+    // MARK: - Edge auto-scroll
+
+    /// Dragging a row past the last visible one has to scroll the list, or a
+    /// long list can only be reordered within one screenful. The driver was
+    /// gated on a payload drag, which only `.cursor` opens — so the two modes
+    /// people actually use were invisible to it.
+    @Test(
+        "A reorder drag arms the edge auto-scroll in every feedback mode",
+        arguments: [RowReorderFeedback.live, .dimmed, .cursor])
+    func reorderArmsAutoScroll(feedback: RowReorderFeedback) {
+        let fixture = Fixture(feedback: feedback)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        #expect(!session.autoScrollArmed, "nothing dragging yet")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        #expect(session.autoScrollArmed, "\(feedback) must reach the auto-scroll driver")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "a")))
+        #expect(!session.autoScrollArmed, "and disarm on the drop")
+    }
+
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
     func cursorDragOutCancels() {
         let fixture = Fixture(feedback: .cursor)

@@ -306,9 +306,32 @@ final class DragAndDropSession: @unchecked Sendable {
     }
 
     /// Ends the drag without dropping (or after one), clearing any targeting.
+    /// Whether a gesture that carries no payload — a row reorder — has asked
+    /// for the edge auto-scroll.
+    ///
+    /// `.live` and `.dimmed` reordering never opens a drag (there is nothing to
+    /// float), so the driver's `active != nil` gate silently excluded the two
+    /// modes people actually use: the zones were registered, the cursor was
+    /// stamped, and the driver bailed on its first line.
+    private(set) var autoScrollArmed = false
+
+    /// Arms the edge auto-scroll for a gesture with no payload.
+    func armAutoScroll() { autoScrollArmed = true }
+
+    /// Releases the arming when the gesture ends WITHOUT having been a drag —
+    /// a motionless press and release is a click, and `end()` (which disarms)
+    /// only runs when the gesture actually reordered something.
+    func disarmAutoScroll() {
+        guard active == nil else { return }  // a real drag is still in flight
+        autoScrollArmed = false
+        autoScrollEngagedSinceNanos = nil
+        releaseAutoScrollFlags()
+    }
+
     func end() {
         active?.targeted?.setTargeted(false)
         active = nil
+        autoScrollArmed = false
         autoScrollEngagedSinceNanos = nil
         releaseAutoScrollFlags()
     }
@@ -362,7 +385,7 @@ final class DragAndDropSession: @unchecked Sendable {
     /// - Parameter nowNanos: This frame's monotonic timestamp.
     @discardableResult
     func driveAutoScroll(nowNanos: UInt64) -> Bool {
-        guard active != nil, let dispatcher, let cursor = lastAbsoluteEvent,
+        guard active != nil || autoScrollArmed, let dispatcher, let cursor = lastAbsoluteEvent,
             let step = bestAutoScroll(
                 cursorX: cursor.x, cursorY: cursor.y, dispatcher: dispatcher)
         else {

@@ -309,6 +309,19 @@ extension ItemListHandler {
         return drawn
     }
 
+    /// Re-reads the drop target from the bands just published, while edge
+    /// auto-scroll is driving THIS list.
+    ///
+    /// The target is a DRAWN position, and it is otherwise only computed in the
+    /// `.dragged` branch of the mouse handler — but auto-scroll is by
+    /// definition the case where the pointer holds still and no drag event
+    /// arrives. Left stale, the slot walks to the top edge as its index scrolls
+    /// off, and the eventual drop lands a place out.
+    private func retargetForAutoScroll() {
+        guard isAutoScrolling, reorder != nil, let y = lastReorderContentY else { return }
+        dragReorder(toContentY: y)
+    }
+
     /// Whether this data row carries the keyboard cursor *right now*.
     ///
     /// While a row is out of the list — the slot feedback modes — the cursor
@@ -360,6 +373,7 @@ extension ItemListHandler {
     /// cursor, so press-frame bands would describe an order that no longer
     /// exists (and a wheel tick can scroll them out from under any mode).
     func publishRowBands(_ bands: [DrawnBand]) {
+        defer { retargetForAutoScroll() }
         let placeholder = reorderPlaceholder
         visibleRowBands = bands.map { band in
             switch band.entry {
@@ -458,6 +472,9 @@ extension ItemListHandler {
     /// only move the cursor to mark where the drop would land.
     func dragReorder(toContentY contentY: Int?) {
         guard var reorder, onMove != nil else { return }
+        // Kept so the target can be recomputed when the rows move under a
+        // motionless pointer — see `publishRowBands`.
+        lastReorderContentY = contentY
         // Any movement at all makes this a reorder rather than a click, even
         // when the cursor hasn't yet reached another row.
         reorder.active = true

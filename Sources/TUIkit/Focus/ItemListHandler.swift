@@ -366,6 +366,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// Drag auto-scroll drive flag (``ScrollableOffsetState``).
     var isAutoScrolling = false
 
+    /// The content Y the reorder drag last saw, so the drop target can be
+    /// recomputed when edge auto-scroll moves the rows under a still pointer.
+    var lastReorderContentY: Int?
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render. Selection movement is NOT
     /// gated by it — moving a cursor is not adjusting a scroll position, and the
