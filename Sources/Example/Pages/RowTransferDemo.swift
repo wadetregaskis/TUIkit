@@ -19,7 +19,10 @@ import TUIkit
 ///     which is exactly why the row cannot leave: there is no value to hand over.
 ///   - **`.draggable` + `.dropDestination`** carries a value the app defines, so
 ///     a row can go anywhere that accepts that value — including another list.
-///     The reorder is then app code too, because the drop is.
+///     The reorder is then app code too, because the drop is. Taken on the ROWS
+///     (`ForEach.dropDestination(for:action:)`) rather than on the view, the
+///     list still shows the landing slot and reports the index it opened at, so
+///     a travelling row looks exactly like a reordering one.
 ///
 /// A row cannot use both at once: whichever region claims the press owns the
 /// rest of the gesture, and `.draggable`'s sits inside the row, so it wins. That
@@ -62,9 +65,12 @@ struct RowTransferDemoSection: View {
         }
     }
 
-    /// One of the two lists. Every row is a drag source and a drop target; the
-    /// list around them takes the drops that land past the last row, which is
-    /// how a row is appended (and the only way into an empty list).
+    /// One of the two lists. Every row is a drag source, and the ROWS are the
+    /// drop destination — `ForEach.dropDestination(for:action:)` rather than the
+    /// `View` modifier of the same name, which is what makes the list open a
+    /// landing slot under the pointer exactly as the reorder demo above does.
+    /// A drop past the last row appends (and is the only way into an empty
+    /// list); the index reports that as "before the row after the last one".
     @ViewBuilder private func list(_ side: Side, title: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).bold()
@@ -72,25 +78,20 @@ struct RowTransferDemoSection: View {
                 ForEach(tracks(side)) { track in
                     HStack(spacing: 1) {
                         Text(track.name)
-                        // The Spacer makes the WHOLE row width a drop target
-                        // rather than just its label — a row hugs its content,
-                        // so without it a drop to the right of a short name
-                        // would fall through to the list below. (Same reason
-                        // as the drag-auto-scroll demo's folder rows.)
+                        // The Spacer makes the WHOLE row width draggable rather
+                        // than just its label — a row hugs its content, so
+                        // without it a press to the right of a short name would
+                        // fall through to the list. (Same reason as the
+                        // drag-auto-scroll demo's folder rows.)
                         Spacer()
                     }
                     .draggable(TrackDrag(side: side, id: track.id))
-                    .dropDestination(for: TrackDrag.self) { drops, _ in
-                        for drop in drops { perform(drop, to: side, before: track.id) }
-                        return true
-                    }
+                }
+                .dropDestination(for: TrackDrag.self) { index, drops in
+                    for drop in drops { perform(drop, to: side, at: index) }
                 }
             }
             .frame(width: 22, height: 7)
-            .dropDestination(for: TrackDrag.self) { drops, _ in
-                for drop in drops { perform(drop, to: side, before: nil) }
-                return true
-            }
         }
     }
 
@@ -108,31 +109,29 @@ struct RowTransferDemoSection: View {
         side == .queue ? L("page.list.transferQueue") : L("page.list.transferBacklog")
     }
 
-    /// Puts the dragged row in front of `targetID` in `side`'s list — or at the
-    /// end when there is no target row (a drop past the last one).
+    /// Puts the dragged row at `index` in `side`'s list.
     ///
-    /// The row is removed BEFORE the insertion index is looked up, so a move
-    /// down inside one list needs no index adjustment: the index of the row it
-    /// was dropped on is already measured against the list without it.
-    private func perform(_ drag: TrackDrag, to side: Side, before targetID: String?) {
-        // Dropping a row on itself means "leave it alone". Worth saying out
-        // loud: it would otherwise read as "insert before a row that is no
-        // longer there", and land at the end of the list.
-        guard drag.id != targetID else { return }
-
+    /// `index` is a DISPLAY position: the row the landing slot sits in front of,
+    /// counted against the list as it is drawn — which, for a move inside one
+    /// list, still includes the row being dragged. So the same-list case takes
+    /// the row out first and then steps the index back past the hole it left;
+    /// the cross-list case needs no such adjustment, the destination never
+    /// having held the row.
+    private func perform(_ drag: TrackDrag, to side: Side, at index: Int) {
         var source = tracks(drag.side)
-        guard let index = source.firstIndex(where: { $0.id == drag.id }) else { return }
-        let track = source.remove(at: index)
+        guard let from = source.firstIndex(where: { $0.id == drag.id }) else { return }
+        let track = source.remove(at: from)
 
         if drag.side == side {
-            source.insert(track, at: source.firstIndex { $0.id == targetID } ?? source.count)
+            let target = min(max(0, from < index ? index - 1 : index), source.count)
+            guard target != from else { return }  // dropped back where it was
+            source.insert(track, at: target)
             setTracks(side, source)
             status = "\(L("page.list.transferReordered")) \(title(side))"
         } else {
             setTracks(drag.side, source)
             var destination = tracks(side)
-            destination.insert(
-                track, at: destination.firstIndex { $0.id == targetID } ?? destination.count)
+            destination.insert(track, at: min(max(0, index), destination.count))
             setTracks(side, destination)
             status = "\(track.name) → \(title(side))"
         }
