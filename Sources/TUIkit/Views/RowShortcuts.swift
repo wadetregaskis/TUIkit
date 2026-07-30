@@ -44,6 +44,18 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
     /// Move the focused row one place down.
     case moveRowDown
 
+    /// Send the focused row to the top of the list.
+    case moveRowToTop
+
+    /// Send the focused row to the bottom.
+    case moveRowToBottom
+
+    /// Move the focused row up by a screenful.
+    case moveRowPageUp
+
+    /// Move the focused row down by a screenful.
+    case moveRowPageDown
+
     /// What TUIkit binds this action to out of the box.
     ///
     /// Control chords throughout, and deliberately: `Ctrl`+letter is not a
@@ -66,8 +78,32 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
         // Terminal sends bare ESC[A/B for Up/Down and drops the modifier, so
         // this chord is undeliverable there. That is why it is an accelerator
         // and ``pickUpRow`` is the feature: the mode needs no modifiers at all.
-        case .moveRowUp: return [KeyboardShortcut(.upArrow, modifiers: .control)]
-        case .moveRowDown: return [KeyboardShortcut(.downArrow, modifiers: .control)]
+        //
+        // TWO chords each, because neither one works everywhere. macOS itself
+        // eats ⌃↑/⌃↓ (Mission Control / Application Windows) before any
+        // terminal sees them, so on a stock Mac they are dead — but they are
+        // the natural binding on Linux, where nothing intercepts them. Option
+        // is what macOS leaves alone, and the parser reads it from both the
+        // ESC-prefixed and the xterm `;3` forms; Apple Terminal needs "Use
+        // Option as Meta key" turned on, and even then strips modifiers from
+        // Up/Down specifically. Hence ``pickUpRow``, which needs no modifier
+        // at all, remains the route that always works.
+        case .moveRowUp:
+            return [
+                KeyboardShortcut(.upArrow, modifiers: .control),
+                KeyboardShortcut(.upArrow, modifiers: .option),
+            ]
+        case .moveRowDown:
+            return [
+                KeyboardShortcut(.downArrow, modifiers: .control),
+                KeyboardShortcut(.downArrow, modifiers: .option),
+            ]
+        // Home/End/Page keep their modifiers in more terminals than the arrows
+        // do, so these have one binding each.
+        case .moveRowToTop: return [KeyboardShortcut(.home, modifiers: .option)]
+        case .moveRowToBottom: return [KeyboardShortcut(.end, modifiers: .option)]
+        case .moveRowPageUp: return [KeyboardShortcut(.pageUp, modifiers: .option)]
+        case .moveRowPageDown: return [KeyboardShortcut(.pageDown, modifiers: .option)]
         }
     }
 }
@@ -173,9 +209,22 @@ struct RowShortcutLookup: Sendable {
     /// (tests, and the frame before the first render).
     static let `default` = RowShortcuts.default.lookup(commandKey: .control)
 
-    /// The action `event` triggers, if any.
-    func action(for event: KeyEvent) -> RowAction? {
-        KeyboardShortcut.trigger(for: event).flatMap { byTrigger[$0] }
+    /// The action `event` triggers, if any, and whether Shift was riding along
+    /// as an accelerator rather than as part of the binding.
+    ///
+    /// Shift is looked up first as part of the chord, so an app CAN bind
+    /// something to it explicitly; only if that finds nothing is it stripped
+    /// and retried. That is what makes Option+Shift+↑ mean "the Option+↑ move,
+    /// several rows at a time" without every move action needing a second
+    /// binding — the same shape the arrow keys already use for the cursor.
+    func action(for event: KeyEvent) -> (action: RowAction, accelerated: Bool)? {
+        if let exact = KeyboardShortcut.trigger(for: event).flatMap({ byTrigger[$0] }) {
+            return (exact, false)
+        }
+        guard event.shift else { return nil }
+        let unshifted = KeyEvent(key: event.key, ctrl: event.ctrl, alt: event.alt)
+        return KeyboardShortcut.trigger(for: unshifted).flatMap { byTrigger[$0] }
+            .map { ($0, true) }
     }
 }
 

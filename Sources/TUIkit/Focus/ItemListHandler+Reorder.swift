@@ -211,11 +211,19 @@ extension ItemListHandler {
     func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
         // Chords, so they work in either selection mode.
-        switch shortcuts.action(for: event) {
+        guard let (action, accelerated) = shortcuts.action(for: event) else { return nil }
+        // Shift rides along as the coarse step, exactly as it does for the
+        // cursor keys — same environment-configured multiplier.
+        let step = accelerated ? max(1, shiftStepMultiplier) : 1
+        switch action {
         case .pickUpRow: return beginKeyboardMove() ? true : nil
-        case .moveRowUp: return nudgeFocusedRow(by: -1) ? true : nil
-        case .moveRowDown: return nudgeFocusedRow(by: 1) ? true : nil
-        default: return nil
+        case .moveRowUp: return nudgeFocusedRow(by: -step) ? true : nil
+        case .moveRowDown: return nudgeFocusedRow(by: step) ? true : nil
+        case .moveRowPageUp: return nudgeFocusedRow(by: -pageStep) ? true : nil
+        case .moveRowPageDown: return nudgeFocusedRow(by: pageStep) ? true : nil
+        case .moveRowToTop: return moveFocusedRow(to: 0) ? true : nil
+        case .moveRowToBottom: return moveFocusedRow(to: itemCount - 1) ? true : nil
+        case .selectAll, .extendSelection, .placeRow, .cancelMove: return nil
         }
     }
 
@@ -224,6 +232,40 @@ extension ItemListHandler {
     ///
     /// Each press is one `onMove`, so it is undoable and repeatable in the
     /// app's own terms, and the cursor rides along with the row.
+    /// Applies a bound chord to the row currently in hand. Returns whether it
+    /// meant anything here — a selection chord does not.
+    private func heldRowChord(_ bound: (action: RowAction, accelerated: Bool)) -> Bool {
+        let step = bound.accelerated ? max(1, shiftStepMultiplier) : 1
+        switch bound.action {
+        case .placeRow, .pickUpRow: placeHeldRow()
+        case .cancelMove: cancelKeyboardMove()
+        case .moveRowUp: moveHeldRow(by: -step)
+        case .moveRowDown: moveHeldRow(by: step)
+        case .moveRowPageUp: moveHeldRow(by: -pageStep)
+        case .moveRowPageDown: moveHeldRow(by: pageStep)
+        case .moveRowToTop: moveHeldRow(to: 0)
+        case .moveRowToBottom: moveHeldRow(to: itemCount - 1)
+        case .selectAll, .extendSelection: return false
+        }
+        return true
+    }
+
+    /// A screenful, in rows — the same unit the Page keys scroll by.
+    var pageStep: Int { max(1, viewportHeight - 1) }
+
+    /// Moves the focused row to an absolute position, with no mode to enter:
+    /// the Home/End of reordering.
+    @discardableResult
+    func moveFocusedRow(to destination: Int) -> Bool {
+        guard onMove != nil, itemCount > 1 else { return false }
+        let from = clampedRowIndex(focusedIndex)
+        let target = min(max(0, destination), itemCount - 1)
+        guard target != from else { return false }
+        focusedIndex = move(from: from, to: target)
+        ensureFocusedItemVisible()
+        return true
+    }
+
     @discardableResult
     func nudgeFocusedRow(by delta: Int) -> Bool {
         guard onMove != nil, itemCount > 0 else { return false }
@@ -237,23 +279,8 @@ extension ItemListHandler {
     /// The keys a held row answers, or `nil` for one that keeps its usual
     /// meaning (so a chord the app bound elsewhere still works mid-move).
     private func handleKeyboardMoveKey(_ event: KeyEvent) -> Bool? {
-        switch shortcuts.action(for: event) {
-        case .placeRow, .pickUpRow:
-            placeHeldRow()
-            return true
-        case .cancelMove:
-            cancelKeyboardMove()
-            return true
-        case .moveRowUp:
-            moveHeldRow(by: -1)
-            return true
-        case .moveRowDown:
-            moveHeldRow(by: 1)
-            return true
-        case .selectAll, .extendSelection, nil:
-            break
-        }
-        let page = max(1, viewportHeight - 1)
+        if let bound = shortcuts.action(for: event), heldRowChord(bound) { return true }
+        let page = pageStep
         switch event.key {
         case .up: moveHeldRow(by: -1)
         case .down: moveHeldRow(by: 1)

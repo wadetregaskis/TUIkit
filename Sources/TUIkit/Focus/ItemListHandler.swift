@@ -665,7 +665,7 @@ extension ItemListHandler {
         // Chord-bound operations go through the app-customisable table (see
         // `RowShortcuts`), captured at render because the environment is out of
         // reach by the time the key arrives.
-        switch shortcuts.action(for: event) {
+        switch shortcuts.action(for: event)?.action {
         case .extendSelection:
             toggleExtendMode()
             return true
@@ -675,7 +675,8 @@ extension ItemListHandler {
             isExtendingSelection = false
             return true
 
-        case .pickUpRow, .placeRow, .cancelMove, .moveRowUp, .moveRowDown, nil:
+        case .pickUpRow, .placeRow, .cancelMove, .moveRowUp, .moveRowDown,
+            .moveRowToTop, .moveRowToBottom, .moveRowPageUp, .moveRowPageDown, nil:
             // Not selection business — handled above, or not a chord at all.
             break
         }

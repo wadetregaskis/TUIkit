@@ -186,6 +186,50 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["b", "a", "c", "d", "e"])
     }
 
+    /// macOS binds ⌃↑/⌃↓ to Mission Control, so on a stock Mac the editor
+    /// convention never reaches the app. Option is what it leaves alone.
+    @Test("Option+arrow nudges as well as Ctrl+arrow")
+    func optionArrowNudges() {
+        let rows = RowBox()
+        let handler = makeHandler(rows)
+        handler.focusedIndex = 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, alt: true)))
+        #expect(rows.items == ["b", "a", "c", "d", "e"])
+        #expect(handler.handleKeyEvent(KeyEvent(key: .up, alt: true)))
+        #expect(rows.items == ["a", "b", "c", "d", "e"])
+    }
+
+    /// Shift is the coarse step everywhere else in the framework; it rides on
+    /// top of whatever chord the move is bound to rather than needing its own.
+    @Test("Shift makes a nudge jump by the configured multiplier")
+    func shiftAcceleratesTheNudge() {
+        let rows = RowBox()
+        let handler = makeHandler(rows)
+        handler.shiftStepMultiplier = 3
+        handler.focusedIndex = 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, alt: true, shift: true)))
+        #expect(rows.items == ["b", "c", "d", "a", "e"], "three places, not one")
+        #expect(handler.focusedIndex == 3, "and the cursor rode along")
+    }
+
+    /// The fast way to send a row to an end — the reordering counterpart of
+    /// Home/End, with no mode to enter.
+    @Test("Option+Home/End send the row to the ends; Option+Page moves a screenful")
+    func optionJumpsMoveTheRow() {
+        let rows = RowBox()
+        let handler = makeHandler(rows)
+        handler.focusedIndex = 2
+        #expect(handler.handleKeyEvent(KeyEvent(key: .end, alt: true)))
+        #expect(rows.items == ["a", "b", "d", "e", "c"])
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home, alt: true)))
+        #expect(rows.items == ["c", "a", "b", "d", "e"])
+
+        handler.focusedIndex = 0
+        handler.viewportHeight = 3  // a screenful is two rows
+        #expect(handler.handleKeyEvent(KeyEvent(key: .pageDown, alt: true)))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "c moved down two")
+    }
+
     // MARK: - Feedback
 
     /// `.live` moves the data as the keys go (one `onMove` per step, as a live

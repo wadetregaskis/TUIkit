@@ -341,10 +341,20 @@ What the move *shows* is ``RowReorderFeedback``, as with a drag — except that
 ``RowReorderFeedback/dimmed`` instead: the same faint copy of the row in the slot
 it would land in, rather than an empty gap and a row that is nowhere.
 
-There is an accelerator for the common case, too: <kbd>Ctrl</kbd>+<kbd>↑</kbd>
-and <kbd>Ctrl</kbd>+<kbd>↓</kbd> move the focused row one place with no mode to
-enter or leave — the binding every editor uses, as far as a terminal permits it.
-Apple Terminal is exactly where it does not: the chord is undeliverable there,
-which is why it is the accelerator and the mode is the feature.
+There are accelerators for the common cases, too, with no mode to enter or
+leave: <kbd>Ctrl</kbd>/<kbd>Option</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> move the
+focused row one place, <kbd>Option</kbd>+<kbd>Home</kbd>/<kbd>End</kbd> send it
+to an end, <kbd>Option</kbd>+<kbd>PageUp</kbd>/<kbd>PageDown</kbd> move it a
+screenful, and holding <kbd>Shift</kbd> with any of them applies the
+`shiftStepMultiplier` coarse step.
+
+Two chords for the nudge because neither works everywhere. macOS binds
+<kbd>Ctrl</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> to Mission Control system-wide, so on
+a stock Mac they never reach the terminal at all — but they are the natural
+binding on Linux, where nothing intercepts them. <kbd>Option</kbd> is what macOS
+leaves alone; Apple Terminal needs "Use Option as Meta key", and even then
+strips modifiers from <kbd>↑</kbd>/<kbd>↓</kbd> specifically, which is why
+``RowAction/pickUpRow`` — which needs no modifier at all — remains the route
+that always works.
 
 Every chord here is rebindable — see ``RowShortcuts``.

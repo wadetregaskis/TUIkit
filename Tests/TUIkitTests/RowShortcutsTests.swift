@@ -82,10 +82,18 @@ struct RowShortcutsTests {
         #expect(KeyboardShortcut(.pageDown, modifiers: []).displayString == "PgDn")
 
         let table = RowShortcuts()
-        #expect(table.shortcuts(for: .moveRowUp) == [ctrlUp])
         let lookup = table.lookup(commandKey: .control)
-        #expect(lookup.action(for: KeyEvent(key: .up, ctrl: true)) == .moveRowUp)
-        #expect(lookup.action(for: KeyEvent(key: .down, ctrl: true)) == .moveRowDown)
+        #expect(
+            table.shortcuts(for: .moveRowUp) == [ctrlUp, KeyboardShortcut(.upArrow, modifiers: .option)],
+            "two bindings: the one macOS eats, and the one it leaves alone")
+        #expect(
+            lookup.action(for: KeyEvent(key: .up, alt: true))?.action == .moveRowUp,
+            "Option+↑ is the binding that survives Mission Control")
+        #expect(
+            lookup.action(for: KeyEvent(key: .up, alt: true, shift: true))?.accelerated == true,
+            "and Shift on top of it is the coarse step, not a separate binding")
+        #expect(lookup.action(for: KeyEvent(key: .up, ctrl: true))?.action == .moveRowUp)
+        #expect(lookup.action(for: KeyEvent(key: .down, ctrl: true))?.action == .moveRowDown)
         #expect(lookup.action(for: KeyEvent(key: .up)) == nil, "a bare arrow still navigates")
     }
 
@@ -113,8 +121,8 @@ struct RowShortcutsTests {
     @Test("The lookup maps a key event to its action")
     func lookupMatchesEvents() {
         let lookup = RowShortcuts.default.lookup(commandKey: .control)
-        #expect(lookup.action(for: KeyEvent(key: .character("v"), ctrl: true)) == .extendSelection)
-        #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true)) == .selectAll)
+        #expect(lookup.action(for: KeyEvent(key: .character("v"), ctrl: true))?.action == .extendSelection)
+        #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true))?.action == .selectAll)
         #expect(
             lookup.action(for: KeyEvent(key: .character("v"))) == nil,
             "the BARE key is free — it belongs to the app, and to row type-ahead")
@@ -128,7 +136,7 @@ struct RowShortcutsTests {
         #expect(table.shortcuts(for: .selectAll, commandKey: .control)
             == [KeyboardShortcut("g", modifiers: .control)])
         let lookup = table.lookup(commandKey: .control)
-        #expect(lookup.action(for: KeyEvent(key: .character("g"), ctrl: true)) == .selectAll)
+        #expect(lookup.action(for: KeyEvent(key: .character("g"), ctrl: true))?.action == .selectAll)
         #expect(
             table.lookup(commandKey: .unavailable)
                 .action(for: KeyEvent(key: .character("g"), ctrl: true)) == nil,
@@ -142,7 +150,7 @@ struct RowShortcutsTests {
     func overrideBeatsDefault() {
         let table = RowShortcuts([.extendSelection: [ctrlA]])
         let lookup = table.lookup(commandKey: .control)
-        #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true)) == .extendSelection)
+        #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true))?.action == .extendSelection)
     }
 
     // MARK: - End to end
