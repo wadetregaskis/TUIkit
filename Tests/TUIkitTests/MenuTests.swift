@@ -552,4 +552,55 @@ struct MenuTests {
         #expect(out.contains { $0.contains("A") }, "both menus are expanded: \(out)")
         #expect(out.contains { $0.contains("B") })
     }
+    // MARK: - onMenuOpen
+
+    /// The hook exists so an app can clear whatever the LAST choice left on
+    /// screen, which is the only way choosing the same item twice running reads
+    /// as two choices. So the assertion that matters is the ORDER: the reset
+    /// runs as the menu opens, not after the item's action.
+    @Test("onMenuOpen fires on each opening, before the choice")
+    func menuOpenHookFiresOnOpen() throws {
+        let (tui, context) = harness()
+        let log = EventLog()
+        let view = Menu("Actions") {
+            Button("Rename") { log.events.append("chose") }
+        }
+        .onMenuOpen { log.events.append("open") }
+
+        _ = renderArmed(view, tui: tui, context: context)
+        #expect(log.events.isEmpty, "rendering a closed menu is not an opening")
+
+        func clickTrigger() {
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .left, phase: .released, x: 2, y: 0))
+        }
+
+        clickTrigger()
+        #expect(log.events == ["open"], "opening reports once")
+        let opened = renderArmed(view, tui: tui, context: context)
+        #expect(log.events == ["open"], "and re-rendering the OPEN menu does not repeat it")
+
+        let overlay = try #require(opened.overlays.first)
+        let itemY = try #require(
+            lines(overlay.content).firstIndex { $0.contains("Rename") })
+        let y = overlay.offsetY + itemY
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 3, y: y))
+        _ = renderArmed(view, tui: tui, context: context)
+        #expect(log.events == ["open", "chose"], "closing is not an opening")
+
+        clickTrigger()
+        #expect(
+            log.events == ["open", "chose", "open"],
+            "and the next opening clears the way for the next choice")
+    }
+
+    /// A mutable box the menu's closures can write to — `@State` needs a render
+    /// pass to bind, and these closures fire between renders.
+    @MainActor private final class EventLog {
+        var events: [String] = []
+    }
 }

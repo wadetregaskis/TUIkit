@@ -60,6 +60,9 @@ struct MenusPage: View {
                     // click landed. Neither is visible with a single target.
                     // Their items differ — and so, deliberately, do their widths
                     // — so the read-out below says which menu you picked from.
+                    // Opening either menu clears the read-out, so picking the
+                    // same item twice running still reads as two choices
+                    // rather than as nothing having happened.
                     HStack(spacing: 2) {
                         // The items are Buttons — SwiftUI's API — but they render
                         // as menu rows, and the pop-up hugs its widest item.
@@ -90,6 +93,7 @@ struct MenusPage: View {
                                 }
                             }
                     }
+                    .onMenuOpen { contextAction = "—" }
                     Text(L("page.menus.contextSwapNote"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     ValueDisplayRow(L("page.menus.chose"), contextAction)
@@ -108,6 +112,9 @@ struct MenusPage: View {
                             Button(item) { pullDownChoice = item }
                         }
                     }
+                    // As above: the read-out clears as the menu opens, so
+                    // choosing `Rename` twice shows two distinct choices.
+                    .onMenuOpen { pullDownChoice = "—" }
                     ValueDisplayRow(L("page.menus.chose"), pullDownChoice)
                 }
             }

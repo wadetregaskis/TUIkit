@@ -221,7 +221,13 @@ struct OverlaysPage: View {
                     Text(L("page.overlays.confirm.explain"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 2) {
-                        Button(L("page.overlays.confirm.trigger")) { showConfirm = true }
+                        // Clear the read-out as the dialog opens, so choosing
+                        // the same answer twice running still reads as two
+                        // answers rather than as nothing having happened.
+                        Button(L("page.overlays.confirm.trigger")) {
+                            confirmChoice = "—"
+                            showConfirm = true
+                        }
                         ValueDisplayRow(L("page.overlays.confirm.result"), confirmChoice)
                     }
                 }

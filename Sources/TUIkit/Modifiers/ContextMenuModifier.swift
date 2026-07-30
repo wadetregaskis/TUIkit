@@ -192,6 +192,7 @@ extension ContextMenuModifier: Renderable {
         to buffer: inout FrameBuffer, state: ContextMenuState, context: RenderContext
     ) {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
+        let onOpen = context.environment.menuOpenAction
         let handlerID = dispatcher.register { event in
             // Secondary click = right button, or Ctrl + left (the fallback where a
             // terminal claims right-click for itself, e.g. iTerm2 by default).
@@ -206,6 +207,7 @@ extension ContextMenuModifier: Renderable {
                 state.openedByKeyboard = false
                 // Opened by the pointer: nothing is chosen yet.
                 state.controller.opened(withSelection: false)
+                onOpen?()
                 dispatcher.handOffGesture()
                 dispatcher.pressOpenedPopup()
                 return true
@@ -250,6 +252,7 @@ extension ContextMenuModifier: Renderable {
         guard context.environment.focusManager != nil, context.environment.isEnabled else {
             return false
         }
+        let keyboardOnOpen = context.environment.menuOpenAction
         let focusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: nil,
             defaultPrefix: "contextmenu-target", propertyIndex: StateIndex.focusID)
@@ -268,6 +271,7 @@ extension ContextMenuModifier: Renderable {
             // Opened from the keyboard, which has no other way to point at a
             // row: start on the first item so the arrows have somewhere to go.
             state.controller.opened(withSelection: true)
+            keyboardOnOpen?()
             return true
         }
         return FocusRegistration.isFocused(context: context, focusID: focusID)

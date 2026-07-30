@@ -51,7 +51,10 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
     /// collapsed label — open or closed.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(
-            trigger(state(in: context), focusManager: context.environment.focusManager),
+            trigger(
+                state(in: context), focusManager: context.environment.focusManager,
+                // Measuring only: nothing can open, so nothing to report.
+                onOpen: nil),
             proposal: proposal, context: triggerContext(context))
     }
 
@@ -62,7 +65,9 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         if !context.isMeasuring { context.environment.stateStorage?.markActive(context.identity) }
 
         var buffer = TUIkit.renderToBuffer(
-            trigger(state, focusManager: context.environment.focusManager),
+            trigger(
+                state, focusManager: context.environment.focusManager,
+                onOpen: context.environment.menuOpenAction),
             context: triggerContext(context))
         guard state.isOpen, !context.isMeasuring else {
             // Tear down a section left over from a just-dismissed menu so the
@@ -87,7 +92,9 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
 
     /// The collapsed control: the caller's label plus the closed/open caret
     /// every TUIkit drop-down uses.
-    private func trigger(_ state: MenuPopupState, focusManager: FocusManager?) -> some View {
+    private func trigger(
+        _ state: MenuPopupState, focusManager: FocusManager?, onOpen: MenuOpenAction?
+    ) -> some View {
         Button {
             state.isOpen.toggle()
             // A `Button` erases how it was pressed (a click and a Return both
@@ -96,6 +103,7 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
             // highlighted.
             if state.isOpen {
                 state.controller.opened(withSelection: focusManager?.lastInputSource != .pointer)
+                onOpen?()
             }
         } label: {
             HStack(spacing: 1) {

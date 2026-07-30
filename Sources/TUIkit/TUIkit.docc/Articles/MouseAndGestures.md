@@ -95,6 +95,14 @@ menu by default, so TUIkit also accepts <kbd>Ctrl</kbd>-click, and
 <kbd>Shift</kbd>+<kbd>F10</kbd> opens the menu of whatever is focused. See
 `Documentation/Terminal-compatibility.md` for what each terminal forwards.
 
+`onMenuOpen(_:)` reports the opening — of a `contextMenu` or of a ``Menu`` — to
+any view above it, however the menu was opened. It exists for a specific
+problem: when the app shows what was last chosen from a menu, choosing the same
+item again changes nothing on screen and so reads as nothing having happened.
+Clearing the display as the menu opens fixes that, and there is no other moment
+to hang it on. TUIkit-specific; SwiftUI's menus are system-drawn, and their open
+moment is not the app's to observe.
+
 ## Press-and-Hold
 
 Pop-up menus — ``Menu``, a `.menu`-style ``Picker``, a `TextField`'s suggestion
