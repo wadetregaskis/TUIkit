@@ -451,6 +451,31 @@ struct DragAndDropTests {
             !hovering.lines[rowY].stripped.contains { !" │".contains($0) },
             "and the gap itself holds nothing: \(hovering.lines[rowY].stripped.debugDescription)")
 
+        // The pointer has not moved, but the frame it is over HAS: the gap is
+        // now the line under it. Every later mouse report re-resolves the slot
+        // against that frame, and the answer has to be the same one — the slot
+        // used to read as "off the rows", jump to the end of the list, and come
+        // back on the report after that.
+        tui.dragAndDropSession.dragMoved()
+        let steady = render()
+        #expect(
+            steady.lines.firstIndex { $0.stripped.contains("c") } == rowY + 1,
+            "the gap stays where the pointer is")
+
+        // And one line DOWN moves it one line down — not "nowhere", and not
+        // stuck one row above the cursor.
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: rowY + 1)
+        tui.dragAndDropSession.dragMoved()
+        let lower = render()
+        #expect(
+            lower.lines.firstIndex { $0.stripped.contains("c") } == rowY,
+            "row c is back above the gap: the gap followed the pointer down")
+
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: rowY)
+        tui.dragAndDropSession.dragMoved()
+        _ = render()
         _ = tui.dragAndDropSession.performDrop()
         #expect(log.inserted.count == 1, "the drop was taken")
         #expect(log.inserted.first?.0 == 2, "at row c's index: \(log.inserted)")

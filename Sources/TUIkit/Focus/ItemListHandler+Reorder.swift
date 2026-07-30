@@ -119,7 +119,17 @@ extension ItemListHandler {
     /// data order and the two are the same number.
     func reorderDrawnPosition(of index: Int) -> Int {
         let removed = reorderRemovedRows
-        guard !removed.isEmpty else { return index }
+        guard !removed.isEmpty else {
+            // A drag from ELSEWHERE takes no rows out of this list, but its
+            // landing slot still pushes every row at or past it down a line —
+            // so a row below the slot names the position after itself, exactly
+            // as a reorder's does. Without this the mapping is a fixed point:
+            // the row under the pointer keeps naming the index the slot is
+            // already at, and the gap sits one row above the cursor for the
+            // rest of the drag.
+            guard let slot = externalDropSlot else { return index }
+            return index >= slot ? index + 1 : index
+        }
         let closedUp = reorderClosedUpIndex(index, removed: removed)
         guard let slot = reorderPlaceholder?.slot else { return closedUp }
         return closedUp >= slot ? closedUp + 1 : closedUp
@@ -519,7 +529,12 @@ extension ItemListHandler {
                 // rows" is what made a `.cursor` drag cancel its own gap.
                 return RowBand(
                     rowIndex: Self.reorderSlotRowIndex, yStart: band.yStart,
-                    height: band.height, isContent: false, dropIndex: placeholder?.slot)
+                    height: band.height, isContent: false,
+                    // `externalDropSlot` for a drag from elsewhere: that slot is
+                    // where the pointer rests after every step too, and reading
+                    // it as "off the rows" sent the gap to the end of the list
+                    // and back on alternate mouse reports.
+                    dropIndex: placeholder?.slot ?? externalDropSlot)
             case .chrome(let rowIndex):
                 return RowBand(
                     rowIndex: rowIndex, yStart: band.yStart, height: band.height,

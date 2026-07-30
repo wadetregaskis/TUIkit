@@ -1331,8 +1331,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // The band under the pointer names the row it would land
                     // BEFORE; past the last row it appends.
                     let contentY = y - topInset
-                    handler.externalDropSlot =
-                        handler.dropTarget(atContentY: contentY) ?? handler.itemCount
+                    // Clamped: a list that shrank under the pointer must not
+                    // strand the slot past its own end.
+                    let slot = handler.dropTarget(atContentY: contentY) ?? handler.itemCount
+                    handler.externalDropSlot = min(max(0, slot), handler.itemCount)
                 }))
     }
 
