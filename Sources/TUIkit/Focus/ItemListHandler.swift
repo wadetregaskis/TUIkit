@@ -604,10 +604,11 @@ extension ItemListHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         guard itemCount > 0 else { return false }
 
-        // Picking a row up, and the keys a held one answers — ahead of the
-        // selection keys, and of the plain movement below, because a row in
-        // hand takes the movement keys over. `nil` means neither applies.
-        if let handled = handleRowMoveKey(event) {
+        // Everything reordering claims — picking a row up, the keys a held row
+        // answers, and the navigators during a mouse drag — ahead of the
+        // selection keys and of the plain movement below, both of which would
+        // otherwise move the cursor out from under the gesture.
+        if let handled = handleReorderKey(event) {
             return handled
         }
 

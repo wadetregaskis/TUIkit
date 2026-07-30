@@ -495,6 +495,8 @@ struct ListReorderDragTests {
         #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 
+    // MARK: - Keys during a mouse drag
+
     // MARK: - Edge auto-scroll
 
     /// Dragging a row past the last visible one has to scroll the list, or a

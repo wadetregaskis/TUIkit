@@ -129,6 +129,37 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["a", "b", "c", "d", "e"], "put back, not left half-moved")
     }
 
+    // MARK: - Keys during a mouse drag
+
+    /// While a MOUSE drag is in flight the navigators scroll and leave the
+    /// cursor alone. Moving the cursor there is confusing in a specific way:
+    /// the next pointer movement snaps it back, because the drag re-points it
+    /// at the row under the pointer.
+    @Test("Navigators scroll during a mouse drag instead of moving the cursor")
+    func navigatorsScrollDuringAMouseDrag() {
+        let rows = RowBox()
+        let handler = ItemListHandler<String>(
+            focusID: "list", itemCount: 40, viewportHeight: 5, selectionMode: .single)
+        handler.onMove = { _, _ in }
+        handler.focusedIndex = 1
+        handler.beginReorder(grabbing: 1)
+        handler.dragReorder(toContentY: 1)  // any movement makes it a drag
+        #expect(handler.isReordering && !handler.isKeyboardMove)
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
+        #expect(handler.scrollOffset == 1, "the viewport moved")
+        #expect(handler.focusedIndex == 1, "the cursor did not")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)))
+        #expect(handler.scrollOffset > 1, "and Shift scrolls coarsely")
+        #expect(handler.focusedIndex == 1)
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .end)))
+        #expect(handler.scrollOffset == handler.maxOffset)
+        #expect(handler.focusedIndex == 1, "still the row in hand")
+        _ = rows
+    }
+
     // MARK: - The whole selection
 
     /// A handler with a real multi-selection binding, so the reorder can read

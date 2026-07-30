@@ -357,6 +357,12 @@ strips modifiers from <kbd>↑</kbd>/<kbd>↓</kbd> specifically, which is why
 ``RowAction/pickUpRow`` — which needs no modifier at all — remains the route
 that always works.
 
+While a row is being dragged with the MOUSE, the movement keys scroll the
+viewport instead of moving the cursor — that is how you reach a destination
+that is off screen without letting go. They leave the cursor and the selection
+where they are, because the next pointer movement would snap the cursor back to
+the row under the pointer anyway.
+
 Holding <kbd>Shift</kbd> with any of the movement keys moves the row by the
 `shiftStepMultiplier` coarse step, the same as it does for the cursor.
 

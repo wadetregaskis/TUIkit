@@ -251,6 +251,15 @@ extension ItemListHandler {
     /// The whole keyboard-reorder branch: the keys a held row answers, or the
     /// chord that picks one up. `nil` when neither applies, so the key goes on
     /// to mean whatever it usually means.
+    /// Every key reordering claims, in one place: the chords, the held-row
+    /// movement, and — while a MOUSE drag is in flight — the navigators, which
+    /// scroll rather than move the cursor. `nil` means "not ours".
+    func handleReorderKey(_ event: KeyEvent) -> Bool? {
+        if let handled = handleRowMoveKey(event) { return handled }
+        guard isReordering, !isKeyboardMove else { return nil }
+        return handleDragScrollKey(event)
+    }
+
     func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
         // A MOUSE drag in flight: the cancel chord puts the row back. It has to
         // be answered here rather than in the selection keys, which only run in
@@ -268,6 +277,11 @@ extension ItemListHandler {
             dragSession?.cancelReturningToOrigin()
             return true
         }
+        // A mouse drag owns the gesture: past the cancel chord it must not fall
+        // into the keyboard-move keys. `.pickUpRow` there would overwrite the
+        // in-flight reorder and latch `isKeyboardMove`, which the mouse release
+        // does not clear — leaving the list in a mode with nothing in hand.
+        if isReordering, !isKeyboardMove { return nil }
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
         // Chords, so they work in either selection mode.
         guard let (action, accelerated) = shortcuts.action(for: event) else { return nil }
@@ -306,6 +320,36 @@ extension ItemListHandler {
         case .moveRowToBottom: moveHeldRow(to: itemCount - 1)
         case .selectAll, .extendSelection: return false
         }
+        return true
+    }
+
+    /// The navigators, while a MOUSE drag is in flight: they scroll the
+    /// viewport and leave the cursor and the selection exactly where they are.
+    ///
+    /// Moving the focus mid-drag is confusing in a specific way — the next
+    /// pointer movement snaps it back, because the drag re-points the cursor at
+    /// the row under the pointer. Scrolling is what these keys are FOR here:
+    /// reaching a destination that is off-screen without letting go.
+    ///
+    /// Every claimed key returns `true` even at an edge: an unconsumed arrow is
+    /// taken by the focus system's in-section navigation and would move focus to
+    /// another control mid-drag, which is worse than a no-op.
+    func handleDragScrollKey(_ event: KeyEvent) -> Bool? {
+        let step = event.shift ? max(1, shiftStepMultiplier) : 1
+        switch event.key {
+        case .up: scrollFine(by: -step)
+        case .down: scrollFine(by: step)
+        case .pageUp: scrollFine(by: -pageStep)
+        case .pageDown: scrollFine(by: pageStep)
+        case .home:
+            scrollOffset = 0
+            scrollTopClipLines = 0
+        case .end:
+            scrollOffset = maxOffset
+            scrollTopClipLines = 0
+        default: return nil
+        }
+        releaseAnchorOnUserScroll()
         return true
     }
 
