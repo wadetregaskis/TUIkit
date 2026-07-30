@@ -1254,11 +1254,10 @@ extension ItemListHandler {
         // the move instead. (Found by driving the real app; the handler-level
         // tests never see the app's Escape.) It also advertises the mode, which
         // is what makes it discoverable at all.
-        // A mouse drag claims it on the same terms: mid-drag Escape used to
-        // fall through to the page's "⎋ back", navigating out from under a
-        // live drag while the floating preview kept compositing over the new
-        // page until the button came up.
-        if isKeyboardMove || isReordering {
+        // A MOUSE drag claims nothing: Escape keeps meaning what it means on
+        // the page, so a row can be picked up here, carried to another subpage,
+        // and dropped there. (See ``cancelMouseDragReorder()``.)
+        if isKeyboardMove {
             context.environment.statusBar.escapeLabelOverride = "cancel move"
             context.environment.statusBar.escapeClaimGrabsInput = false
             return

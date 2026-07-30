@@ -261,26 +261,11 @@ extension ItemListHandler {
     }
 
     func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
-        // A MOUSE drag in flight: the cancel chord puts the row back. It has to
-        // be answered here rather than in the selection keys, which only run in
-        // multi-selection mode — and the button is still down, so a release is
-        // still coming: without the latch it would fall into the click path and
-        // select whatever row the pointer happens to be over.
-        if isReordering, !isKeyboardMove,
-            shortcuts.action(for: event)?.action == .cancelMove
-        {
-            cancelReorder()
-            reorderCancelled = true
-            // Home rather than gone: the row walks back to where it was picked
-            // up, which says "nothing happened" far more clearly than a preview
-            // vanishing mid-air.
-            dragSession?.cancelReturningToOrigin()
-            return true
-        }
-        // A mouse drag owns the gesture: past the cancel chord it must not fall
-        // into the keyboard-move keys. `.pickUpRow` there would overwrite the
-        // in-flight reorder and latch `isKeyboardMove`, which the mouse release
-        // does not clear — leaving the list in a mode with nothing in hand.
+        // A mouse drag owns the gesture: it must not fall into the keyboard-move
+        // keys. `.pickUpRow` there would overwrite the in-flight reorder and
+        // latch `isKeyboardMove`, which the mouse release does not clear —
+        // leaving the list in a mode with nothing in hand. NO key cancels it
+        // either, deliberately: see ``cancelMouseDragReorder()``.
         if isReordering, !isKeyboardMove { return nil }
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
         // Chords, so they work in either selection mode.
@@ -697,6 +682,24 @@ extension ItemListHandler {
         focusedIndex = clampedRowIndex(
             move(reorder.held, to: target) + reorder.primaryRank)
         return true
+    }
+
+    /// Abandons a MOUSE drag: the rows go back where they were picked up and
+    /// the floating preview walks home rather than vanishing under the pointer.
+    ///
+    /// Deliberately bound to NO key. Escape was the obvious candidate and is
+    /// spoken for: a drag has to be carriable across the app — pick a row up on
+    /// one page, navigate, drop it on another — and that requires the
+    /// navigation keys to keep navigating while something is in hand. Releasing
+    /// over nothing is the cancel, as it is on macOS. Kept whole (and covered
+    /// by tests) for the day a chord is chosen for it.
+    func cancelMouseDragReorder() {
+        cancelReorder()
+        // The button is still down, so a release is still coming: without the
+        // latch it falls into the click path and selects whatever row the
+        // pointer happens to be over.
+        reorderCancelled = true
+        dragSession?.cancelReturningToOrigin()
     }
 
     /// Drops any in-flight reorder without moving anything.

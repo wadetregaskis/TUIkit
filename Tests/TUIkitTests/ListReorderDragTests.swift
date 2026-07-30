@@ -84,6 +84,12 @@ struct ListReorderDragTests {
             return buffer
         }
 
+        /// The list's own handler — the press focuses it, which is what makes
+        /// it reachable from here.
+        var handler: ItemListHandler<String>? {
+            env.focusManager?.currentFocused as? ItemListHandler<String>
+        }
+
         func rowY(_ buffer: FrameBuffer, _ label: String) -> Int {
             buffer.lines.firstIndex { $0.stripped.contains(label) } ?? -1
         }
@@ -521,35 +527,17 @@ struct ListReorderDragTests {
         #expect(!session.autoScrollArmed, "and disarm on the drop")
     }
 
-    /// Escape mid-drag used to fall through to the page — the Example's
-    /// "⎋ back" navigated out from under a live drag while the floating
-    /// preview kept compositing over the new page until the button came up.
-    /// `.live` moves the data at every step, so clearing the drag state is not
-    /// a cancel — the row is left wherever the pointer last dropped it. Found
-    /// in the live app: the unit test above uses `.cursor`, where nothing has
-    /// moved yet, so it could not see this.
-    @Test("Escape puts a live-reordered row back where it was picked up")
-    func escapeUndoesALiveReorder() {
-        let fixture = Fixture(feedback: .live)
-        let buffer = fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
-        fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
-        fixture.render()
-        #expect(fixture.items != ["a", "b", "c", "d", "e"], "live has already moved it")
-
-        #expect(fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == true)
-        #expect(fixture.items == ["a", "b", "c", "d", "e"], "and Escape puts it back")
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "c")))
-        #expect(fixture.items == ["a", "b", "c", "d", "e"])
-    }
-
-    @Test("Escape cancels a drag in flight, and its release is not a click")
-    func escapeCancelsAMouseDrag() {
+    /// A drag has to be carriable across the app — pick a row up on one page,
+    /// navigate, drop it on another — which means the navigation keys keep
+    /// navigating while something is in hand. Escape briefly cancelled a drag
+    /// instead; it must not, and must not CLAIM the key either (a claim routes
+    /// it to the focus system, where the page's "⎋ back" never sees it).
+    @Test("Escape neither cancels a mouse drag nor claims the key")
+    func escapeDoesNotCancelAMouseDrag() {
         let fixture = Fixture(feedback: .cursor)
+        // Its own status bar: the default is shared, so a parallel test's claim
+        // would leak into the assertion below.
+        fixture.env.statusBar = StatusBarState()
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         fixture.dispatcher.dispatch(
@@ -559,15 +547,46 @@ struct ListReorderDragTests {
             MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
         fixture.render()
         #expect(session.active != nil, "carrying a row")
+        #expect(fixture.env.statusBar.escapeLabelOverride == nil, "the page keeps Escape")
 
-        #expect(fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == true)
-        #expect(session.active == nil, "the floating row goes down at once")
-        fixture.render()
-        #expect(fixture.items == ["a", "b", "c", "d", "e"], "and the row goes back")
+        #expect(
+            fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == false,
+            "unhandled, so the app is free to navigate with the row still in hand")
+        #expect(session.active != nil, "and the drag is still in flight")
 
-        // The button is still down — the release must not land as a click.
+        // Still a drag, so the release still drops.
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+        #expect(fixture.items == ["b", "c", "d", "a", "e"], "the drop landed")
+    }
+
+    /// The cancel itself is kept, bound to nothing, for the day a chord is
+    /// chosen for it. `.live` is the case that proves it is a real undo: it
+    /// moves the data at every step, so clearing the drag state would leave the
+    /// row wherever the pointer last dropped it. (Found in the live app — a
+    /// `.cursor` test cannot see it, nothing having moved yet.)
+    @Test("Cancelling a mouse drag puts a live-reordered row back")
+    func cancelPutsALiveReorderedRowBack() {
+        let fixture = Fixture(feedback: .live)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        fixture.render()
+        #expect(fixture.items != ["a", "b", "c", "d", "e"], "live has already moved it")
+
+        fixture.handler?.cancelMouseDragReorder()
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "the cancel puts it back")
+        #expect(session.active == nil, "and takes the floating row down at once")
+
+        // The button is still down — the release must not land as a click, nor
+        // as a drop.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "c")))
         fixture.render()
         #expect(fixture.items == ["a", "b", "c", "d", "e"], "nothing moved on the way out")
     }

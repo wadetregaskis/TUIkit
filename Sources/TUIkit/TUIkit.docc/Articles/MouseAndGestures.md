@@ -197,13 +197,19 @@ between.
 
 ## Abandoning a Drag
 
-<kbd>Escape</kbd> cancels a drag in flight: the row goes back where it came
-from, and the floating preview walks back to where the row started rather than
-vanishing under the pointer — about a fifth of a second, cell by cell. A drop
-released with nowhere to land does the same thing, for the same reason: "nothing
-happened" reads far better as a row going home than as one disappearing in
-mid-air. The release that follows is swallowed rather than read as a click, so a
-cancelled gesture leaves the selection exactly as it found it.
+Let go with nowhere to land and the drag is abandoned: the floating preview
+walks back to where it started rather than vanishing under the pointer — about
+a fifth of a second, cell by cell. "Nothing happened" reads far better as a row
+going home than as one disappearing in mid-air.
 
-A press that starts a reorder also takes keyboard focus, which is what lets
-<kbd>Escape</kbd> reach a list that was not focused before the drag began.
+**No key cancels a drag**, deliberately. A drag has to be carriable across the
+app — pick a row up on one page, navigate to another, drop it there — and that
+requires the navigation keys to keep navigating while something is in hand.
+<kbd>Escape</kbd> was the obvious candidate and is exactly the key that
+navigation needs, so releasing over nothing is the cancel, as it is on macOS.
+The movement keys are the other half of the same rule: mid-drag they scroll
+rather than move the cursor, so a destination that is off screen can be reached
+without letting go.
+
+A keyboard move (<kbd>Ctrl</kbd>+<kbd>R</kbd>) is a different thing — a mode,
+not a gesture — and it does answer <kbd>Escape</kbd>, which puts the row back.
