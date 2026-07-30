@@ -85,6 +85,24 @@ extension DraggableModifier: Renderable, Layoutable {
             let session = context.environment.dragAndDropSession
         else { return buffer }
 
+        // A view being carried has LEFT its place: it is in the user's hand,
+        // floating at the cursor, and drawing it here as well would be one
+        // thing shown twice. Row reordering has always worked this way (see
+        // `RowReorderFeedback.cursor`); a `.draggable` row in a list that a
+        // drag is transferring OUT of now reads the same, rather than sitting
+        // there as if nothing were happening.
+        //
+        // Blank rather than absent: the view owns this space in the layout,
+        // and a list closing up under the pointer mid-drag would move the very
+        // rows the drop is aimed between.
+        let token = context.identity.path
+        if session.isDragSource(token) {
+            buffer = FrameBuffer(
+                lines: Array(
+                    repeating: String(repeating: " ", count: max(0, buffer.width)),
+                    count: max(1, buffer.height)))
+        }
+
         // The floating preview: the explicit preview view when given, else
         // the content's own rendered buffer (regions/overlays stripped — the
         // preview is purely visual).
@@ -106,7 +124,7 @@ extension DraggableModifier: Renderable, Layoutable {
             onDragBegin: { _, grab in
                 session.begin(
                     payload: payload(), preview: capturedPreview,
-                    grabX: grab.x, grabY: grab.y, anchor: anchor)
+                    grabX: grab.x, grabY: grab.y, anchor: anchor, sourceToken: token)
             },
             onDragMove: { _ in session.dragMoved() },
             onDragEnd: { _ in

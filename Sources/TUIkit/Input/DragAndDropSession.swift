@@ -231,12 +231,21 @@ final class DragAndDropSession: @unchecked Sendable {
     ///     the grab point `.grabPoint` keeps under the cursor.
     ///   - grabY: The press row within the dragged view.
     ///   - anchor: How the preview anchors to the cursor.
+    /// The view that started the drag in flight, by its structural identity —
+    /// so that view can render itself as gone while it is in the user's hand.
+    private(set) var sourceToken: String?
+
+    /// Whether `token` names the view whose drag is in flight.
+    func isDragSource(_ token: String) -> Bool { active != nil && sourceToken == token }
+
     func begin(
         payload: Any, preview: FrameBuffer,
         grabX: Int = 0, grabY: Int = 0,
-        anchor: DragPreviewAnchor = .grabPoint
+        anchor: DragPreviewAnchor = .grabPoint,
+        sourceToken: String? = nil
     ) {
         guard let event = lastAbsoluteEvent else { return }
+        self.sourceToken = sourceToken
         // The preview rides above everything and paints every cell it has, so
         // a row padded to its list's width would erase a column of the screen
         // per blank. Trimmed HERE rather than at each producer, so all three
@@ -430,6 +439,7 @@ final class DragAndDropSession: @unchecked Sendable {
     func end() {
         active?.targeted?.setTargeted(false)
         active = nil
+        sourceToken = nil
         autoScrollArmed = false
         autoScrollEngagedSinceNanos = nil
         releaseAutoScrollFlags()

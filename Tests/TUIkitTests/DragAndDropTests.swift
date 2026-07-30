@@ -336,6 +336,35 @@ struct DragAndDropTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 9, y: 3))
     }
 
+    /// A view being carried has LEFT its place — the same contract row
+    /// reordering has always kept under `.cursor`. Drawing it at the cursor
+    /// AND in the list it came from shows one thing twice.
+    @Test("The source view goes blank while its drag is in flight")
+    func draggableLeavesItsPlaceWhileCarried() {
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        let tree = makeTree(log)
+        let before = renderToBuffer(tree, context: context)
+        #expect(before.lines.contains { $0.stripped.contains("CHIP") }, "drawn at rest")
+        dispatcher.setRegions(before.hitTestRegions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 8, y: 2))
+        let during = renderToBuffer(tree, context: context)
+        #expect(
+            !during.lines.contains { $0.stripped.contains("CHIP") },
+            "and gone from its place while carried: \(during.lines.map(\.stripped))")
+        #expect(during.height == before.height, "the space it owns is kept")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 2))
+        let after = renderToBuffer(tree, context: context)
+        #expect(after.lines.contains { $0.stripped.contains("CHIP") }, "and back when let go")
+    }
+
     /// `ForEach.dropDestination(for:action:)` — the index-reporting sibling of
     /// the view-level modifier. A view destination only knows that something
     /// was dropped on it; this one knows between which rows, so the list can

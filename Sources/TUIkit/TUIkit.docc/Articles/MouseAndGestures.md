@@ -186,6 +186,15 @@ the frame.
 The raw event types (`MouseEvent`, `MouseButton`, `MousePhase`) live in the
 re-exported `TUIkitCore` module.
 
+A view being carried leaves its place: while its own drag is in flight it draws
+blank, because it is already on screen at the cursor and drawing it twice says
+two things are moving. That is the contract row reordering has always kept under
+``RowReorderFeedback/cursor``, now kept by `.draggable` too — so a row dragged
+out of one list and into another looks the same as a row dragged within one. It
+goes blank rather than vanishing from the layout: the space is still the view's,
+and a list closing up mid-drag would move the very rows the drop is aimed
+between.
+
 ## Abandoning a Drag
 
 <kbd>Escape</kbd> cancels a drag in flight: the row goes back where it came
