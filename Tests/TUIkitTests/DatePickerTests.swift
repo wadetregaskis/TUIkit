@@ -192,21 +192,24 @@ struct DatePickerTests {
         return (dispatcher, region.offsetY, { region.offsetX + $0 })
     }
 
-    /// The wheel follows this control's OWN Up arrow (up = later). Stepper and
-    /// Slider point the other way, which reads correctly on a horizontal track
-    /// but would contradict the date field's arrows.
-    @Test("Wheel up steps the pointed field forward, wheel down back")
+    /// The framework-wide wheel convention: up goes towards smaller/earlier,
+    /// the same as Stepper, Slider and the scrollers. Rolling the wheel is
+    /// scrolling THROUGH the values, not pressing the Up arrow.
+    @Test("Wheel up steps the pointed field back, wheel down forward")
     func wheelStepsThePointedField() {
-        let sink = DateSink(date(2026, 3, 5))
+        // Mid-month, mid-year: stepping the month must not carry into the day,
+        // and staying clear of a DST boundary keeps that assertion about the
+        // field arithmetic rather than about the calendar.
+        let sink = DateSink(date(2026, 6, 15))
         guard let (dispatcher, y, x) = wheelHarness(sink) else {
             Issue.record("expected a date-picker hit-test region"); return
         }
         _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(5), y: y))
-        #expect(calendar.component(.month, from: sink.value) == 4, "wheel up over the month")
+        #expect(calendar.component(.month, from: sink.value) == 5, "wheel up over the month")
         _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: x(5), y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: x(5), y: y))
-        #expect(calendar.component(.month, from: sink.value) == 2, "and back down past the start")
-        #expect(calendar.component(.day, from: sink.value) == 5, "no other field moved")
+        #expect(calendar.component(.month, from: sink.value) == 7, "and forward past the start")
+        #expect(calendar.component(.day, from: sink.value) == 15, "no other field moved")
     }
 
     /// Pointing at a field is enough — no click first. This is what makes the
@@ -218,13 +221,13 @@ struct DatePickerTests {
             Issue.record("expected a date-picker hit-test region"); return
         }
         _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(0), y: y))
-        #expect(calendar.component(.year, from: sink.value) == 2027, "the year, not the default field")
+        #expect(calendar.component(.year, from: sink.value) == 2025, "the year, not the default field")
 
         let before = sink.value
         // Column 4 is the "-" separator: nobody owns it, so the field the
         // previous tick activated keeps the step.
         _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(4), y: y))
-        #expect(calendar.component(.year, from: sink.value) == 2028)
+        #expect(calendar.component(.year, from: sink.value) == 2024)
         #expect(sink.value != before)
     }
 

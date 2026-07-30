@@ -316,12 +316,13 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                     handler.activeIndex = index
                 }
                 focusManager?.focus(id: focusID)
-                // Wheel up increments, matching THIS control's Up arrow.
-                // Stepper and Slider point the other way ("wheel up = towards
-                // smaller"), which reads correctly on a horizontal track but
-                // would contradict the date field's own arrows: pointing at
-                // the month and rolling up must do what pressing Up does.
-                handler.adjust(by: event.button == .scrollUp ? 1 : -1)
+                // Wheel up goes towards SMALLER/earlier, as it does on every
+                // other wheel control here (Stepper, Slider, and the scrollers
+                // themselves). Rolling the wheel is scrolling THROUGH the
+                // values, not pressing the Up arrow — the two need not agree,
+                // and consistency across controls is what a user actually
+                // carries from one to the next.
+                handler.adjust(by: event.button == .scrollUp ? -1 : 1)
                 // Swallowed, not chained: this is a value control, so the
                 // wheel must not also scroll the page underneath it.
                 return true
