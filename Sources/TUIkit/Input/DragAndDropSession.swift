@@ -142,6 +142,14 @@ final class DragAndDropSession: @unchecked Sendable {
         var cursorX: Int
         var cursorY: Int
 
+        /// Where the preview sat when the drag began — its frame at that
+        /// moment, in the same absolute space. A cancelled drag flies back
+        /// here. Recorded at `begin` rather than derived later: by the time a
+        /// drop is refused the cursor has moved, and the row's own place may
+        /// have scrolled away entirely.
+        var originX = 0
+        var originY = 0
+
         /// The id of the currently targeted destination, if any — valid only
         /// within the frame that registered it (handler ids reset to 0 every
         /// render pass), so it is used purely to detect targeting
@@ -234,6 +242,10 @@ final class DragAndDropSession: @unchecked Sendable {
             grabY: min(max(0, grabY), max(0, preview.height - 1)),
             anchor: anchor,
             cursorX: event.x, cursorY: event.y, targetedID: nil, targeted: nil)
+        if let frame = previewFrame() {
+            active?.originX = frame.x
+            active?.originY = frame.y
+        }
         dragMoved()
     }
 
@@ -314,6 +326,76 @@ final class DragAndDropSession: @unchecked Sendable {
     /// modes people actually use: the zones were registered, the cursor was
     /// stamped, and the driver bailed on its first line.
     private(set) var autoScrollArmed = false
+
+    /// A cancelled drag on its way home.
+    ///
+    /// Cell-stepped and derived from the clock rather than counted in frames,
+    /// so a slow frame shortens the flight instead of stretching it — the same
+    /// contract `Spinner` keeps.
+    struct ReturnFlight {
+        let preview: FrameBuffer
+        let fromX: Int, fromY: Int
+        let toX: Int, toY: Int
+        var startNanos: UInt64?
+
+        /// How long the row takes to get back. Long enough to read as a
+        /// movement, short enough not to make a cancel feel like a wait.
+        static let durationNanos: UInt64 = 200_000_000
+    }
+
+    /// The flight in progress, if any.
+    private(set) var returnFlight: ReturnFlight?
+
+    /// Where the returning preview is right now, as the render loop last
+    /// advanced it. The scene draws THIS rather than advancing the flight
+    /// itself, so the animation has exactly one clock.
+    private(set) var returnFlightFrame: (x: Int, y: Int, preview: FrameBuffer)?
+
+    /// Ends the drag by sending the preview back where it came from, instead of
+    /// having it vanish at the cursor.
+    ///
+    /// For a refused drop and for `Escape`: in both the answer is "nothing
+    /// happened", and a row that disappears mid-air says that far less clearly
+    /// than one that walks home.
+    func cancelReturningToOrigin() {
+        returnFlightFrame = nil
+        if let drag = active, let frame = previewFrame(),
+            frame.x != drag.originX || frame.y != drag.originY
+        {
+            returnFlight = ReturnFlight(
+                preview: drag.preview,
+                fromX: frame.x, fromY: frame.y,
+                toX: drag.originX, toY: drag.originY,
+                startNanos: nil)
+        }
+        end()
+    }
+
+    /// Advances the flight and reports where to draw the preview, or `nil` when
+    /// nothing is returning. Called once per frame by the render loop, which
+    /// keeps asking for frames while this returns non-`nil`.
+    func driveReturnFlight(nowNanos: UInt64) -> (x: Int, y: Int, preview: FrameBuffer)? {
+        guard var flight = returnFlight else { return nil }
+        let start = flight.startNanos ?? nowNanos
+        if flight.startNanos == nil {
+            flight.startNanos = start
+            returnFlight = flight
+        }
+        let elapsed = nowNanos &- start
+        guard elapsed < ReturnFlight.durationNanos else {
+            returnFlight = nil
+            returnFlightFrame = nil
+            return nil
+        }
+        let progress = Double(elapsed) / Double(ReturnFlight.durationNanos)
+        // Ease out: most of the distance early, so the row reads as being
+        // pulled home rather than drifting.
+        let eased = 1 - (1 - progress) * (1 - progress)
+        let x = flight.fromX + Int((Double(flight.toX - flight.fromX) * eased).rounded())
+        let y = flight.fromY + Int((Double(flight.toY - flight.fromY) * eased).rounded())
+        returnFlightFrame = (x, y, flight.preview)
+        return returnFlightFrame
+    }
 
     /// Arms the edge auto-scroll for a gesture with no payload.
     func armAutoScroll() { autoScrollArmed = true }

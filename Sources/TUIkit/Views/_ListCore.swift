@@ -1402,12 +1402,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     }
                     // A reorder drop. `.live` has already moved the row; the
                     // other modes move it exactly here.
+                    // Asked BEFORE the drop, which clears the state: a release with
+                    // no slot and no row under the pointer is the gesture
+                    // saying "nothing happened".
+                    let landsNowhere = captureHandler.reorderPlaceholder == nil && dragContentY == nil
                     if captureHandler.dropReorder(atContentY: dragContentY) {
                         // The row is back in the list — nothing left to float.
                         // `end`, never `performDrop`: the payload is private and
                         // unnameable, so no `dropDestination` could take it, and
                         // the list has already placed the row itself.
-                        dragSession?.end()
+                        // Nowhere to land — released off the rows, and the mode
+                        // showed no slot — so the row walks home rather than
+                        // vanishing where the pointer happens to be.
+                        if landsNowhere {
+                            dragSession?.cancelReturningToOrigin()
+                        } else {
+                            dragSession?.end()
+                        }
                         focusManager?.focus(id: captureFocusID)
                         return true
                     }

@@ -1657,8 +1657,19 @@ where Value.ID: Hashable {
                 // modes move it exactly here. `end`, never `performDrop`: the
                 // payload is unnameable, so no `dropDestination` could take it,
                 // and the table has already placed the row itself.
-                if captureHandler.dropReorder(atContentY: dragContentY) {
-                    dragSession?.end()
+                // Asked BEFORE the drop, which clears the state: a release with
+                    // no slot and no row under the pointer is the gesture
+                    // saying "nothing happened".
+                    let landsNowhere = captureHandler.reorderPlaceholder == nil && dragContentY == nil
+                    if captureHandler.dropReorder(atContentY: dragContentY) {
+                    // Nowhere to land — released off the rows, and the mode
+                    // showed no slot — so the row walks home rather than
+                    // vanishing where the pointer happens to be.
+                    if landsNowhere {
+                        dragSession?.cancelReturningToOrigin()
+                    } else {
+                        dragSession?.end()
+                    }
                     focusManager?.focus(id: captureFocusID)
                     return true
                 }

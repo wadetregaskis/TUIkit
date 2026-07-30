@@ -326,6 +326,16 @@ extension RenderLoop {
                 "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
         }
 
+        // A cancelled drag walks its preview home over ~200 ms. Same shape as
+        // the auto-scroll tick above: the loop is demand-driven, so the flight
+        // has to ask for its own frames or it would draw one and freeze.
+        if tuiContext.dragAndDropSession.driveReturnFlight(
+            nowNanos: UInt64(bitPattern: frameNowNanos)) != nil
+        {
+            _ = animationScheduler?.request(
+                "drag-return", AnimationRequest(frequency: 30), now: frameNowNanos)
+        }
+
         beginRenderPass()
 
         // If an @Published property changed, clear the entire render cache

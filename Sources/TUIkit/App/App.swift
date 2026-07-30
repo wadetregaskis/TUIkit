@@ -549,6 +549,14 @@ extension WindowGroup: SceneRenderable {
                     level: .notification
                 )
             )
+        } else if let step = dragSession?.returnFlightFrame {
+            // A cancelled drag on its way home: the same overlay, walking back
+            // to where the row started. The render loop advances it and keeps
+            // asking for frames; this draws wherever it has got to.
+            centered.overlays.append(
+                OverlayLayer(
+                    offsetX: step.x, offsetY: step.y,
+                    content: step.preview, level: .notification))
         }
         return centered
     }

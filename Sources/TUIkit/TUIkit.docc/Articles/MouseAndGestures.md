@@ -189,8 +189,11 @@ re-exported `TUIkitCore` module.
 ## Abandoning a Drag
 
 <kbd>Escape</kbd> cancels a drag in flight: the row goes back where it came
-from and the floating preview comes down at once, without waiting for the
-button. The release that follows is swallowed rather than read as a click, so a
+from, and the floating preview walks back to where the row started rather than
+vanishing under the pointer — about a fifth of a second, cell by cell. A drop
+released with nowhere to land does the same thing, for the same reason: "nothing
+happened" reads far better as a row going home than as one disappearing in
+mid-air. The release that follows is swallowed rather than read as a click, so a
 cancelled gesture leaves the selection exactly as it found it.
 
 A press that starts a reorder also takes keyboard focus, which is what lets

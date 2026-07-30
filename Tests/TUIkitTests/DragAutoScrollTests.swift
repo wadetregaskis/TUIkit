@@ -109,6 +109,59 @@ struct DragAutoScrollTests {
         #expect(handler.scrollOffset < 50, "hovering the top edge scrolls toward the start")
     }
 
+    // MARK: - The return flight
+
+    /// A cancelled drag walks its preview home rather than having it vanish
+    /// mid-air. Cell-stepped and derived from the clock, so a slow frame
+    /// shortens the flight instead of stretching it.
+    @Test("A cancelled drag returns the preview to where it started")
+    func cancelledDragFliesHome() {
+        let harness = Harness()
+        harness.setRegions([Self.viewport])
+        harness.session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .pressed, x: 4, y: 2)
+        harness.session.begin(payload: "x", preview: FrameBuffer(text: "ROW"))
+        // Drag away: the preview follows the cursor.
+        harness.session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 20, y: 8)
+        harness.session.dragMoved()
+        let away = harness.session.previewFrame()
+        #expect(away?.x == 20 && away?.y == 8, "carried to the cursor")
+
+        harness.session.cancelReturningToOrigin()
+        #expect(harness.session.active == nil, "the drag is over immediately")
+
+        var seen: [(x: Int, y: Int)] = []
+        for step in 0...5 {
+            guard let frame = harness.session.driveReturnFlight(
+                nowNanos: UInt64(step) * 40_000_000)
+            else { break }
+            seen.append((frame.x, frame.y))
+        }
+        #expect(seen.first?.x == 20 && seen.first?.y == 8, "starts where it was let go")
+        #expect(seen.count > 1, "and takes more than one frame about it")
+        #expect(
+            zip(seen, seen.dropFirst()).allSatisfy { $0.x >= $1.x && $0.y >= $1.y },
+            "moving only homeward: \(seen)")
+
+        // Past the duration it is done, and draws nothing more.
+        #expect(harness.session.driveReturnFlight(nowNanos: 500_000_000) == nil)
+        #expect(harness.session.returnFlightFrame == nil)
+    }
+
+    /// A drag cancelled without having moved has nowhere to fly, and must not
+    /// leave a stray overlay behind for a frame.
+    @Test("A cancel at the origin ends without a flight")
+    func cancelAtOriginDoesNotFly() {
+        let harness = Harness()
+        harness.setRegions([Self.viewport])
+        harness.session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .pressed, x: 4, y: 2)
+        harness.session.begin(payload: "x", preview: FrameBuffer(text: "ROW"))
+        harness.session.cancelReturningToOrigin()
+        #expect(harness.session.driveReturnFlight(nowNanos: 0) == nil)
+    }
+
     /// A row reorder carries no payload, so `.live` and `.dimmed` never open a
     /// drag — and the driver's "is a drag in flight" gate silently excluded the
     /// two feedback modes people actually use. `armAutoScroll()` is how a

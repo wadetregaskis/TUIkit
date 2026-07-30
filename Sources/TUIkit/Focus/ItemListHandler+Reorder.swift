@@ -256,7 +256,10 @@ extension ItemListHandler {
         {
             cancelReorder()
             reorderCancelled = true
-            dragSession?.end()
+            // Home rather than gone: the row walks back to where it was picked
+            // up, which says "nothing happened" far more clearly than a preview
+            // vanishing mid-air.
+            dragSession?.cancelReturningToOrigin()
             return true
         }
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
