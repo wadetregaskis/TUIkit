@@ -259,17 +259,20 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
 
         /// Where `grabbedOffset` sits within ``held``, so the row the pointer
         /// took hold of stays the one it is holding after the drop.
-        var primaryRank: Int {
-            held.integerLessThanOrEqualTo(grabbedOffset).map { _ in
-                held.count(where: { $0 < grabbedOffset })
-            } ?? 0
-        }
+        ///
+        /// Stored, not derived: a `.live` block move rewrites `held` at every
+        /// step, and re-deriving the rank against a `grabbedOffset` that now
+        /// names a different row would drift.
+        let primaryRank: Int
 
         init(grabbedOffset: Int, held: IndexSet, active: Bool) {
+            let held = held.isEmpty ? IndexSet(integer: grabbedOffset) : held
             self.grabbedOffset = grabbedOffset
             self.currentOffset = grabbedOffset
-            self.held = held.isEmpty ? IndexSet(integer: grabbedOffset) : held
+            self.held = held
             self.active = active
+            self.primaryRank =
+                held.contains(grabbedOffset) ? held.count(where: { $0 < grabbedOffset }) : 0
         }
     }
 

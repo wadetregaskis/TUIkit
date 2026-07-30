@@ -139,12 +139,6 @@ extension ItemListHandler {
     /// alternative, an empty gap and a row that is nowhere at all, would just
     /// look like the row had been deleted.
     var effectiveReorderFeedback: RowReorderFeedback {
-        // `.live` moves the data at every step, which a MULTI-row gesture must
-        // not do: the rows only become a block when they land, and a live
-        // shuffle could not be undone by a cancel — one `onMove` can gather a
-        // disjoint selection into a block, but nothing can scatter it back.
-        // So several rows in hand always preview with a slot.
-        if heldRowCount > 1, reorderFeedback == .live { return .dimmed }
         // A move started from the KEYBOARD always previews dimmed, whatever the
         // view asked for. A mouse drag needs no mode indicator — the pointer is
         // one — but Ctrl-R puts the control into a state the user cannot see
@@ -660,9 +654,16 @@ extension ItemListHandler {
             }
             return
         }
-        if effectiveReorderFeedback == .live, target != reorder.currentOffset {
-            move(from: reorder.currentOffset, to: target)
-            reorder.currentOffset = target
+        // `.live` moves the data NOW, one `onMove` per slot crossed — the whole
+        // block of held rows, not just the one under the pointer. Pointing at a
+        // row already in hand is not a crossing.
+        if effectiveReorderFeedback == .live, !reorder.held.contains(target) {
+            let landed = move(reorder.held, to: liveSlot(forTarget: target, held: reorder.held))
+            // The block is contiguous from here on, wherever it started: after
+            // the first move the disjoint set no longer exists, and every later
+            // step has to name the rows where they NOW are.
+            reorder.held = IndexSet(integersIn: landed..<(landed + reorder.held.count))
+            reorder.currentOffset = landed + reorder.primaryRank
         }
         reorder.targetOffset = target
         self.reorder = reorder
@@ -670,6 +671,19 @@ extension ItemListHandler {
         // data offset. Over the gap there is no such row, so it stays put —
         // moving it to the drop target would light up a neighbour instead.
         if let row = contentRowIndex(atContentY: contentY) { focusedIndex = row }
+    }
+
+    /// The closed-up slot a `.live` step should move the held block to, given
+    /// the DATA index of the row the pointer is over.
+    ///
+    /// Dragging down lands the block after that row, dragging up lands it
+    /// before — the asymmetry a single-row drag has always had, because the row
+    /// under the pointer is the one you are displacing. For one row in hand
+    /// this is exactly the old `move(from:to: target)`.
+    private func liveSlot(forTarget target: Int, held: IndexSet) -> Int {
+        let closedUp = reorderClosedUpIndex(target, removed: held)
+        let downward = held.min().map { target > $0 } ?? false
+        return closedUp + (downward ? 1 : 0)
     }
 
     /// Commits a drop at `contentY`, and reports whether this gesture was a
@@ -732,7 +746,11 @@ extension ItemListHandler {
         // last left it. Put it back where it was picked up. (The slot modes
         // move nothing until the drop, so for them there is nothing to undo.)
         if let reorder, reorder.currentOffset != reorder.grabbedOffset {
-            move(from: reorder.currentOffset, to: reorder.grabbedOffset)
+            // The whole block goes back, to the slot the grabbed row came from.
+            // For a selection that was DISJOINT when it was picked up that is a
+            // consolidation rather than an undo — the first live step already
+            // gathered it, and one `onMove` cannot scatter it again.
+            move(reorder.held, to: reorder.grabbedOffset)
             focusedIndex = reorder.grabbedOffset
         }
         reorder = nil
@@ -761,7 +779,11 @@ extension ItemListHandler {
         guard let onMove, !held.isEmpty else { return target }
         let destination = reorderInsertionOffset(forSlot: target, removed: held)
         onMove(held, destination)
-        return target
+        // Where the block actually starts now — which is `target` except when
+        // the slot was past the end and the insertion clamped, and a `.live`
+        // drag that believed the clamped number would move the block again from
+        // a place it is not.
+        return reorderClosedUpIndex(destination, removed: held)
     }
 
     /// `index` clamped to the rows that exist (an empty list yields 0).

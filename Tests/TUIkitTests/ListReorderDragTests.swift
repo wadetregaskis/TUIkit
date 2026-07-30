@@ -610,6 +610,57 @@ struct ListReorderDragTests {
         #expect(fixture.items != ["a", "b", "c", "d", "e"], "the rows actually moved")
     }
 
+    /// `.live` means the list itself is the preview, and that has to hold for a
+    /// block as much as for one row: the rows shuffle as the pointer crosses
+    /// slots, staying together and staying in their own order. (A keyboard move
+    /// still previews with a slot — it has a cancel, and one `onMove` cannot
+    /// scatter a gathered block back.)
+    @Test("A live multi-row mouse drag shuffles the block as it goes")
+    func liveMultiRowShufflesAsItGoes() {
+        let fixture = Fixture(feedback: .live)
+        fixture.selection = ["a", "b"]
+        var buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        #expect(fixture.handler?.effectiveReorderFeedback == .live, "the mouse keeps live")
+
+        // Onto "c": the block lands after it, as a single-row drag would.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        buffer = fixture.render()
+        #expect(fixture.items == ["c", "a", "b", "d", "e"], "no release needed — that is `.live`")
+
+        // And again, from where the rows are NOW.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        buffer = fixture.render()
+        #expect(fixture.items == ["c", "d", "a", "b", "e"], "the block moves as one")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        #expect(
+            fixture.items == ["c", "d", "a", "b", "e"],
+            "and the drop commits nothing further — live already arrived")
+    }
+
+    /// Back up the way it came: dragging the block upward lands it BEFORE the
+    /// row under the pointer, which is the same asymmetry one row has.
+    @Test("A live multi-row drag upward lands before the row it is over")
+    func liveMultiRowDragsUpward() {
+        let fixture = Fixture(feedback: .live)
+        fixture.selection = ["d", "e"]
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "e")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        #expect(fixture.items == ["a", "d", "e", "b", "c"])
+    }
+
     /// A drag has to be carriable across the app — pick a row up on one page,
     /// navigate, drop it on another — which means the navigation keys keep
     /// navigating while something is in hand. Escape briefly cancelled a drag

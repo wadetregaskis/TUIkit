@@ -390,7 +390,9 @@ copy of every row under ``RowReorderFeedback/dimmed`` and making room for all of
 them under ``RowReorderFeedback/cursor``, which floats the whole block on the
 pointer. Grab it by its third row and it hangs from its third row.
 
-``RowReorderFeedback/live`` is never used for several rows, whatever the view
-asked for: it moves the data at every step, and while one `onMove` can gather a
-scattered selection into a block, nothing can scatter it back — so a cancel
-could not undo it.
+Under ``RowReorderFeedback/live`` a block shuffles as the pointer crosses slots,
+exactly as one row does — it lands after the row it is dragged onto going down,
+before it going up. A KEYBOARD move of several rows previews with a slot instead,
+whatever the view asked for: it has a cancel, and while one `onMove` can gather a
+scattered selection into a block, nothing can scatter it back, so there would be
+nothing to cancel to.

@@ -523,4 +523,26 @@ struct TableReorderDragTests {
             fixture.rows == ["b", "c", "d", "e", "f", "a", "g", "h", "i", "j"],
             "landed on the row under the cursor — got \(fixture.rows)")
     }
+    /// The `List` twin of this lives in ListReorderDragTests: `.live` under the
+    /// mouse shuffles the whole block as the pointer crosses slots, in the
+    /// Table too, and nothing is drawn faint (that is the keyboard's cue).
+    @Test("A live multi-row mouse drag shuffles the block, undimmed")
+    func liveMultiRowShufflesAsItGoes() {
+        let fixture = Fixture(feedback: .live)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        #expect(fixture.handler?.heldRowCount == 2)
+        #expect(fixture.handler?.effectiveReorderFeedback == .live, "the mouse keeps live")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        let dragging = fixture.render()
+        #expect(fixture.rows == ["c", "a", "b", "d", "e"], "the block moved, live")
+        #expect(
+            !dragging.lines.contains { $0.contains("\u{1b}[2m") },
+            "and nothing is dimmed — a pointer is its own indicator")
+    }
 }
