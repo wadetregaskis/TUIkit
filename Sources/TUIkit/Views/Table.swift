@@ -671,28 +671,39 @@ where Value.ID: Hashable {
         // Drawn in reorder order (the dragged row out, a slot where it would
         // land) — see `composeRowLines` for the same two lines of it.
         let drawn = handler.reorderDrawnRows(visibleRange)
-        publishRowBands(handler: handler, drawn: drawn, slide: handler.overscrollState.excursion)
+        func padded(_ line: String) -> String {
+            line + String(repeating: " ", count: max(0, contentInnerWidth - line.strippedLength))
+        }
         var rowLines: [String] = []
+        // Heights, not entries: the slot stands for every row in hand, so it can
+        // be several lines tall and the entries no longer map one-to-one onto
+        // lines. Same shape as `composeRowLines`.
+        var drawnHeights: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)] = []
         rowLines.reserveCapacity(contentHeight)
-        for line in 0..<contentHeight {
-            let rowLine: String
-            switch line < drawn.count ? drawn[line] : nil {
+        for entry in drawn {
+            switch entry {
             case .row(let rowIndex):
-                rowLine = renderRow(
+                rowLines.append(padded(renderRow(
                     item: data[rowIndex], columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
-                    rowWidth: contentInnerWidth, context: context, palette: palette)
+                    rowWidth: contentInnerWidth, context: context, palette: palette)))
+                drawnHeights.append((entry, 1))
             case .slot:
-                rowLine = reorderSlotLine(
+                let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentInnerWidth,
                     context: context, palette: palette)
-            case nil:
-                rowLine = ""
+                rowLines.append(contentsOf: slot.map(padded))
+                drawnHeights.append((entry, slot.count))
             }
-            let pad = max(0, contentInnerWidth - rowLine.strippedLength)
-            rowLines.append(rowLine + String(repeating: " ", count: pad))
         }
+        publishRowBands(
+            handler: handler, drawn: drawnHeights, slide: handler.overscrollState.excursion)
+        // A drag never changes how much is on screen. It can only overrun when
+        // rows in hand have scrolled out of the visible range — the slot is
+        // still their full height — so the tail is clipped, not grown.
+        if rowLines.count > contentHeight { rowLines.removeLast(rowLines.count - contentHeight) }
+        while rowLines.count < contentHeight { rowLines.append(padded("")) }
         let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
         let lines = handler.overscrollState.slid(rowLines, blank: blankRow)
             .enumerated()
@@ -1260,6 +1271,10 @@ where Value.ID: Hashable {
         // sequence (and the arithmetic behind it) is the handler's, shared with
         // `List`; outside a drag it is just the visible range.
         let drawn = handler.reorderDrawnRows(visibleRange)
+        // Heights, not entries, drive the bands: the slot stands for every row
+        // in hand, so a multi-row drag opens a gap several lines tall and the
+        // rows after it are no longer one line per entry.
+        var drawnHeights: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)] = []
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
@@ -1272,13 +1287,22 @@ where Value.ID: Hashable {
                     context: context,
                     palette: palette
                 ))
+                drawnHeights.append((entry, 1))
             case .slot:
-                rowLines.append(reorderSlotLine(
+                let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentWidth,
-                    context: context, palette: palette))
+                    context: context, palette: palette)
+                rowLines.append(contentsOf: slot)
+                drawnHeights.append((entry, slot.count))
             }
         }
-        publishRowBands(handler: handler, drawn: drawn, slide: handler.overscrollState.excursion)
+        publishRowBands(
+            handler: handler, drawn: drawnHeights, slide: handler.overscrollState.excursion)
+        // See the scrollbar path: a slot taller than the rows it replaced (some
+        // of them scrolled away) must clip rather than grow the control.
+        if rowLines.count > visibleRange.count {
+            rowLines.removeLast(rowLines.count - visibleRange.count)
+        }
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         if handler.hasContentBelow {
@@ -1304,38 +1328,44 @@ where Value.ID: Hashable {
     /// ``RowReorderFeedback/dimmed``, and a gap the row's size under
     /// ``RowReorderFeedback/cursor`` (which has the row itself on the pointer, so
     /// drawing it here too would read as a duplicate).
-    private func reorderSlotLine(
+    private func reorderSlotLines(
         handler: ItemListHandler<Value.ID>,
         columnWidths: [Int],
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> String {
+    ) -> [String] {
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering reads as emphasis, not as a hole.
         // (`isFocused` rather than a bespoke colour — the pulse a focused row
         // already uses is exactly the "this one" cue, and it walks the palette
         // ramp so it survives a 256-colour terminal.)
         let held = handler.isKeyboardMove
-        guard handler.effectiveReorderFeedback == .dimmed,
-            let source = handler.reorderRemovedRow, data.indices.contains(source)
-        else {
-            // No source to show (a `.cursor` drag carries the row on the
-            // pointer). A keyboard move never lands here: it resolves `.cursor`
-            // to `.dimmed`, precisely because there is no pointer to carry it.
-            return String(repeating: " ", count: max(0, rowWidth))
+        // EVERY row in hand: they land as one block, so the slot is one gap the
+        // size of all of them. A blank line each under `.cursor` (which carries
+        // them on the pointer, where drawing them here too would read as
+        // duplicates); a faint copy each under `.dimmed`.
+        let sources = handler.reorderRemovedRows.filter { data.indices.contains($0) }
+        let blank = String(repeating: " ", count: max(0, rowWidth))
+        guard handler.effectiveReorderFeedback == .dimmed, !sources.isEmpty else {
+            // A keyboard move never takes the `.cursor` path: it resolves that
+            // to `.dimmed`, precisely because there is no pointer to carry a row.
+            return Array(repeating: blank, count: max(1, sources.count))
         }
-        let line = renderRow(
-            item: data[source], columnWidths: columnWidths,
-            isFocused: held, isSelected: held, rowWidth: rowWidth,
-            context: context, palette: palette)
-        // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
-        // steering this", the dim says "it is not in the list right now", and
-        // both are true at once. Substituting one for the other is why a Table
-        // stopped dimming as soon as the move came from the keyboard.
-        // Persistent: `renderRow` emits a reset per styled run — starting with
-        // the selection-indicator gutter, so a bare wrapper died at cell one.
-        return ANSIRenderer.applyPersistentDim(line)
+        return sources.map { source in
+            let line = renderRow(
+                item: data[source], columnWidths: columnWidths,
+                isFocused: held, isSelected: held, rowWidth: rowWidth,
+                context: context, palette: palette)
+            // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
+            // steering this", the dim says "it is not in the list right now",
+            // and both are true at once. Substituting one for the other is why
+            // a Table stopped dimming as soon as the move came from the
+            // keyboard. Persistent: `renderRow` emits a reset per styled run —
+            // starting with the selection-indicator gutter, so a bare wrapper
+            // died at cell one.
+            return ANSIRenderer.applyPersistentDim(line)
+        }
     }
 
     /// Hands this frame's drawn row geometry to the shared publisher.
@@ -1346,18 +1376,20 @@ where Value.ID: Hashable {
     /// by it, so a drag hit-tests the wrong row without it.
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
-        drawn: [ItemListHandler<Value.ID>.DrawnRow],
+        drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)],
         slide: Int
     ) {
         typealias Handler = ItemListHandler<Value.ID>
-        handler.publishRowBands(drawn.enumerated().compactMap { line, entry in
+        var line = 0
+        handler.publishRowBands(drawn.compactMap { entry, height in
             let yStart = line + slide
+            line += height
             guard yStart >= 0 else { return nil }  // slid off the top
             switch entry {
             case .row(let rowIndex):
-                return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: 1)
+                return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: height)
             case .slot:
-                return Handler.DrawnBand(entry: .slot, yStart: yStart, height: 1)
+                return Handler.DrawnBand(entry: .slot, yStart: yStart, height: height)
             }
         })
     }
@@ -1631,14 +1663,20 @@ where Value.ID: Hashable {
                     // every other view, which only the drag session can draw.
                     let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
-                    if let dragSession, let floating = captureHandler.reorderFloatingRow {
-                        if !wasActive, let line = previewLine(floating) {
-                            // The row's own line, floated at the cursor. No hit
-                            // regions to strip: it is a plain rendered line.
-                            let preview = FrameBuffer(lines: [line])
+                    let floating = captureHandler.reorderFloatingRows
+                    if let dragSession, !floating.isEmpty {
+                        let carried = floating.compactMap(previewLine)
+                        if !wasActive, !carried.isEmpty {
+                            // The rows' own lines, floated at the cursor. No hit
+                            // regions to strip: they are plain rendered lines.
+                            let preview = FrameBuffer(lines: carried)
+                            // One line per row here, so the grab point moves
+                            // down the block by however many of its rows sit
+                            // above the one the pointer took hold of.
                             dragSession.begin(
                                 payload: RowReorderPayload(), preview: preview,
-                                grabX: grab.x, grabY: 0)  // `begin` trims and clamps
+                                grabX: grab.x,
+                                grabY: captureHandler.reorderHeldRowsAboveGrab.count)
                         } else {
                             // `begin` samples the cursor once; only `dragMoved`
                             // tracks it — see the same call in _ListCore.

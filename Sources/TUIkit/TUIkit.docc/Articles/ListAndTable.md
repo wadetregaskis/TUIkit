@@ -374,3 +374,23 @@ invisible, and `.live` — which only shuffles the data — would show nothing a
 all.
 
 Every chord here is rebindable — see ``RowShortcuts``.
+
+## Reordering Several Rows
+
+Grab any row of a multi-selection and the whole selection comes — macOS's rule,
+and what makes a multi-row drag discoverable at all. Grabbing an UNSELECTED row
+takes only that row, which is how you move one row out of a selection without
+clearing it first.
+
+They travel as a block and land as one: a disjoint selection arrives contiguous,
+in its original relative order, through a single `onMove`. So the preview shows
+one slot however many rows are in hand — a gap per row would promise something
+the drop does not do — and that slot is as tall as the block, holding a faint
+copy of every row under ``RowReorderFeedback/dimmed`` and making room for all of
+them under ``RowReorderFeedback/cursor``, which floats the whole block on the
+pointer. Grab it by its third row and it hangs from its third row.
+
+``RowReorderFeedback/live`` is never used for several rows, whatever the view
+asked for: it moves the data at every step, and while one `onMove` can gather a
+scattered selection into a block, nothing can scatter it back — so a cancel
+could not undo it.

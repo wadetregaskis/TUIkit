@@ -1196,12 +1196,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        let original = handler.reorderRemovedRow
-            .flatMap { source in visibleRows.first { $0.index == source }?.row.buffer }
+        // EVERY row in hand, stacked: they land as one block, so the slot is
+        // one gap the size of all of them. Showing only the grabbed row made a
+        // multi-row drag look like the rest had been deleted.
+        let byIndex = Dictionary(
+            visibleRows.map { ($0.index, $0.row) }, uniquingKeysWith: { first, _ in first })
+        let held = handler.reorderRemovedRows.compactMap { byIndex[$0]?.buffer }
         var body: FrameBuffer
         switch handler.effectiveReorderFeedback {
-        case .dimmed: body = original.map(dimmed) ?? blankRow(like: nil)
-        case .cursor, .live: body = blankRow(like: original)
+        case .dimmed: body = stacked(held.map(dimmed)) ?? blankRow(like: nil)
+        case .cursor, .live: body = blankRow(like: stacked(held))
         }
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering is emphasised, not a gap.
@@ -1214,7 +1218,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         // Which rows to draw, and where the slot goes among them, is the shared
         // arithmetic — `Table` asks the same question of the same handler.
-        let byIndex = Dictionary(visibleRows.map { ($0.index, $0.row) }, uniquingKeysWith: { first, _ in first })
         return handler.reorderDrawnRows(visibleRows.map(\.index)).compactMap { drawn in
             switch drawn {
             case .row(let index):
@@ -1249,7 +1252,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         FrameBuffer(lines: buffer.lines.map { ANSIRenderer.applyPersistentDim($0) })
     }
 
-    /// A gap the size of the dragged row — `.cursor`'s "it lands here".
+    /// The rows in hand as one buffer, in data order — what travels together,
+    /// and so what the slot has to make room for. `nil` for no rows at all (an
+    /// external drag hovering, which has no rows of ours to show).
+    private func stacked(_ buffers: [FrameBuffer]) -> FrameBuffer? {
+        guard !buffers.isEmpty else { return nil }
+        return FrameBuffer(lines: buffers.flatMap(\.lines))
+    }
+
+    /// A gap the size of the dragged rows — `.cursor`'s "they land here".
     private func blankRow(like buffer: FrameBuffer?) -> FrameBuffer {
         let height = max(1, buffer?.height ?? 1)
         let width = max(1, buffer?.width ?? 1)
@@ -1413,22 +1424,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // the drag session can draw.
                     let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
-                    if let dragSession, let floating = captureHandler.reorderFloatingRow {
-                        if !wasActive, let row = capturedRows.first(where: { $0.index == floating })
-                        {
-                            // Hand the row's own buffer to the session, which
-                            // floats it at the cursor above everything else. Its
-                            // hit regions go — a copy of a row riding the pointer
-                            // must not also be clickable.
-                            var preview = row.row.buffer
+                    let floating = captureHandler.reorderFloatingRows
+                    if let dragSession, !floating.isEmpty {
+                        let carried = floating.compactMap { index in
+                            capturedRows.first { $0.index == index }?.row.buffer
+                        }
+                        if !wasActive, !carried.isEmpty {
+                            // Hand the rows' own buffers to the session, which
+                            // floats them at the cursor above everything else.
+                            // Their hit regions go — a copy of a row riding the
+                            // pointer must not also be clickable.
+                            var preview = FrameBuffer(lines: carried.flatMap(\.lines))
                             preview.hitTestRegions = []
+                            // The whole block travels, so the grab point moves
+                            // down it by however much of the block was above the
+                            // row the pointer took hold of — otherwise a block
+                            // grabbed by its last row hangs from its first.
+                            let above = captureHandler.reorderHeldRowsAboveGrab.reduce(0) { sum, index in
+                                sum + (capturedRows.first { $0.index == index }?.row.buffer.height ?? 1)
+                            }
                             // `begin` trims the preview's padding and clamps
                             // the grab point into what survives, so a press
                             // past the end of a short row still anchors the
                             // floating copy under the pointer.
                             dragSession.begin(
                                 payload: RowReorderPayload(), preview: preview,
-                                grabX: grab.x, grabY: grab.y)
+                                grabX: grab.x, grabY: grab.y + above)
                         } else {
                             // …and advance it on every later movement. `begin`
                             // samples the cursor once; only `dragMoved` tracks

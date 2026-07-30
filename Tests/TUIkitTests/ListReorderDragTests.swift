@@ -33,6 +33,9 @@ struct ListReorderDragTests {
     private final class Fixture {
         var items: [String]
         let reorderable: Bool
+        /// Rows selected before the gesture starts. Non-empty switches the list
+        /// to multi-selection, which is what makes a drag pick up a block.
+        var selection: Set<String> = []
         /// How many times `onMove` has fired — the difference between "the list
         /// is the preview" and "the drop is the move".
         private(set) var moves = 0
@@ -74,8 +77,14 @@ struct ListReorderDragTests {
                     self.items.move(fromOffsets: $0, toOffset: $1)
                 }
                 : base
-            let view = List(selection: .constant(String?.none)) { forEach }
-                .frame(height: 9)
+            let view: AnyView =
+                selection.isEmpty
+                ? AnyView(List(selection: .constant(String?.none)) { forEach }.frame(height: 9))
+                : AnyView(
+                    List(
+                        selection: Binding(
+                            get: { self.selection }, set: { self.selection = $0 })
+                    ) { forEach }.frame(height: 9))
             var context = RenderContext(
                 availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
             context.hasExplicitHeight = true
@@ -525,6 +534,56 @@ struct ListReorderDragTests {
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "a")))
         #expect(!session.autoScrollArmed, "and disarm on the drop")
+    }
+
+    // MARK: - Several rows at once
+
+    /// Every row in hand has to be visible and moving. The slot stands for the
+    /// whole block, so it is as tall as the rows it holds — showing only the
+    /// grabbed one looked exactly like the rest had been deleted.
+    @Test("A dimmed multi-row drag shows every row it is carrying")
+    func dimmedMultiRowShowsThemAll() {
+        let fixture = Fixture(feedback: .dimmed)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        let height = buffer.height
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        let dragging = fixture.render()
+        #expect(fixture.handler?.heldRowCount == 2, "the whole selection came")
+
+        let lines = dragging.lines.map(\.stripped)
+        #expect(lines.contains { $0.contains("a") }, "the grabbed row is on screen")
+        #expect(lines.contains { $0.contains("b") }, "and so is the one travelling with it")
+        #expect(dragging.height == height, "and the list is no taller for it")
+    }
+
+    /// `.cursor` carries the block on the pointer, so the float is as tall as
+    /// the block: one line per row, not just the row that was grabbed.
+    @Test("A cursor multi-row drag floats every row it is carrying")
+    func cursorMultiRowFloatsThemAll() {
+        let fixture = Fixture(feedback: .cursor)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+
+        let preview = session.active?.preview
+        #expect(preview?.height == 2, "both rows ride the pointer")
+        let floating = (preview?.lines ?? []).map(\.stripped)
+        #expect(floating.first?.contains("a") == true)
+        #expect(floating.last?.contains("b") == true)
+        // Grabbed by its SECOND row, so the block hangs one line higher than
+        // its top — otherwise it jumps up under the pointer as the drag starts.
+        #expect(session.active?.grabY == 1, "the grabbed row stays under the cursor")
     }
 
     /// A drag has to be carriable across the app — pick a row up on one page,

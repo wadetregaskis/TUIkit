@@ -563,6 +563,25 @@ extension ItemListHandler {
         return reorderSource
     }
 
+    /// EVERY row a ``RowReorderFeedback/cursor`` drag is carrying, in data
+    /// order — stacked, they are what the float shows and what the gap makes
+    /// room for. One row is the ordinary case; a multi-row gesture carries the
+    /// whole selection, and showing only the grabbed one of them looked exactly
+    /// like the rest had been deleted.
+    var reorderFloatingRows: [Int] {
+        guard effectiveReorderFeedback == .cursor else { return [] }
+        return Array(reorderRemovedRows)
+    }
+
+    /// The rows in hand that sit above the one the pointer grabbed — the part
+    /// of the floating stack drawn before it, and so the distance the grab
+    /// point moves down within the stack. Without it a multi-row drag hangs
+    /// from its first row however far down the block you took hold.
+    var reorderHeldRowsAboveGrab: [Int] {
+        guard let reorder else { return [] }
+        return reorder.held.filter { $0 < reorder.grabbedOffset }
+    }
+
     /// Where the dragged row would land — what `.dimmed` and `.cursor` open a
     /// slot for (a faint copy of the row, and an empty gap, respectively).
     ///

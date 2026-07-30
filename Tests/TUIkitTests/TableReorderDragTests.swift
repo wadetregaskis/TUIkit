@@ -36,6 +36,9 @@ struct TableReorderDragTests {
     private final class Fixture {
         var rows: [String]
         let reorderable: Bool
+        /// Rows selected before the gesture. Non-empty switches the table to
+        /// multi-selection, which is what makes a drag pick up a block.
+        var selection: Set<String> = []
         private(set) var moves = 0
         let tui = TUIContext()
         var env = EnvironmentValues()
@@ -59,16 +62,25 @@ struct TableReorderDragTests {
         @discardableResult
         func render() -> FrameBuffer {
             dispatcher.beginRenderPass()
-            let base = Table(rows.map(Row.init), selection: .constant(String?.none)) {
-                TableColumn<Row>("Name", value: \.name)
+            let move: (IndexSet, Int) -> Void = {
+                self.moves += 1
+                self.rows.move(fromOffsets: $0, toOffset: $1)
             }
-            let table =
-                reorderable
-                ? base.onMove {
-                    self.moves += 1
-                    self.rows.move(fromOffsets: $0, toOffset: $1)
+            let table: AnyView
+            if selection.isEmpty {
+                let base = Table(rows.map(Row.init), selection: .constant(String?.none)) {
+                    TableColumn<Row>("Name", value: \.name)
                 }
-                : base
+                table = AnyView(reorderable ? AnyView(base.onMove(move)) : AnyView(base))
+            } else {
+                let base = Table(
+                    rows.map(Row.init),
+                    selection: Binding(get: { self.selection }, set: { self.selection = $0 })
+                ) {
+                    TableColumn<Row>("Name", value: \.name)
+                }
+                table = AnyView(reorderable ? AnyView(base.onMove(move)) : AnyView(base))
+            }
             let view = table.frame(width: 20, height: 9)
             var context = RenderContext(
                 availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
@@ -427,5 +439,51 @@ struct TableReorderDragTests {
         func rowY(_ buffer: FrameBuffer, _ label: String) -> Int {
             buffer.lines.firstIndex { $0.stripped.contains(label) } ?? -1
         }
+    }
+    // MARK: - Several rows at once
+
+    /// The `List` twin of this pair lives in ListReorderDragTests; the two views
+    /// hold the same rule in two places and keep drifting, so both are asserted.
+    /// Every row in hand has to be visible and moving — the slot stands for the
+    /// whole block, so it is as tall as the rows it holds.
+    @Test("A dimmed multi-row drag shows every row it is carrying")
+    func dimmedMultiRowShowsThemAll() {
+        let fixture = Fixture(feedback: .dimmed)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        let height = buffer.height
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        let dragging = fixture.render()
+
+        let letters = dragging.lines.map { $0.stripped.filter(\.isLetter) }
+        #expect(letters.contains("a"), "the grabbed row is on screen")
+        #expect(letters.contains("b"), "and so is the one travelling with it")
+        #expect(dragging.height == height, "and the table is no taller for it")
+    }
+
+    /// `.cursor` carries the block on the pointer, so the float is as tall as
+    /// the block: one line per row, not just the row that was grabbed.
+    @Test("A cursor multi-row drag floats every row it is carrying")
+    func cursorMultiRowFloatsThemAll() {
+        let fixture = Fixture(feedback: .cursor)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+
+        let floating = (session.active?.preview.lines ?? []).map { $0.stripped.filter(\.isLetter) }
+        #expect(floating == ["a", "b"], "both rows ride the pointer, in order")
+        // Grabbed by its SECOND row, so the block hangs one line higher than its
+        // top — otherwise it jumps up under the pointer as the drag starts.
+        #expect(session.active?.grabY == 1, "the grabbed row stays under the cursor")
     }
 }
