@@ -174,6 +174,71 @@ struct DatePickerTests {
             "the 2 started a fresh number — it did not extend the abandoned 1 into 12")
     }
 
+    // MARK: - Mouse wheel
+
+    /// Renders a date-only picker and returns the dispatcher plus the field's
+    /// on-screen row, so a test can put the wheel over a chosen column.
+    private func wheelHarness(
+        _ sink: DateSink
+    ) -> (dispatcher: MouseEventDispatcher, y: Int, x: (Int) -> Int)? {
+        let context = makeRenderContext(width: 40, height: 1)
+        guard let dispatcher = context.environment.mouseEventDispatcher else { return nil }
+        dispatcher.setActiveSupport(.standard)
+        let view = DatePicker(selection: sink.binding, displayedComponents: .date) { EmptyView() }
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let region = buffer.hitTestRegions.max(by: { $0.width < $1.width }) else { return nil }
+        // "YYYY-MM-DD" — year at +0…3, month at +5…6, day at +8…9.
+        return (dispatcher, region.offsetY, { region.offsetX + $0 })
+    }
+
+    /// The wheel follows this control's OWN Up arrow (up = later). Stepper and
+    /// Slider point the other way, which reads correctly on a horizontal track
+    /// but would contradict the date field's arrows.
+    @Test("Wheel up steps the pointed field forward, wheel down back")
+    func wheelStepsThePointedField() {
+        let sink = DateSink(date(2026, 3, 5))
+        guard let (dispatcher, y, x) = wheelHarness(sink) else {
+            Issue.record("expected a date-picker hit-test region"); return
+        }
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(5), y: y))
+        #expect(calendar.component(.month, from: sink.value) == 4, "wheel up over the month")
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: x(5), y: y))
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: x(5), y: y))
+        #expect(calendar.component(.month, from: sink.value) == 2, "and back down past the start")
+        #expect(calendar.component(.day, from: sink.value) == 5, "no other field moved")
+    }
+
+    /// Pointing at a field is enough — no click first. This is what makes the
+    /// wheel worth having over Up/Down, which only reach the active field.
+    @Test("The field under the pointer takes the step and becomes active")
+    func wheelRetargetsTheActiveField() {
+        let sink = DateSink(date(2026, 3, 5))
+        guard let (dispatcher, y, x) = wheelHarness(sink) else {
+            Issue.record("expected a date-picker hit-test region"); return
+        }
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(0), y: y))
+        #expect(calendar.component(.year, from: sink.value) == 2027, "the year, not the default field")
+
+        let before = sink.value
+        // Column 4 is the "-" separator: nobody owns it, so the field the
+        // previous tick activated keeps the step.
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(4), y: y))
+        #expect(calendar.component(.year, from: sink.value) == 2028)
+        #expect(sink.value != before)
+    }
+
+    /// A value control swallows the wheel; otherwise a tick aimed at the month
+    /// would also scroll the page out from under the pointer.
+    @Test("A wheel tick is swallowed, not chained to the page")
+    func wheelIsSwallowed() {
+        let sink = DateSink(date(2026, 3, 5))
+        guard let (dispatcher, y, x) = wheelHarness(sink) else {
+            Issue.record("expected a date-picker hit-test region"); return
+        }
+        #expect(dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: x(5), y: y)))
+    }
+
     @Test("Tab and Enter are not consumed (focus can leave)")
     func focusKeysPropagate() {
         let handler = handler(DateSink(date(2026, 3, 5)), .date)

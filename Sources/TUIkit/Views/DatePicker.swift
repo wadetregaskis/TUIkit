@@ -295,7 +295,9 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
     }
 
     /// One wide region: a left-click focuses the field and selects the component
-    /// under the cursor; the wheel adjusts the active component.
+    /// under the cursor; the wheel steps the component under the pointer (the
+    /// active one if the pointer is on a separator) and is swallowed, so it
+    /// never also scrolls an enclosing page.
     private func registerMouse(
         context: RenderContext, buffer: inout FrameBuffer, handler: DatePickerHandler,
         cells: [DateFieldModel.Cell], isDisabled: Bool
@@ -306,6 +308,26 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let focusManager = context.environment.focusManager
         let focusID = handler.focusID
         let handlerID = mouseDispatcher.register { event in
+            switch event.button {
+            case .scrollUp, .scrollDown:
+                // The field under the pointer takes the step and becomes the
+                // active one; over a separator the active field keeps it.
+                if let index = componentIndex(at: event.x, cells: cells) {
+                    handler.activeIndex = index
+                }
+                focusManager?.focus(id: focusID)
+                // Wheel up increments, matching THIS control's Up arrow.
+                // Stepper and Slider point the other way ("wheel up = towards
+                // smaller"), which reads correctly on a horizontal track but
+                // would contradict the date field's own arrows: pointing at
+                // the month and rolling up must do what pressing Up does.
+                handler.adjust(by: event.button == .scrollUp ? 1 : -1)
+                // Swallowed, not chained: this is a value control, so the
+                // wheel must not also scroll the page underneath it.
+                return true
+            default:
+                break
+            }
             switch event.phase {
             case .pressed where event.button == .left:
                 // Claim the press so the dispatcher's drag capture pins the

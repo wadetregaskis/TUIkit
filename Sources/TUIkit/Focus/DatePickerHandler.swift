@@ -85,7 +85,10 @@ final class DatePickerHandler: Focusable {
 
     /// Moves the active component by `delta`, wrapping within the field exactly
     /// as Up/Down do — Page Up from December is March, not next year.
-    private func adjust(by delta: Int) {
+    ///
+    /// Shared by Up/Down, Page Up/Down and the mouse wheel, so all three clear a
+    /// half-typed digit the same way.
+    func adjust(by delta: Int) {
         selection.wrappedValue = model.adjusted(
             date: selection.wrappedValue, kind: activeKind, by: delta)
         digitBuffer = ""
