@@ -1341,15 +1341,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                             // must not also be clickable.
                             var preview = row.row.buffer
                             preview.hitTestRegions = []
-                            // Clamped into the preview: a row's buffer is only
-                            // as wide as its own content, so a press on the
-                            // padding past the end of a short row would anchor
-                            // the floating copy off to one side of the pointer
-                            // instead of under it.
+                            // `begin` trims the preview's padding and clamps
+                            // the grab point into what survives, so a press
+                            // past the end of a short row still anchors the
+                            // floating copy under the pointer.
                             dragSession.begin(
                                 payload: RowReorderPayload(), preview: preview,
-                                grabX: min(grab.x, max(0, preview.width - 1)),
-                                grabY: min(grab.y, max(0, preview.height - 1)))
+                                grabX: grab.x, grabY: grab.y)
                         } else {
                             // …and advance it on every later movement. `begin`
                             // samples the cursor once; only `dragMoved` tracks

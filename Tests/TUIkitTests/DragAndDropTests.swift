@@ -302,6 +302,40 @@ struct DragAndDropTests {
         #expect(tui.dragAndDropSession.active == nil)
     }
 
+    /// The preview is composited opaquely, cell for cell, so a row padded out
+    /// to its container's width (an `HStack` with a `Spacer`, i.e. every list
+    /// row) used to wipe a column of the screen per blank it carried. The
+    /// erasure itself is pinned in `FrameBufferTests`; this pins that the
+    /// padding never reaches the session.
+    @Test("A padded row is trimmed to its content before it floats")
+    func previewIsTrimmedToItsContent() {
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        let tree = HStack(spacing: 0) {
+            Text("AB")
+            Spacer()
+        }
+        .frame(width: 12)
+        .draggable("apple")
+        let buffer = renderToBuffer(tree, context: context)
+        #expect(buffer.width == 12, "the row itself is padded to its frame")
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // Grab in the PADDING, past the end of the text: the grab point has to
+        // come back inside what survives the trim, or the floating copy jumps
+        // off to the left of the pointer.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 9, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 9, y: 3))
+        let frame = tui.dragAndDropSession.previewFrame()
+        #expect(frame?.width == 2, "trimmed to \"AB\": \(String(describing: frame))")
+        #expect(frame?.x == 8, "and anchored one cell left of the cursor, not nine")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 9, y: 3))
+    }
+
     @Test("dragPreviewAnchor(.offset) trails the cursor; DropInfo reports the frame")
     func offsetAnchorAndDropInfoFrame() {
         let log = DropLog()

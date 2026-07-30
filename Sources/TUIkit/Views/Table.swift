@@ -1547,7 +1547,7 @@ where Value.ID: Hashable {
                             let preview = FrameBuffer(lines: [visibleRowLines[offset]])
                             dragSession.begin(
                                 payload: RowReorderPayload(), preview: preview,
-                                grabX: min(grab.x, max(0, preview.width - 1)), grabY: 0)
+                                grabX: grab.x, grabY: 0)  // `begin` trims and clamps
                         } else {
                             // `begin` samples the cursor once; only `dragMoved`
                             // tracks it — see the same call in _ListCore.

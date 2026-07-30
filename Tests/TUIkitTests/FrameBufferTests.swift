@@ -226,4 +226,52 @@ struct OverlayTests {
             !endsUnderlined(result.lines[0]),
             "padding after the overlay must not inherit the header underline")
     }
+
+    // MARK: - Trimming trailing blanks
+
+    /// Compositing is opaque per cell, so anything drawn OVER the screen — the
+    /// floating drag preview above all — erases a column for every blank it
+    /// carries. A list row padded to its container's width is nearly all blanks.
+    @Test("Trailing blank cells are trimmed, and stop erasing what they cover")
+    func trimmingTrailingBlanks() {
+        let padded = FrameBuffer(lines: ["AB" + String(repeating: " ", count: 10)])
+        #expect(padded.width == 12)
+        let trimmed = padded.trimmingTrailingBlankCells()
+        #expect(trimmed.width == 2)
+
+        let base = FrameBuffer(lines: ["UNDERNEATH.."])
+        #expect(
+            base.composited(with: padded, at: (x: 0, y: 0)).lines[0].stripped == "AB          ",
+            "the untrimmed preview blanks the rest of the row")
+        #expect(
+            base.composited(with: trimmed, at: (x: 0, y: 0)).lines[0].stripped == "ABDERNEATH..",
+            "the trimmed one covers only its own two cells")
+    }
+
+    /// On a selected or filled row the trailing blanks ARE the fill. Trimming
+    /// them would turn a highlighted floating row into a ragged one.
+    @Test("Trailing blanks that carry a background are kept")
+    func trimmingKeepsStyledBlanks() {
+        let filled = FrameBuffer(lines: ["\u{1B}[44mAB        \u{1B}[0m"])
+        #expect(filled.trimmingTrailingBlankCells().width == 10, "the fill is content")
+
+        // …but a background that has been switched off again is just padding.
+        let reset = FrameBuffer(lines: ["\u{1B}[44mAB\u{1B}[0m        "])
+        #expect(reset.trimmingTrailingBlankCells().width == 2)
+
+        // And a line whose every cell is a blank with no styling disappears —
+        // which is what lets a blank slot row float over nothing.
+        #expect(FrameBuffer(lines: ["    "]).trimmingTrailingBlankCells().width == 0)
+    }
+
+    /// Ragged is fine: each line keeps its own silhouette, and `composited`
+    /// already writes line by line.
+    @Test("A multi-line preview trims each line independently")
+    func trimmingIsPerLine() {
+        let buffer = FrameBuffer(lines: ["one   ", "t     ", "three "])
+        let trimmed = buffer.trimmingTrailingBlankCells()
+        #expect(trimmed.lines.map(\.strippedLength) == [3, 1, 5])
+        #expect(trimmed.width == 5)
+        #expect(!trimmed.linesAreUniformWidth)
+    }
 }

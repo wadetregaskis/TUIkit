@@ -596,6 +596,54 @@ public func asciiSpaces(_ count: Int) -> Substring {
 }
 
 extension String {
+    /// The visible width of this line up to its last cell that must be painted
+    /// — everything after it is unstyled blank space that an overlay has no
+    /// business writing.
+    ///
+    /// Compositing is opaque per cell (see ``FrameBuffer/composited(with:at:)``),
+    /// so a floating drag preview writes its padding as blank cells and erases
+    /// whatever it passes over. Trailing blanks that carry a BACKGROUND are
+    /// kept: on a selected or filled row they are the fill, not padding.
+    func visibleWidthBeforeTrailingBlanks() -> Int {
+        var width = 0
+        var keep = 0
+        var background = false
+        for segment in ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                if isSGR { background = Self.background(after: sequence, wasSet: background) }
+            case .visible(let character):
+                width += character.terminalWidth
+                if character != " " || background { keep = width }
+            }
+        }
+        return keep
+    }
+
+    /// Whether a background colour is in force after `sequence`, given that it
+    /// `wasSet` before. Parameters are applied in order, so `ESC[0;41m` ends up
+    /// set and `ESC[41;0m` does not.
+    private static func background(after sequence: String, wasSet: Bool) -> Bool {
+        var background = wasSet
+        let body = sequence.dropFirst(2).dropLast()  // strip "ESC[" and the final "m"
+        var parameters = body.split(separator: ";", omittingEmptySubsequences: false)
+            .map { Int($0) ?? 0 }
+        if parameters.isEmpty { parameters = [0] }  // a bare ESC[m is a reset
+        var index = 0
+        while index < parameters.count {
+            switch parameters[index] {
+            case 0, 49: background = false
+            case 40...47, 100...107: background = true
+            case 48:
+                background = true
+                index = parameters.count  // its own arguments follow; nothing else to read
+            default: break
+            }
+            index += 1
+        }
+        return background
+    }
+
     /// The visible width of the string in terminal cells, excluding ANSI escape codes.
     ///
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells

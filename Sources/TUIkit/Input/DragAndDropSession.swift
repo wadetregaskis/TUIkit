@@ -221,9 +221,18 @@ final class DragAndDropSession: @unchecked Sendable {
         anchor: DragPreviewAnchor = .grabPoint
     ) {
         guard let event = lastAbsoluteEvent else { return }
+        // The preview rides above everything and paints every cell it has, so
+        // a row padded to its list's width would erase a column of the screen
+        // per blank. Trimmed HERE rather than at each producer, so all three
+        // (`.draggable`, and List's and Table's `.cursor` reorder) agree.
+        let preview = preview.trimmingTrailingBlankCells()
+        // Clamped AFTER the trim: a press in the padding must still anchor the
+        // image to the cursor, not to a column the preview no longer has.
         active = ActiveDrag(
             payload: payload, preview: preview,
-            grabX: grabX, grabY: grabY, anchor: anchor,
+            grabX: min(max(0, grabX), max(0, preview.width - 1)),
+            grabY: min(max(0, grabY), max(0, preview.height - 1)),
+            anchor: anchor,
             cursorX: event.x, cursorY: event.y, targetedID: nil, targeted: nil)
         dragMoved()
     }

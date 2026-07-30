@@ -488,8 +488,12 @@ extension FrameBuffer {
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
     ///
-    /// This performs character-level compositing: overlay characters replace base characters
-    /// only where the overlay has visible content (non-space characters).
+    /// Compositing is OPAQUE per cell: every cell of the overlay replaces the
+    /// base cell under it, blanks included. Only a zero-length overlay line is
+    /// skipped. That is deliberate — `ZStack` backgrounds, dialog interiors and
+    /// the modal dim all depend on blank cells painting — so a buffer that
+    /// should not erase what it covers must be trimmed before it gets here (see
+    /// ``trimmingTrailingBlankCells()``).
     ///
     /// - Parameters:
     ///   - overlay: The buffer to composite on top.
@@ -571,6 +575,32 @@ extension FrameBuffer {
     ///   - width: The maximum visible width in cells. Values below 0 are treated as 0.
     ///   - height: The maximum number of lines. Values below 0 are treated as 0.
     /// - Returns: A buffer with `width <= max(0, width)` and `height <= max(0, height)`.
+    /// A copy with each line's trailing unstyled blank cells removed.
+    ///
+    /// For buffers that are drawn OVER something — a floating drag preview,
+    /// above all. Compositing is opaque per cell, so a row padded to its
+    /// container's width erases a column of whatever it passes over for every
+    /// blank it carries. Trailing blanks that carry a background are kept:
+    /// there they are fill, not padding.
+    ///
+    /// Lines are left ragged, which ``FrameBuffer`` supports (see
+    /// ``linesAreUniformWidth``) and ``composited(with:at:)`` honours line by
+    /// line — so a multi-line preview keeps its own silhouette.
+    public func trimmingTrailingBlankCells() -> FrameBuffer {
+        var trimmed = lines
+        var changed = false
+        for index in trimmed.indices {
+            let keep = trimmed[index].visibleWidthBeforeTrailingBlanks()
+            guard keep < trimmed[index].strippedLength else { continue }
+            trimmed[index] = trimmed[index].ansiAwarePrefix(visibleCount: keep)
+            changed = true
+        }
+        guard changed else { return self }
+        var copy = self
+        copy.lines = trimmed  // didSet remeasures the width and drops the stale per-line widths
+        return copy
+    }
+
     public func clamped(toWidth width: Int, height: Int) -> FrameBuffer {
         let maxWidth = max(0, width)
         let maxHeight = max(0, height)
