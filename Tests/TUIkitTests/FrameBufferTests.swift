@@ -264,6 +264,40 @@ struct OverlayTests {
         #expect(FrameBuffer(lines: ["    "]).trimmingTrailingBlankCells().width == 0)
     }
 
+    // MARK: - Pointer-anchored overlays
+
+    /// The bug a fixture could not see: an overlay wider than the space to its
+    /// right was SLID back on screen. Right for a drop-down, fatal for anything
+    /// pinned to the pointer — a wide drag preview stopped following the cursor
+    /// after a few cells and then painted over whatever was at the right edge.
+    @Test("A pointer-anchored overlay is clipped at the edge, not slid back")
+    func pointerAnchoredOverlayClipsInsteadOfSliding() {
+        let wide = FrameBuffer(lines: [String(repeating: "X", count: 10)])
+        let popover = OverlayLayer(offsetX: 15, offsetY: 0, content: wide)
+        let pinned = OverlayLayer(offsetX: 15, offsetY: 0, content: wide, clampsToScreen: false)
+
+        let slid = popover.placed(maxWidth: 20, maxHeight: 5)
+        #expect(slid.x == 10, "a popover slides left to stay whole")
+        #expect(slid.content.width == 10)
+
+        let clipped = pinned.placed(maxWidth: 20, maxHeight: 5)
+        #expect(clipped.x == 15, "the pinned one stays where the pointer put it")
+        #expect(clipped.content.width == 5, "and loses what hangs off the edge")
+    }
+
+    /// Off the LEFT edge the overhang has to come off the content too: the
+    /// compositor cannot take a negative column.
+    @Test("A pointer-anchored overlay clipped at the left edge drops columns")
+    func pointerAnchoredOverlayClipsLeftEdge() {
+        let content = FrameBuffer(lines: ["ABCDEFGH", "abcdefgh"])
+        let pinned = OverlayLayer(offsetX: -3, offsetY: -1, content: content, clampsToScreen: false)
+        let placed = pinned.placed(maxWidth: 20, maxHeight: 5)
+        #expect(placed.x == 0 && placed.y == 0)
+        #expect(
+            placed.content.lines.map(\.stripped) == ["defgh"],
+            "the first three columns and the first row are gone: \(placed.content.lines)")
+    }
+
     /// Ragged is fine: each line keeps its own silhouette, and `composited`
     /// already writes line by line.
     @Test("A multi-line preview trims each line independently")

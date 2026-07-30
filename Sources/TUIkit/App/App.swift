@@ -546,7 +546,11 @@ extension WindowGroup: SceneRenderable {
                     offsetX: frame.x,
                     offsetY: frame.y,
                     content: drag.preview,
-                    level: .notification
+                    level: .notification,
+                    // Pinned to the pointer: clipped at the screen edge, never
+                    // slid back onto it. Sliding is what made a wide preview
+                    // stop following the cursor a few cells in.
+                    clampsToScreen: false
                 )
             )
         } else if let step = dragSession?.returnFlightFrame {
@@ -556,7 +560,7 @@ extension WindowGroup: SceneRenderable {
             centered.overlays.append(
                 OverlayLayer(
                     offsetX: step.x, offsetY: step.y,
-                    content: step.preview, level: .notification))
+                    content: step.preview, level: .notification, clampsToScreen: false))
         }
         return centered
     }

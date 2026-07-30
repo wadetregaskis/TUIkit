@@ -112,8 +112,10 @@ public struct OverlayLayer: Sendable, Equatable {
         zIndex: Double = 0,
         anchorHeight: Int = 0,
         centered: Bool = false,
-        dimsBackground: Bool = false
+        dimsBackground: Bool = false,
+        clampsToScreen: Bool = true
     ) {
+        self.clampsToScreen = clampsToScreen
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.content = content
@@ -132,6 +134,17 @@ public struct OverlayLayer: Sendable, Equatable {
     /// can't fit. If it would then overflow the bottom edge it is flipped to sit
     /// *above* its anchor (when ``anchorHeight`` allows); otherwise it is nudged
     /// back up. The same nudge keeps it within the right edge.
+    /// Whether an overhanging layer is moved back on screen (`true`, the
+    /// pop-over policy) or CLIPPED where it is (`false`).
+    ///
+    /// Moving is right for a menu: a drop-down that would run off the right
+    /// edge slides left and stays whole. It is exactly wrong for anything
+    /// anchored to the pointer, which must stay where the pointer is even when
+    /// part of it falls off the screen — a drag preview that slides back is a
+    /// row that stops following the cursor, and the wider the preview the
+    /// sooner it happens. (A full-width Table row detached after three cells.)
+    public var clampsToScreen: Bool = true
+
     public func placed(maxWidth: Int, maxHeight: Int) -> (content: FrameBuffer, x: Int, y: Int) {
         var clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
         // `clamped(toWidth:height:)` deliberately keeps ALL hit-test regions —
@@ -173,6 +186,24 @@ public struct OverlayLayer: Sendable, Equatable {
             let x = min(max(0, centeredX), max(0, maxWidth - width))
             let y = min(max(0, centeredY), max(0, maxHeight - height))
             return (clamped, x, y)
+        }
+
+        // Pointer-anchored: stay put and lose what falls off the edges. The
+        // compositor grows its result to fit an overlay and cannot take a
+        // negative column, so the overhang is cut from the CONTENT rather than
+        // handed on as an out-of-range offset.
+        if !clampsToScreen {
+            let x = max(0, offsetX)
+            let y = max(0, offsetY)
+            let dropX = x - offsetX  // columns cut off the left edge
+            let dropY = y - offsetY
+            var visible = clamped
+            if dropY > 0 { visible.lines = Array(visible.lines.dropFirst(dropY)) }
+            if dropX > 0 {
+                visible.lines = visible.lines.map { $0.ansiAwareSuffix(droppingVisible: dropX) }
+            }
+            visible = visible.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
+            return (visible, x, y)
         }
 
         var y = offsetY

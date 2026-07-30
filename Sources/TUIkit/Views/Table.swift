@@ -266,6 +266,9 @@ where Value.ID: Hashable {
     /// `rowContentLeft` in `attachMouseHandlers`.
     static var containerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
 
+    /// The gap between columns in a row that is riding the pointer.
+    static var previewColumnSpacing: Int { 2 }
+
     let data: [Value]
     let columns: [TableColumn<Value>]
     let singleSelection: Binding<Value.ID?>?
@@ -1445,7 +1448,11 @@ where Value.ID: Hashable {
             return renderRow(
                 item: data[index], columnWidths: columnWidths,
                 isFocused: false, isSelected: false, rowWidth: rowContentWidth,
-                context: context, palette: palette)
+                context: context, palette: palette,
+                // Condensed: the float is a thing in your hand, not a slice of
+                // the grid, and the grid's column spacing makes it needlessly
+                // wide — which also drives it off the screen edge sooner.
+                columnSpacing: Self.previewColumnSpacing)
         }
         // Where a ROW LINE's first cell sits in the buffer: past the border and
         // past the container's own padding. Not the same as the first clickable
@@ -1801,9 +1808,10 @@ where Value.ID: Hashable {
         isSelected: Bool,
         rowWidth: Int,
         context: RenderContext,
-        palette: any Palette
+        palette: any Palette,
+        columnSpacing overrideSpacing: Int? = nil
     ) -> String {
-        let spacing = String(repeating: " ", count: columnSpacing)
+        let spacing = String(repeating: " ", count: overrideSpacing ?? columnSpacing)
         let visualState = rowVisualState(
             isFocused: isFocused,
             isSelected: isSelected,
