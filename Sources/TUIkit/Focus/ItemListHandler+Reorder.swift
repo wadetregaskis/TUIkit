@@ -145,8 +145,14 @@ extension ItemListHandler {
         // disjoint selection into a block, but nothing can scatter it back.
         // So several rows in hand always preview with a slot.
         if heldRowCount > 1, reorderFeedback == .live { return .dimmed }
+        // A move started from the KEYBOARD always previews dimmed, whatever the
+        // view asked for. A mouse drag needs no mode indicator — the pointer is
+        // one — but Ctrl-R puts the control into a state the user cannot see
+        // otherwise, and `.live` (which just shuffles the data) shows nothing at
+        // all. The faint copy at the slot IS the indicator.
+        if isKeyboardMove { return .dimmed }
         guard reorderFeedback == .cursor else { return reorderFeedback }
-        return (isKeyboardMove || !canFloatDraggedRow) ? .dimmed : .cursor
+        return canFloatDraggedRow ? .cursor : .dimmed
     }
 
     // MARK: - Moving a row from the keyboard
@@ -334,9 +340,14 @@ extension ItemListHandler {
     private func handleKeyboardMoveKey(_ event: KeyEvent) -> Bool? {
         if let bound = shortcuts.action(for: event), heldRowChord(bound) { return true }
         let page = pageStep
+        // Shift is the coarse step here too. It cannot arrive as an accelerated
+        // CHORD the way a nudge does — this mode claims the BARE arrows, which
+        // no binding names — so the multiplier is applied on this path as well.
+        // Page/Home/End ignore it: a screenful and an end are already coarse.
+        let step = event.shift ? max(1, shiftStepMultiplier) : 1
         switch event.key {
-        case .up: moveHeldRow(by: -1)
-        case .down: moveHeldRow(by: 1)
+        case .up: moveHeldRow(by: -step)
+        case .down: moveHeldRow(by: step)
         case .pageUp: moveHeldRow(by: -page)
         case .pageDown: moveHeldRow(by: page)
         case .home: moveHeldRow(to: 0)

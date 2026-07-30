@@ -357,4 +357,14 @@ strips modifiers from <kbd>↑</kbd>/<kbd>↓</kbd> specifically, which is why
 ``RowAction/pickUpRow`` — which needs no modifier at all — remains the route
 that always works.
 
+Holding <kbd>Shift</kbd> with any of the movement keys moves the row by the
+`shiftStepMultiplier` coarse step, the same as it does for the cursor.
+
+A move started from the keyboard always previews with a slot — the row shown
+faint where it would land — whatever ``RowReorderFeedback`` the view asked for.
+A mouse drag needs no indication that it is happening; the pointer is one.
+<kbd>Ctrl</kbd>+<kbd>R</kbd> puts the control into a state that is otherwise
+invisible, and `.live` — which only shuffles the data — would show nothing at
+all.
+
 Every chord here is rebindable — see ``RowShortcuts``.

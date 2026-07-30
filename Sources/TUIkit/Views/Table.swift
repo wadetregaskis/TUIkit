@@ -1329,7 +1329,10 @@ where Value.ID: Hashable {
             item: data[source], columnWidths: columnWidths,
             isFocused: held, isSelected: held, rowWidth: rowWidth,
             context: context, palette: palette)
-        guard !held else { return line }
+        // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
+        // steering this", the dim says "it is not in the list right now", and
+        // both are true at once. Substituting one for the other is why a Table
+        // stopped dimming as soon as the move came from the keyboard.
         // Persistent: `renderRow` emits a reset per styled run — starting with
         // the selection-indicator gutter, so a bare wrapper died at cell one.
         return ANSIRenderer.applyPersistentDim(line)

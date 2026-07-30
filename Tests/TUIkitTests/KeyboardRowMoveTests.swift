@@ -302,17 +302,37 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["a", "b", "c", "d", "e"], "c moved down two")
     }
 
+    @Test("Shift makes the held row jump by the multiplier too")
+    func shiftAcceleratesTheHeldRow() {
+        let rows = RowBox()
+        let handler = makeHandler(rows, feedback: .dimmed)
+        handler.shiftStepMultiplier = 3
+        handler.focusedIndex = 0
+        #expect(pickUp(handler))
+        // The bare arrows belong to the mode, so Shift cannot arrive as a bound
+        // chord — the multiplier has to be applied on that path as well.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down, shift: true)))
+        #expect(handler.reorderPlaceholder?.slot == 3, "three slots down, not one")
+        #expect(press(handler, .enter))
+        #expect(rows.items == ["b", "c", "d", "a", "e"])
+    }
+
     // MARK: - Feedback
 
-    /// `.live` moves the data as the keys go (one `onMove` per step, as a live
-    /// drag does); the slot modes leave it alone until the drop.
-    @Test("Live feedback moves the data per keystroke; the slot modes do not")
+    /// A KEYBOARD move always previews with a slot, whatever the view asked
+    /// for: the faint copy is the only sign the mode is on, and `.live` — which
+    /// just shuffles the data — shows nothing at all. So no mode moves the data
+    /// until the row is placed.
+    @Test("A keyboard move previews with a slot even when the view asked for .live")
     func feedbackDecidesWhenTheDataMoves() {
         let live = RowBox()
         let liveHandler = makeHandler(live, feedback: .live)
         #expect(pickUp(liveHandler))
+        #expect(liveHandler.effectiveReorderFeedback == .dimmed)
         #expect(press(liveHandler, .down))
-        #expect(live.items == ["b", "a", "c", "d", "e"], "already moved, mid-gesture")
+        #expect(live.items == ["a", "b", "c", "d", "e"], "not yet — the slot moved")
+        #expect(press(liveHandler, .enter))
+        #expect(live.items == ["b", "a", "c", "d", "e"], "…now")
 
         let dimmed = RowBox()
         let dimmedHandler = makeHandler(dimmed, feedback: .dimmed)
