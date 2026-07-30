@@ -574,7 +574,16 @@ extension ItemListHandler {
 
     /// Drops any in-flight reorder without moving anything.
     func cancelReorder() {
+        // `.live` has been moving the data at every step of the drag, so
+        // clearing the state is not a cancel — the row is wherever the pointer
+        // last left it. Put it back where it was picked up. (The slot modes
+        // move nothing until the drop, so for them there is nothing to undo.)
+        if let reorder, reorder.currentOffset != reorder.grabbedOffset {
+            move(from: reorder.currentOffset, to: reorder.grabbedOffset)
+            focusedIndex = reorder.grabbedOffset
+        }
         reorder = nil
+        lastReorderContentY = nil
     }
 
     // MARK: - Moving

@@ -522,6 +522,29 @@ struct ListReorderDragTests {
     /// Escape mid-drag used to fall through to the page — the Example's
     /// "⎋ back" navigated out from under a live drag while the floating
     /// preview kept compositing over the new page until the button came up.
+    /// `.live` moves the data at every step, so clearing the drag state is not
+    /// a cancel — the row is left wherever the pointer last dropped it. Found
+    /// in the live app: the unit test above uses `.cursor`, where nothing has
+    /// moved yet, so it could not see this.
+    @Test("Escape puts a live-reordered row back where it was picked up")
+    func escapeUndoesALiveReorder() {
+        let fixture = Fixture(feedback: .live)
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        fixture.render()
+        #expect(fixture.items != ["a", "b", "c", "d", "e"], "live has already moved it")
+
+        #expect(fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == true)
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "and Escape puts it back")
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "c")))
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+    }
+
     @Test("Escape cancels a drag in flight, and its release is not a click")
     func escapeCancelsAMouseDrag() {
         let fixture = Fixture(feedback: .cursor)
