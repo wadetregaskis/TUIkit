@@ -209,6 +209,19 @@ extension ItemListHandler {
     /// chord that picks one up. `nil` when neither applies, so the key goes on
     /// to mean whatever it usually means.
     func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
+        // A MOUSE drag in flight: the cancel chord puts the row back. It has to
+        // be answered here rather than in the selection keys, which only run in
+        // multi-selection mode — and the button is still down, so a release is
+        // still coming: without the latch it would fall into the click path and
+        // select whatever row the pointer happens to be over.
+        if isReordering, !isKeyboardMove,
+            shortcuts.action(for: event)?.action == .cancelMove
+        {
+            cancelReorder()
+            reorderCancelled = true
+            dragSession?.end()
+            return true
+        }
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
         // Chords, so they work in either selection mode.
         guard let (action, accelerated) = shortcuts.action(for: event) else { return nil }

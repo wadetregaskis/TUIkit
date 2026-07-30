@@ -519,6 +519,34 @@ struct ListReorderDragTests {
         #expect(!session.autoScrollArmed, "and disarm on the drop")
     }
 
+    /// Escape mid-drag used to fall through to the page — the Example's
+    /// "⎋ back" navigated out from under a live drag while the floating
+    /// preview kept compositing over the new page until the button came up.
+    @Test("Escape cancels a drag in flight, and its release is not a click")
+    func escapeCancelsAMouseDrag() {
+        let fixture = Fixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+        #expect(session.active != nil, "carrying a row")
+
+        #expect(fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == true)
+        #expect(session.active == nil, "the floating row goes down at once")
+        fixture.render()
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "and the row goes back")
+
+        // The button is still down — the release must not land as a click.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "nothing moved on the way out")
+    }
+
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
     func cursorDragOutCancels() {
         let fixture = Fixture(feedback: .cursor)

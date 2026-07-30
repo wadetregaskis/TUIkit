@@ -370,6 +370,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// recomputed when edge auto-scroll moves the rows under a still pointer.
     var lastReorderContentY: Int?
 
+    /// Set when Escape cancels a drag whose button is still down: the release
+    /// that follows must be swallowed rather than read as a click.
+    var reorderCancelled = false
+
+    /// The drag session, captured at render, so a cancel can take the floating
+    /// preview down without waiting for the release that ends the gesture.
+    weak var dragSession: DragAndDropSession?
+
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render. Selection movement is NOT
     /// gated by it — moving a cursor is not adjusting a scroll position, and the
@@ -1219,7 +1227,11 @@ extension ItemListHandler {
         // the move instead. (Found by driving the real app; the handler-level
         // tests never see the app's Escape.) It also advertises the mode, which
         // is what makes it discoverable at all.
-        if isKeyboardMove {
+        // A mouse drag claims it on the same terms: mid-drag Escape used to
+        // fall through to the page's "⎋ back", navigating out from under a
+        // live drag while the floating preview kept compositing over the new
+        // page until the button came up.
+        if isKeyboardMove || isReordering {
             context.environment.statusBar.escapeLabelOverride = "cancel move"
             context.environment.statusBar.escapeClaimGrabsInput = false
             return

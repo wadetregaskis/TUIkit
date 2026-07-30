@@ -596,6 +596,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             commandKey: context.environment.commandKey)
         // `.cursor` feedback needs a session to float the row above the frame.
         handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
+        // Captured so a cancel can take the floating preview down itself.
+        handler.dragSession = context.environment.dragAndDropSession
         handler.isScrollEnabled = context.environment.isScrollEnabled
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
@@ -1340,6 +1342,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // two feedback modes that open no drag session
                         // (`.live`, `.dimmed`) have to say so explicitly.
                         dragSession?.armAutoScroll()
+                        // Focus follows the gesture, so the keyboard reaches
+                        // this list for the length of it — that is what lets
+                        // Escape cancel a drag on a list not previously focused.
+                        focusManager?.focus(id: captureFocusID)
                         let band = captureHandler.visibleRowBands.first { $0.rowIndex == hit.rowIndex }
                         grab.x = max(0, event.x - rowContentLeft)
                         grab.y = max(0, event.y - topInset - (band?.yStart ?? 0))
@@ -1387,6 +1393,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // never moved — the gesture is over, so let go of the edge
                     // auto-scroll. (`end()` below only runs for a real drop.)
                     dragSession?.disarmAutoScroll()
+                    // Escape already put the row back and ended the drag; the
+                    // release that follows is the tail of a cancelled gesture,
+                    // not a click on whatever is under the pointer.
+                    if captureHandler.reorderCancelled {
+                        captureHandler.reorderCancelled = false
+                        return true
+                    }
                     // A reorder drop. `.live` has already moved the row; the
                     // other modes move it exactly here.
                     if captureHandler.dropReorder(atContentY: dragContentY) {

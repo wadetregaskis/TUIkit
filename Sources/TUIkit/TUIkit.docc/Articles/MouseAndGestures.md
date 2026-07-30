@@ -185,3 +185,13 @@ the frame.
 
 The raw event types (`MouseEvent`, `MouseButton`, `MousePhase`) live in the
 re-exported `TUIkitCore` module.
+
+## Abandoning a Drag
+
+<kbd>Escape</kbd> cancels a drag in flight: the row goes back where it came
+from and the floating preview comes down at once, without waiting for the
+button. The release that follows is swallowed rather than read as a click, so a
+cancelled gesture leaves the selection exactly as it found it.
+
+A press that starts a reorder also takes keyboard focus, which is what lets
+<kbd>Escape</kbd> reach a list that was not focused before the drag began.
