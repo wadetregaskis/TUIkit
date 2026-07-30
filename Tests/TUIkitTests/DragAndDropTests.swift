@@ -80,6 +80,9 @@ struct DragAndDropTests {
         #expect(log.info?.ctrl == true, "modifiers held at release ride along")
         #expect(log.info?.x == 3 && log.info?.y == 0, "drop point is zone-local")
         #expect(tui.dragAndDropSession.active == nil, "the session ends after the drop")
+        #expect(
+            tui.dragAndDropSession.returnFlight == nil,
+            "a drop that landed does not fly home")
     }
 
     @Test("A drop outside any destination cancels")
@@ -100,6 +103,36 @@ struct DragAndDropTests {
         #expect(log.dropped.isEmpty)
         #expect(log.targetedChanges.isEmpty)
         #expect(tui.dragAndDropSession.active == nil)
+        // Nothing took it, so it goes home rather than vanishing under the
+        // pointer — the same ending a refused drop gets below.
+        let flight = tui.dragAndDropSession.returnFlight
+        #expect(flight != nil, "the preview walks back to where it was picked up")
+        #expect(flight?.toX == 0 && flight?.toY == 0, "which is the chip's own place")
+    }
+
+    /// A destination can accept the payload TYPE and still refuse the drop
+    /// itself (a full queue, a duplicate). That is a refusal like any other:
+    /// nothing took the payload, so it goes home.
+    @Test("A refused drop flies home too")
+    func refusedDropFliesHome() {
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        let buffer = renderToBuffer(makeTree(log, accept: false), context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: 4))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 4))
+
+        #expect(log.dropped == ["apple"], "the zone saw it — and said no")
+        #expect(tui.dragAndDropSession.active == nil, "the drag is over either way")
+        #expect(
+            tui.dragAndDropSession.returnFlight != nil,
+            "and the refused row walks back to its place")
     }
 
     @Test("A destination for a different payload type is never targeted")

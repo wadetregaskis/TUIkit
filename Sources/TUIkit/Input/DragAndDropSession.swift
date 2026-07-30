@@ -202,7 +202,18 @@ final class DragAndDropSession: @unchecked Sendable {
     /// the dispatcher before it localises the event for the captured handler
     /// — drop targeting needs the on-screen cursor position, which the
     /// (region-relative) coordinates a drag handler receives can't provide.
-    var lastAbsoluteEvent: MouseEvent?
+    var lastAbsoluteEvent: MouseEvent? {
+        didSet {
+            if lastAbsoluteEvent?.phase == .pressed { pressAbsoluteEvent = lastAbsoluteEvent }
+        }
+    }
+
+    /// Where the gesture's PRESS landed, absolute. A drag only begins at the
+    /// first MOVEMENT, by which time the cursor has left the cell it was
+    /// grabbed in — and in a terminal it can be several cells away, since
+    /// motion reports coalesce under load. This is what makes "fly home" mean
+    /// the place the view actually came from.
+    private(set) var pressAbsoluteEvent: MouseEvent?
 
     /// Clears the per-frame target registrations. Called by the root scene
     /// render before the view tree renders (and re-registers).
@@ -259,9 +270,11 @@ final class DragAndDropSession: @unchecked Sendable {
             grabY: min(max(0, grabY), max(0, preview.height - 1)),
             anchor: anchor,
             cursorX: event.x, cursorY: event.y, targetedID: nil, targeted: nil)
-        if let frame = previewFrame() {
-            active?.originX = frame.x
-            active?.originY = frame.y
+        if let drag = active {
+            let press = pressAbsoluteEvent ?? event
+            let home = Self.previewOrigin(cursorX: press.x, cursorY: press.y, drag: drag)
+            active?.originX = home.x
+            active?.originY = home.y
         }
         dragMoved()
     }
@@ -272,17 +285,20 @@ final class DragAndDropSession: @unchecked Sendable {
     /// here, and drops report the same frame through ``DropInfo``.
     func previewFrame() -> (x: Int, y: Int, width: Int, height: Int)? {
         guard let drag = active else { return nil }
-        let originX: Int
-        let originY: Int
+        let origin = Self.previewOrigin(cursorX: drag.cursorX, cursorY: drag.cursorY, drag: drag)
+        return (origin.x, origin.y, drag.preview.width, drag.preview.height)
+    }
+
+    /// Where the preview's top-left sits for a given cursor position — the
+    /// anchor math, in one place, so the live frame and the recorded origin
+    /// can never disagree about what "here" means.
+    private static func previewOrigin(
+        cursorX: Int, cursorY: Int, drag: ActiveDrag
+    ) -> (x: Int, y: Int) {
         switch drag.anchor {
-        case .grabPoint:
-            originX = drag.cursorX - drag.grabX
-            originY = drag.cursorY - drag.grabY
-        case .offset(let dx, let dy):
-            originX = drag.cursorX + dx
-            originY = drag.cursorY + dy
+        case .grabPoint: (cursorX - drag.grabX, cursorY - drag.grabY)
+        case .offset(let dx, let dy): (cursorX + dx, cursorY + dy)
         }
-        return (originX, originY, drag.preview.width, drag.preview.height)
     }
 
     /// Advances the drag to the last stamped cursor position and updates
@@ -320,10 +336,15 @@ final class DragAndDropSession: @unchecked Sendable {
 
     /// Drops the payload on the destination under the cursor (if any), ends
     /// the drag, and reports whether a destination took the payload.
+    ///
+    /// A drop nothing takes — released over empty space, or over a view that
+    /// refuses this payload — ends as a cancel: the preview walks home rather
+    /// than vanishing under the pointer. Which is why this cannot end the drag
+    /// in a `defer`: the two outcomes end it differently, and the flight needs
+    /// the drag still in hand to know where home is.
     @discardableResult
     func performDrop() -> Bool {
         guard let drag = active else { return false }
-        defer { end() }
         // Resolve against the CURRENT frame's registrations at the release
         // position — never through the id stored at the last movement:
         // handler ids reset every render pass, and a re-render between the
@@ -338,9 +359,17 @@ final class DragAndDropSession: @unchecked Sendable {
                     + "\(lastAbsoluteEvent?.y ?? -1)); \(targets.count) targets, "
                     + "hit ids \(dispatcher?.handlerIDs(at: lastAbsoluteEvent?.x ?? -1, y: lastAbsoluteEvent?.y ?? -1).map(\.raw) ?? []), "
                     + "target ids \(targets.map(\.handlerID.raw))")
+            cancelReturningToOrigin()
             return false
         }
-        return target.perform(drag.payload, event)
+        // A destination can accept the TYPE and still refuse this particular
+        // drop (a full queue, a duplicate); that is a refusal like any other.
+        guard target.perform(drag.payload, event) else {
+            cancelReturningToOrigin()
+            return false
+        }
+        end()
+        return true
     }
 
     /// Ends the drag without dropping (or after one), clearing any targeting.
