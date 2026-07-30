@@ -722,11 +722,18 @@ extension ItemListHandler {
             focusedIndex = clampedRowIndex(reorder.currentOffset)
             return true
         }
-        // Released off the rows. `.cursor` shows no drop slot there, so it has
-        // promised the drop would do nothing — keep that promise. `.dimmed` still
-        // shows one (it holds the last), so it commits to it.
-        guard let target = contentY.flatMap({ dropTarget(atContentY: $0) })
-            ?? reorder.targetOffset
+        // The SLOT first, and the release position only as a fallback: what is
+        // on screen is the promise, and the two part company whenever the rows
+        // moved without the pointer — a wheel tick, a mid-drag Page key, an
+        // auto-scroll. The band under the release point then names a different
+        // place than the gap the user is looking at, and the drop belongs to
+        // the gap.
+        //
+        // Released off the rows, `.cursor` has no slot and has promised the drop
+        // would do nothing — keep that promise. `.dimmed` holds its last slot,
+        // so it commits to it.
+        guard let target = reorder.targetOffset
+            ?? contentY.flatMap({ dropTarget(atContentY: $0) })
         else {
             focusedIndex = clampedRowIndex(reorder.grabbedOffset)
             return true
