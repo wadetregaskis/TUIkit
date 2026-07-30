@@ -169,7 +169,9 @@ struct TablePage: View {
     @State var liveSelection: Int?
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
     @State var liveTick: Int = 0
-    @State var playlistSelection: String?
+    /// The reorder demo's selection is a SET, so several rows can travel
+    /// together — grab any one of them and they all move.
+    @State var playlistSelection: Set<String> = []
     @State var reorderFeedback = ReorderFeedbackChoice.live.rawValue
     /// The reorderable table's rows — `@State`, because `onMove` writes to them.
     @State fileprivate var playlist = Track.playlist

@@ -64,7 +64,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
-            "page.list.editableInstruction": "Drag a row with the mouse to reorder it; the picker below chooses what the drag shows. Tab to the list, then press Delete or Backspace to remove the focused row.",
+            "page.list.editableInstruction": "Drag a row with the mouse to reorder it; the picker below chooses what the drag shows. Tab to the list, then press Delete or Backspace to remove the focused row. Select several rows (Ctrl-V then the arrows, or Shift-click) and drag any one of them: they all move, and disjoint rows land as one block in their original order.",
             "page.list.reorderFeedback": "Reorder feedback",
             "page.list.reorderFeedback.live": "Live · rows shuffle as you drag",
             "page.list.reorderFeedback.dimmed": "Dimmed · the row itself, faint, in the slot",
@@ -107,7 +107,7 @@ extension ExampleStrings {
             "page.table.currentSelections": "Current Selections",
 
             "page.table.reorderSection": "Drag to reorder · .onMove",
-            "page.table.reorderInstruction": "Drag a row with the mouse to move it; the picker chooses what the drag shows, exactly as on the Lists page. On a Table the modifier goes on the table itself — its rows are values and its cells are not views, so there is no ForEach to attach it to.",
+            "page.table.reorderInstruction": "Drag a row with the mouse to move it; the picker chooses what the drag shows, exactly as on the Lists page. On a Table the modifier goes on the table itself — its rows are values and its cells are not views, so there is no ForEach to attach it to. Selecting several rows and dragging any of them moves them all — the Table's selection is a Set here.",
             "page.table.column.track": "Track",
             "page.table.column.artist": "Artist",
             "page.table.column.length": "Time",
@@ -272,7 +272,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Bearbeitbar · .onMove / .onDelete",
-            "page.list.editableInstruction": "Ziehe eine Zeile mit der Maus, um sie umzusortieren; die Auswahl darunter bestimmt, was dabei zu sehen ist. Wechsle mit Tab zur Liste und drücke Entf oder Rücktaste, um die fokussierte Zeile zu entfernen.",
+            "page.list.editableInstruction": "Ziehe eine Zeile mit der Maus, um sie umzusortieren; die Auswahl darunter bestimmt, was dabei zu sehen ist. Wechsle mit Tab zur Liste und drücke Entf oder Rücktaste, um die fokussierte Zeile zu entfernen. Wähle mehrere Zeilen aus (Strg-V und Pfeiltasten oder Umschalt-Klick) und ziehe eine davon: alle wandern mit, verstreute Zeilen landen als ein Block in ihrer ursprünglichen Reihenfolge.",
             "page.list.reorderFeedback": "Umsortier-Rückmeldung",
             "page.list.reorderFeedback.live": "Live · Zeilen wandern beim Ziehen",
             "page.list.reorderFeedback.dimmed": "Abgeblendet · die Zeile selbst, blass, im Zielslot",
@@ -315,7 +315,7 @@ extension ExampleStrings {
             "page.table.currentSelections": "Aktuelle Auswahl",
 
             "page.table.reorderSection": "Ziehen zum Umsortieren · .onMove",
-            "page.table.reorderInstruction": "Ziehe eine Zeile mit der Maus, um sie zu verschieben; das Auswahlfeld bestimmt, was der Zug zeigt — genau wie auf der Listen-Seite. Bei einer Tabelle sitzt der Modifier an der Tabelle selbst: ihre Zeilen sind Werte und ihre Zellen keine Views, es gibt also kein ForEach dafür.",
+            "page.table.reorderInstruction": "Ziehe eine Zeile mit der Maus, um sie zu verschieben; das Auswahlfeld bestimmt, was der Zug zeigt — genau wie auf der Listen-Seite. Bei einer Tabelle sitzt der Modifier an der Tabelle selbst: ihre Zeilen sind Werte und ihre Zellen keine Views, es gibt also kein ForEach dafür. Mehrere ausgewählte Zeilen wandern gemeinsam — die Auswahl der Tabelle ist hier eine Menge.",
             "page.table.column.track": "Titel",
             "page.table.column.artist": "Interpret",
             "page.table.column.length": "Dauer",
@@ -480,7 +480,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modifiable · .onMove / .onDelete",
-            "page.list.editableInstruction": "Faites glisser une ligne avec la souris pour la réordonner ; le sélecteur ci-dessous choisit ce que montre le glisser. Passez à la liste avec Tab, puis appuyez sur Suppr ou Retour arrière pour supprimer la ligne ciblée.",
+            "page.list.editableInstruction": "Faites glisser une ligne avec la souris pour la réordonner ; le sélecteur ci-dessous choisit ce que montre le glisser. Passez à la liste avec Tab, puis appuyez sur Suppr ou Retour arrière pour supprimer la ligne ciblée. Sélectionnez plusieurs lignes puis faites glisser l’une d’elles : elles se déplacent toutes et arrivent groupées, dans leur ordre d’origine.",
             "page.list.reorderFeedback": "Retour visuel du réarrangement",
             "page.list.reorderFeedback.live": "Direct · les lignes se réorganisent pendant le glisser",
             "page.list.reorderFeedback.dimmed": "Estompé · la ligne elle-même, pâle, dans l'emplacement",
@@ -688,7 +688,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Modificabile · .onMove / .onDelete",
-            "page.list.editableInstruction": "Trascina una riga con il mouse per riordinarla; il selettore qui sotto sceglie cosa mostra il trascinamento. Passa alla lista con Tab, poi premi Canc o Backspace per rimuovere la riga attiva.",
+            "page.list.editableInstruction": "Trascina una riga con il mouse per riordinarla; il selettore qui sotto sceglie cosa mostra il trascinamento. Passa alla lista con Tab, poi premi Canc o Backspace per rimuovere la riga attiva. Seleziona più righe e trascinane una qualsiasi: si spostano tutte e arrivano come un blocco, nel loro ordine originale.",
             "page.list.reorderFeedback": "Feedback del riordino",
             "page.list.reorderFeedback.live": "Dal vivo · le righe si riordinano mentre trascini",
             "page.list.reorderFeedback.dimmed": "Attenuato · la riga stessa, tenue, nella destinazione",
@@ -896,7 +896,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "Editable · .onMove / .onDelete",
-            "page.list.editableInstruction": "Arrastra una fila con el ratón para reordenarla; el selector de abajo elige qué muestra el arrastre. Ve a la lista con Tab y pulsa Supr o Retroceso para eliminar la fila enfocada.",
+            "page.list.editableInstruction": "Arrastra una fila con el ratón para reordenarla; el selector de abajo elige qué muestra el arrastre. Ve a la lista con Tab y pulsa Supr o Retroceso para eliminar la fila enfocada. Selecciona varias filas y arrastra cualquiera de ellas: se mueven todas y llegan como un bloque, en su orden original.",
             "page.list.reorderFeedback": "Respuesta al reordenar",
             "page.list.reorderFeedback.live": "En vivo · las filas se reordenan al arrastrar",
             "page.list.reorderFeedback.dimmed": "Atenuado · la fila misma, tenue, en el destino",
@@ -1104,7 +1104,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "可编辑 · .onMove / .onDelete",
-            "page.list.editableInstruction": "用鼠标拖动某一行即可重新排序；下方的选择器决定拖动时显示什么。按 Tab 切换到列表，再按 Delete 或 Backspace 删除当前行。",
+            "page.list.editableInstruction": "用鼠标拖动某一行即可重新排序；下方的选择器决定拖动时显示什么。按 Tab 切换到列表，再按 Delete 或 Backspace 删除当前行。 选中多行后拖动其中任意一行：它们会一起移动，并按原有顺序作为一个整体落位。",
             "page.list.reorderFeedback": "重排反馈",
             "page.list.reorderFeedback.live": "实时 · 拖动时行随即重排",
             "page.list.reorderFeedback.dimmed": "淡显 · 该行本身淡化后置于落点",
@@ -1312,7 +1312,7 @@ extension ExampleStrings {
 
             // ForEach .onMove / .onDelete + .rowReorderFeedback
             "page.list.editableSection": "編集可能 · .onMove / .onDelete",
-            "page.list.editableInstruction": "行をマウスでドラッグすると並べ替えられます。ドラッグ中に何を見せるかは下のピッカーで選べます。Tab でリストに移動し、Delete または Backspace でフォーカス中の行を削除します。",
+            "page.list.editableInstruction": "行をマウスでドラッグすると並べ替えられます。ドラッグ中に何を見せるかは下のピッカーで選べます。Tab でリストに移動し、Delete または Backspace でフォーカス中の行を削除します。 複数行を選択していずれかをドラッグすると、すべてが一緒に移動し、元の順序のまま一つのまとまりとして着地します。",
             "page.list.reorderFeedback": "並べ替えの表示",
             "page.list.reorderFeedback.live": "ライブ · ドラッグ中に行が入れ替わる",
             "page.list.reorderFeedback.dimmed": "淡色 · 行そのものが淡くなって落下位置に入る",

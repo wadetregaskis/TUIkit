@@ -73,6 +73,7 @@ struct ListPage: View {
     @State private var editableItems = [
         "🍎 Apple", "🍌 Banana", "🍒 Cherry", "🍇 Grape", "🍑 Peach", "🍋 Lemon",
     ]
+    @State private var editableSelection: Set<String> = []
     @State private var reorderFeedback = ReorderFeedbackChoice.live.rawValue
 
     private static let fruits = [
@@ -132,7 +133,9 @@ struct ListPage: View {
                             Text(choice.label).tag(choice.rawValue)
                         }
                     }
-                    List {
+                    // A SET binding: several rows can be selected, and then
+                    // they reorder together — grab any one of them.
+                    List(selection: $editableSelection) {
                         ForEach(editableItems, id: \.self) { Text($0) }
                             .onMove { editableItems.move(fromOffsets: $0, toOffset: $1) }
                             .onDelete { editableItems.remove(atOffsets: $0) }
