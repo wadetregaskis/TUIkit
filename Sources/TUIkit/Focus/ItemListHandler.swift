@@ -671,7 +671,7 @@ extension ItemListHandler {
             isExtendingSelection = false
             return true
 
-        case .pickUpRow, .placeRow, .cancelMove, nil:
+        case .pickUpRow, .placeRow, .cancelMove, .moveRowUp, .moveRowDown, nil:
             // Not selection business — handled above, or not a chord at all.
             break
         }

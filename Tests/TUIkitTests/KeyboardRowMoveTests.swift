@@ -129,6 +129,63 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["a", "b", "c", "d", "e"], "put back, not left half-moved")
     }
 
+    // MARK: - Nudging
+
+    /// The accelerator: one keystroke, one place, no mode. Ctrl+↑/↓ — the
+    /// editor convention, as far as a terminal permits it.
+    @Test("Ctrl-arrow moves the focused row one place, with no mode")
+    func nudge() {
+        let rows = RowBox()
+        let handler = makeHandler(rows)
+        handler.focusedIndex = 2
+        #expect(press(handler, .down, ctrl: true))
+        #expect(rows.items == ["a", "b", "d", "c", "e"])
+        #expect(handler.focusedIndex == 3, "the cursor rides along with the row")
+        #expect(!handler.isKeyboardMove, "nothing to leave")
+
+        #expect(press(handler, .up, ctrl: true))
+        #expect(press(handler, .up, ctrl: true))
+        #expect(rows.items == ["a", "c", "b", "d", "e"])
+    }
+
+    @Test("A nudge at the end of the list is a no-op, not a wrap")
+    func nudgeClampsAtTheEnds() {
+        let rows = RowBox()
+        let handler = makeHandler(rows)
+        handler.focusedIndex = 0
+        #expect(press(handler, .up, ctrl: true))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "nowhere above the first row")
+        handler.focusedIndex = 4
+        #expect(press(handler, .down, ctrl: true))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "nor below the last")
+    }
+
+    /// Without `onMove` there is nothing to reorder, so the chord goes on to
+    /// mean what the plain arrow means — it moves the cursor, exactly as it did
+    /// before this feature existed.
+    @Test("A list with no onMove moves nothing")
+    func nudgeNeedsOnMove() {
+        let rows = RowBox()
+        let handler = makeHandler(rows, reorderable: false)
+        #expect(press(handler, .down, ctrl: true))
+        #expect(rows.items == ["a", "b", "c", "d", "e"])
+        #expect(handler.focusedIndex == 1, "the cursor moved, the rows did not")
+    }
+
+    /// Mid-move the same chords move the SLOT, so the two ways of reordering do
+    /// not contradict each other under the fingers.
+    @Test("While a row is held, Ctrl-arrow moves its slot")
+    func nudgeMovesTheSlotWhileHeld() {
+        let rows = RowBox()
+        let handler = makeHandler(rows, feedback: .dimmed)
+        #expect(pickUp(handler))
+        #expect(press(handler, .down, ctrl: true))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "the slot moved, not the data")
+        #expect(handler.reorderPlaceholder?.slot == 1)
+        #expect(press(handler, .enter))
+        #expect(rows.items == ["b", "a", "c", "d", "e"])
+    }
+
     // MARK: - Feedback
 
     /// `.live` moves the data as the keys go (one `onMove` per step, as a live

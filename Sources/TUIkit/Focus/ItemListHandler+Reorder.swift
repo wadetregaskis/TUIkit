@@ -210,9 +210,28 @@ extension ItemListHandler {
     /// to mean whatever it usually means.
     func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
         if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
-        // A chord, so it works in either selection mode.
-        if shortcuts.action(for: event) == .pickUpRow, beginKeyboardMove() { return true }
-        return nil
+        // Chords, so they work in either selection mode.
+        switch shortcuts.action(for: event) {
+        case .pickUpRow: return beginKeyboardMove() ? true : nil
+        case .moveRowUp: return nudgeFocusedRow(by: -1) ? true : nil
+        case .moveRowDown: return nudgeFocusedRow(by: 1) ? true : nil
+        default: return nil
+        }
+    }
+
+    /// Moves the focused row one place, with no mode to enter or leave — the
+    /// single-step shortcut that is most of what reordering ever is.
+    ///
+    /// Each press is one `onMove`, so it is undoable and repeatable in the
+    /// app's own terms, and the cursor rides along with the row.
+    @discardableResult
+    func nudgeFocusedRow(by delta: Int) -> Bool {
+        guard onMove != nil, itemCount > 0 else { return false }
+        let target = min(max(0, focusedIndex + delta), itemCount - 1)
+        guard target != focusedIndex else { return true }
+        focusedIndex = clampedRowIndex(move(from: focusedIndex, to: target))
+        ensureFocusedItemVisible()
+        return true
     }
 
     /// The keys a held row answers, or `nil` for one that keeps its usual
@@ -224,6 +243,12 @@ extension ItemListHandler {
             return true
         case .cancelMove:
             cancelKeyboardMove()
+            return true
+        case .moveRowUp:
+            moveHeldRow(by: -1)
+            return true
+        case .moveRowDown:
+            moveHeldRow(by: 1)
             return true
         case .selectAll, .extendSelection, nil:
             break

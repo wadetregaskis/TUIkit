@@ -38,6 +38,12 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
     /// Abandon the move and put the row back where it was picked up.
     case cancelMove
 
+    /// Move the focused row one place up, with no mode to enter or leave.
+    case moveRowUp
+
+    /// Move the focused row one place down.
+    case moveRowDown
+
     /// What TUIkit binds this action to out of the box.
     ///
     /// Control chords throughout, and deliberately: `Ctrl`+letter is not a
@@ -55,6 +61,13 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
         // one place this control's grammar changes, and the status bar says so.
         case .placeRow: return [.defaultAction]
         case .cancelMove: return [.cancelAction]
+        // The editor convention (VS Code's ⌥↑/↓, Xcode's ⌘⌥[/]) as far as a
+        // terminal allows it — and it does NOT allow it everywhere: Apple
+        // Terminal sends bare ESC[A/B for Up/Down and drops the modifier, so
+        // this chord is undeliverable there. That is why it is an accelerator
+        // and ``pickUpRow`` is the feature: the mode needs no modifiers at all.
+        case .moveRowUp: return [KeyboardShortcut(.upArrow, modifiers: .control)]
+        case .moveRowDown: return [KeyboardShortcut(.downArrow, modifiers: .control)]
         }
     }
 }

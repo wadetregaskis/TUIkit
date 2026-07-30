@@ -71,6 +71,37 @@ struct RowShortcutsTests {
         #expect(replaced.hint(for: .selectAll) == "^B", "…unless it is gone")
     }
 
+    /// The arrow keys had no `KeyEquivalent` at all until the nudge needed one,
+    /// so a chord on them could not be written, let alone fired. They print as
+    /// their names — the private-use scalar behind `.upArrow` would otherwise
+    /// reach the screen as a missing-glyph box.
+    @Test("Non-printable keys are bindable, and print as names")
+    func nonPrintableKeys() {
+        let ctrlUp = KeyboardShortcut(.upArrow, modifiers: .control)
+        #expect(ctrlUp.displayString == "^↑")
+        #expect(KeyboardShortcut(.pageDown, modifiers: []).displayString == "PgDn")
+
+        let table = RowShortcuts()
+        #expect(table.shortcuts(for: .moveRowUp) == [ctrlUp])
+        let lookup = table.lookup(commandKey: .control)
+        #expect(lookup.action(for: KeyEvent(key: .up, ctrl: true)) == .moveRowUp)
+        #expect(lookup.action(for: KeyEvent(key: .down, ctrl: true)) == .moveRowDown)
+        #expect(lookup.action(for: KeyEvent(key: .up)) == nil, "a bare arrow still navigates")
+    }
+
+    /// Return and Escape keep their semantic roles when unmodified — the default
+    /// button and the cancel button depend on it — and become ordinary key
+    /// equivalents only when a modifier is held.
+    @Test("Bare Return and Escape stay the semantic roles")
+    func semanticRolesSurvive() {
+        #expect(KeyboardShortcut.trigger(for: KeyEvent(key: .enter)) == .defaultAction)
+        #expect(KeyboardShortcut.trigger(for: KeyEvent(key: .escape)) == .cancelAction)
+        #expect(
+            KeyboardShortcut.trigger(for: KeyEvent(key: .enter, ctrl: true))
+                == .key(.return, .control),
+            "…but a modified one is just a key")
+    }
+
     // MARK: - Resolution
 
     @Test("An unmentioned action keeps its defaults")

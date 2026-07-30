@@ -35,6 +35,40 @@ public struct KeyEquivalent: Hashable, Sendable, ExpressibleByExtendedGraphemeCl
     /// The space bar.
     public static let space = Self(" ")
 
+    // The non-printable keys, spelled the way SwiftUI spells them — same names,
+    // same scalars. The arrows and navigation keys are AppKit's private-use
+    // function-key block (`NSUpArrowFunctionKey` = U+F700 and its neighbours),
+    // which is what SwiftUI's own `KeyEquivalent` uses; the rest are their
+    // control characters. A terminal sends these as escape sequences rather
+    // than as these scalars, so ``KeyboardShortcut/trigger(for:)`` maps a parsed
+    // ``Key`` onto them — nothing ever types one of these characters directly.
+    /// The up arrow.
+    public static let upArrow = Self("\u{F700}")
+    /// The down arrow.
+    public static let downArrow = Self("\u{F701}")
+    /// The left arrow.
+    public static let leftArrow = Self("\u{F702}")
+    /// The right arrow.
+    public static let rightArrow = Self("\u{F703}")
+    /// Page Up.
+    public static let pageUp = Self("\u{F72C}")
+    /// Page Down.
+    public static let pageDown = Self("\u{F72D}")
+    /// Home.
+    public static let home = Self("\u{F729}")
+    /// End.
+    public static let end = Self("\u{F72B}")
+    /// Forward delete.
+    public static let deleteForward = Self("\u{F728}")
+    /// Backspace / delete-backwards.
+    public static let delete = Self("\u{7F}")
+    /// Return.
+    public static let `return` = Self("\u{D}")
+    /// Escape.
+    public static let escape = Self("\u{1B}")
+    /// Tab.
+    public static let tab = Self("\u{9}")
+
     // Identity is the folded character alone. `impliesShift` records how the
     // literal was written so the initialiser can fold it into the shortcut's
     // modifiers, and must not survive into the lookup key — otherwise
@@ -185,6 +219,9 @@ public struct KeyboardShortcut: Hashable, Sendable {
     static func trigger(for event: KeyEvent) -> Trigger? {
         let modifiers = EventModifiers(event)
         switch event.key {
+        // A BARE Return or Escape is the semantic role — the default button,
+        // the cancel button. Held with a modifier it is an ordinary key
+        // equivalent, so `⌥⏎` can be bound without disturbing either role.
         case .enter where modifiers.isEmpty:
             return .defaultAction
         case .escape where modifiers.isEmpty:
@@ -195,9 +232,21 @@ public struct KeyboardShortcut: Hashable, Sendable {
             if character.isUppercase { modifiers.insert(.shift) }
             return .key(KeyEquivalent(character), modifiers)
         default:
-            return nil
+            // The non-printable keys, via the table below. Function keys and
+            // pasted text are not bindable, and map to nothing.
+            return equivalents[event.key].map { .key($0, modifiers) }
         }
     }
+
+    /// A parsed ``Key`` as the ``KeyEquivalent`` that stands for it. A terminal
+    /// sends these as escape sequences, never as the scalars themselves, so this
+    /// is the only way one is ever produced.
+    private static let equivalents: [Key: KeyEquivalent] = [
+        .enter: .return, .escape: .escape, .tab: .tab, .space: .space,
+        .up: .upArrow, .down: .downArrow, .left: .leftArrow, .right: .rightArrow,
+        .pageUp: .pageUp, .pageDown: .pageDown, .home: .home, .end: .end,
+        .backspace: .delete, .delete: .deleteForward,
+    ]
 
     /// The printable form of this shortcut — what a menu row prints as its
     /// hint — or `nil` for the semantic roles, which have no key to show.
@@ -216,12 +265,27 @@ public struct KeyboardShortcut: Hashable, Sendable {
         var prefix = ""
         if modifiers.contains(.control) { prefix += "^" }
         if modifiers.contains(.option) { prefix += "M-" }
+        // A non-printable key prints as its name, not as the private-use
+        // scalar that stands for it (see `KeyEquivalent.upArrow`) — which would
+        // otherwise reach the screen as a missing-glyph box.
+        if let name = Self.keyNames[key] { return prefix + name }
         // Shift is the character's case — a terminal has no other way to say
         // it — and a Control shortcut is conventionally printed uppercase too.
         let shifted = modifiers.contains(.shift) || modifiers.contains(.control)
         let character = shifted ? String(key.character).uppercased() : String(key.character)
         return prefix + character
     }
+
+    /// How the non-printable keys are named in a hint. Arrows as arrows; the
+    /// rest in the words a terminal UI uses, since ⇞/⌫ are ambiguous-width and
+    /// would shear an aligned column on a CJK-configured terminal (the same
+    /// reason ``displayString`` spells Control as `^`).
+    private static let keyNames: [KeyEquivalent: String] = [
+        .upArrow: "↑", .downArrow: "↓", .leftArrow: "←", .rightArrow: "→",
+        .pageUp: "PgUp", .pageDown: "PgDn", .home: "Home", .end: "End",
+        .delete: "Del", .deleteForward: "FwdDel", .return: "Return",
+        .escape: "Esc", .tab: "Tab", .space: "Space",
+    ]
 }
 
 // MARK: - Command key

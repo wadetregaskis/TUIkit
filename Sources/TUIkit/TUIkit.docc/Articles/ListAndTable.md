@@ -341,4 +341,10 @@ What the move *shows* is ``RowReorderFeedback``, as with a drag — except that
 ``RowReorderFeedback/dimmed`` instead: the same faint copy of the row in the slot
 it would land in, rather than an empty gap and a row that is nowhere.
 
+There is an accelerator for the common case, too: <kbd>Ctrl</kbd>+<kbd>↑</kbd>
+and <kbd>Ctrl</kbd>+<kbd>↓</kbd> move the focused row one place with no mode to
+enter or leave — the binding every editor uses, as far as a terminal permits it.
+Apple Terminal is exactly where it does not: the chord is undeliverable there,
+which is why it is the accelerator and the mode is the feature.
+
 Every chord here is rebindable — see ``RowShortcuts``.

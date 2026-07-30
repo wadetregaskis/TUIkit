@@ -69,7 +69,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "Live · rows shuffle as you drag",
             "page.list.reorderFeedback.dimmed": "Dimmed · the row itself, faint, in the slot",
             "page.list.reorderFeedback.cursor": "Cursor · the row rides the pointer",
-            "page.rows.keyboardMoveHint": "No mouse? Tab to the list, then Ctrl-R to pick the focused row up — the arrows (and Home/End/PageUp/PageDown) move its landing slot, Return places it, Escape puts it back.",
+            "page.rows.keyboardMoveHint": "No mouse? Tab to the list, then Ctrl-R to pick the focused row up — the arrows (and Home/End/PageUp/PageDown) move its landing slot, Return places it, Escape puts it back. Or skip the mode: Ctrl-↑/↓ moves the focused row one place at a time (where the terminal forwards it — Apple Terminal does not).",
 
             "page.list.transferSection": "Rows that travel · .draggable + .dropDestination",
             "page.list.transferHint": "Drag a row onto another row to put it in that place, onto the other list to move it across, or past the last row to append it. Both lists are the same code. This is the other mechanism: .onMove above lets the List own the drag (so it can draw the drop slot) but a row cannot leave it, because the List never learns what a row IS; here the row carries a value the app defined, so it can go anywhere that accepts one — at the price of the app doing the reordering too.",
@@ -277,7 +277,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "Live · Zeilen wandern beim Ziehen",
             "page.list.reorderFeedback.dimmed": "Abgeblendet · die Zeile selbst, blass, im Zielslot",
             "page.list.reorderFeedback.cursor": "Cursor · die Zeile hängt am Zeiger",
-            "page.rows.keyboardMoveHint": "Keine Maus? Mit Tab zur Liste, dann Strg-R, um die fokussierte Zeile aufzunehmen — die Pfeiltasten (sowie Pos1/Ende/Bild↑/Bild↓) verschieben den Zielplatz, Enter setzt sie ab, Esc bricht ab.",
+            "page.rows.keyboardMoveHint": "Keine Maus? Mit Tab zur Liste, dann Strg-R, um die fokussierte Zeile aufzunehmen — die Pfeiltasten (sowie Pos1/Ende/Bild↑/Bild↓) verschieben den Zielplatz, Enter setzt sie ab, Esc bricht ab. Oder ohne Modus: Strg-↑/↓ verschiebt die fokussierte Zeile um je eine Position (sofern das Terminal es meldet — Apple Terminal nicht).",
 
             "page.list.transferSection": "Wandernde Zeilen · .draggable + .dropDestination",
             "page.list.transferHint": "Ziehe eine Zeile auf eine andere, um sie an diese Stelle zu setzen, auf die andere Liste, um sie dorthin zu verschieben, oder hinter die letzte Zeile, um sie anzuhängen. Beide Listen sind derselbe Code. Das ist der andere Mechanismus: bei .onMove oben führt die Liste die Bewegung (und kann deshalb den Ziel-Platzhalter zeichnen), aber die Zeile kann sie nicht verlassen, weil die Liste nie erfährt, WAS eine Zeile ist; hier trägt die Zeile einen von der App definierten Wert und kann überall dorthin, wo dieser angenommen wird — dafür sortiert die App selbst.",
@@ -485,7 +485,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "Direct · les lignes se réorganisent pendant le glisser",
             "page.list.reorderFeedback.dimmed": "Estompé · la ligne elle-même, pâle, dans l'emplacement",
             "page.list.reorderFeedback.cursor": "Curseur · la ligne suit le pointeur",
-            "page.rows.keyboardMoveHint": "Pas de souris ? Tab jusqu’à la liste, puis Ctrl-R pour saisir la ligne ciblée — les flèches (et Début/Fin/Pg.préc/Pg.suiv) déplacent l’emplacement d’arrivée, Entrée la dépose, Échap annule.",
+            "page.rows.keyboardMoveHint": "Pas de souris ? Tab jusqu’à la liste, puis Ctrl-R pour saisir la ligne ciblée — les flèches (et Début/Fin/Pg.préc/Pg.suiv) déplacent l’emplacement d’arrivée, Entrée la dépose, Échap annule. Ou sans le mode : Ctrl-↑/↓ déplace la ligne ciblée d’une position (si le terminal le transmet — pas Apple Terminal).",
 
             "page.list.transferSection": "Lignes voyageuses · .draggable + .dropDestination",
             "page.list.transferHint": "Faites glisser une ligne sur une autre pour la placer à cet endroit, sur l’autre liste pour l’y déplacer, ou après la dernière ligne pour l’ajouter à la fin. Les deux listes sont le même code. C’est l’autre mécanisme : avec .onMove ci-dessus, la liste mène le glissement (elle peut donc dessiner l’emplacement d’arrivée) mais la ligne ne peut pas en sortir, car la liste ne sait jamais CE QU’EST une ligne ; ici la ligne porte une valeur définie par l’application et peut aller partout où elle est acceptée — au prix d’un réordonnancement écrit par l’application.",
@@ -693,7 +693,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "Dal vivo · le righe si riordinano mentre trascini",
             "page.list.reorderFeedback.dimmed": "Attenuato · la riga stessa, tenue, nella destinazione",
             "page.list.reorderFeedback.cursor": "Cursore · la riga segue il puntatore",
-            "page.rows.keyboardMoveHint": "Niente mouse? Tab fino alla lista, poi Ctrl-R per prendere la riga a fuoco — le frecce (e Inizio/Fine/PgSu/PgGiù) spostano il punto di arrivo, Invio la posa, Esc annulla.",
+            "page.rows.keyboardMoveHint": "Niente mouse? Tab fino alla lista, poi Ctrl-R per prendere la riga a fuoco — le frecce (e Inizio/Fine/PgSu/PgGiù) spostano il punto di arrivo, Invio la posa, Esc annulla. Oppure senza modalità: Ctrl-↑/↓ sposta la riga a fuoco di una posizione (se il terminale lo trasmette — Apple Terminal no).",
 
             "page.list.transferSection": "Righe in viaggio · .draggable + .dropDestination",
             "page.list.transferHint": "Trascina una riga su un’altra per metterla in quel posto, sull’altra lista per spostarla lì, o oltre l’ultima riga per aggiungerla in fondo. Le due liste sono lo stesso codice. Questo è l’altro meccanismo: con .onMove sopra è la lista a condurre il trascinamento (e può quindi disegnare lo spazio di arrivo) ma la riga non può uscirne, perché la lista non sa mai COSA sia una riga; qui la riga porta un valore definito dall’app e può andare dove quel valore è accettato — al prezzo di un riordino scritto dall’app.",
@@ -901,7 +901,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "En vivo · las filas se reordenan al arrastrar",
             "page.list.reorderFeedback.dimmed": "Atenuado · la fila misma, tenue, en el destino",
             "page.list.reorderFeedback.cursor": "Cursor · la fila sigue al puntero",
-            "page.rows.keyboardMoveHint": "¿Sin ratón? Tab hasta la lista y Ctrl-R para tomar la fila enfocada — las flechas (e Inicio/Fin/RePág/AvPág) mueven el destino, Intro la coloca, Esc lo deshace.",
+            "page.rows.keyboardMoveHint": "¿Sin ratón? Tab hasta la lista y Ctrl-R para tomar la fila enfocada — las flechas (e Inicio/Fin/RePág/AvPág) mueven el destino, Intro la coloca, Esc lo deshace. O sin modo: Ctrl-↑/↓ mueve la fila enfocada una posición (si la terminal lo envía — Apple Terminal no).",
 
             "page.list.transferSection": "Filas que viajan · .draggable + .dropDestination",
             "page.list.transferHint": "Arrastra una fila sobre otra para colocarla en ese lugar, sobre la otra lista para moverla allí, o más allá de la última fila para añadirla al final. Las dos listas son el mismo código. Este es el otro mecanismo: con .onMove arriba la lista dirige el arrastre (y por eso puede dibujar el hueco de destino) pero la fila no puede salir de ella, porque la lista nunca llega a saber QUÉ es una fila; aquí la fila lleva un valor definido por la app y puede ir a donde ese valor se acepte — a cambio de que la app también haga el reordenado.",
@@ -1109,7 +1109,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "实时 · 拖动时行随即重排",
             "page.list.reorderFeedback.dimmed": "淡显 · 该行本身淡化后置于落点",
             "page.list.reorderFeedback.cursor": "光标 · 行随指针移动",
-            "page.rows.keyboardMoveHint": "没有鼠标？用 Tab 切到列表，按 Ctrl-R 拿起当前行——方向键（以及 Home/End/PgUp/PgDn）移动落点，Enter 放下，Esc 取消。",
+            "page.rows.keyboardMoveHint": "没有鼠标？用 Tab 切到列表，按 Ctrl-R 拿起当前行——方向键（以及 Home/End/PgUp/PgDn）移动落点，Enter 放下，Esc 取消。也可以不进入该模式：Ctrl-↑/↓ 每次把当前行移动一位（需终端支持上报，Apple Terminal 不支持）。",
 
             "page.list.transferSection": "可迁移的行 · .draggable + .dropDestination",
             "page.list.transferHint": "把某一行拖到另一行上，即把它放在那个位置；拖到另一个列表上，即移过去；拖到最后一行之后，即追加到末尾。两个列表用的是同一段代码。这是另一种机制：上面的 .onMove 由 List 主导拖拽（因此它能画出落点空位），但行无法离开这个 List，因为 List 永远不知道一行“是什么”；这里行携带应用自定义的值，可以去往任何接受该值的地方——代价是排序也要由应用自己来做。",
@@ -1317,7 +1317,7 @@ extension ExampleStrings {
             "page.list.reorderFeedback.live": "ライブ · ドラッグ中に行が入れ替わる",
             "page.list.reorderFeedback.dimmed": "淡色 · 行そのものが淡くなって落下位置に入る",
             "page.list.reorderFeedback.cursor": "カーソル · 行がポインタに追従",
-            "page.rows.keyboardMoveHint": "マウスがなくても：Tab でリストへ移動し、Ctrl-R でフォーカス行を持ち上げます。矢印キー（および Home/End/PgUp/PgDn）で落とす位置を動かし、Enter で確定、Esc で元に戻します。",
+            "page.rows.keyboardMoveHint": "マウスがなくても：Tab でリストへ移動し、Ctrl-R でフォーカス行を持ち上げます。矢印キー（および Home/End/PgUp/PgDn）で落とす位置を動かし、Enter で確定、Esc で元に戻します。モードを使わずに、Ctrl-↑/↓ でフォーカス行を一つずつ動かすこともできます（端末が対応している場合。Apple Terminal は非対応）。",
 
             "page.list.transferSection": "移動できる行 · .draggable + .dropDestination",
             "page.list.transferHint": "行を別の行にドロップするとその位置に入り、もう一方のリストにドロップすると移動し、最後の行より下にドロップすると末尾に追加されます。二つのリストは同じコードです。これはもう一つの仕組みです。上の .onMove ではドラッグを List が主導するため落下位置を描けますが、List は行が「何であるか」を知らないので、行はその List から出られません。ここでは行がアプリの定義した値を運ぶので、その値を受け取る場所へどこへでも行けます——並べ替えもアプリが書くのが代償です。",
