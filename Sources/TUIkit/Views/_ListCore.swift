@@ -1393,10 +1393,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // Edge auto-scroll applies to reordering too, and the
                         // two feedback modes that open no drag session
                         // (`.live`, `.dimmed`) have to say so explicitly.
-                        dragSession?.armAutoScroll()
+                        dragSession?.armAutoScroll(owner: captureHandler)
                         // Focus follows the gesture, so the keyboard reaches
-                        // this list for the length of it — that is what lets
-                        // Escape cancel a drag on a list not previously focused.
+                        // this list for the length of it — that is what lets the
+                        // navigators scroll a list that was not focused before
+                        // the drag began.
                         focusManager?.focus(id: captureFocusID)
                         let band = captureHandler.visibleRowBands.first { $0.rowIndex == hit.rowIndex }
                         grab.x = max(0, event.x - rowContentLeft)

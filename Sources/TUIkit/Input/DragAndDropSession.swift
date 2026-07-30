@@ -195,6 +195,10 @@ final class DragAndDropSession: @unchecked Sendable {
     /// The scrollable currently flagged ``ScrollableOffsetState/isAutoScrolling``.
     private var autoScrollDriven: (any ScrollableOffsetState)?
 
+    /// The scrollable this gesture belongs to, when it named one — see
+    /// ``armAutoScroll(owner:)``.
+    private var autoScrollOwner: ObjectIdentifier?
+
     /// The drag in flight, or `nil`.
     private(set) var active: ActiveDrag?
 
@@ -453,7 +457,16 @@ final class DragAndDropSession: @unchecked Sendable {
     }
 
     /// Arms the edge auto-scroll for a gesture with no payload.
-    func armAutoScroll() { autoScrollArmed = true }
+    ///
+    /// - Parameter owner: The scrollable the gesture belongs to. A row being
+    ///   reordered can only land in the list it came from, so that list is the
+    ///   only thing allowed to scroll under it — an enclosing page scrolling
+    ///   away under a drag that could never land there is just the view running
+    ///   off.
+    func armAutoScroll(owner: (any ScrollableOffsetState)? = nil) {
+        autoScrollArmed = true
+        autoScrollOwner = owner.map(ObjectIdentifier.init)
+    }
 
     /// Releases the arming when the gesture ends WITHOUT having been a drag —
     /// a motionless press and release is a click, and `end()` (which disarms)
@@ -461,6 +474,7 @@ final class DragAndDropSession: @unchecked Sendable {
     func disarmAutoScroll() {
         guard active == nil else { return }  // a real drag is still in flight
         autoScrollArmed = false
+        autoScrollOwner = nil
         autoScrollEngagedSinceNanos = nil
         releaseAutoScrollFlags()
     }
@@ -470,6 +484,7 @@ final class DragAndDropSession: @unchecked Sendable {
         active = nil
         sourceToken = nil
         autoScrollArmed = false
+        autoScrollOwner = nil
         autoScrollEngagedSinceNanos = nil
         releaseAutoScrollFlags()
     }
@@ -563,7 +578,9 @@ final class DragAndDropSession: @unchecked Sendable {
     ) -> AutoScrollStep? {
         var best: (step: AutoScrollStep, area: Int)?
         for zone in autoScrollZones {
-            guard let rect = dispatcher.regionRect(for: zone.handlerID) else { continue }
+            guard let rect = dispatcher.regionRect(for: zone.handlerID),
+                canReceiveDrag(zone, rect: rect, dispatcher: dispatcher)
+            else { continue }
             let withinCols = cursorX >= rect.offsetX && cursorX < rect.offsetX + rect.width
             let withinRows = cursorY >= rect.offsetY && cursorY < rect.offsetY + rect.height
 
@@ -595,6 +612,34 @@ final class DragAndDropSession: @unchecked Sendable {
             }
         }
         return best?.step
+    }
+
+    /// Whether a zone is somewhere this drag could actually land — the only
+    /// scrollables with any business moving under it. A page that scrolls away
+    /// beneath a payload it would refuse is just the view running off.
+    ///
+    /// Answered from the dispatcher's geometry rather than by asking the
+    /// scrollable, which knows nothing about payloads: a zone qualifies when a
+    /// drop destination that ACCEPTS this payload overlaps it. That makes the
+    /// rule automatic for every scrollable — no new API, and an app that adds a
+    /// `dropDestination` gets the auto-scroll that goes with it for free.
+    private func canReceiveDrag(
+        _ zone: AutoScrollZone, rect: HitTestRegion, dispatcher: MouseEventDispatcher
+    ) -> Bool {
+        // The gesture's own scrollable always qualifies: a reorder carries a
+        // payload no destination can name (or none at all), and the list still
+        // has to reach the rest of itself.
+        if let autoScrollOwner, ObjectIdentifier(zone.vertical) == autoScrollOwner { return true }
+        guard let payload = active?.payload else { return false }
+        return targets.contains { target in
+            guard target.accepts(payload),
+                let targetRect = dispatcher.regionRect(for: target.handlerID)
+            else { return false }
+            return targetRect.offsetX < rect.offsetX + rect.width
+                && rect.offsetX < targetRect.offsetX + targetRect.width
+                && targetRect.offsetY < rect.offsetY + rect.height
+                && rect.offsetY < targetRect.offsetY + targetRect.height
+        }
     }
 
     /// The signed per-tick step for one axis: negative toward the start,

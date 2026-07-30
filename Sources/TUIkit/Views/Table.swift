@@ -1611,10 +1611,11 @@ where Value.ID: Hashable {
                         // Edge auto-scroll applies to reordering too, and the
                         // two feedback modes that open no drag session
                         // (`.live`, `.dimmed`) have to say so explicitly.
-                        dragSession?.armAutoScroll()
+                        dragSession?.armAutoScroll(owner: captureHandler)
                         // Focus follows the gesture, so the keyboard reaches
-                        // this list for the length of it — that is what lets
-                        // Escape cancel a drag on a list not previously focused.
+                        // this list for the length of it — that is what lets the
+                        // navigators scroll a list that was not focused before
+                        // the drag began.
                         focusManager?.focus(id: captureFocusID)
                         // Relative to the ROW LINE, which is what the preview
                         // is — not to the first clickable column.

@@ -36,6 +36,17 @@ struct DragAutoScrollTests {
 
         func setRegions(_ regions: [HitTestRegion]) { dispatcher.setRegions(regions) }
 
+        /// A drop destination sharing a zone's rectangle — what makes that zone
+        /// somewhere the drag could actually land, and so somewhere allowed to
+        /// scroll under it. Real trees get this from the app's own
+        /// `dropDestination`; the tests state it explicitly.
+        func addTarget(_ handlerID: HitTestRegion.HandlerID, accepts: Bool = true) {
+            session.registerTarget(
+                DragAndDropSession.Target(
+                    handlerID: handlerID, accepts: { _ in accepts },
+                    perform: { _, _ in true }, setTargeted: { _ in }))
+        }
+
         func addZone(
             _ handlerID: HitTestRegion.HandlerID,
             vertical: any ScrollableOffsetState,
@@ -82,12 +93,14 @@ struct DragAutoScrollTests {
     private func oneZone(
         vertical: any ScrollableOffsetState,
         horizontal: (any ScrollableOffsetState)? = nil,
-        cursorX: Int, cursorY: Int, delayNanos: UInt64 = 0
+        cursorX: Int, cursorY: Int, delayNanos: UInt64 = 0,
+        accepts: Bool = true
     ) -> Harness {
         let harness = Harness()
         harness.setRegions([Self.viewport])
         harness.addZone(
             Self.zoneID, vertical: vertical, horizontal: horizontal, delayNanos: delayNanos)
+        harness.addTarget(Self.zoneID, accepts: accepts)
         harness.beginDrag(x: cursorX, y: cursorY)
         return harness
     }
@@ -178,7 +191,7 @@ struct DragAutoScrollTests {
         #expect(!harness.drive(nowNanos: 0), "unarmed, the driver does nothing")
         #expect(vertical.scrollOffset == 0)
 
-        harness.session.armAutoScroll()
+        harness.session.armAutoScroll(owner: vertical)
         harness.run(ticks: 3)
         #expect(vertical.scrollOffset > 0, "armed, the edge scrolls it")
 
@@ -186,6 +199,44 @@ struct DragAutoScrollTests {
         harness.session.disarmAutoScroll()
         harness.run(ticks: 3)
         #expect(vertical.scrollOffset == reached, "and disarming stops it")
+    }
+
+    /// A page that scrolls away under a payload it would refuse is just the
+    /// view running off: the drag can't land there, so there is nothing to
+    /// reveal. What entitles a scrollable to move is containing a destination
+    /// that would take THIS payload.
+    @Test("A scrollable that would refuse the payload never scrolls")
+    func refusingZoneDoesNotScroll() {
+        let handler = scrollHandler(offset: 0, content: 100, viewport: 10)
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9, accepts: false)
+        #expect(!harness.drive(nowNanos: 0), "nowhere to land here, so no engagement")
+        harness.run(ticks: 3)
+        #expect(handler.scrollOffset == 0)
+    }
+
+    /// A reorder can only land in the list it came from, so the enclosing page
+    /// must hold still — even though the cursor is at ITS edge too.
+    @Test("A reorder scrolls its own list, not the page around it")
+    func reorderScrollsOnlyItsOwnList() {
+        let page = scrollHandler(offset: 30, content: 100, viewport: 20)
+        let list = scrollHandler(offset: 30, content: 100, viewport: 8)
+        let harness = Harness()
+        let pageRect = HitTestRegion(
+            offsetX: 0, offsetY: 0, width: 40, height: 20, handlerID: HitTestRegion.HandlerID(1))
+        let listRect = HitTestRegion(
+            offsetX: 0, offsetY: 12, width: 40, height: 8, handlerID: HitTestRegion.HandlerID(2))
+        harness.setRegions([pageRect, listRect])
+        harness.addZone(pageRect.handlerID, vertical: page)
+        harness.addZone(listRect.handlerID, vertical: list)
+        // No drop destination anywhere: a reorder payload is private and
+        // unnameable, so nothing could register one.
+        harness.session.armAutoScroll(owner: list)
+        // The last row of both the list and the page — inside both hot margins.
+        harness.session.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 20, y: 19)
+        harness.run(ticks: 3)
+        #expect(list.scrollOffset > 30, "the list the row came from scrolls")
+        #expect(page.scrollOffset == 30, "the page it sits in does not")
     }
 
     @Test("A drag comfortably inside the viewport does not scroll")
@@ -260,6 +311,8 @@ struct DragAutoScrollTests {
         // Registered outer-first, as the render order would.
         harness.addZone(outerRect.handlerID, vertical: outer)
         harness.addZone(innerRect.handlerID, vertical: inner)
+        harness.addTarget(outerRect.handlerID)
+        harness.addTarget(innerRect.handlerID)
         // Cursor on the inner zone's bottom edge (row 12 = 5 + 8 - 1), inside its
         // columns.
         harness.beginDrag(x: 12, y: 12)
@@ -384,6 +437,10 @@ struct DragAutoScrollRenderTests {
         }
 
         _ = frame()  // register the zone and publish its region
+        // A row reorder: the gesture belongs to the control's own scrollable,
+        // which is what entitles it to scroll (nothing else would accept a
+        // reorder payload). The real press does this in `_ListCore` / `Table`.
+        session.armAutoScroll(owner: session.autoScrollZones.first?.vertical)
         // Park the drag on the control's last line: inside the bottom hot
         // margin, at the base rate — the rate that lands exactly on offset 1.
         session.lastAbsoluteEvent = MouseEvent(

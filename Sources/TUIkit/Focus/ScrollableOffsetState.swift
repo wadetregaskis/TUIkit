@@ -533,6 +533,12 @@ extension View {
     /// into view (macOS's drag auto-scroll). The rate then ramps with how far
     /// past the edge the cursor is dragged. `.zero` scrolls immediately; the
     /// default is 1 second.
+    ///
+    /// Only scrollables the drag could actually land in ever move: one holding
+    /// a `dropDestination` that accepts the payload, or the one the gesture
+    /// began in (a row reorder can only land in its own list). A page that
+    /// scrolled away under a payload it would refuse is just the view running
+    /// off — there is nothing there to reveal.
     public func dragAutoScrollDelay(_ delay: Duration) -> some View {
         environment(\.dragAutoScrollDelay, delay)
     }
