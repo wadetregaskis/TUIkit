@@ -739,6 +739,10 @@ where Value.ID: Hashable {
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // The app-customisable key bindings, resolved once here rather than
+        // per keystroke (see RowShortcuts.lookup).
+        handler.shortcuts = context.environment.rowShortcuts.lookup(
+            commandKey: context.environment.commandKey)
         handler.isScrollEnabled = context.environment.isScrollEnabled
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
@@ -1108,6 +1112,10 @@ where Value.ID: Hashable {
         handler.scrollGranularity = context.environment.scrollGranularity
         handler.followMargin = context.environment.scrollFollowMargin
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // The app-customisable key bindings, resolved once here rather than
+        // per keystroke (see RowShortcuts.lookup).
+        handler.shortcuts = context.environment.rowShortcuts.lookup(
+            commandKey: context.environment.commandKey)
         // Table configures its handler from TWO independent places — here for
         // single-line rows, and inline in `buildMultiLineContent` for multi-line
         // ones. Anything captured in only one of them is silently dead on the

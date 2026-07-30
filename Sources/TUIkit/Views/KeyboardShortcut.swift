@@ -175,6 +175,30 @@ public struct KeyboardShortcut: Hashable, Sendable {
         self.trigger = trigger
     }
 
+    /// The trigger `event` would fire, or `nil` for a key no shortcut can name.
+    ///
+    /// The one place a `KeyEvent` becomes a shortcut key, because the Shift rule
+    /// is easy to get wrong and expensive to get wrong twice: Shift comes from
+    /// the CASE, not from `event.shift`. A terminal sends a shifted printable as
+    /// the shifted character with no modifier bits, so trusting the flag would
+    /// make `("a", [.shift])` permanently dead and let `("a", [])` fire for "A".
+    static func trigger(for event: KeyEvent) -> Trigger? {
+        let modifiers = EventModifiers(event)
+        switch event.key {
+        case .enter where modifiers.isEmpty:
+            return .defaultAction
+        case .escape where modifiers.isEmpty:
+            return .cancelAction
+        case .character(let character):
+            var modifiers = modifiers
+            modifiers.remove(.shift)
+            if character.isUppercase { modifiers.insert(.shift) }
+            return .key(KeyEquivalent(character), modifiers)
+        default:
+            return nil
+        }
+    }
+
     /// The printable form of this shortcut — what a menu row prints as its
     /// hint — or `nil` for the semantic roles, which have no key to show.
     ///
@@ -294,26 +318,11 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
     /// Unmodified Return/Escape drive the two semantic roles; a character key
     /// drives a key equivalent whose modifiers match exactly what the terminal
     /// reported. Exactly, not "at least": a shortcut on plain "q" must not fire
-    /// on Ctrl-Q.
+    /// on Ctrl-Q. The event → trigger rule itself is
+    /// ``KeyboardShortcut/trigger(for:)``, shared with the row-shortcut table.
     func trigger(for event: KeyEvent) -> Bool {
-        let modifiers = EventModifiers(event)
-        switch event.key {
-        case .enter where modifiers.isEmpty:
-            return run(.defaultAction)
-        case .escape where modifiers.isEmpty:
-            return run(.cancelAction)
-        case .character(let character):
-            // Shift comes from the CASE, not from `event.shift`: a terminal
-            // sends a shifted printable as the shifted character with no
-            // modifier bits, so trusting the flag would make `("a", [.shift])`
-            // permanently dead and let `("a", [])` fire for "A" as well.
-            var modifiers = modifiers
-            modifiers.remove(.shift)
-            if character.isUppercase { modifiers.insert(.shift) }
-            return run(.key(KeyEquivalent(character), modifiers))
-        default:
-            return false
-        }
+        guard let trigger = KeyboardShortcut.trigger(for: event) else { return false }
+        return run(trigger)
     }
 
     /// Runs the registered action for `trigger`, reporting whether there was one.

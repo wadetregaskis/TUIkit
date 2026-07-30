@@ -111,13 +111,13 @@ struct MultiSelectionKeyboardTests {
         #expect(handler.focusedIndex == 4)
     }
 
-    @Test("`v` extend mode: plain arrows extend, `v` again exits keeping the selection")
+    @Test("Ctrl-V extend mode: plain arrows extend, Ctrl-V again exits keeping the selection")
     func extendModeWalks() {
         let box = SelectionBox()
         let handler = makeHandler(box)
 
         press(handler, .down)  // cursor 1
-        #expect(press(handler, .character("v")))
+        #expect(press(handler, .character("v"), ctrl: true))
         #expect(handler.isExtendingSelection)
         #expect(box.selection == ["b"], "entering selects the cursor row — the mode's feedback")
 
@@ -125,7 +125,7 @@ struct MultiSelectionKeyboardTests {
         press(handler, .down)
         #expect(box.selection == ["b", "c", "d"])
 
-        #expect(press(handler, .character("v")))
+        #expect(press(handler, .character("v"), ctrl: true))
         #expect(!handler.isExtendingSelection)
         press(handler, .down)
         #expect(box.selection == ["b", "c", "d"], "after exiting, arrows move without selecting")
@@ -138,7 +138,7 @@ struct MultiSelectionKeyboardTests {
         let ids = (0..<20).map { "r\($0)" }
         let handler = makeHandler(box, ids: ids)
 
-        press(handler, .character("v"))
+        press(handler, .character("v"), ctrl: true)
         press(handler, .down, shift: true)
         #expect(handler.focusedIndex == 5, "the default ×5 multiplier")
         #expect(box.selection == Set(ids[0...5]))
@@ -193,7 +193,7 @@ struct MultiSelectionKeyboardTests {
         let box = SelectionBox()
         let handler = makeHandler(box)
 
-        press(handler, .character("v"))
+        press(handler, .character("v"), ctrl: true)
         press(handler, .down)
         #expect(box.selection == ["a", "b"])
 
@@ -228,7 +228,7 @@ struct MultiSelectionKeyboardTests {
         #expect(box.selection == nil)
 
         // The multi-selection keys pass through unconsumed.
-        #expect(!press(handler, .character("v")))
+        #expect(!press(handler, .character("v"), ctrl: true))
         #expect(!press(handler, .character("a"), ctrl: true))
         box.selection = "r5"
         #expect(!press(handler, .escape), "Escape falls through even with a single selection")
@@ -255,12 +255,12 @@ struct MultiSelectionKeyboardTests {
         let box = SelectionBox()
         let handler = makeHandler(box)
 
-        press(handler, .character("v"))
+        press(handler, .character("v"), ctrl: true)
         #expect(handler.isExtendingSelection)
         click(handler, at: 3)
         #expect(!handler.isExtendingSelection, "a click ends the keyboard mode")
 
-        press(handler, .character("v"))
+        press(handler, .character("v"), ctrl: true)
         handler.onFocusLost()
         #expect(!handler.isExtendingSelection, "focus loss ends the mode")
     }

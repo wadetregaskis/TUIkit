@@ -105,6 +105,12 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// moves one. See ``View/shiftStepMultiplier(_:)``.
     var shiftStepMultiplier: Int = 5
 
+    /// The chord → action map this list's keys dispatch through, resolved from
+    /// `environment.rowShortcuts` during render (see ``RowShortcuts``). Captured
+    /// rather than read live: a key event arrives between renders, with no
+    /// environment to consult.
+    var shortcuts: RowShortcutLookup = .default
+
     /// The full height of the scrollable content area, in rows —
     /// the space available for visible rows *plus* whichever
     /// scroll indicators are showing.
@@ -628,16 +634,24 @@ extension ItemListHandler {
             return handled
         }
 
-        switch event.key {
-        case .character("v") where !event.ctrl && !event.alt && !event.shift:
+        // Chord-bound operations go through the app-customisable table (see
+        // `RowShortcuts`), captured at render because the environment is out of
+        // reach by the time the key arrives.
+        switch shortcuts.action(for: event) {
+        case .extendSelection:
             toggleExtendMode()
             return true
 
-        case .character("a") where event.ctrl && !event.alt:
+        case .selectAll:
             selectAll()
             isExtendingSelection = false
             return true
 
+        case nil:
+            break
+        }
+
+        switch event.key {
         case .escape:
             return handleEscapeKey()
 

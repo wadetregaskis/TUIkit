@@ -229,8 +229,8 @@ struct MultiSelectionStormTests {
                 switch rand(4) {
                 case 0:
                     let before = box.selection
-                    if handler.handleKeyEvent(KeyEvent(key: .character("v"))) {
-                        violations.append("trial \(trial) step \(step): single mode consumed 'v'")
+                    if handler.handleKeyEvent(KeyEvent(key: .character("v"), ctrl: true)) {
+                        violations.append("trial \(trial) step \(step): single mode consumed Ctrl+V")
                     }
                     if handler.handleKeyEvent(KeyEvent(key: .character("a"), ctrl: true)) {
                         violations.append("trial \(trial) step \(step): single mode consumed Ctrl+A")

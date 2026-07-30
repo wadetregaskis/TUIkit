@@ -78,7 +78,7 @@ struct ContentView: View {
   - **Search**: `.searchable(text:placement:prompt:)` composes a magnifier glyph and a bound field above the content; `.searchFieldIconPlacement(_:)` moves the glyph and turns it to face the field
   - `List` rows render lazily — only the visible window is materialised, so very large lists stay O(visible) — with `.plain` / `.insetGrouped` styles and `.badge()` rows
   - `Table` supports per-column sizing (`.width(.fixed(n) | .flexible | .ratio(r) | .fit)`, where `.fit` sizes to the widest header/cell value), multi-line wrapping cells (`.lineLimit(_:)`), per-column alignment and truncation, and row selection
-  - `Set`-bound selections follow the macOS model: plain / shift- / ctrl-click for sole / range / toggle selection, Shift+arrows extend the range where the terminal reports Shift, `v` toggles an extend mode so plain arrows extend in any terminal, Ctrl+A selects all, and Escape clears — consuming the key only when there is something to clear, so it never blocks app navigation
+  - `Set`-bound selections follow the macOS model: plain / shift- / ctrl-click for sole / range / toggle selection, Shift+arrows extend the range where the terminal reports Shift, Ctrl+V toggles an extend mode so plain arrows extend in any terminal, Ctrl+A selects all, and Escape clears — consuming the key only when there is something to clear, so it never blocks app navigation. Every one of those chords is rebindable with `.rowShortcuts(_:)` — bare keys are deliberately left to the app
   - `NavigationSplitView` columns are resizable by default (drag the divider or use the keyboard) and offer automatic / balanced / prominent-detail styles
 - **Containers & chrome**: `Alert`, `Dialog`, `Panel`, `Card`
 - **Feedback**:

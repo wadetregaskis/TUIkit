@@ -200,7 +200,7 @@ environment value (default 5).
 
 With a `Set` selection binding, the macOS multi-selection keyboard model is
 also available: **Shift+Up/Down** extends an anchored selection span
-(clamping at the ends, like macOS), **v** toggles a sticky extend mode in
+(clamping at the ends, like macOS), <kbd>Ctrl</kbd>+<kbd>V</kbd> toggles a sticky extend mode in
 which plain Up/Down keep extending (Shift then reapplies the accelerated
 step), **Ctrl+A** selects all, and **Escape** acts one stage per press —
 exit extend mode, then clear the selection — falling through to page

@@ -585,6 +585,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        // The app-customisable key bindings, resolved once here rather than
+        // per keystroke (see RowShortcuts.lookup).
+        handler.shortcuts = context.environment.rowShortcuts.lookup(
+            commandKey: context.environment.commandKey)
         handler.isScrollEnabled = context.environment.isScrollEnabled
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
