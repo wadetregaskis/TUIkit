@@ -586,6 +586,30 @@ struct ListReorderDragTests {
         #expect(session.active?.grabY == 1, "the grabbed row stays under the cursor")
     }
 
+    /// The mode a drag was drawn in has to be the mode its drop commits in.
+    /// `effectiveReorderFeedback` is DERIVED from the reorder state, so reading
+    /// it after that state is torn down answered a different question: a
+    /// multi-row `.live` drag previewed with a slot (several rows in hand never
+    /// shuffle live) and then dropped as though `.live` had already moved the
+    /// data — which it never had. The gesture did nothing at all.
+    @Test("A multi-row drop commits in the mode the drag was drawn in")
+    func multiRowLiveDropActuallyMoves() {
+        let fixture = Fixture(feedback: .live)
+        fixture.selection = ["a", "b"]
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        #expect(fixture.handler?.heldRowCount == 2, "the whole selection came")
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "d")))
+        fixture.render()
+        #expect(fixture.items != ["a", "b", "c", "d", "e"], "the rows actually moved")
+    }
+
     /// A drag has to be carriable across the app — pick a row up on one page,
     /// navigate, drop it on another — which means the navigation keys keep
     /// navigating while something is in hand. Escape briefly cancelled a drag

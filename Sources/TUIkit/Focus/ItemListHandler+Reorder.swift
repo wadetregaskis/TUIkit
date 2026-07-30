@@ -683,9 +683,13 @@ extension ItemListHandler {
             self.reorder = nil
             return false
         }
+        // BEFORE the teardown below: `effectiveReorderFeedback` is derived from
+        // the state this is about to clear, so reading it afterwards answers a
+        // different question than the drag was answering all along.
+        let feedback = effectiveReorderFeedback
         self.reorder = nil
 
-        if effectiveReorderFeedback == .live {
+        if feedback == .live {
             focusedIndex = clampedRowIndex(reorder.currentOffset)
             return true
         }
