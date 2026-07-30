@@ -23,11 +23,19 @@ protocol DynamicViewContentActions {
     /// The `.onDelete(perform:)` action: the offsets to delete. `nil` if the
     /// rows can't be deleted.
     var deleteAction: ((IndexSet) -> Void)? { get }
+
+    /// The `.dropDestination(for:action:)` insertion action: whether a payload
+    /// is accepted, and what to do with it at an index. `nil` if the rows take
+    /// no drops.
+    var dropInsertionAction: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)? { get }
 }
 
 extension ForEach: DynamicViewContentActions {
     var moveAction: ((IndexSet, Int) -> Void)? { onMoveAction }
     var deleteAction: ((IndexSet) -> Void)? { onDeleteAction }
+    var dropInsertionAction: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)? {
+        dropInsertion
+    }
 }
 
 // MARK: - ForEach modifiers
@@ -54,6 +62,44 @@ extension ForEach {
     ///
     /// - Parameter action: The delete action, or `nil` to disable deletion.
     /// - Returns: A `ForEach` that reports the delete action to its `List`.
+    /// Makes the rows a drop destination that reports WHERE the drop landed —
+    /// mirrors SwiftUI's `DynamicViewContent.dropDestination(for:action:)`.
+    ///
+    /// The difference from the `View` modifier of the same name is the index.
+    /// A view-level destination only knows that something was dropped on it; a
+    /// row-level one knows which row it was dropped between, so the list can
+    /// show a landing slot while the pointer moves and the app can insert at
+    /// exactly that place.
+    ///
+    /// ```swift
+    /// List {
+    ///     ForEach(tracks, id: \.self) { Text($0.title) }
+    ///         .dropDestination(for: Track.self) { index, tracks in
+    ///             self.tracks.insert(contentsOf: tracks, at: index)
+    ///         }
+    /// }
+    /// ```
+    ///
+    /// While a compatible drag is over the rows, the list opens a gap at the
+    /// prospective index — the same gap a `.cursor` reorder shows, because it
+    /// is the same machinery and it means the same thing.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload type these rows accept.
+    ///   - action: Inserts the payloads at the given index.
+    /// - Returns: A `ForEach` whose list takes drops between its rows.
+    public func dropDestination<Payload>(
+        for payloadType: Payload.Type = Payload.self,
+        action: @escaping (Int, [Payload]) -> Void
+    ) -> ForEach {
+        var copy = self
+        copy.dropInsertion = (
+            accepts: { $0 is Payload },
+            perform: { index, values in action(index, values.compactMap { $0 as? Payload }) }
+        )
+        return copy
+    }
+
     public func onDelete(perform action: ((IndexSet) -> Void)?) -> ForEach {
         var copy = self
         copy.onDeleteAction = action

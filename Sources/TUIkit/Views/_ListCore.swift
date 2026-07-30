@@ -223,6 +223,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// the rows' own hit-test regions, which `attachMouseHandlers` merges
         /// into the list's buffer.
         let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
+
+        /// The rows' `.dropDestination(for:action:)` insertion action, if any —
+        /// what makes this list a landing place for a drag from elsewhere.
+        var dropInsertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
         /// The buffer column of the scrollbar and its line-height, when one is
         /// drawn (`nil` column = no bar). Drives the bar's mouse handler in
         /// `attachMouseHandlers`.
@@ -502,6 +506,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 focusID: persistedFocusID,
                 visibleRowYRanges: visibleRowYRanges,
                 visibleRows: visibleRows,
+                dropInsertion: (source.allContent
+                    ? content as? DynamicViewContentActions : nil)?.dropInsertionAction,
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight
             )
@@ -1046,6 +1052,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 contentColumns: contentColumns
             )
         )
+        // The rows are a landing place for drags from elsewhere. It borrows the
+        // container's region: same rectangle, and the drop target only needs
+        // the geometry — clicks still go to the container's own closure.
+        registerRowDropDestination(
+            zoneID: mouseHandlerID, state: state, context: context, topInset: topInset,
+            insertion: state.dropInsertion)
         // Insert at index 0 so any interactive child inside a
         // row (Button, TextField, Stepper) still wins the
         // dispatcher's reverse-iteration match. This region is
@@ -1271,6 +1283,46 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// no data behind it, so it cannot carry a real offset. Shared with `Table`.
     private static var reorderSlotRowIndex: Int {
         ItemListHandler<SelectionValue>.reorderSlotRowIndex
+    }
+
+    /// Registers the list's rows as a drop destination that reports WHERE — the
+    /// `ForEach.dropDestination(for:action:)` half of the drag-and-drop story.
+    ///
+    /// While a compatible drag hovers, the pointer's row becomes a landing slot
+    /// (the same gap a `.cursor` reorder opens, drawn by the same code). On
+    /// release the app is told the index it was pointing at.
+    private func registerRowDropDestination(
+        zoneID: HitTestRegion.HandlerID,
+        state: PopulatedRenderState,
+        context: RenderContext,
+        topInset: Int,
+        insertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
+    ) {
+        let handler = state.handler
+        guard let insertion, let session = context.environment.dragAndDropSession else {
+            handler.externalDropSlot = nil
+            return
+        }
+        session.registerTarget(
+            DragAndDropSession.Target(
+                handlerID: zoneID,
+                accepts: insertion.accepts,
+                perform: { payload, _ in
+                    let slot = handler.externalDropSlot ?? handler.itemCount
+                    handler.externalDropSlot = nil
+                    insertion.perform(slot, [payload])
+                    return true
+                },
+                setTargeted: { targeted in
+                    if !targeted { handler.externalDropSlot = nil }
+                },
+                hovering: { _, y in
+                    // The band under the pointer names the row it would land
+                    // BEFORE; past the last row it appends.
+                    let contentY = y - topInset
+                    handler.externalDropSlot =
+                        handler.dropTarget(atContentY: contentY) ?? handler.itemCount
+                }))
     }
 
     /// Builds the closure that the container-wide hit-test

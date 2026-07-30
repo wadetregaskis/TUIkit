@@ -88,6 +88,14 @@ final class DragAndDropSession: @unchecked Sendable {
         /// The `isTargeted` callback: fired with `true` when an accepted drag
         /// moves over the destination, `false` when it leaves (or drops).
         let setTargeted: (Bool) -> Void
+
+        /// Where the pointer is INSIDE this destination, in its own local
+        /// cells, on every move while it is the targeted one.
+        ///
+        /// `setTargeted` fires once on entry and once on exit, which is all a
+        /// highlight needs; a destination that opens a landing slot has to
+        /// track the pointer the whole time it is over it.
+        var hovering: ((_ x: Int, _ y: Int) -> Void)?
     }
 
     /// One frame's registration of a scrollable that should auto-scroll while
@@ -290,6 +298,15 @@ final class DragAndDropSession: @unchecked Sendable {
         drag.targetedID = newTarget?.handlerID
         drag.targeted = newTarget
         active = drag
+
+        // A destination that draws a landing slot needs the pointer, not just
+        // "you are being hovered" — localised to its own top-left, since that
+        // is the space its rows are laid out in.
+        if let target = newTarget, let hovering = target.hovering,
+            let rect = dispatcher?.regionRect(for: target.handlerID)
+        {
+            hovering(event.x - rect.offsetX, event.y - rect.offsetY)
+        }
     }
 
     /// Drops the payload on the destination under the cursor (if any), ends

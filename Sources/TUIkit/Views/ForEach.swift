@@ -70,6 +70,11 @@ public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>
     /// delete)`. `nil` unless a `.onDelete` modifier set it.
     var onDeleteAction: ((IndexSet) -> Void)?
 
+    /// The `.dropDestination(for:action:)` insertion action, if attached:
+    /// `(insertion index, payloads)`. Type-erased so `ForEach` need not carry
+    /// the payload type; the erased pair is `(accepts, perform)`.
+    var dropInsertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
+
     /// Creates a ForEach with an explicit ID key path.
     ///
     /// - Parameters:

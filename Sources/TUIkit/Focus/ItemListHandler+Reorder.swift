@@ -377,7 +377,16 @@ extension ItemListHandler {
     /// `move(from:to:)` produces) that having it twice is how the two drift.
     func reorderDrawnRows(_ visible: some Sequence<Int>) -> [DrawnRow] {
         let removed = reorderRemovedRows
-        guard !removed.isEmpty else { return visible.map { .row($0) } }
+        guard !removed.isEmpty else {
+            // No reorder — but a drag from another list may be hovering, and it
+            // opens the same gap for the same reason.
+            let rows = Array(visible)
+            guard let slot = externalDropSlot else { return rows.map { .row($0) } }
+            var drawn = rows.map { DrawnRow.row($0) }
+            let at = rows.firstIndex { $0 >= slot } ?? drawn.count
+            drawn.insert(.slot, at: min(at, drawn.count))
+            return drawn
+        }
         // EVERY held row leaves — a multi-row drag carries them all — but only
         // ONE slot opens: they land as a single block, so a gap per row would
         // promise something the drop does not do.

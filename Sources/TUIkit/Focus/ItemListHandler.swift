@@ -389,6 +389,13 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// recomputed when edge auto-scroll moves the rows under a still pointer.
     var lastReorderContentY: Int?
 
+    /// Where a drag from OUTSIDE this list would land, while one is hovering
+    /// — a data index, since nothing has been taken out of this list.
+    ///
+    /// Draws the same gap a `.cursor` reorder shows, because it means the same
+    /// thing: let go here and the rows arrive at this place.
+    var externalDropSlot: Int?
+
     /// Set when Escape cancels a drag whose button is still down: the release
     /// that follows must be swallowed rather than read as a click.
     var reorderCancelled = false
