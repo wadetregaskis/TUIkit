@@ -90,6 +90,12 @@ struct TableReorderDragTests {
             return buffer
         }
 
+        /// The table's own handler — the press focuses it, which is what makes
+        /// it reachable from here.
+        var handler: ItemListHandler<String>? {
+            env.focusManager?.currentFocused as? ItemListHandler<String>
+        }
+
         /// The screen line of the row whose text IS `label`, matched on its
         /// letters alone.
         ///
@@ -485,5 +491,36 @@ struct TableReorderDragTests {
         // Grabbed by its SECOND row, so the block hangs one line higher than its
         // top — otherwise it jumps up under the pointer as the drag starts.
         #expect(session.active?.grabY == 1, "the grabbed row stays under the cursor")
+    }
+    /// Auto-scroll can make an "N more above" line appear mid-drag, and that
+    /// line pushes every row down by one. The row geometry the gesture reads
+    /// must follow: it used to be captured at the press, so from the moment the
+    /// table left the top every drag position read one row low — the dragged row
+    /// settling a row below the cursor, exactly as reported.
+    @Test("A drag still tracks the cursor after the viewport leaves the top")
+    func dragTracksAfterScrollingAwayFromTheTop() {
+        let fixture = Fixture(rows: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"])
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        #expect(fixture.rows.first == "b", "the live drag has started")
+
+        // What auto-scroll does: the viewport leaves the top, so an indicator
+        // line appears above the rows and they all shift down one.
+        fixture.handler?.scrollFine(by: 3)
+        let scrolled = fixture.render()
+        #expect(fixture.rowY(scrolled, "f") > 0, "row f is on screen after the scroll")
+
+        // Drop ON row f. It must land there, not a row past it.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(scrolled, "f")))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(scrolled, "f")))
+        #expect(
+            fixture.rows == ["b", "c", "d", "e", "f", "a", "g", "h", "i", "j"],
+            "landed on the row under the cursor — got \(fixture.rows)")
     }
 }

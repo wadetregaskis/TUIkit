@@ -1501,7 +1501,7 @@ where Value.ID: Hashable {
                 state: state,
                 context: context,
                 focusManager: focusManager,
-                firstRowY: firstRowY,
+                interiorTopY: firstRowY - state.scrollOffsetAbove,
                 contentColumns: contentColumns,
                 rowContentLeft: rowContentLeft,
                 previewLine: previewLine
@@ -1576,7 +1576,7 @@ where Value.ID: Hashable {
         state: PopulatedRenderState,
         context: RenderContext,
         focusManager: FocusManager?,
-        firstRowY: Int,
+        interiorTopY: Int,
         contentColumns: Range<Int>,
         rowContentLeft: Int,
         previewLine: @escaping @MainActor (Int) -> String?
@@ -1592,7 +1592,18 @@ where Value.ID: Hashable {
         // drag keeps under the pointer. Held in the closure because the closure
         // IS the gesture (see RowReorderGrabPoint).
         let grab = RowReorderGrabPoint()
+        // Whether an "N more above" line sits between the header and the first
+        // row. Asked of the handler EVERY event, never captured: the press
+        // frame's answer goes stale the moment drag auto-scroll leaves the top,
+        // and the whole gesture routes back to this one closure (the
+        // dispatcher's press capture). Captured, every row read one lower than
+        // it was drawn — the dragged row settling a row below the cursor.
+        // (The scrollbar path draws no indicators at all, so its rows never
+        // shift.)
+        let hasIndicators = !state.hasScrollbar
         return { event in
+            let firstRowY =
+                interiorTopY + (hasIndicators && captureHandler.hasContentAbove ? 1 : 0)
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
             // model. Routed through the shared
