@@ -309,6 +309,68 @@ extension ItemListHandler {
         return drawn
     }
 
+    /// The sentinel `rowIndex` the reorder drop slot is published with: it has
+    /// no data behind it, so it cannot carry a real offset.
+    static var reorderSlotRowIndex: Int { -1 }
+
+    /// One drawn entry's extent on screen, as a view reports it.
+    struct DrawnBand {
+        /// What occupies a drawn line, for band purposes.
+        enum Content {
+            /// A real, selectable data row.
+            case row(Int)
+            /// The reorder drop slot: a drop target with no data behind it.
+            case slot
+            /// Chrome that shares the row area — a `List`'s section header. Not
+            /// selectable, and not somewhere a row can land.
+            case chrome(rowIndex: Int)
+        }
+
+        /// What is drawn there.
+        var entry: Content
+        /// Its first line, counted from the first CONTENT line of the interior.
+        /// Must already include the "N more above" indicator's offset and any
+        /// overscroll slide: this is the space the mouse handler works in.
+        var yStart: Int
+        /// How many lines it occupies (a clipped row counts what is shown).
+        var height: Int
+    }
+
+    /// Hands this frame's drawn row geometry to the drag, applying the
+    /// drop-index rules once for both `List` and `Table`.
+    ///
+    /// It has to come from the handler rather than a mouse closure's captured
+    /// copy: a ``RowReorderFeedback/live`` drag reorders the rows underneath the
+    /// cursor, so press-frame bands would describe an order that no longer
+    /// exists (and a wheel tick can scroll them out from under any mode).
+    func publishRowBands(_ bands: [DrawnBand]) {
+        let placeholder = reorderPlaceholder
+        visibleRowBands = bands.map { band in
+            switch band.entry {
+            case .row(let rowIndex):
+                // A real row means "put it where this row is" — as the row is
+                // DRAWN, not as its data is numbered. Mid-drag the list has
+                // closed up behind the dragged row and opened a slot elsewhere,
+                // so the two differ, and it is the drawn position the pointer is
+                // actually resting on.
+                return RowBand(
+                    rowIndex: rowIndex, yStart: band.yStart, height: band.height,
+                    isContent: true, dropIndex: reorderDrawnPosition(of: rowIndex))
+            case .slot:
+                // The gap holds the target it already has. It is the line the
+                // pointer rests on after every step, so reading it as "off the
+                // rows" is what made a `.cursor` drag cancel its own gap.
+                return RowBand(
+                    rowIndex: Self.reorderSlotRowIndex, yStart: band.yStart,
+                    height: band.height, isContent: false, dropIndex: placeholder?.slot)
+            case .chrome(let rowIndex):
+                return RowBand(
+                    rowIndex: rowIndex, yStart: band.yStart, height: band.height,
+                    isContent: false, dropIndex: nil)
+            }
+        }
+    }
+
     // MARK: - The drag
 
     /// Whether a reorder drag is in flight *and* has moved — the test that

@@ -258,6 +258,14 @@ extension Table {
 /// Internal core view that handles table rendering inside a ContainerView.
 private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable, Layoutable
 where Value.ID: Hashable {
+    /// The inset between the table's border and its row lines.
+    ///
+    /// One constant because two things must agree about it: the layout that
+    /// draws the rows there, and the mouse maths that works out which cell of a
+    /// row a press landed on. They drifted apart once already — see
+    /// `rowContentLeft` in `attachMouseHandlers`.
+    static var containerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
+
     let data: [Value]
     let columns: [TableColumn<Value>]
     let singleSelection: Binding<Value.ID?>?
@@ -408,7 +416,7 @@ where Value.ID: Hashable {
         let container = ContainerView(
             title: nil,
             style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
-            padding: EdgeInsets(horizontal: 1, vertical: 0)
+            padding: Self.containerPadding
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
@@ -438,11 +446,18 @@ where Value.ID: Hashable {
         /// path shows one). Drives the bar's mouse handler in `attachMouseHandlers`.
         var hasScrollbar = false
 
-        /// This frame's rendered row lines, in `visibleRange` order — the source
-        /// of a ``RowReorderFeedback/cursor`` drag's floating preview. Populated
-        /// only for a reorderable table (`onMove` set), since nothing else reads
-        /// it; empty on the multi-line path, which reorders `.live`.
-        var visibleRowLines: [String] = []
+        /// This frame's column widths and row width — enough to re-render any
+        /// row on demand, which is how a ``RowReorderFeedback/cursor`` drag gets
+        /// its floating preview.
+        ///
+        /// Deliberately NOT the row line as drawn: that line is styled for the
+        /// grid it sits in (selection background, padding out to the interior
+        /// width, the scrollbar's column beside it), and floating it painted
+        /// over the scrollbar and the right border. What rides the pointer is
+        /// the row as its own object — the contract `_ListCore` already keeps by
+        /// floating the row's own content buffer.
+        var columnWidths: [Int] = []
+        var rowContentWidth = 0
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -595,7 +610,8 @@ where Value.ID: Hashable {
                 // Single-line rows: leave empty (no per-frame array); the click
                 // handler maps the line offset straight to the row.
                 visibleRowHeights: [],
-                visibleRowLines: composed.rowLines
+                columnWidths: columnWidths,
+                rowContentWidth: innerWidth
             )
         )
     }
@@ -652,7 +668,7 @@ where Value.ID: Hashable {
         // Drawn in reorder order (the dragged row out, a slot where it would
         // land) — see `composeRowLines` for the same two lines of it.
         let drawn = handler.reorderDrawnRows(visibleRange)
-        publishRowBands(handler: handler, drawn: drawn)
+        publishRowBands(handler: handler, drawn: drawn, slide: handler.overscrollState.excursion)
         var rowLines: [String] = []
         rowLines.reserveCapacity(contentHeight)
         for line in 0..<contentHeight {
@@ -684,7 +700,7 @@ where Value.ID: Hashable {
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
                 scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true,
-                visibleRowLines: handler.onMove == nil ? [] : rowLines))
+                columnWidths: columnWidths, rowContentWidth: contentInnerWidth))
     }
 
     // MARK: - Multi-line content (variable row heights)
@@ -810,6 +826,8 @@ where Value.ID: Hashable {
         if topClip > 0, !visibleRowHeights.isEmpty {
             visibleRowHeights[0] = max(1, visibleRowHeights[0] - topClip)
         }
+        publishMultiLineRowBands(
+            handler: handler, range: window.range, heights: visibleRowHeights)
         return (
             lines: lines,
             state: PopulatedRenderState(
@@ -1255,7 +1273,7 @@ where Value.ID: Hashable {
                     context: context, palette: palette))
             }
         }
-        publishRowBands(handler: handler, drawn: drawn)
+        publishRowBands(handler: handler, drawn: drawn, slide: handler.overscrollState.excursion)
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         if handler.hasContentBelow {
@@ -1300,35 +1318,49 @@ where Value.ID: Hashable {
         return ANSIRenderer.applyPersistentDim(line)
     }
 
-    /// Hands this frame's drawn row geometry to the handler for the reorder drag
-    /// to hit-test against — the Table's mirror of `_ListCore.publishRowBands`.
+    /// Hands this frame's drawn row geometry to the shared publisher.
     ///
-    /// `yStart` counts lines from the first ROW line (past the "N more above"
-    /// indicator), which is the same space the mouse handler's `lineOffset` is in.
-    /// Every row is one line on the single-line paths, which is the only place
-    /// this is called from; the multi-line path reorders with `.live` feedback,
-    /// where the data itself moves and there is no slot to hit-test.
+    /// `yStart` is measured from the first row line (past any "N more above"
+    /// indicator), which is the space the mouse handler's `lineOffset` is in,
+    /// and it must include the overscroll `slide` — the rows are drawn shifted
+    /// by it, so a drag hit-tests the wrong row without it.
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
-        drawn: [ItemListHandler<Value.ID>.DrawnRow]
+        drawn: [ItemListHandler<Value.ID>.DrawnRow],
+        slide: Int
     ) {
-        let placeholder = handler.reorderPlaceholder
-        handler.visibleRowBands = drawn.enumerated().map { line, entry in
+        typealias Handler = ItemListHandler<Value.ID>
+        handler.publishRowBands(drawn.enumerated().compactMap { line, entry in
+            let yStart = line + slide
+            guard yStart >= 0 else { return nil }  // slid off the top
             switch entry {
             case .row(let rowIndex):
-                // A real row means "put it where this row is" — as DRAWN, which
-                // mid-drag is not how its data is numbered.
-                return ItemListHandler<Value.ID>.RowBand(
-                    rowIndex: rowIndex, yStart: line, height: 1, isContent: true,
-                    dropIndex: handler.reorderDrawnPosition(of: rowIndex))
+                return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: 1)
             case .slot:
-                // The gap keeps the target it already has: it is the line the
-                // pointer rests on after every step of the drag.
-                return ItemListHandler<Value.ID>.RowBand(
-                    rowIndex: -1, yStart: line, height: 1, isContent: false,
-                    dropIndex: placeholder?.slot)
+                return Handler.DrawnBand(entry: .slot, yStart: yStart, height: 1)
             }
-        }
+        })
+    }
+
+    /// The multi-line path's bands: rows of different heights, no slot (that
+    /// path forces ``RowReorderFeedback/live``, which moves the data instead of
+    /// opening a gap).
+    ///
+    /// It published nothing at all until now, which did not merely disable
+    /// drag-reorder there — it made the gesture swallow the click while doing
+    /// nothing, since `dropTarget` had no bands to hit-test against.
+    private func publishMultiLineRowBands(
+        handler: ItemListHandler<Value.ID>,
+        range: Range<Int>,
+        heights: [Int]
+    ) {
+        typealias Handler = ItemListHandler<Value.ID>
+        var yStart = 0
+        handler.publishRowBands(range.enumerated().map { offset, rowIndex in
+            let height = offset < heights.count ? max(1, heights[offset]) : 1
+            defer { yStart += height }
+            return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: height)
+        })
     }
 
     // MARK: - Mouse handler wiring
@@ -1388,13 +1420,35 @@ where Value.ID: Hashable {
         // render inside a bordered container, so one column each side. (The
         // List sibling got this guard in a6ba424d; this is its Table mirror.)
         let contentColumns = 1..<max(1, buffer.width - 1)
+        // The row, rendered as its own object: no selection background, no
+        // padding out to the grid's interior. Built on demand — only a drag
+        // that actually starts pays for it.
+        let palette = context.environment.palette
+        let columnWidths = state.columnWidths
+        let rowContentWidth = state.rowContentWidth
+        let previewLine: @MainActor (Int) -> String? = { index in
+            guard data.indices.contains(index), !columnWidths.isEmpty else { return nil }
+            return renderRow(
+                item: data[index], columnWidths: columnWidths,
+                isFocused: false, isSelected: false, rowWidth: rowContentWidth,
+                context: context, palette: palette)
+        }
+        // Where a ROW LINE's first cell sits in the buffer: past the border and
+        // past the container's own padding. Not the same as the first clickable
+        // column — the padding column is clickable but belongs to no row — and
+        // measuring the reorder grab point from the wrong one of the two put
+        // the floating row a cell off the pointer. `_ListCore` passes the
+        // equivalent `rowContentLeft`.
+        let rowContentLeft = contentColumns.lowerBound + Self.containerPadding.leading
         let mouseHandlerID = mouseDispatcher.register(
             containerMouseHandler(
                 state: state,
                 context: context,
                 focusManager: focusManager,
                 firstRowY: firstRowY,
-                contentColumns: contentColumns
+                contentColumns: contentColumns,
+                rowContentLeft: rowContentLeft,
+                previewLine: previewLine
             )
         )
         // Insert at the back so interactive children inside a
@@ -1467,13 +1521,14 @@ where Value.ID: Hashable {
         context: RenderContext,
         focusManager: FocusManager?,
         firstRowY: Int,
-        contentColumns: Range<Int>
+        contentColumns: Range<Int>,
+        rowContentLeft: Int,
+        previewLine: @escaping @MainActor (Int) -> String?
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
         let visibleRowHeights = state.visibleRowHeights
-        let visibleRowLines = state.visibleRowLines
         let rowIDs = data.map(\.id)
         let capturedPrimaryAction = primaryAction
         let dragSession = context.environment.dragAndDropSession
@@ -1529,7 +1584,9 @@ where Value.ID: Hashable {
                         let index = rowAt(y: event.y)
                     {
                         captureHandler.beginReorder(grabbing: index)
-                        grab.x = max(0, event.x - contentColumns.lowerBound)
+                        // Relative to the ROW LINE, which is what the preview
+                        // is — not to the first clickable column.
+                        grab.x = max(0, event.x - rowContentLeft)
                         grab.y = 0  // one line per row on every reorderable path
                     }
                     return true
@@ -1542,11 +1599,10 @@ where Value.ID: Hashable {
                     let wasActive = captureHandler.isReordering
                     captureHandler.dragReorder(toContentY: dragContentY)
                     if let dragSession, let floating = captureHandler.reorderFloatingRow {
-                        let offset = floating - visibleRange.lowerBound
-                        if !wasActive, visibleRowLines.indices.contains(offset) {
+                        if !wasActive, let line = previewLine(floating) {
                             // The row's own line, floated at the cursor. No hit
                             // regions to strip: it is a plain rendered line.
-                            let preview = FrameBuffer(lines: [visibleRowLines[offset]])
+                            let preview = FrameBuffer(lines: [line])
                             dragSession.begin(
                                 payload: RowReorderPayload(), preview: preview,
                                 grabX: grab.x, grabY: 0)  // `begin` trims and clamps

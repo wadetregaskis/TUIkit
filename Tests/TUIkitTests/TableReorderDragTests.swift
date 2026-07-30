@@ -285,4 +285,147 @@ struct TableReorderDragTests {
 
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yTarget))
     }
+
+    /// The grabbed cell must stay under the pointer, so with the pointer held
+    /// still the float must sit exactly on the row's own left edge. Measuring
+    /// the grab from the first CLICKABLE column instead of the first ROW cell
+    /// put it a cell out — and because the preview was the full-interior-width
+    /// styled line, the overhang painted over the scrollbar and the border.
+    @Test("The floating row lands on the row's own left edge")
+    func cursorPreviewAnchorsToTheRow() {
+        let fixture = Fixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let y = fixture.rowY(buffer, "b")
+        guard let line = buffer.lines.first(where: { $0.stripped.contains("b") }),
+            let textColumn = line.stripped.firstIndex(of: "b").map({
+                line.stripped.distance(from: line.stripped.startIndex, to: $0)
+            })
+        else {
+            Issue.record("expected a row line holding \"b\""); return
+        }
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: textColumn, y: y))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: textColumn, y: y + 2))
+        fixture.render()
+
+        guard let frame = fixture.tui.dragAndDropSession.previewFrame(),
+            let preview = fixture.tui.dragAndDropSession.active?.preview
+        else {
+            Issue.record("expected a floating row"); return
+        }
+        let previewText = preview.lines[0].stripped
+        guard let inPreview = previewText.firstIndex(of: "b").map({
+            previewText.distance(from: previewText.startIndex, to: $0)
+        }) else {
+            Issue.record("the float should be the row: \(previewText.debugDescription)"); return
+        }
+        #expect(
+            frame.x + inPreview == textColumn,
+            "the grabbed cell drifted off the pointer: float x \(frame.x) + \(inPreview)")
+        #expect(
+            frame.x + preview.width <= buffer.width - 1,
+            "and the float stays inside the table's own frame, off the border and scrollbar")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: textColumn, y: y + 2))
+    }
+
+    /// What floats is the ROW, not the row as the grid drew it. The drawn line
+    /// carries the focus/selection background and is padded out to the grid's
+    /// interior — floating that painted a bar of highlight across the scrollbar
+    /// column and the right border, because a styled blank is real content and
+    /// the preview trim (rightly) keeps it.
+    @Test("The floating row is the row itself, not its line in the grid")
+    func cursorPreviewIsUnstyled() {
+        let fixture = Fixture(feedback: .cursor, scrollbar: .visible)
+        var buffer = fixture.render()
+        let y = fixture.rowY(buffer, "b")
+        // Select it first: the row you drag is normally the row you are on.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: y))
+        buffer = fixture.render()
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 3, y: y + 2))
+        fixture.render()
+
+        guard let frame = fixture.tui.dragAndDropSession.previewFrame(),
+            let preview = fixture.tui.dragAndDropSession.active?.preview
+        else {
+            Issue.record("expected a floating row"); return
+        }
+        #expect(
+            preview.lines[0].stripped.trimmingCharacters(in: .whitespaces) == "b",
+            "the float is one row's content: \(preview.lines[0].stripped.debugDescription)")
+        #expect(
+            frame.x + preview.width <= buffer.width - 2,
+            "it clears the scrollbar column and the border: x \(frame.x) w \(preview.width)")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: y + 2))
+    }
+
+    /// A table with a wrapping column publishes no row bands at all until now,
+    /// so the drag had nothing to hit-test: the row never moved AND the click
+    /// was swallowed. Multi-line tables force `.live` feedback (no slot), so a
+    /// successful drag is visible in the data.
+    @Test("A multi-line table reorders by drag too")
+    func multiLineDragReorders() {
+        let rows = ["alpha beta gamma", "delta epsilon", "zeta eta"]
+        let holder = MultiLineFixture(rows: rows)
+        let buffer = holder.render()
+        let ySource = holder.rowY(buffer, "alpha")
+        let yTarget = holder.rowY(buffer, "zeta")
+        #expect(ySource >= 0 && yTarget > ySource, "both rows on screen")
+
+        holder.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: ySource))
+        holder.render()
+        holder.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 4, y: yTarget))
+        holder.render()
+        holder.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 4, y: yTarget))
+        holder.render()
+
+        #expect(holder.rows.first != rows[0], "the dragged row left the top: \(holder.rows)")
+        #expect(Set(holder.rows) == Set(rows), "and nothing was lost")
+    }
+
+    /// A table whose column wraps — rows are taller than one line, so the band
+    /// heights are what a click maps through.
+    @MainActor
+    private final class MultiLineFixture {
+        var rows: [String]
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+
+        init(rows: [String]) {
+            self.rows = rows
+            env.focusManager = FocusManager()
+            env.applyRuntimeServices(from: tui)
+            tui.mouseEventDispatcher.setActiveSupport(.full)
+        }
+
+        var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
+
+        @discardableResult
+        func render() -> FrameBuffer {
+            dispatcher.beginRenderPass()
+            let view = Table(rows.map(Row.init), selection: .constant(String?.none)) {
+                TableColumn<Row>("Name", value: \.name).lineLimit(2)
+            }
+            .onMove { self.rows.move(fromOffsets: $0, toOffset: $1) }
+            .frame(width: 14, height: 12)
+            var context = RenderContext(
+                availableWidth: 14, availableHeight: 14, environment: env, tuiContext: tui)
+            context.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        func rowY(_ buffer: FrameBuffer, _ label: String) -> Int {
+            buffer.lines.firstIndex { $0.stripped.contains(label) } ?? -1
+        }
+    }
 }

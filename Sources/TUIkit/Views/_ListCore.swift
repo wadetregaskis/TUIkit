@@ -1225,36 +1225,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// cursor, so press-frame bands would describe an order that no longer
     /// exists (and a wheel tick can scroll them out from under any mode).
     private func publishRowBands(state: PopulatedRenderState) {
-        let handler = state.handler
-        let placeholder = handler.reorderPlaceholder
-        state.handler.visibleRowBands = state.visibleRowYRanges.map { range in
-            var isContent = false
-            if case .content = range.type { isContent = true }
-            let dropIndex: Int?
-            if isContent {
-                // A real row means "put it where this row is" — as the row is
-                // DRAWN, not as its data is numbered. Mid-drag the list has
-                // closed up behind the dragged row and opened a slot elsewhere,
-                // so the two differ, and it is the drawn position the pointer is
-                // actually resting on.
-                dropIndex = handler.reorderDrawnPosition(of: range.rowIndex)
-            } else if range.rowIndex == Self.reorderSlotRowIndex, let placeholder {
-                // The gap holds the target it already has. It is the line the
-                // pointer rests on after every step, so reading it as "off the
-                // rows" is what made a `.cursor` drag cancel its own gap.
-                dropIndex = placeholder.slot
+        typealias Handler = ItemListHandler<SelectionValue>
+        state.handler.publishRowBands(state.visibleRowYRanges.map { range in
+            let entry: Handler.DrawnBand.Content
+            if case .content = range.type {
+                entry = .row(range.rowIndex)
+            } else if range.rowIndex == Self.reorderSlotRowIndex {
+                entry = .slot
             } else {
-                dropIndex = nil
+                entry = .chrome(rowIndex: range.rowIndex)
             }
-            return ItemListHandler<SelectionValue>.RowBand(
-                rowIndex: range.rowIndex, yStart: range.yStart, height: range.height,
-                isContent: isContent, dropIndex: dropIndex)
-        }
+            return Handler.DrawnBand(entry: entry, yStart: range.yStart, height: range.height)
+        })
     }
 
     /// The sentinel row index the reorder drop slot is decorated with — it has
-    /// no data behind it, so it cannot carry a real offset.
-    private static var reorderSlotRowIndex: Int { -1 }
+    /// no data behind it, so it cannot carry a real offset. Shared with `Table`.
+    private static var reorderSlotRowIndex: Int {
+        ItemListHandler<SelectionValue>.reorderSlotRowIndex
+    }
 
     /// Builds the closure that the container-wide hit-test
     /// region invokes. Routes wheel to the handler's scroll
