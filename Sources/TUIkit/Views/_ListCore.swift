@@ -430,7 +430,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // A `.dimmed` / `.cursor` drag rewrites the rows here, AFTER the
         // window walk: the drag shows an extra row that is not in the data, so
         // it must not take part in choosing which data rows are visible.
-        visibleRows = decorateForReorder(visibleRows, handler: handler, palette: palette)
+        visibleRows = decorateForReorder(
+            visibleRows, handler: handler, context: context, palette: palette)
 
         // Row width — the List is greedy on width (SwiftUI parity): fill the
         // available interior, growing past it only when a row is itself wider
@@ -758,7 +759,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
-            let isFocused = handler.isFocused(at: rowIndex) && listHasFocus
+            let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
             var styledLines = renderRow(
                 row: row,
@@ -889,7 +890,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
-            let isFocused = handler.isFocused(at: rowIndex) && listHasFocus
+            let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
             var styledLines = renderRow(
                 row: row,
@@ -1178,14 +1179,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func decorateForReorder(
         _ visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         handler: ItemListHandler<SelectionValue>,
+        context: RenderContext,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         let original = handler.reorderRemovedRow
             .flatMap { source in visibleRows.first { $0.index == source }?.row.buffer }
-        let body: FrameBuffer
+        var body: FrameBuffer
         switch handler.effectiveReorderFeedback {
         case .dimmed: body = original.map(dimmed) ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: original)
+        }
+        // A keyboard move has no pointer to say where the row is, so the slot
+        // says it: the row you are steering is emphasised, not a gap.
+        if let held = heldSlotBackground(handler: handler, context: context, palette: palette) {
+            body = FrameBuffer(
+                lines: body.lines.map {
+                    ANSIRenderer.applyPersistentBackground(
+                        $0.isEmpty ? " " : $0, color: held)
+                })
         }
         // Which rows to draw, and where the slot goes among them, is the shared
         // arithmetic — `Table` asks the same question of the same handler.
@@ -1198,6 +1209,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 return (Self.reorderSlotRowIndex, SelectableListRow(type: .footer, buffer: body))
             }
         }
+    }
+
+    /// The colour that marks the slot as the row you are steering — the same
+    /// pulse a focused, selected row uses, so "in hand" reads as emphasis
+    /// rather than as a hole in the list. Only for a keyboard move: a mouse
+    /// drag has the pointer itself to say where the row is.
+    private func heldSlotBackground(
+        handler: ItemListHandler<SelectionValue>, context: RenderContext, palette: any Palette
+    ) -> Color? {
+        guard handler.isKeyboardMove else { return nil }
+        return SelectionIndicator.resolve(isFocused: true, context: context)
+            .color(
+                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+                bright: palette.accent.opacity(
+                    ViewConstants.focusPulseMax, over: palette.background))
     }
 
     /// The same buffer with every line drawn faint — `.dimmed`'s preview of the

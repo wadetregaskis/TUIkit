@@ -677,7 +677,7 @@ where Value.ID: Hashable {
             case .row(let rowIndex):
                 rowLine = renderRow(
                     item: data[rowIndex], columnWidths: columnWidths,
-                    isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
+                    isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     rowWidth: contentInnerWidth, context: context, palette: palette)
             case .slot:
@@ -1261,7 +1261,7 @@ where Value.ID: Hashable {
                 rowLines.append(renderRow(
                     item: data[rowIndex],
                     columnWidths: columnWidths,
-                    isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
+                    isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     rowWidth: contentWidth,
                     context: context,
@@ -1306,13 +1306,25 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> String {
+        // A keyboard move has no pointer to say where the row is, so the slot
+        // says it: the row you are steering reads as emphasis, not as a hole.
+        // (`isFocused` rather than a bespoke colour — the pulse a focused row
+        // already uses is exactly the "this one" cue, and it walks the palette
+        // ramp so it survives a 256-colour terminal.)
+        let held = handler.isKeyboardMove
         guard handler.effectiveReorderFeedback == .dimmed,
             let source = handler.reorderRemovedRow, data.indices.contains(source)
-        else { return String(repeating: " ", count: max(0, rowWidth)) }
+        else {
+            // No source to show (a `.cursor` drag carries the row on the
+            // pointer). A keyboard move never lands here: it resolves `.cursor`
+            // to `.dimmed`, precisely because there is no pointer to carry it.
+            return String(repeating: " ", count: max(0, rowWidth))
+        }
         let line = renderRow(
             item: data[source], columnWidths: columnWidths,
-            isFocused: false, isSelected: false, rowWidth: rowWidth,
+            isFocused: held, isSelected: held, rowWidth: rowWidth,
             context: context, palette: palette)
+        guard !held else { return line }
         // Persistent: `renderRow` emits a reset per styled run — starting with
         // the selection-indicator gutter, so a bare wrapper died at cell one.
         return ANSIRenderer.applyPersistentDim(line)

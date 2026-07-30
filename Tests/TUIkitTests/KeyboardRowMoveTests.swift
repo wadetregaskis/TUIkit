@@ -279,6 +279,28 @@ struct KeyboardRowMoveTests {
         #expect(context.environment.statusBar.escapeLabelOverride == "cancel move")
     }
 
+    /// While a row is out of the list the cursor belongs to the SLOT — that is
+    /// where the row visually is. `focusedIndex` is parked on a neighbour on
+    /// purpose (scroll-follow reasons in data indices), so highlighting from it
+    /// directly lit the row BELOW the one being moved.
+    @Test("The row below the slot is not the cursor row")
+    func heldRowDoesNotHighlightItsNeighbour() {
+        let rows = RowBox()
+        let handler = makeHandler(rows, feedback: .dimmed)
+        handler.focusedIndex = 1
+        #expect(handler.isCursorRow(1), "before the pick-up, the cursor is a row")
+        #expect(pickUp(handler))
+        #expect(press(handler, .down))
+        #expect(handler.isHoldingRow)
+        for index in rows.items.indices {
+            #expect(
+                !handler.isCursorRow(index),
+                "no DATA row is the cursor while one is in hand (index \(index))")
+        }
+        #expect(press(handler, .enter))
+        #expect(handler.isCursorRow(handler.focusedIndex), "and it comes back on the drop")
+    }
+
     @Test("The pick-up chord is rebindable like any other")
     func rebindable() {
         let rows = RowBox()

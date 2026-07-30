@@ -309,7 +309,23 @@ extension ItemListHandler {
         return drawn
     }
 
-    /// The sentinel `rowIndex` the reorder drop slot is published with: it has
+    /// Whether this data row carries the keyboard cursor *right now*.
+    ///
+    /// While a row is out of the list — the slot feedback modes — the cursor
+    /// belongs to the SLOT, which is where the row visually is. `focusedIndex`
+    /// is meanwhile parked on a neighbour of the slot on purpose (see
+    /// ``moveHeldRow(to:)``): the scroll-follow machinery reasons in data
+    /// indices and a slot has no data behind it. Highlighting straight from
+    /// `focusedIndex` is what put the cursor one row BELOW the row being moved.
+    func isCursorRow(_ index: Int) -> Bool {
+        reorderRemovedRow == nil && isFocused(at: index)
+    }
+
+    /// Whether the control is steering a row that has left the list, so the
+    /// slot should read as "this is in your hand" rather than as a hole.
+    var isHoldingRow: Bool { reorderRemovedRow != nil }
+
+        /// The sentinel `rowIndex` the reorder drop slot is published with: it has
     /// no data behind it, so it cannot carry a real offset.
     static var reorderSlotRowIndex: Int { -1 }
 
