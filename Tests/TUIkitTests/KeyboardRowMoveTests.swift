@@ -129,6 +129,78 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["a", "b", "c", "d", "e"], "put back, not left half-moved")
     }
 
+    // MARK: - The whole selection
+
+    /// A handler with a real multi-selection binding, so the reorder can read
+    /// which rows are selected.
+    private func multiHandler(_ rows: RowBox, selected: Set<String>) -> ItemListHandler<String> {
+        let box = SelectionBox(selected)
+        let handler = ItemListHandler<String>(
+            focusID: "list", itemCount: rows.items.count, viewportHeight: 5,
+            selectionMode: .multi)
+        handler.multiSelection = box.binding
+        handler.itemIDs = rows.items
+        handler.onMove = { offsets, destination in
+            rows.items.move(fromOffsets: offsets, toOffset: destination)
+            handler.itemIDs = rows.items
+            handler.itemCount = rows.items.count
+        }
+        return handler
+    }
+
+    @MainActor
+    private final class SelectionBox {
+        var value: Set<String>
+        init(_ value: Set<String>) { self.value = value }
+        var binding: Binding<Set<String>> { Binding(get: { self.value }, set: { self.value = $0 }) }
+    }
+
+    /// macOS's rule: grab ANY selected row and they all come. Disjoint rows
+    /// land as one block, in their original relative order.
+    @Test("A disjoint selection moves as one block, keeping its order")
+    func disjointSelectionMovesAsABlock() {
+        let rows = RowBox()  // a b c d e
+        let handler = multiHandler(rows, selected: ["b", "d", "e"])
+        handler.focusedIndex = 3  // d — one of the selected rows
+        #expect(pickUp(handler))
+        #expect(handler.heldRowCount == 3, "the whole selection came")
+
+        #expect(press(handler, .home))
+        #expect(press(handler, .enter))
+        #expect(rows.items == ["b", "d", "e", "a", "c"], "one block, original order")
+    }
+
+    /// Dragging an UNSELECTED row takes only it — which is what makes it
+    /// possible to move a row out of a selection without clearing it first.
+    @Test("An unselected row moves alone")
+    func unselectedRowMovesAlone() {
+        let rows = RowBox()
+        let handler = multiHandler(rows, selected: ["b", "d"])
+        handler.focusedIndex = 0  // a, not selected
+        #expect(pickUp(handler))
+        #expect(handler.heldRowCount == 1)
+        #expect(press(handler, .end))
+        #expect(press(handler, .enter))
+        #expect(rows.items == ["b", "c", "d", "e", "a"])
+    }
+
+    /// `.live` moves the data at every step, which several rows must not do:
+    /// they are only a block once they land, and one `onMove` could never
+    /// scatter them back if the move were cancelled.
+    @Test("Several rows in hand always preview with a slot, never live")
+    func multiRowNeverPreviewsLive() {
+        let rows = RowBox()
+        let handler = multiHandler(rows, selected: ["b", "c"])
+        handler.reorderFeedback = .live
+        handler.focusedIndex = 1
+        #expect(pickUp(handler))
+        #expect(handler.effectiveReorderFeedback == .dimmed)
+        #expect(press(handler, .end))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "nothing moved yet")
+        #expect(press(handler, .escape))
+        #expect(rows.items == ["a", "b", "c", "d", "e"], "and the cancel is free")
+    }
+
     // MARK: - Nudging
 
     /// The accelerator: one keystroke, one place, no mode. Ctrl+↑/↓ — the

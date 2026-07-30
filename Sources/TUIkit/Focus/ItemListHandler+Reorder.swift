@@ -55,8 +55,23 @@ extension ItemListHandler {
     /// The single piece of index arithmetic the whole feature rests on; the drop
     /// slot, the drop target and the decoration all derive from it, so it lives
     /// in one place rather than being re-derived at each site.
-    func reorderClosedUpIndex(_ index: Int, source: Int) -> Int {
-        index - (index > source ? 1 : 0)
+    func reorderClosedUpIndex(_ index: Int, removed: IndexSet) -> Int {
+        index - removed.count(where: { $0 < index })
+    }
+
+    /// The data offset that a drop at closed-up position `slot` must pass to
+    /// `onMove`, whose `toOffset` is measured against the collection BEFORE the
+    /// move: the index of the `slot`-th row that is NOT in hand.
+    ///
+    /// Subsumes the single-row rule this replaced (`from < target ? target + 1
+    /// : target`) — for one removed row the two agree at every position.
+    func reorderInsertionOffset(forSlot slot: Int, removed: IndexSet) -> Int {
+        var seen = 0
+        for index in 0..<itemCount where !removed.contains(index) {
+            if seen == slot { return index }
+            seen += 1
+        }
+        return itemCount
     }
 
     /// The row a non-`.live` drag has taken OUT of the list, or `nil` when the
@@ -72,6 +87,16 @@ extension ItemListHandler {
         guard let source = reorderSource else { return nil }
         guard effectiveReorderFeedback == .cursor || reorderPlaceholder != nil else { return nil }
         return source
+    }
+
+    /// EVERY row the drag has taken out of the list — the whole selection when
+    /// one was picked up. ``reorderRemovedRow`` is the one of them the pointer
+    /// grabbed, which is what the float and the faint copy show; this is what
+    /// the drawing and the index arithmetic have to work from, or a multi-row
+    /// drag draws rows it is carrying.
+    var reorderRemovedRows: IndexSet {
+        guard reorderRemovedRow != nil, let reorder else { return IndexSet() }
+        return reorder.held
     }
 
     /// Where the row with data offset `index` sits in the order currently
@@ -93,8 +118,9 @@ extension ItemListHandler {
     /// Returns `index` unchanged outside such a drag, where the list is drawn in
     /// data order and the two are the same number.
     func reorderDrawnPosition(of index: Int) -> Int {
-        guard let source = reorderRemovedRow else { return index }
-        let closedUp = reorderClosedUpIndex(index, source: source)
+        let removed = reorderRemovedRows
+        guard !removed.isEmpty else { return index }
+        let closedUp = reorderClosedUpIndex(index, removed: removed)
         guard let slot = reorderPlaceholder?.slot else { return closedUp }
         return closedUp >= slot ? closedUp + 1 : closedUp
     }
@@ -113,6 +139,12 @@ extension ItemListHandler {
     /// alternative, an empty gap and a row that is nowhere at all, would just
     /// look like the row had been deleted.
     var effectiveReorderFeedback: RowReorderFeedback {
+        // `.live` moves the data at every step, which a MULTI-row gesture must
+        // not do: the rows only become a block when they land, and a live
+        // shuffle could not be undone by a cancel — one `onMove` can gather a
+        // disjoint selection into a block, but nothing can scatter it back.
+        // So several rows in hand always preview with a slot.
+        if heldRowCount > 1, reorderFeedback == .live { return .dimmed }
         guard reorderFeedback == .cursor else { return reorderFeedback }
         return (isKeyboardMove || !canFloatDraggedRow) ? .dimmed : .cursor
     }
@@ -138,7 +170,11 @@ extension ItemListHandler {
         // A keyboard move is a move from the first keystroke: there is no
         // "moved far enough to not be a click" question to answer.
         reorder?.active = true
-        reorder?.targetOffset = focusedIndex
+        // The slot starts where the held rows already are — as a CLOSED-UP
+        // position, which for a multi-row hold is not the focused index: the
+        // rows above it in the selection have already left.
+        let held = reorder?.held ?? IndexSet()
+        reorder?.targetOffset = reorderClosedUpIndex(focusedIndex, removed: held)
         isKeyboardMove = true
         return true
     }
@@ -180,7 +216,8 @@ extension ItemListHandler {
         if effectiveReorderFeedback == .live {
             focusedIndex = clampedRowIndex(reorder.currentOffset)
         } else if let target = reorder.targetOffset {
-            focusedIndex = clampedRowIndex(move(from: reorder.grabbedOffset, to: target))
+            focusedIndex = clampedRowIndex(
+                move(reorder.held, to: target) + reorder.primaryRank)
         }
         ensureFocusedItemVisible()
     }
@@ -336,13 +373,17 @@ extension ItemListHandler {
     /// and it is subtle enough (every index here is CLOSED-UP, which is also what
     /// `move(from:to:)` produces) that having it twice is how the two drift.
     func reorderDrawnRows(_ visible: some Sequence<Int>) -> [DrawnRow] {
-        guard let source = reorderRemovedRow else { return visible.map { .row($0) } }
-        let rows = visible.filter { $0 != source }
+        let removed = reorderRemovedRows
+        guard !removed.isEmpty else { return visible.map { .row($0) } }
+        // EVERY held row leaves — a multi-row drag carries them all — but only
+        // ONE slot opens: they land as a single block, so a gap per row would
+        // promise something the drop does not do.
+        let rows = visible.filter { !removed.contains($0) }
         guard let placeholder = reorderPlaceholder else { return rows.map { .row($0) } }
         // The slot goes at closed-up position `placeholder.slot` — before the
         // first surviving row that already numbers at or past it.
         let slot =
-            rows.firstIndex { reorderClosedUpIndex($0, source: source) >= placeholder.slot }
+            rows.firstIndex { reorderClosedUpIndex($0, removed: removed) >= placeholder.slot }
             ?? rows.count
         var drawn = rows.map { DrawnRow.row($0) }
         drawn.insert(.slot, at: slot)
@@ -499,9 +540,27 @@ extension ItemListHandler {
     /// The row also takes the keyboard cursor, so the user can see what they
     /// have hold of before moving anything.
     func beginReorder(grabbing offset: Int) {
-        reorder = RowReorder(grabbedOffset: offset, active: false)
+        reorder = RowReorder(grabbedOffset: offset, held: heldRows(grabbing: offset), active: false)
         focusedIndex = offset
     }
+
+    /// The rows a gesture starting at `offset` picks up: the whole selection
+    /// when `offset` is part of one, otherwise just that row.
+    ///
+    /// macOS's rule, and the one that makes a multi-row drag discoverable —
+    /// grab ANY selected row and they all come. Dragging an UNselected row
+    /// takes only it, which is what makes it possible to move a row out of a
+    /// selection without clearing the selection first.
+    private func heldRows(grabbing offset: Int) -> IndexSet {
+        guard selectionMode == .multi, isSelected(at: offset) else {
+            return IndexSet(integer: offset)
+        }
+        let selected = IndexSet((0..<itemCount).filter { isSelected(at: $0) })
+        return selected.contains(offset) ? selected : IndexSet(integer: offset)
+    }
+
+    /// How many rows the drag has hold of. One outside a multi-row gesture.
+    var heldRowCount: Int { reorder?.held.count ?? 0 }
 
     /// Tracks a drag to `contentY` (`nil` when the cursor is off the rows —
     /// over the border, a header, or past the last row — which holds the
@@ -568,7 +627,8 @@ extension ItemListHandler {
             focusedIndex = clampedRowIndex(reorder.grabbedOffset)
             return true
         }
-        focusedIndex = clampedRowIndex(move(from: reorder.grabbedOffset, to: target))
+        focusedIndex = clampedRowIndex(
+            move(reorder.held, to: target) + reorder.primaryRank)
         return true
     }
 
@@ -593,13 +653,22 @@ extension ItemListHandler {
     /// doesn't churn the app's state.
     @discardableResult
     func move(from: Int, to target: Int) -> Int {
-        guard let onMove, from != target else { return from }
-        // `toOffset` is measured against the collection BEFORE the move, so
-        // moving down inserts past the target and moving up inserts before it
-        // — exactly what SwiftUI's `move(fromOffsets:toOffset:)` expects.
-        let destination = from < target ? target + 1 : target
-        onMove(IndexSet(integer: from), destination)
-        return destination > from ? destination - 1 : destination
+        move(IndexSet(integer: from), to: target)
+    }
+
+    /// Moves every row in `held` to closed-up position `target`, in ONE
+    /// `onMove` — which is all it takes, because that is `(IndexSet, Int)` and
+    /// `move(fromOffsets:toOffset:)` already implements the disjoint case:
+    /// rows 2, 4 and 5 arrive as one block, in that order.
+    ///
+    /// Returns where the block starts, which for a single row is where it
+    /// landed.
+    @discardableResult
+    func move(_ held: IndexSet, to target: Int) -> Int {
+        guard let onMove, !held.isEmpty else { return target }
+        let destination = reorderInsertionOffset(forSlot: target, removed: held)
+        onMove(held, destination)
+        return target
     }
 
     /// `index` clamped to the rows that exist (an empty list yields 0).

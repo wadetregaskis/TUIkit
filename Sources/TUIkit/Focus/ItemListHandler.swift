@@ -247,9 +247,28 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         /// drag off the list read as "release here and nothing moves".
         var targetOffset: Int?
 
-        init(grabbedOffset: Int, active: Bool) {
+        /// Every row in hand, by data offset — the whole selection when the
+        /// grabbed row was part of one, otherwise just that row.
+        ///
+        /// Disjoint sets are allowed and stay disjoint until the drop: rows 2,
+        /// 4 and 5 travel as three rows and land as one block. Consolidating
+        /// earlier would be a data change the user has not asked for yet, and
+        /// could not be undone by a cancel (one `onMove` cannot scatter a block
+        /// back to disjoint places).
+        var held: IndexSet
+
+        /// Where `grabbedOffset` sits within ``held``, so the row the pointer
+        /// took hold of stays the one it is holding after the drop.
+        var primaryRank: Int {
+            held.integerLessThanOrEqualTo(grabbedOffset).map { _ in
+                held.count(where: { $0 < grabbedOffset })
+            } ?? 0
+        }
+
+        init(grabbedOffset: Int, held: IndexSet, active: Bool) {
             self.grabbedOffset = grabbedOffset
             self.currentOffset = grabbedOffset
+            self.held = held.isEmpty ? IndexSet(integer: grabbedOffset) : held
             self.active = active
         }
     }
