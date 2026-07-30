@@ -28,6 +28,16 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
     /// selection without a modifier the terminal may not report.
     case extendSelection
 
+    /// Pick the focused row up, or put it down where it now is — a reorder
+    /// driven from the keyboard, for lists that take `onMove`.
+    case pickUpRow
+
+    /// Drop the row being carried at the slot it is showing.
+    case placeRow
+
+    /// Abandon the move and put the row back where it was picked up.
+    case cancelMove
+
     /// What TUIkit binds this action to out of the box.
     ///
     /// Control chords throughout, and deliberately: `Ctrl`+letter is not a
@@ -38,6 +48,13 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
         switch self {
         case .selectAll: return [KeyboardShortcut("a", modifiers: .control)]
         case .extendSelection: return [KeyboardShortcut("v", modifiers: .control)]
+        // "reorder". Ctrl-R is free: it collides with nothing in TUIkit and
+        // with no C0 key (unlike Ctrl-M, which IS Return).
+        case .pickUpRow: return [KeyboardShortcut("r", modifiers: .control)]
+        // Return and Escape, but only while a row is actually in hand — the
+        // one place this control's grammar changes, and the status bar says so.
+        case .placeRow: return [.defaultAction]
+        case .cancelMove: return [.cancelAction]
         }
     }
 }

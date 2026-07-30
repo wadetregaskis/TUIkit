@@ -62,8 +62,12 @@ public enum SelectionMode: Sendable {
 /// | Key | Action |
 /// |-----|--------|
 /// | Shift+Up/Down/Home/End/PageUp/PageDown | Extend the selection from the anchor (where the terminal reports Shift — Terminal.app strips it from Up/Down) |
-/// | `v` | Toggle extend mode: plain movement keys extend the selection, in ANY terminal |
+/// | Ctrl+V | Toggle extend mode: plain movement keys extend the selection, in ANY terminal |
 /// | Ctrl+A | Select all |
+///
+/// Every chord above is rebindable — see ``RowShortcuts`` — and a reorderable
+/// list adds Ctrl+R to pick the focused row up, after which the movement keys
+/// move its landing slot and Return/Escape place it or put it back.
 /// | Escape | Exit extend mode, else clear a non-empty selection; otherwise falls through (page navigation is never blocked) |
 final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffsetState {
     /// The unique identifier for this focusable element.
@@ -253,6 +257,15 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// What a reorder drag shows, synced from `environment.rowReorderFeedback`
     /// during render; read at event time, when the environment is out of reach.
     var reorderFeedback: RowReorderFeedback = .live
+
+    /// Whether the reorder in flight was started from the KEYBOARD (see
+    /// ``ItemListHandler/beginKeyboardMove()``) rather than by a drag.
+    var isKeyboardMove = false
+
+    /// Whether a dragged row can actually be floated at the pointer — there has
+    /// to be a drag-and-drop session to draw it above the frame. Captured at
+    /// render; see ``effectiveReorderFeedback``.
+    var canFloatDraggedRow = false
 
     /// Where each visible row sits in the rendered content, republished every
     /// render (see ``RowBand``). A drag reads the CURRENT bands rather than the
@@ -510,6 +523,10 @@ extension ItemListHandler {
         // would be a surprise.
         isExtendingSelection = false
 
+        // A row in hand is the same: the keys that would place it have gone
+        // with the focus, so put it back rather than leaving it stranded.
+        if isKeyboardMove { cancelKeyboardMove() }
+
         // When focus is lost, reset focused index to the first selected item
         // (if any) so that when focus returns, the user sees the selection.
         switch selectionMode {
@@ -548,6 +565,13 @@ extension ItemListHandler {
 extension ItemListHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         guard itemCount > 0 else { return false }
+
+        // Picking a row up, and the keys a held one answers — ahead of the
+        // selection keys, and of the plain movement below, because a row in
+        // hand takes the movement keys over. `nil` means neither applies.
+        if let handled = handleRowMoveKey(event) {
+            return handled
+        }
 
         // Multi-selection lists understand the macOS selection keys (range
         // extension, select-all, clear). Consulted first so an extending
@@ -647,7 +671,8 @@ extension ItemListHandler {
             isExtendingSelection = false
             return true
 
-        case nil:
+        case .pickUpRow, .placeRow, .cancelMove, nil:
+            // Not selection business — handled above, or not a chord at all.
             break
         }
 
@@ -1181,7 +1206,21 @@ extension ItemListHandler {
     /// Called by the owning view during its render pass, after focus
     /// registration (never on measure passes).
     func publishEscapeClaim(context: RenderContext, isFocused: Bool) {
-        guard isFocused, !context.isMeasuring, selectionMode == .multi else { return }
+        guard isFocused, !context.isMeasuring else { return }
+
+        // A row in hand owns Escape — it puts the row back — and has to SAY so:
+        // `InputHandler` routes a claimed Escape through the focus system first,
+        // and without the claim a page-level "⎋ back" navigates out from under
+        // the move instead. (Found by driving the real app; the handler-level
+        // tests never see the app's Escape.) It also advertises the mode, which
+        // is what makes it discoverable at all.
+        if isKeyboardMove {
+            context.environment.statusBar.escapeLabelOverride = "cancel move"
+            context.environment.statusBar.escapeClaimGrabsInput = false
+            return
+        }
+
+        guard selectionMode == .multi else { return }
         if isExtendingSelection {
             context.environment.statusBar.escapeLabelOverride = "stop extending selection"
             context.environment.statusBar.escapeClaimGrabsInput = false

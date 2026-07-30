@@ -133,6 +133,9 @@ struct ListPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.list.editableInstruction"))
                         .foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.rows.keyboardMoveHint"))
+                        .foregroundStyle(.palette.foregroundTertiary)
+                        .dim()
                     Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
                         ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
                             Text(choice.label).tag(choice.rawValue)

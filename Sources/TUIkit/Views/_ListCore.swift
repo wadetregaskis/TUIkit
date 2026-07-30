@@ -589,6 +589,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // per keystroke (see RowShortcuts.lookup).
         handler.shortcuts = context.environment.rowShortcuts.lookup(
             commandKey: context.environment.commandKey)
+        // `.cursor` feedback needs a session to float the row above the frame.
+        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
         handler.isScrollEnabled = context.environment.isScrollEnabled
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
@@ -1177,7 +1179,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let original = handler.reorderRemovedRow
             .flatMap { source in visibleRows.first { $0.index == source }?.row.buffer }
         let body: FrameBuffer
-        switch handler.reorderFeedback {
+        switch handler.effectiveReorderFeedback {
         case .dimmed: body = original.map(dimmed) ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: original)
         }

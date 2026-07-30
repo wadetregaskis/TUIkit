@@ -320,3 +320,25 @@ List("Items", selection: $selected) {
 - ``ForEach``
 - ``SelectionMode``
 - <doc:FocusSystem>
+
+## Reordering from the Keyboard
+
+A list or table that takes `onMove` can be reordered without a mouse.
+<kbd>Ctrl</kbd>+<kbd>R</kbd> picks the focused row up; from there the movement
+keys — arrows, <kbd>Home</kbd>/<kbd>End</kbd>, <kbd>Page Up</kbd>/<kbd>Down</kbd>
+— move its landing slot, <kbd>Return</kbd> places it and <kbd>Escape</kbd> puts
+it back. Nothing else changes meaning, and a key the mode does not claim keeps
+its own.
+
+That is a mode rather than the modifier+arrow chord every editor uses, because
+Apple Terminal strips modifiers from <kbd>↑</kbd>/<kbd>↓</kbd> entirely — a
+`⌥↑` binding is not merely unbound there, it is undeliverable. The mode needs no
+modifiers at all, so it works in every terminal, and a long move costs three
+keys rather than two hundred: pick up, <kbd>End</kbd>, <kbd>Return</kbd>.
+
+What the move *shows* is ``RowReorderFeedback``, as with a drag — except that
+``RowReorderFeedback/cursor`` has no cursor to ride, so a keyboard move shows
+``RowReorderFeedback/dimmed`` instead: the same faint copy of the row in the slot
+it would land in, rather than an empty gap and a row that is nowhere.
+
+Every chord here is rebindable — see ``RowShortcuts``.

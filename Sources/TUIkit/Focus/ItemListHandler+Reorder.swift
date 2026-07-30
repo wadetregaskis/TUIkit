@@ -70,7 +70,7 @@ extension ItemListHandler {
     /// the list for the whole drag, slot or no slot.
     var reorderRemovedRow: Int? {
         guard let source = reorderSource else { return nil }
-        guard reorderFeedback == .cursor || reorderPlaceholder != nil else { return nil }
+        guard effectiveReorderFeedback == .cursor || reorderPlaceholder != nil else { return nil }
         return source
     }
 
@@ -97,6 +97,148 @@ extension ItemListHandler {
         let closedUp = reorderClosedUpIndex(index, source: source)
         guard let slot = reorderPlaceholder?.slot else { return closedUp }
         return closedUp >= slot ? closedUp + 1 : closedUp
+    }
+
+    // MARK: - Which feedback
+
+    /// The feedback actually shown, which is ``reorderFeedback`` except where
+    /// ``RowReorderFeedback/cursor`` has no cursor to ride.
+    ///
+    /// That mode's whole idea is the row travelling with the pointer, which
+    /// takes two things: a pointer, and a drag session to draw the row above the
+    /// frame. A move driven from the KEYBOARD has neither, and a build with no
+    /// drag session has no way to draw it. Both fall back to
+    /// ``RowReorderFeedback/dimmed`` — the same information (a faint copy of the
+    /// row where it would land) in the one place that is left to show it. The
+    /// alternative, an empty gap and a row that is nowhere at all, would just
+    /// look like the row had been deleted.
+    var effectiveReorderFeedback: RowReorderFeedback {
+        guard reorderFeedback == .cursor else { return reorderFeedback }
+        return (isKeyboardMove || !canFloatDraggedRow) ? .dimmed : .cursor
+    }
+
+    // MARK: - Moving a row from the keyboard
+
+    /// Picks the focused row up, or — if one is already in hand — puts it down
+    /// where it now is. Reports whether anything happened, so an unreorderable
+    /// list lets the key through to whatever else wants it.
+    ///
+    /// From here the arrow keys (and Home/End/Page) move the row's landing SLOT
+    /// rather than the cursor, ``placeHeldRow()`` commits and
+    /// ``cancelKeyboardMove()`` puts it back. That is the only way this control's
+    /// grammar changes, and only while a row is in hand.
+    @discardableResult
+    func beginKeyboardMove() -> Bool {
+        guard onMove != nil, itemCount > 0 else { return false }
+        if isKeyboardMove {
+            placeHeldRow()
+            return true
+        }
+        beginReorder(grabbing: focusedIndex)
+        // A keyboard move is a move from the first keystroke: there is no
+        // "moved far enough to not be a click" question to answer.
+        reorder?.active = true
+        reorder?.targetOffset = focusedIndex
+        isKeyboardMove = true
+        return true
+    }
+
+    /// Moves the landing slot by `delta` rows, clamped to the list.
+    func moveHeldRow(by delta: Int) {
+        guard let reorder else { return }
+        moveHeldRow(to: (reorder.targetOffset ?? reorder.currentOffset) + delta)
+    }
+
+    /// Moves the landing slot to `slot`, clamped to the list.
+    ///
+    /// Under ``RowReorderFeedback/live`` there is no slot to move: the data
+    /// moves now, one `onMove` per step, exactly as a live drag does. The slot
+    /// modes leave the data alone and move the gap, so the list keeps its length
+    /// and one `onMove` fires at the drop.
+    func moveHeldRow(to slot: Int) {
+        guard var reorder, reorder.active else { return }
+        let target = min(max(0, slot), max(0, itemCount - 1))
+        if effectiveReorderFeedback == .live {
+            let landed = move(from: reorder.currentOffset, to: target)
+            reorder.currentOffset = landed
+            reorder.targetOffset = landed
+            focusedIndex = clampedRowIndex(landed)
+        } else {
+            reorder.targetOffset = target
+            // Keep the cursor beside the slot so an enclosing scroller follows
+            // it off-screen: the slot itself is not a row the cursor can sit on.
+            focusedIndex = clampedRowIndex(target < reorder.grabbedOffset ? target : target + 1)
+        }
+        self.reorder = reorder
+        ensureFocusedItemVisible()
+    }
+
+    /// Drops the row at the slot it is showing.
+    func placeHeldRow() {
+        defer { endKeyboardMove() }
+        guard let reorder, reorder.active else { return }
+        if effectiveReorderFeedback == .live {
+            focusedIndex = clampedRowIndex(reorder.currentOffset)
+        } else if let target = reorder.targetOffset {
+            focusedIndex = clampedRowIndex(move(from: reorder.grabbedOffset, to: target))
+        }
+        ensureFocusedItemVisible()
+    }
+
+    /// Abandons the move: the row goes back where it was picked up.
+    ///
+    /// Under `.live` that means moving it back — the data has been moving all
+    /// along — while the slot modes never moved it, so there is only the gap to
+    /// drop.
+    func cancelKeyboardMove() {
+        defer { endKeyboardMove() }
+        guard let reorder, reorder.active else { return }
+        if effectiveReorderFeedback == .live, reorder.currentOffset != reorder.grabbedOffset {
+            move(from: reorder.currentOffset, to: reorder.grabbedOffset)
+        }
+        focusedIndex = clampedRowIndex(reorder.grabbedOffset)
+        ensureFocusedItemVisible()
+    }
+
+    private func endKeyboardMove() {
+        reorder = nil
+        isKeyboardMove = false
+    }
+
+    /// The whole keyboard-reorder branch: the keys a held row answers, or the
+    /// chord that picks one up. `nil` when neither applies, so the key goes on
+    /// to mean whatever it usually means.
+    func handleRowMoveKey(_ event: KeyEvent) -> Bool? {
+        if isKeyboardMove, let handled = handleKeyboardMoveKey(event) { return handled }
+        // A chord, so it works in either selection mode.
+        if shortcuts.action(for: event) == .pickUpRow, beginKeyboardMove() { return true }
+        return nil
+    }
+
+    /// The keys a held row answers, or `nil` for one that keeps its usual
+    /// meaning (so a chord the app bound elsewhere still works mid-move).
+    private func handleKeyboardMoveKey(_ event: KeyEvent) -> Bool? {
+        switch shortcuts.action(for: event) {
+        case .placeRow, .pickUpRow:
+            placeHeldRow()
+            return true
+        case .cancelMove:
+            cancelKeyboardMove()
+            return true
+        case .selectAll, .extendSelection, nil:
+            break
+        }
+        let page = max(1, viewportHeight - 1)
+        switch event.key {
+        case .up: moveHeldRow(by: -1)
+        case .down: moveHeldRow(by: 1)
+        case .pageUp: moveHeldRow(by: -page)
+        case .pageDown: moveHeldRow(by: page)
+        case .home: moveHeldRow(to: 0)
+        case .end: moveHeldRow(to: itemCount - 1)
+        default: return nil
+        }
+        return true
     }
 
     // MARK: - What to draw
@@ -155,7 +297,7 @@ extension ItemListHandler {
     /// up behind it, so what is on screen is the order a drop would produce.
     /// It reappears only at the drop slot, and only in `.dimmed`.
     var reorderSource: Int? {
-        guard reorderFeedback != .live, let reorder, reorder.active else { return nil }
+        guard effectiveReorderFeedback != .live, let reorder, reorder.active else { return nil }
         return reorder.currentOffset
     }
 
@@ -167,7 +309,7 @@ extension ItemListHandler {
     /// there is no drop slot: the row is in the user's hand either way, and the
     /// absent slot is what says releasing here would put it back.
     var reorderFloatingRow: Int? {
-        guard reorderFeedback == .cursor else { return nil }
+        guard effectiveReorderFeedback == .cursor else { return nil }
         return reorderSource
     }
 
@@ -222,13 +364,13 @@ extension ItemListHandler {
             // Off the rows. `.cursor` forgets its slot — the gap disappears and
             // releasing there is a cancel — while the other modes hold the last
             // one, since they have nothing that says "nowhere".
-            if reorderFeedback == .cursor {
+            if effectiveReorderFeedback == .cursor {
                 reorder.targetOffset = nil
                 self.reorder = reorder
             }
             return
         }
-        if reorderFeedback == .live, target != reorder.currentOffset {
+        if effectiveReorderFeedback == .live, target != reorder.currentOffset {
             move(from: reorder.currentOffset, to: target)
             reorder.currentOffset = target
         }
@@ -253,7 +395,7 @@ extension ItemListHandler {
         }
         self.reorder = nil
 
-        if reorderFeedback == .live {
+        if effectiveReorderFeedback == .live {
             focusedIndex = clampedRowIndex(reorder.currentOffset)
             return true
         }
@@ -281,7 +423,7 @@ extension ItemListHandler {
     /// where it now sits. A drop onto itself is skipped, so an aimless drag
     /// doesn't churn the app's state.
     @discardableResult
-    private func move(from: Int, to target: Int) -> Int {
+    func move(from: Int, to target: Int) -> Int {
         guard let onMove, from != target else { return from }
         // `toOffset` is measured against the collection BEFORE the move, so
         // moving down inserts past the target and moving up inserts before it

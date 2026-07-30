@@ -743,6 +743,8 @@ where Value.ID: Hashable {
         // per keystroke (see RowShortcuts.lookup).
         handler.shortcuts = context.environment.rowShortcuts.lookup(
             commandKey: context.environment.commandKey)
+        // `.cursor` feedback needs a session to float the row above the frame.
+        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
         handler.isScrollEnabled = context.environment.isScrollEnabled
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
@@ -1116,6 +1118,8 @@ where Value.ID: Hashable {
         // per keystroke (see RowShortcuts.lookup).
         handler.shortcuts = context.environment.rowShortcuts.lookup(
             commandKey: context.environment.commandKey)
+        // `.cursor` feedback needs a session to float the row above the frame.
+        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
         // Table configures its handler from TWO independent places — here for
         // single-line rows, and inline in `buildMultiLineContent` for multi-line
         // ones. Anything captured in only one of them is silently dead on the
@@ -1284,7 +1288,7 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> String {
-        guard handler.reorderFeedback == .dimmed,
+        guard handler.effectiveReorderFeedback == .dimmed,
             let source = handler.reorderRemovedRow, data.indices.contains(source)
         else { return String(repeating: " ", count: max(0, rowWidth)) }
         let line = renderRow(
