@@ -26,11 +26,10 @@ extension ExampleStrings {
             "page.focus.focusableUnfocused": "Focusable",
             "page.focus.focusableFocused": "Focusable (focused)",
 
-            // .searchable + EditButton (Lists page)
-            "page.list.searchableSection": "Searchable + Edit Mode",
-            "page.list.searchableExplain": "A .searchable field filters the list (filtering is app-driven); EditButton toggles \\.editMode.",
+            // .searchable (Lists page)
+            "page.list.searchableSection": "Searchable",
+            "page.list.searchableExplain": "A .searchable field filters the list (filtering is app-driven).",
             "page.list.searchableEmpty": "No matches",
-            "page.list.editModeLabel": "Edit mode",
 
             // (The Lists page's .onMove / .onDelete section moved to group 3,
             // alongside the other `page.list.*` keys — and is translated there.)

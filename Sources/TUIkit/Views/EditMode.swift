@@ -8,14 +8,15 @@
 ///
 /// Views that support editing — an editable `List`, an `EditButton` — read the
 /// current mode from the `\.editMode` environment binding and react to it.
-/// > Important: In TUIkit this is app-level state, not a gate. `EditButton`
-/// > drives it and an app can read it, but no `List` or `Table` behaviour
-/// > depends on it: editing is enabled by the presence of `onMove`/`onDelete`,
-/// > so drag-to-reorder, <kbd>Delete</kbd> and the keyboard move all work
-/// > without ever entering a mode. That is deliberate — a terminal UI is
-/// > desktop-shaped, and SwiftUI itself marks `EditMode` unavailable on macOS —
-/// > and it is why the type exists at all: so an app porting iOS code can carry
-/// > its own edit-mode UI across.
+/// > Important: This does **nothing** in TUIkit, and is not expected to. It is
+/// > here so that code ported from SwiftUI compiles and reads the same.
+/// >
+/// > TUIkit's `List` and `Table` follow the macOS style: they are not modal.
+/// > Rows drag to reorder, <kbd>Delete</kbd> removes one and the keyboard move
+/// > works whenever `onMove`/`onDelete` are present — there is no mode to enter
+/// > first, and nothing in the framework reads this value. (SwiftUI agrees
+/// > about the platform: it marks `EditMode` and `EditButton` unavailable on
+/// > macOS.) An app may still drive and read it for editing UI of its own.
 public enum EditMode: Sendable, Equatable {
     /// The view is not editable.
     case inactive

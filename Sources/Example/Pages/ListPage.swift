@@ -70,7 +70,6 @@ struct ListPage: View {
     @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State private var searchQuery = ""
-    @State private var editMode = EditMode.inactive
     @State private var editableItems = [
         "🍎 Apple", "🍌 Banana", "🍒 Cherry", "🍇 Grape", "🍑 Peach", "🍋 Lemon",
     ]
@@ -128,16 +127,6 @@ struct ListPage: View {
                     Text(L("page.rows.keyboardMoveHint"))
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
-                    // Edit mode belongs next to the list it describes: it is an
-                    // app-level flag, and TUIkit's own editing (drag to reorder,
-                    // Delete, Ctrl-R) is gated on `onMove`/`onDelete` being
-                    // present, not on the mode. It sat two sections away from
-                    // this list, where it could not have described anything.
-                    HStack(spacing: 2) {
-                        EditButton()
-                        ValueDisplayRow(
-                            L("page.list.editModeLabel"), editMode.isEditing ? "on" : "off")
-                    }
                     Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
                         ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
                             Text(choice.label).tag(choice.rawValue)
@@ -156,8 +145,6 @@ struct ListPage: View {
                     .rowReorderFeedback(
                         ReorderFeedbackChoice(rawValue: reorderFeedback)?.feedback ?? .live)
                 }
-                // Provide the edit-mode binding EditButton reads and drives.
-                .environment(\.editMode, $editMode)
             }
 
             // The other way rows move: a value the app defines, dragged to
