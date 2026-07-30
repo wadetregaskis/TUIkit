@@ -250,4 +250,39 @@ struct TableReorderDragTests {
 
         #expect(fixture.rows == ["a", "b", "c", "d", "e"], "back where it started")
     }
+
+    /// `.dimmed` draws the row itself, faint, at the slot it would land in — and
+    /// it must be faint ALL the way along. A Table row is several styled runs
+    /// (starting with the one-cell selection gutter) and each carries its own
+    /// reset, so a `dim … reset` wrapper used to die before the first character
+    /// and the row drew at full intensity. Asserting `contains(dim)` cannot see
+    /// that; asserting that no reset is left un-reopened can.
+    @Test("The dimmed slot stays faint past the row's own resets")
+    func dimmedSlotIsFaintThroughout() {
+        let fixture = Fixture(feedback: .dimmed)
+        let buffer = fixture.render()
+        let ySource = fixture.rowY(buffer, "b")
+        let yTarget = fixture.rowY(buffer, "d")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: ySource))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yTarget))
+        let dragging = fixture.render()
+
+        guard let slot = dragging.lines.first(where: { $0.contains(ANSIRenderer.dim) }) else {
+            Issue.record("expected a dimmed slot line"); return
+        }
+        guard let column = slot.stripped.firstIndex(of: "b").map({ slot.stripped.distance(from: slot.stripped.startIndex, to: $0) })
+        else {
+            Issue.record("the slot should hold a copy of the dragged row: \(slot.stripped)"); return
+        }
+        // The state in force AT the row's text — not merely somewhere on the
+        // line. Everything before the last reset has been cancelled by it.
+        let state = slot.ansiStateBefore(visibleColumn: column)
+        let live = state.components(separatedBy: ANSIRenderer.reset).last ?? ""
+        #expect(
+            live.contains(ANSIRenderer.dim),
+            "the dim was cancelled before the text: \(state.debugDescription)")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yTarget))
+    }
 }

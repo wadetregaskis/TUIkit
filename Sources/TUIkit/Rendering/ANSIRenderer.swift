@@ -131,6 +131,21 @@ extension ANSIRenderer {
         return bgCode + stringWithPersistentBg
     }
 
+    /// Wraps a string in faint (SGR 2) that persists across ANSI resets.
+    ///
+    /// The dim twin of ``applyPersistentBackground(_:color:)``, and needed for
+    /// the same reason: a styled line already contains a reset per run, and a
+    /// bare `dim … reset` wrapper dies at the first of them. A Table row begins
+    /// with a one-cell selection indicator, so the naive wrapper cancelled
+    /// itself before a single character of text and the row drew at full
+    /// intensity — the "`.dimmed` does not dim" bug.
+    ///
+    /// - Parameter string: The text to draw faint.
+    /// - Returns: The string with persistent dim applied.
+    static func applyPersistentDim(_ string: String) -> String {
+        dim + string.replacing(reset, with: reset + dim) + reset
+    }
+
     /// Moves the cursor to the specified position.
     ///
     /// - Parameters:

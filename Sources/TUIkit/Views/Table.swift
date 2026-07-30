@@ -1295,7 +1295,9 @@ where Value.ID: Hashable {
             item: data[source], columnWidths: columnWidths,
             isFocused: false, isSelected: false, rowWidth: rowWidth,
             context: context, palette: palette)
-        return ANSIRenderer.dim + line + ANSIRenderer.reset
+        // Persistent: `renderRow` emits a reset per styled run — starting with
+        // the selection-indicator gutter, so a bare wrapper died at cell one.
+        return ANSIRenderer.applyPersistentDim(line)
     }
 
     /// Hands this frame's drawn row geometry to the handler for the reorder drag

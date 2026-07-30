@@ -1202,8 +1202,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     /// The same buffer with every line drawn faint — `.dimmed`'s preview of the
     /// row, shown at the slot it would land in.
+    ///
+    /// Persistent, not a bare wrapper: a row of several styled runs carries a
+    /// reset per run, and each one would otherwise end the dim early.
     private func dimmed(_ buffer: FrameBuffer) -> FrameBuffer {
-        FrameBuffer(lines: buffer.lines.map { ANSIRenderer.dim + $0 + ANSIRenderer.reset })
+        FrameBuffer(lines: buffer.lines.map { ANSIRenderer.applyPersistentDim($0) })
     }
 
     /// A gap the size of the dragged row — `.cursor`'s "it lands here".
