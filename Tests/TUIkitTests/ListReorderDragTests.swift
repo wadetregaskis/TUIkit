@@ -483,6 +483,12 @@ struct ListReorderDragTests {
         #expect(
             !dragging.lines.contains { $0.stripped.contains("a") },
             "and still out of the list, so the row is never drawn twice")
+        // A row in your hand is not a row hidden below the fold. The viewport
+        // is sized from the DATA window, so taking the dragged row out of the
+        // DRAWING must not make the List claim there is more to scroll to.
+        #expect(
+            !dragging.lines.contains { $0.stripped.contains("below") },
+            "and no phantom overflow indicator for the row being carried")
 
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 0, y: 0))
         #expect(session.active == nil, "the cancelled drop ends the drag too")

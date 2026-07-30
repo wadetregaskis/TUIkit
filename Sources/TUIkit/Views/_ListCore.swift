@@ -420,13 +420,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 overflowing: overflowing
             )
         }
+        // Sync the viewport to the DATA rows this window covers — BEFORE the
+        // reorder decoration rewrites them. The dragged row and the drop slot
+        // are drawing, not data: a row in the user's hand is still counted by
+        // `itemCount` and is not hidden below, and a slot has no data behind it
+        // at all. Counting either makes the indicator predicates disagree with
+        // the extent and invent a "1 more row below".
+        handler.viewportHeight = max(1, visibleRows.count)
         // A `.dimmed` / `.cursor` drag rewrites the rows here, AFTER the
         // window walk: the drag shows an extra row that is not in the data, so
         // it must not take part in choosing which data rows are visible.
         visibleRows = decorateForReorder(visibleRows, handler: handler, palette: palette)
-        // Sync the viewport to the rows actually shown so the
-        // handler's indicator predicates match the rendering.
-        handler.viewportHeight = max(1, visibleRows.count)
 
         // Row width — the List is greedy on width (SwiftUI parity): fill the
         // available interior, growing past it only when a row is itself wider
