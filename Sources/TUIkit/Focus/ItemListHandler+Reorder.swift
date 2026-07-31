@@ -456,7 +456,25 @@ extension ItemListHandler {
     /// off, and the eventual drop lands a place out.
     private func retargetForAutoScroll() {
         guard isAutoScrolling, reorder != nil, let y = lastReorderContentY else { return }
-        dragReorder(toContentY: y)
+        // CLAMPED onto the rows, not replayed verbatim. Auto-scroll engages at
+        // the control's edge, and the hot margin is chrome — the indicator line,
+        // the header — so the pointer is by definition NOT on a droppable row.
+        // Replayed as-is it resolved to nothing, `dragReorder` returned without
+        // touching the target, and the slot sat still while the rows streamed
+        // past it: the "wiggle the mouse and it snaps back" report. Clamped, the
+        // slot rides the leading edge of the viewport, which is what a drag past
+        // the edge means.
+        dragReorder(toContentY: clampedToDroppableRows(y))
+    }
+
+    /// `contentY` moved onto the nearest line that can actually take a drop.
+    /// Unchanged when it already is one.
+    private func clampedToDroppableRows(_ contentY: Int) -> Int {
+        let droppable = visibleRowBands.filter { $0.dropIndex != nil }
+        guard let first = droppable.first, let last = droppable.last else { return contentY }
+        if contentY < first.yStart { return first.yStart }
+        let end = last.yStart + max(1, last.height) - 1
+        return contentY > end ? end : contentY
     }
 
     /// Whether this data row carries the keyboard cursor *right now*.

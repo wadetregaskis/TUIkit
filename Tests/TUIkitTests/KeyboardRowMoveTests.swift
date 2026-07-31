@@ -232,6 +232,43 @@ struct KeyboardRowMoveTests {
         #expect(rows.items == ["a", "b", "c", "d", "e"], "and the cancel is free")
     }
 
+    // MARK: - Auto-scroll follow
+
+    /// Auto-scroll engages at the CONTROL's edge — the indicator line, the
+    /// header — which is by definition not a droppable row. The re-target
+    /// replayed that position verbatim, resolved it to nothing, and left the
+    /// slot where it was while the rows streamed past underneath: the "the
+    /// dragged item stops following until you wiggle the mouse" report.
+    @Test("A drag target held at the edge follows the auto-scroll")
+    func autoScrollRetargetsOntoTheRows() {
+        let rows = RowBox()
+        let handler = makeHandler(rows, feedback: .dimmed)
+        handler.viewportHeight = 3
+        handler.contentHeight = 3
+
+        // A frame's worth of geometry: three rows on lines 0...2. The pointer is
+        // parked on line 4 — past the last row, where the bottom hot margin is.
+        func publish(startingAt first: Int) {
+            handler.publishRowBands(
+                (0..<3).map {
+                    .init(entry: .row(first + $0), yStart: $0, height: 1)
+                })
+        }
+        publish(startingAt: 0)
+        handler.beginReorder(grabbing: 0)
+        handler.dragReorder(toContentY: 4)
+        let offTheRows = handler.reorder?.targetOffset
+
+        // Now the viewport scrolls under the motionless pointer, exactly as
+        // auto-scroll does, and republishes its bands.
+        handler.isAutoScrolling = true
+        publish(startingAt: 1)
+        let followed = handler.reorder?.targetOffset
+
+        #expect(followed != nil, "the target survives a scroll under a still pointer")
+        #expect(followed != offTheRows, "and moves with the rows")
+    }
+
     // MARK: - Nudging
 
     /// The accelerator: one keystroke, one place, no mode. Ctrl+↑/↓ — the
