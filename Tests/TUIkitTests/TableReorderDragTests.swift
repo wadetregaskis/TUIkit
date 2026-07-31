@@ -583,4 +583,61 @@ struct TableReorderDragTests {
             region.width > 1 && region.height > 1,
             "and covers the box, not a sliver: \(region.width)x\(region.height)")
     }
+    /// `Table.dropDestination(for:action:)` — the row-level counterpart of
+    /// `ForEach.dropDestination`, which a Table cannot have because its rows are
+    /// values with no `ForEach` to attach one to. It opens the same landing slot
+    /// a reorder does, and reports the index it opened at.
+    @Test("A table takes a drop between its rows, and reports where")
+    func tableRowDropDestination() throws {
+        final class Log: @unchecked Sendable { var got: [(Int, [String])] = [] }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+
+        func render(_ rows: [String]) -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = Table(rows.map(Row.init), selection: .constant(String?.none)) {
+                TableColumn<Row>("Name", value: \.name)
+            }
+            .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
+            .frame(width: 20, height: 9)
+            var context = RenderContext(
+                availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
+            context.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: context)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let rows = ["a", "b", "c"]
+        let buffer = render(rows)
+        let rowY = try #require(
+            buffer.lines.firstIndex { $0.stripped.filter(\.isLetter) == "b" })
+
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        let hovering = render(rows)
+        #expect(
+            hovering.lines.firstIndex { $0.stripped.filter(\.isLetter) == "b" } == rowY + 1,
+            "a gap opened at the pointer, pushing row b down one")
+
+        #expect(tui.dragAndDropSession.performDrop(), "the table took it")
+        #expect(log.got.first?.0 == 1, "before row b: \(log.got)")
+        #expect(log.got.first?.1 == ["zzz"])
+
+        // And an EMPTY table reports the only index there is.
+        log.got.removeAll()
+        _ = render([])
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render([])
+        #expect(tui.dragAndDropSession.performDrop(), "an empty table takes it too")
+        #expect(log.got.first?.0 == 0, "at index 0: \(log.got)")
+    }
 }

@@ -93,6 +93,11 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
     /// the rows can be dragged into a new order.
     var moveAction: ((IndexSet, Int) -> Void)?
 
+    /// The `.dropDestination(for:action:)` insertion action, if attached:
+    /// `(insertion index, payloads)`. Type-erased so `Table` need not carry the
+    /// payload type; the erased pair is `(accepts, perform)`.
+    var dropInsertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
+
     public var body: some View {
         _TableCore(
             data: data,
@@ -105,7 +110,8 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
             emptyPlaceholder: emptyPlaceholder,
             columnSpacing: columnSpacing,
             primaryAction: primaryAction,
-            moveAction: moveAction
+            moveAction: moveAction,
+            dropInsertion: dropInsertion
         )
     }
 }
@@ -155,6 +161,35 @@ extension Table {
     public func onMove(_ action: @escaping (IndexSet, Int) -> Void) -> Table {
         var copy = self
         copy.moveAction = action
+        return copy
+    }
+
+    /// Makes the ROWS a drop destination that reports WHERE the drop landed —
+    /// the `Table` counterpart of `ForEach.dropDestination(for:action:)`.
+    ///
+    /// A `Table`'s rows are values, not views, so there is no `ForEach` to carry
+    /// SwiftUI's row-level modifier; it lives on the table itself, exactly as
+    /// ``onMove(_:)`` does and for the same reason. (SwiftUI's own `Table` has
+    /// neither.)
+    ///
+    /// While a compatible drag hovers, the table opens a gap at the prospective
+    /// index — the same gap a ``RowReorderFeedback/cursor`` reorder shows,
+    /// because it is the same machinery and means the same thing. On release the
+    /// app is told the index it was pointing at; a drop past the last row
+    /// reports one past the end, which is also how an EMPTY table is filled.
+    ///
+    /// - Parameters:
+    ///   - payloadType: The payload type these rows accept.
+    ///   - action: Inserts the payloads at the given index.
+    public func dropDestination<Payload>(
+        for payloadType: Payload.Type = Payload.self,
+        action: @escaping (Int, [Payload]) -> Void
+    ) -> Table {
+        var copy = self
+        copy.dropInsertion = (
+            accepts: { $0 is Payload },
+            perform: { index, values in action(index, values.compactMap { $0 as? Payload }) }
+        )
         return copy
     }
 }
@@ -280,6 +315,7 @@ where Value.ID: Hashable {
     let columnSpacing: Int
     var primaryAction: ((Value.ID) -> Void)?
     var moveAction: ((IndexSet, Int) -> Void)?
+    var dropInsertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
 
     var body: Never {
         fatalError("_TableCore renders via Renderable")
@@ -1421,6 +1457,49 @@ where Value.ID: Hashable {
     /// indicator), which is the space the mouse handler's `lineOffset` is in,
     /// and it must include the overscroll `slide` — the rows are drawn shifted
     /// by it, so a drag hit-tests the wrong row without it.
+    /// Registers the table's rows as a drop destination that reports WHERE —
+    /// the ``Table/dropDestination(for:action:)`` half, and the twin of
+    /// `_ListCore.registerRowDropDestination`.
+    ///
+    /// The hovered index goes through the SHARED handler state
+    /// (`externalDropSlot`), so the gap it opens is drawn by the same code the
+    /// reorder slot uses and lands at the index the drop reports.
+    private func registerRowDropDestination(
+        zoneID: HitTestRegion.HandlerID,
+        state: PopulatedRenderState,
+        context: RenderContext,
+        firstRowY: Int
+    ) {
+        let handler = state.handler
+        guard let insertion = dropInsertion,
+            let session = context.environment.dragAndDropSession
+        else {
+            handler.externalDropSlot = nil
+            return
+        }
+        session.registerTarget(
+            DragAndDropSession.Target(
+                handlerID: zoneID,
+                accepts: insertion.accepts,
+                perform: { payload, _ in
+                    let slot = handler.externalDropSlot ?? handler.itemCount
+                    handler.externalDropSlot = nil
+                    insertion.perform(min(max(0, slot), handler.itemCount), [payload])
+                    return true
+                },
+                setTargeted: { targeted in
+                    if !targeted { handler.externalDropSlot = nil }
+                },
+                hovering: { _, y in
+                    // The band under the pointer names the row it would land
+                    // BEFORE; past the last row it appends. Measured from the
+                    // first ROW line, which is the space the bands are in.
+                    let slot =
+                        handler.dropTarget(atContentY: y - firstRowY) ?? handler.itemCount
+                    handler.externalDropSlot = min(max(0, slot), handler.itemCount)
+                }))
+    }
+
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)],
@@ -1600,6 +1679,8 @@ where Value.ID: Hashable {
         // to reveal an off-screen drop target. Auto-scroll is a gesture, so
         // `.scrollDisabled` withholds the zone entirely.
         if context.environment.isScrollEnabled {
+            registerRowDropDestination(
+                zoneID: mouseHandlerID, state: state, context: context, firstRowY: firstRowY)
             context.environment.dragAndDropSession?.registerAutoScrollZone(
                 DragAndDropSession.AutoScrollZone(
                     handlerID: mouseHandlerID,
