@@ -217,7 +217,11 @@ requires the navigation keys to keep navigating while something is in hand.
 navigation needs, so releasing over nothing is the cancel, as it is on macOS.
 The movement keys are the other half of the same rule: mid-drag they scroll
 rather than move the cursor, so a destination that is off screen can be reached
-without letting go.
+without letting go. They scroll **the view under the pointer**, not the one the
+drag came from — carrying a payload somewhere else is the whole point, and
+somewhere else is where you need to reach. A view the drag could not land in is
+not scrolled under it, and with the pointer over nothing that qualifies the keys
+mean what they usually mean.
 
 A keyboard move (<kbd>Ctrl</kbd>+<kbd>R</kbd>) is a different thing — a mode,
 not a gesture — and it does answer <kbd>Escape</kbd>, which puts the row back.

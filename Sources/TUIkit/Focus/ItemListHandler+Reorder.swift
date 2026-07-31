@@ -330,22 +330,28 @@ extension ItemListHandler {
     /// Every claimed key returns `true` even at an edge: an unconsumed arrow is
     /// taken by the focus system's in-section navigation and would move focus to
     /// another control mid-drag, which is worse than a no-op.
+    /// They move whatever the POINTER is over, which need not be this list: a
+    /// drag is carried across the app, and the scrollable a user wants to reach
+    /// into is the one under the payload, not the one it came from. Resolved by
+    /// the session against the same rule the edge auto-scroll uses, so the keys
+    /// and the edges can never disagree about which view is in play. Falls back
+    /// to this list when nothing qualifies — which is what a reorder inside its
+    /// own list gets, since that is the only zone its gesture can land in.
     func handleDragScrollKey(_ event: KeyEvent) -> Bool? {
+        let target: any ScrollableOffsetState = dragSession?.scrollableUnderCursor() ?? self
         let step = event.shift ? max(1, shiftStepMultiplier) : 1
+        // A screenful of the view being MOVED, not of this one.
+        let page = max(1, target.viewportHeight - 1)
         switch event.key {
-        case .up: scrollFine(by: -step)
-        case .down: scrollFine(by: step)
-        case .pageUp: scrollFine(by: -pageStep)
-        case .pageDown: scrollFine(by: pageStep)
-        case .home:
-            scrollOffset = 0
-            scrollTopClipLines = 0
-        case .end:
-            scrollOffset = maxOffset
-            scrollTopClipLines = 0
+        case .up: target.scrollFine(by: -step)
+        case .down: target.scrollFine(by: step)
+        case .pageUp: target.scrollFine(by: -page)
+        case .pageDown: target.scrollFine(by: page)
+        case .home: target.scrollToOffset(0)
+        case .end: target.scrollToOffset(target.maxOffset)
         default: return nil
         }
-        releaseAnchorOnUserScroll()
+        target.releaseAnchorOnUserScroll()
         return true
     }
 

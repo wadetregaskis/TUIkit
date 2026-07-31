@@ -143,6 +143,11 @@ final class DragAndDropSession: @unchecked Sendable {
         /// reasoning as ``topInset``, and the symmetric bug: a footered List
         /// only auto-scrolls downward once the cursor is over the footer.
         var bottomInset: Int = 0
+
+        /// How far a SHIFTED navigator moves this view mid-drag, from its own
+        /// environment at registration (`.shiftStepMultiplier`) — the keys are
+        /// answered at the root, where that environment is out of reach.
+        var shiftStep: Int = 5
     }
 
     /// The drag in flight, or `nil`.
@@ -679,7 +684,7 @@ final class DragAndDropSession: @unchecked Sendable {
     /// drop destination that ACCEPTS this payload overlaps it. That makes the
     /// rule automatic for every scrollable — no new API, and an app that adds a
     /// `dropDestination` gets the auto-scroll that goes with it for free.
-    private func canReceiveDrag(
+    func canReceiveDrag(
         _ zone: AutoScrollZone, rect: HitTestRegion, dispatcher: MouseEventDispatcher
     ) -> Bool {
         // The gesture's own scrollable always qualifies: a reorder carries a

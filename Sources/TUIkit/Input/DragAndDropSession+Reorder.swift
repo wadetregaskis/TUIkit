@@ -138,6 +138,69 @@ extension DragAndDropSession {
         cancelReturningToOrigin()
     }
 
+    /// The scrollable a navigator pressed mid-drag should move: the innermost
+    /// registered zone under the cursor that this gesture could actually land
+    /// in, or `nil` when the pointer is over nothing that qualifies.
+    ///
+    /// The same zones, the same "could this drag land here" rule and the same
+    /// innermost-wins tiebreak the edge auto-scroll uses — deliberately, so the
+    /// keys and the edges can never disagree about which view is in play. What
+    /// differs is only the geometry: auto-scroll asks whether the cursor is near
+    /// an EDGE, this asks whether it is inside at all.
+    func zoneUnderCursor() -> AutoScrollZone? {
+        guard let dispatcher, let cursor = lastAbsoluteEvent else { return nil }
+        var best: (zone: AutoScrollZone, area: Int)?
+        for zone in autoScrollZones {
+            guard let rect = dispatcher.regionRect(for: zone.handlerID),
+                cursor.x >= rect.offsetX, cursor.x < rect.offsetX + rect.width,
+                cursor.y >= rect.offsetY, cursor.y < rect.offsetY + rect.height,
+                canReceiveDrag(zone, rect: rect, dispatcher: dispatcher)
+            else { continue }
+            let area = rect.width * rect.height
+            if best == nil || area <= best!.area { best = (zone, area) }
+        }
+        return best?.zone
+    }
+
+    /// Just the scroll state of ``zoneUnderCursor()``.
+    func scrollableUnderCursor() -> (any ScrollableOffsetState)? {
+        zoneUnderCursor()?.vertical
+    }
+
+    /// Answers a navigator key pressed while a drag gesture is in flight, by
+    /// scrolling the view under the pointer. Reports whether it did.
+    ///
+    /// This runs ahead of the focus system deliberately. The keys have to reach
+    /// the view the payload is OVER, and that view is usually not the focused
+    /// one — a drag starts by focusing its source, and the whole point of
+    /// carrying a payload somewhere else is that "somewhere else" is where you
+    /// need to scroll. Left to the focus system these keys would move the source
+    /// list's own selection instead, mid-drag, which is both useless and
+    /// destructive.
+    ///
+    /// Declines when the pointer is over nothing this drag could land in, so a
+    /// gesture held over inert chrome leaves the keys to mean what they usually
+    /// mean; a scrollable that registered no zone (`.scrollDisabled`) is not a
+    /// candidate either, and a reorder inside it still falls through to
+    /// ``ItemListHandler/handleDragScrollKey(_:)``.
+    func handleDragNavigator(_ event: KeyEvent) -> Bool {
+        guard active != nil || autoScrollArmed, let zone = zoneUnderCursor() else { return false }
+        let target = zone.vertical
+        let step = event.shift ? max(1, zone.shiftStep) : 1
+        let page = max(1, target.viewportHeight - 1)
+        switch event.key {
+        case .up: target.scrollFine(by: -step)
+        case .down: target.scrollFine(by: step)
+        case .pageUp: target.scrollFine(by: -page)
+        case .pageDown: target.scrollFine(by: page)
+        case .home: target.scrollToOffset(0)
+        case .end: target.scrollToOffset(target.maxOffset)
+        default: return false
+        }
+        target.releaseAnchorOnUserScroll()
+        return true
+    }
+
     /// The control this frame registered for the gesture in flight, if any.
     ///
     /// Last match wins, on the same reasoning as ``autoScrollZones``:

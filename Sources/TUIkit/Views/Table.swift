@@ -1725,7 +1725,8 @@ where Value.ID: Hashable {
                     // in, it ate the whole upward hot margin: the border and the
                     // header were the two hot rows, so the "▲ N more above" line
                     // — the one place a user aims to scroll up — was inert.
-                    topInset: 1))
+                    topInset: 1,
+                    shiftStep: context.environment.shiftStepMultiplier))
         }
 
         // A one-row region at the keyboard cursor's on-screen line, ahead of

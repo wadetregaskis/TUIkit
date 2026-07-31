@@ -125,6 +125,14 @@ public protocol ScrollableOffsetState: AnyObject {
     /// this requirement, so the override applies to every wheel event.
     @discardableResult
     func scrollFine(by delta: Int) -> Bool
+
+    /// Jumps to an absolute offset — the Home / End of a scrollable, and the
+    /// only mover that must also discard any *partial* scroll within a row.
+    ///
+    /// A requirement rather than an extension method so it dispatches through
+    /// `any ScrollableOffsetState`: mid-drag navigators move whatever the
+    /// pointer is over, which is resolved as an existential.
+    func scrollToOffset(_ offset: Int)
 }
 
 // MARK: - Generic single-axis scroll state
@@ -250,6 +258,12 @@ extension ScrollableOffsetState {
               extent > viewportHeight
         else { return }
         scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
+    }
+
+    /// Jumps to an absolute offset, clamped to the valid range. A conformer
+    /// with a sub-row scroll unit overrides this to discard it too.
+    public func scrollToOffset(_ offset: Int) {
+        scrollOffset = max(0, min(maxOffset, offset))
     }
 
     /// Clamps ``scrollOffset`` to the current valid range.

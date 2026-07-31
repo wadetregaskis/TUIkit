@@ -91,6 +91,7 @@ struct InputHandlerTests {
             paletteManager: palette,
             appearanceManager: appearance,
             keyboardShortcuts: shortcuts,
+            dragAndDropSession: nil,
             onQuit: { probe.quitCount += 1 }
         )
         return Fixture(

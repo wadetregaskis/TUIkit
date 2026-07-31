@@ -124,6 +124,7 @@ extension AppRunner {
             paletteManager: paletteManager,
             appearanceManager: appearanceManager,
             keyboardShortcuts: tuiContext.keyboardShortcuts,
+            dragAndDropSession: tuiContext.dragAndDropSession,
             onQuit: { [weak self] in
                 self?.isRunning = false
             }

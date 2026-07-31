@@ -1103,8 +1103,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // container's region: same rectangle, and the drop target only needs
         // the geometry — clicks still go to the container's own closure.
         registerRowTargets(
-            zoneID: mouseHandlerID, state: state, context: context, topInset: topInset,
-            contentColumns: contentColumns, insertion: state.dropInsertion)
+            zoneID: mouseHandlerID, state: state, context: context,
+            topInset: topInset, contentColumns: contentColumns, insertion: state.dropInsertion)
         // Insert at index 0 so any interactive child inside a
         // row (Button, TextField, Stepper) still wins the
         // dispatcher's reverse-iteration match. This region is
@@ -1124,27 +1124,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ),
             at: 0
         )
-
-        // Register the list as a drag auto-scroll zone (sharing the container
-        // region id): a drag hovering near its top/bottom edge scrolls the rows
-        // to reveal an off-screen drop target. Auto-scroll is a gesture, so
-        // `.scrollDisabled` withholds the zone entirely.
-        if context.environment.isScrollEnabled {
-            context.environment.dragAndDropSession?.registerAutoScrollZone(
-                DragAndDropSession.AutoScrollZone(
-                    handlerID: mouseHandlerID,
-                    vertical: state.handler,
-                    horizontal: nil,
-                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds,
-                    // A title sits above the rows, and a footer (with its
-                    // separator) below them — chrome the rows never occupy. Left
-                    // in, they eat the hot margin at that edge: a footered list
-                    // only scrolled downward once the cursor was over the
-                    // footer, which is the same defect a Table's header caused
-                    // at the top.
-                    topInset: title != nil ? 1 : 0,
-                    bottomInset: footer != nil ? 2 : 0))
-        }
 
         // A one-row region at the keyboard cursor's on-screen line, stamped
         // with the SAME focusID and inserted ahead of the container region:
@@ -1374,6 +1353,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         insertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
     ) {
         let handler = state.handler
+        // A drag hovering near an edge scrolls the rows to reveal an off-screen
+        // drop target. Auto-scroll IS a scroll, so `.scrollDisabled` withholds
+        // this one — unlike the two registrations below it.
+        if context.environment.isScrollEnabled {
+            context.environment.dragAndDropSession?.registerAutoScrollZone(
+                DragAndDropSession.AutoScrollZone(
+                    handlerID: zoneID, vertical: handler, horizontal: nil,
+                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds,
+                    // A title sits above the rows, and a footer (with its
+                    // separator) below them — chrome the rows never occupy. Left
+                    // in, they eat the hot margin at that edge: a footered list
+                    // only scrolled downward once the cursor was over the footer,
+                    // the same defect a Table's header caused at the top.
+                    topInset: title != nil ? 1 : 0,
+                    bottomInset: footer != nil ? 2 : 0,
+                    shiftStep: context.environment.shiftStepMultiplier))
+        }
         if handler.onMove != nil {
             context.environment.dragAndDropSession?.registerReorderHost(
                 DragAndDropSession.ReorderHost(

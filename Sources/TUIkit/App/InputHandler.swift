@@ -43,6 +43,10 @@ internal struct InputHandler {
     /// after the focused control declines a Return/Escape.
     let keyboardShortcuts: KeyboardShortcutRegistry
 
+    /// The drag-and-drop session, consulted before every other layer while a
+    /// drag is in flight so the navigators reach the view under the pointer.
+    let dragAndDropSession: DragAndDropSession?
+
     /// Called when the user requests to quit the application.
     let onQuit: () -> Void
 }
@@ -95,6 +99,17 @@ extension InputHandler {
             if focusManager.dispatchKeyEvent(event) {
                 return true
             }
+        }
+
+        // Layer 0.5: mid-drag navigators. While something is in hand they
+        // scroll whatever the pointer is over — reaching a destination that is
+        // off screen without letting go — and they must beat every layer below,
+        // all of which would otherwise spend them on the focused control (a
+        // page-level `onKeyPress` returning to the menu, the source list moving
+        // its own selection). Declines unless a drag is actually in flight AND
+        // the pointer is over something that drag could land in.
+        if dragAndDropSession?.handleDragNavigator(event) == true {
+            return true
         }
 
         // Layer 1: Status bar items with actions
