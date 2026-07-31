@@ -662,4 +662,37 @@ struct TableReorderDragTests {
         #expect(faint.filter { !$0 }.count == 1, "exactly one row is at full strength")
         #expect(faint[grabbed ?? 0] == false, "and it is the row that was grabbed")
     }
+
+    @Test("The Table held slot's emphasis starts where a focused row's does")
+    func heldSlotEmphasisReachesTheFirstCell() {
+        let fixture = Fixture(feedback: .dimmed)
+        _ = fixture.render()
+        _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        let held = fixture.render()
+
+        // The Table twin of `_ListCore`'s first-cell rule, stated the way it
+        // actually holds. The List's slot was off by one cell because its
+        // selection gutter is added AROUND the row buffer; a Table renders the
+        // gutter into the line itself and has never had that defect. What must
+        // hold on both sides is the invariant, not a literal column: the slot
+        // begins wherever the control's own focused rows begin.
+        let slotLine = held.lines.first { $0.contains("\u{1b}[48;") && !$0.stripped.isEmpty }
+        let ahead = (slotLine?.components(separatedBy: "\u{1b}[48;").first ?? "?").stripped
+
+        // A plain focused row is the yardstick: whatever chrome it leaves
+        // outside its own highlight, the slot may leave too. Comparing against
+        // it rather than against "border only" is what keeps this honest — a
+        // Table's container adds a padding column that belongs to no row.
+        let plain = Fixture()
+        _ = plain.render()
+        _ = plain.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
+        let focused = plain.render()
+        let focusedLine = focused.lines.first { $0.contains("\u{1b}[48;") } ?? ""
+        let aheadOfRow = focusedLine.components(separatedBy: "\u{1b}[48;").first?.stripped ?? "?"
+        #expect(
+            ahead == aheadOfRow,
+            "the slot starts where a focused row does: \(ahead) vs \(aheadOfRow)")
+    }
 }
