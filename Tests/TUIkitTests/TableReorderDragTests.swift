@@ -568,4 +568,19 @@ struct TableReorderDragTests {
             "condensed to its content: \((float ?? "").debugDescription)")
         #expect(float?.stripped.filter(\.isLetter) == "a")
     }
+    /// Empty is a state, not an absence: the table still occupies its frame,
+    /// so it is still the thing under the pointer — clickable, focusable, and
+    /// somewhere an enclosing `ScrollView` can find to reveal. It used to
+    /// contribute no hit-test region of its own at all once its rows were gone.
+    @Test("An empty table still claims its frame")
+    func emptyTableStaysInteractive() throws {
+        let fixture = Fixture(rows: [])
+        let buffer = fixture.render()
+        let focused = buffer.hitTestRegions.filter { $0.focusID != nil }
+        #expect(!focused.isEmpty, "the container region carries the table's focusID")
+        let region = try #require(focused.first)
+        #expect(
+            region.width > 1 && region.height > 1,
+            "and covers the box, not a sliver: \(region.width)x\(region.height)")
+    }
 }

@@ -501,7 +501,14 @@ where Value.ID: Hashable {
         let renderState: PopulatedRenderState?
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
-            renderState = nil
+            // Empty is a state, not an absence: the table still occupies its
+            // frame, so it is still the thing under the pointer, still
+            // clickable, still focusable, and still somewhere a drag can be
+            // dropped. All of that hangs off this state — without it the table
+            // contributed no hit region at all and a drag over it resolved
+            // nothing. Same fix as `_ListCore`'s.
+            renderState = emptyRenderState(
+                context: context, stateStorage: stateStorage, contentHeight: rowArea)
         } else if wantsScrollbar {
             let result = buildScrollbarContent(
                 context: context, stateStorage: stateStorage, palette: palette,
@@ -1235,6 +1242,46 @@ where Value.ID: Hashable {
             ? max(1, contentHeight - aboveLines - 1)
             : rowsWithoutBelow
         handler.viewportHeight = max(1, min(visibleRowCount, remaining))
+    }
+
+    /// The interaction state of a table with no rows: a real handler (its
+    /// `itemCount` freshly zeroed, so the count from its last populated frame
+    /// cannot leak into a later index), an empty visible range, no rows.
+    ///
+    /// It registers focus exactly as the populated path does — an empty table is
+    /// still a Tab stop, and an enclosing `ScrollView` still has to be able to
+    /// find it to reveal it.
+    private func emptyRenderState(
+        context: RenderContext,
+        stateStorage: StateStorage,
+        contentHeight: Int
+    ) -> PopulatedRenderState {
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context,
+            explicitFocusID: focusID,
+            defaultPrefix: "table",
+            propertyIndex: 1  // focusID
+        )
+        let handler = resolveHandler(
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            context: context,
+            contentHeight: contentHeight,
+            overflowing: false
+        )
+        FocusRegistration.register(context: context, handler: handler)
+        let hasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: hasFocus)
+        // Clears the bands the last populated frame left behind, so nothing
+        // hit-tests against rows that are no longer drawn.
+        handler.publishRowBands([])
+        return PopulatedRenderState(
+            handler: handler,
+            focusID: persistedFocusID,
+            visibleRange: 0..<0,
+            scrollOffsetAbove: 0,
+            visibleRowHeights: []
+        )
     }
 
     /// Stitches scroll indicators around the visible data rows.
