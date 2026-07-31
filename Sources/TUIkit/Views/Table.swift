@@ -1558,7 +1558,12 @@ where Value.ID: Hashable {
                     handlerID: mouseHandlerID,
                     vertical: state.handler,
                     horizontal: nil,
-                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds,
+                    // The column header is not part of the scrollable band. Left
+                    // in, it ate the whole upward hot margin: the border and the
+                    // header were the two hot rows, so the "▲ N more above" line
+                    // — the one place a user aims to scroll up — was inert.
+                    topInset: 1))
         }
 
         // A one-row region at the keyboard cursor's on-screen line, ahead of

@@ -1088,7 +1088,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     handlerID: mouseHandlerID,
                     vertical: state.handler,
                     horizontal: nil,
-                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds))
+                    delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds,
+                    // A title sits above the rows, and a footer (with its
+                    // separator) below them — chrome the rows never occupy. Left
+                    // in, they eat the hot margin at that edge: a footered list
+                    // only scrolled downward once the cursor was over the
+                    // footer, which is the same defect a Table's header caused
+                    // at the top.
+                    topInset: title != nil ? 1 : 0,
+                    bottomInset: footer != nil ? 2 : 0))
         }
 
         // A one-row region at the keyboard cursor's on-screen line, stamped

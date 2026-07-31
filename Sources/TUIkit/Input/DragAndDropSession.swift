@@ -127,6 +127,22 @@ final class DragAndDropSession: @unchecked Sendable {
         /// registration (`.dragAutoScrollDelay(_:)`), so a per-subtree override
         /// is honoured even though the driver runs at the root.
         let delayNanos: UInt64
+
+        /// Chrome lines at the top of the zone's rect that are not part of the
+        /// scrollable band — a `Table`'s column header, say.
+        ///
+        /// The zone borrows the control's whole hit region, because that is the
+        /// one rect the driver can resolve; but the hot margin has to be
+        /// measured against the SCROLLABLE part of it. Two rows of chrome at an
+        /// edge swallow the entire margin, and the edge stops responding until
+        /// the cursor is over the chrome — which is exactly what a Table's
+        /// header did to its upward auto-scroll.
+        var topInset: Int = 0
+
+        /// Chrome lines at the bottom — a `List`'s divider and footer. Same
+        /// reasoning as ``topInset``, and the symmetric bug: a footered List
+        /// only auto-scrolls downward once the cursor is over the footer.
+        var bottomInset: Int = 0
     }
 
     /// The drag in flight, or `nil`.
@@ -588,10 +604,16 @@ final class DragAndDropSession: @unchecked Sendable {
             // cursor far to the side isn't a candidate); horizontal needs it
             // within the rows. A cursor past an edge stays a candidate on the
             // OTHER axis' overlap — that is the "drag past the edge" case.
+            // Measured against the scrollable band, not the whole box: the
+            // insets are chrome the rows never occupy, and a margin spent on
+            // chrome is a margin the user cannot reach. (`withinCols`, the
+            // area tiebreak and `canReceiveDrag` all keep the FULL rect —
+            // they are asking where the control is, not where its rows are.)
             let dy =
                 withinCols
                 ? Self.autoScrollDelta(
-                    position: cursorY, start: rect.offsetY, extent: rect.height,
+                    position: cursorY, start: rect.offsetY + zone.topInset,
+                    extent: max(0, rect.height - zone.topInset - zone.bottomInset),
                     canBackward: zone.vertical.hasContentAbove,
                     canForward: zone.vertical.hasContentBelow)
                 : 0

@@ -51,12 +51,15 @@ struct DragAutoScrollTests {
             _ handlerID: HitTestRegion.HandlerID,
             vertical: any ScrollableOffsetState,
             horizontal: (any ScrollableOffsetState)? = nil,
-            delayNanos: UInt64 = 0
+            delayNanos: UInt64 = 0,
+            topInset: Int = 0,
+            bottomInset: Int = 0
         ) {
             session.registerAutoScrollZone(
                 DragAndDropSession.AutoScrollZone(
                     handlerID: handlerID, vertical: vertical,
-                    horizontal: horizontal, delayNanos: delayNanos))
+                    horizontal: horizontal, delayNanos: delayNanos,
+                    topInset: topInset, bottomInset: bottomInset))
         }
 
         func beginDrag(x: Int, y: Int) {
@@ -237,6 +240,50 @@ struct DragAutoScrollTests {
         harness.run(ticks: 3)
         #expect(list.scrollOffset > 30, "the list the row came from scrolls")
         #expect(page.scrollOffset == 30, "the page it sits in does not")
+    }
+
+    /// A control's chrome is not part of its scrollable band, and the hot margin
+    /// is only two rows — so two rows of chrome at an edge swallow it whole and
+    /// that edge stops responding. A Table's column header did exactly that to
+    /// its upward auto-scroll: the two hot rows were the border and the header,
+    /// leaving the "▲ N more above" line — the one place a user aims — inert.
+    @Test("Chrome at an edge does not eat that edge's hot margin")
+    func insetsMoveTheHotBandOffTheChrome() {
+        // A Table-shaped box: border, header, then the scrollable band.
+        let handler = scrollHandler(offset: 30, content: 100, viewport: 10)
+        let harness = Harness()
+        harness.setRegions([Self.viewport])
+        harness.addZone(Self.zoneID, vertical: handler, topInset: 2)
+        harness.addTarget(Self.zoneID)
+        harness.beginDrag(x: 20, y: 3)  // the first scrollable line, past the chrome
+        #expect(harness.drive(nowNanos: 0), "the top of the BAND is hot")
+        harness.run(ticks: 3)
+        #expect(handler.scrollOffset < 30, "and it scrolls upward")
+
+        // Without the inset that same line is two rows inside the rect, so it is
+        // cold — which is the bug.
+        let uninset = scrollHandler(offset: 30, content: 100, viewport: 10)
+        let plain = Harness()
+        plain.setRegions([Self.viewport])
+        plain.addZone(Self.zoneID, vertical: uninset)
+        plain.addTarget(Self.zoneID)
+        plain.beginDrag(x: 20, y: 3)
+        #expect(!plain.drive(nowNanos: 0), "counted from the box, row 3 is not an edge")
+    }
+
+    /// The mirror case: a List's divider + footer at the bottom.
+    @Test("Bottom chrome does not eat the downward hot margin")
+    func bottomInsetMovesTheHotBandOffTheFooter() {
+        let handler = scrollHandler(offset: 0, content: 100, viewport: 10)
+        let harness = Harness()
+        harness.setRegions([Self.viewport])  // 10 rows tall
+        harness.addZone(Self.zoneID, vertical: handler, bottomInset: 2)
+        harness.addTarget(Self.zoneID)
+        // Row 7 is the last scrollable line when the last two are chrome.
+        harness.beginDrag(x: 20, y: 7)
+        #expect(harness.drive(nowNanos: 0), "the bottom of the BAND is hot")
+        harness.run(ticks: 3)
+        #expect(handler.scrollOffset > 0)
     }
 
     @Test("A drag comfortably inside the viewport does not scroll")
