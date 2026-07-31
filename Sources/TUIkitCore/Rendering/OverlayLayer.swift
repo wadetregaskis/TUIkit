@@ -200,7 +200,25 @@ public struct OverlayLayer: Sendable, Equatable {
             var visible = clamped
             if dropY > 0 { visible.lines = Array(visible.lines.dropFirst(dropY)) }
             if dropX > 0 {
-                visible.lines = visible.lines.map { $0.ansiAwareSuffix(droppingVisible: dropX) }
+                visible.lines = visible.lines.map { line in
+                    // `ansiAwareSlice`, not `ansiAwareSuffix`: the suffix throws
+                    // away every SGR that occurred before the cut, so a preview
+                    // clipped at the left edge arrived unstyled and rendered in
+                    // the terminal's raw defaults — which reads as "just the
+                    // background". The slice replays the style it cut through.
+                    let owed = max(0, line.strippedLength - dropX)
+                    let slice = line.ansiAwareSlice(visibleStart: dropX, visibleCount: owed)
+                    // A wide glyph straddling the cut cannot be half-drawn, so
+                    // it is dropped whole and the line comes back a cell short —
+                    // which would slide the whole preview one column left, off
+                    // the cell the pointer grabbed. Pad that shortfall, after
+                    // the carried style so the gap keeps the run's background.
+                    let shortfall = owed - slice.strippedLength
+                    guard shortfall > 0 else { return slice }
+                    let carried = slice.leadingANSISequences()
+                    return carried + String(repeating: " ", count: shortfall)
+                        + slice.dropFirst(carried.count)
+                }
             }
             visible = visible.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
             return (visible, x, y)

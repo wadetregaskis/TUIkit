@@ -298,6 +298,38 @@ struct OverlayTests {
             "the first three columns and the first row are gone: \(placed.content.lines)")
     }
 
+    /// The clip has to carry the STYLE across the cut. Dropping the escapes that
+    /// came before it left the surviving text with no colour at all, which the
+    /// compositor writes between two resets — so a drag preview carried to the
+    /// left edge rendered in the terminal's raw defaults and read as nothing but
+    /// background.
+    @Test("A left-clipped overlay keeps the styling it was cut through")
+    func pointerAnchoredOverlayCarriesStyleAcrossTheCut() {
+        let styled = "\u{1B}[38;5;213mABCDEFGH\u{1B}[0m"
+        let pinned = OverlayLayer(
+            offsetX: -3, offsetY: 0, content: FrameBuffer(lines: [styled]),
+            clampsToScreen: false)
+        let line = pinned.placed(maxWidth: 20, maxHeight: 5).content.lines[0]
+        #expect(line.stripped == "DEFGH", "the visible cells are the ones that fit")
+        #expect(line.contains("38;5;213"), "and they are still pink: \(line.debugDescription)")
+    }
+
+    /// A wide glyph cut in half cannot be drawn, so it goes — and the cell it
+    /// owed has to be paid in spaces, or every later cell slides one column left
+    /// and the preview stops holding the cell the pointer grabbed.
+    @Test("A left-clipped overlay pads a straddled wide glyph")
+    func pointerAnchoredOverlayPadsAStraddledGlyph() {
+        // 🎵 is two cells; cutting one column into it drops it whole.
+        let pinned = OverlayLayer(
+            offsetX: -1, offsetY: 0, content: FrameBuffer(lines: ["\u{1F3B5} Aurora"]),
+            clampsToScreen: false)
+        let line = pinned.placed(maxWidth: 20, maxHeight: 5).content.lines[0]
+        #expect(
+            line.strippedLength == 8,
+            "one cell of the glyph survives as a space: \(line.debugDescription)")
+        #expect(line.stripped.hasSuffix(" Aurora"))
+    }
+
     /// Ragged is fine: each line keeps its own silhouette, and `composited`
     /// already writes line by line.
     @Test("A multi-line preview trims each line independently")
