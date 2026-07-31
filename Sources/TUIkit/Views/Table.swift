@@ -740,12 +740,11 @@ where Value.ID: Hashable {
                 drawnHeights.append((entry, slot.count))
             }
         }
-        publishRowBands(
-            handler: handler, drawn: drawnHeights, slide: handler.overscrollState.excursion)
-        // A drag never changes how much is on screen. It can only overrun when
-        // rows in hand have scrolled out of the visible range — the slot is
-        // still their full height — so the tail is clipped, not grown.
-        if rowLines.count > contentHeight { rowLines.removeLast(rowLines.count - contentHeight) }
+        // See `composeRowLines`: clipped away from the slot, never through it.
+        let slide =
+            handler.overscrollState.excursion
+            + clipOverrun(&rowLines, to: contentHeight, drawn: drawnHeights)
+        publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
         while rowLines.count < contentHeight { rowLines.append(padded("")) }
         let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
         let lines = handler.overscrollState.slid(rowLines, blank: blankRow)
@@ -1379,13 +1378,16 @@ where Value.ID: Hashable {
                 drawnHeights.append((entry, slot.count))
             }
         }
-        publishRowBands(
-            handler: handler, drawn: drawnHeights, slide: handler.overscrollState.excursion)
-        // See the scrollbar path: a slot taller than the rows it replaced (some
-        // of them scrolled away) must clip rather than grow the control.
-        if rowLines.count > visibleRange.count {
-            rowLines.removeLast(rowLines.count - visibleRange.count)
-        }
+        // A drag never changes how much is on screen, so an overrun is clipped —
+        // but never the SLOT. It overruns when rows in hand have scrolled out of
+        // the visible range, and when the slot is the last entry (the "move to
+        // the end" destination) the tail IS the slot: clipping it took away the
+        // only thing on screen saying where the rows would land, which reads as
+        // the selection falling off the bottom of the table.
+        let slide =
+            handler.overscrollState.excursion
+            + clipOverrun(&rowLines, to: visibleRange.count, drawn: drawnHeights)
+        publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         if handler.hasContentBelow {
@@ -1498,6 +1500,26 @@ where Value.ID: Hashable {
                         handler.dropTarget(atContentY: y - firstRowY) ?? handler.itemCount
                     handler.externalDropSlot = min(max(0, slot), handler.itemCount)
                 }))
+    }
+
+    /// Trims `lines` to `budget`, taking the overrun off whichever end is NOT
+    /// the drop slot, and reports how far the survivors shifted (negative when
+    /// the front was dropped) so the published bands move with them.
+    ///
+    /// `publishRowBands` discards bands whose `yStart` goes negative — "slid off
+    /// the top" — which is exactly right for rows dropped from the front.
+    private func clipOverrun(
+        _ lines: inout [String], to budget: Int,
+        drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)]
+    ) -> Int {
+        let overrun = lines.count - budget
+        guard overrun > 0 else { return 0 }
+        guard drawn.last?.entry == .slot else {
+            lines.removeLast(overrun)
+            return 0
+        }
+        lines.removeFirst(overrun)
+        return -overrun
     }
 
     private func publishRowBands(
