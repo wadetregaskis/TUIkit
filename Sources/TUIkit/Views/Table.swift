@@ -1394,6 +1394,37 @@ where Value.ID: Hashable {
         })
     }
 
+    /// Commits a reorder drop and takes the floating preview down the way the
+    /// gesture ended. Reports whether this gesture WAS a reorder — `false` means
+    /// the caller should carry on and treat it as a click.
+    ///
+    /// `end`, never `performDrop`: the payload is unnameable, so no
+    /// `dropDestination` could take it, and the table has already placed the row
+    /// itself.
+    @MainActor
+    private func finishReorderDrop(
+        handler: ItemListHandler<Value.ID>,
+        dragSession: DragAndDropSession?,
+        contentY: Int?
+    ) -> Bool {
+        // Asked BEFORE the drop, which clears the state. The question is whether
+        // anything would take the row — not whether the pointer is still over
+        // the content columns, which is all a nil `contentY` means (see the twin
+        // in `_ListCore`).
+        let landsNowhere =
+            (contentY.flatMap { handler.dropTarget(atContentY: $0) }
+                ?? handler.reorderPlaceholder?.slot) == nil
+        guard handler.dropReorder(atContentY: contentY) else { return false }
+        // Nowhere to land — so the row walks home rather than vanishing where
+        // the pointer happens to be.
+        if landsNowhere {
+            dragSession?.cancelReturningToOrigin()
+        } else {
+            dragSession?.end()
+        }
+        return true
+    }
+
     /// The multi-line path's bands: rows of different heights, no slot (that
     /// path forces ``RowReorderFeedback/live``, which moves the data instead of
     /// opening a gap).
@@ -1713,23 +1744,10 @@ where Value.ID: Hashable {
                     return false
                 }
 
-                // A reorder drop. `.live` has already moved the row; the other
-                // modes move it exactly here. `end`, never `performDrop`: the
-                // payload is unnameable, so no `dropDestination` could take it,
-                // and the table has already placed the row itself.
-                // Asked BEFORE the drop, which clears the state: a release with
-                    // no slot and no row under the pointer is the gesture
-                    // saying "nothing happened".
-                    let landsNowhere = captureHandler.reorderPlaceholder == nil && dragContentY == nil
-                    if captureHandler.dropReorder(atContentY: dragContentY) {
-                    // Nowhere to land — released off the rows, and the mode
-                    // showed no slot — so the row walks home rather than
-                    // vanishing where the pointer happens to be.
-                    if landsNowhere {
-                        dragSession?.cancelReturningToOrigin()
-                    } else {
-                        dragSession?.end()
-                    }
+                // A reorder drop, if this gesture was one.
+                if finishReorderDrop(
+                    handler: captureHandler, dragSession: dragSession, contentY: dragContentY)
+                {
                     focusManager?.focus(id: captureFocusID)
                     return true
                 }

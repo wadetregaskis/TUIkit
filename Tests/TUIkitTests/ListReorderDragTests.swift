@@ -25,98 +25,9 @@ import Testing
 @Suite("List drag-to-reorder")
 struct ListReorderDragTests {
 
-    /// A row-order holder plus the pieces to render it — a reference type so the
-    /// `onMove` closure (which fires during a later mouse dispatch, not during
-    /// the render that installed it) writes straight back into `items`.
-    /// `@MainActor`, so capturing it in the closure is race-free.
-    @MainActor
-    private final class Fixture {
-        var items: [String]
-        let reorderable: Bool
-        /// Rows selected before the gesture starts. Non-empty switches the list
-        /// to multi-selection, which is what makes a drag pick up a block.
-        var selection: Set<String> = []
-        /// How many times `onMove` has fired — the difference between "the list
-        /// is the preview" and "the drop is the move".
-        private(set) var moves = 0
-        /// Rows rendered taller than one line, by label. Variable row heights
-        /// are what make the drag's row geometry go stale as rows shuffle.
-        var tallRows: [String: Int] = [:]
-        let tui = TUIContext()
-        var env = EnvironmentValues()
-
-        init(
-            items: [String] = ["a", "b", "c", "d", "e"], reorderable: Bool = true,
-            feedback: RowReorderFeedback = .live
-        ) {
-            self.items = items
-            self.reorderable = reorderable
-            env.focusManager = FocusManager()
-            env.rowReorderFeedback = feedback
-            env.applyRuntimeServices(from: tui)
-            tui.mouseEventDispatcher.setActiveSupport(.full)
-        }
-
-        var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
-
-        /// Renders the current order and arms the dispatcher.
-        @discardableResult
-        func render() -> FrameBuffer {
-            dispatcher.beginRenderPass()
-            let tall = tallRows
-            let base = ForEach(items, id: \.self) { item in
-                Text(
-                    tall[item].map { lines in
-                        Array(repeating: item, count: lines).joined(separator: "\n")
-                    } ?? item)
-            }
-            let forEach =
-                reorderable
-                ? base.onMove {
-                    self.moves += 1
-                    self.items.move(fromOffsets: $0, toOffset: $1)
-                }
-                : base
-            let view: AnyView =
-                selection.isEmpty
-                ? AnyView(List(selection: .constant(String?.none)) { forEach }.frame(height: 9))
-                : AnyView(
-                    List(
-                        selection: Binding(
-                            get: { self.selection }, set: { self.selection = $0 })
-                    ) { forEach }.frame(height: 9))
-            var context = RenderContext(
-                availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
-            context.hasExplicitHeight = true
-            let buffer = renderToBuffer(view, context: context)
-            dispatcher.setRegions(buffer.hitTestRegions)
-            return buffer
-        }
-
-        /// The list's own handler — the press focuses it, which is what makes
-        /// it reachable from here.
-        var handler: ItemListHandler<String>? {
-            env.focusManager?.currentFocused as? ItemListHandler<String>
-        }
-
-        func rowY(_ buffer: FrameBuffer, _ label: String) -> Int {
-            buffer.lines.firstIndex { $0.stripped.contains(label) } ?? -1
-        }
-
-        func drag(from source: String, to target: String) {
-            let buffer = render()
-            let ySource = rowY(buffer, source)
-            let yTarget = rowY(buffer, target)
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: ySource))
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yTarget))
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yTarget))
-            render()
-        }
-    }
-
     @Test("Dragging a row downward drops it after the target")
     func dragDown() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         fixture.drag(from: "a", to: "c")
         // "a" (0) dropped onto "c" (2) lands just after it.
         #expect(fixture.items == ["b", "c", "a", "d", "e"])
@@ -124,7 +35,7 @@ struct ListReorderDragTests {
 
     @Test("Dragging a row upward drops it before the target")
     func dragUp() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         fixture.drag(from: "e", to: "b")
         // "e" (4) dragged up onto "b" (1) lands before it.
         #expect(fixture.items == ["a", "e", "b", "c", "d"])
@@ -132,7 +43,7 @@ struct ListReorderDragTests {
 
     @Test("A press/release with no motion selects — it does not reorder")
     func clickDoesNotReorder() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
         // No .dragged between press and release → a plain click.
@@ -144,14 +55,14 @@ struct ListReorderDragTests {
 
     @Test("Dropping a row back onto itself is a no-op")
     func dragToSameRowIsNoOp() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         fixture.drag(from: "c", to: "c")
         #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 
     @Test("A non-reorderable list (no onMove) is never reordered by a drag")
     func noOnMoveDoesNotReorder() {
-        let fixture = Fixture(reorderable: false)
+        let fixture = ListReorderFixture(reorderable: false)
         fixture.drag(from: "a", to: "c")
         #expect(fixture.items == ["a", "b", "c", "d", "e"], "a plain list is never reordered")
     }
@@ -160,7 +71,7 @@ struct ListReorderDragTests {
 
     @Test("A live drag reorders as the cursor moves, before any release")
     func liveReordersDuringTheDrag() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
@@ -173,7 +84,7 @@ struct ListReorderDragTests {
 
     @Test("A live drag issues one onMove per slot crossed")
     func liveMovesOncePerSlot() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
@@ -196,7 +107,7 @@ struct ListReorderDragTests {
 
     @Test("A live drag that returns to where it started leaves the order alone")
     func liveDragBackIsNetZero() {
-        let fixture = Fixture()
+        let fixture = ListReorderFixture()
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
         let yC = fixture.rowY(buffer, "c")
@@ -215,7 +126,7 @@ struct ListReorderDragTests {
         // given line — with press-frame geometry the second drag below reads
         // the line under the cursor as the row ABOVE the one that is really
         // drawn there, and shoves "a" straight back where it came from.
-        let fixture = Fixture(items: ["a", "b", "c", "d"])
+        let fixture = ListReorderFixture(items: ["a", "b", "c", "d"])
         fixture.tallRows = ["a": 3]
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
@@ -238,7 +149,7 @@ struct ListReorderDragTests {
 
     @Test("Cursor feedback leaves the order alone until the drop")
     func cursorDefersTheMove() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = ListReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
@@ -253,7 +164,7 @@ struct ListReorderDragTests {
 
     @Test("A dimmed drag takes the row out of its place and shows it faint at the slot")
     func dimmedShowsTheRowAtTheSlotOnly() throws {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = ListReorderFixture(feedback: .dimmed)
         let buffer = fixture.render()
         let height = buffer.height
         let yA = fixture.rowY(buffer, "a")
@@ -278,7 +189,7 @@ struct ListReorderDragTests {
 
     @Test("A cursor drag takes the row out and leaves an EMPTY slot")
     func cursorLeavesAnEmptySlot() throws {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = ListReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         let height = buffer.height
         let yA = fixture.rowY(buffer, "a")
@@ -300,7 +211,7 @@ struct ListReorderDragTests {
     @Test("The slot advances one row per step and never vanishes")
     func slotAdvancesEveryStep() {
         for feedback in [RowReorderFeedback.dimmed, .cursor] {
-            let fixture = Fixture(feedback: feedback)
+            let fixture = ListReorderFixture(feedback: feedback)
             let buffer = fixture.render()
             var y = fixture.rowY(buffer, "a")
             fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: y))
@@ -343,7 +254,7 @@ struct ListReorderDragTests {
     /// Presses `source`, drags to `target`, and returns the mid-drag frame plus
     /// the row the cursor is resting on — so the caller can release right there.
     private func midDrag(
-        _ fixture: Fixture, from source: String, to target: String
+        _ fixture: ListReorderFixture, from source: String, to target: String
     ) -> (frame: FrameBuffer, y: Int) {
         let buffer = fixture.render()
         let y = fixture.rowY(buffer, target)
@@ -355,7 +266,7 @@ struct ListReorderDragTests {
 
     @Test("A row dragged downward sits after the row under the cursor")
     func dimmedDownSitsAfterTheTarget() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = ListReorderFixture(feedback: .dimmed)
         let labels = fixture.items
         let (dragging, y) = midDrag(fixture, from: "a", to: "c")
         #expect(
@@ -370,7 +281,7 @@ struct ListReorderDragTests {
 
     @Test("A row dragged upward sits before the row under the cursor")
     func dimmedUpSitsBeforeTheTarget() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = ListReorderFixture(feedback: .dimmed)
         let labels = fixture.items
         let (dragging, y) = midDrag(fixture, from: "e", to: "b")
         #expect(
@@ -391,7 +302,7 @@ struct ListReorderDragTests {
         "A drag over its own row previews dropping it back",
         arguments: [RowReorderFeedback.dimmed, .cursor])
     func sourceRowIsADropTarget(feedback: RowReorderFeedback) {
-        let fixture = Fixture(feedback: feedback)
+        let fixture = ListReorderFixture(feedback: feedback)
         let buffer = fixture.render()
         let labels = fixture.items
         let yA = fixture.rowY(buffer, "a")
@@ -432,7 +343,7 @@ struct ListReorderDragTests {
     func cursorFloatsTheRowAtThePointer() throws {
         // Multi-cell labels, so the press can land in the MIDDLE of a row and
         // the grab point is something other than its corner.
-        let fixture = Fixture(items: ["alpha", "bravo", "charlie", "delta"], feedback: .cursor)
+        let fixture = ListReorderFixture(items: ["alpha", "bravo", "charlie", "delta"], feedback: .cursor)
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         // A row's content starts at column 2 — past the border and the gutter
@@ -482,7 +393,7 @@ struct ListReorderDragTests {
     /// list. Drawn in both places it would read as a duplicate.
     @Test("A cursor drag off the rows keeps carrying the row")
     func cursorOffTheRowsStillFloats() throws {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = ListReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         fixture.dispatcher.dispatch(
@@ -522,7 +433,7 @@ struct ListReorderDragTests {
         "A reorder drag arms the edge auto-scroll in every feedback mode",
         arguments: [RowReorderFeedback.live, .dimmed, .cursor])
     func reorderArmsAutoScroll(feedback: RowReorderFeedback) {
-        let fixture = Fixture(feedback: feedback)
+        let fixture = ListReorderFixture(feedback: feedback)
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         #expect(!session.autoScrollArmed, "nothing dragging yet")
@@ -536,131 +447,6 @@ struct ListReorderDragTests {
         #expect(!session.autoScrollArmed, "and disarm on the drop")
     }
 
-    // MARK: - Several rows at once
-
-    /// Every row in hand has to be visible and moving. The slot stands for the
-    /// whole block, so it is as tall as the rows it holds — showing only the
-    /// grabbed one looked exactly like the rest had been deleted.
-    @Test("A dimmed multi-row drag shows every row it is carrying")
-    func dimmedMultiRowShowsThemAll() {
-        let fixture = Fixture(feedback: .dimmed)
-        fixture.selection = ["a", "b"]
-        let buffer = fixture.render()
-        let height = buffer.height
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
-        fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
-        let dragging = fixture.render()
-        #expect(fixture.handler?.heldRowCount == 2, "the whole selection came")
-
-        let lines = dragging.lines.map(\.stripped)
-        #expect(lines.contains { $0.contains("a") }, "the grabbed row is on screen")
-        #expect(lines.contains { $0.contains("b") }, "and so is the one travelling with it")
-        #expect(dragging.height == height, "and the list is no taller for it")
-    }
-
-    /// `.cursor` carries the block on the pointer, so the float is as tall as
-    /// the block: one line per row, not just the row that was grabbed.
-    @Test("A cursor multi-row drag floats every row it is carrying")
-    func cursorMultiRowFloatsThemAll() {
-        let fixture = Fixture(feedback: .cursor)
-        fixture.selection = ["a", "b"]
-        let buffer = fixture.render()
-        let session = fixture.tui.dragAndDropSession
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
-        fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
-        fixture.render()
-
-        let preview = session.active?.preview
-        #expect(preview?.height == 2, "both rows ride the pointer")
-        let floating = (preview?.lines ?? []).map(\.stripped)
-        #expect(floating.first?.contains("a") == true)
-        #expect(floating.last?.contains("b") == true)
-        // Grabbed by its SECOND row, so the block hangs one line higher than
-        // its top — otherwise it jumps up under the pointer as the drag starts.
-        #expect(session.active?.grabY == 1, "the grabbed row stays under the cursor")
-    }
-
-    /// The mode a drag was drawn in has to be the mode its drop commits in.
-    /// `effectiveReorderFeedback` is DERIVED from the reorder state, so reading
-    /// it after that state is torn down answered a different question: a
-    /// multi-row `.live` drag previewed with a slot (several rows in hand never
-    /// shuffle live) and then dropped as though `.live` had already moved the
-    /// data — which it never had. The gesture did nothing at all.
-    @Test("A multi-row drop commits in the mode the drag was drawn in")
-    func multiRowLiveDropActuallyMoves() {
-        let fixture = Fixture(feedback: .live)
-        fixture.selection = ["a", "b"]
-        let buffer = fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
-        fixture.render()
-        #expect(fixture.handler?.heldRowCount == 2, "the whole selection came")
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
-        fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "d")))
-        fixture.render()
-        #expect(fixture.items != ["a", "b", "c", "d", "e"], "the rows actually moved")
-    }
-
-    /// `.live` means the list itself is the preview, and that has to hold for a
-    /// block as much as for one row: the rows shuffle as the pointer crosses
-    /// slots, staying together and staying in their own order. (A keyboard move
-    /// still previews with a slot — it has a cancel, and one `onMove` cannot
-    /// scatter a gathered block back.)
-    @Test("A live multi-row mouse drag shuffles the block as it goes")
-    func liveMultiRowShufflesAsItGoes() {
-        let fixture = Fixture(feedback: .live)
-        fixture.selection = ["a", "b"]
-        var buffer = fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
-        fixture.render()
-        #expect(fixture.handler?.effectiveReorderFeedback == .live, "the mouse keeps live")
-
-        // Onto "c": the block lands after it, as a single-row drag would.
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
-        buffer = fixture.render()
-        #expect(fixture.items == ["c", "a", "b", "d", "e"], "no release needed — that is `.live`")
-
-        // And again, from where the rows are NOW.
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
-        buffer = fixture.render()
-        #expect(fixture.items == ["c", "d", "a", "b", "e"], "the block moves as one")
-
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "b")))
-        fixture.render()
-        #expect(
-            fixture.items == ["c", "d", "a", "b", "e"],
-            "and the drop commits nothing further — live already arrived")
-    }
-
-    /// Back up the way it came: dragging the block upward lands it BEFORE the
-    /// row under the pointer, which is the same asymmetry one row has.
-    @Test("A live multi-row drag upward lands before the row it is over")
-    func liveMultiRowDragsUpward() {
-        let fixture = Fixture(feedback: .live)
-        fixture.selection = ["d", "e"]
-        let buffer = fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "e")))
-        fixture.render()
-        fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "b")))
-        fixture.render()
-        #expect(fixture.items == ["a", "d", "e", "b", "c"])
-    }
-
     /// A drag has to be carriable across the app — pick a row up on one page,
     /// navigate, drop it on another — which means the navigation keys keep
     /// navigating while something is in hand. Escape briefly cancelled a drag
@@ -668,7 +454,7 @@ struct ListReorderDragTests {
     /// it to the focus system, where the page's "⎋ back" never sees it).
     @Test("Escape neither cancels a mouse drag nor claims the key")
     func escapeDoesNotCancelAMouseDrag() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = ListReorderFixture(feedback: .cursor)
         // Its own status bar: the default is shared, so a parallel test's claim
         // would leak into the assertion below.
         fixture.env.statusBar = StatusBarState()
@@ -702,7 +488,7 @@ struct ListReorderDragTests {
     /// `.cursor` test cannot see it, nothing having moved yet.)
     @Test("Cancelling a mouse drag puts a live-reordered row back")
     func cancelPutsALiveReorderedRowBack() {
-        let fixture = Fixture(feedback: .live)
+        let fixture = ListReorderFixture(feedback: .live)
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         fixture.dispatcher.dispatch(
@@ -727,7 +513,7 @@ struct ListReorderDragTests {
 
     @Test("Dragging a cursor-mode row out of the list cancels the drop")
     func cursorDragOutCancels() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = ListReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
@@ -750,7 +536,7 @@ struct ListReorderDragTests {
         "Dragging back over the row's own line previews putting it back",
         arguments: [RowReorderFeedback.dimmed, .cursor])
     func draggingBackToTheStartPutsItBack(feedback: RowReorderFeedback) {
-        let fixture = Fixture(feedback: feedback)
+        let fixture = ListReorderFixture(feedback: feedback)
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
@@ -775,7 +561,7 @@ struct ListReorderDragTests {
     @Test("The slot follows the pointer back up, one row per step")
     func slotFollowsThePointerBackUp() {
         for feedback in [RowReorderFeedback.dimmed, .cursor] {
-            let fixture = Fixture(feedback: feedback)
+            let fixture = ListReorderFixture(feedback: feedback)
             let buffer = fixture.render()
             let yA = fixture.rowY(buffer, "a")
             fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))
@@ -796,7 +582,7 @@ struct ListReorderDragTests {
 
     @Test("Nothing is disturbed until a drag actually begins")
     func decorationNeedsMotion() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = ListReorderFixture(feedback: .dimmed)
         let buffer = fixture.render()
         let yA = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: yA))

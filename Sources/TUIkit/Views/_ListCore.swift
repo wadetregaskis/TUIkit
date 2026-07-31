@@ -1481,7 +1481,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // Asked BEFORE the drop, which clears the state: a release with
                     // no slot and no row under the pointer is the gesture
                     // saying "nothing happened".
-                    let landsNowhere = captureHandler.reorderPlaceholder == nil && dragContentY == nil
+                    // "Nowhere to land" is the question `dropReorder` itself
+                    // asks — no slot, and no droppable row under the release —
+                    // not "the pointer left the content COLUMNS", which is all
+                    // `dragContentY == nil` means. Dragging a row straight out
+                    // of the list keeps x inside the columns, so the old test
+                    // said "landed somewhere" and the row vanished instead of
+                    // flying home.
+                    let landsNowhere =
+                        (dragContentY.flatMap { captureHandler.dropTarget(atContentY: $0) }
+                            ?? captureHandler.reorderPlaceholder?.slot) == nil
                     if captureHandler.dropReorder(atContentY: dragContentY) {
                         // The row is back in the list — nothing left to float.
                         // `end`, never `performDrop`: the payload is private and
