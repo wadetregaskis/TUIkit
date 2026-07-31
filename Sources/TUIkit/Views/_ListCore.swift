@@ -287,7 +287,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let renderState: PopulatedRenderState?
         if source.isEmpty {
             contentLines = buildEmptyStateLines(context: context)
-            renderState = nil
+            // Empty is not inert. The list still occupies its frame, so it is
+            // still somewhere a drag can be dropped — and everything that makes
+            // that true (the container's hit region, the drop destination, the
+            // auto-scroll zone) hangs off this state. Without it, emptying a
+            // list made it permanently unfillable: nothing to hit-test, so a
+            // drag over it resolved no target and flew home.
+            renderState = emptyRenderState(
+                source: source, context: context, stateStorage: stateStorage,
+                targetContentHeight: targetContentHeight)
         } else {
             let result = buildPopulatedContent(
                 source: source,
@@ -511,6 +519,45 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight
             )
+        )
+    }
+
+    /// The interaction state of a list with no rows: a real handler (its
+    /// `itemCount` freshly zeroed, so the stale count from its last populated
+    /// frame cannot leak into a drop index), no rows, no bands, and whatever
+    /// drop action the content declared.
+    ///
+    /// Rows are the only thing missing. `publishRowBands` is called with an
+    /// empty list, which clears the previous frame's geometry; the drop
+    /// destination then resolves index 0 through its own `?? itemCount`
+    /// fallback, with no new arithmetic anywhere.
+    private func emptyRenderState(
+        source: RowSource<SelectionValue>,
+        context: RenderContext,
+        stateStorage: StateStorage,
+        targetContentHeight: Int
+    ) -> PopulatedRenderState {
+        let persistedFocusID = FocusRegistration.persistFocusID(
+            context: context,
+            explicitFocusID: focusID,
+            defaultPrefix: "list",
+            propertyIndex: 1  // focusID
+        )
+        let handler = resolvePopulatedHandler(
+            source: source,
+            persistedFocusID: persistedFocusID,
+            stateStorage: stateStorage,
+            context: context,
+            contentHeight: targetContentHeight,
+            overflowing: false
+        )
+        return PopulatedRenderState(
+            handler: handler,
+            focusID: persistedFocusID,
+            visibleRowYRanges: [],
+            visibleRows: [],
+            dropInsertion: (source.allContent
+                ? content as? DynamicViewContentActions : nil)?.dropInsertionAction
         )
     }
 

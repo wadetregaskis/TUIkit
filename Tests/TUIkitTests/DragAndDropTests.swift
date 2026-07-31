@@ -482,6 +482,54 @@ struct DragAndDropTests {
         #expect(log.inserted.first?.1 == ["zzz"])
     }
 
+    /// Emptying a list used to make it permanently unfillable: the empty branch
+    /// returned before ANY interaction was wired, so the list contributed no hit
+    /// region and no drop target, and a drag over it resolved nothing and flew
+    /// home. Empty is a state, not an absence.
+    @Test("An empty list still takes a drop, at index 0")
+    func emptyListStillAcceptsDrops() {
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 10, environment: env, tuiContext: tui)
+
+        let rows: [String] = []
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                ForEach(rows, id: \.self) { Text($0) }
+                    .dropDestination(for: String.self) { index, values in
+                        log.inserted.append((index, values))
+                    }
+            }
+            .frame(height: 6)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let buffer = render()
+        #expect(!buffer.hitTestRegions.isEmpty, "an empty list is still on screen and clickable")
+
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: 2)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render()
+        #expect(tui.dragAndDropSession.performDrop(), "the empty list takes it")
+        #expect(log.inserted.first?.0 == 0, "at the only index there is: \(log.inserted)")
+        #expect(log.inserted.first?.1 == ["zzz"])
+    }
+
     @Test("dragPreviewAnchor(.offset) trails the cursor; DropInfo reports the frame")
     func offsetAnchorAndDropInfoFrame() {
         let log = DropLog()
