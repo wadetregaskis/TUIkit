@@ -1102,9 +1102,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // The rows are a landing place for drags from elsewhere. It borrows the
         // container's region: same rectangle, and the drop target only needs
         // the geometry — clicks still go to the container's own closure.
-        registerRowDropDestination(
+        registerRowTargets(
             zoneID: mouseHandlerID, state: state, context: context, topInset: topInset,
-            insertion: state.dropInsertion)
+            contentColumns: contentColumns, insertion: state.dropInsertion)
         // Insert at index 0 so any interactive child inside a
         // row (Button, TextField, Stepper) still wins the
         // dispatcher's reverse-iteration match. This region is
@@ -1351,20 +1351,35 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         ItemListHandler<SelectionValue>.reorderSlotRowIndex
     }
 
-    /// Registers the list's rows as a drop destination that reports WHERE — the
-    /// `ForEach.dropDestination(for:action:)` half of the drag-and-drop story.
+    /// Registers everything this frame's rows can receive: a reorder of their
+    /// own, and a drop from elsewhere.
     ///
+    /// Both borrow the container's region — same rectangle, and both only need
+    /// the geometry; clicks still go to the container's own closure. Neither is
+    /// conditional on `isScrollEnabled` (the auto-scroll zone is): a drop is not
+    /// a scroll, and a list that did not register is one a gesture cannot land
+    /// in.
+    ///
+    /// The drop destination reports WHERE — the
+    /// `ForEach.dropDestination(for:action:)` half of the drag-and-drop story.
     /// While a compatible drag hovers, the pointer's row becomes a landing slot
     /// (the same gap a `.cursor` reorder opens, drawn by the same code). On
     /// release the app is told the index it was pointing at.
-    private func registerRowDropDestination(
+    private func registerRowTargets(
         zoneID: HitTestRegion.HandlerID,
         state: PopulatedRenderState,
         context: RenderContext,
         topInset: Int,
+        contentColumns: Range<Int>,
         insertion: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)?
     ) {
         let handler = state.handler
+        if handler.onMove != nil {
+            context.environment.dragAndDropSession?.registerReorderHost(
+                DragAndDropSession.ReorderHost(
+                    focusID: state.focusID, handlerID: zoneID, topInset: topInset,
+                    contentColumns: contentColumns, handler: handler))
+        }
         guard let insertion, let session = context.environment.dragAndDropSession else {
             handler.externalDropSlot = nil
             return
@@ -1458,6 +1473,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         case .content = hit.type
                     {
                         captureHandler.beginReorder(grabbing: hit.rowIndex)
+                        // Which control the gesture belongs to is the session's
+                        // to know from here on: every event after this one is
+                        // answered by whichever list is on screen under that
+                        // focus identity, not by the one this closure captured.
+                        dragSession?.beginReorder(
+                            focusID: captureFocusID, handler: captureHandler)
                         // Edge auto-scroll applies to reordering too, and the
                         // two feedback modes that open no drag session
                         // (`.live`, `.dimmed`) have to say so explicitly.
@@ -1479,9 +1500,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // `.cursor`'s business reaches outside the list: its row is
                     // carried on the pointer, above every other view, which only
                     // the drag session can draw.
-                    let wasActive = captureHandler.isReordering
-                    captureHandler.dragReorder(toContentY: dragContentY)
-                    let floating = captureHandler.reorderFloatingRows
+                    // Tracked through the session, which resolves the gesture
+                    // against the list rendering NOW and localises the cursor
+                    // by that list's rectangle — the captured coordinates
+                    // describe the press frame, which is a different place the
+                    // moment anything moves. Without a session (a headless
+                    // harness) there is only ever one list, so the captured
+                    // handler and coordinates are the same answer.
+                    let held = dragSession?.reorderHandler ?? captureHandler
+                    let wasActive = held.isReordering
+                    if let dragSession {
+                        dragSession.trackReorder()
+                    } else {
+                        captureHandler.dragReorder(toContentY: dragContentY)
+                    }
+                    let current = dragSession?.reorderHandler ?? captureHandler
+                    let floating = current.reorderFloatingRows
                     if let dragSession, !floating.isEmpty {
                         let carried = floating.compactMap { index in
                             capturedRows.first { $0.index == index }?.row.buffer
@@ -1497,7 +1531,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                             // down it by however much of the block was above the
                             // row the pointer took hold of — otherwise a block
                             // grabbed by its last row hangs from its first.
-                            let above = captureHandler.reorderHeldRowsAboveGrab.reduce(0) { sum, index in
+                            let above = current.reorderHeldRowsAboveGrab.reduce(0) { sum, index in
                                 sum + (capturedRows.first { $0.index == index }?.row.buffer.height ?? 1)
                             }
                             // `begin` trims the preview's padding and clamps
@@ -1527,38 +1561,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // Escape already put the row back and ended the drag; the
                     // release that follows is the tail of a cancelled gesture,
                     // not a click on whatever is under the pointer.
-                    if captureHandler.reorderCancelled {
-                        captureHandler.reorderCancelled = false
+                    let releasing = dragSession?.reorderHandler ?? captureHandler
+                    if releasing.reorderCancelled {
+                        releasing.reorderCancelled = false
                         return true
                     }
-                    // A reorder drop. `.live` has already moved the row; the
-                    // other modes move it exactly here.
-                    // Asked BEFORE the drop, which clears the state: a release with
-                    // no slot and no row under the pointer is the gesture
-                    // saying "nothing happened".
-                    // "Nowhere to land" is the question `dropReorder` itself
-                    // asks — no slot, and no droppable row under the release —
-                    // not "the pointer left the content COLUMNS", which is all
-                    // `dragContentY == nil` means. Dragging a row straight out
-                    // of the list keeps x inside the columns, so the old test
-                    // said "landed somewhere" and the row vanished instead of
-                    // flying home.
-                    let landsNowhere =
-                        (dragContentY.flatMap { captureHandler.dropTarget(atContentY: $0) }
-                            ?? captureHandler.reorderPlaceholder?.slot) == nil
-                    if captureHandler.dropReorder(atContentY: dragContentY) {
-                        // The row is back in the list — nothing left to float.
-                        // `end`, never `performDrop`: the payload is private and
-                        // unnameable, so no `dropDestination` could take it, and
-                        // the list has already placed the row itself.
-                        // Nowhere to land — released off the rows, and the mode
-                        // showed no slot — so the row walks home rather than
-                        // vanishing where the pointer happens to be.
-                        if landsNowhere {
-                            dragSession?.cancelReturningToOrigin()
-                        } else {
-                            dragSession?.end()
-                        }
+                    // A reorder drop, if this gesture was one. `.live` has
+                    // already moved the rows; the other modes move them exactly
+                    // there. Committed through the session for the same reason
+                    // the drag is tracked through it — and it is the same shape
+                    // as `performDrop`, deliberately.
+                    if dragSession?.performReorderDrop()
+                        ?? captureHandler.dropReorder(atContentY: dragContentY)
+                    {
                         focusManager?.focus(id: captureFocusID)
                         return true
                     }

@@ -199,6 +199,29 @@ final class DragAndDropSession: @unchecked Sendable {
     /// resolves to the innermost by preferring the last (deepest) match.
     private(set) var autoScrollZones: [AutoScrollZone] = []
 
+    // The three below are written only by `DragAndDropSession+Reorder`, which
+    // has to live in its own file to keep this one from growing further — so
+    // they cannot be `private(set)`.
+
+    /// This frame's reorderable controls, in registration (render) order. Like
+    /// ``targets``, these exist so a gesture is resolved against what is on
+    /// screen NOW rather than against whatever the press closed over. See
+    /// ``DragAndDropSession/registerReorderHost(_:)``.
+    var reorderHosts: [ReorderHost] = []
+
+    /// The focus identity of the control whose row reorder is in flight, or
+    /// `nil`. The key the gesture is resumed against, because it is the one
+    /// name that survives a re-render — handler ids reset every pass, and the
+    /// control's state object does not survive leaving the view tree.
+    var reorderFocusID: String?
+
+    /// The control that currently holds the reorder's rows.
+    ///
+    /// Weak: while the gesture is away from its page this is an orphan kept
+    /// alive only by the press-captured mouse closure, and the session has no
+    /// business extending that.
+    weak var reorderHandler: (any RowReorderHosting)?
+
     /// When the cursor first entered an auto-scroll zone's trigger band on the
     /// current run, or `nil` when nothing is engaged — the anchor for the
     /// configurable initial delay before the first scroll tick.
@@ -240,6 +263,7 @@ final class DragAndDropSession: @unchecked Sendable {
     func beginFrame() {
         targets.removeAll(keepingCapacity: true)
         autoScrollZones.removeAll(keepingCapacity: true)
+        reorderHosts.removeAll(keepingCapacity: true)
     }
 
     /// Registers a drop destination for this frame.
@@ -482,6 +506,16 @@ final class DragAndDropSession: @unchecked Sendable {
     func armAutoScroll(owner: (any ScrollableOffsetState)? = nil) {
         autoScrollArmed = true
         autoScrollOwner = owner.map(ObjectIdentifier.init)
+    }
+
+    /// Moves the "this scrollable may move under the gesture" permission from
+    /// one control to another — for when a reorder is handed to the control that
+    /// replaced its owner (see ``registerReorderHost(_:)``). Without it a
+    /// resumed gesture is over a list that refuses to auto-scroll, because the
+    /// owner it is checked against no longer draws anything.
+    func adoptAutoScrollOwner(from old: AnyObject, to new: AnyObject) {
+        guard autoScrollOwner == ObjectIdentifier(old) else { return }
+        autoScrollOwner = ObjectIdentifier(new)
     }
 
     /// Releases the arming when the gesture ends WITHOUT having been a drag —

@@ -221,3 +221,11 @@ without letting go.
 
 A keyboard move (<kbd>Ctrl</kbd>+<kbd>R</kbd>) is a different thing — a mode,
 not a gesture — and it does answer <kbd>Escape</kbd>, which puts the row back.
+
+A **row reorder** is carriable in the same way, with one limit that follows from
+what it is: a reorder can only land in the list it came from, so leaving that
+list's page and coming back resumes the gesture, and releasing anywhere else
+abandons it. The rows go home and the preview walks back, exactly as a refused
+drop does. Which control finishes a reorder is decided at the release, against
+whatever is on screen then — not against the list that was there at the press —
+so the drop lands in the list you are looking at, moving the rows you can see.

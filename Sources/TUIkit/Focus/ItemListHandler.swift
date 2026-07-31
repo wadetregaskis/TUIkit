@@ -229,53 +229,6 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// ``ItemListHandler/dragReorder(toContentY:)`` for the state machine.
     var reorder: RowReorder?
 
-    /// One in-flight row-reorder drag.
-    struct RowReorder: Equatable {
-        /// The data offset of the row picked up on press.
-        var grabbedOffset: Int
-        /// Where that row sits *now*. Only ``RowReorderFeedback/live`` moves it
-        /// mid-drag; the other modes leave the data alone until the drop, so
-        /// this stays equal to ``grabbedOffset`` throughout.
-        var currentOffset: Int
-        /// Whether the cursor has actually moved since the press — a plain
-        /// press/release with no motion is a click (selection), not a reorder.
-        var active: Bool
-
-        /// Where the row would land if released now, or `nil` when the cursor is
-        /// off the rows entirely. `.dimmed` and `.cursor` show this slot — as a
-        /// copy of the row and as a gap respectively — and `nil` is what makes a
-        /// drag off the list read as "release here and nothing moves".
-        var targetOffset: Int?
-
-        /// Every row in hand, by data offset — the whole selection when the
-        /// grabbed row was part of one, otherwise just that row.
-        ///
-        /// Disjoint sets are allowed and stay disjoint until the drop: rows 2,
-        /// 4 and 5 travel as three rows and land as one block. Consolidating
-        /// earlier would be a data change the user has not asked for yet, and
-        /// could not be undone by a cancel (one `onMove` cannot scatter a block
-        /// back to disjoint places).
-        var held: IndexSet
-
-        /// Where `grabbedOffset` sits within ``held``, so the row the pointer
-        /// took hold of stays the one it is holding after the drop.
-        ///
-        /// Stored, not derived: a `.live` block move rewrites `held` at every
-        /// step, and re-deriving the rank against a `grabbedOffset` that now
-        /// names a different row would drift.
-        let primaryRank: Int
-
-        init(grabbedOffset: Int, held: IndexSet, active: Bool) {
-            let held = held.isEmpty ? IndexSet(integer: grabbedOffset) : held
-            self.grabbedOffset = grabbedOffset
-            self.currentOffset = grabbedOffset
-            self.held = held
-            self.active = active
-            self.primaryRank =
-                held.contains(grabbedOffset) ? held.count(where: { $0 < grabbedOffset }) : 0
-        }
-    }
-
     /// What a reorder drag shows, synced from `environment.rowReorderFeedback`
     /// during render; read at event time, when the environment is out of reach.
     var reorderFeedback: RowReorderFeedback = .live

@@ -1,18 +1,25 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  ItemListHandler+Reorder.swift
 //
-//  The drag-to-reorder state machine for `List` rows, shared by every feedback
-//  mode (``RowReorderFeedback``). It lives on the handler rather than in
-//  `_ListCore`'s mouse closure for two reasons: the closure is captured at
+//  The drag-to-reorder state machine for `List` and `Table` rows, shared by
+//  every feedback mode (``RowReorderFeedback``). It lives on the handler rather
+//  than in the views' mouse closures for two reasons: a closure is captured at
 //  press time and outlives the render that made it, and the handler is what
 //  survives between renders — so the drag reads the CURRENT row geometry
 //  (``ItemListHandler/visibleRowBands``, republished every render) instead of a
 //  press-frame copy that `.live` reordering would immediately invalidate.
 //
+//  Which handler a gesture belongs to is `DragAndDropSession`'s question, not
+//  this file's: see `DragAndDropSession+Reorder`.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
 import Foundation
+
+/// The handler *is* the reorder state machine, so the protocol the drag-and-drop
+/// session resolves gestures through needs nothing added.
+extension ItemListHandler: RowReorderHosting {}
 
 extension ItemListHandler {
 
@@ -776,7 +783,20 @@ extension ItemListHandler {
         // latch it falls into the click path and selects whatever row the
         // pointer happens to be over.
         reorderCancelled = true
-        dragSession?.cancelReturningToOrigin()
+        // Clears the session's binding to this gesture as well, and walks the
+        // floating preview home.
+        dragSession?.cancelReorder()
+    }
+
+    /// Whether a release at `contentY` would put the rows anywhere.
+    ///
+    /// Not "is the pointer still over the content columns", which is all a `nil`
+    /// `contentY` means: dragging a row straight out through the top of a list
+    /// keeps x inside the columns, and reading it that way said "landed
+    /// somewhere" while the row vanished. `List` and `Table` asked this
+    /// identically before their drops; it belongs beside the drop.
+    func reorderLandsNowhere(atContentY contentY: Int?) -> Bool {
+        (contentY.flatMap { dropTarget(atContentY: $0) } ?? reorderPlaceholder?.slot) == nil
     }
 
     /// Drops any in-flight reorder without moving anything.

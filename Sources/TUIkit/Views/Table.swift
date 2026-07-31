@@ -1542,35 +1542,33 @@ where Value.ID: Hashable {
         })
     }
 
-    /// Commits a reorder drop and takes the floating preview down the way the
-    /// gesture ended. Reports whether this gesture WAS a reorder — `false` means
-    /// the caller should carry on and treat it as a click.
+    /// Starts the floating preview on the first movement of a `.cursor` drag,
+    /// or advances it on every movement after that.
     ///
-    /// `end`, never `performDrop`: the payload is unnameable, so no
-    /// `dropDestination` could take it, and the table has already placed the row
-    /// itself.
+    /// `begin` samples the cursor once; only `dragMoved` tracks it — and a
+    /// reorder drag reaches the view's own mouse closure rather than the
+    /// `.draggable` modifier that normally calls it.
     @MainActor
-    private func finishReorderDrop(
-        handler: ItemListHandler<Value.ID>,
-        dragSession: DragAndDropSession?,
-        contentY: Int?
-    ) -> Bool {
-        // Asked BEFORE the drop, which clears the state. The question is whether
-        // anything would take the row — not whether the pointer is still over
-        // the content columns, which is all a nil `contentY` means (see the twin
-        // in `_ListCore`).
-        let landsNowhere =
-            (contentY.flatMap { handler.dropTarget(atContentY: $0) }
-                ?? handler.reorderPlaceholder?.slot) == nil
-        guard handler.dropReorder(atContentY: contentY) else { return false }
-        // Nowhere to land — so the row walks home rather than vanishing where
-        // the pointer happens to be.
-        if landsNowhere {
-            dragSession?.cancelReturningToOrigin()
-        } else {
-            dragSession?.end()
+    private func floatCarriedRows(
+        session: DragAndDropSession?,
+        handler: any RowReorderHosting,
+        wasActive: Bool,
+        grabX: Int,
+        previewLine: @MainActor (Int) -> String?
+    ) {
+        guard let session, !handler.reorderFloatingRows.isEmpty else { return }
+        let carried = handler.reorderFloatingRows.compactMap(previewLine)
+        guard !wasActive, !carried.isEmpty else {
+            session.dragMoved()
+            return
         }
-        return true
+        // The rows' own lines, floated at the cursor. No hit regions to strip:
+        // they are plain rendered lines. One line per row here, so the grab
+        // point moves down the block by however many of its rows sit above the
+        // one the pointer took hold of.
+        session.begin(
+            payload: RowReorderPayload(), preview: FrameBuffer(lines: carried),
+            grabX: grabX, grabY: handler.reorderHeldRowsAboveGrab.count)
     }
 
     /// The multi-line path's bands: rows of different heights, no slot (that
@@ -1695,6 +1693,20 @@ where Value.ID: Hashable {
             ),
             at: 0
         )
+
+        // A landing place for a reorder of its own rows, on the container's
+        // rectangle. Registered unconditionally (not under `isScrollEnabled`,
+        // as the auto-scroll zone below is): a drop is not a scroll, and a
+        // table that did not register is one a gesture cannot land in.
+        if state.handler.onMove != nil {
+            context.environment.dragAndDropSession?.registerReorderHost(
+                DragAndDropSession.ReorderHost(
+                    focusID: state.focusID,
+                    handlerID: mouseHandlerID,
+                    topInset: firstRowY,
+                    contentColumns: contentColumns,
+                    handler: state.handler))
+        }
 
         // Register the table as a drag auto-scroll zone (sharing the container
         // region id): a drag hovering near its top/bottom edge scrolls the rows
@@ -1831,6 +1843,10 @@ where Value.ID: Hashable {
                         let index = rowAt(y: event.y)
                     {
                         captureHandler.beginReorder(grabbing: index)
+                        // Which control the gesture belongs to is the session's
+                        // to know from here on — see the twin in `_ListCore`.
+                        dragSession?.beginReorder(
+                            focusID: captureFocusID, handler: captureHandler)
                         // Edge auto-scroll applies to reordering too, and the
                         // two feedback modes that open no drag session
                         // (`.live`, `.dimmed`) have to say so explicitly.
@@ -1852,28 +1868,18 @@ where Value.ID: Hashable {
                     // looks like is the feedback mode's business — and `.cursor`'s
                     // reaches outside the table: its row rides the pointer above
                     // every other view, which only the drag session can draw.
-                    let wasActive = captureHandler.isReordering
-                    captureHandler.dragReorder(toContentY: dragContentY)
-                    let floating = captureHandler.reorderFloatingRows
-                    if let dragSession, !floating.isEmpty {
-                        let carried = floating.compactMap(previewLine)
-                        if !wasActive, !carried.isEmpty {
-                            // The rows' own lines, floated at the cursor. No hit
-                            // regions to strip: they are plain rendered lines.
-                            let preview = FrameBuffer(lines: carried)
-                            // One line per row here, so the grab point moves
-                            // down the block by however many of its rows sit
-                            // above the one the pointer took hold of.
-                            dragSession.begin(
-                                payload: RowReorderPayload(), preview: preview,
-                                grabX: grab.x,
-                                grabY: captureHandler.reorderHeldRowsAboveGrab.count)
-                        } else {
-                            // `begin` samples the cursor once; only `dragMoved`
-                            // tracks it — see the same call in _ListCore.
-                            dragSession.dragMoved()
-                        }
+                    // Tracked through the session — see the twin in `_ListCore`
+                    // for why, and for what the session-less fallback is.
+                    let wasActive = (dragSession?.reorderHandler ?? captureHandler).isReordering
+                    if let dragSession {
+                        dragSession.trackReorder()
+                    } else {
+                        captureHandler.dragReorder(toContentY: dragContentY)
                     }
+                    floatCarriedRows(
+                        session: dragSession,
+                        handler: dragSession?.reorderHandler ?? captureHandler,
+                        wasActive: wasActive, grabX: grab.x, previewLine: previewLine)
                     return true
 
                 case .released:
@@ -1884,8 +1890,9 @@ where Value.ID: Hashable {
                     // Escape already put the row back and ended the drag; the
                     // release that follows is the tail of a cancelled gesture,
                     // not a click on whatever is under the pointer.
-                    if captureHandler.reorderCancelled {
-                        captureHandler.reorderCancelled = false
+                    let releasing = dragSession?.reorderHandler ?? captureHandler
+                    if releasing.reorderCancelled {
+                        releasing.reorderCancelled = false
                         return true
                     }
 
@@ -1893,9 +1900,10 @@ where Value.ID: Hashable {
                     return false
                 }
 
-                // A reorder drop, if this gesture was one.
-                if finishReorderDrop(
-                    handler: captureHandler, dragSession: dragSession, contentY: dragContentY)
+                // A reorder drop, if this gesture was one. Committed through
+                // the session — see the twin in `_ListCore`.
+                if dragSession?.performReorderDrop()
+                    ?? captureHandler.dropReorder(atContentY: dragContentY)
                 {
                     focusManager?.focus(id: captureFocusID)
                     return true
