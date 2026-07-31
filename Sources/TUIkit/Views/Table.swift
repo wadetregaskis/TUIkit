@@ -1437,11 +1437,17 @@ where Value.ID: Hashable {
             // to `.dimmed`, precisely because there is no pointer to carry a row.
             return Array(repeating: blank, count: max(1, sources.count))
         }
+        // The row the cursor is on stays at full strength while the rest of the
+        // block goes faint — the slot's pulse covers all of them, so without
+        // this a multi-row hold marks no row in particular. `nil` for one row
+        // and for every mouse drag: see `reorderPrimaryHeldRow`.
+        let primary = handler.reorderPrimaryHeldRow
         return sources.map { source in
             let line = renderRow(
                 item: data[source], columnWidths: columnWidths,
                 isFocused: held, isSelected: held, rowWidth: rowWidth,
                 context: context, palette: palette)
+            guard source != primary else { return line }
             // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
             // steering this", the dim says "it is not in the list right now",
             // and both are true at once. Substituting one for the other is why

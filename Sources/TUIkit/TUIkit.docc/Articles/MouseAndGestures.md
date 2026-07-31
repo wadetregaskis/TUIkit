@@ -225,6 +225,10 @@ mean what they usually mean.
 
 A keyboard move (<kbd>Ctrl</kbd>+<kbd>R</kbd>) is a different thing — a mode,
 not a gesture — and it does answer <kbd>Escape</kbd>, which puts the row back.
+Its rows leave the list and are drawn as the landing slot, which pulses to say
+"these are in your hand". Several rows at once make that pulse ambiguous, so the
+row the cursor is on stays at full strength while the others travel faint: an
+indicator every row wears is an indicator none of them wears.
 
 A **row reorder** is carriable in the same way, with one limit that follows from
 what it is: a reorder can only land in the list it came from, so leaving that

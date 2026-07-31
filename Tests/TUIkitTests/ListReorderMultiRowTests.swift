@@ -198,4 +198,30 @@ struct ListReorderMultiRowTests {
             ahead.allSatisfy { "│┃|".contains($0) },
             "only the border precedes the highlight: \(ahead.debugDescription)")
     }
+
+    @Test("A block in hand still shows which row the cursor is on")
+    func multiRowKeyboardMoveKeepsTheCursorRow() {
+        let fixture = ListReorderFixture(feedback: .dimmed)
+        fixture.selection = ["a", "b", "c"]
+        _ = fixture.render()
+        // Focus the list, then pick the whole selection up from the keyboard.
+        _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        let grabbed = try? #require(fixture.handler?.reorder?.grabbedOffset)
+        let held = fixture.render()
+
+        // The three rows have left the list and are drawn as one slot, which
+        // carries the focus pulse across its whole height. The row the cursor is
+        // on has to stay picked out inside it: before Ctrl-R it was plainly
+        // distinguishable from its selected neighbours, and picking the block up
+        // must not take that away. Faint everywhere = an indicator on all three
+        // = an indicator on none.
+        let faint = ["a", "b", "c"].map { label -> Bool in
+            let line = held.lines.first { $0.stripped.contains(label) } ?? ""
+            return line.contains("\u{1b}[2m")
+        }
+        #expect(faint.filter { !$0 }.count == 1, "exactly one row is at full strength")
+        #expect(faint[grabbed ?? 0] == false, "and it is the row that was grabbed")
+    }
 }

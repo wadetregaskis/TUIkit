@@ -506,6 +506,25 @@ extension ItemListHandler {
     /// slot should read as "this is in your hand" rather than as a hole.
     var isHoldingRow: Bool { reorderRemovedRow != nil }
 
+    /// The one held row the keyboard cursor is on — the row the user actually
+    /// grabbed, and the one that is still "the" row after the drop — or `nil`
+    /// when the question does not arise.
+    ///
+    /// It arises for a keyboard move holding SEVERAL rows, and only there. The
+    /// held rows leave the list and are redrawn as the slot, which carries the
+    /// focus pulse across its whole height; with one row that pulse IS the
+    /// cursor, but with three it is on all of them at once, and an indicator
+    /// everything wears indicates nothing. Before <kbd>Ctrl</kbd>+<kbd>R</kbd>
+    /// the cursor row was plainly distinguishable from its selected neighbours,
+    /// and picking the block up must not take that away.
+    ///
+    /// `nil` for a mouse drag whatever it is holding: the pointer says where
+    /// the rows are, and there is no keyboard cursor in play to lose.
+    var reorderPrimaryHeldRow: Int? {
+        guard isKeyboardMove, let reorder, reorder.held.count > 1 else { return nil }
+        return reorder.grabbedOffset
+    }
+
         /// The sentinel `rowIndex` the reorder drop slot is published with: it has
     /// no data behind it, so it cannot carry a real offset.
     static var reorderSlotRowIndex: Int { -1 }

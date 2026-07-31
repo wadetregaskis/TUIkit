@@ -640,4 +640,26 @@ struct TableReorderDragTests {
         #expect(tui.dragAndDropSession.performDrop(), "an empty table takes it too")
         #expect(log.got.first?.0 == 0, "at index 0: \(log.got)")
     }
+
+    @Test("A Table block in hand also shows which row the cursor is on")
+    func multiRowKeyboardMoveKeepsTheCursorRow() {
+        let fixture = Fixture(feedback: .dimmed)
+        fixture.selection = ["a", "b", "c"]
+        _ = fixture.render()
+        _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        let grabbed = try? #require(fixture.handler?.reorder?.grabbedOffset)
+        let held = fixture.render()
+
+        // The List twin of this, and for the same reason: the slot's pulse
+        // covers the whole block, so without one row at full strength it marks
+        // no row in particular. See `reorderPrimaryHeldRow`.
+        let faint = ["a", "b", "c"].map { label -> Bool in
+            let y = fixture.rowY(held, label)
+            return y >= 0 && held.lines[y].contains("\u{1b}[2m")
+        }
+        #expect(faint.filter { !$0 }.count == 1, "exactly one row is at full strength")
+        #expect(faint[grabbed ?? 0] == false, "and it is the row that was grabbed")
+    }
 }

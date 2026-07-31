@@ -1235,11 +1235,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // multi-row drag look like the rest had been deleted.
         let byIndex = Dictionary(
             visibleRows.map { ($0.index, $0.row) }, uniquingKeysWith: { first, _ in first })
-        let held = handler.reorderRemovedRows.compactMap { byIndex[$0]?.buffer }
+        let held = handler.reorderRemovedRows.compactMap { index in
+            byIndex[index].map { (index: index, buffer: $0.buffer) }
+        }
+        // Within a block, the row the cursor is on stays at full strength while
+        // its travelling companions go faint — otherwise the slot's pulse is on
+        // every one of them and marks none. See `reorderPrimaryHeldRow`; `nil`
+        // for one row and for every mouse drag, which keep the old rendering.
+        let primary = handler.reorderPrimaryHeldRow
         var body: FrameBuffer
         switch handler.effectiveReorderFeedback {
-        case .dimmed: body = stacked(held.map(dimmed)) ?? blankRow(like: nil)
-        case .cursor, .live: body = blankRow(like: stacked(held))
+        case .dimmed:
+            body =
+                stacked(held.map { $0.index == primary ? $0.buffer : dimmed($0.buffer) })
+                ?? blankRow(like: nil)
+        case .cursor, .live: body = blankRow(like: stacked(held.map(\.buffer)))
         }
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering is emphasised, not a gap. Carried as
