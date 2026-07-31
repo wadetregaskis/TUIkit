@@ -98,6 +98,15 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
     /// The lazily-rendered buffer + badge for this row.
     let content: LazyListRowContent
 
+    /// A background this row paints instead of the one its type would choose —
+    /// how the reorder drop slot carries the "you are steering this" emphasis.
+    ///
+    /// It has to be painted by the row renderer rather than baked into the
+    /// buffer: the leading selection gutter is added around the buffer, so a
+    /// background inside it starts one cell late and leaves the row's first
+    /// cell at the terminal default.
+    var backgroundOverride: Color?
+
     /// The rendered content buffer.
     ///
     /// Forces the lazy render on first access (then memoised). Only ever read

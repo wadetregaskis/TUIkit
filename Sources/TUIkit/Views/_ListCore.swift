@@ -1263,14 +1263,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         case .cursor, .live: body = blankRow(like: stacked(held))
         }
         // A keyboard move has no pointer to say where the row is, so the slot
-        // says it: the row you are steering is emphasised, not a gap.
-        if let held = heldSlotBackground(handler: handler, context: context, palette: palette) {
-            body = FrameBuffer(
-                lines: body.lines.map {
-                    ANSIRenderer.applyPersistentBackground(
-                        $0.isEmpty ? " " : $0, color: held)
-                })
-        }
+        // says it: the row you are steering is emphasised, not a gap. Carried as
+        // a background the ROW renderer paints — baked into the buffer it began
+        // one cell late, because the selection gutter is added around the
+        // buffer, leaving the slot's first cell at the terminal default.
+        let heldBackground = heldSlotBackground(
+            handler: handler, context: context, palette: palette)
         // Which rows to draw, and where the slot goes among them, is the shared
         // arithmetic — `Table` asks the same question of the same handler.
         return handler.reorderDrawnRows(visibleRows.map(\.index)).compactMap { drawn in
@@ -1278,7 +1276,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             case .row(let index):
                 return byIndex[index].map { (index: index, row: $0) }
             case .slot:
-                return (Self.reorderSlotRowIndex, SelectableListRow(type: .footer, buffer: body))
+                var slot = SelectableListRow<SelectionValue>(type: .footer, buffer: body)
+                slot.backgroundOverride = heldBackground
+                return (Self.reorderSlotRowIndex, slot)
             }
         }
     }
@@ -1797,7 +1797,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
-        let backgroundColor = rowBackgroundColor(
+        let backgroundColor = row.backgroundOverride ?? rowBackgroundColor(
             rowType: row.type,
             isFocused: isFocused,
             isSelected: isSelected,

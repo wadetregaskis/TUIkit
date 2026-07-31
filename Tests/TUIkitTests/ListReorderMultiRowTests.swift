@@ -171,4 +171,31 @@ struct ListReorderMultiRowTests {
         #expect(fixture.items == ["a", "b", "c", "d", "e"], "nothing moved")
         #expect(session.returnFlight != nil, "and the row walks back to its place")
     }
+    /// The slot's "you are steering this" emphasis is painted by the ROW
+    /// renderer, not baked into the slot's buffer. Baked in, it began one cell
+    /// late — the selection gutter is added AROUND the buffer — so the row's
+    /// first cell stayed at the terminal's default colours while the rest of the
+    /// line was highlighted.
+    @Test("The held slot's emphasis covers the row's first cell")
+    func heldSlotEmphasisReachesTheFirstCell() {
+        let fixture = ListReorderFixture(feedback: .dimmed)
+        _ = fixture.render()
+        // Focus the list and pick a row up from the KEYBOARD — the only gesture
+        // that emphasises the slot (a mouse drag has the pointer to say where
+        // the row is).
+        _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        let held = fixture.render()
+
+        let slotLine = try? #require(
+            held.lines.first { $0.contains("\u{1b}[48;") && !$0.stripped.isEmpty })
+        // Everything before the highlight starts is the list's own BORDER. The
+        // row's first cell — the selection gutter — must be inside it; it used
+        // to be the one cell left unpainted.
+        let ahead = (slotLine?.components(separatedBy: "\u{1b}[48;").first ?? "?").stripped
+        #expect(
+            ahead.allSatisfy { "│┃|".contains($0) },
+            "only the border precedes the highlight: \(ahead.debugDescription)")
+    }
 }
