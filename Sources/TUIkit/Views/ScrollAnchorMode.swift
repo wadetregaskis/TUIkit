@@ -19,9 +19,12 @@ import TUIkitCore
 /// | ``row`` | A designated row keeps its place on screen as rows change around it. |
 /// | ``window`` | *No* anchor (the default): the position stays where it is in LINE coordinates unless something explicitly moves it. |
 ///
-/// Until this feature's later slices land there is no public designator for
-/// ``row`` — per the spec's guardrail #1 it arrives via its own API, as in
-/// SwiftUI, rather than by overloading the `UnitPoint` anchor.
+/// ``row`` is designated through its own API — ``ScrollAnchor/row(_:)`` written
+/// into a bound ``TUIkit/View/anchorPosition(_:)`` — per the spec's guardrail
+/// #1, rather than by overloading the `UnitPoint` anchor. It is deliberately
+/// *not* declarable: ``resolved(defaultScrollAnchor:)`` maps a `UnitPoint` and
+/// can only yield ``top``, ``bottom`` or ``window``, since a declaration has no
+/// way to name which row it means.
 enum ScrollAnchorMode: Equatable {
     case top
     case bottom

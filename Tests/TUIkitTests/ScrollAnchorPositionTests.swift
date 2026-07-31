@@ -312,16 +312,29 @@ struct ScrollAnchorPositionTests {
         #expect(read() == .row(AnyHashable("d")))
     }
 
-    /// Scoping negative 1 — the spec switches **Top/Bottom** to Row. A view
-    /// already released to `.window` is being browsed freely; selecting there
-    /// must not silently start holding a row.
-    @Test("Selecting does NOT re-anchor a view already released to .window")
-    func selectionLeavesReleasedViewAlone() {
+    /// **Re-selection is the Row restore** (owner decision, 2026-07-31, §3.1).
+    /// This case used to assert the opposite — that a view released to `.window`
+    /// by a scroll was left alone — which left row-anchoring unreachable once
+    /// the user had scrolled, i.e. exactly when a restore is wanted. Retargeted,
+    /// not deleted: the negative that survives is the declared-Window one below.
+    @Test("Selecting RESTORES row anchoring after a scroll released the view")
+    func selectionRestoresRowAfterRelease() {
         let (handler, read) = listHandler(declared: .bottom, bound: .window)
         handler.focusedIndex = 1
 
         handler.handleSelectionKey(.space)
-        #expect(read() == .window, "the user is browsing; selection doesn't re-anchor")
+        #expect(read() == .row(AnyHashable("b")), "picking a row is how you get anchoring back")
+    }
+
+    /// The same rule reached from the other side: an app that programmatically
+    /// re-asserted its edge is not privileged over the user's next pick.
+    @Test("Selecting overrides a code-set edge anchor too")
+    func selectionOverridesCodeSetEdge() {
+        let (handler, read) = listHandler(declared: .bottom, bound: .bottom)
+        handler.focusedIndex = 3
+
+        handler.handleSelectionKey(.space)
+        #expect(read() == .row(AnyHashable("d")))
     }
 
     /// Scoping negative 2 — with no edge declared there is no edge policy to

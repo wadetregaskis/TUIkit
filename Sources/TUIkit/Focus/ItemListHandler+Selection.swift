@@ -34,13 +34,26 @@ extension ItemListHandler {
     /// tail and holds what the user just picked.
     ///
     /// Scoped exactly as the spec scopes it — "selecting a row shadow-switches
-    /// **Top/Bottom** modes to Row". Two cases deliberately do nothing:
+    /// **Top/Bottom** modes to Row" — and that is the whole scope: the declared
+    /// anchor must name an edge. A declared Window has no edge policy to depart
+    /// from, and its app asked for no anchoring at all, so selecting there must
+    /// not silently start holding a row.
     ///
-    /// - Already departed (the binding is non-`nil`, e.g. `.window` after a
-    ///   scroll): the user is browsing freely and never asked for anchoring, so
-    ///   selecting shouldn't silently start holding a row.
-    /// - The declared anchor is Window (no edge declared): there is no edge
-    ///   policy to switch away from.
+    /// It deliberately does NOT also require the view to be undeparted. That
+    /// extra guard used to be here, and it made this the *first* switch away
+    /// from an edge rather than a gesture the user can reach for: once a scroll
+    /// had released the view to `.window`, selecting a row did nothing, so there
+    /// was no way back to row-anchoring at all. **Re-selection IS the restore**
+    /// (owner decision, 2026-07-31, `Documentation/Scroll-anchoring.md` §3.1) —
+    /// which requires that it work precisely when the view has departed, since
+    /// that is the only time there is anything to restore. The rationale the old
+    /// guard carried — "the user never asked for anchoring" — is the *declared
+    /// Window* case, and that is still excluded below.
+    ///
+    /// A code-set `.top`/`.bottom` is overwritten too, on the same reading of
+    /// the spec: an app that programmatically re-asserted "follow the log" and a
+    /// user who then picks a row want the same thing — stop chasing the tail and
+    /// hold this.
     ///
     /// The id is erased through `AnyHashable`, which preserves the base value —
     /// so it round-trips back to the app's own `ID`. If the app bound a
@@ -48,7 +61,6 @@ extension ItemListHandler {
     /// rather than force-casting.
     func anchorOnSelection(at index: Int) {
         guard let binding = anchorPositionBinding,
-            binding.wrappedValue == nil,
             declaredAnchorMode == .top || declaredAnchorMode == .bottom,
             let id = id(at: index)
         else { return }

@@ -40,8 +40,9 @@ is always preserved underneath:
   keys, wheel, trackpad, scrollbar — re-engages the corresponding edge
   anchor. Merely *grazing* the edge (a scroll that happens to land exactly
   there, no further) does not stick.
-- Open: how a user expresses "restore to Row / Window" code defaults —
-  see §3.1 below.
+- **Re-selection is the Row restore** (owner decision, 2026-07-31): picking a
+  row is how a user takes row-anchoring back, whether or not a scroll released
+  it first. Window needs no gesture — it *is* the released state. See §3.1.
 
 ### 1.4 Code-side restore
 
@@ -66,7 +67,7 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 | Row mode | **Shipped.** `.anchorPosition(_:)` designates a row, and every scrollable holds it — the three stack render paths, `List`, and `Table` (`017683fa`; Table had never been wired to the anchor at all). See §3.4. The one remaining restriction is that a raw stack must be LAZY. |
 | Gap avoidance | Partially: clamping (`maxOffset`) prevents scrolling past the end and content shrinkage pulls the view up — but with no over/underscroll allowance to observe. |
 | User adjustability toggle | **Shipped** (`bc3c829d`) as `.scrollDisabled(_:)`, SwiftUI's own name. Gates gestures only — wheel, scrollbar, scroll keys, drag auto-scroll — while `scrollTo`, anchors and reveal-on-focus keep working, and a List still follows its selection. Chrome renders in a disabled state, and a blocked wheel tick chains to the parent rather than being swallowed. See below. |
-| Selection → Row shadow-switch | **Shipped** (`04b3034c`). Selecting a row — by key or click — turns a declared Top/Bottom anchor into Row on that row, via `ItemListHandler.anchorOnSelection(at:)`. Scoped by two negatives it also tests: a view already released to `.window` is being browsed and is left alone, and Window declares no edge policy to depart from. |
+| Selection → Row shadow-switch | **Shipped** (`04b3034c`), and widened into the §3.1 restore. Selecting a row — by key or click — turns a Top/Bottom anchor into Row on that row, via `ItemListHandler.anchorOnSelection(at:)`, whether the view is undeparted or has been released to `.window` by a scroll. One negative survives and is tested: a **declared Window** never starts holding a row, because its app asked for no anchoring. |
 | Sticky edges | **Shipped.** Home/End engage their edge (§1.3's first bullet), and the push-past half now works on every scrollable: a step the content cannot absorb — wheel, arrow, or scrollbar arrow — engages that edge. The spec's "grazing must not stick" caveat holds **structurally**, with no timing or gesture heuristics: `userScrollFine(by:)` tries ordinary movement first, so the step that merely reaches an edge is spent getting there and only the next one reaches the sticky branch. A view whose content FITS is excluded — it sits at its top and bottom at once, so "past the bottom" names nothing there. |
 | Code-side restore | **Shipped** as §3.2 designed it: writing into the bound `.anchorPosition` IS the restore. `.top`/`.bottom` jump to that edge (`anchor(to:)`), `.row(id)` pins that row (`anchor(toRow:)`), `nil` returns to the declaration (`restoreDefaultAnchor()`). No proxy extensions were needed. `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` remains for one-shot SwiftUI-parity seeks. |
 | Over/underscroll | **Shipped** on every scrollable (`dbd0fa1f` ScrollView, `b0661dfd` List/Table) as `.scrollOverscroll(top:bottom:)`. The "additive parameter" hope in this row was wrong and §3.3 records the measurement: widening `scrollOffset`'s range TRAPS. The excursion is a separate signed rendering quantity instead, which left the offset's domain — and therefore every data-indexing consumer and both "N more" counts — untouched. |
@@ -90,19 +91,43 @@ Redefining Home as "restore the code-set anchor" was considered and
 rejected: it would make Home behave inconsistently across Lists / Tables /
 ScrollViews depending on each one's configured default.
 
-Remaining candidates:
+**SETTLED (owner decision, 2026-07-31): re-selection is the Row restore. No
+new keybinding.**
 
-- **A modified Home (e.g. Option-Home) as "restore the code-set anchor"**,
-  if it doesn't conflict with anything. Caveat to check at implementation
-  time: modifier forwarding on Home/End is terminal-dependent (Terminal.app
-  is known to strip modifiers from Up/Down while keeping them on
-  Left/Right; Home/End forwarding is unmeasured). Probe per
-  `Documentation/Terminal-compatibility.md` before committing to a binding.
-- **Re-selection is the Row restore.** Since selecting a row shadow-switches
-  to Row-anchoring *on that row*, "restore to the code-designated row" is
-  only distinct when the user has selected a *different* row — and the code
-  can always re-assert (§3.2). A dedicated keybinding for this seems
-  unearned; recommend not inventing one until a real use asks for it.
+Selecting a row is the gesture. Window needs none — it is the released state,
+and scrolling is how you reach it. The rejected alternative was a modified Home
+(Option-Home) meaning "restore the code-set anchor": it generalises to all four
+modes, but it spends a chord on a demand nobody has demonstrated, and modifier
+forwarding on Home/End is *unmeasured* across terminals (Terminal.app strips
+modifiers from Up/Down while keeping them on Left/Right, so this is a live risk
+rather than a theoretical one). If it is ever revisited, probe per
+`Documentation/Terminal-compatibility.md` first.
+
+**What the decision required in code.** The gesture did not previously work as
+a *restore*: `anchorOnSelection(at:)` also demanded the view be undeparted
+(`binding.wrappedValue == nil`), so once a scroll had released it to `.window`,
+selecting a row did nothing — there was no way back to row-anchoring at all,
+which is precisely the situation a restore is for. That guard is gone. The
+scoping that remains is the one the spec actually states: the declared anchor
+must name an edge, so a declared Window (an app that asked for no anchoring)
+still never starts holding a row on a mere selection. A code-set `.top`/
+`.bottom` is overwritten too — an app that re-asserted "follow the log" and a
+user who then picks a row want the same thing.
+
+`ScrollAnchorPositionTests.selectionLeavesReleasedViewAlone` asserted the old
+behaviour and was **retargeted, not deleted**
+(`selectionRestoresRowAfterRelease`), alongside a new case for the code-set
+edge. Verified live in the Example's "Selection becomes the anchor" section:
+click a row → `holding row 25`; wheel → `released (.window)`; click a row again
+→ `holding row 19`, with the viewport unmoved by the re-anchor.
+
+**Caveat worth keeping.** This decision is comfortable partly because Row is
+not a *declarable* default: `ScrollAnchorMode.resolved(defaultScrollAnchor:)`
+maps a `UnitPoint` and can only yield Top, Bottom or Window, so "restore to the
+Row the code designated" names something that cannot yet exist. Row is reachable
+only through the binding. If a declarative Row designator is ever added, revisit
+— the "unearned keybinding" argument weakens once an app can declare a specific
+row as its default.
 
 ### 3.2 Code-side restore — SUPERSEDED (owner decision, 2026-07-21)
 
