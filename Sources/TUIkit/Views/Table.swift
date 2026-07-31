@@ -1508,17 +1508,11 @@ where Value.ID: Hashable {
         // that actually starts pays for it.
         let palette = context.environment.palette
         let columnWidths = state.columnWidths
-        let rowContentWidth = state.rowContentWidth
         let previewLine: @MainActor (Int) -> String? = { index in
             guard data.indices.contains(index), !columnWidths.isEmpty else { return nil }
-            return renderRow(
+            return previewRow(
                 item: data[index], columnWidths: columnWidths,
-                isFocused: false, isSelected: false, rowWidth: rowContentWidth,
-                context: context, palette: palette,
-                // Condensed: the float is a thing in your hand, not a slice of
-                // the grid, and the grid's column spacing makes it needlessly
-                // wide — which also drives it off the screen edge sooner.
-                columnSpacing: Self.previewColumnSpacing)
+                context: context, palette: palette)
         }
         // Where a ROW LINE's first cell sits in the buffer: past the border and
         // past the container's own padding. Not the same as the first clickable
@@ -1880,9 +1874,8 @@ where Value.ID: Hashable {
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette,
-        columnSpacing overrideSpacing: Int? = nil
     ) -> String {
-        let spacing = String(repeating: " ", count: overrideSpacing ?? columnSpacing)
+        let spacing = String(repeating: " ", count: columnSpacing)
         let visualState = rowVisualState(
             isFocused: isFocused,
             isSelected: isSelected,
@@ -1918,6 +1911,34 @@ where Value.ID: Hashable {
         } else {
             return content
         }
+    }
+
+    /// The floating row a `.cursor` drag carries: the row's VALUES, condensed.
+    ///
+    /// Not `renderRow`. What makes a grid row as wide as the table is not the
+    /// spacing between columns — it is that every cell is padded out to its
+    /// layout width, and a `.flexible` column's width is all the room left over.
+    /// A row in your hand is not a slice of the grid, so it takes each value
+    /// clipped to its column (a pathological value still cannot out-grow the
+    /// row it came from) and joins them with two cells, with no padding and no
+    /// per-column alignment — there is no column to align within.
+    ///
+    /// It keeps the selection gutter, so the grab point — measured from the row
+    /// line's first cell — still lands in the first column.
+    private func previewRow(
+        item: Value,
+        columnWidths: [Int],
+        context: RenderContext,
+        palette: any Palette
+    ) -> String {
+        let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
+        let cells = zip(columns, columnWidths).map { column, width in
+            ANSIRenderer.colorize(
+                column.value(for: item).truncatedToWidth(width, mode: column.truncationMode),
+                foreground: foregroundColor)
+        }
+        let gap = String(repeating: " ", count: Self.previewColumnSpacing)
+        return "  " + cells.joined(separator: gap)
     }
 
     /// Determines indicator symbol, indicator color, and background color for a table row.

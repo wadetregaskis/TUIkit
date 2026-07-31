@@ -545,4 +545,27 @@ struct TableReorderDragTests {
             !dragging.lines.contains { $0.contains("\u{1b}[2m") },
             "and nothing is dimmed — a pointer is its own indicator")
     }
+    /// The float is a row in your hand, not a slice of the grid: a `.flexible`
+    /// column pads its cell out to whatever interior is left, which made the
+    /// floating row as wide as the table. It carries the VALUES, two cells
+    /// apart.
+    @Test("A cursor drag floats a condensed row, not a grid-width one")
+    func cursorFloatIsCondensed() {
+        let fixture = Fixture(rows: ["a", "b", "c"], feedback: .cursor)
+        let buffer = fixture.render()
+        let session = fixture.tui.dragAndDropSession
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
+        fixture.render()
+
+        let float = try? #require(session.active?.preview.lines.first)
+        // Gutter + "a" — nowhere near the 20-cell table it came from.
+        #expect(
+            (float?.strippedLength ?? 99) <= 4,
+            "condensed to its content: \((float ?? "").debugDescription)")
+        #expect(float?.stripped.filter(\.isLetter) == "a")
+    }
 }
