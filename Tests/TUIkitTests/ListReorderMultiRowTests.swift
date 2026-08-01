@@ -20,6 +20,42 @@ import Testing
 @Suite("List drag-to-reorder: several rows")
 struct ListReorderMultiRowTests {
 
+    /// The bafc8de1 Table bug's List half, the render-level fixture that fix
+    /// left owed: the ordinary budget clips take lines off the TAIL, and
+    /// after End the slot IS the tail — clipping it took away the only thing
+    /// on screen saying where the rows would land, reading as the selection
+    /// falling off the bottom of the list. The overrun must come off the
+    /// FRONT instead, and the held row's faint copy must survive at the slot
+    /// even though its own row scrolled out of the window frames ago.
+    @Test("A keyboard move to the end keeps the slot (and its faint copy) on screen")
+    func keyboardMoveToEndKeepsTheSlotVisible() {
+        let fixture = ListReorderFixture(
+            items: (0..<30).map { "row\($0)" }, feedback: .dimmed)
+        let before = fixture.render()
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        fixture.render()
+        _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .end))
+        let held = fixture.render()
+
+        #expect(fixture.handler?.reorder?.active == true, "a hold is in flight")
+        // The held row scrolled out of the window frames ago, so its faint
+        // copy cannot be drawn (a List row only exists rendered — unlike a
+        // Table, which rebuilds its line from `data`); the slot is a
+        // correctly-sized blank instead. What MUST hold: the slot line is on
+        // screen after the last row — pre-fix the tail clip removed it, so
+        // the last row butted straight against the frame bottom.
+        let lines = held.lines.map(\.stripped)
+        let lastRow = lines.lastIndex { $0.contains("row2") } ?? -1
+        #expect(lastRow >= 0 && lastRow + 1 < lines.count, "rows are on screen: \(lines)")
+        #expect(
+            lines[lastRow + 1].allSatisfy { "│ ".contains($0) },
+            "the slot's (blank-interior) line follows the last row: \(lines)")
+        #expect(
+            held.height == before.height,
+            "a drag never changes how much is on screen: \(held.height) vs \(before.height)")
+    }
+
     /// Every row in hand has to be visible and moving. The slot stands for the
     /// whole block, so it is as tall as the rows it holds — showing only the
     /// grabbed one looked exactly like the rest had been deleted.

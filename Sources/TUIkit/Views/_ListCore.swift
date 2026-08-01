@@ -832,7 +832,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
             }
             // …and the bottom row leaves partially, clipped at the budget.
-            if let rowLineBudget {
+            // During a reorder hold the budget clip is deferred to
+            // `clipReorderOverrun` below, which knows not to clip THROUGH the
+            // slot — this mid-loop clip is blind to it, and when the slot was
+            // the last entry (a move to the end) it took away the only thing
+            // on screen saying where the rows would land.
+            if let rowLineBudget, handler.reorder == nil {
                 let remaining = rowLineBudget - rowLinesEmitted
                 if remaining <= 0 { break }
                 if styledLines.count > remaining {
@@ -849,6 +854,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 type: row.type
             ))
             if case .content = row.type { sectionContentIndex += 1 }
+        }
+
+        // A drag never changes how much is on screen, so a reorder frame's
+        // overrun is clipped here, slot-aware, for BOTH granularities (row
+        // granularity has no other clip at all — the window fit before the
+        // slot was added, so held rows scrolled out of it overflowed the
+        // content area by the slot's height).
+        if handler.reorder != nil {
+            clipReorderOverrun(
+                lines: &rowLines, ranges: &ranges,
+                budget: rowLineBudget ?? max(1, contentHeight - indicatorLines))
         }
 
         if handler.hasContentBelow {
@@ -964,7 +980,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
             // …and the bottom row leaves partially: the bar area's height is
             // the hard budget, so the list never grows to fit a whole row.
-            if context.environment.scrollGranularity == .line {
+            // Deferred to the slot-aware `clipReorderOverrun` during a hold —
+            // see composeRowLines.
+            if context.environment.scrollGranularity == .line, handler.reorder == nil {
                 let remaining = contentHeight - lines.count
                 if remaining <= 0 { break }
                 if styledLines.count > remaining {
@@ -992,6 +1010,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ))
             if case .content = row.type { sectionContentIndex += 1 }
         }
+        // Slot-aware overrun clip for a reorder hold (see composeRowLines).
+        if handler.reorder != nil {
+            clipReorderOverrun(lines: &lines, ranges: &ranges, budget: contentHeight)
+        }
+
         // Fill the area below the last row so the bar spans the full height.
         let blank = String(repeating: " ", count: contentRowWidth)
         while lines.count < contentHeight { lines.append(blank) }
@@ -1002,6 +1025,42 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return (
             slid.enumerated().map { $0.element + barCell(at: $0.offset) },
             slidRanges(ranges, handler: handler, lineCount: slid.count))
+    }
+
+    /// Clips a reorder frame's overrun — away from the SLOT, never through
+    /// it. The exact bug the Table fixed in bafc8de1, whose List halves were
+    /// still open: the ordinary budget clips take lines off the TAIL, and
+    /// when the slot is the last entry (the "move to the end" destination)
+    /// the tail IS the slot — clipping it took away the only thing on screen
+    /// saying where the rows would land, which reads as the selection falling
+    /// off the bottom of the list. When the slot ends the frame, the overrun
+    /// comes off the FRONT instead (visually: the list scrolled down to keep
+    /// the destination in view), and the ranges shift with it.
+    private func clipReorderOverrun(
+        lines: inout [String], ranges: inout [VisibleRowRange], budget: Int
+    ) {
+        let overrun = lines.count - max(1, budget)
+        guard overrun > 0 else { return }
+        if ranges.last?.rowIndex == Self.reorderSlotRowIndex {
+            lines.removeFirst(overrun)
+            ranges = ranges.compactMap { range in
+                let end = range.yStart + range.height - overrun
+                guard end > 0 else { return nil }
+                let start = max(0, range.yStart - overrun)
+                return (
+                    rowIndex: range.rowIndex, yStart: start, height: end - start,
+                    type: range.type)
+            }
+        } else {
+            lines.removeLast(overrun)
+            let cap = lines.count
+            ranges = ranges.compactMap { range in
+                guard range.yStart < cap else { return nil }
+                return (
+                    rowIndex: range.rowIndex, yStart: range.yStart,
+                    height: min(range.height, cap - range.yStart), type: range.type)
+            }
+        }
     }
 
     /// The row ranges after an overscroll slide, dropping any pushed off screen.
@@ -1250,6 +1309,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 stacked(held.map { $0.index == primary ? $0.buffer : dimmed($0.buffer) })
                 ?? blankRow(like: nil)
         case .cursor, .live: body = blankRow(like: stacked(held.map(\.buffer)))
+        }
+        // Held rows that have scrolled out of the window were never rendered,
+        // so there is no buffer to show for them — but the slot must still be
+        // the size of the whole block (the drop moves ALL of it; a Table
+        // renders its lines straight from `data` and never has this gap, a
+        // List row is an arbitrary view that only exists rendered inside the
+        // window). Pad with one blank line per unseen row — their true height
+        // is unknowable unrendered, and single-line is the overwhelming case.
+        let removedCount = handler.reorderRemovedRows.count
+        if body.height < removedCount {
+            let width = max(1, body.width)
+            body = FrameBuffer(
+                lines: body.lines
+                    + Array(
+                        repeating: String(repeating: " ", count: width),
+                        count: removedCount - body.height))
         }
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering is emphasised, not a gap. Carried as
