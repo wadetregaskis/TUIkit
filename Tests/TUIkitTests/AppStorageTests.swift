@@ -187,6 +187,46 @@ struct JSONFileStorageTests {
         #expect(profile == Profile(name: "x", age: 1, tags: ["t"]))
     }
 
+    @Test("Concurrent writes race no reader: the flush snapshots under the lock")
+    func concurrentWritesAreSafe() {
+        // The old implementation's detached save iterated `cache` with NO
+        // lock while setValue mutated it under one — a dictionary read/write
+        // race (TSan-visible; occasionally a CoW heap corruption). This
+        // hammers the same interleaving: many writers while flushes drain.
+        withTempStorage { storage, _ in
+            DispatchQueue.concurrentPerform(iterations: 200) { index in
+                storage.setValue(index, forKey: "k\(index % 8)")
+            }
+            storage.synchronize()
+            // Every key must read back as a value some writer stored for it.
+            for slot in 0..<8 {
+                let value: Int? = storage.value(forKey: "k\(slot)")
+                #expect(value != nil && value! % 8 == slot)
+            }
+        }
+    }
+
+    @Test("synchronize flushes behind queued asynchronous saves, losing nothing")
+    func synchronizeFlushesQueuedSaves() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tuikit-appstorage-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        do {
+            let writer = JSONFileStorage(fileURL: url)
+            // A burst of writes queues (coalesced) async saves; synchronize
+            // must land the LAST value even if no queued save ran yet —
+            // this is the "change a setting and quit" path.
+            for index in 0...50 {
+                writer.setValue(index, forKey: "counter")
+            }
+            writer.synchronize()
+        }
+
+        let reader = JSONFileStorage(fileURL: url)
+        #expect(reader.value(forKey: "counter") == 50)
+    }
+
     @Test("A nonexistent backing file behaves as empty storage")
     func nonexistentFileIsEmpty() {
         let url = FileManager.default.temporaryDirectory

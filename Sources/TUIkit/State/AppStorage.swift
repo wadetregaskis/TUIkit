@@ -108,8 +108,23 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// In-memory cache of stored values.
     private var cache: [String: Data] = [:]
 
-    /// Lock for thread safety.
+    /// Lock for thread safety. Guards `cache` and `savePending` — and nothing
+    /// slow: disk writes snapshot under the lock and write outside it.
     private let lock = NSLock()
+
+    /// Serialises every disk write. A dedicated serial queue rather than
+    /// `Task.detached` for three reasons: writes land in submission order (two
+    /// detached saves could race and let an older snapshot win the file);
+    /// `synchronize()` can flush *behind* any queued save with a plain
+    /// `queue.sync`; and a slow disk never occupies a width-limited
+    /// cooperative-pool thread.
+    private let saveQueue = DispatchQueue(label: "TUIkit.JSONFileStorage.save", qos: .utility)
+
+    /// Whether a save is already queued. Writes arrive in bursts (a slider
+    /// bound to storage emits one per tick); one queued flush snapshots
+    /// whatever the cache holds when it runs, so the burst costs one disk
+    /// write, not one per tick.
+    private var savePending = false
 
     /// Creates a JSON file storage with default location.
     public init() {
@@ -167,10 +182,12 @@ extension JSONFileStorage {
     }
 
     public func synchronize() {
-        lock.lock()
-        defer { lock.unlock() }
-
-        saveToDiskSync()
+        // A plain sync hop onto the serial save queue: any already-queued
+        // asynchronous save runs first, then this flush writes whatever the
+        // cache holds now — so "synchronize then exit" cannot lose a value.
+        saveQueue.sync {
+            self.flushToDisk()
+        }
     }
 }
 
@@ -195,16 +212,31 @@ extension JSONFileStorage {
         }
     }
 
+    /// Queues one flush (caller holds `lock`). Bursts coalesce: if a flush is
+    /// already queued it will snapshot this write too, so a slider dragging a
+    /// bound value costs one disk write per drain, not one per tick.
     fileprivate func saveToDiskAsync() {
-        Task.detached(priority: .utility) { [weak self] in
-            self?.saveToDiskSync()
+        guard !savePending else { return }
+        savePending = true
+        saveQueue.async { [weak self] in
+            self?.flushToDisk()
         }
     }
 
-    fileprivate func saveToDiskSync() {
+    /// Runs only on `saveQueue`. Snapshots the cache under the lock, then
+    /// serialises and writes OUTSIDE it — the old detached save iterated
+    /// `cache` with no lock at all, racing `setValue`'s mutation on the main
+    /// thread (a CoW dictionary read overlapping a mutation of the same
+    /// reference).
+    fileprivate func flushToDisk() {
+        lock.lock()
+        savePending = false
+        let snapshot = cache
+        lock.unlock()
+
         // Convert Data values to base64 strings for JSON compatibility
         var serializable: [String: String] = [:]
-        for (key, data) in cache {
+        for (key, data) in snapshot {
             serializable[key] = data.base64EncodedString()
         }
 

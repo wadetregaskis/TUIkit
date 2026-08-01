@@ -484,6 +484,11 @@ extension AppRunner {
         appState.clearObservers()
         focusManager.clear()
         tuiContext.reset()
+        // Persistence writes are queued asynchronously (and coalesced), so a
+        // value stored moments before quitting may not have reached disk yet.
+        // Flush behind any queued save — without this, "change a setting and
+        // quit" sometimes silently lost the setting.
+        StorageDefaults.backend.synchronize()
     }
 }
 
