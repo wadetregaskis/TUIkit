@@ -100,17 +100,20 @@ extension QuitShortcut {
     /// - Parameter event: The key event to check.
     /// - Returns: `true` if the event matches this shortcut.
     public func matches(_ event: KeyEvent) -> Bool {
+        // The alt guard on every arm: a quit shortcut spells at most Ctrl —
+        // Alt+Q (a meta-sending terminal's Option+Q) is some other binding's
+        // chord, and quitting the app on it would be a destructive surprise.
         if ctrl {
-            return event.ctrl && event.key == key
+            return event.ctrl && !event.alt && event.key == key
         }
 
         // Case-insensitive matching for character keys
         if case .character(let expected) = key,
             case .character(let actual) = event.key
         {
-            return !event.ctrl && actual.lowercased() == expected.lowercased()
+            return !event.ctrl && !event.alt && actual.lowercased() == expected.lowercased()
         }
 
-        return event.key == key && !event.ctrl
+        return event.key == key && !event.ctrl && !event.alt
     }
 }

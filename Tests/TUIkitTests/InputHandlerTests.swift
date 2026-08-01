@@ -187,6 +187,29 @@ struct InputHandlerTests {
         #expect(fixture.appearance.current.id == "a2")
     }
 
+    /// Layer 4's bindings mean the BARE key: `t` cycles the theme, `a` the
+    /// appearance, `q` quits. A modifier chord of the same letter belongs to
+    /// whatever layer owns that chord (Ctrl+A is select-all, Ctrl+T is a
+    /// common app binding) — reaching layer 4 unconsumed must not mutate the
+    /// app chrome as a surprise.
+    @Test("Layer 4 bindings ignore modifier chords of their letters")
+    func globalShortcutsIgnoreModifiedChords() {
+        let fixture = makeFixture()
+        fixture.statusBar.showThemeItem = true
+        let paletteBefore = fixture.palette.current.id
+        let appearanceBefore = fixture.appearance.current.id
+
+        #expect(!fixture.handler.handle(KeyEvent(key: .character("t"), ctrl: true)))
+        #expect(!fixture.handler.handle(KeyEvent(key: .character("t"), alt: true)))
+        #expect(!fixture.handler.handle(KeyEvent(key: .character("a"), ctrl: true)))
+        #expect(!fixture.handler.handle(KeyEvent(key: .character("a"), alt: true)))
+        #expect(fixture.palette.current.id == paletteBefore)
+        #expect(fixture.appearance.current.id == appearanceBefore)
+
+        fixture.handler.handle(KeyEvent(key: .character("q"), alt: true))
+        #expect(fixture.probe.quitCount == 0, "Alt+Q is not the quit binding")
+    }
+
     /// Leaves the focus manager in the state a presented modal/alert produces:
     /// a section that is active *and* marked modal (input-grabbing).
     private func activateModalSection(_ focus: FocusManager, id: String = "modal-test") {

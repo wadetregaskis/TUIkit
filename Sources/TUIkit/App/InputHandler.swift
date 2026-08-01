@@ -171,7 +171,13 @@ extension InputHandler {
     }
 
     /// The tail of layer 4: the global appearance/theme cycling shortcuts.
+    ///
+    /// These bindings mean the BARE letter. A modifier chord that fell
+    /// through the earlier layers unconsumed (Ctrl+T from a page with no
+    /// binding for it, Ctrl+A over a single-select list) is not a request to
+    /// restyle the app — swallowing it here mutated chrome as a surprise.
     private func handleGlobalShortcut(_ event: KeyEvent, inputGrabbed: Bool) -> Bool {
+        guard !event.ctrl, !event.alt else { return false }
         switch event.key {
         case .character(let character) where character == "t" || character == "T":
             if statusBar.showThemeItem && !inputGrabbed {
