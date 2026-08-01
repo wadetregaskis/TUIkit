@@ -1289,6 +1289,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         palette: any Palette
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
+        // The overwhelmingly common frame has nothing in hand and no external
+        // drag hovering: the decoration is the identity, and building the
+        // by-index dictionary plus the drawn-rows walk just to reproduce the
+        // input was ~11% of a plain List frame's render (session-list.trace,
+        // 2026-07-31). Bail before any of it.
+        guard !handler.reorderRemovedRows.isEmpty || handler.externalDropSlot != nil else {
+            return visibleRows
+        }
         // EVERY row in hand, stacked: they land as one block, so the slot is
         // one gap the size of all of them. Showing only the grabbed row made a
         // multi-row drag look like the rest had been deleted.
