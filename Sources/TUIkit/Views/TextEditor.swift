@@ -533,7 +533,14 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let text = self.text
         func placeCursor(at event: MouseEvent) {
             let row = max(0, min(event.y, height - 1))
-            let displayColumn = handler.scrollColumn + max(0, min(event.x, contentWidth))
+            // Valid content columns are 0..<contentWidth: clamping to
+            // `contentWidth` put a scrollbar-column click one display column
+            // PAST the window's right edge, so on a long line the caret
+            // landed on the first off-screen character and followCursor
+            // immediately scrolled the text one column right — a scrollbar
+            // click that horizontally scrolled the editor.
+            let displayColumn =
+                handler.scrollColumn + max(0, min(event.x, contentWidth - 1))
             let line = handler.scrollLine + row
             let allLines = text.wrappedValue
                 .split(separator: "\n", omittingEmptySubsequences: false).map { Array($0) }
