@@ -95,102 +95,15 @@ extension TextFieldHandler {
 // MARK: - Clipboard Helpers
 
 extension TextFieldHandler {
-    /// Copies text to the system clipboard using platform-specific command.
+    /// Copies text to the system clipboard. `SystemClipboard` owns the child
+    /// I/O and its hardening (non-blocking, deadline-bounded pipes) — see its
+    /// doc comment for the failure modes that motivated it.
     fileprivate func copyToClipboard(_ text: String) {
-        #if os(macOS)
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/pbcopy")
-
-            let pipe = Pipe()
-            process.standardInput = pipe
-
-            do {
-                try process.run()
-                pipe.fileHandleForWriting.write(Data(text.utf8))
-                pipe.fileHandleForWriting.closeFile()
-                process.waitUntilExit()
-            } catch {
-                // Silently fail if clipboard is unavailable
-            }
-        #elseif os(Linux)
-            // Try xclip first, then xsel
-            for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: command)
-                process.arguments = command.contains("xclip") ? ["-selection", "clipboard"] : ["--clipboard", "--input"]
-
-                let pipe = Pipe()
-                process.standardInput = pipe
-
-                do {
-                    try process.run()
-                    pipe.fileHandleForWriting.write(Data(text.utf8))
-                    pipe.fileHandleForWriting.closeFile()
-                    process.waitUntilExit()
-                    return
-                } catch {
-                    continue
-                }
-            }
-        #endif
+        SystemClipboard.copy(text)
     }
 
-    /// Pastes text from the system clipboard using platform-specific command.
+    /// Pastes text from the system clipboard, or `nil` when unavailable.
     fileprivate func pasteFromClipboard() -> String? {
-        #if os(macOS)
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/pbpaste")
-
-            let pipe = Pipe()
-            process.standardOutput = pipe
-
-            do {
-                try process.run()
-                // Drain the pipe BEFORE waiting: `readDataToEndOfFile` returns
-                // when the child closes stdout (i.e. finishes writing), so a
-                // clipboard payload larger than the ~64 KB pipe buffer can't
-                // block `pbpaste` on a full pipe — which would otherwise deadlock
-                // `waitUntilExit()` forever. Reaping after is then immediate.
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                // Strip trailing newline that pbpaste adds
-                var result = String(data: data, encoding: .utf8) ?? ""
-                if result.hasSuffix("\n") {
-                    result.removeLast()
-                }
-                return result
-            } catch {
-                return nil
-            }
-        #elseif os(Linux)
-            // Try xclip first, then xsel
-            for command in ["/usr/bin/xclip", "/usr/bin/xsel"] where FileManager.default.fileExists(atPath: command) {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: command)
-                process.arguments = command.contains("xclip") ? ["-selection", "clipboard", "-o"] : ["--clipboard", "--output"]
-
-                let pipe = Pipe()
-                process.standardOutput = pipe
-
-                do {
-                    try process.run()
-                    // Drain before waiting (see the macOS branch): a large
-                    // clipboard payload must not block xclip/xsel on a full pipe
-                    // and deadlock waitUntilExit().
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    process.waitUntilExit()
-                    var result = String(data: data, encoding: .utf8) ?? ""
-                    if result.hasSuffix("\n") {
-                        result.removeLast()
-                    }
-                    return result
-                } catch {
-                    continue
-                }
-            }
-            return nil
-        #else
-            return nil
-        #endif
+        SystemClipboard.paste()
     }
 }
