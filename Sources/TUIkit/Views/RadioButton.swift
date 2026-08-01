@@ -242,6 +242,25 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
+    /// Keeps the persisted handler in sync with the CURRENT render's values —
+    /// every field the view declares, or the handler keeps the creation
+    /// render's (a stale `orientation` kept the old arrow-axis mapping after
+    /// a responsive layout flipped the group).
+    private func syncHandler(
+        _ handler: RadioButtonGroupHandler,
+        selection: Binding<AnyHashable>,
+        itemValues: [AnyHashable],
+        isDisabled: Bool,
+        context: RenderContext
+    ) {
+        handler.selection = selection
+        handler.itemValues = itemValues
+        handler.orientation = orientation
+        handler.canBeFocused = !isDisabled
+        handler.edgeBehavior = context.environment.radioButtonGroupEdgeBehavior
+        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
@@ -281,12 +300,9 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         )
         let handler = handlerBox.value
 
-        // Keep handler in sync with current values (in case items changed)
-        handler.selection = erasedSelection
-        handler.itemValues = itemValues
-        handler.canBeFocused = !isDisabled
-        handler.edgeBehavior = context.environment.radioButtonGroupEdgeBehavior
-        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
+        syncHandler(
+            handler, selection: erasedSelection, itemValues: itemValues,
+            isDisabled: isDisabled, context: context)
 
         FocusRegistration.register(context: context, handler: handler)
         let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
@@ -540,7 +556,12 @@ final class RadioButtonGroupHandler: Focusable {
     let focusID: String
     var selection: Binding<AnyHashable>
     var itemValues: [AnyHashable]
-    let orientation: RadioButtonOrientation
+    /// Mutable because the handler persists across renders while a responsive
+    /// layout may flip the group between vertical and horizontal — a stale
+    /// orientation kept the OLD arrow-axis mapping (Up/Down navigating a
+    /// now-horizontal group, Left/Right relinquishing). Re-synced every
+    /// render; same stale-handler-field class as `SliderHandler.bounds`.
+    var orientation: RadioButtonOrientation
     var canBeFocused: Bool
 
     /// What an on-axis arrow past the first/last item does — contain (stay,
