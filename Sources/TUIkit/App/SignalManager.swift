@@ -135,6 +135,18 @@ final class SignalManager {
         guard registrations.isEmpty else { return }
         self.wake = wake
 
+        // SIGPIPE's default action is process termination, and a TUI app has
+        // two routine ways to earn one: writing to a clipboard helper whose
+        // stdin closed early (xclip with no display prints an error and exits
+        // before reading), and writing frames to a pty whose reader vanished.
+        // Either would kill the app mid-raw-mode — no deinit, terminal left on
+        // the alternate screen. Ignore it process-wide so those writes return
+        // EPIPE and fail gracefully instead. No dispatch source needed: nothing
+        // wants to *observe* the signal, only to survive it. (Unlike INT/TERM
+        // below, this is safe on Linux too — no libdispatch handler owns
+        // SIGPIPE, so there is nothing to displace.)
+        signal(SIGPIPE, SIG_IGN)
+
         let barrier = SignalRegistrationBarrier()
         register(SIGINT, kind: .shutdown, barrier: barrier)
         register(SIGTERM, kind: .shutdown, barrier: barrier)
