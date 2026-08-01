@@ -80,19 +80,26 @@ extension BadgeValue: Equatable {
 
 // MARK: - Badge Extraction
 
+/// Type-erased peek at a ``BadgeModifier``'s value. A protocol conformance
+/// check is a cached runtime lookup; the `Mirror` walk it replaces ran on
+/// EVERY row of every `List` frame and profiled at 8% of a plain list render
+/// (session-list-after.trace, 2026-07-31) — almost all of it for rows with no
+/// badge at all.
+@MainActor
+private protocol BadgeCarrying {
+    var carriedBadgeValue: BadgeValue { get }
+}
+
+extension BadgeModifier: BadgeCarrying {
+    fileprivate var carriedBadgeValue: BadgeValue { value }
+}
+
 /// Extracts the badge value from a view if it's wrapped in a BadgeModifier.
 ///
 /// This is used by List to extract badge values during row extraction.
 @MainActor
 public func extractBadgeValue<V: View>(from view: V) -> BadgeValue? {
-    // Use Mirror to check if the view is a BadgeModifier
-    let mirror = Mirror(reflecting: view)
-    for child in mirror.children {
-        if child.label == "value", let badge = child.value as? BadgeValue {
-            return badge
-        }
-    }
-    return nil
+    (view as? any BadgeCarrying)?.carriedBadgeValue
 }
 
 // MARK: - Renderable
