@@ -286,30 +286,17 @@ extension _ImageCore {
 
             let src = source
             lifecycle.startTask(token: token, priority: .userInitiated) {
-                let loader = PlatformImageLoader()
-
-                do {
-                    let rawImage: RGBAImage
-                    switch src {
-                    case .file(let path):
-                        rawImage = try loader.loadImage(from: path, maxPixelCount: maxPixelCount)
-                    case .url(let urlString):
-                        rawImage = try loader.loadImage(
-                            from: urlString,
-                            cache: .shared,
-                            timeout: urlTimeout,
-                            maxPixelCount: maxPixelCount
-                        )
-                    }
-
-                    // Store the raw image; conversion happens per render pass.
-                    // StateBox.didSet triggers setNeedsRender() automatically,
-                    // so there is no need to hop to the main actor here.
-                    phaseBox.value = .success(rawImage)
-                } catch let loadError as ImageLoadError {
-                    phaseBox.value = .failure(loadError.description)
-                } catch {
-                    phaseBox.value = .failure(error.localizedDescription)
+                // Decode off the main actor (@concurrent guarantees it), then
+                // write the box ON it. The box's invalidation SINK is
+                // thread-safe, but the value itself is a plain property the
+                // render loop reads every frame — assigning a multi-word enum
+                // payload from a pool thread raced those reads (a torn read of
+                // the CoW pixel array is heap corruption, not a glitch). This
+                // is the one place the framework itself wrote @State off-main.
+                let phase = await Self.loadPhase(
+                    source: src, maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
+                await MainActor.run {
+                    phaseBox.value = phase
                 }
             }
         } else {
@@ -319,6 +306,38 @@ extension _ImageCore {
         // Cancel loading task on disappear
         lifecycle.registerDisappear(token: token) { [lifecycle] in
             lifecycle.cancelTask(token: token)
+        }
+    }
+
+    /// Loads and decodes the image, returning the phase to publish. Decoding
+    /// is CPU-bound (and the URL path can block on the network), so
+    /// `@concurrent` keeps it off the main actor's executor no matter what
+    /// context awaits it — the caller then publishes the result on the main
+    /// actor, where every other `@State` write happens.
+    @concurrent
+    private static func loadPhase(
+        source: ImageSource, maxPixelCount: Int?, urlTimeout: Double
+    ) async -> ImageLoadingPhase {
+        let loader = PlatformImageLoader()
+        do {
+            let rawImage: RGBAImage
+            switch source {
+            case .file(let path):
+                rawImage = try loader.loadImage(from: path, maxPixelCount: maxPixelCount)
+            case .url(let urlString):
+                rawImage = try loader.loadImage(
+                    from: urlString,
+                    cache: .shared,
+                    timeout: urlTimeout,
+                    maxPixelCount: maxPixelCount
+                )
+            }
+            // Store the raw image; conversion happens per render pass.
+            return .success(rawImage)
+        } catch let loadError as ImageLoadError {
+            return .failure(loadError.description)
+        } catch {
+            return .failure(error.localizedDescription)
         }
     }
 }
