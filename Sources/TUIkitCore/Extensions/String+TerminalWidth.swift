@@ -939,8 +939,13 @@ extension String {
     /// the result, so the slice keeps whatever styling was active at `visibleStart`
     /// even though the codes that set it scrolled out of view. Non-SGR escapes
     /// (cursor moves) in the dropped region are not replayed. A wide character that
-    /// straddles either edge is dropped (it can't be shown whole), leaving a gap —
-    /// the same treatment ``ansiAwarePrefix(visibleCount:)`` gives the right edge.
+    /// straddles either edge cannot be shown whole; its IN-WINDOW cells become
+    /// spaces, so the gap it leaves still occupies its columns. (Dropping it with
+    /// no gap — the old behaviour — let everything after a left-edge straddle
+    /// render one cell left of its neighbours: aligned columns went ragged,
+    /// jittering as each wide glyph crossed the window edge while scrolling.)
+    /// The slice's visible width is therefore always
+    /// `max(0, min(strippedLength − visibleStart, visibleCount))`.
     ///
     /// - Parameters:
     ///   - visibleStart: The first visible column to include (0-based).
@@ -964,10 +969,16 @@ extension String {
                 }
             case .visible(let character):
                 let charWidth = character.terminalWidth
-                if visible >= visibleStart && visible + charWidth <= end {
+                let charEnd = visible + charWidth
+                if visible >= visibleStart && charEnd <= end {
                     body.append(character)
+                } else if charEnd > visibleStart && visible < end {
+                    // Straddles an edge: blank its in-window cells.
+                    body += String(
+                        repeating: " ",
+                        count: min(charEnd, end) - max(visible, visibleStart))
                 }
-                visible += charWidth
+                visible = charEnd
             }
         }
         return carriedStyle + body

@@ -894,4 +894,21 @@ struct AnsiAwareSliceTests {
         #expect(slice.stripped == "text")
         #expect(slice.hasPrefix("\(esc)[32m"), "carries the green still active at the slice: \(slice.debugDescription)")
     }
+
+    /// A wide character straddling a window edge cannot be shown whole, but
+    /// its gap must still OCCUPY its in-window cells. Dropping it with no gap
+    /// let everything after a left-edge straddle render one cell left of its
+    /// neighbours — a horizontal ScrollView over mixed CJK/ASCII content went
+    /// ragged by one column, jittering as each wide glyph crossed the edge.
+    @Test("A straddled wide character leaves a gap in its own columns")
+    func wideStraddleLeavesGap() {
+        // "ab漢cdef": 漢 spans columns 2–3. A window starting at column 3
+        // bisects it: the gap fills column 3, so 'c' stays put at column 4
+        // and stays vertically aligned with the ASCII line beside it.
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 3, visibleCount: 4) == " cde")
+        // Right-edge straddle: a window over columns 1–2 cuts 漢 in half.
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 1, visibleCount: 2) == "b ")
+        // Whole-glyph windows are untouched.
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 2, visibleCount: 2) == "漢")
+    }
 }
