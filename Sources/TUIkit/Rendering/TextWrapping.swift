@@ -173,6 +173,19 @@ enum TextWrapping {
             return Wrapped(lines: lines, widths: widths)
         }
 
+        // Spaces are the only break opportunity the word walk below knows, so
+        // a space-less CJK paragraph was classified as one giant "word",
+        // placed on a single line, and then truncated by the fit pass — all
+        // content past the first visual line silently dropped, in every
+        // localisation that doesn't put spaces between words. Wide characters
+        // carry their own break opportunities (a break is permitted between
+        // ideographs, as UAX #14 allows), so any paragraph containing one
+        // takes the wide-aware walk. ASCII-and-narrow prose — the hot path —
+        // keeps the allocation-lean space split below.
+        if text.contains(where: { $0.terminalWidth >= 2 }) {
+            return wrapWithWideBreaks(text, width: width)
+        }
+
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
         var lines: [String] = []
         var widths: [Int] = []
@@ -199,6 +212,88 @@ enum TextWrapping {
         if !currentLine.isEmpty {
             lines.append(currentLine)
             widths.append(currentLineWidth)
+        }
+
+        if lines.isEmpty {
+            return Wrapped(lines: [""], widths: [0])
+        }
+        return Wrapped(lines: lines, widths: widths)
+    }
+
+    /// The wide-aware twin of the space walk: wraps a paragraph that contains
+    /// at least one 2-cell character, breaking at spaces AND between wide
+    /// characters (each wide character is its own unit, breakable on both
+    /// sides — the basic UAX #14 ideograph rule; kinsoku refinements like
+    /// "don't start a line with 。" are deliberately out of scope here).
+    ///
+    /// Narrow runs (Latin words inside CJK prose, "TUIkit" in a Japanese
+    /// sentence) stay unbreakable units exactly as the space walk treats them,
+    /// so mixed-script text wraps the way both scripts expect. A space at a
+    /// line break is consumed by the break (as in the space walk); interior
+    /// and trailing spaces that don't sit at a break are preserved.
+    private static func wrapWithWideBreaks(_ text: String, width: Int) -> Wrapped {
+        var lines: [String] = []
+        var widths: [Int] = []
+        var line = ""
+        var lineWidth = 0
+        var pendingSpaces = 0
+
+        func commitLine() {
+            lines.append(line)
+            widths.append(lineWidth)
+            line = ""
+            lineWidth = 0
+            pendingSpaces = 0  // a break consumes the whitespace at it
+        }
+
+        /// Places one unbreakable unit, gluing any pending interior spaces.
+        func place(_ unit: String, unitWidth: Int) {
+            if line.isEmpty {
+                // Even an over-wide unit goes on its own line — the caller
+                // truncates, as with the space walk's over-long word.
+                line = unit
+                lineWidth = unitWidth
+            } else if lineWidth + pendingSpaces + unitWidth <= width {
+                line += String(repeating: " ", count: pendingSpaces) + unit
+                lineWidth += pendingSpaces + unitWidth
+            } else {
+                commitLine()
+                line = unit
+                lineWidth = unitWidth
+            }
+            pendingSpaces = 0
+        }
+
+        var narrowRun = ""
+        var narrowRunWidth = 0
+        func flushNarrowRun() {
+            guard !narrowRun.isEmpty else { return }
+            place(narrowRun, unitWidth: narrowRunWidth)
+            narrowRun = ""
+            narrowRunWidth = 0
+        }
+
+        for character in text {
+            if character == " " {
+                flushNarrowRun()
+                pendingSpaces += 1
+            } else if character.terminalWidth >= 2 {
+                flushNarrowRun()
+                place(String(character), unitWidth: character.terminalWidth)
+            } else {
+                narrowRun.append(character)
+                narrowRunWidth += character.terminalWidth
+            }
+        }
+        flushNarrowRun()
+        // Trailing spaces are content when they fit (the space walk preserves
+        // them the same way); at a break they'd be consumed anyway.
+        if pendingSpaces > 0, !line.isEmpty, lineWidth + pendingSpaces <= width {
+            line += String(repeating: " ", count: pendingSpaces)
+            lineWidth += pendingSpaces
+        }
+        if !line.isEmpty {
+            commitLine()
         }
 
         if lines.isEmpty {

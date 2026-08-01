@@ -52,6 +52,52 @@ struct TextTerminalWidthTests {
         #expect(size.height == 2, "CJK text should wrap to 2 lines at width 6, got \(size.height)")
         #expect(size.width == 4, "Each line should be 4 cells wide, got \(size.width)")
     }
+
+    /// The trap the test above couldn't see: its sample has an ASCII SPACE.
+    /// Chinese and Japanese put no spaces between words, and spaces were the
+    /// only break the wrapper knew — a space-less paragraph was one giant
+    /// "word", placed on ONE line, and the fit pass then truncated it: all
+    /// content past the first visual line silently dropped, in every zh/ja
+    /// string the example app ships. Breaks are permitted between ideographs
+    /// (UAX #14), so the paragraph must wrap like prose.
+    @Test("Space-less CJK paragraphs wrap instead of truncating to one line")
+    func spacelessCJKWraps() {
+        let paragraph = "这是一段没有空格的中文说明文字会被完整地保留"  // 22 chars, 44 cells
+        let wrapped = TextWrapping.wrapMeasured(paragraph, width: 10)
+        #expect(wrapped.lines.count == 5, "44 cells at width 10: \(wrapped.lines)")
+        #expect(wrapped.widths.allSatisfy { $0 <= 10 }, "every line fits: \(wrapped.widths)")
+        #expect(
+            wrapped.lines.joined() == paragraph,
+            "wrapping loses NOTHING — the old path truncated all but line 1")
+
+        // And the fit pass keeps its line budget instead of eating the rest.
+        let fitted = TextWrapping.fit(paragraph, width: 10, maxLines: 3)
+        #expect(fitted.count == 3)
+        #expect(fitted.last?.hasSuffix("…") == true, "the fold is shown, not silent")
+    }
+
+    @Test("Mixed-script text keeps Latin words whole between ideographs")
+    func mixedScriptWrap() {
+        // The Latin word is an unbreakable unit; the ideographs around it
+        // each carry their own break opportunities.
+        let wrapped = TextWrapping.wrapMeasured("端末TUIkit框架", width: 8)
+        #expect(
+            wrapped.lines.joined() == "端末TUIkit框架",
+            "nothing lost: \(wrapped.lines)")
+        #expect(wrapped.widths.allSatisfy { $0 <= 8 }, "every line fits: \(wrapped.widths)")
+        #expect(
+            wrapped.lines.contains { $0.contains("TUIkit") },
+            "the Latin word survives whole on one line: \(wrapped.lines)")
+    }
+
+    @Test("A space-less CJK Text renders every line, not just the first")
+    func spacelessCJKTextRenders() {
+        let text = Text("这是一段没有空格的中文说明文字")  // 15 chars, 30 cells
+        let context = testContext(width: 10)
+        let size = text.sizeThatFits(
+            proposal: ProposedSize(width: 10, height: nil), context: context)
+        #expect(size.height == 3, "30 cells at width 10 is 3 lines, got \(size.height)")
+    }
 }
 
 // MARK: - Explicit Line Break Tests
