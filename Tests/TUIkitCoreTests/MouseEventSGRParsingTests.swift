@@ -109,6 +109,22 @@ struct MouseEventSGRParsingTests {
         #expect(MouseEvent.parseSGR(bytes) == nil)
     }
 
+    /// A well-terminated report whose numeric parameter overflows `Int` must be
+    /// rejected, not trapped on. No real terminal emits one, but anything that
+    /// can write to the tty (a corrupted SSH stream, `cat` of a crafted file)
+    /// can — and the parser's contract for every other malformed shape is
+    /// "drop it", never "kill the app mid-raw-mode".
+    @Test(
+        "Oversized numeric parameters are rejected instead of trapping",
+        arguments: [
+            Array("\u{1B}[<0;9999999999999999999;1M".utf8),  // column overflows Int64
+            Array("\u{1B}[<9999999999999999999;1;1M".utf8),  // button code overflows
+            Array("\u{1B}[<0;1;99999999999999999999999999M".utf8),  // row, well past 19 digits
+        ])
+    func rejectsOverflowingParams(_ bytes: [UInt8]) {
+        #expect(MouseEvent.parseSGR(bytes) == nil)
+    }
+
     // MARK: - Legacy (X10) Mouse Parsing
 
     /// Legacy `ESC [ M b col row` reports (each byte biased by +32).

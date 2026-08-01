@@ -409,11 +409,20 @@ extension MouseEvent {
     }
 
     /// Parses an ASCII decimal integer slice into an `Int`.
+    ///
+    /// Overflow rejects rather than traps: no real terminal emits a parameter
+    /// anywhere near `Int.max`, but anything that can write to the tty (a
+    /// corrupted SSH stream, `cat` of a crafted file) can — and the parser's
+    /// contract for every other malformed shape is "drop it", never "kill the
+    /// app mid-raw-mode".
     private static func parseInt(_ slice: ArraySlice<UInt8>) -> Int? {
         var value = 0
         for byte in slice {
             guard byte >= 0x30, byte <= 0x39 else { return nil }
-            value = value * 10 + Int(byte - 0x30)
+            let (shifted, mulOverflow) = value.multipliedReportingOverflow(by: 10)
+            let (next, addOverflow) = shifted.addingReportingOverflow(Int(byte - 0x30))
+            guard !mulOverflow, !addOverflow else { return nil }
+            value = next
         }
         return value
     }
