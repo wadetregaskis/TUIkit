@@ -297,12 +297,27 @@ extension StatusBarItem {
     }
 
     /// Override matching for special cases.
+    ///
+    /// The shortcut vocabulary spells BARE keys only — there is no "^a" — so
+    /// an item on "a" means plain `a`, never Ctrl+A or Alt+A. Those chords
+    /// belong to later dispatch layers (`.selectAll` row shortcuts,
+    /// Ctrl/Option+arrow row moves), and status-bar items match at layer 1,
+    /// ahead of them all: matching modifier-blind starved every later layer
+    /// of its chords (an action-bearing "a" item swallowed a List's Ctrl+A).
+    /// Shift is the one modifier a shortcut CAN spell — as an uppercase
+    /// letter — so character triggers keep matching by case, and every other
+    /// trigger requires the modifier-free chord (Shift+↑ is extend-selection,
+    /// Shift+Tab is backtab; neither is the bare item).
     public func matches(_ event: KeyEvent) -> Bool {
+        guard !event.ctrl, !event.alt else { return false }
+
         // Handle arrow key combinations like "↑↓"
-        if shortcut.contains("↑") && event.key == .up { return true }
-        if shortcut.contains("↓") && event.key == .down { return true }
-        if shortcut.contains("←") && event.key == .left { return true }
-        if shortcut.contains("→") && event.key == .right { return true }
+        if !event.shift {
+            if shortcut.contains("↑") && event.key == .up { return true }
+            if shortcut.contains("↓") && event.key == .down { return true }
+            if shortcut.contains("←") && event.key == .left { return true }
+            if shortcut.contains("→") && event.key == .right { return true }
+        }
 
         // Standard matching
         guard let trigger = triggerKey else { return false }
@@ -315,7 +330,7 @@ extension StatusBarItem {
             return triggerChar == eventChar
         }
 
-        return event.key == trigger
+        return event.key == trigger && !event.shift
     }
 }
 

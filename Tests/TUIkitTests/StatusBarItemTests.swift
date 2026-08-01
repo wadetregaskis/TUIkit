@@ -111,6 +111,29 @@ struct StatusBarItemTests {
         #expect(item.matches(leftEvent) == false)
     }
 
+    /// The shortcut vocabulary can only spell BARE keys — there is no "^a" —
+    /// so an item on "a" means plain `a`, and must not also swallow Ctrl+A /
+    /// Alt+A, which belong to later dispatch layers (`.selectAll` row
+    /// shortcuts, Ctrl+arrow row moves). Status-bar items sit at layer 1,
+    /// ahead of everything, so a modifier-blind match here starves those
+    /// layers of their chords.
+    @Test("StatusBarItem never matches a modified chord of its bare key")
+    func modifiedChordsDoNotMatch() {
+        let letterItem = StatusBarItem(shortcut: "a", label: "appearance")
+        #expect(letterItem.matches(KeyEvent(key: .character("a"))) == true)
+        #expect(letterItem.matches(KeyEvent(key: .character("a"), ctrl: true)) == false)
+        #expect(letterItem.matches(KeyEvent(key: .character("a"), alt: true)) == false)
+
+        let arrowItem = StatusBarItem(shortcut: "↑↓", label: "nav")
+        #expect(arrowItem.matches(KeyEvent(key: .up, shift: true)) == false)
+        #expect(arrowItem.matches(KeyEvent(key: .up, ctrl: true)) == false)
+        #expect(arrowItem.matches(KeyEvent(key: .down, alt: true)) == false)
+
+        let escItem = StatusBarItem(shortcut: "esc", label: "back")
+        #expect(escItem.matches(KeyEvent(key: .escape)) == true)
+        #expect(escItem.matches(KeyEvent(key: .escape, alt: true)) == false)
+    }
+
     @Test("StatusBarItem matches all arrows")
     func matchesAllArrows() {
         let item = StatusBarItem(shortcut: Shortcut.arrowsAll, label: "move")
