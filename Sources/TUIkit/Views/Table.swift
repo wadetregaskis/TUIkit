@@ -741,9 +741,14 @@ where Value.ID: Hashable {
             }
         }
         // See `composeRowLines`: clipped away from the slot, never through it.
+        // The excursion term is NEGATED: `slid()` draws unslid line y at
+        // y − excursion (both signs), so the bands must move the same way —
+        // `+ excursion` sent them in the OPPOSITE direction, 2×excursion away
+        // from the drawn rows. `ScrollOverscrollState.slidRange` (the List's
+        // path) subtracts for the same reason.
         let slide =
-            handler.overscrollState.excursion
-            + clipOverrun(&rowLines, to: contentHeight, drawn: drawnHeights)
+            clipOverrun(&rowLines, to: contentHeight, drawn: drawnHeights)
+            - handler.overscrollState.excursion
         publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
         while rowLines.count < contentHeight { rowLines.append(padded("")) }
         let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
@@ -1384,9 +1389,11 @@ where Value.ID: Hashable {
         // the end" destination) the tail IS the slot: clipping it took away the
         // only thing on screen saying where the rows would land, which reads as
         // the selection falling off the bottom of the table.
+        // Negated excursion for the same reason as the scrollbar path above:
+        // bands must travel WITH the slid rows, not mirror them.
         let slide =
-            handler.overscrollState.excursion
-            + clipOverrun(&rowLines, to: visibleRange.count, drawn: drawnHeights)
+            clipOverrun(&rowLines, to: visibleRange.count, drawn: drawnHeights)
+            - handler.overscrollState.excursion
         publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
@@ -1752,7 +1759,7 @@ where Value.ID: Hashable {
         let cursor = state.handler.focusedIndex
         if state.visibleRange.contains(cursor) {
             let rowOffset = cursor - state.visibleRange.lowerBound
-            let cursorY: Int
+            var cursorY: Int
             let cursorHeight: Int
             if state.visibleRowHeights.isEmpty {
                 cursorY = firstRowY + rowOffset
@@ -1763,6 +1770,11 @@ where Value.ID: Hashable {
             } else {
                 return
             }
+            // The marker must sit where the row is DRAWN: overscroll slides
+            // the rows by −excursion, and an enclosing ScrollView reveals by
+            // this region — uncompensated it revealed the wrong line.
+            cursorY -= state.handler.overscrollState.excursion
+            guard cursorY >= firstRowY else { return }
             buffer.hitTestRegions.insert(
                 HitTestRegion(
                     offsetX: 0, offsetY: cursorY,
@@ -1792,6 +1804,11 @@ where Value.ID: Hashable {
         let captureFocusID = state.focusID
         let visibleRange = state.visibleRange
         let visibleRowHeights = state.visibleRowHeights
+        // A value, not a handler read: `rowAt` is a local function, which may
+        // not capture the non-Sendable handler — and the value is current for
+        // every event this closure sees, since any excursion change repaints
+        // (and re-creates this closure) before the next event arrives.
+        let captureExcursion = state.handler.overscrollState.excursion
         let rowIDs = data.map(\.id)
         let capturedPrimaryAction = primaryAction
         let dragSession = context.environment.dragAndDropSession
@@ -1825,7 +1842,11 @@ where Value.ID: Hashable {
                 /// tables walk the visible rows' heights, so a click anywhere in
                 /// a tall row hits it.
                 func rowAt(y: Int) -> Int? {
-                    let lineOffset = y - firstRowY
+                    // Overscroll slides the drawn rows by −excursion; a click
+                    // lands in DRAWN space, so map it back to the unslid row
+                    // grid. (The List's twin gets this for free — its ranges
+                    // are pre-slid by `slidRange` before publication.)
+                    let lineOffset = y - firstRowY + captureExcursion
                     guard lineOffset >= 0 else { return nil }
                     if visibleRowHeights.isEmpty {
                         return lineOffset < visibleRange.count

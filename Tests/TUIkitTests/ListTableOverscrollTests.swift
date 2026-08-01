@@ -203,6 +203,47 @@ struct ListTableOverscrollTests {
             """)
     }
 
+    /// The Table twin. Its click path recomputes the row from `visibleRange`
+    /// rather than publishing pre-slid ranges like the List, so it needs its
+    /// own excursion compensation — uncompensated, a click under a 2-row push
+    /// selected the row 2 PAST the one under the pointer (and its published
+    /// bands slid the wrong way entirely: `+excursion` where drawn rows sit at
+    /// `−excursion`, putting bands 2×excursion from the rows they named).
+    @Test("Clicking a slid Table row selects that row too")
+    func tableRowClicksSlide() {
+        final class Box { var value: Int? }
+        let selected = Box()
+        let ctx = context(top: .rows(2))
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let view = Table(
+            Self.items,
+            selection: Binding(get: { selected.value }, set: { selected.value = $0 })
+        ) {
+            TableColumn("Name", value: \Item.name)
+        }
+
+        let first = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(first.hitTestRegions)
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: 2, y: 2))
+
+        let pushed = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(pushed.hitTestRegions)
+        let screen = pushed.lines.map(\.stripped)
+        guard let row = screen.firstIndex(where: { $0.contains("row 1") }) else {
+            Issue.record("row 1 is not on screen:\n\(screen.joined(separator: "\n"))")
+            return
+        }
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: row))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: row))
+        #expect(
+            selected.value == 1,
+            """
+            clicking where "row 1" is DRAWN selects row 1, \
+            got \(selected.value.map(String.init) ?? "nil"):
+            \(screen.joined(separator: "\n"))
+            """)
+    }
+
     // MARK: - Inert by default
 
     @Test("Without an allowance neither view moves at all", arguments: [true, false])
