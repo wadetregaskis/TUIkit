@@ -530,6 +530,51 @@ struct DragAndDropTests {
         #expect(log.inserted.first?.1 == ["zzz"])
     }
 
+    /// The List side of the rule the Table twin pins in
+    /// `TableReorderDragTests.scrollDisabledTableStillAcceptsDrops`: a drop is
+    /// not a scroll, so `.scrollDisabled` never withholds the drop target.
+    @Test("A scroll-disabled list still takes a drop")
+    func scrollDisabledListStillAcceptsDrops() {
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 10, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                ForEach(["a", "b", "c"], id: \.self) { Text($0) }
+                    .dropDestination(for: String.self) { index, values in
+                        log.inserted.append((index, values))
+                    }
+            }
+            .scrollDisabled(true)
+            .frame(height: 7)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        _ = render()
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: 2)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render()
+        #expect(tui.dragAndDropSession.performDrop(), "the pinned list takes it")
+        #expect(log.inserted.count == 1)
+        #expect(log.inserted.first?.1 == ["zzz"])
+    }
+
     @Test("dragPreviewAnchor(.offset) trails the cursor; DropInfo reports the frame")
     func offsetAnchorAndDropInfoFrame() {
         let log = DropLog()

@@ -1714,13 +1714,21 @@ where Value.ID: Hashable {
                     handler: state.handler))
         }
 
+        // The external drop destination is registered unconditionally too, for
+        // the same reason as the reorder host above: a drop is not a scroll,
+        // and a pinned `.scrollDisabled` staging table must still take drops —
+        // as the List twin already does (`_ListCore.registerRowTargets`, which
+        // gates only its auto-scroll zone). This sat inside the
+        // `isScrollEnabled` gate below, so a non-scrolling table silently
+        // refused every external drag: no slot opened, and release flew home.
+        registerRowDropDestination(
+            zoneID: mouseHandlerID, state: state, context: context, firstRowY: firstRowY)
+
         // Register the table as a drag auto-scroll zone (sharing the container
         // region id): a drag hovering near its top/bottom edge scrolls the rows
         // to reveal an off-screen drop target. Auto-scroll is a gesture, so
         // `.scrollDisabled` withholds the zone entirely.
         if context.environment.isScrollEnabled {
-            registerRowDropDestination(
-                zoneID: mouseHandlerID, state: state, context: context, firstRowY: firstRowY)
             context.environment.dragAndDropSession?.registerAutoScrollZone(
                 DragAndDropSession.AutoScrollZone(
                     handlerID: mouseHandlerID,

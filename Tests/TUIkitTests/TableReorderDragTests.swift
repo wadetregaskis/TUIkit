@@ -641,6 +641,50 @@ struct TableReorderDragTests {
         #expect(log.got.first?.0 == 0, "at index 0: \(log.got)")
     }
 
+    /// A drop is not a scroll: `.scrollDisabled` withholds the auto-scroll
+    /// zone, never the drop destination. The registration used to sit inside
+    /// the `isScrollEnabled` gate, so a pinned staging table silently refused
+    /// every external drag while the identical `.scrollDisabled` List took it.
+    @Test("A scroll-disabled table still takes a drop")
+    func scrollDisabledTableStillAcceptsDrops() throws {
+        final class Log: @unchecked Sendable { var got: [(Int, [String])] = [] }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = Table(["a", "b", "c"].map(Row.init), selection: .constant(String?.none)) {
+                TableColumn<Row>("Name", value: \.name)
+            }
+            .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
+            .scrollDisabled(true)
+            .frame(width: 20, height: 9)
+            var context = RenderContext(
+                availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
+            context.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: context)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let buffer = render()
+        let rowY = try #require(
+            buffer.lines.firstIndex { $0.stripped.filter(\.isLetter) == "b" })
+
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render()
+        #expect(tui.dragAndDropSession.performDrop(), "the pinned table took it")
+        #expect(log.got.first?.0 == 1, "before row b: \(log.got)")
+        #expect(log.got.first?.1 == ["zzz"])
+    }
+
     @Test("A Table block in hand also shows which row the cursor is on")
     func multiRowKeyboardMoveKeepsTheCursorRow() {
         let fixture = Fixture(feedback: .dimmed)
