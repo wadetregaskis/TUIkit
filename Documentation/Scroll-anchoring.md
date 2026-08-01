@@ -313,12 +313,19 @@ frame would make the view unscrollable.
 
 Two things worth remembering from wiring the List/Table side:
 
-- **The focus cursor comes along.** A follow that moved the offset alone was
-  undone within the same frame: focus registration calls
-  `ensureFocusedItemVisible()`, which drags the viewport back to the cursor
-  (row 0 by default), and row 0 is not visible from the tail. That reveal is the
-  shipped "selection must stay visible" invariant, so the follow carries the
-  cursor to the last row instead — which is what following a log means anyway.
+- **The focus cursor comes along — when the tail advances.** A follow that
+  moved the offset alone was undone within the same frame: focus registration
+  calls `ensureFocusedItemVisible()`, which drags the viewport back to the
+  cursor (row 0 by default), and row 0 is not visible from the tail. That
+  reveal is the shipped "selection must stay visible" invariant, so the follow
+  carries the cursor to the last row instead — which is what following a log
+  means anyway. The carry is scoped to frames where the tail actually advanced
+  (the opening placement, an append, a re-engagement — detected by item count,
+  not offset, since a list shorter than its viewport appends at offset 0
+  forever). Carrying on *every* glued frame made the arrow keys dead: Up moved
+  the cursor to a row that was already visible, no offset moved, and the next
+  render snapped the cursor straight back — so the positional release
+  ("arrowing up moves the offset off the tail") could never engage.
 - **`maxOffset` needs reading twice.** It early-outs to a cheap floor while the
   offset is far from the tail (so a huge list needn't materialise tail row
   heights every frame). That floor is a lower bound, so one assignment lands

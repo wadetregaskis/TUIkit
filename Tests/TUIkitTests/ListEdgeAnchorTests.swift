@@ -185,6 +185,63 @@ struct ListEdgeAnchorTests {
         #expect(handler.scrollOffset == handler.maxOffset, "back at the tail, following again")
     }
 
+    /// The cursor-carry is scoped to frames where the tail ADVANCES (opening
+    /// placement, appends, re-engagement). Carrying it on every glued frame
+    /// made the arrow keys dead on a focused `.bottom` list: Up moved the
+    /// cursor to a row that was already visible, so no offset moved, so the
+    /// next render was still glued and snapped the cursor straight back — the
+    /// documented release path ("arrowing up moves the offset off the tail")
+    /// could never engage because the cursor was reset before it could reach
+    /// the viewport's top edge.
+    @Test("Arrow-up walks off the tail; appends still carry the cursor")
+    func arrowUpEscapesTheGlue() {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: 40, viewportHeight: 8,
+            selectionMode: .single, canBeFocused: true)
+        handler.declaredAnchorMode = .bottom
+
+        handler.applyAnchorHold()
+        #expect(handler.scrollOffset == handler.maxOffset, "opens glued to the tail")
+        #expect(handler.focusedIndex == 39, "the opening placement carries the cursor")
+
+        // Up moves the cursor to a row that is already visible — no offset
+        // moves — and the following steady glued render must leave it there.
+        handler.moveFocus(by: -1, wrap: false)
+        #expect(handler.focusedIndex == 38)
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 38, "a steady glued frame must not snap the cursor back")
+        #expect(handler.scrollOffset == handler.maxOffset, "the follow itself stays engaged")
+
+        // Rows arrive: the tail advances, and the cursor comes along — that is
+        // what follow-the-log means; the newest row is the interesting one.
+        handler.itemCount = 45
+        handler.applyAnchorHold()
+        #expect(handler.scrollOffset == handler.maxOffset, "followed the new tail")
+        #expect(handler.focusedIndex == 44, "and carried the cursor to it")
+    }
+
+    /// A list shorter than its viewport appends at offset 0 forever, so an
+    /// offset comparison alone can't see the tail advance — the carry must
+    /// key on the item count.
+    @Test("A short list's appends still carry the cursor (offset never moves)")
+    func shortListStillCarriesTheCursor() {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: 5, viewportHeight: 8,
+            selectionMode: .single, canBeFocused: true)
+        handler.declaredAnchorMode = .bottom
+
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 4, "opens on the tail row")
+
+        handler.moveFocus(by: -1, wrap: false)
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 3, "arrows walk freely between appends")
+
+        handler.itemCount = 7
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 6, "an append carries the cursor, offset or no offset")
+    }
+
     /// Top and Window ask for nothing beyond "leave the offset alone", so the
     /// hold must not touch it. Guards against a naive `.top` implementation
     /// that snaps to row 0 every frame and makes the list unscrollable.

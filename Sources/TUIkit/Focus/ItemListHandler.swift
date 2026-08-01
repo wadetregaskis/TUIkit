@@ -417,6 +417,15 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// which is how a declared `.bottom` list opens at its tail.
     var bottomFollowBound = 0
 
+    /// Last glued frame's ``itemCount``, so the Bottom follow can tell a frame
+    /// where the tail actually ADVANCED (rows arrived — carry the focus cursor
+    /// along) from a steady glued frame (nothing changed — leave the cursor
+    /// alone, or the arrow keys are dead; see ``followBottomEdge()``). Counts
+    /// rather than offsets, because a list shorter than its viewport appends
+    /// without ever moving the offset. Starts at -1 so the first glued frame
+    /// always reads as an advance (the opening placement carries the cursor).
+    var bottomFollowItemCount = -1
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 

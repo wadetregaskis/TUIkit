@@ -72,20 +72,32 @@ extension ItemListHandler {
     /// re-engages it, with no stored flag to get out of step. Mirrors
     /// `_ScrollViewCore.isGluedToBottom`.
     ///
-    /// **The focus cursor comes along.** A focused list's scroll position is
-    /// owned by its cursor — `ensureFocusedItemVisible()` runs whenever focus is
-    /// (re-)received and drags the viewport back to whatever row the cursor is
-    /// on, which is the shipped "the selection must stay visible" invariant. So
-    /// a follow that moved the offset alone would be undone within the same
-    /// frame, leaving `.bottom` inert on any focused list: the cursor starts at
-    /// row 0, row 0 is not visible from the tail, and the reveal wins. Carrying
-    /// the cursor to the last row is what "follow the log" means anyway — the
-    /// newest row is the interesting one — and it keeps the two mechanisms
-    /// agreeing instead of fighting. Arrowing up moves the cursor, which moves
-    /// the offset off the tail, which releases the follow; arrowing back down to
-    /// the last row re-engages it.
+    /// **The focus cursor comes along — but only when the tail advances.** A
+    /// focused list's scroll position is owned by its cursor —
+    /// `ensureFocusedItemVisible()` runs whenever focus is (re-)received and
+    /// drags the viewport back to whatever row the cursor is on, which is the
+    /// shipped "the selection must stay visible" invariant. So a follow that
+    /// moved the offset alone would be undone within the same frame, leaving
+    /// `.bottom` inert on any focused list: the cursor starts at row 0, row 0
+    /// is not visible from the tail, and the reveal wins. Carrying the cursor
+    /// to the last row is what "follow the log" means anyway — the newest row
+    /// is the interesting one.
+    ///
+    /// The carry fires on frames where the tail actually ADVANCED (the opening
+    /// placement, an append, a re-engagement), **never on a steady glued
+    /// frame**. Snapping every glued render made the arrow keys dead: Up moved
+    /// the cursor to a row that was already visible, so no offset moved, so
+    /// the next render was still glued and snapped the cursor straight back —
+    /// the release path this comment used to promise ("arrowing up moves the
+    /// offset off the tail") could never engage, because the cursor was reset
+    /// before it could ever walk to the viewport's top edge. With the carry
+    /// scoped to advances, arrowing up walks freely inside the viewport; when
+    /// the walk reaches the top edge it moves the offset, which releases the
+    /// follow (positional, as ever), and arrowing back down to the tail
+    /// re-engages it.
     private func followBottomEdge() {
         guard scrollOffset >= bottomFollowBound else { return }
+        let offsetBefore = scrollOffset
         scrollOffset = maxOffset
         // `maxOffset` deliberately early-outs to a cheap floor (`itemCount -
         // contentHeight`) while the offset is nowhere near the tail, so as not
@@ -96,6 +108,12 @@ extension ItemListHandler {
         // condition for the exact walk, so reading it once more converges. One
         // extra read, by construction — not a loop.
         scrollOffset = maxOffset
+        // Offsets alone can't detect an advance: a list shorter than its
+        // viewport appends at offset 0 forever, and the cursor must still
+        // chase its tail.
+        let tailAdvanced = scrollOffset != offsetBefore || itemCount != bottomFollowItemCount
+        bottomFollowItemCount = itemCount
+        guard tailAdvanced else { return }
         // The tail sits on a whole-row boundary, so any line-granularity clip
         // carried from the previous top row no longer describes anything.
         scrollTopClipLines = 0
