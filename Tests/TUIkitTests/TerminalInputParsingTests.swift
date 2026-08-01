@@ -127,6 +127,65 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(character: "[")))
     }
 
+    // MARK: - Typed non-ASCII text
+
+    /// The extractor used to consume every non-ESC byte SINGLY, and
+    /// `parseSingleByte` returns nil for anything ≥ 0x80 — so every character
+    /// a user typed outside ASCII was silently discarded byte by byte. A
+    /// framework that ships seven localisations could not accept a single
+    /// French, German, or CJK keystroke except via bracketed paste.
+    @Test(
+        "Typed multi-byte UTF-8 characters arrive as one character event",
+        arguments: [
+            ("é", [0xC3, 0xA9]),  // 2 bytes — Latin accents
+            ("ß", [0xC3, 0x9F]),  // 2 bytes
+            ("你", [0xE4, 0xBD, 0xA0]),  // 3 bytes — CJK
+            ("🎉", [0xF0, 0x9F, 0x8E, 0x89]),  // 4 bytes — emoji
+        ] as [(Character, [UInt8])])
+    func typedNonASCIIArrives(_ character: Character, _ bytes: [UInt8]) {
+        let (terminal, stage) = makeTerminal()
+        stage(bytes)
+        #expect(terminal.readEvent() == .key(KeyEvent(character: character)))
+    }
+
+    @Test("A UTF-8 character split across reads still arrives whole")
+    func splitUTF8ArrivesWhole() {
+        let (terminal, stage) = makeTerminal()
+        stage([0xC3])  // é's lead byte; the tail is still in flight
+        #expect(terminal.readEvent() == nil)
+        stage([0xA9])
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "é")))
+    }
+
+    @Test("Alt + a multi-byte character parses as that character with alt")
+    func altNonASCIIParses() {
+        // A meta-sending terminal prefixes whatever the layout produced:
+        // Option+ß on a German layout is ESC + the two bytes of ß.
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B, 0xC3, 0x9F])
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .character("ß"), alt: true)))
+    }
+
+    @Test("Malformed UTF-8 is dropped without swallowing the bytes after it")
+    func malformedUTF8DoesNotEatFollowingInput() {
+        let (terminal, stage) = makeTerminal()
+        // An orphan continuation byte, then a mis-framed lead, then a real key.
+        stage([0xA9, 0xC3, 0x61])
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "a")))
+    }
+
+    @Test("A stranded lead byte resolves via staleness without leaking a key")
+    func strandedLeadByteResolves() {
+        let (terminal, stage) = makeTerminal()
+        stage([0xC3])  // nothing ever follows
+        var results: [TerminalInput?] = []
+        for _ in 0..<6 { results.append(terminal.readEvent()) }
+        #expect(results.allSatisfy { $0 == nil }, "garbage surfaces no event")
+        // The buffer made progress: a real key typed afterwards still works.
+        stage([0x62])
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "b")))
+    }
+
     @Test("A complete CSI delivered in one read is unaffected")
     func completeCSIUnaffected() {
         let (terminal, stage) = makeTerminal()

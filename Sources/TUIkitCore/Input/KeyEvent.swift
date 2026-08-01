@@ -247,6 +247,16 @@ extension KeyEvent {
             }
         }
 
+        // Alt + a multi-byte UTF-8 character: a meta-sending terminal
+        // prefixes whatever the keyboard produced, ASCII or not (Option+ß on
+        // a German layout arrives as ESC + the two bytes of ß).
+        if bytes.count > 2,
+            let string = String(bytes: bytes.dropFirst(), encoding: .utf8),
+            string.count == 1, let character = string.first
+        {
+            return KeyEvent(key: .character(character), alt: true)
+        }
+
         return KeyEvent(key: .escape)
     }
 

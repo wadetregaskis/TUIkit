@@ -573,10 +573,11 @@ extension Terminal {
         guard !input.isEmpty else { return nil }
         let first = input[0]
 
-        // Plain (non-escape) byte: single-byte event.
+        // Plain (non-escape) byte: an ASCII event, or the lead of a multi-byte
+        // UTF-8 character (typed é/ß/中/emoji — anything a keyboard layout or
+        // IME produces beyond ASCII).
         if first != 0x1B {
-            consume(1)
-            return [first]
+            return tryExtractPlainText()
         }
 
         // ESC + ?  — need at least the byte after ESC.
@@ -610,11 +611,87 @@ extension Terminal {
             return nil
         }
 
+        // Alt + a multi-byte character: a meta-sending terminal prefixes
+        // whatever the keyboard produced, ASCII or not (Option+ß under a
+        // German layout arrives as ESC + the two bytes of ß). Same
+        // put-the-prefix-back dance as the meta-escape path above when the
+        // character's tail hasn't arrived yet.
+        if second >= 0x80 {
+            consume(1)
+            if let inner = tryExtractPlainText() {
+                return [0x1B] + inner
+            }
+            input.insert(0x1B, at: 0)
+            return nil
+        }
+
         // Alt+key — 2 bytes total.
         let bytes = [first, second]
         consume(2)
 
         return bytes
+    }
+
+    /// Peels one complete plain-text event off the front of the buffer: a
+    /// single ASCII byte, or the full byte run of one multi-byte UTF-8
+    /// scalar. Returns `nil` when a scalar's continuation bytes are still in
+    /// flight (a split read — the stale-partial machinery bounds the wait,
+    /// popping a truly stranded lead via its "any other stuck byte" arm).
+    ///
+    /// The old path consumed ONE byte unconditionally, and
+    /// `KeyEvent.parseSingleByte` returns nil for anything ≥ 0x80 — so every
+    /// non-ASCII character a user typed was discarded byte by byte. The
+    /// multi-byte branch in `KeyEvent.parse` existed but was unreachable from
+    /// the live parser; only bracketed paste could deliver non-ASCII text.
+    ///
+    /// Malformed bytes (an orphan continuation, an overlong or out-of-range
+    /// lead, a lead whose followers aren't continuations) are dropped one at
+    /// a time in the loop, so garbage can't swallow the innocent bytes after
+    /// it — and can't recurse either, which a self-call here would on a long
+    /// garbage run.
+    private func tryExtractPlainText() -> [UInt8]? {
+        while !input.isEmpty, input[0] != 0x1B {
+            let first = input[0]
+            if first < 0x80 {
+                consume(1)
+                return [first]
+            }
+            guard let length = Self.utf8SequenceLength(lead: first) else {
+                consume(1)  // orphan continuation / invalid lead: drop it
+                continue
+            }
+            guard input.count >= length else { return nil }  // tail in flight
+            var isValid = true
+            for index in 1..<length where input[index] & 0xC0 != 0x80 {
+                isValid = false
+                break
+            }
+            guard isValid else {
+                consume(1)  // mis-framed lead: drop it, re-parse what follows
+                continue
+            }
+            var bytes = [UInt8]()
+            bytes.reserveCapacity(length)
+            for index in 0..<length { bytes.append(input[index]) }
+            consume(length)
+            return bytes
+        }
+        // Empty, or dropping garbage uncovered an ESC — the next call's
+        // escape paths own that.
+        return nil
+    }
+
+    /// The byte length of the UTF-8 sequence this lead byte begins, or `nil`
+    /// when it cannot begin one (a bare continuation byte, the overlong
+    /// C0/C1 leads, or leads beyond U+10FFFF's F4).
+    private static func utf8SequenceLength(lead: UInt8) -> Int? {
+        switch lead {
+        case 0x00...0x7F: return 1
+        case 0xC2...0xDF: return 2
+        case 0xE0...0xEF: return 3
+        case 0xF0...0xF4: return 4
+        default: return nil
+        }
     }
 
     /// CSI extractor — assumes `inputBuffer` starts with `ESC [`
