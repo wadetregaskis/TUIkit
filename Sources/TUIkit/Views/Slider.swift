@@ -430,8 +430,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
         let handler = handlerBox.value
 
-        // Keep handler in sync with current values
+        // Keep handler in sync with current values — EVERY field the view
+        // declares, or the persisted handler keeps the creation render's
+        // (stale bounds made clampValue force-write the app's value back
+        // inside a range the view no longer declares).
         handler.value = value
+        handler.bounds = bounds
+        handler.step = step
         handler.canBeFocused = !isDisabled
         // Captured at render so Shift+arrow can accelerate at event time.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier

@@ -249,6 +249,29 @@ struct SliderTrackStyleTests {
     /// List, ScrollView): wheel DOWN advances (increases), wheel UP retreats
     /// (decreases). The slider previously had this inverted, so a horizontal
     /// slider adjusted the opposite way from the wheel everywhere else.
+    /// The persisted-handler stale-field class (StepperHandler had the same
+    /// bug and the same fix): `bounds`/`step` were set only at handler
+    /// creation, and `clampValue()` runs every render — so after the app
+    /// widened the range and set a value beyond the OLD maximum, every frame
+    /// force-wrote the app's binding back inside a range the view no longer
+    /// declares.
+    @Test("A runtime range change is honoured — no stale clamp of the app's value")
+    func dynamicRangeIsResynced() {
+        var value = 0.5
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let context = makeRenderContext(width: 40, height: 1)
+
+        // First render creates the handler against 0...1.
+        _ = renderToBuffer(Slider(value: binding, in: 0...1, step: 0.1), context: context)
+
+        // A mode switch widens the range and moves the value beyond the old max.
+        value = 200
+        _ = renderToBuffer(Slider(value: binding, in: 0...255, step: 5), context: context)
+        #expect(
+            value == 200,
+            "clampValue must clamp against the CURRENT range — the stale one snapped it to \(value)")
+    }
+
     @Test("Scroll wheel down increases the value, up decreases it")
     func wheelDirectionMatchesEverythingElse() {
         var value = 0.5

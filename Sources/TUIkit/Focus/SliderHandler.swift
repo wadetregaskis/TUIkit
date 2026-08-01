@@ -29,10 +29,20 @@ final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: Bin
     var value: Binding<V>
 
     /// The range of valid values.
-    let bounds: ClosedRange<V>
+    ///
+    /// Mutable because the handler PERSISTS across renders while the view's
+    /// declared range may not: a `Slider(value:in:)` whose range derives from
+    /// other state (a maximum that flips with a mode picker) must clamp
+    /// against the range the CURRENT render declared, not the one in force
+    /// when the handler was first created — `StepperHandler.bounds` documents
+    /// the same rule. Worse than stale arrows here: `clampValue()` runs every
+    /// render and force-WROTE the app's binding back inside the stale range.
+    /// Refreshed every render alongside the value binding.
+    var bounds: ClosedRange<V>
 
-    /// The step size for increment/decrement.
-    let step: V.Stride
+    /// The step size for increment/decrement. Mutable for the same reason
+    /// as ``bounds``.
+    var step: V.Stride
 
     /// How many steps a Shift-accelerated arrow press takes. Set from
     /// `environment.shiftStepMultiplier` during render (default 5); a plain arrow
