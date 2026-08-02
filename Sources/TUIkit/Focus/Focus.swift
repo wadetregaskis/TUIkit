@@ -51,6 +51,19 @@ public final class FocusManager: @unchecked Sendable {
     /// Registered focus sections in render order.
     private var sections: [FocusSection] = []
 
+    /// Last frame's sections — see ``beginRenderPass()``. Read only by
+    /// ``notifyFocusLost()``, as the fallback when the focused element is not
+    /// registered in the CURRENT frame's ring.
+    private var previousSections: [FocusSection] = []
+
+    /// Set when focus was assigned directly from section memory (a modal
+    /// dismissal restoring the page's control) at a moment the target could
+    /// not possibly be registered yet. The element must still be told it holds
+    /// focus again — its editing session, its reveal — so ``endRenderPass()``
+    /// fires `onFocusReceived` once registration has completed and the element
+    /// is real.
+    private var pendingRestoreNotificationID: String?
+
     /// The ID of the currently active section.
     private var activeSectionID: String?
 
@@ -862,10 +875,20 @@ extension FocusManager {
     public func deactivateSection(id: String) {
         guard activeSectionID == id else { return }
         rememberFocusForActiveSection()
+        // The modal's control loses focus here as surely as the page's control
+        // did when the modal opened (`activateSection` notifies) — and it must
+        // hear so, or whatever its focus began (an editing session, a latch)
+        // never ends. It is found through LAST frame's ring: this runs
+        // mid-pass, after the sections cleared, and a dismissed modal never
+        // re-registers.
+        notifyFocusLost()
         let target = sectionRevertTarget[id] ?? Self.defaultSectionID
         sectionRevertTarget[id] = nil
         activeSectionID = target
         focusedID = sectionFocusMemory[target]
+        // The restored control cannot be notified yet — it may not re-register
+        // until later this pass — so the arrival is deferred to `endRenderPass`.
+        pendingRestoreNotificationID = focusedID
         onFocusChange?()
     }
 
@@ -916,6 +939,13 @@ extension FocusManager {
     ///
     /// Call this at the start of each render pass instead of ``clear()``.
     func beginRenderPass() {
+        // Last frame's ring, kept for one frame so a LOSS can still reach its
+        // element. Focus-lost moments routinely involve an element this frame
+        // never registers: a modal's control at dismissal (`deactivateSection`
+        // runs mid-pass, after this clear and before anything re-registers),
+        // or a focused element that left the tree. The handler objects persist
+        // in StateStorage regardless — this only preserves reachability.
+        previousSections = sections
         sections.removeAll()
         // Modal sections are re-marked each render by the presentation modifiers;
         // clearing here means a dismissed modal (which no longer renders, so no
@@ -958,6 +988,7 @@ extension FocusManager {
             !sections.contains(where: { $0.id == activeID })
         {
             rememberFocusForActiveSection()
+            notifyFocusLost()
             activeSectionID = sections.first?.id
             focusedID = nil
             restoreFocusForActiveSection()
@@ -967,10 +998,13 @@ extension FocusManager {
         // focusable" is treated like "gone": some elements register with a
         // dynamic `canBeFocused` (a ScrollView is focusable only while its
         // content overflows), and focus resting on one would silently eat key
-        // events while showing no focus indicator anywhere.
+        // events while showing no focus indicator anywhere. Either way the
+        // element is told (`onFocusLost` — through last frame's ring when it
+        // left the tree), so its editing session or latch ends with its focus.
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
+                notifyFocusLost()
                 self.focusedID = nil
             }
         }
@@ -991,6 +1025,20 @@ extension FocusManager {
             let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
         {
             focusPreservingPendingIntent(firstFocusable)
+        }
+
+        // A restore that was assigned directly from section memory (a modal
+        // dismissal, before the target could re-register) still owes its
+        // element the arrival notification — deliverable only now, once
+        // registration has completed. Skipped if focus has since moved on or
+        // the element never materialised (validation cleared it above).
+        if let restoreID = pendingRestoreNotificationID {
+            pendingRestoreNotificationID = nil
+            if focusedID == restoreID,
+                let element = activeSection?.focusables.first(where: { $0.focusID == restoreID })
+            {
+                element.onFocusReceived()
+            }
         }
 
         // Drop `@FocusState` entries whose control left the tree this pass.
@@ -1139,6 +1187,15 @@ extension FocusManager {
     fileprivate func notifyFocusLost() {
         guard let currentID = focusedID else { return }
         for section in sections {
+            if let current = section.focusables.first(where: { $0.focusID == currentID }) {
+                current.onFocusLost()
+                return
+            }
+        }
+        // Not registered this frame — a modal's control at dismissal, or an
+        // element that left the tree while focused. Last frame's ring still
+        // reaches it, and its session must still end.
+        for section in previousSections {
             if let current = section.focusables.first(where: { $0.focusID == currentID }) {
                 current.onFocusLost()
                 return
