@@ -184,8 +184,18 @@ import Foundation
             let appName = sanitizedProcessName(ProcessInfo.processInfo.processName)
 
             // Use XDG Base Directory: ~/.local/share/[appName]/
+            //
+            // "If $XDG_DATA_HOME is either not set or empty, a default equal to
+            // $HOME/.local/share should be used" — the spec's wording, and the
+            // empty half of it matters: `URL(fileURLWithPath: "")` is a
+            // RELATIVE path, so an empty variable (which shells produce readily
+            // — `XDG_DATA_HOME= app`, or an unset variable exported anyway) put
+            // the app's saved state in whatever directory it happened to be
+            // launched from.
             let dataHome: URL
-            if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] {
+            if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"],
+                !xdgDataHome.isEmpty
+            {
                 dataHome = URL(fileURLWithPath: xdgDataHome)
             } else {
                 dataHome = FileManager.default.homeDirectoryForCurrentUser
