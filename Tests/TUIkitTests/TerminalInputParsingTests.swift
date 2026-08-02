@@ -302,6 +302,55 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true, shift: true)))
     }
 
+    /// A paste whose `ESC[201~` never arrives used to swallow every keystroke
+    /// after it into the paste buffer — paste mode had no timeout at all, only
+    /// the 1 MiB cap, so the app went on rendering while answering no input.
+    @Test("An unterminated paste is delivered rather than wedging the keyboard")
+    func stalledPasteIsDeliveredAndInputResumes() {
+        let (terminal, stage) = makeTerminal()
+
+        // ESC[200~ then content — and no end marker, ever.
+        stage([0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E] + Array("hello".utf8))
+        var paste: TerminalInput?
+        for _ in 0..<60 where paste == nil {
+            paste = terminal.readEvent()
+        }
+        #expect(paste == .key(KeyEvent(key: .paste("hello"))))
+
+        // And the keyboard works again: pre-fix this 'x' vanished into the
+        // still-open paste.
+        stage([0x78])
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "x")))
+    }
+
+    /// The timeout must not cut a real paste in half: a stream that keeps
+    /// delivering bytes keeps resetting the silence count, however long it
+    /// takes in total.
+    @Test("A slow but steady paste is never cut short")
+    func slowPasteIsNotTruncated() {
+        let (terminal, stage) = makeTerminal()
+
+        stage([0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E])
+        #expect(terminal.readEvent() == nil)
+
+        // Ten chunks, each arriving after a couple of quiet frames.
+        for index in 0..<10 {
+            #expect(terminal.readEvent() == nil)
+            #expect(terminal.readEvent() == nil)
+            stage(Array("chunk\(index) ".utf8))
+            #expect(terminal.readEvent() == nil, "still mid-paste")
+        }
+
+        stage([0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E])  // ESC[201~ at last
+        let event = terminal.readEvent()
+        guard case .key(let key) = event, case .paste(let text) = key.key else {
+            Issue.record("expected a paste event, got \(String(describing: event))")
+            return
+        }
+        #expect(text.hasPrefix("chunk0 "))
+        #expect(text.hasSuffix("chunk9 "), "every chunk is in one paste: \(text)")
+    }
+
     /// And the later split: both ESCs go stale and are deferred, THEN the
     /// sequence's introducer turns up. The held chord must give way to the
     /// real sequence rather than emit alt+escape and strand `[Z`.

@@ -562,6 +562,18 @@ extension Terminal {
     /// timeout). Short, so Escape stays responsive.
     private static let bareEscStaleFrames = 2
 
+    /// Stale frames of TOTAL silence before an unterminated bracketed paste is
+    /// delivered anyway. At the loop's ~24 ms cadence this is about a second —
+    /// far longer than any gap inside a real paste, which arrives as a
+    /// continuous stream, and short enough that a user does not sit in front of
+    /// an app that has stopped answering the keyboard.
+    ///
+    /// Without it the ONLY way out of paste mode was the end marker or the 1 MiB
+    /// cap: a paste whose `ESC[201~` never arrived swallowed every subsequent
+    /// keystroke into the paste buffer, forever, and the app looked frozen to
+    /// input while still rendering.
+    private static let stalledPasteStaleFrames = 40
+
     /// Stale frames before an incomplete `ESC [` / `ESC O` is abandoned as a
     /// dead sequence. Generous: a read-split sequence's tail arrives within a
     /// frame or two, so by the time we reach this any real terminator is long
@@ -808,6 +820,27 @@ extension Terminal {
         return nil
     }
 
+    /// Ends a paste whose end marker never arrived, delivering whatever was
+    /// buffered as the paste it evidently was.
+    ///
+    /// Delivering beats discarding: the bytes are the user's pasted text, and
+    /// the alternative to both is the wedge this exists to prevent. An empty
+    /// buffer just leaves paste mode — there is nothing to deliver, and a paste
+    /// event carrying "" would be noise.
+    private func abandonStalledPaste() -> TerminalInput? {
+        inPasteMode = false
+        guard !input.isEmpty else { return nil }
+
+        var content = [UInt8]()
+        content.reserveCapacity(input.count)
+        for index in 0..<input.count { content.append(input[index]) }
+        consume(input.count)
+
+        let text = String(bytes: content, encoding: .utf8)
+            ?? String(content.map { Character(UnicodeScalar($0)) })
+        return .key(KeyEvent(key: .paste(text)))
+    }
+
     /// Whether the parser is holding something that needs another
     /// ``readEvent()`` soon to resolve, even if no new bytes arrive: a lone
     /// `ESC` mid Escape-vs-sequence disambiguation, a deferred bare `ESC`, or an
@@ -878,10 +911,22 @@ extension Terminal {
                 staleFrames = 0
                 return event
             }
-            // Don't increment staleFrames in paste mode — large
-            // pastes legitimately take several frames to fully
-            // arrive, and the maxPasteBytes guard handles the
-            // pathological case.
+            // A real paste arrives as a continuous stream, so a frame that
+            // brought NO bytes at all is the only thing that counts against
+            // it; a slow one simply keeps resetting the count. Total silence
+            // for a second means the end marker is not coming — a dropped
+            // `ESC[201~`, or a terminal that abandoned the paste — and paste
+            // mode must end, or every keystroke from here on is swallowed into
+            // the buffer and the app stops answering the keyboard entirely.
+            if added > 0 {
+                staleFrames = 0
+            } else {
+                staleFrames += 1
+                if staleFrames >= Self.stalledPasteStaleFrames {
+                    staleFrames = 0
+                    return abandonStalledPaste()
+                }
+            }
             return nil
         }
 
