@@ -101,6 +101,22 @@ public final class FocusManager: @unchecked Sendable {
     /// menu simply stops marking and the flag evaporates.
     private var optionalFocusSectionIDs: Set<String> = []
 
+    /// Whether this manager may give focus to a control merely because it
+    /// registered. Set on the throwaway manager the page-beneath-a-modal
+    /// renders into (`RenderContext.isolatedForBackground()`): that render
+    /// exists only to draw a dimmed backdrop, so nothing in it should become
+    /// focused — and crucially nothing should ACT on becoming focused. An
+    /// auto-focused background control fires `onFocusReceived`, whose
+    /// scroll-to-reveal then rewrites the page's scroll position, which is
+    /// why the backdrop used to need a throwaway `StateStorage` too (and why
+    /// the page's state was being pruned as a side effect). Suppressing the
+    /// cause lets the backdrop share the real storage, so it draws the page
+    /// as it actually is.
+    ///
+    /// Explicit focus (`focus(id:)`, section restore) is unaffected — only
+    /// the "first registrant wins an empty focus" rule is.
+    var suppressesAutoFocus = false
+
     /// For each section that was activated *over* another, the section to revert
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
     private var sectionRevertTarget: [String: String] = [:]
@@ -286,6 +302,7 @@ extension FocusManager {
         if targetID == activeSectionID && focusedID == nil && element.canBeFocused
             && !hasUnresolvedDefaultFocus
             && !optionalFocusSectionIDs.contains(targetID)
+            && !suppressesAutoFocus
         {
             focusPreservingPendingIntent(element)
         }

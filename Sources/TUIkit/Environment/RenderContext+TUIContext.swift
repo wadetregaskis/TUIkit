@@ -60,10 +60,10 @@ extension RenderContext {
         )
     }
 
-    /// Creates a context isolated from the real focus, key-event, and state
-    /// systems — for rendering the page *beneath* a root-hosted modal / alert as
-    /// an inert backdrop. The returned context has a throwaway `FocusManager`,
-    /// `KeyEventDispatcher`, **and `StateStorage`**:
+    /// Creates a context isolated from the real focus and key-event systems —
+    /// for rendering the page *beneath* a root-hosted modal / alert as an inert
+    /// backdrop. The returned context has a throwaway `FocusManager` (which
+    /// gives focus to nothing) and `KeyEventDispatcher`:
     ///
     /// - **focus isolation** stops the background's controls from registering
     ///   into the live `FocusManager`. Crucially, the modal has already
@@ -73,23 +73,34 @@ extension RenderContext {
     ///   auto-focus there (see `FocusManager.register`), stealing the focus the
     ///   modal's own controls should receive and leaving the background live to
     ///   hotkeys. A throwaway manager keeps the real one seeing only the modal.
+    /// - **no auto-focus** within that throwaway manager either
+    ///   (`suppressesAutoFocus`). Without it the backdrop's first control was
+    ///   focused, `onFocusReceived` fired, and a `ScrollView`'s scroll-to-reveal
+    ///   rewrote the page's scroll position — dismissing the modal left the page
+    ///   scrolled back to the top.
     /// - **key isolation** stops the background's `onKeyPress` / Menu key handlers
     ///   from firing while the modal is up.
-    /// - **state isolation** stops the background re-render from mutating the
-    ///   page's persistent `@State`. (The throwaway focus manager auto-focuses the
-    ///   first background element; a `ScrollView` would then snap-scroll to it and
-    ///   overwrite the real scroll offset — so dismissing the modal left the page
-    ///   scrolled back to the top. With its own storage that write lands on the
-    ///   throwaway state and the page's scroll position survives.)
+    ///
+    /// **State is deliberately NOT isolated.** A throwaway `StateStorage` used to
+    /// stand in for suppressing that reveal, at two costs: the backdrop drew the
+    /// page from DEFAULTS (a counter reading 7 while the page held 8), and — since
+    /// the real storage never saw those identities marked active — the page's
+    /// entire `@State` subtree was pruned by `endRenderPass` on the first
+    /// presented frame, so dismissing re-hydrated the page from scratch. Focus
+    /// memory and the reveal made the scroll position *look* restored, which is
+    /// how it survived earlier rounds of modal fixes. With the auto-focus cause
+    /// gone the backdrop can share the real storage: it draws the page as it is,
+    /// and the page's state simply stays alive.
     ///
     /// Mouse is isolated separately by the dimmed backdrop dropping the page's
     /// hit-test regions. Lifecycle and preferences stay shared (keyed by identity,
     /// unaffected by the backdrop, and must not double-fire / be lost).
     func isolatedForBackground() -> Self {
         var copy = self
-        copy.environment.focusManager = FocusManager()
+        let backdropFocus = FocusManager()
+        backdropFocus.suppressesAutoFocus = true
+        copy.environment.focusManager = backdropFocus
         copy.environment.keyEventDispatcher = KeyEventDispatcher()
-        copy.environment.stateStorage = StateStorage()
         return copy
     }
 }
