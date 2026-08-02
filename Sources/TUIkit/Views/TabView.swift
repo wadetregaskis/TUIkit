@@ -650,11 +650,8 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         surface: Color, activeBg: Color, palette: any Palette,
         width: Int, alignment: HorizontalAlignment
     ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)]) {
-        let activeFg = isFocused
-            ? palette.accent.resolve(with: palette)
-            : Self.contrastingForeground(for: surface, palette: palette)
-        let inactiveFg = palette.foregroundSecondary
-        let inactiveBg = palette.background.resolve(with: palette)
+        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
+            surface: surface, isFocused: isFocused, palette: palette)
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
 
@@ -736,11 +733,8 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let alignment = context.environment.tabViewHeaderAlignment
         let activeBg = activeChipBackground(
             surface: surface, palette: palette, isFocused: isFocused, context: context)
-        let activeFg = isFocused
-            ? palette.accent.resolve(with: palette)
-            : Self.contrastingForeground(for: surface, palette: palette)
-        let inactiveFg = palette.foregroundSecondary
-        let inactiveBg = palette.background.resolve(with: palette)
+        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
+            surface: surface, isFocused: isFocused, palette: palette)
 
         // Size to the widest tab; the strip wraps per the header-wrap mode.
         let avail = max(1, context.availableWidth - 2)
@@ -839,9 +833,23 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
         // Content rows, centred within the interior as one block (a uniform
         // offset, so internal column alignment is preserved), then the bottom.
+        //
+        // The rows the content may occupy once the strip and borders take
+        // theirs. The panel is hard-capped to `availableHeight` (the clamp at
+        // the end), so any content beyond this budget could only survive by
+        // displacing the bottom border — GitHub issue #13's missing `╰─╯`, with
+        // stray interior rows where it should have been. Two ways past the
+        // budget, both capped here: a height-flexible tab (a ScrollView, a
+        // Spacer) measures its NATURAL height against the full available
+        // height, chrome not yet subtracted, so `tallestContentHeight` padded
+        // the panel one strip past what fits; and a tab genuinely taller than
+        // the terminal. Either way the content clips INSIDE the border, like
+        // any other bordered container.
         let contentPad = max(0, (interior - content.width) / 2)
         let contentStartY = lines.count
-        for line in content.lines {
+        let (visibleContent, panelContentHeight) = borderedPanelContent(
+            content: content, insets: insets, avail: avail, chrome: chrome, context: context)
+        for line in visibleContent.lines {
             let used = line.strippedLength
             lines.append(
                 bc("│") + surf(contentPad) + line + surf(max(0, interior - contentPad - used)) + bc("│"))
@@ -849,7 +857,6 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         // Size the box to the TALLEST tab so switching tabs doesn't change the
         // box height: pad the (selected) content down to that height with
         // surface-filled interior rows before the bottom border.
-        let panelContentHeight = tallestContentHeight(insets: insets, available: avail, context: context)
         while lines.count - contentStartY < panelContentHeight {
             lines.append(bc("│") + surf(interior) + bc("│"))
         }
@@ -859,14 +866,46 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         // Re-attach the content's interactive regions/overlays (slider, toggle, …):
         // the content rows above were rebuilt as fresh strings, so the content
         // buffer's hit regions are not carried automatically. Shift them past the
-        // left border + centring pad and down past the tab-strip rows.
+        // left border + centring pad and down past the tab-strip rows. From the
+        // budget-clipped content, so nothing hit-tests against rows not drawn.
         let contentShiftX = 1 + contentPad
         buffer.hitTestRegions.append(
-            contentsOf: content.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
+            contentsOf: visibleContent.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
         buffer.overlays.append(
-            contentsOf: content.shiftedOverlays(byX: contentShiftX, y: contentStartY))
+            contentsOf: visibleContent.shiftedOverlays(byX: contentShiftX, y: contentStartY))
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// The strip's label colours — active foreground (the accent when the strip
+    /// is focused, a surface-contrasting tone otherwise) plus the inactive
+    /// chips' foreground and background. Shared by both strip styles.
+    private func stripLabelColors(
+        surface: Color, isFocused: Bool, palette: any Palette
+    ) -> (activeFg: Color, inactiveFg: Color, inactiveBg: Color) {
+        (
+            isFocused
+                ? palette.accent.resolve(with: palette)
+                : Self.contrastingForeground(for: surface, palette: palette),
+            palette.foregroundSecondary,
+            palette.background.resolve(with: palette)
+        )
+    }
+
+    /// The budget-clipped content rows and the interior height the panel pads
+    /// to — both capped to what fits below the strip, so the bottom border
+    /// always survives (GitHub issue #13; see the call site's rationale).
+    private func borderedPanelContent(
+        content: FrameBuffer, insets: EdgeInsets, avail: Int, chrome: Int, context: RenderContext
+    ) -> (visible: FrameBuffer, panelHeight: Int) {
+        let budget = max(0, context.availableHeight - chrome)
+        let visible =
+            content.height > budget
+            ? content.clamped(toWidth: content.width, height: budget)
+            : content
+        let panelHeight = min(
+            tallestContentHeight(insets: insets, available: avail, context: context), budget)
+        return (visible, panelHeight)
     }
 
     /// The glyph for a tab-strip top wall: rounded corners at the strip ends and
