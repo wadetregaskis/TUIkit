@@ -1201,6 +1201,15 @@ where Value.ID: Hashable {
             commandKey: context.environment.commandKey)
         // `.cursor` feedback needs a session to float the row above the frame.
         handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
+        // Captured so a cancel can take the floating preview down itself, and so
+        // the mid-drag navigators reach the view under the POINTER rather than
+        // falling back to this one.
+        handler.dragSession = context.environment.dragAndDropSession
+        // The nested-scroll grace period. `.scrollChainingDelay(_:)` documents
+        // itself as reaching "List, Table, ScrollView, both axes" — without this
+        // a single-line Table was the one scroller in that list that kept the
+        // 500 ms default no matter what the app asked for.
+        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // Table configures its handler from TWO independent places — here for
         // single-line rows, and inline in `buildMultiLineContent` for multi-line
         // ones. Anything captured in only one of them is silently dead on the
