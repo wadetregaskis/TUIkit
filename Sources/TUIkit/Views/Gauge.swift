@@ -353,23 +353,38 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             colorAt["\(cell.r),\(cell.c)"] = isOn[index] ? accent : dim
         }
 
-        // The value is right-aligned within the middle row's interior.
-        let stripped = valueText.stripped
-        let leftPad = max(0, inner - valueText.strippedLength)
-        for (offset, char) in stripped.enumerated() where 1 + leftPad + offset <= inner {
-            glyphs[1][1 + leftPad + offset] = char
-        }
-
         var lines: [String] = []
         for row in 0..<3 {
+            // The middle row is assembled by CELLS, not grid columns. The glyph
+            // grid holds one Character per column, and the ring's own glyphs
+            // are all one cell wide — but the VALUE is arbitrary text, and a
+            // wide character (CJK, emoji, a fun unit) in it occupies two cells
+            // in one column, shoving the right wall out of the ring. `inner`
+            // and `leftPad` are already cell counts (`strippedLength` sums
+            // terminal widths), so composing wall + pad + value + wall directly
+            // keeps all three rows the same visible width.
+            if row == 1 {
+                let stripped = valueText.stripped
+                let leftPad = max(0, inner - valueText.strippedLength)
+                let wall = { (col: Int) -> String in
+                    let ch = String(glyphs[1][col])
+                    guard let color = colorAt["1,\(col)"] else { return ch }
+                    return ANSIRenderer.colorize(ch, foreground: color)
+                }
+                let value =
+                    stripped.isEmpty
+                    ? "" : ANSIRenderer.colorize(stripped, foreground: palette.foreground)
+                lines.append(
+                    wall(0) + String(repeating: " ", count: leftPad) + value + wall(inner + 1))
+                continue
+            }
             var line = ""
             for col in 0...(inner + 1) {
                 let ch = String(glyphs[row][col])
                 if let color = colorAt["\(row),\(col)"] {
                     line += ANSIRenderer.colorize(ch, foreground: color)
                 } else {
-                    // Interior: the value text (or a blank).
-                    line += ch == " " ? " " : ANSIRenderer.colorize(ch, foreground: palette.foreground)
+                    line += ch
                 }
             }
             lines.append(line)

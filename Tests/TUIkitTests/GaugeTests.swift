@@ -109,6 +109,26 @@ struct GaugeTests {
         #expect(mid.hasPrefix("│ "), "padding on the left proves right-alignment: '\(mid)'")
     }
 
+    @Test("A wide-character value does not break the ring")
+    func circularDialWideValue() {
+        // The dial's glyph grid holds one Character per column, but a CJK or
+        // emoji character in the VALUE is two cells wide: deposited per-column
+        // it shoved the middle row's right wall a cell past the ring, so the
+        // three rows no longer aligned. Cells, not characters.
+        let buffer = renderToBuffer(
+            Gauge(value: 0.5) { EmptyView() } currentValueLabel: { Text("五〇%") }
+                .gaugeStyle(.accessoryCircular),
+            context: makeRenderContext(width: 30, height: 6))
+        let rows = buffer.lines.map(\.stripped).filter { !$0.isEmpty }
+        #expect(rows.count >= 3, "the three ring rows render: \(rows)")
+        let widths = rows.prefix(3).map(\.strippedLength)
+        #expect(
+            Set(widths).count == 1,
+            "all three ring rows are the same cell width: \(widths) in \(rows)")
+        let mid = rows.first { $0.contains("五〇%") } ?? ""
+        #expect(mid.hasSuffix("五〇%│"), "the value sits flush against the right wall: '\(mid)'")
+    }
+
     @Test("The accessory-circular-tiny style keeps the single pie glyph")
     func accessoryCircularTinyDial() {
         let buffer = renderToBuffer(
