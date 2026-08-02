@@ -960,6 +960,27 @@ This is why `.contextMenu`'s Shift+F10 route appeared dead: the binding was
 correct, but `parseExtendedKey` stopped at 24, so `ESC[32~` decoded to nothing
 and never became an event at all.
 
+## Mouse button codes: bit 7 means two different things
+
+The SGR button code packs modifiers and group bits around a two-bit button
+number, and **bit 7 (`+128`) is overloaded**:
+
+| Code | With bit 6 (wheel) set | Without it |
+|---|---|---|
+| `+128` | horizontal wheel — the form some terminals use instead of buttons 66/67 | xterm's extended button **group 8–11** |
+
+Both forms are real and both are in the wild, so the reading depends on the
+wheel bit. Buttons 8–11 are a five-button mouse's back/forward pair plus two
+more with no agreed meaning; they are numbered in the *same low two bits* that
+mean left/middle/right, so a decoder that ignores bit 7 outside the wheel group
+turns a press of "back" into a left click wherever the pointer happens to be.
+TUIkit has no notion of those buttons and declines the report
+(`MouseEvent.decodeSGRButton`); the horizontal-wheel reading is unaffected.
+
+Not measured per terminal — this follows xterm's `ctlseqs` definition rather
+than an observation, and no terminal surveyed here was seen to send 8–11 during
+the probes (no five-button mouse was attached).
+
 ## Where the adaptations live
 
 - `TerminalHost` — `TERM_PROGRAM` detection (`Apple_Terminal`,

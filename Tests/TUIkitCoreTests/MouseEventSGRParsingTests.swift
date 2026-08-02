@@ -151,6 +151,42 @@ struct MouseEventSGRParsingTests {
         #expect(event?.y == y)
     }
 
+    /// xterm's extended buttons 8–11 — the back/forward pair a five-button
+    /// mouse sends, plus two nobody agrees on — are reported with bit 7 set
+    /// and numbered in the SAME low two bits that mean left/middle/right, so
+    /// taking the code at face value turned "back" into a left click on
+    /// whatever the cursor was over. TUIkit has no notion of these buttons, so
+    /// the report is declined rather than mistaken for one it does have.
+    ///
+    /// Bit 7 still means "horizontal" INSIDE the wheel group (some terminals
+    /// encode it that way), which is why the guard sits after the wheel test.
+    @Test(
+        "xterm extended buttons 8–11 are declined, not read as left/middle/right",
+        arguments: [
+            "128",  // button 8 (back)
+            "129",  // button 9 (forward)
+            "130",
+            "131",
+            "160",  // motion with button 8 held (128 + 32)
+        ])
+    func declinesExtendedButtons(_ code: String) {
+        let bytes = Array("\u{1B}[<\(code);5;3M".utf8)
+        #expect(
+            MouseEvent.parseSGR(bytes) == nil,
+            "\(code) names a button TUIkit does not have — it must not read as a click")
+    }
+
+    /// The control case: bit 7 WITH the wheel bit is a horizontal wheel and
+    /// must still decode, so the guard above cannot be a blanket "reject 128".
+    @Test(
+        "Bit 7 inside the wheel group is still the horizontal wheel",
+        arguments: [("192", MouseButton.scrollLeft), ("193", .scrollRight)])
+    func horizontalWheelStillDecodes(_ code: String, _ button: MouseButton) {
+        let event = MouseEvent.parseSGR(Array("\u{1B}[<\(code);5;3M".utf8))
+        #expect(event?.button == button)
+        #expect(event?.phase == .scrolled)
+    }
+
     /// Too-short or wrong-header legacy byte runs are rejected.
     @Test(
         "Malformed legacy bytes are rejected",

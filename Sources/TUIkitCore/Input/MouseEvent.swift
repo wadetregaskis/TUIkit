@@ -244,15 +244,24 @@ extension MouseEvent {
     ) -> (MouseButton, MousePhase)? {
         let isMotion = (buttonCode & 32) != 0
         let isWheel = (buttonCode & 64) != 0
-        let horizontalWheel = (buttonCode & 128) != 0  // some terms use bit 7
+        let extendedGroup = (buttonCode & 128) != 0
         let buttonNumber = buttonCode & 3
 
         if isWheel {
+            // Within the wheel group, bit 7 is the horizontal form some
+            // terminals use.
             return (decodeSGRWheel(
                 buttonNumber: buttonNumber,
-                horizontal: horizontalWheel
+                horizontal: extendedGroup
             ), .scrolled)
         }
+        // Outside it, bit 7 names one of xterm's extended buttons 8–11 — the
+        // back/forward pair a five-button mouse sends, and two more nobody
+        // agrees on. TUIkit has no notion of them, and the low two bits they
+        // are numbered in are the same ones that mean left/middle/right, so
+        // decoding the code at face value turned a press of "back" into a
+        // click on whatever the cursor was over.
+        guard !extendedGroup else { return nil }
         if isMotion {
             let button = decodeSGRMotionButton(buttonNumber: buttonNumber)
             return (button, button == .none ? .moved : .dragged)
