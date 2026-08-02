@@ -1,0 +1,172 @@
+//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  URLImageDownloadTests.swift
+//
+//  Created by LAYERED.work
+//  License: MIT
+
+import Foundation
+import Testing
+
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#endif
+
+@testable import TUIkitImage
+
+// MARK: - Tarpit
+
+/// A TCP listener that never answers.
+///
+/// It binds and listens but never calls `accept`, so the kernel completes the
+/// handshake into the backlog: a client connects, sends its request, and then
+/// waits — for the full request timeout, if nothing cancels it. That is the
+/// shape of a slow image server, reproduced locally with no network access and
+/// no dependence on any external host.
+private final class Tarpit {
+    let port: UInt16
+    private let listener: Int32
+
+    init() throws {
+        #if canImport(Darwin)
+            let streamType = SOCK_STREAM
+        #else
+            let streamType = Int32(SOCK_STREAM.rawValue)
+        #endif
+        let fd = socket(AF_INET, streamType, 0)
+        guard fd >= 0 else { throw TarpitError.failed("socket") }
+
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0  // any free port
+        address.sin_addr.s_addr = UInt32(0x7F00_0001).bigEndian  // 127.0.0.1
+        #if canImport(Darwin)
+            address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        #endif
+
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0, listen(fd, 8) == 0 else {
+            close(fd)
+            throw TarpitError.failed("bind/listen")
+        }
+
+        var assigned = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &assigned) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &length)
+            }
+        }
+        guard named == 0 else {
+            close(fd)
+            throw TarpitError.failed("getsockname")
+        }
+
+        listener = fd
+        port = UInt16(bigEndian: assigned.sin_port)
+    }
+
+    var urlString: String { "http://127.0.0.1:\(port)/tarpit.png" }
+
+    deinit { close(listener) }
+
+    enum TarpitError: Error { case failed(String) }
+}
+
+// MARK: - Tests
+
+/// A URL image load must suspend, not block, and must honour cancellation.
+///
+/// The download used to be a `DispatchSemaphore` around `URLSession`'s
+/// callback. That parked the calling thread for the whole transfer — and the
+/// caller is `_ImageCore`'s load task, running on the cooperative pool, which
+/// has one thread per core. Two slow images on a small machine and no other
+/// async work could run at all. Cancellation was equally impossible: a blocked
+/// thread cannot notice that its task was cancelled, so leaving the page did
+/// not release anything until the request timed out on its own.
+@Suite("URL image download")
+struct URLImageDownloadTests {
+
+    /// Cancelling the task must abandon the download promptly. The timeout is
+    /// 30 s and the tarpit never replies, so pre-fix this could only finish by
+    /// waiting all of it out; a second is generous for "promptly" while still
+    /// being an order of magnitude short of the timeout.
+    @Test("Cancellation abandons an in-flight download")
+    func cancellationAbandonsDownload() async throws {
+        let tarpit = try Tarpit()
+        let loader = PlatformImageLoader()
+        let url = tarpit.urlString
+
+        let task = Task<Bool, Never> {
+            do {
+                _ = try await loader.loadImage(fromURL: url, timeout: 30)
+                return false  // the tarpit cannot serve an image
+            } catch is CancellationError {
+                return true
+            } catch {
+                // A cancelled transfer may also surface as URLError.cancelled
+                // if the check races; either way the load gave up early, which
+                // is what this test is about.
+                return Task.isCancelled
+            }
+        }
+
+        // Let the task start and its request reach the tarpit, so what is
+        // cancelled is a transfer in flight rather than a task not yet begun.
+        try await Task.sleep(for: .milliseconds(250))
+        let clock = ContinuousClock()
+        let begin = clock.now
+        task.cancel()
+        let cancelled = await task.value
+        let elapsed = clock.now - begin
+
+        #expect(cancelled, "a cancelled download reports cancellation, not a network failure")
+        #expect(
+            elapsed < .seconds(1),
+            "cancelling must abandon the transfer, not wait out the 30 s timeout (took \(elapsed))")
+    }
+
+    /// The load must not occupy the thread it is called on. Ten concurrent
+    /// downloads against a tarpit, on a pool with far fewer threads than that,
+    /// still leave room for other work to run to completion.
+    @Test("A slow download does not block the cooperative pool")
+    func slowDownloadDoesNotBlockThePool() async throws {
+        let tarpit = try Tarpit()
+        let loader = PlatformImageLoader()
+        let url = tarpit.urlString
+
+        let downloads = (0..<10).map { _ in
+            Task { try? await loader.loadImage(fromURL: url, timeout: 30) }
+        }
+        defer { for download in downloads { download.cancel() } }
+
+        // Unrelated async work, started after the downloads and expected to
+        // finish while they are all still in flight.
+        let counter = Task { () -> Int in
+            var total = 0
+            for _ in 0..<100 {
+                await Task.yield()
+                total += 1
+            }
+            return total
+        }
+
+        let clock = ContinuousClock()
+        let begin = clock.now
+        let total = await counter.value
+        let elapsed = clock.now - begin
+
+        #expect(total == 100)
+        #expect(
+            elapsed < .seconds(5),
+            "ten stalled downloads must not starve the pool (took \(elapsed))")
+    }
+}

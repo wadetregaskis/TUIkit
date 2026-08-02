@@ -293,8 +293,10 @@ extension _ImageCore {
                 // payload from a pool thread raced those reads (a torn read of
                 // the CoW pixel array is heap corruption, not a glitch). This
                 // is the one place the framework itself wrote @State off-main.
-                let phase = await Self.loadPhase(
-                    source: src, maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
+                guard
+                    let phase = await Self.loadPhase(
+                        source: src, maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
+                else { return }
                 await MainActor.run {
                     phaseBox.value = phase
                 }
@@ -309,15 +311,19 @@ extension _ImageCore {
         }
     }
 
-    /// Loads and decodes the image, returning the phase to publish. Decoding
-    /// is CPU-bound (and the URL path can block on the network), so
-    /// `@concurrent` keeps it off the main actor's executor no matter what
-    /// context awaits it — the caller then publishes the result on the main
-    /// actor, where every other `@State` write happens.
+    /// Loads and decodes the image, returning the phase to publish — or `nil`
+    /// if the load was cancelled, which is not a phase: the view has left the
+    /// tree (or its source changed), and a replacement task may already be
+    /// running, so publishing anything here would either paint an error into a
+    /// view nobody asked about any more or clobber the new load's result.
+    ///
+    /// Decoding is CPU-bound, so `@concurrent` keeps it off the main actor's
+    /// executor no matter what context awaits it — the caller then publishes
+    /// the result on the main actor, where every other `@State` write happens.
     @concurrent
     private static func loadPhase(
         source: ImageSource, maxPixelCount: Int?, urlTimeout: Double
-    ) async -> ImageLoadingPhase {
+    ) async -> ImageLoadingPhase? {
         let loader = PlatformImageLoader()
         do {
             let rawImage: RGBAImage
@@ -325,8 +331,8 @@ extension _ImageCore {
             case .file(let path):
                 rawImage = try loader.loadImage(from: path, maxPixelCount: maxPixelCount)
             case .url(let urlString):
-                rawImage = try loader.loadImage(
-                    from: urlString,
+                rawImage = try await loader.loadImage(
+                    fromURL: urlString,
                     cache: .shared,
                     timeout: urlTimeout,
                     maxPixelCount: maxPixelCount
@@ -334,6 +340,8 @@ extension _ImageCore {
             }
             // Store the raw image; conversion happens per render pass.
             return .success(rawImage)
+        } catch is CancellationError {
+            return nil
         } catch let loadError as ImageLoadError {
             return .failure(loadError.description)
         } catch {

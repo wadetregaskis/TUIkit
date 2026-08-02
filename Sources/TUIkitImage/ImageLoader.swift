@@ -374,8 +374,20 @@ extension PlatformImageLoader {
 
     /// Loads an image from a URL, using the session cache.
     ///
-    /// On first access the image is downloaded synchronously and cached.
-    /// Subsequent calls for the same URL return the cached copy.
+    /// On first access the image is downloaded and cached; subsequent calls
+    /// for the same URL return the cached copy.
+    ///
+    /// The download *suspends* — it never blocks the calling thread — and it
+    /// honours cancellation: cancelling the enclosing task cancels the
+    /// transfer and throws `CancellationError` promptly, rather than leaving
+    /// the caller waiting out `timeout`.
+    ///
+    /// The label is `fromURL:` rather than `from:` because the two arguments
+    /// this takes in practice — `(String, maxPixelCount:)` — are otherwise
+    /// indistinguishable from the file-path overload's, `cache` and `timeout`
+    /// both having defaults. Overload resolution silently preferred whichever
+    /// was the better match in context, which for a *path* in an `async`
+    /// function meant downloading it.
     ///
     /// - Parameters:
     ///   - urlString: The URL to download.
@@ -383,13 +395,14 @@ extension PlatformImageLoader {
     ///   - timeout: The download timeout in seconds (default: 30).
     ///   - maxPixelCount: The maximum allowed total pixel count, or `nil` for no limit.
     /// - Returns: The decoded image.
-    /// - Throws: `ImageLoadError` on network or decoding failure, or if image exceeds size limit.
+    /// - Throws: `CancellationError` if the task was cancelled; `ImageLoadError`
+    ///   on network or decoding failure, or if the image exceeds the size limit.
     public func loadImage(
-        from urlString: String,
+        fromURL urlString: String,
         cache: URLImageCache = .shared,
         timeout: TimeInterval = 30,
         maxPixelCount: Int? = nil
-    ) throws -> RGBAImage {
+    ) async throws -> RGBAImage {
         if let cached = cache.get(urlString) {
             return cached
         }
@@ -398,38 +411,95 @@ extension PlatformImageLoader {
             throw ImageLoadError.downloadFailed("Invalid URL: \(urlString)")
         }
 
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+
         let data: Data
         do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = timeout
-
-            nonisolated(unsafe) var responseData: Data?
-            nonisolated(unsafe) var responseError: Error?
-            let semaphore = DispatchSemaphore(value: 0)
-
-            let task = URLSession.shared.dataTask(with: request) { d, _, error in
-                responseData = d
-                responseError = error
-                semaphore.signal()
-            }
-            task.resume()
-            semaphore.wait()
-
-            if let error = responseError {
-                throw error
-            }
-            guard let downloaded = responseData else {
-                throw ImageLoadError.downloadFailed("No data received")
-            }
-            data = downloaded
+            data = try await Self.download(request)
         } catch let error as ImageLoadError {
             throw error
         } catch {
+            // A cancelled transfer surfaces as `URLError.cancelled`; report it
+            // as what it is so callers can tell "gave up on purpose" from
+            // "the network failed" and skip publishing a stale failure.
+            if Task.isCancelled { throw CancellationError() }
             throw ImageLoadError.downloadFailed(error.localizedDescription)
         }
 
         let image = try loadImage(from: data, maxPixelCount: maxPixelCount)
         cache.set(urlString, image: image)
         return image
+    }
+
+    /// Runs one request to completion, bridging `URLSession`'s callback API to
+    /// `async` — and structured cancellation to `URLSessionTask.cancel()`.
+    ///
+    /// The obvious spelling of this is a `DispatchSemaphore` around the
+    /// callback, which is what this used to be. That parks a whole thread for
+    /// the duration of the transfer, and the caller is on the cooperative
+    /// pool, which has one thread per core: two slow images on a two-core
+    /// machine and *nothing else* async makes progress until they finish or
+    /// time out. Cancellation could not help, because a blocked thread cannot
+    /// notice it.
+    private static func download(_ request: URLRequest) async throws -> Data {
+        let handle = URLTaskHandle()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let task = URLSession.shared.dataTask(with: request) { data, _, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let data {
+                        continuation.resume(returning: data)
+                    } else {
+                        continuation.resume(
+                            throwing: ImageLoadError.downloadFailed("No data received"))
+                    }
+                }
+                handle.adopt(task)
+            }
+        } onCancel: {
+            handle.cancel()
+        }
+    }
+}
+
+// MARK: - Cancellation Bridge
+
+/// Carries a `URLSessionDataTask` from the body of a
+/// `withTaskCancellationHandler` to its cancellation handler.
+///
+/// The handler can run at any time, including *before* the body has created
+/// the task (cancellation that lands in that window would otherwise be lost,
+/// leaving the continuation to wait out the request's full timeout). Ordering
+/// is therefore settled under the lock: whichever arrives second acts.
+private final class URLTaskHandle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var isCancelled = false
+
+    /// Takes ownership of the task and starts it.
+    func adopt(_ task: URLSessionDataTask) {
+        lock.lock()
+        let cancelledFirst = isCancelled
+        if !cancelledFirst { self.task = task }
+        lock.unlock()
+
+        // Resume unconditionally, even when already cancelled: only a task
+        // that has been started is guaranteed to deliver its completion
+        // handler, and that handler is what resumes the continuation.
+        task.resume()
+        if cancelledFirst { task.cancel() }
+    }
+
+    func cancel() {
+        lock.lock()
+        let started = task
+        isCancelled = true
+        task = nil
+        lock.unlock()
+
+        started?.cancel()
     }
 }
