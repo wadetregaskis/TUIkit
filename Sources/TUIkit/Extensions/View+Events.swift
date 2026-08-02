@@ -389,6 +389,13 @@ extension View {
     ///
     /// The task is automatically cancelled when the view disappears.
     ///
+    /// The action runs on the **main actor**, as SwiftUI's does — its closure
+    /// is written inside a view body and inherits that isolation — so reading
+    /// and writing `@State` in it is safe. Work that must not occupy the main
+    /// actor suspends off it explicitly, exactly as in SwiftUI: `await`
+    /// something `@concurrent` (or an actor's method) and publish the result
+    /// on return.
+    ///
     /// # Example
     ///
     /// ```swift
@@ -408,7 +415,7 @@ extension View {
     /// - Returns: A view that starts the task on appearance.
     public func task(
         priority: TaskPriority = .userInitiated,
-        _ action: @escaping @Sendable () async -> Void
+        _ action: @escaping @MainActor @Sendable () async -> Void
     ) -> some View {
         TaskModifier(
             content: self,
@@ -444,7 +451,7 @@ extension View {
     public func task<ID: Equatable>(
         id value: ID,
         priority: TaskPriority = .userInitiated,
-        _ action: @escaping @Sendable () async -> Void
+        _ action: @escaping @MainActor @Sendable () async -> Void
     ) -> some View {
         TaskModifier(
             content: self,

@@ -212,6 +212,28 @@ struct LifecycleManagerTaskTests {
         #expect(executed == true)
     }
 
+    /// SwiftUI parity, and the reason it matters: a `.task` closure is written
+    /// inside a view body, so `results = await search(query)` — the example
+    /// this framework's own documentation gives — writes `@State`. Run
+    /// nonisolated (the old behaviour) that is an off-main write racing the
+    /// render loop's per-frame reads of the same box, on a plain stored
+    /// property of an `@unchecked Sendable` class. Isolation is asserted from
+    /// INSIDE the closure, which is the only place the question is settled.
+    @Test("A task body runs on the main actor, as SwiftUI's does")
+    func taskBodyIsMainActorIsolated() async throws {
+        let manager = LifecycleManager()
+        final class Box: @unchecked Sendable { var onMain = false; var ran = false }
+        let box = Box()
+        manager.startTask(token: "isolation", priority: .medium) {
+            MainActor.assertIsolated("a .task body must be main-actor isolated")
+            box.onMain = true
+            box.ran = true
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(box.ran, "the task ran at all")
+        #expect(box.onMain, "and it ran on the main actor")
+    }
+
     @Test("cancelTask sets cancellation flag")
     func cancelTask() async throws {
         let manager = LifecycleManager()

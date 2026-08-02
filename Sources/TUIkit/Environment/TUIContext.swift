@@ -172,7 +172,7 @@ extension LifecycleManager {
     func startTask(
         token: String,
         priority: TaskPriority,
-        operation: @escaping @Sendable () async -> Void
+        operation: @escaping @MainActor @Sendable () async -> Void
     ) {
         lock.lock()
         defer { lock.unlock() }
@@ -180,7 +180,15 @@ extension LifecycleManager {
         // observe their effects and no disappear pass to cancel them.
         guard firesEffects else { return }
         tasks[token]?.cancel()
-        tasks[token] = Task(priority: priority) {
+        // MAIN-ACTOR isolated, as SwiftUI's `.task` is: its closure is written
+        // inside a `@MainActor` view body and inherits that isolation, so
+        // `results = await search(query)` — the example this framework's own
+        // documentation gives — is safe there. Running it nonisolated (the old
+        // behaviour) made that same line an off-main `@State` write racing the
+        // render loop's reads. Work that must not occupy the main actor
+        // suspends off it explicitly, exactly as in SwiftUI: `await` something
+        // `@concurrent`, as `_ImageCore`'s decode does.
+        tasks[token] = Task(priority: priority) { @MainActor in
             await operation()
         }
     }
