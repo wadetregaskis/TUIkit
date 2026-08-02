@@ -203,13 +203,19 @@ extension EquatableView: Layoutable {
 // MARK: - Private Helpers
 
 extension EquatableView {
-    /// Marks the content's identity as active in StateStorage for GC.
+    /// Keeps the cached subtree's state alive in StateStorage for GC.
     ///
-    /// When returning a cached buffer, the subtree's views aren't visited.
-    /// Their state identities must still be marked active to prevent
-    /// StateStorage from garbage-collecting them.
+    /// When returning a cached buffer, the subtree's views aren't visited, so
+    /// nothing below marks its own identity this pass. Marking only the
+    /// wrapper's identity covered a direct child (which can share it) but not
+    /// anything deeper — a `@State` two levels down was pruned on the first
+    /// hit frame and silently reset to its default the next time the subtree
+    /// actually re-rendered. `retainSubtree` protects every identity below,
+    /// exactly as the windowing containers do for their off-screen rows.
     fileprivate func markSubtreeActive(context: RenderContext) {
-        context.environment.stateStorage!.markActive(context.identity)
+        let storage = context.environment.stateStorage!
+        storage.markActive(context.identity)
+        storage.retainSubtree(context.identity)
     }
 }
 

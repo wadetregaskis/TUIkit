@@ -107,8 +107,13 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
             identity: identity, view: element,
             contextWidth: context.availableWidth, contextHeight: context.availableHeight)
         {
-            // Keep the cached subtree's state identities alive for GC.
+            // Keep the cached subtree's state alive for GC — the WHOLE
+            // subtree, not just this identity: nothing below is visited on a
+            // hit, and a `@State` deeper than a direct child would otherwise
+            // be pruned this pass and reset on the next real render (see
+            // `EquatableView.markSubtreeActive`, the same rule).
             context.environment.stateStorage?.markActive(identity)
+            context.environment.stateStorage?.retainSubtree(identity)
             return cached
         }
         // Render the content under a volatile-read tracker (reusing an
