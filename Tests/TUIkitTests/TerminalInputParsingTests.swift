@@ -267,4 +267,53 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(key: .escape)))
         #expect(terminal.readEvent() == .key(KeyEvent(character: "x")))
     }
+
+    /// `ESC ESC` is Option+Escape on a meta-sending terminal, and
+    /// `KeyEvent.parse` has always decoded it as alt+escape — but the byte
+    /// extractor could never hand it both bytes at once, so the live parser
+    /// popped them one at a time and one keystroke backed out of two levels
+    /// of UI.
+    @Test("ESC ESC in one read is alt+escape, not two Escapes")
+    func doubledEscapeIsAltEscape() {
+        let (terminal, stage) = makeTerminal()
+
+        stage([0x1B, 0x1B])
+        #expect(terminal.readEvent() == nil)  // stale frame 1
+        #expect(terminal.readEvent() == nil)  // stale frame 2 → deferred
+        #expect(terminal.hasPendingInput, "the held chord keeps the loop awake")
+
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .escape, alt: true)))
+        #expect(terminal.readEvent() == nil, "and nothing is left over")
+    }
+
+    /// The reason the arm is gated on there being nothing behind it: with an
+    /// inner sequence still in flight, committing the two ESCs would strand
+    /// its tail as literal keystrokes — the `[`-as-a-page-shortcut bug this
+    /// whole file exists for.
+    @Test("ESC ESC with an inner sequence still in flight waits for it")
+    func doubledEscapeWaitsForItsInnerSequence() {
+        let (terminal, stage) = makeTerminal()
+
+        // Option-Shift-Tab is ESC ESC [ Z, split before the terminator.
+        stage([0x1B, 0x1B, 0x5B])
+        for _ in 0..<3 { #expect(terminal.readEvent() == nil) }
+
+        stage([0x5A])  // "Z"
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true, shift: true)))
+    }
+
+    /// And the later split: both ESCs go stale and are deferred, THEN the
+    /// sequence's introducer turns up. The held chord must give way to the
+    /// real sequence rather than emit alt+escape and strand `[Z`.
+    @Test("A deferred ESC ESC gives way when its sequence finally arrives")
+    func deferredDoubledEscapeYieldsToItsSequence() {
+        let (terminal, stage) = makeTerminal()
+
+        stage([0x1B, 0x1B])
+        #expect(terminal.readEvent() == nil)  // stale frame 1
+        #expect(terminal.readEvent() == nil)  // stale frame 2 → deferred
+
+        stage([0x5B, 0x5A])  // "[Z" — the tail, late
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true, shift: true)))
+    }
 }

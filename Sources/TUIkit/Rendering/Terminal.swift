@@ -120,6 +120,11 @@ final class Terminal: TerminalProtocol {
     /// real sequence, no Escape emitted), and otherwise commits the Escape.
     private var pendingBareEsc: Bool = false
 
+    /// The `ESC ESC` twin of ``pendingBareEsc``: both ESCs have left the buffer
+    /// but the alt+escape chord is held one round, in case the second ESC turns
+    /// out to be a split sequence's introducer rather than the Escape key.
+    private var pendingAltEsc: Bool = false
+
     /// The raw byte source feeding the parser. Production reads from stdin;
     /// tests inject a closure to script split reads deterministically, since
     /// the parser is otherwise impossible to drive without a live TTY.
@@ -814,7 +819,7 @@ extension Terminal {
     /// loop. It's `false` the rest of the time, so a genuinely idle screen still
     /// blocks with zero wakeups.
     var hasPendingInput: Bool {
-        !input.isEmpty || pendingBareEsc
+        !input.isEmpty || pendingBareEsc || pendingAltEsc
     }
 
     /// Reads up to one complete event from the input stream.
@@ -843,6 +848,20 @@ extension Terminal {
                 input.insert(0x1B, at: 0)
             } else {
                 return finalize(bytes: [0x1B])
+            }
+        }
+
+        // The same one-round hold for a deferred `ESC ESC`. The ambiguity is
+        // the same shape one level in: the second ESC may be the Escape key
+        // (Option+Escape) or the introducer of a sequence whose tail is still
+        // in flight (`ESC ESC [ Z` is Option-Shift-Tab). Re-attach both when an
+        // introducer turns up; otherwise the chord stands.
+        if pendingAltEsc {
+            pendingAltEsc = false
+            if !input.isEmpty, input[0] == 0x5B || input[0] == 0x4F {
+                input.insert(copying: [0x1B, 0x1B], at: 0)
+            } else {
+                return finalize(bytes: [0x1B, 0x1B])
             }
         }
 
@@ -940,6 +959,40 @@ extension Terminal {
                 if staleFrames >= Self.deadSequenceStaleFrames {
                     staleFrames = 0
                     consume(input.count)
+                }
+                return nil
+            }
+            if input[1] == 0x1B {
+                // ESC ESC — a meta prefix in front of another escape sequence.
+                // With something behind it the inner sequence is simply
+                // incomplete, and the same rule applies as for a bare CSI: keep
+                // waiting, because committing now strands the tail as literal
+                // keystrokes.
+                guard input.count == 2 else {
+                    if staleFrames >= Self.deadSequenceStaleFrames {
+                        staleFrames = 0
+                        consume(input.count)
+                    }
+                    return nil
+                }
+                // With nothing behind it once the wait is up, the inner event
+                // IS the Escape key: Option+Escape on a meta-sending terminal,
+                // which `KeyEvent.parse` decodes as alt+escape. Popping one
+                // byte at a time (the generic stuck-byte arm below) instead
+                // delivered TWO Escapes, so one keystroke backed out of two
+                // levels of UI — and made the parser's alt+escape decoding
+                // unreachable from a live terminal.
+                //
+                // The trade: an Escape pressed twice fast enough that both land
+                // in ONE read now reads as that chord instead. A human's two
+                // presses are milliseconds apart and land in separate reads
+                // unless a slow frame batches them, and the recovery is to
+                // press Escape again — against one keystroke reliably doing
+                // two things.
+                if staleFrames >= Self.bareEscStaleFrames {
+                    staleFrames = 0
+                    consume(2)
+                    pendingAltEsc = true
                 }
                 return nil
             }
