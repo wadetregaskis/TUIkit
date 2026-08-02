@@ -531,6 +531,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// empty list, which clears the previous frame's geometry; the drop
     /// destination then resolves index 0 through its own `?? itemCount`
     /// fallback, with no new arithmetic anywhere.
+    ///
+    /// It registers with the focus system exactly as the populated path does.
+    /// An empty list is still a Tab stop, an enclosing `ScrollView` still has
+    /// to be able to find it to reveal it — and, the case that bites, a list
+    /// the user is *in* when its last row goes away must not take their focus
+    /// with it: registration is per frame, so a frame that skips it drops the
+    /// control out of the ring and leaves focus nowhere.
     private func emptyRenderState(
         source: RowSource<SelectionValue>,
         context: RenderContext,
@@ -551,6 +558,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             contentHeight: targetContentHeight,
             overflowing: false
         )
+        FocusRegistration.register(context: context, handler: handler)
+        let listHasFocus = FocusRegistration.isFocused(
+            context: context, focusID: persistedFocusID)
+        handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
         return PopulatedRenderState(
             handler: handler,
             focusID: persistedFocusID,
