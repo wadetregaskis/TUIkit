@@ -56,12 +56,21 @@ public struct OpenURLAction: Sendable {
     /// (Linux) — whichever exists — passing the URL as a single argument (no
     /// shell, so nothing in the URL is interpreted). A no-op when neither
     /// opener is present.
+    ///
+    /// The child's output goes to `/dev/null`. It inherits this process's
+    /// descriptors otherwise, and stdout/stderr here are the terminal the app
+    /// is drawing on: `xdg-open`'s "no method available for opening" (or
+    /// `open`'s own complaints) would land in the middle of the frame, at
+    /// whatever cursor position the renderer was using, with nothing to
+    /// repaint over it until the next full redraw.
     static func systemOpen(_ url: URL) {
         for opener in ["/usr/bin/open", "/usr/bin/xdg-open"]
         where FileManager.default.fileExists(atPath: opener) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: opener)
             process.arguments = [url.absoluteString]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
             try? process.run()
             return
         }
