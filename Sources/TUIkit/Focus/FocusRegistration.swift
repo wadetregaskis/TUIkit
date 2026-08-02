@@ -95,11 +95,30 @@ struct FocusRegistration {
         // A `.focused($binding, equals:)` modifier forces the child's id via
         // `assignedFocusID`; it ranks below an explicit `.focusID(_:)` but above
         // the auto-generated path id.
-        let defaultID =
-            explicitFocusID ?? context.environment.assignedFocusID
-            ?? "\(defaultPrefix)-\(context.identity.path)"
+        let declared = explicitFocusID ?? context.environment.assignedFocusID
+        let defaultID = declared ?? "\(defaultPrefix)-\(context.identity.path)"
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: propertyIndex)
         let box: StateBox<String> = stateStorage.storage(for: key, default: defaultID)
+
+        // A DECLARED id is the app's answer on every frame, not just the first.
+        // Returning the stored one regardless froze whatever `.focusID(_:)`
+        // happened to say the first time this view rendered: an id computed
+        // from state — `focusID("row-\(selectedID)")` — never changed again, so
+        // `.focused($field, equals:)` and every other by-id lookup went on
+        // addressing a control that no longer answered to that name.
+        //
+        // The box still holds it, for the same reason it always did: nothing
+        // else persists the id, and it must survive a frame where the
+        // declaration is momentarily absent. It is written only on the render
+        // pass, since a write is an invalidation and a measure pass must not
+        // cause one — the returned value is the declaration either way, so
+        // what is measured still matches what is drawn.
+        if let declared {
+            if !context.isMeasuring, box.value != declared {
+                box.value = declared
+            }
+            return declared
+        }
         return box.value
     }
 
