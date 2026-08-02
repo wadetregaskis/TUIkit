@@ -162,6 +162,45 @@ struct ListReorderResumeTests {
         #expect(fixture.rows(fixture.render(showsList: true)) == ["a", "b", "c", "d", "e"])
     }
 
+    /// Leave TWICE. The first departure orphans the press-captured handler and
+    /// the return adopts the reorder onto a replacement; the second departure
+    /// frees that replacement too (the session holds it weakly), so at release
+    /// there is neither a host on screen nor a live orphan. That release still
+    /// has to END the gesture: it used to return `false`, leaving the session's
+    /// drag active — the floating row stayed painted at the last cursor
+    /// position for the rest of the session (nothing ends a drag but a new one)
+    /// — and then fall through to the click path, mutating an off-screen list's
+    /// selection through press-frame geometry.
+    @Test("Releasing after the resumed list is freed ends the drag, not a click")
+    func releaseAfterAdoptedHandlerIsFreed() {
+        let fixture = ReorderPageFixture(feedback: .cursor)
+        let first = fixture.render(showsList: true)
+        fixture.press(first, on: "a")
+        fixture.drag(first, to: "c")
+        #expect(fixture.session?.active != nil, "a `.cursor` drag floats the row")
+
+        // Away, back (adoption), and away again (the adopted handler is freed).
+        fixture.render(showsList: false)
+        fixture.render(showsList: true)
+        fixture.render(showsList: false)
+        let away = fixture.render(showsList: false)
+        #expect(
+            fixture.session?.reorderHandler == nil,
+            "the adopted handler really was freed — the premise of this test")
+
+        fixture.release(away, on: "another")
+        #expect(fixture.moves == 0, "nothing was moved")
+        #expect(
+            fixture.session?.active == nil,
+            "the drag ended: no preview left painted over every later frame")
+
+        // And the gesture is over for good — coming back must not resurrect it.
+        let back = fixture.render(showsList: true)
+        fixture.release(back, on: "c")
+        #expect(fixture.moves == 0)
+        #expect(fixture.rows(fixture.render(showsList: true)) == ["a", "b", "c", "d", "e"])
+    }
+
     @Test("A reorder that never leaves its page still drops where it points")
     func plainReorderIsUnchanged() {
         let fixture = ReorderPageFixture()

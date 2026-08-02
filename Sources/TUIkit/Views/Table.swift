@@ -1923,9 +1923,12 @@ where Value.ID: Hashable {
                     // never moved — the gesture is over, so let go of the edge
                     // auto-scroll. (`end()` below only runs for a real drop.)
                     dragSession?.disarmAutoScroll()
-                    // Escape already put the row back and ended the drag; the
+                    // A cancel already put the rows back and ended the drag; the
                     // release that follows is the tail of a cancelled gesture,
-                    // not a click on whatever is under the pointer.
+                    // not a click on whatever is under the pointer. Session
+                    // first, for the adopted-handler reason the List twin
+                    // documents (`DragAndDropSession.cancelReorder`).
+                    if dragSession?.consumeReorderCancellation() == true { return true }
                     let releasing = dragSession?.reorderHandler ?? captureHandler
                     if releasing.reorderCancelled {
                         releasing.reorderCancelled = false

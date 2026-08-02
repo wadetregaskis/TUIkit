@@ -1647,9 +1647,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // never moved — the gesture is over, so let go of the edge
                     // auto-scroll. (`end()` below only runs for a real drop.)
                     dragSession?.disarmAutoScroll()
-                    // Escape already put the row back and ended the drag; the
+                    // A cancel already put the rows back and ended the drag; the
                     // release that follows is the tail of a cancelled gesture,
-                    // not a click on whatever is under the pointer.
+                    // not a click on whatever is under the pointer. The SESSION
+                    // is asked first: after a page round-trip the handler latch
+                    // sits on the adopted replacement, which the fallback below
+                    // is not (see `DragAndDropSession.cancelReorder`).
+                    if dragSession?.consumeReorderCancellation() == true { return true }
                     let releasing = dragSession?.reorderHandler ?? captureHandler
                     if releasing.reorderCancelled {
                         releasing.reorderCancelled = false

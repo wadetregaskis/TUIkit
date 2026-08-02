@@ -98,6 +98,13 @@ extension DragAndDropSession {
     /// itself.
     @discardableResult
     func performReorderDrop() -> Bool {
+        // Whether a reorder gesture was in flight AT ALL — set at
+        // `beginReorder` and cleared below. Asked before the handler lookups
+        // because the handler can be gone while the gesture is not: the
+        // session holds it weakly, so a control that left the page, came back
+        // (adopting the reorder onto a replacement) and left again takes the
+        // replacement with it. That release still ends the gesture.
+        let wasReordering = reorderFocusID != nil
         defer {
             reorderFocusID = nil
             reorderHandler = nil
@@ -108,8 +115,17 @@ extension DragAndDropSession {
             // a list the user cannot see — and the preview walks back rather
             // than vanishing under the pointer, which is what every other
             // "nothing happened" already does.
-            guard let orphan = reorderHandler, orphan.reorder?.active == true else { return false }
-            orphan.cancelReorder()
+            if let orphan = reorderHandler, orphan.reorder?.active == true {
+                orphan.cancelReorder()
+            }
+            // Even with NO handler left to tell, the gesture is over and the
+            // session's drag has to end: returning `false` here left the
+            // floating preview painted at the last cursor position for the
+            // rest of the session (only a new drag ever replaced it) and let
+            // the release fall through to the click path, which selects
+            // through press-frame geometry belonging to a list that is no
+            // longer on screen.
+            guard wasReordering else { return false }
             cancelReturningToOrigin()
             return true
         }
@@ -132,10 +148,27 @@ extension DragAndDropSession {
         // The button is still down, so a release is still coming: without the
         // latch it falls into the click path and selects whatever row the
         // pointer happens to be over.
+        //
+        // Latched on the SESSION as well as the handler. The handler latch
+        // alone is unreliable the moment a reorder has been adopted after a
+        // page round-trip: it lands on whichever handler the session holds
+        // (the replacement), and the release path — which falls back to the
+        // press-captured handler once the session forgets its own — then
+        // consults an object that was never flagged, so the cancelled gesture
+        // fell through to the click path anyway.
+        reorderCancelledPendingRelease = true
         reorderHandler?.reorderCancelled = true
         reorderFocusID = nil
         reorderHandler = nil
         cancelReturningToOrigin()
+    }
+
+    /// Reads and clears the session's cancel latch — "the release now arriving
+    /// is the tail of a cancelled gesture, not a click". One-shot, like the
+    /// handler-level flag it backstops.
+    func consumeReorderCancellation() -> Bool {
+        defer { reorderCancelledPendingRelease = false }
+        return reorderCancelledPendingRelease
     }
 
     /// The scrollable a navigator pressed mid-drag should move: the innermost

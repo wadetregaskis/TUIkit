@@ -227,6 +227,13 @@ final class DragAndDropSession: @unchecked Sendable {
     /// business extending that.
     weak var reorderHandler: (any RowReorderHosting)?
 
+    /// A reorder was cancelled and its release has not arrived yet, so that
+    /// release must be swallowed rather than treated as a click. Lives on the
+    /// session because the handler-level twin cannot be trusted after an
+    /// adoption — see ``DragAndDropSession/cancelReorder()``. Read (and
+    /// cleared) through ``consumeReorderCancellation()``.
+    var reorderCancelledPendingRelease = false
+
     /// When the cursor first entered an auto-scroll zone's trigger band on the
     /// current run, or `nil` when nothing is engaged — the anchor for the
     /// configurable initial delay before the first scroll tick.
