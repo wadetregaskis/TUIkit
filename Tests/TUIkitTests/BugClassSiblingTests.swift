@@ -220,11 +220,14 @@ struct BugClassSiblingTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 1, y: 0, meta: true))
         #expect(releases.last?.meta == true)
 
-        // …then a STRAY release with no in-flight press: it must arrive bare,
-        // not stamped with the finished click's meta (a phantom modifier-click
-        // would toggle a multi-selection).
+        // …then a STRAY release with no in-flight press. The worry this test
+        // was written for is that it arrives stamped with the finished click's
+        // meta, and a phantom modifier-click toggles a multi-selection. It now
+        // does not arrive at all — a release whose press nothing saw is not a
+        // click on whatever the pointer has since moved over — which settles
+        // the modifier question along with the rest of it.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 1))
-        #expect(releases.last?.meta == false, "stray release stays unmodified")
+        #expect(releases.count == 1, "the stray release reached nobody: \(releases)")
     }
 
     // MARK: - Wide-char clip shortfall

@@ -70,6 +70,10 @@ struct ModalTabViewInteractionTests {
             return
         }
         dispatcher.setRegions(composited.hitTestRegions)
+        // Both halves of the click: a release whose press nothing saw is not
+        // routed (see UnpairedReleaseTests), and the tab header claims the
+        // press precisely so its release comes back to it.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: column, y: row))
         let consumed = dispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: column, y: row))
         #expect(consumed, "the tab-header click lands on a hit region")

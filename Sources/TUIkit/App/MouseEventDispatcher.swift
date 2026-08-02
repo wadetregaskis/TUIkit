@@ -169,6 +169,15 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// is asked by a *different* handler on the release.
     private var pressOpenedPopupMenu = false
 
+    /// Buttons whose press was handed back to live hit-testing rather than
+    /// captured — see ``handOffGesture()``.
+    ///
+    /// These are the only presses whose release legitimately arrives with no
+    /// capture to route it, and the release has somewhere real to go: the menu
+    /// the press opened. Everything else that reaches a release with no capture
+    /// is a release whose press went somewhere this control never heard about.
+    private var handedOffPresses: Set<MouseButton> = []
+
     /// The maximum gap between successive clicks for them to count as one
     /// multi-click sequence (400 ms — a common desktop double-click threshold).
     private static let multiClickWindowNanos: UInt64 = 400_000_000
@@ -376,6 +385,11 @@ extension MouseEventDispatcher {
             // Cleared before the press is routed, so the handler about to
             // consume it can set it (see ``pressOpenedPopup()``).
             pressOpenedPopupMenu = false
+            // A new press supersedes any record of the last one, whose release
+            // evidently never arrived (a lost release, a mouse-mode change
+            // mid-gesture). Otherwise that record would let one later unpaired
+            // release through.
+            handedOffPresses.remove(event.button)
         case .dragged:
             guard let origin = pressOrigin else { return }
             if origin.x != event.x || origin.y != event.y { pointerMovedSincePress = true }
@@ -462,37 +476,11 @@ extension MouseEventDispatcher {
         // Drag capture: when a button is currently held, route every
         // subsequent event for that button to the handler that took
         // the press, regardless of where the cursor sits now.
-        if event.phase == .dragged || event.phase == .released {
-            if let capture = pressedHandlers[event.button] {
-                let localized = localize(event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
-                _ = capture.handler(localized)
-                if event.phase == .released {
-                    pressedHandlers[event.button] = nil
-                }
-                return true
-            }
-            // X10 legacy releases don't identify the button — the parser
-            // defaults them to `.left`. If the press arrived as an SGR
-            // right/middle report but its release fell back to legacy (which
-            // Terminal.app does on some events), the capture for the REAL
-            // button would never clear, routing every later event for that
-            // button to a stale closure from an old frame. When a left
-            // release has no left capture and exactly ONE other capture is in
-            // flight, treat it as that press's release. (A stray left release
-            // while another button is genuinely held is far rarer than the
-            // legacy fallback.)
-            if event.phase == .released, event.button == .left,
-                pressedHandlers.count == 1,
-                let (capturedButton, capture) = pressedHandlers.first
-            {
-                let localized = localize(
-                    event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
-                _ = capture.handler(localized)
-                pressedHandlers[capturedButton] = nil
-                return true
-            }
+        if event.phase == .dragged || event.phase == .released,
+            let settled = routeAgainstItsPress(event)
+        {
+            return settled
         }
-
         // Find the matching regions outside-in (innermost first
         // = last-registered first; the dispatcher's contract is
         // that views register in render order, so the inner-
@@ -517,13 +505,19 @@ extension MouseEventDispatcher {
             if consumed {
                 // A press captures the rest of the gesture — unless the handler
                 // handed it off (``handOffGesture()``), which a menu-opening
-                // press does so the drag and release find the open menu.
-                if event.phase == .pressed, !gestureHandedOff {
-                    pressedHandlers[event.button] = PressCapture(
-                        handler: handler,
-                        regionOffsetX: region.offsetX,
-                        regionOffsetY: region.offsetY
-                    )
+                // press does so the drag and release find the open menu. That
+                // hand-off is recorded, because it is what entitles the release
+                // to be hit-tested live with nothing captured.
+                if event.phase == .pressed {
+                    if gestureHandedOff {
+                        handedOffPresses.insert(event.button)
+                    } else {
+                        pressedHandlers[event.button] = PressCapture(
+                            handler: handler,
+                            regionOffsetX: region.offsetX,
+                            regionOffsetY: region.offsetY
+                        )
+                    }
                 }
                 return true
             }
@@ -539,6 +533,59 @@ extension MouseEventDispatcher {
             }
         }
         return false
+    }
+
+    /// Settles a drag or release against the press that began the gesture.
+    ///
+    /// - Returns: the dispatch result when the press itself decides the
+    ///   event's fate — routed to a live capture, to the legacy-release
+    ///   fallback, or dropped for having no press behind it at all — and `nil`
+    ///   when the event should go on to ordinary live hit-testing.
+    private func routeAgainstItsPress(_ event: MouseEvent) -> Bool? {
+        // When a button is held, every subsequent event for it goes to the
+        // handler that took the press, wherever the cursor sits now.
+        if let capture = pressedHandlers[event.button] {
+            let localized = localize(
+                event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
+            _ = capture.handler(localized)
+            if event.phase == .released {
+                pressedHandlers[event.button] = nil
+            }
+            return true
+        }
+
+        guard event.phase == .released, event.button == .left else { return nil }
+
+        // X10 legacy releases don't identify the button — the parser defaults
+        // them to `.left`. If the press arrived as an SGR right/middle report
+        // but its release fell back to legacy (which Terminal.app does on some
+        // events), the capture for the REAL button would never clear, routing
+        // every later event for that button to a stale closure from an old
+        // frame. When a left release has no left capture and exactly ONE other
+        // capture is in flight, treat it as that press's release. (A stray left
+        // release while another button is genuinely held is far rarer than the
+        // legacy fallback.)
+        if pressedHandlers.count == 1, let (capturedButton, capture) = pressedHandlers.first {
+            let localized = localize(
+                event, byOffsetX: capture.regionOffsetX, offsetY: capture.regionOffsetY)
+            _ = capture.handler(localized)
+            pressedHandlers[capturedButton] = nil
+            return true
+        }
+
+        // Nothing captured: this is a release whose press the frame's controls
+        // never saw — it landed on the page background, or on something that
+        // declined it — and the pointer has since travelled over whatever is
+        // about to be handed a "click" it was never pressed for. Every control
+        // that consumes a left press captures it, so the one legitimate way
+        // here is a press that deliberately handed the gesture back: a
+        // menu-opening press, whose release belongs to the menu now on screen.
+        //
+        // Left only. A right press is meant to bubble undeclined (that is how a
+        // container's `.contextMenu` catches a right-click on a child), so a
+        // right release routinely and correctly arrives with nothing captured —
+        // hence the `.left` guard above.
+        return handedOffPresses.remove(.left) == nil ? false : nil
     }
 
     /// Returns every region containing the given point, ordered

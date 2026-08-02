@@ -225,12 +225,17 @@ struct RenderLoopRegionMergeTests {
 
         dispatcher.setRegions(merged)
 
+        // A click is a press AND a release: a release whose press nothing saw
+        // is deliberately not routed (see UnpairedReleaseTests), so clicking
+        // here means both halves, as a terminal sends them.
+        func click(x: Int, y: Int) {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        }
+
         // Click in the content area — content handler should
         // fire.
-        _ = dispatcher.dispatch(MouseEvent(
-            button: .left, phase: .released,
-            x: 0, y: 5
-        ))
+        click(x: 0, y: 5)
         #expect(contentFired, "Content-area click must fire the content handler")
 
         contentFired = false
@@ -239,10 +244,7 @@ struct RenderLoopRegionMergeTests {
         // on terminal y=0 (header row) arrives as content-area
         // y=-1 (1 minus the 1-row header). The shifted region's
         // offsetY is -appHeaderHeight = -1, so it matches.
-        _ = dispatcher.dispatch(MouseEvent(
-            button: .left, phase: .released,
-            x: 0, y: -appHeaderHeight
-        ))
+        click(x: 0, y: -appHeaderHeight)
         #expect(headerFired, "App-header click must fire the header handler")
         #expect(!contentFired, "App-header click must not leak to the content handler")
 
@@ -250,10 +252,7 @@ struct RenderLoopRegionMergeTests {
         // Click on the status bar — status handler should fire.
         // The status bar sits at content-area y=contentHeight
         // (= 20 in this test) after translation.
-        _ = dispatcher.dispatch(MouseEvent(
-            button: .left, phase: .released,
-            x: 0, y: contentHeight
-        ))
+        click(x: 0, y: contentHeight)
         #expect(statusFired, "Status-bar click must fire the status handler")
         #expect(!headerFired, "Status-bar click must not leak to the header handler")
         #expect(!contentFired, "Status-bar click must not leak to the content handler")
@@ -357,10 +356,13 @@ struct RenderLoopRegionMergeTests {
             return
         }
 
-        _ = dispatcher.dispatch(MouseEvent(
-            button: .left, phase: .released,
-            x: region.offsetX + 1, y: region.offsetY
-        ))
+        // Press and release: an unpaired release is not routed at all.
+        for phase in [MousePhase.pressed, .released] {
+            _ = dispatcher.dispatch(MouseEvent(
+                button: .left, phase: phase,
+                x: region.offsetX + 1, y: region.offsetY
+            ))
+        }
 
         #expect(synthesisedKey?.key == .escape,
                 "Click on the 'back' item must synthesise an ESC KeyEvent through the environment closure")
