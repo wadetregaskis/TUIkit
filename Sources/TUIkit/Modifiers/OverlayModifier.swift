@@ -40,11 +40,22 @@ extension OverlayModifier: Renderable {
         let baseBuffer = TUIkit.renderToBuffer(base, context: context)
         let overlayBuffer = TUIkit.renderToBuffer(overlay, context: context)
 
-        guard !baseBuffer.isEmpty else {
+        // Shortcut a layer with NOTHING in it — but `isEmpty` only inspects
+        // in-flow lines, and a line-empty buffer can still be carrying the
+        // whole point of the view. `OffsetView` documents exactly that output:
+        // no lines, one `OverlayLayer` holding the offset content, plus its hit
+        // regions. Returning the other layer then threw that away — the base
+        // side losing the content AND its interactivity, the overlay side
+        // losing a `.offset()`-positioned badge entirely. Falling through to
+        // `composited(with:at:)` is correct for both: it keeps this buffer's
+        // layers and regions and lifts the other's, shifted into place, and it
+        // already special-cases a line-empty overlay for exactly this reason.
+        if baseBuffer.isEmpty, baseBuffer.overlays.isEmpty, baseBuffer.hitTestRegions.isEmpty {
             return overlayBuffer
         }
-
-        guard !overlayBuffer.isEmpty else {
+        if overlayBuffer.isEmpty, overlayBuffer.overlays.isEmpty,
+            overlayBuffer.hitTestRegions.isEmpty
+        {
             return baseBuffer
         }
 

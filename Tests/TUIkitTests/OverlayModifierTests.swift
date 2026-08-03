@@ -113,4 +113,41 @@ struct OverlayModifierTests {
         let lastLine = buffer.lines[buffer.height - 1].stripped
         #expect(lastLine.hasSuffix("X"))
     }
+
+    // MARK: - A line-empty layer is not an empty layer
+
+    /// `FrameBuffer.isEmpty` only inspects in-flow LINES. `OffsetView`'s
+    /// documented output is a line-empty buffer whose entire payload is an
+    /// `OverlayLayer` — so the empty-buffer shortcut used to return the other
+    /// layer and throw the offset content away.
+    @Test("An offset overlay survives: the layer is not lost to the empty check")
+    func offsetOverlayIsNotDropped() {
+        let view = Text("content").overlay(alignment: .topTrailing) {
+            Text("*").offset(x: 1, y: -1)
+        }
+        let buffer = render(view)
+        #expect(!buffer.overlays.isEmpty, "the offset badge's layer must reach the result")
+        #expect(buffer.lines.first?.stripped.contains("content") == true)
+    }
+
+    /// The base side loses more: the content AND its interactivity.
+    @Test("An offset BASE keeps its content and hit regions under an overlay")
+    func offsetBaseIsNotDropped() {
+        let view = Text("Hi").offset(x: 2).overlay { Text("!") }
+        let buffer = render(view)
+        #expect(!buffer.overlays.isEmpty, "the base's offset layer must survive")
+        #expect(
+            buffer.lines.joined().stripped.contains("!"),
+            "…and the overlay still draws: \(buffer.lines.map(\.stripped))")
+    }
+
+    /// A layer that really is empty — no lines, no layers, no regions — still
+    /// short-circuits, so nothing about the ordinary case changed.
+    @Test("A genuinely empty layer still short-circuits")
+    func trulyEmptyLayerShortCircuits() {
+        let base = render(Text("base").overlay { EmptyView() })
+        #expect(base.lines.first?.stripped == "base")
+        let overlay = render(EmptyView().overlay { Text("over") })
+        #expect(overlay.lines.first?.stripped == "over")
+    }
 }
