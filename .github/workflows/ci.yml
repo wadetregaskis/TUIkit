@@ -25,8 +25,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "macOS"
+          - name: "macOS Sequoia"
             runner: macos-15
+            container: ""
+            install-swiftlint: brew install swiftlint
+          - name: "macOS Tahoe"
+            runner: macos-26
             container: ""
             install-swiftlint: brew install swiftlint
           - name: "Linux"
