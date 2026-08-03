@@ -589,6 +589,24 @@ extension MouseEventDispatcher {
             return true
         }
 
+        // A DRAG with nothing captured is the same broken gesture as an
+        // unpaired release, and was the one the guard below forgot: the press
+        // landed somewhere no control took it (the app header, blank status
+        // bar, a dialog's dimmed backdrop, any page background not wrapped in a
+        // ScrollView), and every `.dragged` since then is being hit-tested live
+        // and handed to whatever the pointer now sits over — a control that
+        // never saw a press. `DialogDrag` is the visible victim: it applies the
+        // motion from a never-begun anchor, so sweeping a held pointer across a
+        // dialog's title row teleports the dialog by the cursor's region-local
+        // coordinate.
+        //
+        // The hand-off is PEEKED, not consumed: a menu-opening press hands the
+        // gesture to the menu, which must still see the drags AND the release
+        // that follows them.
+        if event.phase == .dragged, event.button == .left {
+            return handedOffPresses.contains(.left) ? nil : false
+        }
+
         guard event.phase == .released, event.button == .left else { return nil }
 
         // X10 legacy releases don't identify the button — the parser defaults

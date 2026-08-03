@@ -61,6 +61,83 @@ struct MouseDispatchEdgeTests {
         #expect(hits[1] == (9, 2))
     }
 
+    /// A `.dragged` with nothing captured is the same broken gesture as an
+    /// unpaired release: the press landed where no control took it, and every
+    /// drag since is hit-tested live into whatever the pointer now sits over.
+    /// `DialogDrag` was the visible victim — it applied the motion from a
+    /// never-begun anchor, so sweeping a held pointer across a dialog's title
+    /// row teleported the dialog by the cursor's region-local coordinate.
+    @Test("A drag whose press nothing captured is not delivered")
+    func uncapturedDragIsDropped() {
+        let dispatcher = makeDispatcher()
+        var drags = 0
+        let id = dispatcher.register { event in
+            if event.phase == .dragged { drags += 1 }
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 3, handlerID: id)
+        ])
+        // No press first: the gesture began somewhere with no region.
+        let handled = dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 4, y: 1))
+        #expect(drags == 0, "an uncaptured drag must not reach a control")
+        #expect(handled == false)
+    }
+
+    /// …and the capture path is untouched: a drag that DOES follow its own
+    /// press still reaches the handler that took it.
+    @Test("A drag that follows its press still reaches that handler")
+    func capturedDragStillDelivered() {
+        let dispatcher = makeDispatcher()
+        var drags = 0
+        let id = dispatcher.register { event in
+            if event.phase == .dragged { drags += 1 }
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 3, handlerID: id)
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 4, y: 2))
+        #expect(drags == 1)
+    }
+
+    /// A press that deliberately hands the gesture back — the menu-opening
+    /// press — keeps its drags flowing to whatever is now on screen, and the
+    /// hand-off is PEEKED rather than consumed so the release still lands too.
+    @Test("A handed-off gesture keeps receiving drags and its release")
+    func handedOffGestureKeepsDragging() {
+        let dispatcher = makeDispatcher()
+        var drags = 0
+        var releases = 0
+        // A menu-opening press: consumes, then hands the gesture to the menu
+        // it just put on screen.
+        let opener = dispatcher.register { [dispatcher] _ in
+            dispatcher.handOffGesture()
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 3, handlerID: opener)
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 4, y: 1))
+
+        // The menu that the press opened, registered for the next frame.
+        dispatcher.beginRenderPass()
+        let menu = dispatcher.register { event in
+            if event.phase == .dragged { drags += 1 }
+            if event.phase == .released { releases += 1 }
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 3, width: 10, height: 4, handlerID: menu)
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 4, y: 4))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 4, y: 5))
+        #expect(drags == 1, "the menu tracks the held pointer")
+        #expect(releases == 1, "and still gets the release that chooses a row")
+    }
+
     @Test("Drag capture localizes to the press region, even outside it")
     func dragCaptureAcrossRegions() {
         let dispatcher = makeDispatcher()
