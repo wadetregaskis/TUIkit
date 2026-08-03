@@ -208,4 +208,28 @@ struct StringANSITests {
         }
         #expect(escapes == ["\u{1B}[?25l"], "got \(escapes)")
     }
+
+    // MARK: - Extended colour arguments are not attribute codes
+
+    /// `38`/`48`/`58` INTRODUCE a colour whose components follow as further
+    /// parameters. Walking those through the attribute switch read a colour
+    /// channel as an attribute — a green of 40 "set a background", a blue of 0
+    /// "reset" one — which mis-classified trailing spaces as fill and made a
+    /// drag preview opaquely erase whatever it passed over.
+    ///
+    /// Each line is a styled "AB" plus six pad spaces and a reset, so the
+    /// stripped length is 8 and the number below is how many of those cells
+    /// must actually be painted.
+    @Test(
+        "An extended colour's components are not attribute codes",
+        arguments: [
+            ("\u{1B}[38;2;200;40;90mAB      \u{1B}[0m", 2),  // the green 40 vs `case 40...47`
+            ("\u{1B}[38;5;104mAB      \u{1B}[0m", 2),  // the index 104 vs `case 100...107`
+            ("\u{1B}[48;5;17m\u{1B}[38;2;255;0;0mAB      \u{1B}[0m", 8),  // a 0 channel must not clear
+            ("\u{1B}[48;5;17m\u{1B}[38:5:104mAB      \u{1B}[0m", 8),  // colon form: one parameter
+            ("\u{1B}[48;2;20;20;30mAB      \u{1B}[0m", 8),  // a real background is still fill
+        ])
+    func extendedColourComponentsAreNotAttributes(line: String, painted: Int) {
+        #expect(line.visibleWidthBeforeTrailingBlanks() == painted, "\(line.debugDescription)")
+    }
 }

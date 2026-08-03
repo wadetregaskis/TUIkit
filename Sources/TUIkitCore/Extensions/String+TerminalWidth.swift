@@ -626,22 +626,56 @@ extension String {
     private static func background(after sequence: String, wasSet: Bool) -> Bool {
         var background = wasSet
         let body = sequence.dropFirst(2).dropLast()  // strip "ESC[" and the final "m"
-        var parameters = body.split(separator: ";", omittingEmptySubsequences: false)
-            .map { Int($0) ?? 0 }
-        if parameters.isEmpty { parameters = [0] }  // a bare ESC[m is a reset
+        let parameters = body.split(separator: ";", omittingEmptySubsequences: false)
+        if parameters.isEmpty { return false }  // a bare ESC[m is a reset
         var index = 0
         while index < parameters.count {
-            switch parameters[index] {
+            let parameter = parameters[index]
+            // Only the LEADING sub-parameter names the attribute. In the colon
+            // form (`38:5:104`) the whole colour lives inside one `;` parameter,
+            // so the components never reach this switch at all — and reading the
+            // parameter whole would fail to parse and fall to 0, which is a
+            // RESET. That is how a foreground colour used to clear a background.
+            // An empty parameter is ECMA-48's default of 0.
+            let attribute = parameter.prefix { $0 != ":" }
+            let code = Int(attribute) ?? 0
+            switch code {
             case 0, 49: background = false
-            case 40...47, 100...107: background = true
-            case 48:
-                background = true
-                index = parameters.count  // its own arguments follow; nothing else to read
-            default: break
+            case 40...47, 48, 100...107: background = true
+            default: break  // 38/58 (foreground / underline colour) included
+            }
+            // 38, 48 and 58 INTRODUCE a colour. In the `;` form its components
+            // follow as further parameters — `5;n` or `2;r;g;b` — and walking
+            // those through the switch above reads a colour channel as an
+            // attribute: `ESC[38;2;200;40;90m` "sets" a background on the green
+            // 40, and `ESC[38;2;255;0;0m` clears one on the blue 0. Skip them.
+            // (In the colon form they are already inside `parameter`, so the
+            // `attribute.count == parameter.count` test leaves those alone.)
+            if code == 38 || code == 48 || code == 58, attribute.count == parameter.count {
+                index += extendedColorArgumentCount(after: index, in: parameters)
             }
             index += 1
         }
         return background
+    }
+
+    /// How many parameters after `index` are the arguments of a `;`-form
+    /// extended-colour introducer (38 / 48 / 58).
+    ///
+    /// The selector says how many follow: `5` (indexed) takes one, `2`
+    /// (truecolor) takes three. Anything else — a truncated sequence, or a
+    /// selector this does not know — takes none, so an unparseable tail is
+    /// walked normally rather than swallowing the rest of the sequence.
+    private static func extendedColorArgumentCount(
+        after index: Int, in parameters: [Substring]
+    ) -> Int {
+        let available = parameters.count - index - 1
+        guard available > 0 else { return 0 }
+        switch Int(parameters[index + 1].prefix { $0 != ":" }) ?? -1 {
+        case 5: return Swift.min(2, available)  // selector + one index
+        case 2: return Swift.min(4, available)  // selector + r, g, b
+        default: return 0
+        }
     }
 
     /// The visible width of the string in terminal cells, excluding ANSI escape codes.
