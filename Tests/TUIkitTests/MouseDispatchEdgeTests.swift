@@ -22,7 +22,10 @@ import Testing
 struct MouseDispatchEdgeTests {
     private func makeDispatcher() -> MouseEventDispatcher {
         let dispatcher = MouseEventDispatcher()
-        dispatcher.setActiveSupport(.full)
+        // Frame-final: models the app's steady state, where the terminal's
+        // reporting mode is actually set — the mid-gesture downgrade unwind
+        // keys on frame-final transitions.
+        dispatcher.setActiveSupport(.full, isFrameFinal: true)
         dispatcher.beginRenderPass()
         return dispatcher
     }
@@ -109,8 +112,8 @@ struct MouseDispatchEdgeTests {
 
         // Mid-gesture the effective support drops below clicks (a page with
         // `.mouseSupport(.disabled)` reached by keyboard), then comes back.
-        dispatcher.setActiveSupport(.disabled)
-        dispatcher.setActiveSupport(.full)
+        dispatcher.setActiveSupport(.disabled, isFrameFinal: true)
+        dispatcher.setActiveSupport(.full, isFrameFinal: true)
 
         // Later events for that button must NOT reach the stale capture.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 25, y: 5))
@@ -123,6 +126,68 @@ struct MouseDispatchEdgeTests {
         #expect(phases == [.pressed, .pressed, .released])
     }
 
+    /// The render pass transiently sets the scene BASE mid-frame before the
+    /// per-frame feature requests are collected; the AppRunner then applies
+    /// the frame-final effective. With a click-less base and a dialog
+    /// elevating clicks (DialogDrag requests them every frame), the support
+    /// cycles base → effective every frame — and treating the transient base
+    /// set as a downgrade cancelled the in-flight gesture on every render,
+    /// which a consumed press itself triggers. A dialog could not be dragged.
+    @Test("The mid-frame base set does not cancel the gesture")
+    func midFrameBaseSetKeepsCapture() {
+        let dispatcher = makeDispatcher()
+        var phases: [MousePhase] = []
+        let id = dispatcher.register { event in
+            phases.append(event.phase)
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 2, handlerID: id)
+        ])
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 1))
+
+        // A frame renders: the click-less scene base is set mid-pass, then
+        // the dialog's elevated effective support lands frame-final.
+        dispatcher.setActiveSupport(.scrollOnly)
+        dispatcher.setActiveSupport(.full, isFrameFinal: true)
+
+        // The gesture is still captured: the drag routes to the press handler.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 6, y: 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 6, y: 1))
+        #expect(phases == [.pressed, .dragged, .released], "the transient base set broke the capture: \(phases)")
+    }
+
+    /// …and the real downgrade still unwinds even though the mid-frame base
+    /// set already lowered the filtering floor: the unwind compares
+    /// frame-final against frame-final, not against whatever the filter
+    /// happens to hold.
+    @Test("A frame-final downgrade after a mid-frame lower still unwinds")
+    func frameFinalDowngradeAfterMidFrameLowerUnwinds() {
+        let dispatcher = makeDispatcher()
+        var phases: [MousePhase] = []
+        let id = dispatcher.register { event in
+            phases.append(event.phase)
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 2, handlerID: id)
+        ])
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 1))
+
+        // The dialog closes: this frame's base set lowers the filter, and
+        // the frame-final effective genuinely drops clicks.
+        dispatcher.setActiveSupport(.scrollOnly)
+        dispatcher.setActiveSupport(.scrollOnly, isFrameFinal: true)
+        dispatcher.setActiveSupport(.full, isFrameFinal: true)
+
+        // Dragged OUTSIDE the region: a live capture would still route it to
+        // the press handler; an unwound one leaves nothing to hit.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 25, y: 5))
+        #expect(phases == [.pressed], "the capture must be unwound by the real downgrade: \(phases)")
+    }
+
     @Test("A mid-gesture support downgrade disarms the drag auto-scroll")
     func supportDowngradeDisarmsAutoScroll() {
         let dispatcher = makeDispatcher()
@@ -132,7 +197,7 @@ struct MouseDispatchEdgeTests {
         session.armAutoScroll()
         #expect(session.autoScrollArmed)
 
-        dispatcher.setActiveSupport(.disabled)
+        dispatcher.setActiveSupport(.disabled, isFrameFinal: true)
         #expect(
             !session.autoScrollArmed,
             "no release is coming to disarm it — the downgrade must")

@@ -404,7 +404,7 @@ extension AppRunner {
         // frame); only re-emitted when it actually changes.
         let effective = renderer.effectiveMouseSupport()
         terminal.applyMouseSupport(effective)
-        tuiContext.mouseEventDispatcher.setActiveSupport(effective)
+        tuiContext.mouseEventDispatcher.setActiveSupport(effective, isFrameFinal: true)
         return (DispatchTime.now().uptimeNanoseconds, deadline)
     }
 
