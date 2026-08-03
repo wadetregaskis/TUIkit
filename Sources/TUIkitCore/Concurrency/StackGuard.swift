@@ -107,16 +107,83 @@ public enum StackGuard {
             guard base > size else { return 0 }
             return (base - size) + reserveBytes
         #elseif canImport(Glibc) || canImport(Musl)
-            var attr = pthread_attr_t()
-            guard pthread_getattr_np(pthread_self(), &attr) == 0 else { return 0 }
-            defer { pthread_attr_destroy(&attr) }
-            var low: UnsafeMutableRawPointer?
-            var size = 0
-            // On Linux `pthread_attr_getstack` returns the LOW address directly.
-            guard pthread_attr_getstack(&attr, &low, &size) == 0, let low else { return 0 }
-            return UInt(bitPattern: low) + reserveBytes
+            // Asked of the KERNEL, not of pthread. The pthread route needs
+            // `pthread_getattr_np`, a GNU extension Swift's Glibc overlay does
+            // not surface — the Linux build failed outright on "cannot find
+            // 'pthread_getattr_np' in scope" — and there is no portable
+            // non-GNU equivalent that yields a thread's stack bounds.
+            //
+            // procfs describes the main thread's stack exactly, is there on
+            // every Linux (glibc and musl alike), and needs nothing but
+            // Foundation. The assertion above is what makes it the right
+            // stack: the floor is seeded on the main thread and probed from it.
+            guard let maps = readProcFile("/proc/self/maps"),
+                let limits = readProcFile("/proc/self/limits")
+            else { return 0 }
+            return linuxStackFloor(maps: maps, limits: limits)
         #else
             return 0  // unknown platform → guard disabled
         #endif
+    }
+
+    /// Reads a procfs file whole.
+    ///
+    /// To EOF rather than by size, and not via `String(contentsOfFile:)`: a
+    /// procfs file reports `st_size` 0, so anything that sizes the read first
+    /// comes back empty.
+    private static func readProcFile(_ path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        guard let data = try? handle.readToEnd() else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// The main thread's stack floor, from the two procfs files that describe
+    /// it. `0` when either is unparseable or the stack is unlimited, which
+    /// disables the guard.
+    ///
+    /// Takes the file *contents* rather than reading them, so the parsing —
+    /// the part with the edge cases — is testable on any platform, including
+    /// the macOS where it never runs.
+    ///
+    /// The floor is `stackTop - limit`, which is precisely the kernel's own
+    /// rule for how far the main stack may grow (`acct_stack_growth` refuses a
+    /// fault once `vm_end - address` exceeds `RLIMIT_STACK`). Both halves have
+    /// to come from these files:
+    ///
+    /// - The **top** is the `[stack]` mapping's HIGH address, fixed at `exec`.
+    ///   Its LOW address is emphatically *not* the floor: the mapping is
+    ///   grow-down and extends only as far as the stack has actually been
+    ///   touched, so it sits a page or two under the current stack pointer and
+    ///   would trip the guard immediately, truncating every nested view.
+    /// - The **limit** is the soft `RLIMIT_STACK`. Read out of `/proc` rather
+    ///   than through `getrlimit` because that call's Swift signature differs
+    ///   between the Glibc and Musl overlays (the resource argument is an
+    ///   imported enum on one and an `Int32` on the other), and this branch
+    ///   cannot be compile-checked from macOS.
+    static func linuxStackFloor(maps: String, limits: String) -> UInt {
+        // "7ffd0d3f0000-7ffd0d411000 rw-p 00000000 00:00 0    [stack]"
+        var top: UInt?
+        for line in maps.split(separator: "\n") where line.hasSuffix("[stack]") {
+            guard let range = line.split(separator: " ", maxSplits: 1).first,
+                let dash = range.firstIndex(of: "-"),
+                let high = UInt(range[range.index(after: dash)...], radix: 16)
+            else { return 0 }
+            top = high
+            break
+        }
+        // "Max stack size            8388608              unlimited            bytes"
+        // The name column holds spaces, so match the prefix and split the rest;
+        // "unlimited" parses as nil, and unlimited means no floor to compute.
+        var limit: UInt?
+        for line in limits.split(separator: "\n") where line.hasPrefix("Max stack size") {
+            limit = line.dropFirst("Max stack size".count)
+                .split(separator: " ", omittingEmptySubsequences: true)
+                .first
+                .flatMap { UInt($0) }
+            break
+        }
+        guard let top, let limit, limit > 0, top > limit else { return 0 }
+        return (top - limit) + reserveBytes
     }
 }
