@@ -288,7 +288,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Vertical chrome around the scrollable content; reserve
         // only what is actually present.
         let footerHeight = footer != nil ? 2 : 0  // footer line + separator
-        let titleOverhead = title != nil ? 1 : 0
+        // A BORDERED container draws the title inside its top border row
+        // (`ContainerView.chromeHeight` counts borders and the footer separator
+        // and nothing else), so it costs no line of its own — charging one
+        // anyway showed a titled list one row fewer than fits, with a stray
+        // blank line at the bottom of the slot. Borderless (`.plain`) does
+        // render the title as its own row (`renderBorderless`), so there the
+        // line is real. `_ListCore`'s own click mapping already agreed: its
+        // `topInset` counts the border and the padding, never a title.
+        let titleOverhead = (title != nil && !style.showsBorder) ? 1 : 0
         let targetContentHeight = max(
             1,
             context.availableHeight - borderOverhead - titleOverhead - footerHeight
