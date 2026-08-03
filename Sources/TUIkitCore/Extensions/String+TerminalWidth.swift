@@ -666,6 +666,35 @@ extension String {
     /// (truecolor) takes three. Anything else — a truncated sequence, or a
     /// selector this does not know — takes none, so an unparseable tail is
     /// walked normally rather than swallowing the rest of the sequence.
+    /// Whether SGR styling is still in force at the end of this string — i.e.
+    /// whether text appended to it would inherit colour or attributes.
+    ///
+    /// The terminal applies SGR parameters in order, so only the LAST sequence
+    /// decides: a pure reset (`ESC[0m`, a bare `ESC[m`, an all-zero parameter
+    /// list) closes everything, and anything else leaves something on.
+    ///
+    /// Erring toward `true` costs a redundant four-byte reset; erring toward
+    /// `false` bleeds the attribute over whatever the caller appends. So a
+    /// sequence this cannot prove is a reset counts as open.
+    public var leavesSGROpen: Bool {
+        guard utf8.contains(0x1B) else { return false }  // plain text: no scan
+        var open = false
+        for segment in ansiSegments() {
+            if case .ansi(let sequence, isSGR: true) = segment {
+                open = !Self.isSGRReset(sequence)
+            }
+        }
+        return open
+    }
+
+    /// Whether an SGR sequence turns everything off.
+    private static func isSGRReset(_ sequence: String) -> Bool {
+        let body = sequence.dropFirst(2).dropLast()  // strip "ESC[" and the 'm'
+        if body.isEmpty { return true }  // a bare ESC[m is a reset
+        return body.split(separator: ";", omittingEmptySubsequences: false)
+            .allSatisfy { $0.isEmpty || Int($0) == 0 }
+    }
+
     private static func extendedColorArgumentCount(
         after index: Int, in parameters: [Substring]
     ) -> Int {

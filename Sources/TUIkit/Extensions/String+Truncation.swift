@@ -72,11 +72,20 @@ extension String {
         switch mode {
         case .tail:
             let prefix = ansiAwarePrefix(visibleCount: keep)
-            if atWordBoundary, let trimmed = Self.keepingLeadingWords(of: prefix) {
-                return trimmed + ellipsis
-            }
-            // Drop a trailing space so the ellipsis never dangles after a gap.
-            return Self.droppingTrailingSpaces(prefix) + ellipsis
+            let body =
+                atWordBoundary
+                ? (Self.keepingLeadingWords(of: prefix) ?? Self.droppingTrailingSpaces(prefix))
+                // Drop a trailing space so the ellipsis never dangles after a gap.
+                : Self.droppingTrailingSpaces(prefix)
+            // The cut discards every later segment — including the styled run's
+            // own closing reset. Callers then append PLAIN padding after this
+            // string (a List row's fill spaces and badge; the clamp and the
+            // diff writer padding a clipped line to the terminal width), so an
+            // attribute still open at the cut painted across all of it: an
+            // underlined row bled its underline over the gutter and the badge.
+            // Close what the cut left open — conditionally, so plain text and a
+            // cut past an already-closed run gain nothing.
+            return body + ellipsis + (body.leavesSGROpen ? ANSIRenderer.reset : "")
         case .head:
             let suffix = ansiAwareSuffix(droppingVisible: max(0, visible - keep))
             if atWordBoundary, let trimmed = Self.keepingTrailingWords(of: suffix) {

@@ -122,4 +122,23 @@ struct AnsiAwareScannerTests {
         #expect(plain.leadingANSISplit().remainder == "Abc")
         #expect("Abc".leadingANSISequences().isEmpty)
     }
+
+    @Test("Tail truncation closes the style run it cuts")
+    func tailTruncationClosesTheRunItCuts() {
+        let reset = "\u{1B}[0m"
+        let styled = "\u{1B}[4mSupercalifragilistic\(reset)"
+        let cut = styled.truncatedToWidth(10)
+        // The cut discards every later segment, the run's own reset included —
+        // and callers append PLAIN padding after this string, which the still
+        // open underline then painted across.
+        #expect(cut.hasSuffix(reset))
+        #expect(cut.stripped == "Supercali…", "content and width are unchanged")
+        #expect(cut.strippedLength == 10)
+
+        // Conditional, both ways: plain text gains nothing…
+        #expect("Supercalifragilistic".truncatedToWidth(10) == "Supercali…")
+        // …and neither does a cut that lands after the run already closed.
+        let mixed = "\u{1B}[4mAB\(reset) plain tail text"
+        #expect(!mixed.truncatedToWidth(8).hasSuffix(reset))
+    }
 }
