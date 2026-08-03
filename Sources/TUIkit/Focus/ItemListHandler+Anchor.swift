@@ -171,6 +171,19 @@ extension ItemListHandler {
         // held line inside it.
         anchorHeldRow = min(anchorHeldRow, lastRow)
         let desired = ordinal - anchorHeldRow
+        // `maxOffset` deliberately early-outs to a cheap floor
+        // (`itemCount - contentHeight`) while the offset is nowhere near the
+        // tail, so as not to materialise tail row heights every frame on a huge
+        // list. That floor is a LOWER bound, so a hold that jumps a long way
+        // down — designating a row far below the current viewport — was clamped
+        // to it and still left the anchored row short of view.
+        //
+        // Assigning it brings the offset within reach of the tail, which is
+        // exactly the condition for the exact walk, so reading it once more
+        // converges. One extra read, by construction — not a loop. Same
+        // two-step `followBottomEdge` uses a few lines above, for the same
+        // reason.
+        scrollOffset = min(max(desired, 0), maxOffset)
         let clamped = min(max(desired, 0), maxOffset)
         if clamped != desired { anchorHeldRow = held(landingAt: ordinal - clamped) }
         scrollOffset = clamped

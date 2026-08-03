@@ -124,6 +124,27 @@ struct ListRowAnchorHoldTests {
             "…and at the BOTTOM of the viewport, where it was held:\n\(after.joined(separator: "\n"))")
     }
 
+    @Test("A row designated far below the fold still lands on screen")
+    func farAnchorClearsTheCheapMaxOffsetFloor() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let items = Array(0..<50)
+
+        // `maxOffset` early-outs to the cheap floor `itemCount - contentHeight`
+        // (50 − 18 = 32) while the offset is nowhere near the tail, so as not to
+        // walk tail row heights every frame on a huge list. That floor is a
+        // LOWER bound: with 3-line rows only six fit, so the true bound is 44.
+        // A hold wanting offset 41 was clamped to 32 and left row 45 off screen.
+        _ = renderTallFrame(items: items, anchored: nil, tui: tui, fm: fm)
+        let after = renderTallFrame(items: items, anchored: 45, tui: tui, fm: fm)
+
+        // Asserted on the SINGLE frame that follows the designation: settling
+        // over several frames would let a later frame's offset creep and mask it.
+        #expect(
+            screenLine(of: 45, in: after) != nil,
+            "the anchored row must be on screen after ONE frame:\n\(after.joined(separator: "\n"))")
+    }
+
     @Test("Inserting rows above the anchored row holds it on its screen line")
     func insertAboveHoldsTheRow() {
         let tui = TUIContext()
