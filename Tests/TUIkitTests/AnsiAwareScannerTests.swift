@@ -102,4 +102,24 @@ struct AnsiAwareScannerTests {
     func plainPrefixIsCorrect() {
         #expect("\u{1B}[31mABC".ansiAwarePrefix(visibleCount: 2).strippedLength == 2)
     }
+
+    /// The same fused-cluster hazard in the leading-state extractor: a
+    /// combining mark opening the visible text fuses with the terminator
+    /// (`…m` + U+0308 is one `Character`), and the character-level scan
+    /// consumed the mark into the "styling" prefix — vanishing it from the
+    /// text on the reassembly path (OverlayLayer's left-edge clip pad).
+    @Test("leadingANSISequences stops at the terminator scalar, not the cluster")
+    func leadingSequencesStopAtTerminatorScalar() {
+        let fused = "\u{1B}[31m\u{0308}x"
+        let (prefix, remainder) = fused.leadingANSISplit()
+        #expect(prefix == "\u{1B}[31m", "the combining mark is TEXT, not styling")
+        #expect(remainder.unicodeScalars.first == "\u{0308}", "the mark stays with the text")
+        #expect(fused.leadingANSISequences() == "\u{1B}[31m")
+
+        // The common cases are unchanged: multiple sequences, then text.
+        let plain = "\u{1B}[31m\u{1B}[1mAbc"
+        #expect(plain.leadingANSISequences() == "\u{1B}[31m\u{1B}[1m")
+        #expect(plain.leadingANSISplit().remainder == "Abc")
+        #expect("Abc".leadingANSISequences().isEmpty)
+    }
 }

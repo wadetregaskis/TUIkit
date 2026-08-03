@@ -1136,28 +1136,46 @@ extension String {
     /// - Returns: The concatenated leading ANSI sequences, or an empty string
     ///   if the line starts with a visible character.
     public func leadingANSISequences() -> String {
-        var result = ""
-        var index = startIndex
+        leadingANSISplit().prefix
+    }
 
-        while index < endIndex {
-            guard self[index] == "\u{1B}" else { break }
+    /// The leading ANSI sequences and everything after them, split at the
+    /// exact SCALAR boundary after the last terminator.
+    ///
+    /// Scalar-level deliberately: grapheme segmentation can fuse a sequence's
+    /// terminator letter with a combining mark that begins the visible text
+    /// (`…m` + U+0308 is ONE `Character`), and a `Character`-level scan
+    /// consumed the fused cluster whole — the combining mark vanished into
+    /// the "styling" prefix, and any caller reassembling around a
+    /// character-counted split point dropped it from the text too. Callers
+    /// that need both halves take THIS, rather than re-deriving the remainder
+    /// by count.
+    public func leadingANSISplit() -> (prefix: String, remainder: String) {
+        let scalars = unicodeScalars
+        var index = scalars.startIndex
 
-            // Consume the ANSI sequence (ESC [ params letter)
-            let seqStart = index
-            index = self.index(after: index)
-            if index < endIndex && self[index] == "[" {
-                index = self.index(after: index)
-                while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                    index = self.index(after: index)
+        while index < scalars.endIndex, scalars[index] == "\u{1B}" {
+            // Consume the ANSI sequence (ESC [ params letter). Parameters and
+            // terminators are ASCII by construction — these are our own
+            // machine-generated SGRs, never text.
+            var probe = scalars.index(after: index)
+            if probe < scalars.endIndex, scalars[probe] == "[" {
+                probe = scalars.index(after: probe)
+                while probe < scalars.endIndex,
+                    ("0"..."9").contains(scalars[probe]) || scalars[probe] == ";"
+                {
+                    probe = scalars.index(after: probe)
                 }
-                if index < endIndex && self[index].isLetter {
-                    index = self.index(after: index)
+                if probe < scalars.endIndex, scalars[probe].properties.isAlphabetic,
+                    scalars[probe].isASCII
+                {
+                    probe = scalars.index(after: probe)
                 }
             }
-            result += String(self[seqStart..<index])
+            index = probe
         }
 
-        return result
+        return (String(scalars[scalars.startIndex..<index]), String(scalars[index...]))
     }
 
     /// The net SGR styling active just before visible column `column` — every SGR

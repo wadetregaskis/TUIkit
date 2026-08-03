@@ -215,9 +215,12 @@ public struct OverlayLayer: Sendable, Equatable {
                     // the carried style so the gap keeps the run's background.
                     let shortfall = owed - slice.strippedLength
                     guard shortfall > 0 else { return slice }
-                    let carried = slice.leadingANSISequences()
-                    return carried + String(repeating: " ", count: shortfall)
-                        + slice.dropFirst(carried.count)
+                    // The scalar-exact split, not `leadingANSISequences()` +
+                    // `dropFirst(count)`: a combining mark opening the visible
+                    // text fuses with the last sequence's terminator into one
+                    // `Character`, and the character-counted drop severed it.
+                    let (carried, remainder) = slice.leadingANSISplit()
+                    return carried + String(repeating: " ", count: shortfall) + remainder
                 }
             }
             visible = visible.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
