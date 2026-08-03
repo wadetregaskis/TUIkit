@@ -166,7 +166,13 @@ internal final class RenderLoop<A: App> {
     let app: A
 
     /// The terminal for output and size queries.
-    let terminal: Terminal
+    ///
+    /// Held as the protocol rather than the concrete `Terminal` so a test can
+    /// drive a whole render pass against a `MockTerminal`. Without that, the
+    /// only way to exercise this class was to run the app, and the bugs that
+    /// live here — the per-pass registries the scene walk writes into — are
+    /// invisible to every unit test on either side of it.
+    let terminal: any TerminalProtocol
 
     /// The status bar state (height, items, appearance).
     let statusBar: StatusBarState
@@ -272,7 +278,7 @@ internal final class RenderLoop<A: App> {
 
     init(
         app: A,
-        terminal: Terminal,
+        terminal: any TerminalProtocol,
         statusBar: StatusBarState,
         appHeader: AppHeaderState,
         focusManager: FocusManager,
@@ -534,7 +540,9 @@ extension RenderLoop {
         // Auto-detect the terminal cell's pixel aspect for undistorted images;
         // terminals that don't report their pixel size keep the 2.0 default (or
         // a `.imageCellAspect(_:)` override deeper in the tree).
-        if let cellAspect = terminal.cellPixelAspect() {
+        // Concrete-only: reporting the cell's pixel size is a real-terminal
+        // capability, not part of the protocol every host must implement.
+        if let cellAspect = (terminal as? Terminal)?.cellPixelAspect() {
             environment.imageCellAspect = cellAspect
         }
         // Determine header height. On the first frame, we perform a measurement
@@ -707,12 +715,80 @@ extension RenderLoop {
 
 extension RenderLoop {
     /// Clears all per-frame state and begins lifecycle/state/cache tracking.
+    ///
+    /// Only the registries that genuinely belong to the FRAME live here. The
+    /// ones that belong to a single walk of the scene are reset by
+    /// ``beginSceneRender()`` instead — see that method for why the difference
+    /// matters and how to decide which list a new registry joins.
     fileprivate func beginRenderPass() {
+        // Per-PASS. `focusManager.beginRenderPass()` snapshots `previousSections`
+        // and must therefore run BEFORE anything clears the current ring.
+        focusManager.beginRenderPass()
+        appHeader.beginRenderPass()
+        statusBar.focusManager = focusManager
+        tuiContext.lifecycle.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        // Per-WALK, reset again before each scene render.
+        beginSceneRender()
+    }
+
+    /// Clears the registries that belong to ONE walk of the scene tree.
+    ///
+    /// `renderContent` may walk the scene more than once inside a single
+    /// ``beginRenderPass()``/``endRenderPass()`` bracket: a throwaway walk on
+    /// the first frame to discover the app header's height, and a correction
+    /// re-render on any frame where the header's actual height disagrees with
+    /// the estimate it was laid out against. Only the LAST walk's buffer is
+    /// drawn — so only the last walk's registrations should survive.
+    ///
+    /// Resetting these once per PASS instead let the discarded walk's entries
+    /// pile up on top of the drawn walk's:
+    ///
+    /// - `stateStorage`'s onChange counters are claimed POSITIONALLY, so the
+    ///   second walk's `.onChange` claimed index 1 where the first claimed 0,
+    ///   found that slot empty, and fired again — every app's
+    ///   `.onChange(of:initial:true)` ran twice at launch, and the junk left in
+    ///   slot 1 could fire a spurious `action(stale, new)` on a later corrected
+    ///   frame even with the default `initial: false`. `.onPreferenceChange`
+    ///   shares the counter and was corrupted the same way.
+    /// - key handlers APPEND, and dispatch walks every entry until one
+    ///   consumes, so a handler that declines with a side effect (the blessed
+    ///   log-the-key pattern) ran its side effect once per duplicate.
+    /// - preference values are REDUCED into a stack, so an accumulating
+    ///   `reduce` collected every published value twice.
+    /// - mouse handler ids are positional and restart at 0 each reset, so a
+    ///   two-walk frame shifted every control's id and the hover tracker's
+    ///   cross-frame comparison sent `.exited` to a *different* control.
+    /// - focus sections accumulate (registration merely de-duplicates by
+    ///   focusID), so a corrected frame's Tab ring was the union of both walks
+    ///   in the DISCARDED walk's order — which was built at the wrong content
+    ///   height, and so could contain focusables the drawn frame does not show.
+    ///
+    /// Called from ``renderScene(_:context:)`` — the one funnel every walk goes
+    /// through — rather than at each call site, so a future third walk is
+    /// correct without anyone remembering this. `WindowGroup.renderScene`
+    /// already resets the drag-and-drop session the same way.
+    ///
+    /// What must NOT move here, and why: `focusManager.beginRenderPass()`
+    /// (snapshots last frame's ring so a focus LOSS can still reach its
+    /// element), `appHeader.beginRenderPass()` (snapshots the height estimate
+    /// this pass is laid out against), `lifecycle` and `renderCache` (a token
+    /// or cache entry seen only in a discarded walk surviving one extra frame
+    /// is the conservative direction — no spurious `onDisappear`, no premature
+    /// eviction), and above all `stateStorage.beginRenderPass()`, which also
+    /// clears `activeIdentities` — already carrying `evaluateAppBody`'s
+    /// `markActive(rootIdentity)` by the time a walk starts, so clearing it
+    /// mid-pass would let `endRenderPass` prune the App's own root `@State` on
+    /// every corrected frame. That is why `beginSceneRender` on `StateStorage`
+    /// is deliberately narrower than its `beginRenderPass`.
+    fileprivate func beginSceneRender() {
         tuiContext.keyEventDispatcher.clearHandlers()
         tuiContext.mouseEventDispatcher.beginRenderPass()
         tuiContext.keyboardShortcuts.beginRenderPass()
         tuiContext.preferences.beginRenderPass()
-        focusManager.beginRenderPass()
+        tuiContext.stateStorage.beginSceneRender()
+        focusManager.beginSceneRender()
         statusBar.clearSectionItems()
         // The transient escape-label override is published by whichever
         // open modal surface (Picker drop-down, etc.) renders in this
@@ -723,11 +799,6 @@ extension RenderLoop {
         // lightweight selection claim lowers it each frame it applies).
         statusBar.escapeLabelOverride = nil
         statusBar.escapeClaimGrabsInput = true
-        appHeader.beginRenderPass()
-        statusBar.focusManager = focusManager
-        tuiContext.lifecycle.beginRenderPass()
-        tuiContext.stateStorage.beginRenderPass()
-        tuiContext.renderCache.beginRenderPass()
     }
 
     /// Evaluates `App.body` with the environment published so `@Environment`
@@ -835,7 +906,11 @@ extension RenderLoop {
     }
 
     /// Renders a scene by delegating to `SceneRenderable`.
+    ///
+    /// The one funnel every walk of the scene passes through, which is why the
+    /// per-walk registries are reset here — see ``beginSceneRender()``.
     fileprivate func renderScene<S: Scene>(_ scene: S, context: RenderContext) -> FrameBuffer {
+        beginSceneRender()
         if let renderable = scene as? SceneRenderable {
             return renderable.renderScene(context: context)
         }

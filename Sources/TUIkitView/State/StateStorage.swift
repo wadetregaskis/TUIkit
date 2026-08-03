@@ -229,8 +229,27 @@ extension StateStorage {
     /// Begins a new render pass by clearing the active identity set.
     public func beginRenderPass() {
         activeIdentities.removeAll(keepingCapacity: true)
-        onChangeCounters.removeAll(keepingCapacity: true)
         retainedSubtreeRoots.removeAll(keepingCapacity: true)
+        beginSceneRender()
+    }
+
+    /// Begins one WALK of the view tree, of which a render pass may contain
+    /// more than one (the app header's height-discovery and correction
+    /// re-renders — see `RenderLoop.beginSceneRender()`).
+    ///
+    /// Deliberately narrower than ``beginRenderPass()``: it resets only the
+    /// per-walk onChange counters, which are claimed POSITIONALLY, so a second
+    /// walk that did not restart them would hand every `.onChange` /
+    /// `.onPreferenceChange` a shifted index and read and write the wrong
+    /// slots.
+    ///
+    /// It must NOT clear `activeIdentities`. By the time a walk begins, that
+    /// set already carries the App's own root identity (marked when the app
+    /// body was evaluated); clearing it mid-pass would leave the root unmarked
+    /// and let ``endRenderPass()`` prune App-level `@State` on every frame that
+    /// walks the tree twice.
+    public func beginSceneRender() {
+        onChangeCounters.removeAll(keepingCapacity: true)
     }
 
     /// Ends a render pass by removing state for views no longer in the tree.

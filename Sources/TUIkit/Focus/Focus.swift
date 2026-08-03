@@ -985,12 +985,7 @@ extension FocusManager {
         // or a focused element that left the tree. The handler objects persist
         // in StateStorage regardless — this only preserves reachability.
         previousSections = sections
-        sections.removeAll()
-        // Modal sections are re-marked each render by the presentation modifiers;
-        // clearing here means a dismissed modal (which no longer renders, so no
-        // longer re-marks) stops grabbing input on the very next frame.
-        modalSectionIDs.removeAll()
-        optionalFocusSectionIDs.removeAll()
+        beginSceneRender()
         // A new generation so this pass's @FocusState registrations can be told
         // apart from prior ones (see `pruneFocusRegistry`). The registry itself
         // is NOT cleared here — a body-top read must resolve against last frame's
@@ -998,6 +993,31 @@ extension FocusManager {
         focusRenderGeneration &+= 1
         // activeSectionID and focusedID are intentionally preserved.
         // They will be validated after the render pass re-registers sections.
+    }
+
+    /// Drops the CURRENT frame's ring so one walk of the view tree rebuilds it
+    /// from scratch.
+    ///
+    /// A render pass may walk the tree more than once (the app header's
+    /// height-discovery and correction re-renders — see
+    /// `RenderLoop.beginSceneRender()`), and only the last walk is drawn.
+    /// Registration merely de-duplicates by focusID, so without this the Tab
+    /// ring of a corrected frame was the UNION of both walks, ordered by the
+    /// walk that was thrown away — a walk laid out at a different content
+    /// height, whose windowed lists and height-dependent branches can register
+    /// focusables the drawn frame does not contain.
+    ///
+    /// Narrower than ``beginRenderPass()`` by exactly the state that belongs to
+    /// the frame rather than the walk: `previousSections` (last frame's ring,
+    /// kept so a focus LOSS can still reach its element), `focusRenderGeneration`,
+    /// `activeSectionID` and `focusedID` are all left alone.
+    func beginSceneRender() {
+        sections.removeAll()
+        // Modal sections are re-marked each render by the presentation modifiers;
+        // clearing here means a dismissed modal (which no longer renders, so no
+        // longer re-marks) stops grabbing input on the very next frame.
+        modalSectionIDs.removeAll()
+        optionalFocusSectionIDs.removeAll()
     }
 
     /// Validates focus state after a render pass.
