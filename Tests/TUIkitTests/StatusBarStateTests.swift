@@ -277,6 +277,35 @@ struct StatusBarStateTests {
         #expect(nonEscTracker.wasTriggered == true)
     }
 
+    @Test("The modal ESC claim covers every spelling of an Escape binding")
+    func escapeClaimCoversAllSpellings() {
+        // The claim used to skip only items DISPLAYED as "⎋" — an item
+        // binding the Escape key under any other display string fired out
+        // from under the open drop-down. Matching the event is what makes
+        // an item an Escape binding, not its glyph.
+        let state = StatusBarState()
+
+        final class TriggerTracker: @unchecked Sendable {
+            var wasTriggered = false
+        }
+        let tracker = TriggerTracker()
+
+        state.setItems([
+            StatusBarItem(shortcut: "esc", label: "back", key: .escape) {
+                tracker.wasTriggered = true
+            }
+        ])
+
+        state.escapeLabelOverride = "close drop-down menu"
+        #expect(state.handleKeyEvent(KeyEvent(key: .escape)) == false)
+        #expect(tracker.wasTriggered == false, "a differently-spelled ESC item fired under the claim")
+
+        // With no claim it fires as normal.
+        state.escapeLabelOverride = nil
+        #expect(state.handleKeyEvent(KeyEvent(key: .escape)) == true)
+        #expect(tracker.wasTriggered == true)
+    }
+
     @Test("Handle key event returns false for unmatched")
     func handleKeyEventUnmatched() {
         let state = StatusBarState()

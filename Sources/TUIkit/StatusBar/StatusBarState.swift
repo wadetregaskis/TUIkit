@@ -314,7 +314,12 @@ extension StatusBarState {
         let escapeIsClaimedByModal = escapeLabelOverride != nil && event.key == .escape
 
         for item in currentItems where item.matches(event) {
-            if escapeIsClaimedByModal && item.shortcut == Shortcut.escape {
+            // Any item matching an Escape event IS an Escape binding —
+            // whatever its display string. This used to compare the display
+            // glyph (`item.shortcut == "⎋"`), so an item spelled differently
+            // (`shortcut: "esc"` with an explicit `key: .escape`) fired out
+            // from under the modal's claim.
+            if escapeIsClaimedByModal {
                 continue
             }
             if let statusBarItem = item as? StatusBarItem {
