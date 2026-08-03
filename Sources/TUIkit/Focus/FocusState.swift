@@ -21,15 +21,62 @@ import TUIkitView
 
 // MARK: - Forced focusID environment
 
+/// A focusID `.focused(_:equals:)` is offering, and which focusable has taken
+/// it — ONE of them, not all of them.
+///
+/// The id used to go into the environment as a bare `String?`, which every
+/// focusable below resolved for itself: `HStack { TextField; TextField }
+/// .focused($field, equals: .credentials)` gave both fields the same id,
+/// `FocusSection.register` silently dropped the duplicate, and the second field
+/// became unreachable by Tab, arrows and pending-focus routing while both drew
+/// the focused affordance and a blinking cursor. SwiftUI's modifier names ONE
+/// focusable; this makes that true here — the first one to ask takes the id and
+/// the rest fall back to their own.
+///
+/// Claiming is by identity and idempotent, so a control that resolves its
+/// focusID more than once in a pass keeps the id it took the first time rather
+/// than losing it to itself.
+/// Unchecked because it lives in the environment and is only ever touched on
+/// the render path, which is main-actor isolated — the same rationale as
+/// ``VolatileReadTracker``.
+final class AssignedFocusID: @unchecked Sendable {
+    /// The id `.focused(_:equals:)` forces on its target.
+    let id: String
+
+    /// Whose it is. `nil` until the first focusable renders below the modifier.
+    private var claimant: ViewIdentity?
+
+    init(id: String) {
+        self.id = id
+    }
+
+    /// The forced id if `identity` may use it — because nothing has taken it
+    /// yet (in which case it now has), or because this identity already did.
+    /// `nil` for every other focusable in the subtree.
+    ///
+    /// Render pass only. A measure pass must not claim: measuring is not
+    /// presence (a candidate the layout later discards would otherwise take the
+    /// id from the control that is actually drawn), and a measuring control
+    /// resolves its persisted id anyway — which IS this id, for the claimant.
+    func claim(_ identity: ViewIdentity) -> String? {
+        guard let claimant else {
+            claimant = identity
+            return id
+        }
+        return claimant == identity ? id : nil
+    }
+}
+
 private struct AssignedFocusIDKey: EnvironmentKey {
-    static let defaultValue: String? = nil
+    static let defaultValue: AssignedFocusID? = nil
 }
 
 extension EnvironmentValues {
-    /// A focusID forced onto the first focusable in the subtree, set by
-    /// `.focused(_:equals:)` and consumed by ``FocusRegistration`` so a
-    /// `@FocusState`-bound control adopts the id the binding expects.
-    var assignedFocusID: String? {
+    /// The focusID offered to the first focusable in the subtree, set by
+    /// `.focused(_:equals:)` and claimed through ``FocusRegistration`` so the
+    /// `@FocusState`-bound control — and only it — adopts the id the binding
+    /// expects.
+    var assignedFocusID: AssignedFocusID? {
         get { self[AssignedFocusIDKey.self] }
         set { self[AssignedFocusIDKey.self] = newValue }
     }
@@ -227,14 +274,18 @@ extension _FocusedModifier: Renderable {
             manager.registerFocusBinding(
                 store: store.storeID, value: AnyHashable(value), focusID: id)
         }
-        let env = context.environment.setting(\.assignedFocusID, to: id)
+        // A fresh offer per render: the claim is this render's, so the same
+        // control takes the id again next frame rather than the offer staying
+        // spent.
+        let env = context.environment.setting(\.assignedFocusID, to: AssignedFocusID(id: id))
         return TUIkitView.renderToBuffer(content, context: context.withEnvironment(env))
     }
 }
 
 extension _FocusedModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let env = context.environment.setting(\.assignedFocusID, to: forcedID(context))
+        let env = context.environment.setting(
+            \.assignedFocusID, to: AssignedFocusID(id: forcedID(context)))
         return measureChild(content, proposal: proposal, context: context.withEnvironment(env))
     }
 }

@@ -92,10 +92,15 @@ struct FocusRegistration {
         propertyIndex: Int
     ) -> String {
         let stateStorage = context.environment.stateStorage!
-        // A `.focused($binding, equals:)` modifier forces the child's id via
-        // `assignedFocusID`; it ranks below an explicit `.focusID(_:)` but above
-        // the auto-generated path id.
-        let declared = explicitFocusID ?? context.environment.assignedFocusID
+        // A `.focused($binding, equals:)` modifier offers its id to the FIRST
+        // focusable below it (see `AssignedFocusID`); it ranks below an explicit
+        // `.focusID(_:)` but above the auto-generated path id. Claimed on the
+        // render pass only — a measuring control resolves the persisted id
+        // below, which is this id if the control is the one that took it.
+        let assigned =
+            context.isMeasuring
+            ? nil : context.environment.assignedFocusID?.claim(context.identity)
+        let declared = explicitFocusID ?? assigned
         let defaultID = declared ?? "\(defaultPrefix)-\(context.identity.path)"
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: propertyIndex)
         let box: StateBox<String> = stateStorage.storage(for: key, default: defaultID)

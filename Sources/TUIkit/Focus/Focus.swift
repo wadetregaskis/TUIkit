@@ -234,6 +234,13 @@ public final class FocusManager: @unchecked Sendable {
         sections.map(\.id)
     }
 
+    /// Every registered focusable's id, in render order across all sections —
+    /// the ring as it actually stands this frame. Used by tests that assert
+    /// what is (and is not) reachable.
+    var focusableIDs: [String] {
+        sections.flatMap { $0.focusables.map(\.focusID) }
+    }
+
     /// Whether any sections are registered (besides potentially the default).
     var hasSections: Bool {
         !sections.isEmpty

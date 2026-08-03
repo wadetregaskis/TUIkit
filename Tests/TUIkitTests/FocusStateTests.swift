@@ -111,6 +111,54 @@ struct FocusStateTests {
         }
     }
 
+    // MARK: - One target, not a whole subtree
+
+    /// `.focused($binding, equals:)` names ONE focusable. Applied to a
+    /// container it used to force its id on EVERY focusable below: both fields
+    /// resolved the same focusID, `FocusSection.register` silently dropped the
+    /// duplicate, and the second field was unreachable by Tab/arrows while both
+    /// drew the focused affordance. Only the first focusable takes the offer now.
+    private struct SharedAssignmentHarness: View {
+        @FocusState var field: Field?
+        let binding: Box<FocusState<Field?>.Binding?>
+        var body: some View {
+            binding.value = $field
+            return HStack {
+                TextField("user", text: .constant(""))
+                TextField("pass", text: .constant(""))
+            }
+            .focused($field, equals: .name)
+        }
+    }
+
+    @Test("A .focused applied to a container claims one focusable, not all of them")
+    func assignmentIsClaimedOnce() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let view = SharedAssignmentHarness(binding: Box(nil))
+        render(view, tuiContext: tui, focusManager: manager)
+
+        let ids = manager.focusableIDs
+        #expect(ids.count == 2, "both fields must be reachable, got \(ids)")
+        #expect(Set(ids).count == 2, "…under DISTINCT ids, got \(ids)")
+        #expect(
+            ids.filter { $0.hasPrefix("focused-") }.count == 1,
+            "exactly one field takes the assigned id, got \(ids)")
+    }
+
+    @Test("The claim is re-offered every frame, not spent once")
+    func assignmentSurvivesReRender() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let view = SharedAssignmentHarness(binding: Box(nil))
+        render(view, tuiContext: tui, focusManager: manager)
+        let first = manager.focusableIDs.sorted()
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(
+            manager.focusableIDs.sorted() == first,
+            "the same control keeps the id across frames")
+    }
+
     @Test("An optional @FocusState reports and moves focus between controls")
     func optionalBinding() {
         let tui = TUIContext()
