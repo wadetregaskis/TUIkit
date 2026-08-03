@@ -172,24 +172,29 @@ extension ConditionalView: Renderable {
         // state and `invalidateDescendants` would be a no-op — eliding it, and
         // the branch identity-node alloc it needs, is byte-identical.
         //
-        // During measurement we must not mutate the branch-tracking map
-        // (measure-side-effect rule). The Layoutable conformance handles the
-        // measure pass and never renders here; a measure that *does* reach this
-        // path (a Renderable parent rendering us in measuring mode) keeps the
-        // original unconditional invalidate so output stays identical.
+        // A measure invalidates NOTHING. Measuring must not mutate persistent
+        // state, and a measure that reaches this path does — `_ButtonCore` (and
+        // every other `measureFixedByRendering` view) measures by rendering, so
+        // a plain `Button` inside an `if` ran a full sweep of the state store on
+        // every measure of every frame. It was also pure waste: the branch that
+        // is about to flip is invalidated by the RENDER below before the new
+        // branch draws, so dropping the inactive branch's state early cannot
+        // change what any frame contains.
+        //
+        // The saving is not just the sweep. `invalidateDescendants` scans both
+        // state dictionaries end to end and allocates an array of matches for
+        // each, and the branch identity it is handed costs an identity-node
+        // allocation — all of it now skipped on the measure path.
         let isTrueBranch: Bool
         switch self {
         case .trueContent: isTrueBranch = true
         case .falseContent: isTrueBranch = false
         }
 
-        let shouldInvalidate: Bool
-        if context.isMeasuring {
-            shouldInvalidate = true
-        } else {
-            shouldInvalidate = stateStorage.recordConditionalBranch(
+        let shouldInvalidate =
+            !context.isMeasuring
+            && stateStorage.recordConditionalBranch(
                 context.identity, isTrueBranch: isTrueBranch)
-        }
 
         switch self {
         case .trueContent(let content):

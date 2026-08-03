@@ -79,4 +79,55 @@ struct ConditionalStateIdentityTests {
         let b = text(renderToBuffer(LazyHost(showA: false), context: ctx))
         #expect(b.contains("B=B"), "deferral via a wrapper is equally isolated")
     }
+
+    /// A conditional invalidates the branch it left — but only when a frame is
+    /// actually DRAWN. Doing it while measuring deletes live `@State` that no
+    /// frame has replaced, and measures are not rare: every
+    /// `measureFixedByRendering` view (`Button` among them) measures by
+    /// rendering, so a conditional inside a button's label was sweeping the
+    /// state store on every measure of every frame.
+    @Test("Measuring a conditional does not delete the other branch's @State")
+    func measuringDoesNotInvalidateTheInactiveBranch() {
+        let ctx = makeRenderContext()
+        let storage = ctx.environment.stateStorage!
+
+        // Draw the false branch so its three slots exist and are live.
+        _ = renderToBuffer(ButtonHost(showA: false), context: ctx)
+        let live = storage.count
+        #expect(live >= 3, "the false branch's three stateful rows must be stored")
+
+        // MEASURE the other branch. The button measures by rendering, so this
+        // reaches the conditional with `isMeasuring` set. It may add the true
+        // branch's own slot; it must not take the false branch's away.
+        _ = measureChild(
+            ButtonHost(showA: true), proposal: ProposedSize(width: 40, height: 10), context: ctx)
+
+        #expect(
+            storage.count > live,
+            "a measure must only ever add state, never drop the branch it did not draw")
+    }
+}
+
+/// A conditional inside a `Button`'s label — the shape that made this cost real.
+/// `_ButtonCore` measures by rendering, so measuring this measures *through* the
+/// conditional. The branches are deliberately lopsided (three stateful rows
+/// against one) so a wrongly-invalidated false branch shows up as a DROP in the
+/// stored-state count rather than cancelling out against the true branch's slot.
+private struct ButtonHost: View {
+    let showA: Bool
+
+    var body: some View {
+        Button {
+        } label: {
+            if showA {
+                StatefulA()
+            } else {
+                VStack {
+                    StatefulB()
+                    StatefulB()
+                    StatefulB()
+                }
+            }
+        }
+    }
 }
