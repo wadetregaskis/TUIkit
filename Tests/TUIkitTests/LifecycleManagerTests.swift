@@ -291,7 +291,12 @@ struct LifecycleManagerTaskTests {
         }
         try await Task.sleep(for: .milliseconds(20))
         manager.cancelTask(token: "load")
-        try await Task.sleep(for: .milliseconds(60))
+        // Polled, not slept: under a full parallel suite a fixed wait is a
+        // coin toss on when the cancelled sleep unwinds and the main-actor hop
+        // lands.
+        for _ in 0..<200 where observed.value == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
         #expect(observed.value == true, "the publish site must be able to see the cancel")
     }
 
