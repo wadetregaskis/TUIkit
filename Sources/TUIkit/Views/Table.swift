@@ -1063,10 +1063,14 @@ where Value.ID: Hashable {
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
                 columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette)
-            // Line granularity: the top row enters partially, its first
-            // `scrollTopClipLines` lines scrolled off above the viewport…
-            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
-                rowLines.removeFirst(min(handler.scrollTopClipLines, rowLines.count - 1))
+            // Line granularity: the top row enters partially, its first lines
+            // scrolled off above the viewport. Clip by the WINDOW's resolved
+            // origin, not the handler's raw state — the window may have
+            // absorbed a one-line clip (drawing the line instead of a "▲ 1
+            // more" indicator), and clipping it here anyway made that line
+            // silently vanish while every row sat one line above its hit band.
+            if rowIndex == window.range.lowerBound, window.topClip > 0 {
+                rowLines.removeFirst(min(window.topClip, rowLines.count - 1))
             }
             // …and the bottom row leaves partially, clipped at the budget.
             if let rowLineBudget {
