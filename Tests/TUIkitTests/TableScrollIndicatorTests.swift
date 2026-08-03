@@ -37,8 +37,21 @@ struct TableScrollIndicatorTests {
     private func renderFrame(
         tui: TUIContext, fm: FocusManager,
         twoLineRows: Bool = false,
-        granularity: ScrollGranularity = .row
+        granularity: ScrollGranularity = .row,
+        scrollbar: ScrollbarVisibility = .hidden
     ) -> [String] {
+        renderBuffer(
+            tui: tui, fm: fm, twoLineRows: twoLineRows, granularity: granularity,
+            scrollbar: scrollbar
+        ).lines.map { $0.stripped }
+    }
+
+    private func renderBuffer(
+        tui: TUIContext, fm: FocusManager,
+        twoLineRows: Bool = false,
+        granularity: ScrollGranularity = .row,
+        scrollbar: ScrollbarVisibility = .hidden
+    ) -> FrameBuffer {
         let rows = (0..<20).map(Note.init(id:))
         let table = Table(rows, selection: .constant(Int?.none)) {
             twoLineRows
@@ -50,6 +63,7 @@ struct TableScrollIndicatorTests {
         var env = EnvironmentValues()
         env.focusManager = fm
         env.scrollGranularity = granularity
+        env.scrollbarVisibility = scrollbar
         env.applyRuntimeServices(from: tui)
         let context = RenderContext(
             availableWidth: 30, availableHeight: Self.height, environment: env, tuiContext: tui)
@@ -62,7 +76,7 @@ struct TableScrollIndicatorTests {
         fm.endRenderPass()
         tui.stateStorage.endRenderPass()
         tui.renderCache.removeInactive()
-        return buffer.lines.map { $0.stripped }
+        return buffer
     }
 
     /// Walking the cursor down lands the reveal on an offset of exactly one
@@ -235,5 +249,79 @@ struct TableScrollIndicatorTests {
         _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
         #expect(handler?.showsScrollbar == false, "this path never draws a bar")
         #expect(handler?.drawsScrollIndicators == true, "overflow marks rows with indicator lines")
+    }
+
+    // MARK: - Scrollbars (multi-line path)
+
+    /// The multi-line layout path used to draw no scrollbar at all — it marked
+    /// hidden rows with "N more" lines and nothing else, so `.scrollbarVisibility`
+    /// was silently inert on any table with a multi-line column, and a table
+    /// whose columns merely ALLOW two lines (this one: every row is one line)
+    /// lost the bar a single-line table would have drawn.
+    @Test("A multi-line table honours .scrollbarVisibility(.visible)")
+    func multiLineTableDrawsAScrollbar() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let lines = renderFrame(tui: tui, fm: fm, scrollbar: .visible)
+        let body = lines.joined(separator: "\n")
+        #expect(
+            !body.contains("more rows below"),
+            "the bar supersedes the text indicators:\n\(body)")
+        #expect(
+            lines.contains { $0.contains("█") || $0.contains("▓") || $0.contains("▲") },
+            "a bar (thumb or arrow) is drawn:\n\(body)")
+    }
+
+    /// A bar takes a column, not a line, so the rows get the WHOLE content area
+    /// — one more row than the indicator layout leaves.
+    @Test("A scrollbar costs a column, not a content line")
+    func scrollbarFreesTheIndicatorLine() {
+        let withBar = renderFrame(tui: TUIContext(), fm: FocusManager(), scrollbar: .visible)
+        let withIndicators = renderFrame(tui: TUIContext(), fm: FocusManager())
+        #expect(withBar.count == withIndicators.count, "the frame height is unchanged")
+        func rowCount(_ lines: [String]) -> Int { lines.filter { $0.contains("row ") }.count }
+        #expect(
+            rowCount(withBar) == rowCount(withIndicators) + 1,
+            "the freed indicator line shows another row: \(rowCount(withBar)) vs \(rowCount(withIndicators))")
+    }
+
+    /// Hidden is the default, and stays the default: nothing about the bar
+    /// support may make an un-asked-for one appear.
+    @Test("Without an opt-in a multi-line table still draws indicators")
+    func hiddenVisibilityKeepsIndicators() {
+        let body = renderFrame(tui: TUIContext(), fm: FocusManager()).joined(separator: "\n")
+        #expect(body.contains("more rows below"), "the default chrome is unchanged:\n\(body)")
+    }
+
+    /// The bar is a real control: it publishes a hit region in its own column,
+    /// so clicks and drags on it reach the scrollbar handler (the same wiring
+    /// the single-line path and the `List` use).
+    @Test("The multi-line scrollbar is clickable")
+    func multiLineScrollbarHasAHitRegion() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let buffer = renderBuffer(tui: tui, fm: fm, scrollbar: .visible)
+        #expect(
+            buffer.hitTestRegions.contains { $0.width == 1 && $0.height > 1 },
+            "the bar's single-column region is published: \(buffer.hitTestRegions)")
+    }
+
+    /// With no indicator line to reserve, the furthest scroll is the true last
+    /// screenful — the "list ends one row short / blank line at the bottom"
+    /// class the `List` hit in `ListMultiLineScrollTests`.
+    @Test("A scrollbar table scrolls to a flush bottom")
+    func scrollbarTableReachesTheBottom() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, scrollbar: .visible)
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler != nil)
+        handler?.scrollOffset = 1000
+        let lines = renderFrame(tui: tui, fm: fm, scrollbar: .visible)
+        let body = lines.joined(separator: "\n")
+        #expect(lines.contains { $0.contains("row 19") }, "the last row is reachable:\n\(body)")
+        #expect(
+            lines.filter { $0.contains("row ") }.count == 11,
+            "all 11 content lines carry rows — no reserved indicator line, no blank remainder:\n\(body)")
     }
 }
