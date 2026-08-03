@@ -896,6 +896,17 @@ extension ItemListHandler {
         return moved
     }
 
+    /// An absolute jump lands row-aligned (``ScrollableOffsetState``
+    /// requirement — its doc promises a sub-row-unit conformer discards the
+    /// clip too). Without this override a generic caller's Home — the focus
+    /// system's section scroll, a mid-drag navigator — jumped the OFFSET to 0
+    /// but left ``scrollTopClipLines`` where the wheel had put it, showing
+    /// row 0 with its first lines still scrolled off at the very top.
+    func scrollToOffset(_ offset: Int) {
+        scrollOffset = max(0, min(maxOffset, offset))
+        scrollTopClipLines = 0
+    }
+
     /// Clamps ``scrollTopClipLines`` to its valid range for the current rows:
     /// zero at the bottom (``maxOffset``), and always inside the top row's
     /// height. Called alongside ``ScrollableOffsetState/clampScrollOffset()``

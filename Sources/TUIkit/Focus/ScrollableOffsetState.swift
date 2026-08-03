@@ -133,6 +133,19 @@ public protocol ScrollableOffsetState: AnyObject {
     /// `any ScrollableOffsetState`: mid-drag navigators move whatever the
     /// pointer is over, which is resolved as an existential.
     func scrollToOffset(_ offset: Int)
+
+    /// A **user** jump to the very top — Home. Engages the top edge anchor
+    /// (§1.3: deliberately travelling to an edge is the clearest request to
+    /// sit at it) and drops any overscroll excursion.
+    ///
+    /// A requirement (with the obvious default) so a conformer with extra
+    /// tail state — ``ScrollViewHandler``'s `seekingTail` — can interpose,
+    /// and so it dispatches through `any ScrollableOffsetState`.
+    func userScrollToTop()
+
+    /// A **user** jump to the very bottom — End. Engages the bottom edge
+    /// anchor and drops any overscroll excursion. See ``userScrollToTop()``.
+    func userScrollToBottom()
 }
 
 // MARK: - Generic single-axis scroll state
@@ -354,6 +367,21 @@ extension ScrollableOffsetState {
         guard clamped != excursion else { return false }
         overscrollState.excursion = clamped
         return true
+    }
+
+    /// The default user Home jump: engage, land row-aligned at the top, drop
+    /// any excursion. See the requirement's doc.
+    public func userScrollToTop() {
+        engageEdgeAnchor(.top)
+        scrollToOffset(0)
+        clearOverscroll()
+    }
+
+    /// The default user End jump — the bottom-edge counterpart.
+    public func userScrollToBottom() {
+        engageEdgeAnchor(.bottom)
+        scrollToOffset(maxOffset)
+        clearOverscroll()
     }
 
     /// Drops any overscroll excursion, putting the content back against its

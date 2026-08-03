@@ -72,6 +72,21 @@ struct ScrollGranularityTests {
         #expect(!handler.scrollFine(by: -1), "at the very top a further up-step reports no movement")
     }
 
+    /// The protocol requirement's own doc promises a sub-row-unit conformer
+    /// discards the clip on an absolute jump — the override was missing, so a
+    /// generic caller's Home (the focus system's section scroll, a mid-drag
+    /// navigator) left the top row still partially scrolled off at offset 0.
+    @Test("An absolute jump discards the sub-row clip")
+    func scrollToOffsetClearsClip() {
+        let handler = makeHandler(count: 10, rowHeight: 3, contentHeight: 9, granularity: .line)
+        #expect(handler.scrollFine(by: 4))
+        #expect(handler.scrollOffset == 1 && handler.scrollTopClipLines == 1)
+
+        handler.scrollToOffset(0)
+        #expect(handler.scrollOffset == 0)
+        #expect(handler.scrollTopClipLines == 0, "Home must show the very top")
+    }
+
     @Test("Row granularity: fine steps jump whole rows (the classic behaviour)")
     func rowGranularityJumpsRows() {
         let handler = makeHandler(count: 10, rowHeight: 3, contentHeight: 9, granularity: .row)

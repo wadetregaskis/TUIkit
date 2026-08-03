@@ -725,18 +725,29 @@ extension FocusManager {
         let scrollers = section.focusables.compactMap { focusable -> (any ScrollableOffsetState)? in
             guard focusable.focusID != focusedID,
                 let scroller = focusable as? any ScrollableOffsetState,
+                // A gesture, so `.scrollDisabled` applies — the scroller's own
+                // key handler already declines these keys under it, and this
+                // fallback must not scroll it from the outside instead.
+                scroller.isScrollEnabled,
                 scroller.maxOffset > 0
             else { return nil }
             return scroller
         }
         guard scrollers.count == 1, let scroller = scrollers.first else { return false }
 
+        // These are USER scrolls, so they go through the user entry points —
+        // raw `scroll(by:)`/`scrollOffset` writes bypassed the shadow anchor
+        // and the sub-row clip: a bound anchor stayed engaged (snapping the
+        // viewport straight back on the next frame, so PageDown appeared
+        // dead), Home left a wheel's partial top clip in place, and End
+        // neither engaged bottom-follow nor set a ScrollView's tail seek —
+        // all of which the scroller's OWN key handler gets right.
         let page = max(1, scroller.viewportHeight)
         switch key {
-        case .pageUp: scroller.scroll(by: -page)
-        case .pageDown: scroller.scroll(by: page)
-        case .home: scroller.scrollOffset = 0
-        case .end: scroller.scrollOffset = scroller.maxOffset
+        case .pageUp: scroller.userScrollFine(by: -page)
+        case .pageDown: scroller.userScrollFine(by: page)
+        case .home: scroller.userScrollToTop()
+        case .end: scroller.userScrollToBottom()
         default: return false
         }
         return true

@@ -193,6 +193,14 @@ extension ScrollViewHandler {
         seekingTail = true
         clearOverscroll()
     }
+
+    /// The protocol's user End jump, interposed to keep `seekingTail`: an End
+    /// pressed while content is still streaming in must pin to the tail, not
+    /// to the offset the tail happened to be at.
+    public func userScrollToBottom() {
+        engageEdgeAnchor(.bottom)
+        scrollToBottom()
+    }
 }
 
 // MARK: - Key Event Handling
@@ -231,12 +239,10 @@ extension ScrollViewHandler {
             // releasing to `.window` as an ordinary scroll does — jumping
             // deliberately to an edge is the clearest statement a user can make
             // that they want to sit at it.
-            engageEdgeAnchor(.top)
-            scrollToTop()
+            userScrollToTop()
             return true
         case .end:
-            engageEdgeAnchor(.bottom)
-            scrollToBottom()
+            userScrollToBottom()
             return true
         case .left:
             // Scroll the horizontal axis (Shift-accelerated). Returns false (not
