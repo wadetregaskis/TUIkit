@@ -482,6 +482,28 @@ final class DragAndDropSession: @unchecked Sendable {
         end()
     }
 
+    /// Unwinds whatever gesture is in flight when the terminal's button
+    /// reporting is switched off mid-gesture — a render downgraded the
+    /// effective ``MouseSupport`` below clicks (a page with
+    /// `.mouseSupport(.disabled)` reached by keyboard while a button is
+    /// held). The release that would normally end the gesture is never
+    /// going to arrive, so unlike ``cancelReorder()`` this arms NO
+    /// pending-release latches — they would swallow the first legitimate
+    /// release after reporting returns.
+    func cancelForLostMouseReporting() {
+        if reorderFocusID != nil {
+            reorderHandler?.cancelReorder()
+            reorderFocusID = nil
+            reorderHandler = nil
+            cancelReturningToOrigin()
+        } else if active != nil {
+            cancelReturningToOrigin()
+        }
+        // The gesture is over even if it never became a drag; without this an
+        // armed edge auto-scroll keeps scrolling under a button nobody holds.
+        disarmAutoScroll()
+    }
+
     /// Advances the flight and reports where to draw the preview, or `nil` when
     /// nothing is returning. Called once per frame by the render loop, which
     /// keeps asking for frames while this returns non-`nil`.

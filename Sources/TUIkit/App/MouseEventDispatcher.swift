@@ -250,6 +250,20 @@ extension MouseEventDispatcher {
     /// events. The AppRunner calls this each frame after computing
     /// the union of base config and per-frame feature requests.
     func setActiveSupport(_ support: MouseSupport) {
+        // A downgrade below clicks turns the terminal's button reporting off
+        // — mid-gesture (a page with `.mouseSupport(.disabled)` reached by
+        // keyboard while a button is held), the release that would unwind the
+        // gesture will never arrive. Without this the press captures stayed
+        // stranded forever — routing every later event for that button to a
+        // dead frame's closure once reporting came back — and an armed drag
+        // auto-scroll kept scrolling a list under a button nobody was
+        // holding. There is no real release to deliver, so cancel what is in
+        // flight and forget the captures.
+        if activeSupport.clicks, !support.clicks {
+            dragAndDropSession?.cancelForLostMouseReporting()
+            pressedHandlers.removeAll()
+            handedOffPresses.removeAll()
+        }
         activeSupport = support
     }
 

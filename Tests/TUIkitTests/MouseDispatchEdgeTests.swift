@@ -87,6 +87,57 @@ struct MouseDispatchEdgeTests {
         #expect(eventsB.map(\.0) == [.pressed])
     }
 
+    /// A downgrade below clicks turns the terminal's button reporting off —
+    /// the release that would unwind a held gesture never arrives. The
+    /// dispatcher must forget the press capture (or it routes every later
+    /// event for that button to a dead frame's closure once reporting comes
+    /// back) and disarm the drag session's edge auto-scroll.
+    @Test("A mid-gesture support downgrade clears the stranded capture")
+    func supportDowngradeClearsCapture() {
+        let dispatcher = makeDispatcher()
+        var phases: [MousePhase] = []
+        let id = dispatcher.register { event in
+            phases.append(event.phase)
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 2, handlerID: id)
+        ])
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 1))
+        #expect(phases == [.pressed])
+
+        // Mid-gesture the effective support drops below clicks (a page with
+        // `.mouseSupport(.disabled)` reached by keyboard), then comes back.
+        dispatcher.setActiveSupport(.disabled)
+        dispatcher.setActiveSupport(.full)
+
+        // Later events for that button must NOT reach the stale capture.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 25, y: 5))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 25, y: 5))
+        #expect(phases == [.pressed], "the stranded capture was routed events: \(phases)")
+
+        // A fresh gesture works normally.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 1))
+        #expect(phases == [.pressed, .pressed, .released])
+    }
+
+    @Test("A mid-gesture support downgrade disarms the drag auto-scroll")
+    func supportDowngradeDisarmsAutoScroll() {
+        let dispatcher = makeDispatcher()
+        let session = DragAndDropSession()
+        dispatcher.dragAndDropSession = session
+
+        session.armAutoScroll()
+        #expect(session.autoScrollArmed)
+
+        dispatcher.setActiveSupport(.disabled)
+        #expect(
+            !session.autoScrollArmed,
+            "no release is coming to disarm it — the downgrade must")
+    }
+
     @Test("An unconsumed press does not capture; stray drags fall through safely")
     func unconsumedPressNoCapture() {
         let dispatcher = makeDispatcher()
