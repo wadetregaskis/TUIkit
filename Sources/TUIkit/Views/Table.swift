@@ -979,27 +979,11 @@ where Value.ID: Hashable {
         lineGranularity: Bool = false, height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int) {
         guard count > 0 else { return (0..<0, false, false, 0) }
-        var offset = min(max(0, scrollOffset), count - 1)
-        var topClip = topClip
-        // An "▲ N more" indicator spends a line to report that content is
-        // hidden. Where no more lines are hidden than the indicator itself
-        // costs, that is pure loss — it says "1 more row above" in the very
-        // line the row would have occupied. Start the window one row earlier
-        // instead and show the content itself; the freed indicator line pays
-        // for it exactly, so nothing below moves.
-        //
-        // Only an offset of 0 or 1 can qualify (every row is at least one
-        // line), which keeps this O(1) — no walking a tall table's rows.
-        let hiddenAbove =
-            switch offset {
-            case 0: topClip
-            case 1: height(0) + topClip
-            default: 2  // ">= 2", enough to earn the indicator
-            }
-        if hiddenAbove == 1 {
-            offset = 0
-            topClip = 0
-        }
+        // Absorb a top clip an indicator would cost more to announce than it
+        // hides — the shared rule, so the `List` cannot drift from it again.
+        let (offset, topClip) = ScrollWindowOrigin.absorbing(
+            offset: min(max(0, scrollOffset), count - 1), topClip: topClip,
+            firstRowHeight: height(0))
         // A line-granularity clip partially hides the top row — content above.
         let showAbove = offset > 0 || topClip > 0
 
