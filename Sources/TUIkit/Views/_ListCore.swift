@@ -217,6 +217,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private struct PopulatedRenderState {
         let handler: ItemListHandler<SelectionValue>
         let focusID: String
+        /// Where this frame was DRAWN from — the handler's raw scroll position
+        /// with any absorbed top clip already resolved away
+        /// (``ItemListHandler/resolvedWindowOrigin(firstRowHeight:)``). The
+        /// click mapping must measure from this, not from the handler, or the
+        /// absorbed frame puts every row a line off its hit band.
+        let origin: WindowOrigin
         let visibleRowYRanges: [VisibleRowRange]
         /// The rows behind ``visibleRowYRanges``, index-aligned with it (both
         /// are built from the same visible-window walk). Their buffers carry
@@ -237,6 +243,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private typealias VisibleRowRange = (
         rowIndex: Int, yStart: Int, height: Int, type: ListRowType<SelectionValue>
     )
+
+    /// The first row of the window and how many of its lines are scrolled off
+    /// above it — the one position the whole render path measures from. See
+    /// ``ItemListHandler/resolvedWindowOrigin(firstRowHeight:)``.
+    private typealias WindowOrigin = (offset: Int, topClip: Int)
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
@@ -414,6 +425,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
 
+        let origin = windowOrigin(
+            handler: handler, source: source, showsScrollbar: wantsScrollbar)
+
         // Reserve a line for each scroll indicator that is actually
         // present at this offset, so the rows plus indicators fill
         // the content area exactly — no wasted blank line at the
@@ -423,11 +437,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
         if wantsScrollbar {
             visibleRows = calculateVisibleRows(
-                source: source, handler: handler, viewportHeight: targetContentHeight)
+                source: source, origin: origin, viewportHeight: targetContentHeight)
         } else {
             visibleRows = resolveVisibleWindow(
                 source: source,
-                handler: handler,
+                origin: origin,
                 contentHeight: targetContentHeight,
                 overflowing: overflowing
             )
@@ -445,25 +459,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         visibleRows = decorateForReorder(
             visibleRows, handler: handler, context: context, palette: palette)
 
-        // Row width — the List is greedy on width (SwiftUI parity): fill the
-        // available interior, growing past it only when a row is itself wider
-        // than the space offered. Sizing to the widest *visible* row (the old
-        // non-explicit path) made the List's box jump width as you scrolled past
-        // wider/narrower rows; filling keeps it stable.
-        //
-        // `.fixedSize(horizontal:)` instead hugs content: the widest of ALL rows
-        // (not just the visible ones — that's what keeps it stable), so the box is
-        // content-sized and constant.
-        let maxRowWidth = visibleRows.map { $0.row.buffer.width }.max() ?? 0
-        let rowWidth: Int
-        if context.environment.fixedSizeWidth {
-            rowWidth = (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
-        } else {
-            // Fill the interior: full available width when borderless (`.plain`),
-            // minus the two border columns when bordered.
-            let borderOverhead = style.showsBorder ? 2 : 0
-            rowWidth = max(maxRowWidth, context.availableWidth - borderOverhead)
-        }
+        let rowWidth = rowWidth(
+            source: source, visibleRows: visibleRows, style: style, context: context)
 
         let lines: [String]
         let visibleRowYRanges: [VisibleRowRange]
@@ -472,7 +469,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if wantsScrollbar {
             let bar = listScrollbarCells(
                 source: source,
-                handler: handler,
+                origin: origin,
                 visibleRows: visibleRows,
                 contentHeight: targetContentHeight,
                 context: context,
@@ -482,12 +479,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             (lines, visibleRowYRanges) = composeScrollbarRowLines(
                 visibleRows: visibleRows,
                 handler: handler,
+                origin: origin,
                 listHasFocus: listHasFocus,
                 contentRowWidth: contentRowWidth,
                 bar: bar,
                 style: style,
-                context: context,
-                palette: palette
+                context: context
             )
             // The bar is the last interior column: border (1) + left padding, then
             // the content, then the bar cell. Matches the `1 + paddingTop` content
@@ -497,13 +494,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         } else {
             (lines, visibleRowYRanges) = composeRowLines(
                 handler: handler,
+                origin: origin,
                 visibleRows: visibleRows,
                 listHasFocus: listHasFocus,
                 rowWidth: rowWidth,
                 contentHeight: targetContentHeight,
                 style: style,
-                context: context,
-                palette: palette
+                context: context
             )
         }
 
@@ -512,6 +509,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
+                origin: origin,
                 visibleRowYRanges: visibleRowYRanges,
                 visibleRows: visibleRows,
                 dropInsertion: (source.allContent
@@ -565,6 +563,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return PopulatedRenderState(
             handler: handler,
             focusID: persistedFocusID,
+            origin: (0, 0),
             visibleRowYRanges: [],
             visibleRows: [],
             dropInsertion: (source.allContent
@@ -776,14 +775,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// for a given click position).
     private func composeRowLines(
         handler: ItemListHandler<SelectionValue>,
+        origin: WindowOrigin,
         visibleRows: [(Int, SelectableListRow<SelectionValue>)],
         listHasFocus: Bool,
         rowWidth: Int,
         contentHeight: Int,
         style: any ListStyle,
-        context: RenderContext,
-        palette: any Palette
+        context: RenderContext
     ) -> (lines: [String], ranges: [VisibleRowRange]) {
+        let palette = context.environment.palette
         // The indicator lines are chrome — they describe where the content sits —
         // so the rows are collected separately and an overscroll slide moves only
         // them (§1.5). `lines` is assembled from the three parts at the end.
@@ -798,10 +798,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let indicatorEmphasis = scrollIndicatorEmphasis(isFocused: listHasFocus, context: context)
         let numberLocale = context.environment.locale
 
-        if handler.hasContentAbove || handler.scrollTopClipLines > 0 {
+        if origin.offset > 0 || origin.topClip > 0 {
             topIndicator = renderScrollIndicator(
                 direction: .up,
-                count: max(1, handler.rowsAbove),
+                count: max(1, origin.offset),
                 unit: .rows,
                 width: rowWidth,
                 palette: palette,
@@ -838,9 +838,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             )
             // Line granularity: the top visible row enters partially, its
-            // first `clip` lines scrolled off above the viewport.
-            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
-                styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
+            // first `clip` lines scrolled off above the viewport. Clipped by
+            // the RESOLVED origin, which is also what the window walk, the
+            // indicators, the bands and the click mapping measure from.
+            if rowIndex == origin.offset, origin.topClip > 0 {
+                styledLines.removeFirst(min(origin.topClip, styledLines.count - 1))
             }
             // …and the bottom row leaves partially, clipped at the budget.
             // During a reorder hold the budget clip is deferred to
@@ -917,7 +919,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// `.hidden` list (the default) never reaches here at all.
     private func listScrollbarCells(
         source: RowSource<SelectionValue>,
-        handler: ItemListHandler<SelectionValue>,
+        origin: WindowOrigin,
         visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         contentHeight: Int,
         context: RenderContext,
@@ -927,14 +929,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let offsetLines: Int
         if visibleRows.allSatisfy({ $0.row.buffer.height == 1 }) {
             extentLines = source.count
-            offsetLines = handler.scrollOffset
+            offsetLines = origin.offset
         } else {
             // A line-granularity top clip adds its hidden lines to the
             // offset, so the thumb tracks fine wheel steps exactly.
             extentLines = (0..<source.count).reduce(0) { $0 + source.row(at: $1).buffer.height }
             offsetLines =
-                (0..<handler.scrollOffset).reduce(0) { $0 + source.row(at: $1).buffer.height }
-                + handler.scrollTopClipLines
+                (0..<origin.offset).reduce(0) { $0 + source.row(at: $1).buffer.height }
+                + origin.topClip
         }
 
         return ScrollbarRenderer.verticalScrollbar(
@@ -953,13 +955,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func composeScrollbarRowLines(
         visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         handler: ItemListHandler<SelectionValue>,
+        origin: WindowOrigin,
         listHasFocus: Bool,
         contentRowWidth: Int,
         bar: [String],
         style: any ListStyle,
-        context: RenderContext,
-        palette: any Palette
+        context: RenderContext
     ) -> (lines: [String], ranges: [VisibleRowRange]) {
+        let palette = context.environment.palette
         let contentHeight = bar.count
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
         func barCell(at line: Int) -> String { line < bar.count ? bar[line] : emptyCell }
@@ -986,8 +989,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
             // Line granularity: the top visible row enters partially (see
             // composeRowLines)…
-            if rowIndex == handler.scrollOffset, handler.scrollTopClipLines > 0 {
-                styledLines.removeFirst(min(handler.scrollTopClipLines, styledLines.count - 1))
+            if rowIndex == origin.offset, origin.topClip > 0 {
+                styledLines.removeFirst(min(origin.topClip, styledLines.count - 1))
             }
             // …and the bottom row leaves partially: the bar area's height is
             // the hard budget, so the list never grows to fit a whole row.
@@ -1234,12 +1237,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Border column (when drawn) + the leading space `renderPlainLine`
         // prefixes to every row line.
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
-        let topClip = state.handler.scrollTopClipLines
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
             // Line granularity: the top row's first `clip` lines are scrolled
             // off above the viewport, so its row-local coordinates shift up
-            // by that much. Every other row has no clip.
-            let clip = visible.index == state.handler.scrollOffset ? topClip : 0
+            // by that much. Every other row has no clip. Measured from the
+            // RESOLVED origin — the same one the rows were drawn from.
+            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
             for region in visible.row.buffer.hitTestRegions {
                 // Rows can be partially visible — the top row clipped above
                 // (line granularity), the last row clipped below: intersect
@@ -1851,45 +1854,88 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// height equal to ``contentHeight`` everywhere — eliminating the
     /// wasted blank line at the ends that used to bump the "N more
     /// below" indicator one row too high.
+    /// Where this frame is DRAWN from. Resolved once and threaded through
+    /// every consumer — the window walk, the indicators, the row clip, the
+    /// published bands and the click mapping — because a renderer that draws
+    /// from the absorbed origin while the hit test measures from the raw one
+    /// puts every row a line off its band (exactly how the `Table` broke
+    /// before it did the same).
+    ///
+    /// A scrollbar spends no indicator line, so there is nothing to absorb:
+    /// that path draws from the handler's raw position.
+    private func windowOrigin(
+        handler: ItemListHandler<SelectionValue>,
+        source: RowSource<SelectionValue>,
+        showsScrollbar: Bool
+    ) -> WindowOrigin {
+        guard !showsScrollbar else { return (handler.scrollOffset, handler.scrollTopClipLines) }
+        return handler.resolvedWindowOrigin(firstRowHeight: source.row(at: 0).buffer.height)
+    }
+
+    /// The width the rows are laid out at. The List is greedy on width (SwiftUI
+    /// parity): fill the available interior, growing past it only when a row is
+    /// itself wider than the space offered. Sizing to the widest *visible* row
+    /// (the old non-explicit path) made the List's box jump width as you
+    /// scrolled past wider/narrower rows; filling keeps it stable.
+    ///
+    /// `.fixedSize(horizontal:)` instead hugs content: the widest of ALL rows
+    /// (not just the visible ones — that's what keeps it stable), so the box is
+    /// content-sized and constant.
+    private func rowWidth(
+        source: RowSource<SelectionValue>,
+        visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
+        style: any ListStyle,
+        context: RenderContext
+    ) -> Int {
+        if context.environment.fixedSizeWidth {
+            return (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
+        }
+        // Fill the interior: full available width when borderless (`.plain`),
+        // minus the two border columns when bordered.
+        let maxRowWidth = visibleRows.map { $0.row.buffer.width }.max() ?? 0
+        let borderOverhead = style.showsBorder ? 2 : 0
+        return max(maxRowWidth, context.availableWidth - borderOverhead)
+    }
+
     private func resolveVisibleWindow(
         source: RowSource<SelectionValue>,
-        handler: ItemListHandler<SelectionValue>,
+        origin: WindowOrigin,
         contentHeight: Int,
         overflowing: Bool
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         guard overflowing else {
             return calculateVisibleRows(
-                source: source, handler: handler, viewportHeight: contentHeight)
+                source: source, origin: origin, viewportHeight: contentHeight)
         }
         // A line-granularity top clip means the top row is partially hidden,
         // which warrants the "above" indicator just like whole hidden rows.
-        let contentAbove = handler.scrollOffset > 0 || handler.scrollTopClipLines > 0
+        let contentAbove = origin.offset > 0 || origin.topClip > 0
         let aboveLines = contentAbove ? 1 : 0
         // First fill assuming no "below" indicator…
         let withoutBelow = calculateVisibleRows(
             source: source,
-            handler: handler,
+            origin: origin,
             viewportHeight: max(1, contentHeight - aboveLines))
         // …then, if rows remain past that window, a "below" indicator
         // is needed, so reserve its line and refill.
-        let belowShown = handler.scrollOffset + withoutBelow.count < source.count
+        let belowShown = origin.offset + withoutBelow.count < source.count
         guard belowShown else { return withoutBelow }
         return calculateVisibleRows(
             source: source,
-            handler: handler,
+            origin: origin,
             viewportHeight: max(1, contentHeight - aboveLines - 1))
     }
 
     private func calculateVisibleRows(
         source: RowSource<SelectionValue>,
-        handler: ItemListHandler<SelectionValue>,
+        origin: WindowOrigin,
         viewportHeight: Int
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         var result: [(Int, SelectableListRow<SelectionValue>)] = []
         // A line-granularity top clip hides the first `clip` lines of the top
         // row, freeing that many lines for content further down.
-        var linesUsed = -handler.scrollTopClipLines
-        var currentIndex = handler.scrollOffset
+        var linesUsed = -origin.topClip
+        var currentIndex = origin.offset
 
         // Only these rows are materialised — `source.row(at:)` builds (and
         // renders) the content box on demand and memoises it.

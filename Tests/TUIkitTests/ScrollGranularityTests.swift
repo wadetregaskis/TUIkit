@@ -281,6 +281,54 @@ struct ScrollGranularityTests {
         #expect(body.contains("1 more row above"), "the above indicator marks the partial row (singular):\n\(body)")
     }
 
+    /// Line granularity, ONE fine step: exactly one line is hidden above, and
+    /// an "▲ 1 more row above" indicator would spend a whole line reporting
+    /// the single line it hides — pure loss, and it says "row" when only a
+    /// line is off-screen. The `Table` absorbs that clip (it draws from the
+    /// un-clipped origin, the freed indicator line paying for the absorbed
+    /// line exactly, so nothing below moves); the `List` must too.
+    @Test("List: a one-line top clip is drawn, not announced")
+    func listAbsorbsOneLineTopClip() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        var env = EnvironmentValues()
+        env.focusManager = focusManager
+        env.applyRuntimeServices(from: tui)
+        env.scrollGranularity = .line
+
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(["a", "b", "c", "d", "e", "f"], id: \.self) { name in
+                Text((1...3).map { "\(name)-\($0)" }.joined(separator: "\n"))
+            }
+        }
+        .frame(height: 11)
+
+        func renderOnce() -> String {
+            var context = RenderContext(
+                availableWidth: 24, availableHeight: 14, environment: env, tuiContext: tui)
+            context.hasExplicitWidth = true
+            context.hasExplicitHeight = true
+            return renderToBuffer(view, context: context).lines.map(\.stripped)
+                .joined(separator: "\n")
+        }
+
+        let atTop = renderOnce()
+        let handler = focusManager.currentFocused as? ItemListHandler<String>
+        #expect(handler != nil, "the list registers as the focused element")
+        #expect(handler?.scrollFine(by: 1) == true)
+        #expect(handler?.scrollOffset == 0, "one line into the first row")
+        #expect(handler?.scrollTopClipLines == 1)
+
+        let body = renderOnce()
+        #expect(
+            !body.contains("more row above"),
+            "a single hidden line does not earn an indicator line:\n\(body)")
+        #expect(body.contains("a-1"), "the absorbed line is drawn instead:\n\(body)")
+        // The freed indicator line pays for the absorbed line exactly, so the
+        // absorbed frame IS the un-scrolled frame — nothing below moves.
+        #expect(body == atTop, "the absorbed frame draws the un-clipped window:\n\(body)")
+    }
+
     @Test("List (row granularity): a wheel event moves three whole ROWS")
     func listRowGranularityJumpsWholeRow() {
         let body = renderList(granularity: .row, wheelTicks: 1)
