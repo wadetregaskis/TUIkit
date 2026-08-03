@@ -49,6 +49,11 @@ internal struct InputHandler {
 
     /// Called when the user requests to quit the application.
     let onQuit: () -> Void
+
+    /// Invoked when Ctrl-Z falls through every layer unconsumed — the runner
+    /// re-raises SIGTSTP so the suspend machinery handles the key and the
+    /// external signal identically.
+    let onSuspend: () -> Void
 }
 
 // MARK: - Internal API
@@ -151,6 +156,19 @@ extension InputHandler {
             if statusBar.isQuitAllowed {
                 onQuit()
             }
+            return true
+        }
+
+        // Ctrl-Z: job-control suspend. Raw mode clears ISIG, so the terminal
+        // driver never turns ^Z into SIGTSTP — it arrives here as an ordinary
+        // key event. Reaching THIS layer means no view claimed it (a text
+        // editor binding Ctrl-Z to undo wins, exactly as it should), so give
+        // it its shell meaning: re-raise it as the signal, which the suspend
+        // machinery observes and acts on between frames.
+        if event.ctrl, case .character(let character) = event.key,
+            character == "z" || character == "Z"
+        {
+            onSuspend()
             return true
         }
 

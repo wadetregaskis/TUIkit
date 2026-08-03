@@ -88,6 +88,8 @@ final class SignalManager {
     private enum Kind {
         case resize
         case shutdown
+        case suspend
+        case resumed
     }
 
     private struct Registration {
@@ -108,6 +110,20 @@ final class SignalManager {
     /// reads it and breaks so the terminal-restore teardown runs.
     private var needsShutdown = false
 
+    /// Set by SIGTSTP (Ctrl-Z). The signal itself no longer stops the process
+    /// (its default action is suppressed by the source registration), because
+    /// stopping mid-frame would strand the user's shell in raw mode on the
+    /// alternate screen. The loop consumes this, hands the terminal back, and
+    /// then ACTUALLY stops — see `App.suspendUntilContinued`.
+    private var suspendRequested = false
+
+    /// Set by SIGCONT. The case this exists for is resuming from an *external*
+    /// `SIGSTOP`, which cannot be caught — nothing was torn down, so nothing
+    /// needs rebuilding, but the screen may have been disturbed while the
+    /// process slept and the loop repaints it. (Our own suspend path consumes
+    /// the flag its `fg` sets, so it doesn't double-repaint through here.)
+    private var continueReceived = false
+
     /// Wakes the demand-driven run loop when a signal lands while it is
     /// idle-blocked with nothing to render.
     private var wake: (@MainActor @Sendable () -> Void)?
@@ -120,6 +136,20 @@ final class SignalManager {
     func consumeResizeFlag() -> Bool {
         defer { terminalResized = false }
         return terminalResized
+    }
+
+    /// Returns `true` if a suspend (Ctrl-Z / SIGTSTP) was requested since the
+    /// last call, then resets the flag (consume-on-read).
+    func consumeSuspendFlag() -> Bool {
+        defer { suspendRequested = false }
+        return suspendRequested
+    }
+
+    /// Returns `true` if a SIGCONT arrived since the last call, then resets
+    /// the flag (consume-on-read).
+    func consumeContinueFlag() -> Bool {
+        defer { continueReceived = false }
+        return continueReceived
     }
 
     /// Installs signal sources for SIGWINCH, SIGINT, and SIGTERM.
@@ -151,6 +181,15 @@ final class SignalManager {
         register(SIGINT, kind: .shutdown, barrier: barrier)
         register(SIGTERM, kind: .shutdown, barrier: barrier)
         register(SIGWINCH, kind: .resize, barrier: barrier)
+        // Ctrl-Z. Registration suppresses the default stop action on both
+        // platforms (Darwin via the SIG_IGN below, Linux via libdispatch's own
+        // handler), which is the point: stopping the moment the signal lands
+        // would strand the user's shell in raw mode on the alternate screen.
+        // The loop restores the terminal first, then stops for real.
+        register(SIGTSTP, kind: .suspend, barrier: barrier)
+        // The other side of an *external* SIGSTOP (uncatchable): repaint,
+        // because the screen may have been disturbed while the process slept.
+        register(SIGCONT, kind: .resumed, barrier: barrier)
 
         // Block until every source's registration handler has fired — i.e. all
         // sources are armed — so no early signal slips through the startup gap.
@@ -187,6 +226,8 @@ final class SignalManager {
                 switch kind {
                 case .resize: self.terminalResized = true
                 case .shutdown: self.needsShutdown = true
+                case .suspend: self.suspendRequested = true
+                case .resumed: self.continueReceived = true
                 }
                 // Set the flag THEN wake, so the resumed loop sees it already set.
                 self.wake?()

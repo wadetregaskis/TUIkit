@@ -250,7 +250,8 @@ struct AlertDismissalTests {
             appearanceManager: ThemeManager(items: [StubTheme()]),
             keyboardShortcuts: tui.keyboardShortcuts,
             dragAndDropSession: nil,
-            onQuit: {})
+            onQuit: {},
+            onSuspend: {})
         return (tui, context, statusBar, handler)
     }
 

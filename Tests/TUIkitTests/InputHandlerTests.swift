@@ -57,6 +57,7 @@ struct InputHandlerTests {
         var statusBarRan = false
         var dispatcherRan = false
         var quitCount = 0
+        var suspendCount = 0
     }
 
     /// An `InputHandler` over fresh collaborators, bundled with the
@@ -92,7 +93,8 @@ struct InputHandlerTests {
             appearanceManager: appearance,
             keyboardShortcuts: shortcuts,
             dragAndDropSession: nil,
-            onQuit: { probe.quitCount += 1 }
+            onQuit: { probe.quitCount += 1 },
+            onSuspend: { probe.suspendCount += 1 }
         )
         return Fixture(
             handler: handler, statusBar: statusBar, dispatcher: dispatcher,
@@ -162,6 +164,34 @@ struct InputHandlerTests {
         fixture.handler.handle(KeyEvent(key: .character("q")))
 
         #expect(fixture.probe.quitCount == 1)
+    }
+
+    /// Raw mode clears ISIG, so Ctrl-Z arrives as a KEY, not a SIGTSTP — and
+    /// its shell meaning (suspend) applies only when no view claimed it.
+    @Test("Layer 4: an unconsumed Ctrl-Z requests suspension")
+    func unconsumedCtrlZSuspends() {
+        let fixture = makeFixture()
+
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("z"), ctrl: true))
+
+        #expect(consumed)
+        #expect(fixture.probe.suspendCount == 1)
+        #expect(fixture.probe.quitCount == 0)
+    }
+
+    /// A view that binds Ctrl-Z (an editor's undo, say) wins over job control,
+    /// exactly as it should — the suspend meaning is the fallback, not a claim.
+    @Test("A view that consumes Ctrl-Z pre-empts the suspend")
+    func consumedCtrlZDoesNotSuspend() {
+        let fixture = makeFixture()
+        fixture.dispatcher.addHandler { event in
+            event.ctrl && event.key == .character("z")
+        }
+
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("z"), ctrl: true))
+
+        #expect(consumed)
+        #expect(fixture.probe.suspendCount == 0, "the view's binding won")
     }
 
     @Test("Layer 4 't' cycles the palette when the theme item is shown")

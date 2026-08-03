@@ -127,6 +127,12 @@ extension AppRunner {
             dragAndDropSession: tuiContext.dragAndDropSession,
             onQuit: { [weak self] in
                 self?.isRunning = false
+            },
+            // Ctrl-Z, unconsumed by any view: give it its shell meaning by
+            // re-raising the signal it would have been in cooked mode. The
+            // SIGTSTP source observes it and the loop suspends between frames.
+            onSuspend: {
+                kill(getpid(), SIGTSTP)
             }
         )
     }
@@ -263,6 +269,23 @@ extension AppRunner {
 
             // Terminal resize (SIGWINCH): rewrite every line at the new size.
             if signals.consumeResizeFlag() {
+                renderer.invalidateDiffCache()
+                pendingRender = true
+            }
+
+            // Ctrl-Z (SIGTSTP): hand the terminal back to the shell, stop for
+            // real, and rebuild everything when `fg` resumes us. Runs here —
+            // not in the signal handler — because only the loop owns the
+            // terminal state it has to tear down and rebuild.
+            if signals.consumeSuspendFlag() {
+                suspendUntilContinued(renderer: renderer)
+                pendingRender = true
+            }
+
+            // Resumed from an *external* SIGSTOP, which cannot be caught, so
+            // nothing was torn down and nothing needs rebuilding — but the
+            // screen may have been disturbed while the process slept.
+            if signals.consumeContinueFlag() {
                 renderer.invalidateDiffCache()
                 pendingRender = true
             }
@@ -422,6 +445,37 @@ extension AppRunner {
     /// through plain (non-`@State`) handler properties that don't themselves
     /// call `setNeedsRender()`, so without this an arrow-key List navigation
     /// would move the selection but never repaint.
+    /// The Ctrl-Z round trip: hands the terminal back to the shell exactly the
+    /// way quitting would, stops the process for real, and — execution resumes
+    /// at the next line when `fg` delivers SIGCONT — rebuilds the terminal
+    /// exactly the way `run` set it up.
+    ///
+    /// `SIGSTOP` is used for the stop because it cannot be caught or ignored:
+    /// SIGTSTP's default action is suppressed by the signal source's
+    /// registration (stopping the instant it lands would strand the shell in
+    /// raw mode on the alternate screen), so re-raising it would just re-enter
+    /// the handler.
+    ///
+    /// The mouse mode is set to `.none` on the way down and NOT re-applied here
+    /// on the way up: the loop re-evaluates the effective mode every frame and
+    /// re-emits it on change, so the first frame after resume — forced by the
+    /// diff-cache invalidation — restores whatever mode the scene wants.
+    fileprivate func suspendUntilContinued(renderer: RenderLoop<A>) {
+        terminal.applyMouseSupport(.disabled)
+        terminal.disableRawMode()
+        terminal.showCursor()
+        terminal.exitAlternateScreen()
+        kill(getpid(), SIGSTOP)
+        // ── stopped; `fg` resumes here ──
+        terminal.enterAlternateScreen()
+        terminal.hideCursor()
+        terminal.enableRawMode()
+        renderer.invalidateDiffCache()
+        // Our own resume delivered a SIGCONT too; the repaint is already
+        // forced above, so consume the flag rather than repainting twice.
+        _ = signals.consumeContinueFlag()
+    }
+
     fileprivate func drainTerminalEvents(
         inputHandler: InputHandler,
         renderer: RenderLoop<A>,

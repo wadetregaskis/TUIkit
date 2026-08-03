@@ -323,8 +323,9 @@ Tools/
 ├── Profiling/            Instruments Time Profiler tooling (record.sh, drive.py,
 │                         analyze_timeprofile.py, idle_cpu.py) and the RenderHarness
 │                         executable (no-PTY render loop for `xctrace --launch`)
-├── Smoke/                Drives the Example and Stress apps through a PTY and walks
-│                         every page, to catch crashes only reachable interactively
+├── Smoke/                Drives the Example and Stress apps through a PTY: walks
+│                         every page (crashes only reachable interactively) and
+│                         probes the Ctrl-Z suspend / fg resume round trip
 └── TerminalProbes/       Reproducible terminal-behaviour probes backing
                           Documentation/Terminal-compatibility.md
 
