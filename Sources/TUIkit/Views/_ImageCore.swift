@@ -298,6 +298,19 @@ extension _ImageCore {
                         source: src, maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
                 else { return }
                 await MainActor.run {
+                    // Cancellation is observed HERE, not (only) inside the
+                    // decode. `loadPhase` returns nil when it notices — but a
+                    // `.file` decode is synchronous with no cancellation
+                    // points at all, so the flag `cancelTask` sets on a source
+                    // change is never seen by it. Without this check the OLD
+                    // task publishes its stale result whenever it finishes
+                    // second, and the image the user switched away from
+                    // replaces the one they switched to (or an error from the
+                    // abandoned path lands on a view that loaded fine).
+                    //
+                    // Last thing before the write, so it also covers a cancel
+                    // that arrives during the hop onto the main actor.
+                    guard !Task.isCancelled else { return }
                     phaseBox.value = phase
                 }
             }

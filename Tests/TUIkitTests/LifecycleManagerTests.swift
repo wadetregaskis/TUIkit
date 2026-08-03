@@ -274,6 +274,27 @@ struct LifecycleManagerTaskTests {
         #expect(secondExecuted == true)
     }
 
+    /// `Image`'s load task publishes its decoded phase only when the task is
+    /// still live (`_ImageCore.manageLoadLifecycle`). That guard is worth
+    /// nothing unless `cancelTask` actually reaches the closure body, which is
+    /// what this pins: a `.file` decode is synchronous with NO cancellation
+    /// points, so the flag is the only signal the closure ever gets, and it
+    /// must survive the hop back onto the main actor where the write happens.
+    @Test("A cancelled task sees its cancellation, even after hopping to the main actor")
+    func cancellationReachesTheClosureBody() async throws {
+        let manager = LifecycleManager()
+        let observed = Cancellation()
+        manager.startTask(token: "load", priority: .medium) {
+            // Stand-in for the decode: long enough to be cancelled mid-flight.
+            try? await Task.sleep(for: .seconds(10))
+            await MainActor.run { observed.record(Task.isCancelled) }
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        manager.cancelTask(token: "load")
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(observed.value == true, "the publish site must be able to see the cancel")
+    }
+
     @Test("reset does not crash with running tasks")
     func resetWithRunningTasks() async throws {
         let manager = LifecycleManager()
@@ -356,4 +377,11 @@ struct LifecycleManagerRetentionTests {
         frameWith(false)  // leaves again
         #expect(fired == 2, "the release of a fired callback must not eat later cycles")
     }
+}
+
+/// A main-actor-written flag a detached task can report into.
+@MainActor
+private final class Cancellation {
+    private(set) var value: Bool?
+    func record(_ cancelled: Bool) { value = cancelled }
 }
