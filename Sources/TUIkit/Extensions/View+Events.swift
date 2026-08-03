@@ -389,12 +389,24 @@ extension View {
     ///
     /// The task is automatically cancelled when the view disappears.
     ///
-    /// The action runs on the **main actor**, as SwiftUI's does — its closure
-    /// is written inside a view body and inherits that isolation — so reading
-    /// and writing `@State` in it is safe. Work that must not occupy the main
-    /// actor suspends off it explicitly, exactly as in SwiftUI: `await`
-    /// something `@concurrent` (or an actor's method) and publish the result
-    /// on return.
+    /// The action **inherits the isolation of the context it is written in**,
+    /// as SwiftUI's does. Written inside a view body — which is `@MainActor` —
+    /// it runs on the main actor, so reading and writing `@State` in it is
+    /// safe and needs no `await`.
+    ///
+    /// That is the default, not a rule: the parameter carries whatever
+    /// isolation the closure actually has, so an action that should not occupy
+    /// the main actor says so and runs elsewhere.
+    ///
+    /// ```swift
+    /// .task { model.rows = await load() }        // main actor (the default)
+    /// .task { @concurrent in await reindex() }   // off the main actor
+    /// .task(myGlobalActorFunction)               // wherever that is isolated
+    /// ```
+    ///
+    /// The remaining option is unchanged from SwiftUI: keep the action on the
+    /// main actor and `await` something `@concurrent` (or an actor's method)
+    /// from inside it, publishing the result on return.
     ///
     /// # Example
     ///
@@ -415,7 +427,7 @@ extension View {
     /// - Returns: A view that starts the task on appearance.
     public func task(
         priority: TaskPriority = .userInitiated,
-        _ action: @escaping @MainActor @Sendable () async -> Void
+        @_inheritActorContext _ action: sending @escaping @isolated(any) @Sendable () async -> Void
     ) -> some View {
         TaskModifier(
             content: self,
@@ -451,7 +463,7 @@ extension View {
     public func task<ID: Equatable>(
         id value: ID,
         priority: TaskPriority = .userInitiated,
-        _ action: @escaping @MainActor @Sendable () async -> Void
+        @_inheritActorContext _ action: sending @escaping @isolated(any) @Sendable () async -> Void
     ) -> some View {
         TaskModifier(
             content: self,

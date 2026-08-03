@@ -168,11 +168,16 @@ extension LifecycleManager {
     /// - Parameters:
     ///   - token: Unique identifier for the view.
     ///   - priority: The task priority.
-    ///   - operation: The async operation to execute.
+    ///   - operation: The async operation to execute. It runs on ITS OWN
+    ///     isolation: a closure written at a `@MainActor` call site inherits
+    ///     that and runs on the main actor, while a value forwarded from
+    ///     elsewhere (what `TaskModifier` hands over) keeps whatever isolation
+    ///     the app gave it.
     func startTask(
         token: String,
         priority: TaskPriority,
-        operation: @escaping @MainActor @Sendable () async -> Void
+        @_inheritActorContext operation: sending @escaping @isolated(any) @Sendable () async ->
+            Void
     ) {
         lock.lock()
         defer { lock.unlock() }
@@ -180,17 +185,17 @@ extension LifecycleManager {
         // observe their effects and no disappear pass to cancel them.
         guard firesEffects else { return }
         tasks[token]?.cancel()
-        // MAIN-ACTOR isolated, as SwiftUI's `.task` is: its closure is written
-        // inside a `@MainActor` view body and inherits that isolation, so
+        // Started ON THE OPERATION'S OWN ISOLATION: the `@isolated(any)` value
+        // carries it, and `Task.init` honours it with no hop. For a closure
+        // written in a view body that is the main actor, so
         // `results = await search(query)` — the example this framework's own
-        // documentation gives — is safe there. Running it nonisolated (the old
-        // behaviour) made that same line an off-main `@State` write racing the
-        // render loop's reads. Work that must not occupy the main actor
-        // suspends off it explicitly, exactly as in SwiftUI: `await` something
-        // `@concurrent`, as `_ImageCore`'s decode does.
-        tasks[token] = Task(priority: priority) { @MainActor in
-            await operation()
-        }
+        // documentation gives — is a safe `@State` write; running it
+        // nonisolated (the behaviour before `.task` was isolated at all) made
+        // that same line an off-main write racing the render loop's reads.
+        // Pinning it to `@MainActor` here instead — the behaviour in between —
+        // was safe but left an app no way to say "not on the main actor",
+        // which the isolation-carrying parameter now allows.
+        tasks[token] = Task(priority: priority, operation: operation)
     }
 
     /// Cancels and removes the task associated with the given token.
