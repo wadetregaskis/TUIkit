@@ -572,7 +572,13 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
             let child = slot.child
             let spacingBefore = slot.spacingBefore
-            let rendered = child.render(width: width, height: window.viewportHeight, context: childContext)
+            // Render at the SLOT's height, not the viewport's: the slot walk
+            // measured the row's natural height, and the canvas below pads to
+            // exactly that — but the render used to be clamped to the
+            // viewport, so any row TALLER than the viewport had its tail
+            // permanently blanked (scrolling to the row's later lines showed
+            // empty rows the content height and scrollbar accounted for).
+            let rendered = child.render(width: width, height: slot.height, context: childContext)
             var slot = FrameBuffer()
             if spacingBefore > 0 {
                 slot.appendVertically(FrameBuffer(emptyWithHeight: spacingBefore), spacing: 0)

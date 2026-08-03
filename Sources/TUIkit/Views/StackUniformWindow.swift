@@ -305,8 +305,12 @@ extension _VStackCore {
     private func uniformRowSlot(
         _ child: ChildView, extent: Int, width: Int, viewportHeight: Int, context: RenderContext
     ) -> FrameBuffer {
+        // Render at the slot's extent, not the viewport: a uniform row taller
+        // than the viewport otherwise loses its tail to the render clamp
+        // while the slot pads the loss with blanks (see the twin comment in
+        // `_VStackCore.renderViewportWindow`).
         let rendered = alignBuffer(
-            child.render(width: width, height: viewportHeight, context: context),
+            child.render(width: width, height: extent, context: context),
             toWidth: width, alignment: alignment)
         var slot = FrameBuffer()
         slot.appendVertically(rendered, spacing: 0)
