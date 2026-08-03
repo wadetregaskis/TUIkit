@@ -77,6 +77,15 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// `.released`.
     private var pressedHandlers: [MouseButton: PressCapture] = [:]
 
+    /// The support in force at the END of the previous frame — what the
+    /// terminal's reporting mode was actually set to. The mid-gesture
+    /// downgrade in `setActiveSupport` compares frame-final against
+    /// frame-final: the render pass transiently sets the scene BASE mid-frame
+    /// (before per-frame feature requests are collected), and comparing
+    /// against that would fire the unwind every frame a dialog elevates
+    /// clicks above the base.
+    private var frameFinalSupport: MouseSupport = .disabled
+
     /// Set by the handler currently taking a `.pressed` event to say it wants
     /// no drag capture — see ``handOffGesture()``. Read (and cleared) around
     /// each handler call, so it can only ever speak for that one press.
@@ -246,23 +255,35 @@ extension MouseEventDispatcher {
         configOverride = support
     }
 
-    /// Updates the effective configuration used to filter incoming
-    /// events. The AppRunner calls this each frame after computing
-    /// the union of base config and per-frame feature requests.
-    func setActiveSupport(_ support: MouseSupport) {
-        // A downgrade below clicks turns the terminal's button reporting off
-        // — mid-gesture (a page with `.mouseSupport(.disabled)` reached by
-        // keyboard while a button is held), the release that would unwind the
-        // gesture will never arrive. Without this the press captures stayed
-        // stranded forever — routing every later event for that button to a
-        // dead frame's closure once reporting came back — and an armed drag
-        // auto-scroll kept scrolling a list under a button nobody was
-        // holding. There is no real release to deliver, so cancel what is in
-        // flight and forget the captures.
-        if activeSupport.clicks, !support.clicks {
-            dragAndDropSession?.cancelForLostMouseReporting()
-            pressedHandlers.removeAll()
-            handedOffPresses.removeAll()
+    /// Updates the effective configuration used to filter incoming events.
+    ///
+    /// Two callers: the render pass sets the scene BASE mid-frame (so events
+    /// queued from the previous frame filter against the right floor), and
+    /// the AppRunner sets the frame-final effective (base ∪ per-frame feature
+    /// requests) after the render — `isFrameFinal: true`, the value the
+    /// terminal's reporting mode is actually switched to.
+    func setActiveSupport(_ support: MouseSupport, isFrameFinal: Bool = false) {
+        // A frame-final downgrade below clicks turns the terminal's button
+        // reporting off — mid-gesture (a page with `.mouseSupport(.disabled)`
+        // reached by keyboard while a button is held), the release that would
+        // unwind the gesture will never arrive. Without this the press
+        // captures stayed stranded forever — routing every later event for
+        // that button to a dead frame's closure once reporting came back —
+        // and an armed drag auto-scroll kept scrolling a list under a button
+        // nobody was holding. There is no real release to deliver, so cancel
+        // what is in flight and forget the captures.
+        //
+        // Frame-final ONLY: the mid-frame base set is a filtering floor, not
+        // a terminal mode change — treating it as a downgrade cancelled the
+        // gesture every frame whenever a dialog's per-frame request elevated
+        // clicks above a click-less scene base (base → effective → base…).
+        if isFrameFinal {
+            if frameFinalSupport.clicks, !support.clicks {
+                dragAndDropSession?.cancelForLostMouseReporting()
+                pressedHandlers.removeAll()
+                handedOffPresses.removeAll()
+            }
+            frameFinalSupport = support
         }
         activeSupport = support
     }
