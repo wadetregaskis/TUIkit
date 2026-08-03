@@ -809,6 +809,16 @@ extension FocusManager {
         sections.first { $0.id == id }
     }
 
+    /// The first registered section whose id starts with `prefix`.
+    ///
+    /// Per-instance sections namespace themselves with the view's identity path
+    /// (`modal-<path>`, `nav-split-divider-0-<path>`, …) so two instances of the
+    /// same view in one frame stay distinct. Tests that only care that THE
+    /// section exists match on the stable prefix rather than pinning a path.
+    func section(withPrefix prefix: String) -> FocusSection? {
+        sections.first { $0.id.hasPrefix(prefix) }
+    }
+
     /// Activates the next section (wrapping around).
     ///
     /// When switching sections, the first focusable element in the new

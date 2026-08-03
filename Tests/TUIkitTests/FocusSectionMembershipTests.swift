@@ -78,6 +78,9 @@ struct FocusSectionMembershipTests {
         // divider 0, content list, divider 1, back to the toggle (the empty
         // detail column is skipped) — then the cycle repeats. Membership
         // must not drift no matter which section was active last frame.
+        // Prefix-matched: a divider's section id is namespaced with the
+        // split's identity path so two splits in one frame stay distinct
+        // (`wireDivider`). The ring ORDER is what this test is about.
         let expectedForward = [
             "nav-split-sidebar", "nav-split-divider-0", "nav-split-content",
             "nav-split-divider-1", "__default__",
@@ -87,7 +90,7 @@ struct FocusSectionMembershipTests {
             focusManager.focusNext()
             renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
             #expect(
-                focusManager.activeSection?.id == expected,
+                focusManager.activeSection?.id.hasPrefix(expected) == true,
                 "forward press \(press): expected \(expected), got \(focusManager.activeSection?.id ?? "nil")")
             #expect(focusManager.currentFocusedID != nil, "forward press \(press) focuses something")
         }
@@ -101,7 +104,7 @@ struct FocusSectionMembershipTests {
             focusManager.focusPrevious()
             renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
             #expect(
-                focusManager.activeSection?.id == expected,
+                focusManager.activeSection?.id.hasPrefix(expected) == true,
                 "backward press \(press): expected \(expected), got \(focusManager.activeSection?.id ?? "nil")")
         }
     }

@@ -34,6 +34,30 @@ struct NavigationSplitViewResizeDisableTests {
         return mid.distance(from: mid.startIndex, to: r)
     }
 
+    /// Two resizable splits in one frame each own their divider. The section id
+    /// was keyed on the divider INDEX alone, so both registered into one shared
+    /// "nav-split-divider-0": focusing either made both look focused, and the
+    /// section's cycling walked the other split's handle. Every other
+    /// per-instance section (`modal-`, `alert-`, `contextmenu-`) namespaces
+    /// itself with the identity path; this one now does too.
+    @Test("Two splits in one frame get distinct divider sections")
+    func siblingSplitsDoNotShareADividerSection() {
+        let context = resizeContext(width: 120)
+        let fm = context.environment.focusManager!
+        let view = HStack {
+            NavigationSplitView { Text("A-SIDE") } detail: { Text("A-DETAIL") }
+            NavigationSplitView { Text("B-SIDE") } detail: { Text("B-DETAIL") }
+        }
+
+        _ = renderToBuffer(view, context: context)
+
+        let dividerSections = fm.sectionIDs.filter { $0.hasPrefix("nav-split-divider-0") }
+        #expect(
+            dividerSections.count == 2,
+            "each split registers its own divider section, got \(dividerSections)")
+        #expect(Set(dividerSections).count == 2, "…under distinct ids")
+    }
+
     @Test("A size-to-fit style is resizable: it keeps its handle and focus section")
     func sizeToFitIsResizable() {
         // Size-to-fit fits the columns to content, but a drag/keyboard resize
@@ -47,7 +71,7 @@ struct NavigationSplitViewResizeDisableTests {
         let buffer = renderToBuffer(view, context: context)
         #expect(gripX(buffer) != nil, "size-to-fit draws its resize grip")
         #expect(
-            fm.section(id: "nav-split-divider-0") != nil,
+            fm.section(withPrefix: "nav-split-divider-0") != nil,
             "size-to-fit registers a divider focus section")
     }
 
@@ -62,7 +86,7 @@ struct NavigationSplitViewResizeDisableTests {
         let buffer = renderToBuffer(view, context: context)
         #expect(gripX(buffer) == nil, "resizable(false) draws no grip under size-to-fit")
         #expect(
-            fm.section(id: "nav-split-divider-0") == nil,
+            fm.section(withPrefix: "nav-split-divider-0") == nil,
             "resizable(false) registers no divider focus section under size-to-fit")
     }
 
@@ -78,7 +102,7 @@ struct NavigationSplitViewResizeDisableTests {
         let buffer = renderToBuffer(view, context: context)
         #expect(gripX(buffer) != nil, "a resizable split draws its grip handle")
         #expect(
-            fm.section(id: "nav-split-divider-0") != nil,
+            fm.section(withPrefix: "nav-split-divider-0") != nil,
             "a resizable split registers a divider focus section")
     }
 
@@ -95,7 +119,7 @@ struct NavigationSplitViewResizeDisableTests {
         let offBuffer = renderToBuffer(off, context: offContext)
         #expect(gripX(offBuffer) == nil, "resizable(false) draws no grip handle")
         #expect(
-            offFM.section(id: "nav-split-divider-0") == nil,
+            offFM.section(withPrefix: "nav-split-divider-0") == nil,
             "resizable(false) registers no divider focus section")
 
         let onContext = resizeContext()
@@ -106,7 +130,7 @@ struct NavigationSplitViewResizeDisableTests {
         let onBuffer = renderToBuffer(on, context: onContext)
         #expect(gripX(onBuffer) != nil, "resizable(true) restores the grip handle")
         #expect(
-            onFM.section(id: "nav-split-divider-0") != nil,
+            onFM.section(withPrefix: "nav-split-divider-0") != nil,
             "resizable(true) restores the divider focus section")
     }
 }

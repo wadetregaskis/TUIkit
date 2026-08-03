@@ -743,7 +743,13 @@ extension _NavigationSplitViewCore {
             return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
         }
 
-        let sectionID = "nav-split-divider-\(index)"
+        // Namespaced by this split's identity, like every other per-instance
+        // section (`modal-`, `alert-`, `contextmenu-`). Keyed on the index
+        // alone, TWO resizable splits in one frame — a nested split in a detail
+        // column, or two side by side — registered their dividers into ONE
+        // shared section, so focusing either divider made both look focused and
+        // the section's cycling walked another split's handle.
+        let sectionID = "nav-split-divider-\(index)-\(context.identity.path)"
         focusManager.registerSection(id: sectionID)
 
         // Persist one handler per divider so its drag anchor survives renders.
@@ -751,7 +757,7 @@ extension _NavigationSplitViewCore {
             for: StateStorage.StateKey(
                 identity: context.identity, propertyIndex: 1 + index),
             default: _SplitDividerHandler(
-                focusID: "\(sectionID)-\(context.identity.path)",
+                focusID: sectionID,
                 columnIndex: index,
                 widths: widths,
                 minimumColumnWidth: minimumColumnWidth

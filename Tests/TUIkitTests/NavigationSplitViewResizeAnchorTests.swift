@@ -112,7 +112,7 @@ struct NavigationSplitViewResizeAnchorTests {
         #expect(before != nil, "the size-to-fit divider draws a grip")
         guard let before else { return }
 
-        focusManager.activateSection(id: "nav-split-divider-0")
+        focusManager.activateSection(id: dividerSectionID(in: focusManager) ?? "")
         _ = focusManager.dispatchKeyEvent(KeyEvent(key: .right))
 
         let after = gripX(renderToBuffer(splitView, context: context))

@@ -613,7 +613,7 @@ struct NavigationSplitViewResizeTests {
         guard let before = gripX(frame(view, context)) else {
             Issue.record("expected a divider grip"); return
         }
-        fm.activateSection(id: "nav-split-divider-0")
+        fm.activateSection(id: dividerSectionID(in: fm) ?? "")
         _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
         _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
         _ = fm.dispatchKeyEvent(KeyEvent(key: .left))
@@ -684,7 +684,7 @@ struct NavigationSplitViewResizeTests {
 
         _ = frame(view, context)
         let unfocused = frame(view, context).lines[6]  // raw, with ANSI
-        fm.activateSection(id: "nav-split-divider-0")
+        fm.activateSection(id: dividerSectionID(in: fm) ?? "")
         let focused = frame(view, context).lines[6]
 
         #expect(unfocused != focused,
@@ -698,7 +698,7 @@ struct NavigationSplitViewResizeTests {
         let view = NavigationSplitView { Text("S") } detail: { Text("D") }
 
         _ = frame(view, context)
-        fm.activateSection(id: "nav-split-divider-0")
+        fm.activateSection(id: dividerSectionID(in: fm) ?? "")
         let raw = frame(view, context).lines[4]  // a grip row → has the pulsing bg
 
         // After the divider cell's reset, the rest of the line (the next
@@ -723,4 +723,12 @@ struct NavigationSplitViewResizeTests {
         #expect(gripX(buffer) == nil, "no grip handle when not resizable")
         #expect(fm.section(id: "nav-split-divider-0") == nil, "no divider focus section when not resizable")
     }
+}
+
+/// The divider's focus-section id, whose suffix is the split's identity path
+/// (so two splits in one frame stay distinct — see `wireDivider`). Tests drive
+/// the divider by looking it up rather than by spelling the whole id.
+@MainActor
+func dividerSectionID(in manager: FocusManager, index: Int = 0) -> String? {
+    manager.section(withPrefix: "nav-split-divider-\(index)")?.id
 }
