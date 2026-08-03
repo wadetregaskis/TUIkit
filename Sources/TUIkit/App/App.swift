@@ -6,6 +6,13 @@
 
 import Dispatch
 
+/// Whether the backtick frame-dump debug shortcut is armed — opt-in via
+/// `TUIKIT_DEBUG_FRAME_DUMP=1`, same convention as `TUIKIT_DEBUG_FOCUS`.
+/// File-scope (the runner is generic, which forbids static stored properties)
+/// and read once: it's consulted per keystroke.
+private let frameDumpEnabled: Bool =
+    getenv("TUIKIT_DEBUG_FRAME_DUMP").map { String(cString: $0) == "1" } ?? false
+
 // MARK: - App Protocol
 
 /// The base protocol for TUIkit applications.
@@ -488,10 +495,13 @@ extension AppRunner {
             switch input {
             case .key(let keyEvent):
                 focusManager.noteInputSource(.keyboard)
-                // "`": dump the current frame to ~/tuikit-frame.ansi (debug
-                // shortcut, not consumed). Force a full repaint first so the
-                // snapshot captures every line.
-                if keyEvent.key == .character("`") {
+                // "`": dump the current frame to a file (debug shortcut, not
+                // consumed). Opt-in via TUIKIT_DEBUG_FRAME_DUMP=1 — unguarded,
+                // every backtick ANYWHERE (typing one into a TextField, a
+                // Markdown snippet in a TextEditor) silently wrote a frame
+                // file into the user's working directory. Force a full
+                // repaint first so the snapshot captures every line.
+                if keyEvent.key == .character("`"), frameDumpEnabled {
                     renderer.invalidateDiffCache()
                     renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
                     terminal.dumpLastFrame()
