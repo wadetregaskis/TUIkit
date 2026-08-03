@@ -760,15 +760,15 @@ extension String {
                 }
 
             case .inCSI:
-                if (0x30...0x39).contains(value) || value == 0x3B {
-                    break  // parameter byte (digit or ';') — stay in CSI
+                if Self.isCSIBodyByte(value) {
+                    break  // parameter or intermediate byte — stay in CSI
                 }
-                if (0x41...0x5A).contains(value) || (0x61...0x7A).contains(value) {
-                    state = .normal  // final letter — introducer complete, consumed
+                if Self.isCSIFinalByte(value) {
+                    state = .normal  // final byte — introducer complete, consumed
                 } else if value == 0x1B {  // ESC interrupts a malformed CSI
                     state = .sawESC
-                } else {  // non-letter where a terminator was expected: not part
-                    runStart = index  // of the introducer, so it starts a run
+                } else {  // not a CSI byte at all where a terminator was
+                    runStart = index  // expected: it starts a visible run
                     hasRun = true
                     state = .normal
                 }
@@ -776,6 +776,28 @@ extension String {
             index = scalars.index(after: index)
         }
         if hasRun { body(self[runStart..<index]) }  // index == endIndex
+    }
+
+    /// Whether `value` is a CSI parameter or intermediate byte — everything
+    /// allowed between the `[` and the final byte (ECMA-48: parameters
+    /// `0x30...0x3F`, which covers digits, `;`, the colon of an SGR
+    /// sub-parameter and the `?`/`<`/`=`/`>` private markers; intermediates
+    /// `0x20...0x2F`, e.g. the space of DECSCUSR `ESC[2 q`).
+    ///
+    /// Accepting only digits and `;` — as this did — made every other form
+    /// leak: the `[` was consumed and the `?` of `ESC[?25l` then started a
+    /// VISIBLE run, so `stripped` left "?25l" on screen, `sanitizedForTerminal`
+    /// (documented as sanitising user input against escape injection) let it
+    /// through, and the wrapper measured 4 cells for a sequence the terminal
+    /// paints in 0 — border and column misalignment.
+    static func isCSIBodyByte(_ value: UInt32) -> Bool {
+        (0x20...0x3F).contains(value)
+    }
+
+    /// Whether `value` terminates a CSI sequence (ECMA-48 final bytes
+    /// `0x40...0x7E` — the letters plus `@[\]^_\`{|}~`).
+    static func isCSIFinalByte(_ value: UInt32) -> Bool {
+        (0x40...0x7E).contains(value)
     }
 
     /// Splits the string into ordered segments — each either a complete
@@ -816,16 +838,13 @@ extension String {
             if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
                 sequence.append(scalars[index])
                 index = scalars.index(after: index)
-                while index < scalars.endIndex,
-                    (0x30...0x39).contains(scalars[index].value) || scalars[index].value == 0x3B {
+                while index < scalars.endIndex, Self.isCSIBodyByte(scalars[index].value) {
                     sequence.append(scalars[index])
                     index = scalars.index(after: index)
                 }
-                // Final byte: a single ASCII letter, consumed by exactly one
-                // scalar so a trailing Extend scalar stays a visible segment.
-                if index < scalars.endIndex,
-                    (0x41...0x5A).contains(scalars[index].value)
-                        || (0x61...0x7A).contains(scalars[index].value) {
+                // Final byte, consumed by exactly one scalar so a trailing
+                // Extend scalar stays a visible segment.
+                if index < scalars.endIndex, Self.isCSIFinalByte(scalars[index].value) {
                     isSGR = scalars[index].value == 0x6D  // 'm'
                     sequence.append(scalars[index])
                     index = scalars.index(after: index)

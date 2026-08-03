@@ -164,4 +164,48 @@ struct StringANSITests {
             "Manual filter incorrectly includes ANSI sequence characters in the count"
         )
     }
+
+    // MARK: - CSI forms beyond "digits and semicolons"
+
+    /// The scanner treated only `0-9` and `;` as CSI body bytes, so every other
+    /// ECMA-48 form leaked: the `[` was consumed and the next byte started a
+    /// VISIBLE run. `stripped` left the sequence's body on screen,
+    /// `sanitizedForTerminal` — documented as sanitising user input against
+    /// escape injection — let it through, and the wrapper measured cells the
+    /// terminal paints in zero, misaligning borders and columns.
+    @Test(
+        "Every CSI form is stripped whole",
+        arguments: [
+            // (input, what should remain)
+            ("\u{1B}[?25lhi", "hi"),  // private parameter (hide cursor)
+            ("\u{1B}[?1049hhi", "hi"),  // private parameter, multi-digit
+            ("\u{1B}[38:5:104mhi\u{1B}[0m", "hi"),  // colon-form SGR sub-parameters
+            ("\u{1B}[2 qhi", "hi"),  // intermediate byte (DECSCUSR)
+            ("\u{1B}[<0;5;3Mhi", "hi"),  // SGR mouse report
+            ("\u{1B}[31mhi\u{1B}[0m", "hi"),  // the ordinary case, unchanged
+        ])
+    func everyCSIFormIsStripped(input: String, expected: String) {
+        #expect(input.stripped == expected)
+    }
+
+    @Test(
+        "Every CSI form measures zero cells",
+        arguments: [
+            "\u{1B}[?25l", "\u{1B}[38:5:104m", "\u{1B}[2 q", "\u{1B}[<0;5;3M",
+        ])
+    func everyCSIFormIsZeroWidth(sequence: String) {
+        #expect(sequence.strippedLength == 0, "\(sequence.debugDescription) must occupy no cells")
+    }
+
+    /// `ansiSegments` is the twin scanner (it keeps the escapes rather than
+    /// dropping them) and had the same gap.
+    @Test("ansiSegments keeps a private-parameter sequence in one piece")
+    func segmentsKeepPrivateParametersWhole() {
+        let segments = "\u{1B}[?25lhi".ansiSegments()
+        let escapes = segments.compactMap { segment -> String? in
+            if case .ansi(let text, _) = segment { return text }
+            return nil
+        }
+        #expect(escapes == ["\u{1B}[?25l"], "got \(escapes)")
+    }
 }
