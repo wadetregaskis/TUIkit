@@ -68,6 +68,62 @@ struct ListRowAnchorHoldTests {
         return (line, lines)
     }
 
+    /// One frame of a MULTI-LINE list, which is where the hold's clamp went
+    /// wrong: `viewportHeight` is still the provisional LINE count when the
+    /// hold runs, so counting rows against it let the anchored row land far
+    /// below the fold.
+    private func renderTallFrame(
+        items: [Int], anchored: Int?, tui: TUIContext, fm: FocusManager
+    ) -> [String] {
+        let list = List(selection: .constant(Int?.none)) {
+            ForEach(items, id: \.self) { item in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("row \(item)")
+                    Text("· detail")
+                    Text("· detail")
+                }
+            }
+        }
+        .frame(height: 20)
+        .anchorPosition(.constant(anchored.map { ScrollAnchor.row($0) }))
+
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 24, availableHeight: 20, environment: env, tuiContext: tui)
+
+        tui.preferences.beginRenderPass()
+        tui.stateStorage.beginRenderPass()
+        tui.renderCache.beginRenderPass()
+        fm.beginRenderPass()
+        let buffer = renderToBuffer(list, context: context)
+        fm.endRenderPass()
+        tui.stateStorage.endRenderPass()
+        tui.renderCache.removeInactive()
+        return buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+    }
+
+    @Test("A designated row lands inside a multi-line list's viewport")
+    func multiLineAnchorLandsOnScreen() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        let items = Array(0..<40)
+
+        // Frame 1 rests at the top; frame 2 designates a row far below it.
+        _ = renderTallFrame(items: items, anchored: nil, tui: tui, fm: fm)
+        let after = renderTallFrame(items: items, anchored: 20, tui: tui, fm: fm)
+
+        // The clamp used to be computed against the LINE count (17 − 2 = 15),
+        // so the row was "held" at screen row 15 of a viewport that only has
+        // five 3-line rows — offset 5, and row 20 nowhere on screen.
+        let line = screenLine(of: 20, in: after)
+        #expect(line != nil, "the anchored row must be on screen:\n\(after.joined(separator: "\n"))")
+        #expect(
+            (line ?? 0) >= 10,
+            "…and at the BOTTOM of the viewport, where it was held:\n\(after.joined(separator: "\n"))")
+    }
+
     @Test("Inserting rows above the anchored row holds it on its screen line")
     func insertAboveHoldsTheRow() {
         let tui = TUIContext()

@@ -1061,7 +1061,7 @@ extension ItemListHandler {
     /// lines. Both ends are assumed to need one while scrolling, which is what
     /// makes this a bound rather than an exact count: at the very top or bottom
     /// one of them is absent, and `clampScrollOffset()` reclaims that line.
-    private var rowLineBudget: Int {
+    var rowLineBudget: Int {
         guard let contentHeight else { return 1 }
         let indicators = drawsScrollIndicators ? 2 : 0
         return max(1, contentHeight - indicators)

@@ -161,7 +161,7 @@ extension ItemListHandler {
         // from off-screen lands clear of the bottom indicator rather than one
         // line under it. An already-visible row's line is ≤ this, so adopting
         // it is unaffected.
-        let lastRow = max(0, viewportHeight - (showsScrollbar ? 1 : 2))
+        let lastRow = lastHoldableRow(for: ordinal)
         func held(landingAt row: Int) -> Int { min(max(row, 0), lastRow) }
         if anchorHeldKey != key {
             anchorHeldKey = key
@@ -177,6 +177,41 @@ extension ItemListHandler {
         // Holding pins the row on a whole-row boundary; any line-granularity
         // sub-row clip on the old top row no longer applies.
         scrollTopClipLines = 0
+    }
+
+    /// The lowest screen ROW the anchored row may be held at: how many whole
+    /// rows fit above it, counting real heights up from it.
+    ///
+    /// ``viewportHeight`` cannot answer this. A `List` finalises it to a
+    /// visible-ROW count only AFTER the window is built, so when the hold runs
+    /// it is still the provisional LINE count — and over multi-line rows those
+    /// differ by a factor of the row height, so the clamp admitted row
+    /// positions far below the fold and the "held" row landed off screen. The
+    /// `Table` twin escapes it only because its own count is offset-independent.
+    ///
+    /// Walking real heights up from the anchored row asks the question
+    /// directly, needs no convention from the caller, and costs O(viewport) on
+    /// rows this frame renders anyway — they are precisely the window the hold
+    /// is about to produce, and a `List`'s row-height closure is lazy and
+    /// memoised.
+    ///
+    /// Falls back to the line arithmetic when there are no row heights to walk:
+    /// a single-line `Table` (where rows and lines are the same thing anyway)
+    /// and the handler's own unit tests, which set no content height.
+    private func lastHoldableRow(for ordinal: Int) -> Int {
+        guard let rowHeight, contentHeight != nil else {
+            return max(0, viewportHeight - (showsScrollbar ? 1 : 2))
+        }
+        let budget = rowLineBudget
+        var used = max(1, rowHeight(ordinal))
+        var rows = 0
+        var index = ordinal - 1
+        while index >= 0, used + max(1, rowHeight(index)) <= budget {
+            used += max(1, rowHeight(index))
+            rows += 1
+            index -= 1
+        }
+        return rows
     }
 
     /// The held anchor row's current ordinal, via an O(1) memo (the key usually
