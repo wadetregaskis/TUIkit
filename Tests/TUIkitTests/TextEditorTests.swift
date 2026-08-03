@@ -111,6 +111,23 @@ struct TextEditorTests {
         #expect(editor.cursorColumn == 1)
     }
 
+    /// A terminal transmits a pasted line break as CR — the same byte as the
+    /// Enter key — and clipboard content can carry CRLF, which is a single
+    /// Swift `Character`. Both must split exactly like `\n`; before this,
+    /// the paste collapsed onto one row with literal carriage returns baked
+    /// into the bound string.
+    @Test("CR and CRLF pasted line breaks split lines", arguments: ["x\ry", "x\r\ny"])
+    func carriageReturnPasteSplits(payload: String) {
+        let sink = StringSink("AB")
+        let editor = handler(sink)
+        editor.cursorColumn = 1
+        _ = editor.handleKeyEvent(KeyEvent(key: .paste(payload)))
+        #expect(sink.value == "Ax\nyB")
+        #expect(!sink.value.contains("\r"), "no carriage return may reach the bound string")
+        #expect(editor.cursorLine == 1)
+        #expect(editor.cursorColumn == 1)
+    }
+
     @Test("Backspace at the very start is a no-op")
     func backspaceAtStart() {
         let sink = StringSink("abc")

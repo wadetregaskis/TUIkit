@@ -286,10 +286,25 @@ final class TextEditorHandler: Focusable {
 
     // MARK: - Editing
 
-    /// Inserts a string at the cursor, splitting into multiple lines on any `\n`.
+    /// Inserts a string at the cursor, splitting into multiple lines on any
+    /// line break.
+    ///
+    /// A terminal transmits a pasted line break the same way it transmits the
+    /// Enter key — as CR (0x0D) — and clipboard content can carry CRLF, whose
+    /// `\r\n` is a single Swift `Character`. Splitting on `"\n"` alone matched
+    /// neither, so a multi-line paste collapsed onto one row with literal
+    /// carriage returns baked into the bound string. Normalise every
+    /// convention (CRLF, lone CR, lone LF) to `\n` before splitting.
     private func insert(_ string: String) {
         var lines = readLines()
-        let inserted = string
+        // Character-level: CRLF is ONE Character, so both it and a lone CR
+        // compare directly. (No Foundation here, deliberately.)
+        var normalized = ""
+        normalized.reserveCapacity(string.count)
+        for character in string {
+            normalized.append(character == "\r\n" || character == "\r" ? "\n" : character)
+        }
+        let inserted = normalized
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { Array($0) }
 
