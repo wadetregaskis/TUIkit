@@ -224,8 +224,7 @@ struct ListReorderMultiRowTests {
             KeyEvent(key: .character("r"), ctrl: true))
         let held = fixture.render()
 
-        let slotLine = try? #require(
-            held.lines.first { $0.contains("\u{1b}[48;") && !$0.stripped.isEmpty })
+        let slotLine = held.lines.first { $0.contains("\u{1b}[48;") && !$0.stripped.isEmpty }
         // Everything before the highlight starts is the list's own BORDER. The
         // row's first cell — the selection gutter — must be inside it; it used
         // to be the one cell left unpainted.
@@ -244,7 +243,7 @@ struct ListReorderMultiRowTests {
         _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
         _ = fixture.env.focusManager?.dispatchKeyEvent(
             KeyEvent(key: .character("r"), ctrl: true))
-        let grabbed = try? #require(fixture.handler?.reorder?.grabbedOffset)
+        let grabbed = fixture.handler?.reorder?.grabbedOffset
         let held = fixture.render()
 
         // The three rows have left the list and are drawn as one slot, which

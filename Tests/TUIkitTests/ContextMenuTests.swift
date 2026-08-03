@@ -620,8 +620,8 @@ struct ContextMenuTests {
         let lines = (opened.overlays.first?.content.lines ?? []).map(\.stripped)
         let rendered = lines.joined(separator: "\n")
 
-        let cut = try? #require(lines.first { $0.contains("Cut") })
-        let duplicate = try? #require(lines.first { $0.contains("Duplicate") })
+        let cut = lines.first { $0.contains("Cut") }
+        let duplicate = lines.first { $0.contains("Duplicate") }
         #expect(cut?.contains("^X") == true, "the shortcut is printed:\n\(rendered)")
         #expect(duplicate?.contains("^V") == true, "…on every row:\n\(rendered)")
         // Aligned: each row pads its own label so the hints share a column,

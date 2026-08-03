@@ -181,7 +181,7 @@ struct RowShortcutsTests {
         // Through the focus manager, as a real key press arrives — the table is
         // captured during the render, so a binding that never reaches the
         // handler would still pass a test that drove the handler directly.
-        let focus = try? #require(env.focusManager)
+        let focus = env.focusManager
         #expect(focus?.dispatchKeyEvent(KeyEvent(key: .character("v"), ctrl: true)) != true)
         #expect(selection.isEmpty, "Ctrl-V was rebound away, so it selected nothing")
         #expect(focus?.dispatchKeyEvent(KeyEvent(key: .character("e"), ctrl: true)) == true)

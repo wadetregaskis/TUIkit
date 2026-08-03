@@ -561,7 +561,7 @@ struct TableReorderDragTests {
             MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "c")))
         fixture.render()
 
-        let float = try? #require(session.active?.preview.lines.first)
+        let float = session.active?.preview.lines.first
         // Gutter + "a" — nowhere near the 20-cell table it came from.
         #expect(
             (float?.strippedLength ?? 99) <= 4,
@@ -693,7 +693,7 @@ struct TableReorderDragTests {
         _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
         _ = fixture.env.focusManager?.dispatchKeyEvent(
             KeyEvent(key: .character("r"), ctrl: true))
-        let grabbed = try? #require(fixture.handler?.reorder?.grabbedOffset)
+        let grabbed = fixture.handler?.reorder?.grabbedOffset
         let held = fixture.render()
 
         // The List twin of this, and for the same reason: the slot's pulse
