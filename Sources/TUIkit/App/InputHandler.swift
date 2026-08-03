@@ -98,12 +98,19 @@ extension InputHandler {
         // gets a shot. Otherwise a page-level onKeyPress that returns to
         // the menu (the example app's ContentView, for one) would close
         // the page out from under the open drop-down.
+        //
+        // Declined here means declined: layer 3 below must not offer the
+        // SAME event to the focus system a second time — a dispatch can
+        // have side effects (a list consuming its one-shot ESC claim, a
+        // handler advancing internal state) even when it returns false.
+        var focusDeclinedEscape = false
         if event.key == .escape, statusBar.escapeLabelOverride != nil,
             !focusManager.hasTextInputFocus
         {
             if focusManager.dispatchKeyEvent(event) {
                 return true
             }
+            focusDeclinedEscape = true
         }
 
         // Layer 0.5: mid-drag navigators. While something is in hand they
@@ -128,8 +135,10 @@ extension InputHandler {
         }
 
         // Layer 3: Focus system (Tab navigation, Enter/Space on focused buttons)
-        // Skipped when text-input has focus since it was already dispatched above.
-        if !focusManager.hasTextInputFocus {
+        // Skipped when text-input has focus since it was already dispatched
+        // above — and when the modal-claimed ESC pre-route already offered
+        // this very event and was declined.
+        if !focusManager.hasTextInputFocus, !focusDeclinedEscape {
             if focusManager.dispatchKeyEvent(event) {
                 return true
             }

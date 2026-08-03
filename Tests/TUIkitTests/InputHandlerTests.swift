@@ -31,7 +31,8 @@ struct InputHandlerTests {
         let focusID: String
         var canBeFocused = true
         let consumes: Bool
-        private(set) var sawEvent = false
+        private(set) var eventCount = 0
+        var sawEvent: Bool { eventCount > 0 }
 
         init(focusID: String, consumes: Bool) {
             self.focusID = focusID
@@ -41,7 +42,7 @@ struct InputHandlerTests {
         func onFocusReceived() {}
         func onFocusLost() {}
         func handleKeyEvent(_ event: KeyEvent) -> Bool {
-            sawEvent = true
+            eventCount += 1
             return consumes
         }
     }
@@ -326,6 +327,25 @@ struct InputHandlerTests {
 
         #expect(focusable.sawEvent, "focus system should receive the modal-claimed Escape")
         #expect(!fixture.probe.statusBarRan, "the page-level Escape handler must not fire")
+    }
+
+    /// The pre-route already offered the event to the focus system; when it
+    /// declines, layer 3 must not offer the SAME event again — a dispatch
+    /// can have side effects (a one-shot claim consumed, internal state
+    /// advanced) even when it returns false.
+    @Test("A declined modal-claimed Escape is not dispatched to focus twice")
+    func modalEscapeDeclinedIsNotDoubleDispatched() {
+        let fixture = makeFixture()
+        fixture.statusBar.escapeLabelOverride = "Close"
+        // A focused element that DECLINES the key — the pre-route falls
+        // through to the later layers.
+        let element = FakeFocusable(focusID: "f", consumes: false)
+        fixture.focus.register(element)
+        fixture.focus.focus(element)
+
+        _ = fixture.handler.handle(KeyEvent(key: .escape))
+
+        #expect(element.eventCount == 1, "the focus system saw the same Escape \(element.eventCount) times")
     }
 
     @Test("A list's Escape claim clears its selection; without one Escape navigates")
