@@ -158,6 +158,82 @@ struct LifecycleModifierTests {
         await renderFrames(ConditionalView(show: false, counter: counter), frames: 1, context: ctx)
         #expect(counter.value == 1, "onDisappear should fire once on removal, got \(counter.value)")
     }
+
+    // MARK: - .task isolation
+
+    /// `.task`'s action inherits the isolation of the context it is written in
+    /// — the view body, which is `@MainActor` — so `@State` writes in it are
+    /// safe without an `await`. That is the SwiftUI contract and the default.
+    ///
+    /// It is only the default. The parameter carries whatever isolation the
+    /// closure actually has, so an app that does not want the main actor
+    /// occupied says so. `{ @concurrent in … }` worked before this too (a
+    /// concurrent closure converts to a `@MainActor` function type and still
+    /// runs concurrently); the case a hard `@MainActor` parameter could NOT
+    /// express is a custom global actor — `{ @Indexing in … }` was a compile
+    /// error ("cannot convert value actor-isolated to 'Indexing' to expected
+    /// argument type actor-isolated to 'MainActor'"), so this test does not
+    /// build against the old signature at all.
+    @Test("A .task written in a body runs on the main actor; other isolations are honoured")
+    func taskIsolationIsInheritedAndChoosable() async {
+        let inBody = Isolation(), opted = Isolation(), onActor = Isolation()
+        struct IsolationView: View {
+            let inBody: Isolation, opted: Isolation, onActor: Isolation
+            var body: some View {
+                VStack {
+                    Text("a").task { inBody.record(runningOnMain()) }
+                    Text("b").task { @concurrent in opted.record(runningOnMain()) }
+                    Text("c").task { @Indexing in onActor.record(runningOnMain()) }
+                }
+            }
+        }
+        await renderFrames(
+            IsolationView(inBody: inBody, opted: opted, onActor: onActor),
+            frames: 4, context: makeContext())
+        #expect(inBody.wasOnMain == true, "the default is the body's own isolation")
+        #expect(opted.wasOnMain == false, "@concurrent must actually leave the main actor")
+        #expect(onActor.wasOnMain == false, "a global-actor action runs on ITS actor")
+    }
+
+    /// The compile-time half of the same contract: a `@MainActor`-isolated
+    /// value is readable and writable directly in the default closure. If the
+    /// action ever stopped inheriting the body's isolation this would need an
+    /// `await` and the file would not build.
+    @Test("The default .task closure touches main-actor state without awaiting")
+    func taskDefaultTouchesMainActorStateSynchronously() async {
+        let counter = Counter()
+        struct StateView: View {
+            @State private var flag = false
+            let counter: Counter
+            var body: some View {
+                Text(flag ? "on" : "off")
+                    .task {
+                        flag = true  // @State write, no await: main-actor isolated
+                        counter.bump()
+                    }
+            }
+        }
+        await renderFrames(StateView(counter: counter), frames: 3, context: makeContext())
+        #expect(counter.value == 1)
+    }
+}
+
+/// Records where a lifecycle closure actually ran. `Thread.isMainThread` is
+/// unavailable *directly* in an async context, so the reading is taken through
+/// a synchronous nonisolated function.
+nonisolated private func runningOnMain() -> Bool { Thread.isMainThread }
+
+/// A custom global actor, standing in for an app's own — the isolation a
+/// `@MainActor`-typed parameter could not accept.
+@globalActor private actor Indexing {
+    static let shared = Indexing()
+}
+
+private final class Isolation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool?
+    var wasOnMain: Bool? { lock.withLock { value } }
+    func record(_ onMain: Bool) { lock.withLock { if value == nil { value = onMain } } }
 }
 
 /// Lock-guarded counter callable from both sync (`onAppear`/`onDisappear`) and

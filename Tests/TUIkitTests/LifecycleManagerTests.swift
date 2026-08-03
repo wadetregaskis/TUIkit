@@ -219,6 +219,13 @@ struct LifecycleManagerTaskTests {
     /// render loop's per-frame reads of the same box, on a plain stored
     /// property of an `@unchecked Sendable` class. Isolation is asserted from
     /// INSIDE the closure, which is the only place the question is settled.
+    ///
+    /// It is now the CALL SITE that settles it: `startTask` takes the
+    /// operation's own isolation (`@isolated(any)`) and inherits the caller's
+    /// for a closure literal, so this literal — written in a `@MainActor`
+    /// suite — is main-actor isolated. The same inheritance is what gives
+    /// `View/task(priority:_:)` its main-actor default (pinned separately in
+    /// LifecycleModifierTests, together with the ways an app can opt out).
     @Test("A task body runs on the main actor, as SwiftUI's does")
     func taskBodyIsMainActorIsolated() async throws {
         let manager = LifecycleManager()

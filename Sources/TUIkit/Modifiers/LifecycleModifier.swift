@@ -106,9 +106,11 @@ struct TaskModifier<Content: View>: View {
 
     /// The async task to execute.
     ///
-    /// `@MainActor`, as SwiftUI's is: the closure is written inside a view
-    /// body and inherits that isolation, so a `@State` write in it is safe.
-    let task: @MainActor @Sendable () async -> Void
+    /// `@isolated(any)`: the value carries the isolation the closure was
+    /// written with, which `View/task(priority:_:)` arranges to be the view
+    /// body's (`@MainActor`) unless the app asked for something else. Starting
+    /// it therefore needs no isolation of its own — see `TUIContext.startTask`.
+    let task: @isolated(any) @Sendable () async -> Void
 
     /// Task priority.
     let priority: TaskPriority
