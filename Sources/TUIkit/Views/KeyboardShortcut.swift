@@ -168,7 +168,20 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// first item".
     public init(_ key: KeyEquivalent, modifiers: EventModifiers = .command) {
         // An uppercase literal IS the shift — see `KeyEquivalent`.
-        self.trigger = .key(key, key.impliesShift ? modifiers.union(.shift) : modifiers)
+        self.trigger = Self.normalised(key, key.impliesShift ? modifiers.union(.shift) : modifiers)
+    }
+
+    /// The spelled-out forms of the two semantic roles ARE those roles —
+    /// SwiftUI defines `.defaultAction` as unmodified Return and
+    /// `.cancelAction` as unmodified Escape. An incoming bare Return/Escape
+    /// event resolves to the role before the key table
+    /// (see ``trigger(for:)``), so an un-normalised `.key(.return, [])`
+    /// could never fire: registered, listed, and permanently dead.
+    private static func normalised(_ key: KeyEquivalent, _ modifiers: EventModifiers) -> Trigger {
+        guard modifiers.isEmpty else { return .key(key, modifiers) }
+        if key == .return { return .defaultAction }
+        if key == .escape { return .cancelAction }
+        return .key(key, modifiers)
     }
 
     /// This shortcut with ``EventModifiers/command`` replaced per `binding`,
@@ -185,7 +198,9 @@ public struct KeyboardShortcut: Hashable, Sendable {
         case .bare: break
         }
         var resolved = self
-        resolved.trigger = .key(key, modifiers)
+        // A `.bare` stand-in can strip ⌘⏎ / ⌘⎋ down to the semantic roles'
+        // own keys — normalise here too, or the resolved form is dead.
+        resolved.trigger = Self.normalised(key, modifiers)
         return resolved
     }
 

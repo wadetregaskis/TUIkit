@@ -253,6 +253,44 @@ struct KeyEquivalentShortcutTests {
         #expect(fired == 0)
     }
 
+    /// SwiftUI defines `.defaultAction` AS unmodified Return and
+    /// `.cancelAction` AS unmodified Escape. An incoming bare Return/Escape
+    /// resolves to the semantic role before the key table, so the spelled-out
+    /// forms could never fire — they normalise to the roles at construction.
+    @Test("Bare .return / .escape spellings ARE the semantic roles")
+    func bareReturnEscapeNormalise() {
+        #expect(KeyboardShortcut(.return, modifiers: []) == .defaultAction)
+        #expect(KeyboardShortcut(.escape, modifiers: []) == .cancelAction)
+
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        registry.register(KeyboardShortcut(.return, modifiers: [])) { fired += 1 }
+        #expect(registry.trigger(for: KeyEvent(key: .enter)))
+        #expect(fired == 1)
+    }
+
+    /// The `.bare` Command stand-in strips ⌘⏎ down to unmodified Return —
+    /// the resolved form must normalise to the role too, not die as a key.
+    @Test("A .bare command key resolves ⌘-Return to the default action")
+    func bareCommandReturnResolves() {
+        #expect(KeyboardShortcut(.return).resolved(commandKey: .bare) == .defaultAction)
+        #expect(KeyboardShortcut(.escape).resolved(commandKey: .bare) == .cancelAction)
+    }
+
+    /// Held with a modifier, Return/Escape are ordinary key equivalents —
+    /// only the BARE forms are the semantic roles.
+    @Test("Modified .return stays a key equivalent")
+    func modifiedReturnStaysKeyEquivalent() {
+        #expect(KeyboardShortcut(.return, modifiers: .option) != .defaultAction)
+
+        let registry = KeyboardShortcutRegistry()
+        var fired = 0
+        registry.register(KeyboardShortcut(.return, modifiers: .option)) { fired += 1 }
+        #expect(registry.trigger(for: KeyEvent(key: .enter, ctrl: false, alt: true, shift: false)))
+        #expect(fired == 1)
+        #expect(!registry.trigger(for: KeyEvent(key: .enter)), "bare Return is the role, not this key")
+    }
+
     /// A terminal does not report Shift for a printable key — it sends the
     /// shifted CHARACTER and no modifier bits (`KeyEvent.parse`'s printable
     /// branch builds `KeyEvent(character:)` with nothing set). So Shift has to
