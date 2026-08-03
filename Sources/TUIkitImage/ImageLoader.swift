@@ -311,6 +311,14 @@ public struct PlatformImageLoader: ImageLoader {
             return pixels
         }
 
+        /// Serializes ``suppressingStandardError(_:)``. The file-descriptor
+        /// table is process-global, and image decodes run concurrently (each
+        /// load is `@concurrent`): unserialized, a second load's `dup` could
+        /// capture fd 2 while a first had it pointed at `/dev/null` — and its
+        /// "restore" then pins stderr to the null device for the rest of the
+        /// process.
+        static let stderrRedirectLock = NSLock()
+
         /// Runs `body` with stderr (fd 2) temporarily redirected to `/dev/null`.
         ///
         /// Used to swallow the benign one-time IOKit probe line CoreGraphics
@@ -318,7 +326,12 @@ public struct PlatformImageLoader: ImageLoader {
         /// would otherwise corrupt the alternate-screen TUI. The window is the
         /// single synchronous draw call; a concurrent stderr write (none is
         /// expected mid-render — the renderer writes stdout) would be lost.
-        private static func suppressingStandardError(_ body: () -> Void) {
+        ///
+        /// Internal (not private) as the test seam: the save/redirect/restore
+        /// dance is what the race lives in, and the tests hammer it directly.
+        static func suppressingStandardError(_ body: () -> Void) {
+            stderrRedirectLock.lock()
+            defer { stderrRedirectLock.unlock() }
             fflush(stderr)
             let saved = dup(STDERR_FILENO)
             let devNull = open("/dev/null", O_WRONLY)
