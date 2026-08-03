@@ -340,4 +340,15 @@ struct OverlayTests {
         #expect(trimmed.width == 5)
         #expect(!trimmed.linesAreUniformWidth)
     }
+
+    @Test("Horizontal append onto an empty buffer claims no spacing slot")
+    func horizontalAppendOntoEmptyBuffer() {
+        // The accumulating stack result after a leading child rendered empty.
+        // A gap belongs between two occupied column ranges, so the first thing
+        // in the row starts at column 0 — the mirror of the vertical rule.
+        var buffer = FrameBuffer()
+        buffer.appendHorizontally(FrameBuffer(text: "Right"), spacing: 2)
+        #expect(buffer.lines == ["Right"])
+        #expect(buffer.width == 5)
+    }
 }

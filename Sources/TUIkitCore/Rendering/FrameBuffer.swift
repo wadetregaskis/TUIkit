@@ -371,7 +371,8 @@ extension FrameBuffer {
     /// - Parameters:
     ///   - other: The buffer to append to the right.
     ///   - spacing: Number of space characters between the two buffers.
-    ///     Ignored when `other` is empty, by design (see above).
+    ///     Ignored when `other` is empty, and when this buffer is still empty —
+    ///     a gap is charged only between two occupied column ranges.
     public mutating func appendHorizontally(_ other: Self, spacing: Int = 0) {
         let priorWidth = width
 
@@ -392,10 +393,24 @@ extension FrameBuffer {
         }
 
         let maxHeight = max(height, other.height)
-        let myWidth = width
+        let myWidth = priorWidth
+
+        // A gap belongs BETWEEN two occupied column ranges. With no columns yet
+        // — an HStack whose leading child rendered empty — `other` is the first
+        // thing in the row and must start at column 0, not be indented by a slot
+        // it never earned. The mirror of `appendVertically`'s `priorHeight > 0`:
+        // rows there, columns here.
+        //
+        // The predicate is `width`, not `isEmpty`, deliberately: `isEmpty` asks
+        // whether the LINE STRINGS carry content, which is the right question
+        // for `other` (a buffer of non-empty zero-width lines still contributes
+        // HEIGHT below) and the wrong one here, where the question is whether
+        // any columns are occupied. A styled-but-empty `Text` would otherwise
+        // still earn a phantom indent.
+        let spacingApplied = priorWidth > 0 ? spacing : 0
 
         // Pre-compute the new width
-        let newWidth = myWidth + spacing + other.width
+        let newWidth = myWidth + spacingApplied + other.width
 
         var result: [String] = []
         result.reserveCapacity(maxHeight)
@@ -429,18 +444,19 @@ extension FrameBuffer {
             }
             let leftPad = max(0, myWidth - leftWidth)
             var combined = ""
-            combined.reserveCapacity(left.utf8.count + leftPad + spacing + right.utf8.count)
+            combined.reserveCapacity(
+                left.utf8.count + leftPad + spacingApplied + right.utf8.count)
             combined += left
             if leftPad > 0 { combined += asciiSpaces(leftPad) }
-            if spacing > 0 { combined += asciiSpaces(spacing) }
+            if spacingApplied > 0 { combined += asciiSpaces(spacingApplied) }
             combined += right
             result.append(combined)
         }
 
         // `other`'s content lands to the right, past this buffer + spacing.
-        let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacing, y: 0)
+        let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacingApplied, y: 0)
         let carriedRegions =
-            hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacing, y: 0)
+            hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacingApplied, y: 0)
 
         // Replace self with the new buffer, supplying the uniform-width hint the
         // bare `FrameBuffer(lines:width:)` used to discard (it defaults the flag

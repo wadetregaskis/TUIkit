@@ -187,4 +187,35 @@ struct HStackRenderTests {
         #expect(buffer.lines.first?.stripped.hasPrefix("0") == true, "Leading column stays visible")
         #expect(buffer.width <= 4, "Never overflows the width it was given")
     }
+
+    // MARK: - Filtered (empty) children
+
+    @Test("A leading empty child claims no spacing slot")
+    func leadingEmptyChildClaimsNoSpacing() {
+        // `EmptyView` is NOT a ChildViewProvider, so unlike `if false { … }` it
+        // survives child resolution and renders an empty buffer at index 0 —
+        // which is exactly the case that used to buy a spacing slot it never
+        // earned, indenting the whole row.
+        let buffer = renderToBuffer(
+            HStack(spacing: 2) {
+                EmptyView()
+                Text("Hi")
+            }, context: ctx())
+        #expect(buffer.lines.count == 1)
+        #expect(buffer.lines[0].stripped == "Hi")
+        #expect(buffer.width == 2)
+    }
+
+    @Test("An interior empty child claims no spacing slot either")
+    func interiorEmptyChildClaimsNoSpacing() {
+        // Passes before and after: the guard rail that stops the fix being
+        // over-applied to the already-correct interior case.
+        let buffer = renderToBuffer(
+            HStack(spacing: 2) {
+                Text("A")
+                EmptyView()
+                Text("B")
+            }, context: ctx())
+        #expect(buffer.lines[0].stripped == "A  B")
+    }
 }
