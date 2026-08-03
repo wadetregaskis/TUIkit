@@ -75,16 +75,27 @@ func renderMenuColumn(
     // label, fatal once a row has something at its trailing edge.
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
 
-    // Does it fit? Measured against a canvas TALLER than the cap, because a
-    // measure is clamped to the context's `availableHeight` — and for an inline
-    // menu the cap IS the available height, so measuring in place always
-    // answers "it fits" and the overflowing rows are simply dropped. The canvas
-    // is the same generous one `ScrollView` measures its own content against.
+    // Does it fit? A measure is clamped to the context's `availableHeight` —
+    // and for an inline menu the cap IS that height — so a measure in place
+    // can only ever answer "it fits", with the overflowing rows silently
+    // dropped. Answering properly needs a canvas TALLER than the cap, the same
+    // generous one `ScrollView` measures its own content against.
+    //
+    // But only when the first measure was AMBIGUOUS. That measure was taken at
+    // the same cap, so a height strictly under it was not clamped: the content
+    // demonstrably fits and the tall-canvas probe would re-walk the whole menu
+    // to learn nothing. Only a height that came back EQUAL to the cap might
+    // have been truncated. Menus are usually a handful of rows in a
+    // terminal-sized slot, so this skips a third full traversal of the tree on
+    // the common path — the inline menu was measuring twice and rendering once
+    // for every frame.
+    guard capHeight > 0 else { return renderToBuffer(menuView, context: sized) }
+    if natural.height < capHeight { return renderToBuffer(menuView, context: sized) }
     let canvas = sized.withAvailableHeight(max(capHeight * 64, 4096))
     let fullHeight = measureChild(
         menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: canvas
     ).height
-    guard capHeight > 0, fullHeight > capHeight else {
+    guard fullHeight > capHeight else {
         return renderToBuffer(menuView, context: sized)
     }
     // Taller than its budget: scroll inside it. The scroll goes INSIDE the
