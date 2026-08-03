@@ -212,7 +212,9 @@ struct ScrollGranularityTests {
     private func renderList(
         granularity: ScrollGranularity = .line,
         linesPerRow: Int = 3,
-        wheelTicks: Int = 0
+        wheelTicks: Int = 0,
+        frameHeight: Int = 11,
+        showsScrollbar: Bool = false
     ) -> String {
         let tui = TUIContext()
         var env = EnvironmentValues()
@@ -227,7 +229,8 @@ struct ScrollGranularityTests {
                 Text((1...linesPerRow).map { "\(name)-\($0)" }.joined(separator: "\n"))
             }
         }
-        .frame(height: 11)
+        .scrollbarVisibility(showsScrollbar ? .visible : .hidden)
+        .frame(height: frameHeight)
 
         func renderOnce() -> FrameBuffer {
             var context = RenderContext(
@@ -327,6 +330,43 @@ struct ScrollGranularityTests {
         // The freed indicator line pays for the absorbed line exactly, so the
         // absorbed frame IS the un-scrolled frame — nothing below moves.
         #expect(body == atTop, "the absorbed frame draws the un-clipped window:\n\(body)")
+    }
+
+    @Test("List (row granularity): whole rows only, so the below indicator survives")
+    func listRowGranularityKeepsBelowIndicator() {
+        // Six 3-line rows in an 11-line frame → a 9-line content area. Rows a,
+        // b, c sum to exactly 9, leaving no line for "▼ N more rows below" — so
+        // under WHOLE-ROW granularity only a and b may show, and the freed line
+        // carries the indicator. Before the window walk learned the rule, row c
+        // was emitted anyway and the container's bottom clamp ate the indicator
+        // instead: the list looked like it ended at row c.
+        let body = renderList(granularity: .row, linesPerRow: 3)
+        #expect(body.contains("b-3"), "the last row that FITS is drawn whole:\n\(body)")
+        #expect(!body.contains("c-1"), "the straddling row stays out of the window:\n\(body)")
+        #expect(body.contains("more rows below"), "the below indicator survives:\n\(body)")
+    }
+
+    @Test("List (row granularity, scrollbar): the bottom row is whole, not part-drawn")
+    func listRowGranularityScrollbarKeepsWholeRows() {
+        // The same over-emission on the scrollbar path, where there is no
+        // indicator to lose — the container clamp cut the bottom ROW instead,
+        // leaving one line of it on screen in whole-row mode. 4-line rows in a
+        // 9-line content area: two fit, the third must wait.
+        let body = renderList(
+            granularity: .row, linesPerRow: 4, frameHeight: 11, showsScrollbar: true)
+        #expect(body.contains("b-4"), "the last row that fits is drawn whole:\n\(body)")
+        #expect(!body.contains("c-1"), "the row that does not fit is not part-drawn:\n\(body)")
+    }
+
+    @Test("List (line granularity, scrollbar): the bottom row still fills the area")
+    func listLineGranularityScrollbarFillsArea() {
+        // The guard against over-correcting: line granularity must still spend
+        // the spare line on a partial row. Identical before and after the
+        // whole-row fix, which is the point — it pins the fix to `.row`.
+        let body = renderList(
+            granularity: .line, linesPerRow: 4, frameHeight: 11, showsScrollbar: true)
+        #expect(body.contains("c-1"), "line mode spends the ninth line on row c:\n\(body)")
+        #expect(!body.contains("c-2"), "…and clips the rest of it:\n\(body)")
     }
 
     @Test("List (row granularity): a wheel event moves three whole ROWS")

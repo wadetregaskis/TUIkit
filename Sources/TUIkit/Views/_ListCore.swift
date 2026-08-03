@@ -443,15 +443,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // row too high), and no overflow in the middle. With a bar,
         // the whole content area is the viewport (no reservation).
         var visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
+        // Deliberately not defaulted anywhere below: an implicit default is
+        // exactly how these window rules drift apart.
+        let lineGranularity = context.environment.scrollGranularity == .line
         if wantsScrollbar {
             visibleRows = calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: targetContentHeight)
+                source: source, origin: origin, viewportHeight: targetContentHeight,
+                lineGranularity: lineGranularity)
         } else {
             visibleRows = resolveVisibleWindow(
                 source: source,
                 origin: origin,
                 contentHeight: targetContentHeight,
-                overflowing: overflowing
+                overflowing: overflowing,
+                lineGranularity: lineGranularity
             )
         }
         // Sync the viewport to the DATA rows this window covers — BEFORE the
@@ -1004,7 +1009,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // the hard budget, so the list never grows to fit a whole row.
             // Deferred to the slot-aware `clipReorderOverrun` during a hold —
             // see composeRowLines.
-            if context.environment.scrollGranularity == .line, handler.reorder == nil {
+            //
+            // Not gated on granularity, unlike the bar-less path: a bar spends
+            // no line on indicators, so its height is a hard budget under
+            // EITHER granularity — the same `showsBar ||` shape the Table uses.
+            // With the whole-row window walk above this can now only fire for a
+            // single row taller than the entire content area, where it keeps
+            // the emitted lines and their published hit bands agreeing instead
+            // of letting the container clamp cut lines the bands still claim.
+            if handler.reorder == nil {
                 let remaining = contentHeight - lines.count
                 if remaining <= 0 { break }
                 if styledLines.count > remaining {
@@ -1909,11 +1922,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         source: RowSource<SelectionValue>,
         origin: WindowOrigin,
         contentHeight: Int,
-        overflowing: Bool
+        overflowing: Bool,
+        lineGranularity: Bool
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         guard overflowing else {
             return calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: contentHeight)
+                source: source, origin: origin, viewportHeight: contentHeight,
+                lineGranularity: lineGranularity)
         }
         // A line-granularity top clip means the top row is partially hidden,
         // which warrants the "above" indicator just like whole hidden rows.
@@ -1923,7 +1938,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let withoutBelow = calculateVisibleRows(
             source: source,
             origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines))
+            viewportHeight: max(1, contentHeight - aboveLines),
+            lineGranularity: lineGranularity)
         // …then, if rows remain past that window, a "below" indicator
         // is needed, so reserve its line and refill.
         let belowShown = origin.offset + withoutBelow.count < source.count
@@ -1931,13 +1947,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return calculateVisibleRows(
             source: source,
             origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines - 1))
+            viewportHeight: max(1, contentHeight - aboveLines - 1),
+            lineGranularity: lineGranularity)
     }
 
+    /// - Parameter lineGranularity: Whether the viewport may end mid-row. See
+    ///   the straddle branch below — this is the whole reason the flag is
+    ///   threaded down here rather than read from the environment at the point
+    ///   of use, so every window walk answers it the same way.
     private func calculateVisibleRows(
         source: RowSource<SelectionValue>,
         origin: WindowOrigin,
-        viewportHeight: Int
+        viewportHeight: Int,
+        lineGranularity: Bool
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         var result: [(Int, SelectableListRow<SelectionValue>)] = []
         // A line-granularity top clip hides the first `clip` lines of the top
@@ -1956,7 +1978,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 linesUsed += rowHeight
                 currentIndex += 1
             } else {
-                result.append((currentIndex, row))
+                // The row that straddles the remaining budget. Line granularity
+                // fills the viewport EXACTLY — the row enters and the renderer
+                // clips its tail. Row granularity promises WHOLE rows, so it
+                // stays out and waits for the next screenful; the shortfall is
+                // padded downstream. `Table.rowWindow` has always had this rule
+                // (its `lineGranularity && used < budget` test); the List never
+                // learned it, and its compose paths tried to undo the over-emit
+                // with a budget clip that is itself gated on `.line` — so under
+                // `.row` nothing trimmed it and the container's blind bottom
+                // clamp ate whatever was last: the "▼ N more below" indicator,
+                // or the tail of the bottom row on the scrollbar path.
+                //
+                // A window is never empty, though: a first row taller than the
+                // whole viewport still enters (clipped), or nothing would draw.
+                if lineGranularity || result.isEmpty {
+                    result.append((currentIndex, row))
+                }
                 break
             }
         }
