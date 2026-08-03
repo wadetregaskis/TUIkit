@@ -99,6 +99,7 @@ extension RenderContext {
         var copy = self
         let backdropFocus = FocusManager()
         backdropFocus.suppressesAutoFocus = true
+        backdropFocus.isBackdrop = true
         copy.environment.focusManager = backdropFocus
         copy.environment.keyEventDispatcher = KeyEventDispatcher()
         return copy

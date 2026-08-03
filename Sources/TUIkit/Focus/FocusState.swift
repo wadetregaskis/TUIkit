@@ -269,7 +269,16 @@ struct _FocusedModifier<Content: View, Value: Hashable>: View {
 extension _FocusedModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let id = forcedID(context)
-        if !context.isMeasuring, let manager = context.environment.focusManager {
+        // NOT under a dimmed backdrop. That render uses a throwaway
+        // FocusManager, and `store.focusManager` is weak — so wiring it there
+        // pointed the page's `@FocusState` at an object that dies with the
+        // frame. Every subsequent write (a modal button's action setting
+        // `focus = .email` to direct focus after dismissal) then resolved a nil
+        // manager and silently did nothing: the store is what event closures
+        // read, since the environment is out of reach outside a render.
+        if !context.isMeasuring, let manager = context.environment.focusManager,
+            !manager.isBackdrop
+        {
             store.focusManager = manager
             manager.registerFocusBinding(
                 store: store.storeID, value: AnyHashable(value), focusID: id)
@@ -304,7 +313,12 @@ struct _DefaultFocusModifier<Content: View, Value: Hashable>: View {
 
 extension _DefaultFocusModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        if !context.isMeasuring, let manager = context.environment.focusManager {
+        // Backdrop-excluded for the same reason as `_FocusedModifier`: the
+        // throwaway manager must not become the store's, and a default-focus
+        // declaration made against it is discarded with it anyway.
+        if !context.isMeasuring, let manager = context.environment.focusManager,
+            !manager.isBackdrop
+        {
             store.focusManager = manager
             manager.setDefaultFocusValue(
                 AnyHashable(value), priority: priority, forStore: store.storeID)

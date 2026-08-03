@@ -159,6 +159,54 @@ struct FocusStateTests {
             "the same control keeps the id across frames")
     }
 
+    // MARK: - A dimmed backdrop is a picture, not the live page
+
+    /// While a modal is up the page beneath re-renders through
+    /// `isolatedForBackground()`, whose FocusManager is a throwaway. The
+    /// `.focused` modifiers used to wire THAT into the page's
+    /// `FocusStateStore` — and the store holds it WEAKLY, so it died with the
+    /// frame. Event closures resolve the store's manager directly (the
+    /// environment is out of reach outside a render), so every later
+    /// `@FocusState` write — a modal button's action setting `focus = .email`
+    /// to direct focus after dismissal — resolved nil and silently did nothing.
+    @Test("A backdrop render does not steal the page's @FocusState wiring")
+    func backdropDoesNotRewireTheStore() {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        let bindingBox = Box<FocusState<Field?>.Binding?>(nil)
+        let view = FieldHarness(binding: bindingBox)
+
+        // Live frame: the store wires to the real manager.
+        render(view, tuiContext: tui, focusManager: manager)
+        #expect(bindingBox.value != nil)
+
+        let beforeBackdrop = manager.currentFocusedID
+        #expect(beforeBackdrop != nil, "the live frame focused something to move away from")
+
+        // A presented frame: the page is drawn as a dimmed backdrop. Scoped so
+        // the throwaway manager's lifetime is the frame's, as it is in the app.
+        do {
+            var environment = EnvironmentValues()
+            environment.focusManager = manager
+            environment.applyRuntimeServices(from: tui)
+            var context = RenderContext(
+                availableWidth: 40, availableHeight: 12, environment: environment,
+                tuiContext: tui)
+            context = context.isolatedForBackground()
+            tui.stateStorage.beginRenderPass()
+            _ = renderToBuffer(view, context: context)
+            tui.stateStorage.endRenderPass()
+        }
+
+        // The write a modal's action would make must still reach the REAL
+        // manager and move focus to the other field.
+        bindingBox.value?.wrappedValue = .email
+        let after = manager.currentFocusedID ?? "nil"
+        #expect(
+            manager.currentFocusedID != beforeBackdrop,
+            "a @FocusState write after a backdrop frame must still move focus (stuck on \(after))")
+    }
+
     @Test("An optional @FocusState reports and moves focus between controls")
     func optionalBinding() {
         let tui = TUIContext()

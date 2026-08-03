@@ -130,6 +130,17 @@ public final class FocusManager: @unchecked Sendable {
     /// the "first registrant wins an empty focus" rule is.
     var suppressesAutoFocus = false
 
+    /// Whether this manager is the throwaway one a dimmed backdrop renders
+    /// under (see `RenderContext.isolatedForBackground()`), rather than the
+    /// app's real focus system.
+    ///
+    /// A backdrop render must not be mistaken for the page being live: it is a
+    /// picture of the page, drawn so the modal has something to dim. Anything
+    /// that would otherwise treat "I am rendering" as "I am the current focus
+    /// system" — the `.focused` modifiers wiring their store, above all — has
+    /// to ask this first.
+    var isBackdrop = false
+
     /// For each section that was activated *over* another, the section to revert
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
     private var sectionRevertTarget: [String: String] = [:]
