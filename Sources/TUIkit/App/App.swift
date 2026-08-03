@@ -472,15 +472,19 @@ extension AppRunner {
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()
+        // Our own resume delivers a SIGCONT too; the repaint is already
+        // forced below, so arm the source to swallow that one signal.
+        // Arming (not consume-after-resume): the SIGCONT source runs on the
+        // main queue, which cannot fire until this synchronous path has
+        // finished — a consume here would run before the flag is ever set,
+        // and the loop would double-repaint on the next iteration.
+        signals.expectSelfResume()
         kill(getpid(), SIGSTOP)
         // ── stopped; `fg` resumes here ──
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()
         renderer.invalidateDiffCache()
-        // Our own resume delivered a SIGCONT too; the repaint is already
-        // forced above, so consume the flag rather than repainting twice.
-        _ = signals.consumeContinueFlag()
     }
 
     fileprivate func drainTerminalEvents(
