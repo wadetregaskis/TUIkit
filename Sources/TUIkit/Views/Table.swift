@@ -481,8 +481,8 @@ where Value.ID: Hashable {
         /// empty for a single-line table (the line offset is the row offset, with
         /// no per-frame array to allocate).
         let visibleRowHeights: [Int]
-        /// Whether a single-line scrollbar column was drawn (only the single-line
-        /// path shows one). Drives the bar's mouse handler in `attachMouseHandlers`.
+        /// Whether a scrollbar column was drawn — by either layout path. Drives
+        /// the bar's mouse handler in `attachMouseHandlers`.
         var hasScrollbar = false
 
         /// This frame's column widths and row width — enough to re-render any
@@ -513,15 +513,20 @@ where Value.ID: Hashable {
         // Calculate available width inside container (subtract border + padding).
         let innerWidth = max(0, context.availableWidth - 4)
 
-        // A single-line table decides a scrollbar cheaply (one line per row),
-        // reserving a column inside the border for it. Multi-line tables wire the
-        // scrollbar separately (their overflow needs the total wrapped height).
+        // A single-line table decides a scrollbar cheaply (one line per row).
+        // A multi-line table's overflow is its total WRAPPED height, so that
+        // walk is only run when a bar is in play at all — scrollbars are opt-in
+        // (`.hidden` by default), which is what keeps the default path free of
+        // it (see `multiLineOverflows`).
         let rowArea = max(1, context.availableHeight - 3)
         let barVisibility = context.environment.scrollbarVisibility
         let isMultiLine = columns.contains { $0.lineLimit > 1 }
         let wantsScrollbar =
-            !isMultiLine && !data.isEmpty && barVisibility != .hidden
-            && (barVisibility == .visible || data.count > rowArea)
+            !data.isEmpty && barVisibility != .hidden
+            && (barVisibility == .visible
+                || (isMultiLine
+                    ? multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
+                    : data.count > rowArea))
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
 
         let columnWidths = calculateColumnWidths(
@@ -545,7 +550,7 @@ where Value.ID: Hashable {
             // nothing. Same fix as `_ListCore`'s.
             renderState = emptyRenderState(
                 context: context, stateStorage: stateStorage, contentHeight: rowArea)
-        } else if wantsScrollbar {
+        } else if wantsScrollbar, !isMultiLine {
             let result = buildScrollbarContent(
                 context: context, stateStorage: stateStorage, palette: palette,
                 columnWidths: columnWidths, contentInnerWidth: contentInnerWidth)
@@ -557,6 +562,7 @@ where Value.ID: Hashable {
                 stateStorage: stateStorage,
                 palette: palette,
                 columnWidths: columnWidths,
+                showsScrollbar: wantsScrollbar,
                 innerWidth: innerWidth
             )
             contentLines = result.lines
@@ -595,6 +601,7 @@ where Value.ID: Hashable {
         stateStorage: StateStorage,
         palette: any Palette,
         columnWidths: [Int],
+        showsScrollbar: Bool = false,
         innerWidth: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
         // Multi-line cells (any column with a line limit above 1) take a separate,
@@ -603,7 +610,8 @@ where Value.ID: Hashable {
         if columns.contains(where: { $0.lineLimit > 1 }) {
             return buildMultiLineContent(
                 context: context, stateStorage: stateStorage, palette: palette,
-                columnWidths: columnWidths, innerWidth: innerWidth)
+                columnWidths: columnWidths, showsScrollbar: showsScrollbar,
+                innerWidth: innerWidth)
         }
 
         // The fixed chrome is 3 lines: the top border, the bottom
@@ -770,11 +778,18 @@ where Value.ID: Hashable {
     /// one line, so the visible window, the scroll bounds, focus-reveal, and the
     /// click mapping are all line-aware (driven by per-row heights). The
     /// single-line path above is left completely untouched.
+    ///
+    /// Marks the rows it can't show with a scrollbar when `showsScrollbar`, "N
+    /// more above/below" indicator lines otherwise — the same choice every other
+    /// scrollable makes. The bar costs a column instead of a line, so the rows
+    /// get the whole content area, and nothing here reserves an indicator line
+    /// (which is what lets the table reach its true last screenful).
     private func buildMultiLineContent(
         context: RenderContext,
         stateStorage: StateStorage,
         palette: any Palette,
         columnWidths: [Int],
+        showsScrollbar: Bool,
         innerWidth: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
         // 3 = top border + column header + bottom border.
@@ -851,16 +866,17 @@ where Value.ID: Hashable {
         handler.followMargin = context.environment.scrollFollowMargin
         // Choose viewportHeight so the handler's row-based maxOffset
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
-        let furthest = maxScrollOffset(count: data.count, contentHeight: contentHeight, height: heightOf)
+        let furthest = maxScrollOffset(
+            count: data.count, contentHeight: contentHeight,
+            showsScrollbar: showsScrollbar, height: heightOf)
         handler.viewportHeight = max(1, data.count - furthest)
-        // This path never draws a scrollbar and marks hidden content with "N
-        // more" indicator lines instead — sync both flags in case the rows
-        // switch between the single-line and multi-line paths across frames
-        // (the single-line resolve sets them from ITS chrome; stale values
-        // would mis-budget the focus-reveal arithmetic). Same divergence
-        // class as the `017683fa` capture notes on the single-line path.
-        handler.showsScrollbar = false
-        handler.drawsScrollIndicators = furthest > 0
+        // Sync both chrome flags in case the rows switch between the
+        // single-line and multi-line paths across frames (the single-line
+        // resolve sets them from ITS chrome; stale values would mis-budget the
+        // focus-reveal arithmetic). Same divergence class as the `017683fa`
+        // capture notes on the single-line path.
+        handler.showsScrollbar = showsScrollbar
+        handler.drawsScrollIndicators = !showsScrollbar && furthest > 0
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
@@ -869,7 +885,7 @@ where Value.ID: Hashable {
             // line-granularity exception (a wheel tick legitimately resting
             // mid-row) reads the first row's height, resolved lazily.
             handler.settleRestingOffset(
-                overflowing: furthest > 0, showsScrollbar: false,
+                overflowing: furthest > 0, showsScrollbar: showsScrollbar,
                 firstRowHeight: heightOf(0))
             // Apply whichever anchor is in effect (§1.1) — a `.row` designation
             // pins that row, a `.bottom` edge follows the tail. Render pass only
@@ -887,15 +903,28 @@ where Value.ID: Hashable {
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
             contentHeight: contentHeight, topClip: handler.scrollTopClipLines,
-            lineGranularity: context.environment.scrollGranularity == .line, height: heightOf)
+            lineGranularity: context.environment.scrollGranularity == .line,
+            showsScrollbar: showsScrollbar, height: heightOf)
         // The window may have absorbed a top clip (or a whole first row) that
         // an indicator would otherwise have announced — the rows are drawn
         // from ITS position, so the mouse mapping must measure from it too.
         let topClip = window.topClip
+        // The bar is metered in LINES, like the `List`'s over multi-line rows:
+        // its extent is the whole wrapped height and its offset the lines
+        // above the window. That total is the one thing this path otherwise
+        // never needs (see `heightOf`), so it is summed only when a bar is
+        // actually drawn — the same discipline `_ListCore.listScrollbarCells`
+        // keeps.
+        let bar: [String] =
+            showsScrollbar
+            ? multiLineScrollbarCells(
+                window: window, contentHeight: contentHeight,
+                height: heightOf, context: context, palette: palette)
+            : []
         let lines = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth,
-            contentHeight: contentHeight, context: context, palette: palette)
+            contentHeight: contentHeight, bar: bar, context: context)
 
         // The first row's on-screen height is net of the line-granularity top
         // clip — the mouse row-mapping walks these heights from the first
@@ -912,10 +941,41 @@ where Value.ID: Hashable {
                 handler: handler,
                 focusID: persistedFocusID,
                 visibleRange: window.range,
-                scrollOffsetAbove: window.showAbove ? 1 : 0,
-                visibleRowHeights: visibleRowHeights
+                scrollOffsetAbove: (window.showAbove && !showsScrollbar) ? 1 : 0,
+                visibleRowHeights: visibleRowHeights,
+                hasScrollbar: showsScrollbar,
+                columnWidths: columnWidths,
+                rowContentWidth: tableContentWidth(columnWidths, within: innerWidth)
             )
         )
+    }
+
+    /// The vertical scrollbar cells for a multi-line table — one styled cell per
+    /// content line, metered in LINES so the thumb tracks fine wheel steps
+    /// through tall rows exactly as the `List`'s does.
+    ///
+    /// This is the one place that needs the table's TOTAL wrapped height, which
+    /// is why it is reached only when a bar is drawn: everything else here works
+    /// from a screenful of memoised heights.
+    private func multiLineScrollbarCells(
+        window: (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int),
+        contentHeight: Int,
+        height: (Int) -> Int,
+        context: RenderContext,
+        palette: any Palette
+    ) -> [String] {
+        var extentLines = 0
+        for index in data.indices { extentLines += height(index) }
+        var offsetLines = window.topClip
+        for index in 0..<window.range.lowerBound { offsetLines += height(index) }
+        return ScrollbarRenderer.verticalScrollbar(
+            height: contentHeight, extent: extentLines, viewport: contentHeight,
+            offset: offsetLines,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            colors: ScrollbarColors(
+                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                arrow: palette.foregroundTertiary))
     }
 
     /// The wrapped lines of each cell of a row plus the row's height (its tallest
@@ -957,12 +1017,16 @@ where Value.ID: Hashable {
 
     /// The furthest the table can scroll: the largest first-visible row such that
     /// the remaining rows still fill the content area (reserving a line for the
-    /// "above" indicator that shows whenever the first visible row isn't row 0).
-    private func maxScrollOffset(count: Int, contentHeight: Int, height: (Int) -> Int) -> Int {
+    /// "above" indicator that shows whenever the first visible row isn't row 0 —
+    /// a bar draws no indicators, so it reserves nothing and the table can reach
+    /// its true last screenful).
+    private func maxScrollOffset(
+        count: Int, contentHeight: Int, showsScrollbar: Bool = false, height: (Int) -> Int
+    ) -> Int {
         var used = 0
         var offset = count
         while offset > 0 {
-            let aboveReserve = (offset - 1) > 0 ? 1 : 0
+            let aboveReserve = (!showsScrollbar && (offset - 1) > 0) ? 1 : 0
             let rowH = height(offset - 1)
             if used + rowH + aboveReserve > contentHeight { break }
             used += rowH
@@ -971,19 +1035,44 @@ where Value.ID: Hashable {
         return offset
     }
 
+    /// Whether a multi-line table's wrapped rows are taller than its row area —
+    /// stopping the moment they are, so a tall table sums a screenful rather
+    /// than all of it, and a table that fits has at most `rowArea` rows to sum.
+    /// The same early-exit shape as `_ListCore.rowsOverflow`.
+    ///
+    /// Measured at the width a bar WOULD leave, where rows wrap taller and so
+    /// overflow soonest: if they don't overflow even there they cannot overflow
+    /// at the full width either, so answering "no bar" is final and the real
+    /// column widths are then computed without the reservation.
+    private func multiLineOverflows(rowArea: Int, innerWidth: Int) -> Bool {
+        let widths = calculateColumnWidths(
+            availableWidth: max(1, innerWidth), spacing: columnSpacing)
+        var lines = 0
+        for item in data {
+            lines += rowHeight(of: item, columnWidths: widths)
+            if lines > rowArea { return true }
+        }
+        return false
+    }
+
     /// The window of rows visible at `scrollOffset`: accumulate row heights until
     /// the content area fills, reserving a line for each scroll indicator actually
     /// shown. Mirrors the single-line indicator reservation, height-aware.
     private func rowWindow(
         scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0,
-        lineGranularity: Bool = false, height: (Int) -> Int
+        lineGranularity: Bool = false, showsScrollbar: Bool = false, height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int) {
         guard count > 0 else { return (0..<0, false, false, 0) }
         // Absorb a top clip an indicator would cost more to announce than it
         // hides — the shared rule, so the `List` cannot drift from it again.
-        let (offset, topClip) = ScrollWindowOrigin.absorbing(
-            offset: min(max(0, scrollOffset), count - 1), topClip: topClip,
-            firstRowHeight: height(0))
+        // A bar spends no indicator line, so it has nothing to absorb (the
+        // `List` skips it on that path for the same reason).
+        let clamped = min(max(0, scrollOffset), count - 1)
+        let (offset, topClip) =
+            showsScrollbar
+            ? (clamped, topClip)
+            : ScrollWindowOrigin.absorbing(
+                offset: clamped, topClip: topClip, firstRowHeight: height(0))
         // A line-granularity clip partially hides the top row — content above.
         let showAbove = offset > 0 || topClip > 0
 
@@ -1009,14 +1098,20 @@ where Value.ID: Hashable {
             return max(offset + 1, end)
         }
 
-        var end = fill(budget: contentHeight - (showAbove ? 1 : 0))
-        if end < count {
-            end = fill(budget: contentHeight - (showAbove ? 1 : 0) - 1)
+        // A bar marks the hidden rows itself, so the whole content area is
+        // viewport: no line is set aside for either indicator.
+        let aboveReserve = (showAbove && !showsScrollbar) ? 1 : 0
+        var end = fill(budget: contentHeight - aboveReserve)
+        if end < count, !showsScrollbar {
+            end = fill(budget: contentHeight - aboveReserve - 1)
         }
         return (offset..<min(count, end), showAbove, end < count, topClip)
     }
 
-    /// Stitches scroll indicators around the visible multi-line rows.
+    /// Stitches the visible multi-line rows together with whichever chrome marks
+    /// the hidden ones: a scrollbar down the right-hand column when `bar` is
+    /// non-empty, "N more above/below" lines otherwise. Never both — the bar
+    /// says everything the indicators would, and takes no line to say it.
     private func composeMultiLineRows(
         window: (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int),
         handler: ItemListHandler<Value.ID>,
@@ -1024,20 +1119,22 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         innerWidth: Int,
         contentHeight: Int,
-        context: RenderContext,
-        palette: any Palette
+        bar: [String],
+        context: RenderContext
     ) -> [String] {
+        let palette = context.environment.palette
         // Every line — focused-row backgrounds and indicators included — is padded
         // to the *content* width (the columns), not the full interior, so a focused
         // row or a scroll indicator is never wider than the header and rows; that
         // width mismatch is what made the wrapping VStack centre the header.
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+        let showsBar = !bar.isEmpty
         // A focused table with no scrollbar pulses its "N more" indicators.
         let indicatorEmphasis = scrollIndicatorEmphasis(
             isFocused: tableHasFocus, context: context)
         let numberLocale = context.environment.locale
         var lines: [String] = []
-        if window.showAbove {
+        if window.showAbove, !showsBar {
             lines.append(renderScrollIndicator(
                 direction: .up, count: max(1, window.range.lowerBound),
                 unit: .rows,
@@ -1048,9 +1145,12 @@ where Value.ID: Hashable {
         // be partially clipped (the top row already can be, via
         // `scrollTopClipLines`), so the table's height never changes with
         // which rows happen to be visible. Row granularity keeps whole rows.
+        // A bar takes no line of its own, so the rows have the whole content
+        // area — and they must be clipped to it under EITHER granularity, since
+        // there is no indicator line left to absorb a row that overruns.
         let rowLineBudget: Int? =
-            context.environment.scrollGranularity == .line
-            ? max(1, contentHeight - lines.count - (window.showBelow ? 1 : 0))
+            showsBar || context.environment.scrollGranularity == .line
+            ? max(1, contentHeight - lines.count - ((window.showBelow && !showsBar) ? 1 : 0))
             : nil
         var rowLinesEmitted = 0
         // The rows are collected apart from the indicator chrome so that only
@@ -1084,7 +1184,7 @@ where Value.ID: Hashable {
         }
         lines.append(contentsOf: handler.overscrollState.slid(
             slidableRows, blank: String(repeating: " ", count: max(0, contentWidth))))
-        if window.showBelow {
+        if window.showBelow, !showsBar {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
                 unit: .rows,
@@ -1102,7 +1202,17 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        return lines
+        guard showsBar else { return lines }
+        // The bar is the rightmost interior column, merged in by absolute line
+        // index so an overscroll slide moves the rows and leaves it where it
+        // is (§1.5) — the same composition the single-line path uses.
+        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        while lines.count < contentHeight {
+            lines.append(String(repeating: " ", count: contentWidth))
+        }
+        return lines.enumerated().map { index, line in
+            line + (index < bar.count ? bar[index] : emptyCell)
+        }
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
