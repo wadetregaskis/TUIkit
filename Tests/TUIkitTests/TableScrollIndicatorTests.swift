@@ -172,4 +172,68 @@ struct TableScrollIndicatorTests {
             lines.count > 3 && lines[3].contains("detail 1"),
             "the clipped top row enters at its second line, under the indicator: \(lines)")
     }
+
+    /// The multi-line path shares `settleRestingOffset` with the single-line
+    /// path and _ListCore: a viewport at rest on offset 1 (row granularity,
+    /// no scrollbar) snaps to 0 — the "▲ 1 more row above" line shows the
+    /// row's first line instead of announcing it.
+    @Test("A multi-line table resting at offset 1 settles to 0")
+    func multiLineRestingOffsetSettles() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
+
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler != nil)
+        handler?.scrollOffset = 1
+
+        let lines = renderFrame(tui: tui, fm: fm, twoLineRows: true)
+        #expect(handler?.scrollOffset == 0, "the shared resting rule snaps off offset 1")
+        #expect(
+            lines.contains { $0.contains("row 0") },
+            "row 0 shows in place of the indicator: \(lines)")
+        #expect(
+            !lines.contains { $0.contains("1 more row above") },
+            "no indicator for the settled offset: \(lines)")
+    }
+
+    /// …but never off a legitimate line-granularity rest: a fine wheel tick
+    /// through tall rows lands on offset 1 with no clip, and snapping that
+    /// back would make the table unscrollable at the top.
+    @Test("A line-granularity mid-row rest at offset 1 is not settled")
+    func lineGranularityRestSurvivesSettling() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true, granularity: .line)
+
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler?.scrollFine(by: 2) == true)
+        #expect(handler?.scrollOffset == 1 && handler?.scrollTopClipLines == 0)
+
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true, granularity: .line)
+        #expect(
+            handler?.scrollOffset == 1,
+            "a tall first row makes offset 1 a legitimate fine-scroll rest")
+    }
+
+    /// The multi-line resolve must re-sync the scrollbar/indicator flags every
+    /// frame: it draws indicator lines and never a bar, and stale values from
+    /// a single-line frame (rows can switch paths as data changes) mis-budget
+    /// the focus-reveal arithmetic.
+    @Test("The multi-line resolve syncs the scrollbar/indicator flags")
+    func multiLineResolveSyncsChromeFlags() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
+
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler != nil)
+        // As if left behind by a single-line frame that showed a scrollbar.
+        handler?.showsScrollbar = true
+        handler?.drawsScrollIndicators = false
+
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
+        #expect(handler?.showsScrollbar == false, "this path never draws a bar")
+        #expect(handler?.drawsScrollIndicators == true, "overflow marks rows with indicator lines")
+    }
 }

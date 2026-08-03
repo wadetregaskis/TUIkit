@@ -853,9 +853,24 @@ where Value.ID: Hashable {
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
         let furthest = maxScrollOffset(count: data.count, contentHeight: contentHeight, height: heightOf)
         handler.viewportHeight = max(1, data.count - furthest)
+        // This path never draws a scrollbar and marks hidden content with "N
+        // more" indicator lines instead — sync both flags in case the rows
+        // switch between the single-line and multi-line paths across frames
+        // (the single-line resolve sets them from ITS chrome; stale values
+        // would mis-budget the focus-reveal arithmetic). Same divergence
+        // class as the `017683fa` capture notes on the single-line path.
+        handler.showsScrollbar = false
+        handler.drawsScrollIndicators = furthest > 0
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
+            // Never rest at offset 1 — see `settleRestingOffset`, the rule
+            // shared with _ListCore and the single-line path below. The
+            // line-granularity exception (a wheel tick legitimately resting
+            // mid-row) reads the first row's height, resolved lazily.
+            handler.settleRestingOffset(
+                overflowing: furthest > 0, showsScrollbar: false,
+                firstRowHeight: heightOf(0))
             // Apply whichever anchor is in effect (§1.1) — a `.row` designation
             // pins that row, a `.bottom` edge follows the tail. Render pass only
             // (it mutates the persistent offset), and after `idAt` above so a row
