@@ -191,7 +191,9 @@ extension TextFieldHandler {
     /// derived from the *current* cursor position, exactly as the renderer
     /// derives it, so a click lands where the user sees the caret land. Columns
     /// left of the text clamp to the start of the visible window; columns past
-    /// the end clamp to the text length.
+    /// the end clamp to the text length; and a column past the content area's
+    /// RIGHT edge — the closing cap, or a combo box's disclosure — clamps into
+    /// its last cell.
     ///
     /// The mapping is in CELLS: `displayWidths` carries each character's
     /// display width (see ``TextFieldContentRenderer/displayCellWidths(of:displayCharacter:)``
@@ -204,7 +206,16 @@ extension TextFieldHandler {
         let cursorCellX = displayWidths[0..<clamped].reduce(0, +)
         let scrollStart = TextFieldContentRenderer.scrollCells(
             cursorCellX: cursorCellX, width: contentWidth)
-        let targetCell = scrollStart + max(0, column)
+        // Valid content columns are 0..<contentWidth. A column past the right
+        // edge — the closing cap, or a combo box's ▾ — must clamp INTO the
+        // window: without this it landed on the first OFF-SCREEN character, and
+        // the caret-anchored scroll then shifted the field a column (three with
+        // a disclosure) on every cap click, so holding the mouse there walked
+        // the text sideways. Mirrors the TextEditor's own placeCursor clamp.
+        //
+        // In CELLS, so a wide character straddling the right edge still
+        // resolves to that character rather than to its left neighbour.
+        let targetCell = scrollStart + max(0, min(column, contentWidth - 1))
         var cellX = 0
         for (index, cellWidth) in displayWidths.enumerated() {
             if targetCell < cellX + cellWidth { return index }

@@ -474,4 +474,51 @@ struct TextFieldHandlerTests {
         #expect(handler.characterIndex(forColumn: 2, contentWidth: 5, displayWidths: widths) == 3)
         #expect(handler.characterIndex(forColumn: 4, contentWidth: 5, displayWidths: widths) == 4)
     }
+
+    @Test("A click past the content window's right edge clamps into the window")
+    func clickPastRightEdgeClampsIntoWindow() {
+        // 20 characters in a 10-cell content area, caret at 5 so the window is
+        // cells 0..<10. The closing cap sits one column past that, and a combo
+        // box's disclosure two further out — both used to map to an OFF-SCREEN
+        // character, whose caret-anchored scroll then shifted the field.
+        var text = "abcdefghijklmnopqrst"
+        let handler = TextFieldHandler(
+            focusID: "test",
+            text: Binding(get: { text }, set: { text = $0 }),
+            cursorPosition: 5)
+        let widths = narrowWidths(20)
+
+        let atCap = handler.characterIndex(forColumn: 10, contentWidth: 10, displayWidths: widths)
+        #expect(atCap == 9, "the closing cap puts the caret on the last VISIBLE character")
+
+        let atDisclosure = handler.characterIndex(
+            forColumn: 12, contentWidth: 10, displayWidths: widths)
+        #expect(atDisclosure == 9, "so does a combo box's disclosure, two cells further out")
+
+        // The symptom: a caret inside the window cannot scroll it.
+        for index in [atCap, atDisclosure] {
+            let cellX = widths[0..<index].reduce(0, +)
+            #expect(
+                TextFieldContentRenderer.scrollCells(cursorCellX: cellX, width: 10) == 0,
+                "a cap click must not walk the field sideways")
+        }
+    }
+
+    @Test("The right-edge clamp is in cells, not characters")
+    func rightEdgeClampIsCellBased() {
+        // Ten emoji: 10 characters, 20 cells. A 10-cell window shows five of
+        // them, so the cap must land on emoji 4 — clamping the CHARACTER index
+        // to contentWidth - 1 would say 9, which is not even on screen.
+        var text = String(repeating: "😀", count: 10)
+        let handler = TextFieldHandler(
+            focusID: "test",
+            text: Binding(get: { text }, set: { text = $0 }),
+            cursorPosition: 0)
+        let widths = Array(repeating: 2, count: 10)
+
+        #expect(handler.characterIndex(forColumn: 10, contentWidth: 10, displayWidths: widths) == 4)
+        // A wide character straddling the right edge still resolves to itself:
+        // in a 9-cell window emoji 4 occupies cells 8-9, and cell 8 is its own.
+        #expect(handler.characterIndex(forColumn: 8, contentWidth: 9, displayWidths: widths) == 4)
+    }
 }
