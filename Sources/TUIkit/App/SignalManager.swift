@@ -120,9 +120,19 @@ final class SignalManager {
     /// Set by SIGCONT. The case this exists for is resuming from an *external*
     /// `SIGSTOP`, which cannot be caught — nothing was torn down, so nothing
     /// needs rebuilding, but the screen may have been disturbed while the
-    /// process slept and the loop repaints it. (Our own suspend path consumes
-    /// the flag its `fg` sets, so it doesn't double-repaint through here.)
+    /// process slept and the loop repaints it. (Our own suspend path arms
+    /// ``expectSelfResume()`` before it stops, so the SIGCONT its `fg` raises
+    /// is swallowed and doesn't double-repaint through here.)
     private var continueReceived = false
+
+    /// Armed by the suspend path just before its self-`SIGSTOP`: the next
+    /// SIGCONT is OURS (the `fg` that resumed us) and its repaint already
+    /// happened inline, so the source swallows it instead of setting
+    /// ``continueReceived``. One-shot. A consume-after-resume can't do this
+    /// job: the source runs on the main QUEUE, which cannot fire until the
+    /// synchronous resume path has finished — the flag it would consume isn't
+    /// set yet.
+    private var swallowNextContinue = false
 
     /// Wakes the demand-driven run loop when a signal lands while it is
     /// idle-blocked with nothing to render.
@@ -150,6 +160,12 @@ final class SignalManager {
     func consumeContinueFlag() -> Bool {
         defer { continueReceived = false }
         return continueReceived
+    }
+
+    /// Arms the one-shot swallow for the suspend path's own resume — see
+    /// ``swallowNextContinue``. Call immediately before the self-`SIGSTOP`.
+    func expectSelfResume() {
+        swallowNextContinue = true
     }
 
     /// Installs signal sources for SIGWINCH, SIGINT, and SIGTERM.
@@ -227,7 +243,13 @@ final class SignalManager {
                 case .resize: self.terminalResized = true
                 case .shutdown: self.needsShutdown = true
                 case .suspend: self.suspendRequested = true
-                case .resumed: self.continueReceived = true
+                case .resumed:
+                    // Our own suspend's `fg` — already repainted inline.
+                    if self.swallowNextContinue {
+                        self.swallowNextContinue = false
+                    } else {
+                        self.continueReceived = true
+                    }
                 }
                 // Set the flag THEN wake, so the resumed loop sees it already set.
                 self.wake?()
