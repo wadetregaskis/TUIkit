@@ -91,6 +91,36 @@ extension ItemListHandler {
             offset: scrollOffset, topClip: scrollTopClipLines,
             firstRowHeight: firstRowHeight())
     }
+
+    /// Re-resolves this frame's overscroll allowance (§1.5) — how far past its
+    /// edges this view may be pushed — in the LINES the excursion is drawn in.
+    ///
+    /// Runs every frame: a `.viewport`-relative allowance moves with the
+    /// terminal, and an existing excursion is pulled back inside a shrunken one.
+    ///
+    /// The unit is the whole point of sharing it. `ScrollOverscrollState.slid`
+    /// slides the RENDERED LINE array, so the allowance is a line count — it
+    /// must not be resolved against ``viewportHeight``, which callers finalise
+    /// to a visible-ROW count. Over multi-line rows those differ by a factor of
+    /// the row height, and the `Table`'s multi-line path read the row count (a
+    /// frame stale, at that, so the first blocked tick saw the default of 1), so
+    /// `.viewport(minus:)` meant "rows visible minus n" LINES there while the
+    /// `List` twin meant "viewport lines minus n".
+    ///
+    /// - Parameters:
+    ///   - environment: This frame's environment, for the two allowances.
+    ///   - contentHeight: The content area, in lines.
+    ///   - reservesIndicatorLine: Whether a "N more" indicator comes out of that
+    ///     area. A scrollbar costs a column rather than a line, and a view whose
+    ///     content fits draws no indicator at all.
+    func resolveOverscroll(
+        environment: EnvironmentValues, contentHeight: Int, reservesIndicatorLine: Bool
+    ) {
+        overscrollState.resolve(
+            top: environment.scrollOverscrollTop,
+            bottom: environment.scrollOverscrollBottom,
+            viewportHeight: reservesIndicatorLine ? max(1, contentHeight - 1) : contentHeight)
+    }
 }
 
 /// The rule for where a scrolled row viewport is drawn from, shared by `List`

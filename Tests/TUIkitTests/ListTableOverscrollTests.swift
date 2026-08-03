@@ -29,6 +29,9 @@ struct ListTableOverscrollTests {
     private struct Item: Identifiable {
         let id: Int
         var name: String { "row \(id)" }
+        /// Three lines, so the visible-ROW count and the viewport's LINE count
+        /// diverge — which is what `.viewport(minus:)` used to be resolved against.
+        var detail: String { "row \(id)\nline b\nline c" }
     }
 
     private static let items = (0..<40).map(Item.init(id:))
@@ -60,15 +63,38 @@ struct ListTableOverscrollTests {
     /// before and after. At offset 0 there is nowhere to scroll, so the tick has
     /// only the allowance to spend — no graze step to consume first.
     private func pushingUp(
-        _ view: some View, context ctx: RenderContext
+        _ view: some View, context ctx: RenderContext, ticks: Int = 1
     ) -> (before: [String], after: [String]) {
         let dispatcher = ctx.environment.mouseEventDispatcher!
         let first = renderToBuffer(view, context: ctx)
-        dispatcher.setRegions(first.hitTestRegions)
-        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: 2, y: 2))
-        return (
-            first.lines.map(\.stripped),
-            renderToBuffer(view, context: ctx).lines.map(\.stripped))
+        var latest = first
+        // A re-render between events is required: the allowance is resolved as
+        // part of rendering, so a second tick only sees a settled bound once the
+        // first tick's frame has been drawn.
+        for _ in 0..<ticks {
+            dispatcher.setRegions(latest.hitTestRegions)
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: 2, y: 2))
+            latest = renderToBuffer(view, context: ctx)
+        }
+        return (first.lines.map(\.stripped), latest.lines.map(\.stripped))
+    }
+
+    @Test("A multi-line Table's viewport allowance is measured in lines, not rows")
+    func multiLineTableViewportAllowanceIsLineBased() {
+        // 15 available lines − 3 chrome (top border, header, bottom border) = 12
+        // content lines; one goes to the "N more" indicator, so the viewport the
+        // allowance is relative to is 11 LINES, and .viewport(minus: 8) is 3.
+        // The visible-ROW count here is far smaller (3-line rows), so resolving
+        // against rows yielded max(0, rows − 8) == 0: no allowance at all, and
+        // the view could not be pushed past its edge by even one line.
+        let ctx = context(width: 28, height: 15, top: .viewport(minus: 8))
+        let view = Table(Self.items, selection: .constant(Int?.none)) {
+            TableColumn("Name", value: \Item.detail).lineLimit(3)
+        }
+        let (before, after) = pushingUp(view, context: ctx, ticks: 2)
+        #expect(
+            slide(before, after) == 3,
+            "the excursion caps at the LINE-based allowance:\n\(after.joined(separator: "\n"))")
     }
 
     /// The screen line the given row is drawn on. A "blank" line still carries

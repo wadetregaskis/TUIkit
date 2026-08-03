@@ -840,13 +840,6 @@ where Value.ID: Hashable {
         // Captured so a cancel can take the floating preview down itself.
         handler.dragSession = context.environment.dragAndDropSession
         handler.isScrollEnabled = context.environment.isScrollEnabled
-        // §1.5: how far past its edges this view may be pushed, re-resolved
-        // every frame (a `.viewport`-relative allowance moves with the
-        // terminal) and pulling any existing excursion back inside it.
-        handler.overscrollState.resolve(
-            top: context.environment.scrollOverscrollTop,
-            bottom: context.environment.scrollOverscrollBottom,
-            viewportHeight: handler.viewportHeight)
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // Captured at render so a USER wheel scroll can release a bound anchor
         // at event time, and so the anchor hold below can resolve its mode.
@@ -877,6 +870,15 @@ where Value.ID: Hashable {
         // capture notes on the single-line path.
         handler.showsScrollbar = showsScrollbar
         handler.drawsScrollIndicators = !showsScrollbar && furthest > 0
+        // §1.5, in LINES — and therefore AFTER `viewportHeight` above, which on
+        // this path is a ROW count (`itemCount − furthest`, chosen to give the
+        // handler the right `maxOffset`). Resolving against that made
+        // `.viewport(minus:)` mean "rows visible − n" lines here while the List
+        // twin meant "viewport lines − n"; and being a frame stale, the first
+        // blocked tick resolved against a fresh handler's default of 1.
+        handler.resolveOverscroll(
+            environment: context.environment, contentHeight: contentHeight,
+            reservesIndicatorLine: handler.drawsScrollIndicators)
         if !context.isMeasuring {
             handler.clampScrollOffset()
             handler.clampTopClip()
@@ -1331,10 +1333,9 @@ where Value.ID: Hashable {
         // same class: `.scrollDisabled` reached only the multi-line path when it
         // shipped, and the overscroll allowance would have had the same hole.
         handler.isScrollEnabled = context.environment.isScrollEnabled
-        handler.overscrollState.resolve(
-            top: context.environment.scrollOverscrollTop,
-            bottom: context.environment.scrollOverscrollBottom,
-            viewportHeight: provisionalViewport)
+        handler.resolveOverscroll(
+            environment: context.environment, contentHeight: contentHeight,
+            reservesIndicatorLine: overflowing)
         // Same event-time capture as the multi-line path above: a user wheel
         // scroll releases a bound anchor, and the hold below reads the mode.
         handler.anchorPositionBinding = context.environment.anchorPosition

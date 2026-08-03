@@ -678,10 +678,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
         // terminal) and pulling any existing excursion back inside it.
-        handler.overscrollState.resolve(
-            top: context.environment.scrollOverscrollTop,
-            bottom: context.environment.scrollOverscrollBottom,
-            viewportHeight: handler.viewportHeight)
+        handler.resolveOverscroll(
+            environment: context.environment, contentHeight: contentHeight,
+            reservesIndicatorLine: overflowing)
         // Captured at render so a USER wheel scroll can release a bound anchor
         // to `.window` at event time. (The list's ARROW keys move the selection,
         // which the spec shadow-switches to Row, not Window — that needs the
