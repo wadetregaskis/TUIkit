@@ -828,16 +828,28 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             return overlay.shifted(byX: dx, y: -scrollOffset)
         }
 
-        // Filter + shift hit-test regions, same logic.
+        // Filter + shift hit-test regions, same logic — and TRIM them to the
+        // viewport, which the overlay filter above gets for free from
+        // `OverlayLayer.placed()`'s own clip but this one has to do itself.
+        //
+        // The viewport is as final a clip for a region as it is for a line: a
+        // control straddling the top edge kept its full height and shifted to a
+        // NEGATIVE offsetY, so the parent placed it over rows above the
+        // ScrollView, and one straddling the bottom kept rows past the last
+        // visible line. Since regions are hit-tested innermost-first, those
+        // phantom rows won — a click on a Button sitting above the scroller
+        // reached a half-scrolled-off row inside it instead.
         let visibleRegions = full.hitTestRegions.compactMap { region -> HitTestRegion? in
             let topY = region.offsetY
             let bottomY = region.offsetY + region.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
+            let clippedTop = max(topY, viewportTop)
+            let clippedBottom = min(bottomY, viewportBottom)
             return HitTestRegion(
                 offsetX: region.offsetX + dx,
-                offsetY: region.offsetY - scrollOffset,
+                offsetY: clippedTop - scrollOffset,
                 width: region.width,
-                height: region.height,
+                height: clippedBottom - clippedTop,
                 handlerID: region.handlerID,
                 // MUST be carried: reveal-on-focus finds its target by
                 // focusID, so dropping it here (the parameter defaults to
