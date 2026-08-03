@@ -75,12 +75,9 @@ extension OnPreferenceChangeModifier: Renderable {
         }
         let prefs = context.environment.preferenceStorage!
 
-        // The registration and the action invocation below are per-frame
-        // side effects a cached buffer cannot reproduce — decline the memos.
+        // The comparison and possible action below are per-frame side
+        // effects a cached buffer cannot reproduce — decline the memos.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
-
-        // Register callback for preference changes
-        prefs.onPreferenceChange(K.self, callback: action)
 
         // Push a new preference context
         prefs.push()
@@ -90,9 +87,27 @@ extension OnPreferenceChangeModifier: Renderable {
 
         // Pop and get collected preferences
         let preferences = prefs.pop()
+        let value = preferences[K.self]
 
-        // Trigger action with current value
-        action(preferences[K.self])
+        // Fire only when the subtree's REDUCED value actually changed —
+        // SwiftUI's contract (that is what the `Equatable` constraint is
+        // for), and what keeps the render loop settled: the canonical action
+        // writes `@State`, and firing unconditionally re-rendered every
+        // frame forever. The baseline persists by view identity through the
+        // same silent tracked-value store `onChange` uses (its claim counter
+        // too, so chained observers at one identity keep distinct slots).
+        // This also replaced a per-publisher storage callback that delivered
+        // RAW un-reduced values — the action now only ever sees the final
+        // reduction, once, like SwiftUI.
+        let storage = context.environment.stateStorage!
+        let index = storage.nextOnChangeIndex(for: context.identity)
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: index)
+        let previous: K.Value? = storage.trackedValue(for: key)
+        storage.setTrackedValue(value, for: key)
+        storage.markActive(context.identity)
+        if previous != value {
+            action(value)
+        }
 
         return buffer
     }

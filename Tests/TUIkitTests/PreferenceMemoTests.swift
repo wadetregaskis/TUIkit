@@ -70,23 +70,51 @@ struct PreferenceMemoTests {
         }
     }
 
-    @Test("onPreferenceChange inside a memoized row keeps firing")
+    @Test("onPreferenceChange inside a memoized row follows value changes")
     func onChangeSurvivesRowMemo() {
         let tuiContext = TUIContext()
         nonisolated(unsafe) var fired = 0
-        let view = VStack {
-            ForEach(["alpha"], id: \.self) { name in
-                Text(name)
-                    .preference(key: TitleKey.self, value: name)
-                    .onPreferenceChange(TitleKey.self) { _ in fired += 1 }
+        func makeView(_ title: String) -> some View {
+            VStack {
+                ForEach(["alpha"], id: \.self) { name in
+                    Text(name)
+                        .preference(key: TitleKey.self, value: title)
+                        .onPreferenceChange(TitleKey.self) { _ in fired += 1 }
+                }
             }
         }
 
+        _ = renderFrame(makeView("one"), tuiContext: tuiContext)
+        #expect(fired == 1, "the initial value fires once")
+        _ = renderFrame(makeView("one"), tuiContext: tuiContext)
+        #expect(fired == 1, "an unchanged value must not re-fire")
+        // The row memo must not silence a change either — the observer's
+        // side-effect declaration declines the cache, so the changed value
+        // reaches it even though the ForEach element is unchanged.
+        _ = renderFrame(makeView("two"), tuiContext: tuiContext)
+        #expect(fired == 2, "the changed value fires exactly once more")
+    }
+
+    /// SwiftUI's contract: the action sees the subtree's REDUCED value, once,
+    /// and only when it changed. It used to fire per publisher with RAW
+    /// un-reduced values and then again with the reduction — every frame,
+    /// changed or not, which spun the render loop when (canonically) the
+    /// action wrote `@State`.
+    @Test("The observer sees only the reduced value, once, on change")
+    func observerSeesReducedValueOnce() {
+        let tuiContext = TUIContext()
+        nonisolated(unsafe) var seen: [Int] = []
+        let view = VStack {
+            Text("a").preference(key: CountKey.self, value: 1)
+            Text("b").preference(key: CountKey.self, value: 1)
+            Text("c").preference(key: CountKey.self, value: 1)
+        }
+        .onPreferenceChange(CountKey.self) { seen.append($0) }
+
         _ = renderFrame(view, tuiContext: tuiContext)
-        let after1 = fired
+        #expect(seen == [3], "raw per-publisher values leaked: \(seen)")
         _ = renderFrame(view, tuiContext: tuiContext)
-        #expect(after1 > 0)
-        #expect(fired > after1, "the observer must keep firing on cache-hit frames")
+        #expect(seen == [3], "an unchanged value re-fired: \(seen)")
     }
 
     @Test("An accumulating key collects each writer exactly once per frame")
