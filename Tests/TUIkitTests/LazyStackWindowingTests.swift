@@ -84,6 +84,57 @@ struct LazyStackWindowingTests {
         #expect(lines[3] == "tail", "the next row sits below the FULL wrapped height")
     }
 
+    /// A row TALLER than the viewport must render ALL its lines into its
+    /// slot: the render used to be clamped to the viewport height, so lines
+    /// viewportHeight..natural of a tall row existed only as blank padding —
+    /// scrolling into the row's tail showed empty rows that the content
+    /// height and scrollbar fully accounted for, and those lines could never
+    /// be displayed at any offset.
+    @Test("A row taller than the viewport keeps its tail")
+    func tallRowKeepsItsTail() {
+        let paragraph = (0..<12).map { "line \($0)" }.joined(separator: "\n")
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            Text("head")
+            Text(paragraph)  // 12 lines in a 5-line viewport
+            Text("tail")
+        }
+        var context = makeBareRenderContext(width: 20, height: 200)
+        context.environment.scrollContentWindow = ScrollContentWindow(
+            offset: 6, viewportHeight: 5)
+        let lines = renderToBuffer(view, context: context).lines.map {
+            $0.stripped.trimmingCharacters(in: .whitespaces)
+        }
+        // Canvas: head at 0, the paragraph at 1...12, tail at 13. The window
+        // covers canvas lines 6..10 — the paragraph's lines 5..9.
+        for canvasLine in 6...10 {
+            #expect(
+                lines[canvasLine] == "line \(canvasLine - 1)",
+                "canvas line \(canvasLine) lost the tall row's tail: '\(lines[canvasLine])'")
+        }
+        #expect(lines[13] == "tail", "the next row stays below the full slot")
+    }
+
+    /// The uniform fast path (engaged on large uniform row sets) has the same
+    /// contract: a uniform extent taller than the viewport renders whole.
+    @Test("Uniform rows taller than the viewport keep their tails")
+    func uniformTallRowsKeepTails() {
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<300, id: \.self) { index in
+                Text((0..<3).map { "r\(index)l\($0)" }.joined(separator: "\n"))
+            }
+        }
+        var context = makeBareRenderContext(width: 20, height: 2000)
+        // Viewport of 2 lines over 3-line rows: the window lands mid-row.
+        context.environment.scrollContentWindow = ScrollContentWindow(
+            offset: 452, viewportHeight: 2)
+        let lines = renderToBuffer(view, context: context).lines.map {
+            $0.stripped.trimmingCharacters(in: .whitespaces)
+        }
+        // Canvas line 452 is row 150's THIRD line (rows span 450..452) — the
+        // line the viewport-clamped render used to blank.
+        #expect(lines[452] == "r150l2", "the uniform row's last line: '\(lines[452])'")
+    }
+
     @Test("Without a scroll window, a LazyVStack renders every row (no windowing)")
     func noWindowRendersAll() {
         let labels = (0..<12).map { "Row \($0)" }
