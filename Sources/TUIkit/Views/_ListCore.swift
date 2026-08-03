@@ -1579,10 +1579,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // focus identity, not by the one this closure captured.
                         dragSession?.beginReorder(
                             focusID: captureFocusID, handler: captureHandler)
-                        // Edge auto-scroll applies to reordering too, and the
-                        // two feedback modes that open no drag session
-                        // (`.live`, `.dimmed`) have to say so explicitly.
-                        dragSession?.armAutoScroll(owner: captureHandler)
                         // Focus follows the gesture, so the keyboard reaches
                         // this list for the length of it — that is what lets the
                         // navigators scroll a list that was not focused before
@@ -1595,6 +1591,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     return true
 
                 case .dragged:
+                    // Edge auto-scroll applies to reordering too, and the two
+                    // feedback modes that open no drag session (`.live`,
+                    // `.dimmed`) have to say so explicitly. Armed on the first
+                    // MOTION rather than at the press: arming a motionless
+                    // long-press near an edge started scrolling the list out
+                    // from under a click once the dwell elapsed, with nothing
+                    // in hand. Gated on the grab actually having begun — this
+                    // closure claims every press, including ones that missed
+                    // the reorderable rows.
+                    dragSession?.armReorderAutoScrollOnMotion(owner: captureHandler)
                     // Any motion during a grab is a reorder, not a click. What
                     // that looks like is the feedback mode's business — and
                     // `.cursor`'s business reaches outside the list: its row is

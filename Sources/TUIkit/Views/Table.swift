@@ -1911,10 +1911,6 @@ where Value.ID: Hashable {
                         // to know from here on — see the twin in `_ListCore`.
                         dragSession?.beginReorder(
                             focusID: captureFocusID, handler: captureHandler)
-                        // Edge auto-scroll applies to reordering too, and the
-                        // two feedback modes that open no drag session
-                        // (`.live`, `.dimmed`) have to say so explicitly.
-                        dragSession?.armAutoScroll(owner: captureHandler)
                         // Focus follows the gesture, so the keyboard reaches
                         // this list for the length of it — that is what lets the
                         // navigators scroll a list that was not focused before
@@ -1928,6 +1924,10 @@ where Value.ID: Hashable {
                     return true
 
                 case .dragged:
+                    // Edge auto-scroll, armed on the first MOTION rather than
+                    // at the press — see the twin in `_ListCore` for why (a
+                    // motionless long-press near an edge must not scroll).
+                    dragSession?.armReorderAutoScrollOnMotion(owner: captureHandler)
                     // Any motion during a grab is a reorder, not a click. What it
                     // looks like is the feedback mode's business — and `.cursor`'s
                     // reaches outside the table: its row rides the pointer above

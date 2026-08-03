@@ -428,7 +428,9 @@ struct ListReorderDragTests {
     /// Dragging a row past the last visible one has to scroll the list, or a
     /// long list can only be reordered within one screenful. The driver was
     /// gated on a payload drag, which only `.cursor` opens — so the two modes
-    /// people actually use were invisible to it.
+    /// people actually use were invisible to it. Armed on the first MOTION,
+    /// not at the press: a motionless long-press near an edge must not start
+    /// scrolling the list out from under a click once the dwell elapses.
     @Test(
         "A reorder drag arms the edge auto-scroll in every feedback mode",
         arguments: [RowReorderFeedback.live, .dimmed, .cursor])
@@ -438,12 +440,17 @@ struct ListReorderDragTests {
         let session = fixture.tui.dragAndDropSession
         #expect(!session.autoScrollArmed, "nothing dragging yet")
 
+        let pressY = fixture.rowY(buffer, "a")
         fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: pressY))
+        #expect(!session.autoScrollArmed, "a motionless hold is not a drag")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: pressY + 1))
         #expect(session.autoScrollArmed, "\(feedback) must reach the auto-scroll driver")
 
         fixture.dispatcher.dispatch(
-            MouseEvent(button: .left, phase: .released, x: 2, y: fixture.rowY(buffer, "a")))
+            MouseEvent(button: .left, phase: .released, x: 2, y: pressY + 1))
         #expect(!session.autoScrollArmed, "and disarm on the drop")
     }
 

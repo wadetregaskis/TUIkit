@@ -542,6 +542,19 @@ final class DragAndDropSession: @unchecked Sendable {
         autoScrollOwner = owner.map(ObjectIdentifier.init)
     }
 
+    /// Arms the edge auto-scroll for a reorder gesture ON ITS FIRST MOTION —
+    /// the `.dragged` sites in `_ListCore`/`Table` call this rather than
+    /// ``armAutoScroll(owner:)`` at the press, because a motionless
+    /// long-press near an edge must not start scrolling the list out from
+    /// under a click once the dwell elapses. One-shot (re-arming would reset
+    /// an owner ``adoptAutoScrollOwner(from:to:)`` moved to a replacement
+    /// handler) and gated on the grab actually having begun — the row
+    /// closures claim every press, including ones that missed the rows.
+    func armReorderAutoScrollOnMotion(owner: any ScrollableOffsetState) {
+        guard reorderFocusID != nil, !autoScrollArmed else { return }
+        armAutoScroll(owner: owner)
+    }
+
     /// Moves the "this scrollable may move under the gesture" permission from
     /// one control to another — for when a reorder is handed to the control that
     /// replaced its owner (see ``registerReorderHost(_:)``). Without it a
