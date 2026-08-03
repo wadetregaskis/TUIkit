@@ -182,6 +182,44 @@ struct ZStackRenderTests {
         let plain = renderToBuffer(ZStack { Text("Hello") }, context: ctx())
         #expect(withZ.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
     }
+
+    // MARK: - A line-empty layer is not an empty layer
+
+    @Test("A child that only floats a layer keeps it")
+    func floatingOnlyChildKeepsItsLayer() {
+        // `OffsetView` renders no lines — its content lives entirely in an
+        // OverlayLayer. The ZStack's zero-size frame used to throw that away,
+        // so the whole view rendered nothing.
+        let context = ctx()
+        let buffer = renderToBuffer(ZStack { Text("puff").offset(x: 4, y: 2) }, context: context)
+        #expect(buffer.overlays.count == 1, "the floated layer must survive the zero-size frame")
+
+        let flat = buffer.compositingOverlays(
+            maxWidth: 30, maxHeight: 8, palette: context.environment.palette)
+        #expect(flat.lines.count >= 3, "…and still draw when composited")
+        #expect(flat.lines[2].stripped.hasSuffix("puff"))
+    }
+
+    @Test("A mixed stack still draws its in-flow child and keeps the layer")
+    func mixedStackKeepsBoth() {
+        // The control: with one non-empty child the frame is non-zero, so this
+        // path was always correct — it holds before and after.
+        let buffer = renderToBuffer(
+            ZStack {
+                Text("base")
+                Text("*").offset(x: 2, y: 1)
+            }, context: ctx())
+        #expect(buffer.lines.first?.stripped == "base")
+        #expect(buffer.overlays.count == 1)
+    }
+
+    @Test("A genuinely empty stack still short-circuits")
+    func trulyEmptyStackStaysEmpty() {
+        let buffer = renderToBuffer(ZStack { EmptyView() }, context: ctx())
+        #expect(buffer.lines.isEmpty)
+        #expect(buffer.overlays.isEmpty)
+        #expect(buffer.hitTestRegions.isEmpty)
+    }
 }
 
 // MARK: - ForEach Expansion (issue #8)

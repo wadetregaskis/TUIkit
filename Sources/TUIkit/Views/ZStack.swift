@@ -99,7 +99,25 @@ private struct _ZStackCore<Content: View>: View, Renderable {
         }
         let frameWidth = buffers.map(\.width).max() ?? 0
         let frameHeight = buffers.map(\.height).max() ?? 0
-        guard frameWidth > 0, frameHeight > 0 else { return FrameBuffer() }
+        // A zero-size frame means no child drew anything IN FLOW — but a
+        // child can still be carrying the whole point of the view as a
+        // free-floating layer: `OffsetView` renders exactly that (no lines, one
+        // `OverlayLayer` holding the offset content and its hit regions).
+        // Returning a bare buffer dropped them, so `ZStack { Text("💨").offset() }`
+        // rendered nothing at all. Fold them in instead — the ZStack face of the
+        // OverlayModifier bug fixed in 3aedeb1f, and what every other combining
+        // op already promises.
+        //
+        // The in-flow result is unchanged: every buffer reaching this guard is
+        // line-empty (a non-empty line would have made `frameWidth > 0`), so
+        // `composited` takes its lift-the-layers branch and no line content is
+        // produced. The offsets are (0, 0) because a zero-size frame gives every
+        // alignment a zero child offset, and each layer's own position already
+        // lives inside it. `ZStack {}` still yields a bare buffer — `reduce`
+        // over no children returns the initial value.
+        guard frameWidth > 0, frameHeight > 0 else {
+            return buffers.reduce(FrameBuffer()) { $0.composited(with: $1, at: (x: 0, y: 0)) }
+        }
 
         // Composite each child onto a blank frame at its alignment offset, in
         // ascending z-order. Character-level compositing (vs. the old whole-line
