@@ -177,7 +177,7 @@ edge). Deferred until a real use asks.
 public enum ScrollOverscroll {
     case none
     case rows(Int)              // e.g. 5 rows past the edge
-    case viewport(minus: Int)   // the viewport height, less n — `minus: 0` is a full viewport
+    case viewport(minus: Int)   // the viewport height in LINES, less n — `minus: 0` is a full viewport
 }
 .scrollOverscroll(top: .rows(5), bottom: .viewport(minus: 1))
 ```
@@ -186,6 +186,16 @@ Chosen over the earlier `.absolute` / `.viewportRelative(-1)` sketch because
 the call site reads as prose and the relative case says what it means; per-end
 (`top:` / `bottom:`) rather than one value, since §1.5 specifies both ends
 independently.
+
+`.rows(n)` counts ROWS; `.viewport(minus: n)` counts LINES — the content area
+less the "N more" indicator's line where one is drawn. The two units coincide
+for single-line rows and diverge by the row height for multi-line ones, which
+is exactly where the `Table` got it wrong: its multi-line path resolved the
+allowance against a visible-ROW count, so `.viewport(minus: 8)` meant "rows
+visible − 8" lines there while the `List` twin meant "viewport lines − 8".
+Both now go through `ItemListHandler.resolveOverscroll(environment:
+contentHeight:reservesIndicatorLine:)`, which takes the content area in lines
+so the unit cannot drift again.
 
 **A view whose content already fits may still overscroll** (owner decision).
 The allowance is not gated on overflow: a short view can be pushed its full
