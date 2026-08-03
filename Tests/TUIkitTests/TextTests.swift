@@ -206,6 +206,30 @@ struct TextWhitespaceTests {
         #expect(
             lines.dropFirst().allSatisfy { !$0.hasPrefix(" ") },
             "continuations start at the margin: \(lines)")
+        // …so they must be WRAPPED at the full width too. Wrapping them against
+        // width − indent made every continuation up to `indent.count` cells
+        // narrower than the room it renders into: "three four" is exactly 10
+        // cells and fits, but used to break into two lines.
+        #expect(lines == ["  one two", "three four"])
+    }
+
+    /// The cost of the too-narrow continuation was not only an extra line: under
+    /// a line limit the fold truncated content that fits.
+    @Test("An indented paragraph does not lose content to a line limit")
+    func indentedParagraphKeepsContentUnderLineLimit() {
+        #expect(
+            TextWrapping.fit("  one two three four", width: 10, maxLines: 2)
+                == ["  one two", "three four"])
+    }
+
+    /// The wide-character walk is a second, independent implementation of the
+    /// same rule, so it needs its own case — a fix to the space walk alone
+    /// leaves this one wrapping short.
+    @Test("An indented CJK paragraph wraps continuations at the full width")
+    func indentedCJKContinuationUsesFullWidth() {
+        let wrapped = TextWrapping.wrapMeasured("  一二三四五六七八九", width: 10)
+        #expect(wrapped.lines == ["  一二三四", "五六七八九"])
+        #expect(wrapped.widths == [10, 10])
     }
 
     @Test("Explicit line breaks each get their own indent")

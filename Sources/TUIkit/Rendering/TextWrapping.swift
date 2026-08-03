@@ -148,7 +148,12 @@ enum TextWrapping {
     ///
     /// Leading spaces are preserved as an indent on the first line (see below);
     /// interior and trailing spaces are preserved as written.
-    private static func wrapParagraph(_ text: String, width: Int) -> Wrapped {
+    /// - Parameter firstLineWidth: The budget for the FIRST line only, when it
+    ///   differs from `width` — the indent case below, where the leading run
+    ///   eats into line 1 and nothing else. `nil` means every line gets `width`.
+    private static func wrapParagraph(
+        _ text: String, width: Int, firstLineWidth: Int? = nil
+    ) -> Wrapped {
         // A leading space is content — an indent — not a wrap opportunity, and
         // the word walk below cannot say so on its own: splitting `" Cut"` on
         // spaces yields `["", "Cut"]`, and an empty FIRST token is
@@ -164,8 +169,19 @@ enum TextWrapping {
         // caller to truncate.
         let indent = text.prefix { $0 == " " }
         if !indent.isEmpty {
+            // Reduce the budget for the FIRST line only. Recursing at the
+            // reduced width made every CONTINUATION up to `indent.count` cells
+            // narrower than the space it actually renders into — they start at
+            // the margin, so they have the full width — which wrapped them
+            // earlier than needed and, under a line limit, folded away content
+            // that fits. The recursion is depth-1 (`dropFirst` strips every
+            // leading space, so the branch cannot re-enter) and the `max(1, …)`
+            // clamp stays exactly where it was, which is what keeps the
+            // indent-wider-than-width contract.
             let wrapped = wrapParagraph(
-                String(text.dropFirst(indent.count)), width: max(1, width - indent.count))
+                String(text.dropFirst(indent.count)),
+                width: width,
+                firstLineWidth: max(1, width - indent.count))
             var lines = wrapped.lines
             var widths = wrapped.widths
             lines[0] = indent + lines[0]
@@ -182,8 +198,9 @@ enum TextWrapping {
         // ideographs, as UAX #14 allows), so any paragraph containing one
         // takes the wide-aware walk. ASCII-and-narrow prose — the hot path —
         // keeps the allocation-lean space split below.
+        let firstBudget = firstLineWidth ?? width
         if text.contains(where: { $0.terminalWidth >= 2 }) {
-            return wrapWithWideBreaks(text, width: width)
+            return wrapWithWideBreaks(text, width: width, firstLineWidth: firstBudget)
         }
 
         let words = text.split(separator: " ", omittingEmptySubsequences: false)
@@ -192,13 +209,15 @@ enum TextWrapping {
         var currentLine = ""
         var currentLineWidth = 0
 
+        // Widens to `width` at the first break: only line 1 pays for an indent.
+        var budget = firstBudget
         for word in words {
             let wordStr = String(word)
             let wordWidth = wordStr.strippedLength
             if currentLine.isEmpty {
                 currentLine = wordStr
                 currentLineWidth = wordWidth
-            } else if currentLineWidth + 1 + wordWidth <= width {
+            } else if currentLineWidth + 1 + wordWidth <= budget {
                 currentLine += " " + wordStr
                 currentLineWidth += 1 + wordWidth
             } else {
@@ -206,6 +225,7 @@ enum TextWrapping {
                 widths.append(currentLineWidth)
                 currentLine = wordStr
                 currentLineWidth = wordWidth
+                budget = width
             }
         }
 
@@ -231,7 +251,11 @@ enum TextWrapping {
     /// so mixed-script text wraps the way both scripts expect. A space at a
     /// line break is consumed by the break (as in the space walk); interior
     /// and trailing spaces that don't sit at a break are preserved.
-    private static func wrapWithWideBreaks(_ text: String, width: Int) -> Wrapped {
+    private static func wrapWithWideBreaks(
+        _ text: String, width: Int, firstLineWidth: Int? = nil
+    ) -> Wrapped {
+        // As in the space walk: only line 1 pays for a leading indent.
+        var budget = firstLineWidth ?? width
         var lines: [String] = []
         var widths: [Int] = []
         var line = ""
@@ -244,6 +268,7 @@ enum TextWrapping {
             line = ""
             lineWidth = 0
             pendingSpaces = 0  // a break consumes the whitespace at it
+            budget = width
         }
 
         /// Places one unbreakable unit, gluing any pending interior spaces.
@@ -253,7 +278,7 @@ enum TextWrapping {
                 // truncates, as with the space walk's over-long word.
                 line = unit
                 lineWidth = unitWidth
-            } else if lineWidth + pendingSpaces + unitWidth <= width {
+            } else if lineWidth + pendingSpaces + unitWidth <= budget {
                 line += String(repeating: " ", count: pendingSpaces) + unit
                 lineWidth += pendingSpaces + unitWidth
             } else {
