@@ -36,11 +36,20 @@ internal struct EnvironmentSnapshot: Equatable {
     /// toggles stayed ■/□ while the answer had flipped to emoji).
     let resolvedAutomaticToggleCharacterSet: ToggleCharacterSet
 
+    /// The frame's locale, republished from the app language each frame. A
+    /// language switch re-renders — but the memoized subtrees compare by
+    /// VALUE, and the view values (localization keys) don't change with the
+    /// language, so without this every `EquatableView`/`ForEach`-memoized row
+    /// kept serving buffers in the OLD language: the same mixed-screen class
+    /// as the toggle-glyph field above, in a different coat.
+    let localeIdentifier: String
+
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.paletteID = environment.palette.id
         self.appearanceID = environment.appearance.id
         self.resolvedAutomaticToggleCharacterSet = environment.resolvedAutomaticToggleCharacterSet
+        self.localeIdentifier = environment.locale.identifier
     }
 }
 

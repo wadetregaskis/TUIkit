@@ -8,6 +8,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -259,5 +260,20 @@ struct EnvironmentSnapshotTests {
         let first = EnvironmentSnapshot(from: EnvironmentValues())
         let second = EnvironmentSnapshot(from: EnvironmentValues())
         #expect(first == second)
+    }
+
+    /// A language switch re-renders, but memoized subtrees compare by VALUE
+    /// and localization keys don't change with the language — so the locale
+    /// must participate, or every memoized row keeps serving the OLD
+    /// language's buffers (the same mixed-screen class the chrome field
+    /// guards against).
+    @Test("A locale change invalidates the render cache (snapshot inequality)")
+    func localeChangeChangesSnapshot() {
+        var environment = EnvironmentValues()
+        environment.locale = Locale(identifier: "en")
+        let before = EnvironmentSnapshot(from: environment)
+        environment.locale = Locale(identifier: "fr")
+        let after = EnvironmentSnapshot(from: environment)
+        #expect(before != after, "a language switch must clear the render cache")
     }
 }
