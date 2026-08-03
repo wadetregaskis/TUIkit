@@ -175,6 +175,33 @@ public final class RenderCache: @unchecked Sendable {
     /// Memoized `EquatableView` measurements (see ``lookupSize`` / ``storeSize``).
     private var sizeEntries: [SizeKey: SizeEntry] = [:]
 
+    /// A `measureChild` memo key: a ``SizeKey`` plus the view's TYPE.
+    ///
+    /// The type is what an identity-only key was missing. Transparent wrappers
+    /// descend under their parent's identity, so several distinct views share
+    /// one identity within a pass; keying on identity alone returned one view's
+    /// size for another (the abandoned cross-frame cache — it got Panel/Card/
+    /// Dialog wrong, and the equivalence harness caught it).
+    public struct MeasureKey: Hashable {
+        let size: SizeKey
+        let viewType: ObjectIdentifier
+
+        public init(size: SizeKey, viewType: ObjectIdentifier) {
+            self.size = size
+            self.viewType = viewType
+        }
+    }
+
+    /// Memoized `measureChild` results — see ``lookupMeasure`` / ``storeMeasure``.
+    ///
+    /// PER-PASS, unlike ``sizeEntries``: cleared by every ``beginRenderPass()``,
+    /// so nothing here outlives the frame that measured it. That is what makes
+    /// an unkeyed-by-value memo defensible where the cross-frame one was not —
+    /// within one pass the tree, the state and the environment are fixed, so a
+    /// repeat measurement of the same view at the same proposal is a repeat of
+    /// work already done, not a guess about a different frame.
+    private var measureEntries: [MeasureKey: ViewSize] = [:]
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -310,6 +337,16 @@ extension RenderCache {
         sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)
     }
 
+    /// Looks up this pass's memoized `measureChild` result.
+    public func lookupMeasure(key: MeasureKey) -> ViewSize? {
+        measureEntries[key]
+    }
+
+    /// Stores a `measureChild` result for the rest of this pass.
+    public func storeMeasure(key: MeasureKey, size: ViewSize) {
+        measureEntries[key] = size
+    }
+
     /// Marks an identity as active during the current render pass.
     ///
     /// Identities not marked active by the end of the render pass
@@ -332,6 +369,8 @@ extension RenderCache {
         statsAtFrameStart = stats
         drainPendingInvalidations()
         activeIdentities.removeAll(keepingCapacity: true)
+        // The measure memo is this frame's scratch space and nothing more.
+        measureEntries.removeAll(keepingCapacity: true)
     }
 
     /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the
