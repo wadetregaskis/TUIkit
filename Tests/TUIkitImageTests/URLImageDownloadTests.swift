@@ -28,7 +28,28 @@ private final class Tarpit {
     let port: UInt16
     private let listener: Int32
 
+    /// One-time SIGPIPE suppression, run before the first tarpit exists.
+    ///
+    /// SIGPIPE's default action is to kill the process, and a tarpit exists to
+    /// manufacture connections that end badly: when the listener closes, every
+    /// connection still queued in its backlog is reset, and the next write to
+    /// one of those takes EPIPE. The writer is URLSession — in THIS process,
+    /// because the fake server and its client are the same program — so the
+    /// signal lands here and takes the whole test bundle with it, mid-suite,
+    /// with no failing expectation to point at. macOS CI died exactly that way
+    /// (`exited with unexpected signal code 13`).
+    ///
+    /// An app gets this from `SignalManager.install`; a test bundle installs
+    /// nothing, and a library has no business setting a process-wide
+    /// disposition its host did not ask for. So it belongs here, next to the
+    /// sockets that need it.
+    private static let ignoreSIGPIPE: Void = {
+        signal(SIGPIPE, SIG_IGN)
+    }()
+
     init() throws {
+        _ = Self.ignoreSIGPIPE
+
         #if canImport(Darwin)
             let streamType = SOCK_STREAM
         #else
