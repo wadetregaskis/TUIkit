@@ -179,6 +179,25 @@ struct StackGuardLinuxFloorTests {
         #expect(extent.low == 0x7ffd_0d3f_0000, "an untagged mapping is bounded by itself")
     }
 
+    /// `RLIMIT_STACK` can be *lowered* after the stack has already grown past
+    /// the new limit, which puts the limit-derived bound above the live stack
+    /// pointer. An extent that excludes its own thread is worse than useless:
+    /// `hasHeadroom()` would miss its fast path AND its containment check, and
+    /// re-read procfs on every single call for the life of the process.
+    @Test("An extent always contains the stack pointer it was derived for")
+    func extentAlwaysContainsItsStackPointer() throws {
+        // 4 KB limit against a stack pointer already 68 KB into the mapping.
+        let tiny = limits.replacingOccurrences(
+            of: "Max stack size            8388608",
+            with: "Max stack size            4096")
+        let extent = try #require(parse(maps, tiny, mainStackPointer))
+        #expect(extent.low <= mainStackPointer)
+        #expect(extent.high > mainStackPointer)
+        #expect(
+            extent.floor > mainStackPointer,
+            "and a stack past its limit still trips the guard rather than growing")
+    }
+
     /// A limit larger than the address it is subtracted from would underflow
     /// `UInt` and trap. Contrived, but the arithmetic must be total — and the
     /// answer is the layout-derived bound, not a disabled guard.

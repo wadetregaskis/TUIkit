@@ -367,7 +367,17 @@ public enum StackGuard {
         let growthLimit = mappingBelowEnd > 0 ? mappingBelowEnd + stackGuardGapBytes : nil
         let rlimitLow = limit.flatMap { $0 > 0 && high > $0 ? high - $0 : nil }
         guard let bound = [growthLimit, rlimitLow].compactMap({ $0 }).max() else { return nil }
-        return extent(low: bound, high: high)
+        // Never report a low bound above the stack pointer it was derived for.
+        // `RLIMIT_STACK` can be *lowered* after the stack has already grown
+        // past the new limit, which puts `rlimitLow` above the live pointer.
+        // The extent would then exclude the very thread it describes, so
+        // `hasHeadroom()` would miss both its fast path and its containment
+        // check and re-read procfs on *every* call — 276 µs apiece — for the
+        // life of the process. Clamping keeps the extent self-consistent; the
+        // floor still lands above the pointer, so the guard trips and the
+        // recursion truncates, which is the right answer for a stack that is
+        // genuinely past its limit.
+        return extent(low: min(bound, stackPointer), high: high)
     }
 
     /// The gap Linux keeps between the main stack and the mapping below it —

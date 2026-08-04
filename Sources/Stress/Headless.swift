@@ -41,9 +41,34 @@ enum Headless {
     /// Whether a frame carries anything a reader would see. A frame of nothing
     /// but spaces and escape sequences is not a rendered scenario.
     private static func isBlank(_ buffer: FrameBuffer) -> Bool {
-        !buffer.lines.contains { line in
-            line.unicodeScalars.contains { $0 != " " && $0 != "\u{1b}" && !($0.value < 0x20) }
+        !buffer.lines.contains { hasVisibleContent($0) }
+    }
+
+    /// Whether one line paints something visible, ignoring ANSI sequences.
+    ///
+    /// Skipping only the `ESC` byte is not enough, and getting this wrong
+    /// defeats the check entirely: the *parameter* bytes of `ESC[48;5;236m`
+    /// are ordinary printable characters, so a frame consisting of nothing but
+    /// background fill would count as content and a blank render would sail
+    /// through. The whole sequence has to be consumed — CSI parameters run
+    /// until a final byte in 0x40...0x7E.
+    private static func hasVisibleContent(_ line: String) -> Bool {
+        var scalars = line.unicodeScalars.makeIterator()
+        while let scalar = scalars.next() {
+            guard scalar == "\u{1b}" else {
+                // Above 0x20 is printable and not a space; 0x20 and below are
+                // spaces, control characters, or the sequence remnants.
+                if scalar.value > 0x20 { return true }
+                continue
+            }
+            guard let introducer = scalars.next() else { break }
+            // Only CSI (`ESC[`) carries parameter bytes that could be mistaken
+            // for content; the two-byte escapes end at the introducer.
+            if introducer == "[" {
+                while let byte = scalars.next(), !(0x40...0x7E).contains(byte.value) {}
+            }
         }
+        return false
     }
 
     /// Builds a render environment. Each call is independent (fresh state +
@@ -115,15 +140,21 @@ enum Headless {
         var checksum = 0
         var blankFrames = 0
         let trimmedBefore = StackGuard.truncationCount
-        let start = DispatchTime.now()
+        // Accumulate only the render itself. Checking the frame is this
+        // harness's own bookkeeping, and it is not cheap next to a cheap
+        // scenario: measured at 6.0% of `dashboard`'s per-frame time against
+        // 0.2% of `deep`'s. Timing it would tax the fast scenarios hardest and
+        // show up as a regression that never happened.
+        var ns: UInt64 = 0
         for _ in 0..<iterations {
             if cold { warm = makeContext(cols: cols, rows: rows) }
             clock.tick &+= 1
+            let frameStart = DispatchTime.now()
             let buffer = renderToBuffer(view, context: warm)
+            ns &+= DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds
             checksum = checksum &+ contentChecksum(buffer)
             if isBlank(buffer) { blankFrames += 1 }
         }
-        let ns = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
         let trimmed = StackGuard.truncationCount - trimmedBefore
 
         let totalMs = Double(ns) / 1_000_000
