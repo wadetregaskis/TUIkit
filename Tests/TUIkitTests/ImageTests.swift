@@ -224,13 +224,13 @@ struct ASCIIConverterTests {
 
     @Test("Fine-block conversion uses two vertical pixels per cell")
     func halfBlocksUsesTwoPixelsPerCell() {
-        // Solid red image. With .blocks(.half) the converter scales to
+        // Solid red image. With .blocks(.fine) the converter scales to
         // (width, height*2) pixels and emits ▄ with a foreground = bottom
         // pixel and a background = top pixel for each cell.
         let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
         let image = RGBAImage(width: 8, height: 8, pixels: pixels)
         let converter = ASCIIConverter(
-            characterSet: .blocks(.half), colorMode: .trueColor, dithering: .none)
+            characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
 
         withColorDepth(.truecolor) {
             let lines = converter.convert(image, width: 8, height: 4)
@@ -271,7 +271,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 4, height: 4, pixels: pixels)
 
         let converter = ASCIIConverter(
-            characterSet: .blocks(.half), colorMode: .mono, dithering: .none)
+            characterSet: .blocks(.fine), colorMode: .mono, dithering: .none)
         let lines = converter.convert(image, width: 4, height: 2)
 
         #expect(lines.count == 2)

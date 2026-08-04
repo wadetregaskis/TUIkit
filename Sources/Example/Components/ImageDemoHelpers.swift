@@ -19,10 +19,10 @@ enum ImageDemoHelpers {
         case custom
     }
 
-    /// The block charset's discrete resolutions, in demo cycling order
-    /// (the framework default `.half` first).
-    static let blockResolutions: [ASCIICharacterSet.BlockResolution] = [
-        .half, .solid, .coarse, .braille,
+    /// The block charset's discrete styles, in demo cycling order
+    /// (the framework default `.fine` first).
+    static let blockStyles: [ASCIICharacterSet.BlockStyle] = [
+        .fine, .solid, .coarse, .braille,
     ]
 
     static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
@@ -36,9 +36,9 @@ enum ImageDemoHelpers {
         }
     }
 
-    static func blockResolutionLabel(_ index: Int) -> String {
-        switch blockResolutions[min(index, blockResolutions.count - 1)] {
-        case .half: return "half"
+    static func blockStyleLabel(_ index: Int) -> String {
+        switch blockStyles[min(index, blockStyles.count - 1)] {
+        case .fine: return "fine"
         case .solid: return "solid"
         case .coarse: return "coarse"
         case .braille: return "braille"
@@ -60,7 +60,7 @@ enum ImageDemoHelpers {
     /// `glyphCount` 0 means the full repertoire; an empty custom ramp falls
     /// back to a 10-glyph ASCII ramp so the demo never renders blank.
     static func effectiveCharSet(
-        charsetIndex: Int, glyphCount: Int, blockResolutionIndex: Int, customRamp: String
+        charsetIndex: Int, glyphCount: Int, blockStyleIndex: Int, customRamp: String
     ) -> ASCIICharacterSet {
         let glyphs = glyphCount > 0 ? glyphCount : nil
         switch Charset(rawValue: charsetIndex) ?? .ascii {
@@ -69,7 +69,7 @@ enum ImageDemoHelpers {
         case .unicode:
             return .unicode(glyphs: glyphs)
         case .blocks:
-            return .blocks(blockResolutions[min(blockResolutionIndex, blockResolutions.count - 1)])
+            return .blocks(blockStyles[min(blockStyleIndex, blockStyles.count - 1)])
         case .custom:
             return customRamp.isEmpty ? .ascii(glyphs: 10) : .customRamp(customRamp)
         }
@@ -93,7 +93,7 @@ enum ImageDemoHelpers {
 
     /// The block-resolution knob applies to non-shape blocks (shape-aware
     /// blocks match over the block glyph repertoire instead).
-    static func usesBlockResolution(charsetIndex: Int, shapeAware: Bool) -> Bool {
+    static func usesBlockStyle(charsetIndex: Int, shapeAware: Bool) -> Bool {
         Charset(rawValue: charsetIndex) == .blocks && !shapeAware
     }
 
@@ -121,7 +121,7 @@ enum ImageDemoHelpers {
     static func maximumGlyphs(charsetIndex: Int, shapeAware: Bool) -> Int {
         effectiveCharSet(
             charsetIndex: charsetIndex, glyphCount: 0,
-            blockResolutionIndex: 0, customRamp: ""
+            blockStyleIndex: 0, customRamp: ""
         ).maximumGlyphs(shapeAware: shapeAware) ?? 0
     }
 
@@ -148,7 +148,7 @@ enum ImageDemoHelpers {
     static func snap(
         charsetIndex: Int,
         glyphCount: inout Int,
-        blockResolutionIndex: inout Int,
+        blockStyleIndex: inout Int,
         shapeAware: inout Bool,
         supersampling: inout Int,
         edgeLines: inout Bool
@@ -162,8 +162,8 @@ enum ImageDemoHelpers {
         if !usesEdgeTracing(charsetIndex: charsetIndex, shapeAware: shapeAware) {
             edgeLines = false
         }
-        if !usesBlockResolution(charsetIndex: charsetIndex, shapeAware: shapeAware) {
-            blockResolutionIndex = 0
+        if !usesBlockStyle(charsetIndex: charsetIndex, shapeAware: shapeAware) {
+            blockStyleIndex = 0
         }
         if usesGlyphCount(charsetIndex: charsetIndex) {
             glyphCount = min(

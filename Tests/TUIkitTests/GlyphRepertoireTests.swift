@@ -85,7 +85,7 @@ struct GlyphRepertoireTests {
             ASCIICharacterSet.unicode.maximumGlyphs(shapeAware: false)
                 == GlyphRepertoire.densityRamp(from: GlyphRepertoire.unicode).count)
         // No glyph-count axis on the block or custom charsets.
-        #expect(ASCIICharacterSet.blocks(.half).maximumGlyphs(shapeAware: true) == nil)
+        #expect(ASCIICharacterSet.blocks(.fine).maximumGlyphs(shapeAware: true) == nil)
         #expect(ASCIICharacterSet.blocks(.coarse).maximumGlyphs(shapeAware: false) == nil)
         #expect(ASCIICharacterSet.customRamp(" .#").maximumGlyphs(shapeAware: false) == nil)
 

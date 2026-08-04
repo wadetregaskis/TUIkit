@@ -90,7 +90,7 @@ extension Image: @preconcurrency Equatable {
 
 /// Environment key for the glyph charset used by Image.
 private struct ImageCharacterSetKey: EnvironmentKey {
-    static let defaultValue: ASCIICharacterSet = .blocks(.half)
+    static let defaultValue: ASCIICharacterSet = .blocks(.fine)
 }
 
 /// Environment key for shape-aware glyph matching.

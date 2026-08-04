@@ -31,7 +31,7 @@ enum ANSIEscape {
 ///   spread as evenly as possible, flattest glyph per level for luminance
 ///   rendering; widest shape-space spread for shape-aware rendering);
 ///   `nil` uses the full repertoire. For `blocks`, size is the discrete
-///   ``BlockResolution``.
+///   ``BlockStyle``.
 /// - **Shape-awareness** — on ``ASCIIConverter`` (and
 ///   `View.imageShapeAware(_:)`): whether glyphs are matched by their
 ///   measured in-cell ink DISTRIBUTION (a corner of darkness picks a
@@ -43,7 +43,7 @@ public enum ASCIICharacterSet: Sendable, Equatable {
 
     /// The pixel-subdivision resolutions of the (non-shape-aware) block
     /// modes — the block charset's discrete "size" axis.
-    public enum BlockResolution: Sendable, Equatable {
+    public enum BlockStyle: Sendable, Equatable {
         /// Shade glyphs (`" ░▒▓█"`) mapped from luminance, one image pixel
         /// per cell. The lowest-resolution block mode, and the only one
         /// whose tone survives a colourless terminal.
@@ -51,7 +51,7 @@ public enum ASCIICharacterSet: Sendable, Equatable {
 
         /// Solid full-cell colour: each cell is one image pixel painted as
         /// the cell **background** (a space, no glyph). Half the vertical
-        /// resolution of ``half`` but **gap-free**: with no block glyph it
+        /// resolution of ``fine`` but **gap-free**: with no block glyph it
         /// never shows the inter-row seams some fonts leave when their
         /// blocks rasterise a hair short of the cell (notably SF Mono in
         /// macOS Terminal.app). On a colourless terminal there is no
@@ -60,7 +60,13 @@ public enum ASCIICharacterSet: Sendable, Equatable {
 
         /// Half-block cells (`▄`) with independent foreground / background
         /// colours — two image pixels per cell, whose sub-cells are very
-        /// nearly square. The default block resolution.
+        /// nearly square. The default block style.
+        ///
+        /// Named for the resolution it achieves, not for the glyph it uses:
+        /// it is the FINEST of the non-Braille block styles, twice the
+        /// vertical resolution of ``solid`` and ``coarse``. (It was briefly
+        /// spelled `half`, after the ▄ half-block — which read as *half* the
+        /// resolution, the exact opposite of what it delivers.)
         ///
         /// > Note: this paints pixels into BOTH the cell foreground and
         /// > background, so a faithful image depends on the terminal drawing
@@ -68,7 +74,7 @@ public enum ASCIICharacterSet: Sendable, Equatable {
         /// > gap-free (pinned by `HalfBlocksRenderTests`); seams come from
         /// > the terminal's glyph rendering (e.g. Terminal.app + SF Mono).
         /// > When a terminal bands, use ``solid``.
-        case half
+        case fine
 
         /// Unicode Braille patterns: 2×4 dots per cell, 256 patterns.
         /// The highest spatial resolution.
@@ -93,11 +99,11 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     case unicode(glyphs: Int?)
 
     /// Unicode Block Elements, rendered by pixel subdivision at the given
-    /// ``BlockResolution`` — or, when the converter is shape-aware, by
+    /// ``BlockStyle`` — or, when the converter is shape-aware, by
     /// shape-matching over the block repertoire (quadrants, halves,
     /// shades, eighth ladders, and the corner triangles `◢◣◤◥`), in which
     /// case the resolution is not used.
-    case blocks(BlockResolution)
+    case blocks(BlockStyle)
 
     /// A caller-supplied luminance ramp, ordered darkest pixel → brightest
     /// pixel: the FIRST character renders black pixels (usually a space,
@@ -229,7 +235,7 @@ public struct ASCIIConverter: Sendable {
 
     /// Creates a converter with the specified options.
     public init(
-        characterSet: ASCIICharacterSet = .blocks(.half),
+        characterSet: ASCIICharacterSet = .blocks(.fine),
         shapeAware: Bool = false,
         colorMode: ASCIIColorMode = .trueColor,
         dithering: DitheringMode = .none,
@@ -299,7 +305,7 @@ extension ASCIIConverter {
         // Each rendering path has its own sub-cell pixel grid:
         //   luminance ramps        : 1×1  (one tone per cell)
         //   .blocks(.solid)        : 1×1  (one pixel per cell)
-        //   .blocks(.half)         : 1×2  (two vertical pixels per cell)
+        //   .blocks(.fine)         : 1×2  (two vertical pixels per cell)
         //   .blocks(.braille)      : 2×4  (eight dots per cell)
         //   shape-aware (any)      : 5×10 (sampled at six staggered circles)
         // Every non-shape grid is scaled by the supersampling factor and then
@@ -318,7 +324,7 @@ extension ASCIIConverter {
         } else {
             let grid: (x: Int, y: Int)
             switch characterSet {
-            case .blocks(.half):
+            case .blocks(.fine):
                 grid = (1, 2)
             case .blocks(.braille):
                 grid = (2, 4)
@@ -354,7 +360,7 @@ extension ASCIIConverter {
         switch characterSet {
         case .blocks(.braille):
             return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
-        case .blocks(.half):
+        case .blocks(.fine):
             return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
         case .blocks(.solid):
             return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)

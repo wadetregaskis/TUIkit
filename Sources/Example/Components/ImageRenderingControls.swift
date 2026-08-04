@@ -16,7 +16,7 @@ import TUIkit
 
 /// Live controls for every image-rendering knob, driving the owning page's
 /// state. The page applies the corresponding modifiers — see
-/// ``ImageDemoHelpers/effectiveCharSet(charsetIndex:glyphCount:blockResolutionIndex:customRamp:)``
+/// ``ImageDemoHelpers/effectiveCharSet(charsetIndex:glyphCount:blockStyleIndex:customRamp:)``
 /// and friends.
 struct ImageRenderingControls: View {
     @Binding var charsetIndex: Int
@@ -24,9 +24,9 @@ struct ImageRenderingControls: View {
     /// How many glyphs the sizeable charsets use: 0 = the full repertoire.
     @Binding var glyphCount: Int
 
-    /// Which ``ImageDemoHelpers/blockResolutions`` entry the blocks charset
+    /// Which ``ImageDemoHelpers/blockStyles`` entry the blocks charset
     /// uses (while not shape-aware).
-    @Binding var blockResolutionIndex: Int
+    @Binding var blockStyleIndex: Int
 
     /// Whether glyphs are matched by in-cell ink distribution (shape) rather
     /// than mapped from cell luminance.
@@ -67,13 +67,13 @@ struct ImageRenderingControls: View {
                 }
                 // The blocks charset's discrete size; the other charsets
                 // size by glyph count instead.
-                Picker(L("component.imageControls.resolution"), selection: $blockResolutionIndex) {
-                    ForEach(ImageDemoHelpers.blockResolutions.indices, id: \.self) { index in
-                        Text(ImageDemoHelpers.blockResolutionLabel(index)).tag(index)
+                Picker(L("component.imageControls.blockStyle"), selection: $blockStyleIndex) {
+                    ForEach(ImageDemoHelpers.blockStyles.indices, id: \.self) { index in
+                        Text(ImageDemoHelpers.blockStyleLabel(index)).tag(index)
                     }
                 }
                 .disabled(
-                    !ImageDemoHelpers.usesBlockResolution(
+                    !ImageDemoHelpers.usesBlockStyle(
                         charsetIndex: charsetIndex, shapeAware: shapeAware))
                 Picker(L("component.imageControls.colour"), selection: $colorModeIndex) {
                     ForEach(ImageDemoHelpers.colorModes.indices, id: \.self) { index in
@@ -149,13 +149,13 @@ struct ImageRenderingControls: View {
         }
     }
 
-    /// Applies ``ImageDemoHelpers/snap(charsetIndex:glyphCount:blockResolutionIndex:shapeAware:supersampling:edgeLines:)``
+    /// Applies ``ImageDemoHelpers/snap(charsetIndex:glyphCount:blockStyleIndex:shapeAware:supersampling:edgeLines:)``
     /// to this control strip's bindings.
     private func snap() {
         ImageDemoHelpers.snap(
             charsetIndex: charsetIndex,
             glyphCount: &glyphCount,
-            blockResolutionIndex: &blockResolutionIndex,
+            blockStyleIndex: &blockStyleIndex,
             shapeAware: &shapeAware,
             supersampling: &supersampling,
             edgeLines: &edgeLines)

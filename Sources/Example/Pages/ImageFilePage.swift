@@ -14,7 +14,7 @@ import TUIkit
 struct ImageFilePage: View {
     @State var charsetIndex: Int = ImageDemoHelpers.Charset.blocks.rawValue
     @State var glyphCount: Int = 0
-    @State var blockResolutionIndex: Int = 0
+    @State var blockStyleIndex: Int = 0
     @State var shapeAware: Bool = false
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
@@ -27,7 +27,7 @@ struct ImageFilePage: View {
     var body: some View {
         let charSet = ImageDemoHelpers.effectiveCharSet(
             charsetIndex: charsetIndex, glyphCount: glyphCount,
-            blockResolutionIndex: blockResolutionIndex, customRamp: customRamp)
+            blockStyleIndex: blockStyleIndex, customRamp: customRamp)
         let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
         let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
 
@@ -40,7 +40,7 @@ struct ImageFilePage: View {
             ImageRenderingControls(
                 charsetIndex: $charsetIndex,
                 glyphCount: $glyphCount,
-                blockResolutionIndex: $blockResolutionIndex,
+                blockStyleIndex: $blockStyleIndex,
                 shapeAware: $shapeAware,
                 colorModeIndex: $colorModeIndex,
                 supersampling: $supersampling,

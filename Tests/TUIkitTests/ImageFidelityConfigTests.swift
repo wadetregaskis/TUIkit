@@ -72,7 +72,7 @@ struct ImageFidelityConfigTests {
             if abs((x - 120) - (y * 2 - 120)) < 14 && x > 100 && x < 200 { return 40 }
             return x > 160 ? UInt8(min(255, (x - 160) * 3)) : 255
         }
-        for set in [ASCIICharacterSet.ascii, .unicode, .blocks(.half)] {
+        for set in [ASCIICharacterSet.ascii, .unicode, .blocks(.fine)] {
             print("== \(set) shape-aware ==")
             for line in ASCIIConverter(
                 characterSet: set, shapeAware: true, colorMode: .mono, dithering: .none
@@ -87,7 +87,7 @@ struct ImageFidelityConfigTests {
     @Test("A solid dark image renders full blocks")
     func blocksShapeSolid() {
         let img = image(50, 30) { _, _ in 0 }
-        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true, edgeThreshold: nil)
+        let out = render(img, w: 10, h: 3, .blocks(.fine), shapeAware: true, edgeThreshold: nil)
         #expect(out.contains("█"), "solid ink is a full block: \(out)")
     }
 
@@ -97,7 +97,7 @@ struct ImageFidelityConfigTests {
         // shape modes). Edge detection is moot for blocks (the repertoire
         // carries its own directional glyphs).
         let img = image(50, 30) { x, y in (x % 5 < 2 && y % 10 < 5) ? 0 : 255 }
-        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
+        let out = render(img, w: 10, h: 3, .blocks(.fine), shapeAware: true)
         let quadrantFamily = Set("▘▝▖▗▚▞▛▜▙▟▀▄▌▐▍▎▏▉▊▋◢◣◤◥")
         #expect(
             out.contains(where: { quadrantFamily.contains($0) }),
@@ -107,7 +107,7 @@ struct ImageFidelityConfigTests {
     @Test("An even mid-tone picks a shade, never blank or solid")
     func blocksShapeMidTone() {
         let img = image(50, 30) { _, _ in 128 }
-        let out = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
+        let out = render(img, w: 10, h: 3, .blocks(.fine), shapeAware: true)
         #expect(!out.contains(" "), "an even mid-tone is never blank: \(out)")
         #expect(!out.contains("█"), "an even mid-tone is never solid: \(out)")
         #expect(
@@ -121,7 +121,7 @@ struct ImageFidelityConfigTests {
         // luminance `.coarse` path can only pick shades — so the two must
         // differ, and every `.blocks(_)` resolution shape-matches identically.
         let img = image(50, 30) { x, y in (x % 5 < 2 && y % 10 < 5) ? 0 : 255 }
-        let shaped = render(img, w: 10, h: 3, .blocks(.half), shapeAware: true)
+        let shaped = render(img, w: 10, h: 3, .blocks(.fine), shapeAware: true)
         let shapedCoarse = render(img, w: 10, h: 3, .blocks(.coarse), shapeAware: true)
         let luminance = render(img, w: 10, h: 3, .blocks(.coarse))
         #expect(shaped == shapedCoarse, "shape-aware blocks ignore the resolution")
@@ -225,8 +225,8 @@ struct ImageFidelityConfigTests {
         // (top = background, bottom = foreground), each of which must be an
         // area average at 2× rather than an aliased point read.
         let img = image(40, 16) { x, y in (x + y).isMultiple(of: 2) ? 0 : 255 }
-        let oneX = renderColor(img, w: 20, h: 4, .blocks(.half), supersampling: 1)
-        let twoX = renderColor(img, w: 20, h: 4, .blocks(.half), supersampling: 2)
+        let oneX = renderColor(img, w: 20, h: 4, .blocks(.fine), supersampling: 1)
+        let twoX = renderColor(img, w: 20, h: 4, .blocks(.fine), supersampling: 2)
         #expect(oneX != twoX, "supersampling changes what the sub-pixels read")
         #expect(twoX.contains("2;127;127;127"), "2× sub-pixels average to mid-grey: \(twoX)")
     }
