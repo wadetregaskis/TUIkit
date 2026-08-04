@@ -39,6 +39,20 @@ struct ScrollViewPage: View {
     @State var scrollPinned: Bool = false
     /// `.scrollOverscroll` — how far past its edges the view may be pushed.
     @State var overscroll: Bool = false
+    /// Swaps the BOTTOM allowance from `.rows(2)` to `.viewport(minus: 2)` —
+    /// the other spelling, and a genuinely different idea: not "two rows past
+    /// the end" but "keep going until only two rows are left on screen", which
+    /// is what a log view wants so its newest line isn't jammed against the
+    /// frame. Off by default: against a 10-line viewport it resolves to EIGHT
+    /// lines, which beside the top's two reads as a bug until you know what it
+    /// is — so it is opt-in, and named.
+    @State var overscrollBottomViewport: Bool = false
+
+    /// The bottom allowance the configurable demo is currently asking for.
+    private var overscrollBottom: ScrollOverscroll {
+        guard overscroll else { return .none }
+        return overscrollBottomViewport ? .viewport(minus: 2) : .rows(2)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -139,17 +153,16 @@ struct ScrollViewPage: View {
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: revealFollowMargin)?.margin ?? .none)
                     .scrollDisabled(scrollPinned)
-                    // The same allowance at both ends. `.viewport(minus: 2)`
-                    // used to sit on the bottom to show off the other spelling,
-                    // but against a 10-line viewport it resolves to EIGHT lines
-                    // — so pushing down opened eight blank rows beside the top's
-                    // two, and the demo read as a bug rather than as a second
-                    // idiom. `.viewport(minus:)` is covered by
-                    // `ScrollOverscrollTests` and `ListTableOverscrollTests`;
-                    // what this toggle is for is showing what overscroll IS.
+                    // Symmetric `.rows(2)` by default, so the first toggle
+                    // shows what overscroll IS. The second swaps the bottom to
+                    // `.viewport(minus: 2)` — the log-view idiom, "keep going
+                    // until only two rows are left". Against this 10-line
+                    // viewport that resolves to EIGHT lines, which is correct
+                    // and looks nothing like the top's two, so it is opt-in and
+                    // labelled rather than the default.
                     .scrollOverscroll(
                         top: overscroll ? .rows(2) : .none,
-                        bottom: overscroll ? .rows(2) : .none)
+                        bottom: overscrollBottom)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -176,6 +189,11 @@ struct ScrollViewPage: View {
                     Text(L("page.scrollView.pinnedNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(L("page.scrollView.overscroll"), isOn: $overscroll)
+                    Toggle(
+                        L("page.scrollView.overscrollViewportBottom"),
+                        isOn: $overscrollBottomViewport
+                    )
+                    .disabled(!overscroll)
                     Text(L("page.scrollView.overscrollNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
