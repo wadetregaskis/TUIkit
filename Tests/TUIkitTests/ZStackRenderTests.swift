@@ -197,7 +197,12 @@ struct ZStackRenderTests {
         let flat = buffer.compositingOverlays(
             maxWidth: 30, maxHeight: 8, palette: context.environment.palette)
         #expect(flat.lines.count >= 3, "…and still draw when composited")
-        #expect(flat.lines[2].stripped.hasSuffix("puff"))
+        // Indexed safely on purpose: `#expect` records and CONTINUES, so a
+        // subscript here would trap the whole test process on the regression
+        // this test exists to catch — the buffer comes back empty, and a
+        // SIGTRAP takes down every other test in the run with it rather than
+        // reporting one readable failure.
+        #expect(flat.lines.dropFirst(2).first?.stripped.hasSuffix("puff") == true)
     }
 
     @Test("A mixed stack still draws its in-flow child and keeps the layer")
