@@ -38,20 +38,42 @@ struct ScrollViewPage: View {
     /// `.scrollDisabled` — the chrome stays, the gestures stop.
     @State var scrollPinned: Bool = false
     /// `.scrollOverscroll` — how far past its edges the view may be pushed.
-    @State var overscroll: Bool = false
-    /// Swaps the BOTTOM allowance from `.rows(2)` to `.viewport(minus: 2)` —
-    /// the other spelling, and a genuinely different idea: not "two rows past
-    /// the end" but "keep going until only two rows are left on screen", which
-    /// is what a log view wants so its newest line isn't jammed against the
-    /// frame. Off by default: against a 10-line viewport it resolves to EIGHT
-    /// lines, which beside the top's two reads as a bug until you know what it
-    /// is — so it is opt-in, and named.
-    @State var overscrollBottomViewport: Bool = false
+    @State var overscroll: OverscrollChoice = .off
 
-    /// The bottom allowance the configurable demo is currently asking for.
-    private var overscrollBottom: ScrollOverscroll {
-        guard overscroll else { return .none }
-        return overscrollBottomViewport ? .viewport(minus: 2) : .rows(2)
+    /// The overscroll allowances `.scrollOverscroll` offers, as one choice
+    /// rather than an on/off plus a which-kind modifier: they are three points
+    /// on one axis, not a flag with a variation.
+    ///
+    /// The same allowance goes on BOTH ends. `.viewport(minus: 2)` reads
+    /// symmetrically — "scroll until only two rows are left" applies as
+    /// naturally upward as downward — and an asymmetric demo is what made this
+    /// control look broken in the first place.
+    enum OverscrollChoice: String, CaseIterable, Hashable {
+        /// The content stops at its edges. The framework default.
+        case off
+        /// `.rows(2)` — a fixed two lines past each end.
+        case twoLines
+        /// `.viewport(minus: 2)` — push until only two lines remain on screen.
+        /// Against this demo's 10-line viewport that resolves to EIGHT, which
+        /// is correct and looks nothing like `twoLines`; naming it in the
+        /// picker is what keeps that from reading as a defect.
+        case allButTwo
+
+        var localizationKey: String {
+            switch self {
+            case .off: "page.scrollView.overscroll.none"
+            case .twoLines: "page.scrollView.overscroll.twoLines"
+            case .allButTwo: "page.scrollView.overscroll.allButTwo"
+            }
+        }
+
+        var allowance: ScrollOverscroll {
+            switch self {
+            case .off: ScrollOverscroll.none
+            case .twoLines: .rows(2)
+            case .allButTwo: .viewport(minus: 2)
+            }
+        }
     }
 
     var body: some View {
@@ -161,8 +183,7 @@ struct ScrollViewPage: View {
                     // and looks nothing like the top's two, so it is opt-in and
                     // labelled rather than the default.
                     .scrollOverscroll(
-                        top: overscroll ? .rows(2) : .none,
-                        bottom: overscrollBottom)
+                        top: overscroll.allowance, bottom: overscroll.allowance)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -188,12 +209,11 @@ struct ScrollViewPage: View {
                     Toggle(L("page.scrollView.pinned"), isOn: $scrollPinned)
                     Text(L("page.scrollView.pinnedNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
-                    Toggle(L("page.scrollView.overscroll"), isOn: $overscroll)
-                    Toggle(
-                        L("page.scrollView.overscrollViewportBottom"),
-                        isOn: $overscrollBottomViewport
-                    )
-                    .disabled(!overscroll)
+                    Picker(L("page.scrollView.overscroll"), selection: $overscroll) {
+                        ForEach(OverscrollChoice.allCases, id: \.rawValue) { choice in
+                            Text(L(choice.localizationKey)).tag(choice)
+                        }
+                    }
                     Text(L("page.scrollView.overscrollNote"))
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
