@@ -126,18 +126,50 @@ struct ScrollContentExtentTests {
 
     @Test("Content that fills whatever it is offered ends the ladder instead of inflating it")
     func flexibleContentTerminatesTheLadder() {
-        // `.frame(maxHeight: .infinity)` reports every budget it is ever handed,
-        // so "it filled the budget, offer more" would climb until the budget
-        // overflowed `Int`. Reporting height-flexible is how such a view says the
-        // question has no answer — the ladder stops at the first rung. (If this
-        // ever regresses, it hangs rather than fails, which is why the assertion
-        // is on the rung and not merely on reaching the end of the test.)
+        // A view that reports every budget it is handed would climb until the
+        // budget overflowed `Int`, so height-flexibility ends the ladder: such a
+        // view is saying the question has no answer, and the caller's own
+        // viewport is the honest value. (If this ever regresses it hangs rather
+        // than fails, which is why the assertion is on the rung reached.)
+        //
+        // A `List` is the real shape of that — it fills its viewport by
+        // construction. `.frame(maxHeight: .infinity)` is NOT, any more: under an
+        // unspecified height proposal it reports its content's height (see
+        // `infiniteFrameDoesNotInventScrollableEmptiness`), which ends the ladder
+        // by the ordinary under-budget rule instead.
         let size = measureNaturalExtent(
-            Text("F").frame(maxHeight: .infinity), along: .vertical,
+            List { ForEach(0..<3, id: \.self) { Text("row \($0)") } }, along: .vertical,
             proposal: ProposedSize(width: 40, height: nil),
             context: context(), startingBudget: 4_096)
         #expect(size.height == 4_096, "stopped at the first rung: \(size.height)")
         #expect(size.isHeightFlexible, "…because the content said it fills what it is given")
+    }
+
+    @Test("An .infinity-height frame does not invent scrollable emptiness")
+    func infiniteFrameDoesNotInventScrollableEmptiness() {
+        // `.frame(maxHeight: .infinity)` means "as tall as I'm given", which has
+        // no answer when the measure gives nothing — and answering with the
+        // measure budget made a one-line label report thousands of lines of
+        // content. A ScrollView believed it and offered 4,086 lines of blank
+        // scrolling. The frame now reports what it actually contains and stays
+        // flagged flexible, so it still FILLS the viewport when rendered.
+        let rendered = lines(ScrollView { Text("F").frame(maxHeight: .infinity) })
+        #expect(
+            !rendered.contains { $0.contains("more lines") },
+            "nothing to scroll to: \(rendered)")
+        #expect(rendered.count == Self.viewport, "…and it still fills the viewport")
+
+        // The same shape one level in: a flexible filler under real content must
+        // not push that content into a phantom scroll either.
+        let mixed = lines(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("top")
+                    Text("F").frame(maxHeight: .infinity)
+                }
+            })
+        #expect(mixed.first == "top")
+        #expect(!mixed.contains { $0.contains("more lines") }, "\(mixed)")
     }
 
     @Test("Content that fits inside the first rung is unaffected")

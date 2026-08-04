@@ -90,11 +90,22 @@ extension FlexibleFrameView {
     /// The height the content is offered for a given available height, or
     /// `nil` to use the content's intrinsic height. Shared by the render and
     /// measure passes (see ``contentTargetWidth(availableWidth:)``).
-    func contentTargetHeight(availableHeight: Int) -> Int? {
+    ///
+    /// - Parameter fills: Whether `maxHeight: .infinity` should expand to
+    ///   `availableHeight`. True when rendering — the frame is being given
+    ///   concrete space and fills it. False when the caller asked for an IDEAL
+    ///   height (no height in the proposal): "as tall as I'm given" has no
+    ///   answer when nothing was given, so the honest report is the content's
+    ///   own height, flagged flexible. SwiftUI resolves an unspecified
+    ///   proposal the same way, and the alternative is a lie with visible
+    ///   consequences — inside a `ScrollView`, a frame reporting the measure
+    ///   budget as its natural height invents thousands of lines of scrollable
+    ///   emptiness under a one-line label.
+    func contentTargetHeight(availableHeight: Int, fills: Bool = true) -> Int? {
         if let maximumHeight = maxHeight {
             switch maximumHeight {
             case .infinity:
-                return availableHeight
+                return fills ? availableHeight : nil
             case .fixed(let value):
                 return min(value, availableHeight)
             }
@@ -281,7 +292,10 @@ extension FlexibleFrameView: Layoutable {
         // the height the frame reports. The width is the available width: the
         // content's `max(_, availableWidth)` bump fills it and the outer clamp
         // caps it there.
-        let targetHeight = contentTargetHeight(availableHeight: availableHeight)
+        // An `.infinity` maximum only fills a height that was actually proposed
+        // (see `contentTargetHeight(availableHeight:fills:)`).
+        let fillsHeight = proposal.height != nil
+        let targetHeight = contentTargetHeight(availableHeight: availableHeight, fills: fillsHeight)
         var contentContext = context
         contentContext.availableWidth = availableWidth
         if let targetHeight {
@@ -297,12 +311,27 @@ extension FlexibleFrameView: Layoutable {
         if let minHeight {
             height = max(height, minHeight)
         }
-        if let maximumHeight = maxHeight, case .infinity = maximumHeight {
+        if let maximumHeight = maxHeight, case .infinity = maximumHeight, fillsHeight {
             height = max(height, availableHeight)
         }
         height = min(height, availableHeight)
 
-        return ViewSize.flexibleWidth(minWidth: availableWidth, height: height)
+        // The height half of the flexibility report, which `flexibleWidth` hard-codes
+        // to false. It used to be unobservable — an `.infinity` maxHeight reported
+        // `availableHeight`, so a parent offering more got the same answer whether or
+        // not it knew the frame could grow. Now that the report is the content's own
+        // height, "can grow" is the only thing distinguishing this from a rigid frame,
+        // and the measure/render parity harness reads it.
+        return ViewSize(
+            width: availableWidth, height: height,
+            isWidthFlexible: true,
+            isHeightFlexible: hasInfiniteMaxHeight || contentSize.isHeightFlexible)
+    }
+
+    /// Whether the frame fills its available height (`maxHeight: .infinity`).
+    private var hasInfiniteMaxHeight: Bool {
+        if case .infinity? = maxHeight { return true }
+        return false
     }
 
     /// Whether the frame fills its available width (`maxWidth: .infinity`).
@@ -340,9 +369,11 @@ extension FlexibleFrameView: Layoutable {
         let availableHeight = proposal.height ?? context.availableHeight
 
         // The width/height the content is offered — the same shared helpers
-        // renderToBuffer uses.
+        // renderToBuffer uses. An `.infinity` maximum fills only a height that
+        // was actually proposed (see `contentTargetHeight(availableHeight:fills:)`).
+        let fillsHeight = proposal.height != nil
         let targetWidth = contentTargetWidth(availableWidth: availableWidth)
-        let targetHeight = contentTargetHeight(availableHeight: availableHeight)
+        let targetHeight = contentTargetHeight(availableHeight: availableHeight, fills: fillsHeight)
 
         var contentContext = context
         contentContext.availableWidth = targetWidth
@@ -369,7 +400,7 @@ extension FlexibleFrameView: Layoutable {
         if let maximumWidth = maxWidth, case .infinity = maximumWidth {
             wantedWidth = max(wantedWidth, availableWidth)
         }
-        if let maximumHeight = maxHeight, case .infinity = maximumHeight {
+        if let maximumHeight = maxHeight, case .infinity = maximumHeight, fillsHeight {
             wantedHeight = max(wantedHeight, availableHeight)
         }
 
