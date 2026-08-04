@@ -100,11 +100,22 @@ func measureNaturalExtent<V: View>(
         let extent = axis == .vertical ? size.height : size.width
         let fills = axis == .vertical ? size.isHeightFlexible : size.isWidthFlexible
 
-        // `>=`, not `==`: a view that over-reports has already told us its true
-        // extent and one more (redundant) rung will confirm it, whereas a view
-        // that reports the budget exactly may have been cut off at it.
-        guard extent >= budget, !fills, budget <= Int.max / growthFactor else { return size }
-        budget *= growthFactor
+        // `>=`, not `==`: a report that lands exactly on the budget is what a
+        // clamp looks like, and a report above it can still be a clamped subtree
+        // plus a border's two rows, so neither is proof the content is done.
+        guard extent >= budget, !fills else { return size }
+
+        // How far to step. A report ABOVE the budget came from something that
+        // declined to clamp — a wrapping `Text`, a stack reporting its true total
+        // — and is therefore a real lower bound on the answer, so clearing it
+        // settles the question next rung. A report EQUAL to the budget carries no
+        // information whatsoever (that is precisely what being cut off looks
+        // like), and there the step has nothing to go on but geometry.
+        let informed = extent > budget && extent < Int.max ? extent + 1 : 0
+        let geometric = budget <= Int.max / growthFactor ? budget * growthFactor : 0
+        let next = max(informed, geometric)
+        guard next > budget else { return size }  // no headroom left in `Int`
+        budget = next
     }
 }
 
