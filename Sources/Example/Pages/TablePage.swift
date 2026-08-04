@@ -165,6 +165,11 @@ struct TablePage: View {
     @State var notesSelection: Int?
     @State var fixedHeightByLine = true
     @State var fixedHeightFollowMargin = FollowMarginChoice.none.rawValue
+    /// Which overflow affordance the "Fixed height" table shows. A scrollbar
+    /// SUPERSEDES the "N more above/below" lines rather than joining them —
+    /// with a bar the rows get the whole content area and nothing reserves an
+    /// indicator line — so one toggle picks between them.
+    @State var fixedHeightScrollbar = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
@@ -247,6 +252,7 @@ struct TablePage: View {
                     Text(L("page.table.wrappingCaption"))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(L("demo.scrollGranularity.line"), isOn: $fixedHeightByLine)
+                    Toggle(L("page.table.useScrollbar"), isOn: $fixedHeightScrollbar)
                     // How early the table scrolls to follow the moving
                     // cursor: at the edge (default), 2 lines early, or centred.
                     FollowMarginPicker(selection: $fixedHeightFollowMargin)
@@ -264,7 +270,7 @@ struct TablePage: View {
                             .lineLimit(3)
                     }
                     .frame(height: 20)
-                    .scrollbarVisibility(.visible)
+                    .scrollbarVisibility(fixedHeightScrollbar ? .visible : .hidden)
                     .scrollGranularity(fixedHeightByLine ? .line : .row)
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: fixedHeightFollowMargin)?.margin ?? .none)
