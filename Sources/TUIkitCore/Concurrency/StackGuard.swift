@@ -101,7 +101,7 @@ public enum StackGuard {
 
         /// No thread measured yet. `high == 0` fails the fast path's range
         /// check, so the first ask always goes and establishes real bounds.
-        static let unseeded = StackExtent(low: 0, floor: 0, high: 0)
+        static let unseeded = Self(low: 0, floor: 0, high: 0)
 
         /// The guard has given up for good. The fast path's
         /// `sp > floor && sp < high` is then true for any real address, so
@@ -113,7 +113,7 @@ public enum StackGuard {
         /// failure is usually transient (fd exhaustion while opening procfs),
         /// and latching on it would disarm the guard for the whole process,
         /// on every thread, for the rest of its life.
-        static let disabled = StackExtent(low: 0, floor: 0, high: .max)
+        static let disabled = Self(low: 0, floor: 0, high: .max)
     }
 
     /// The extent of the thread the recursion was last seen on.

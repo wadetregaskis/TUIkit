@@ -256,9 +256,18 @@ struct StackGuardExtentCacheTests {
         }
 
         let stackPointer = currentStackPointer()
-        // The running stack pointer sits inside [low, high) but under floor.
+        // Margins far wider than any frame-layout difference between this
+        // reading and the probe inside `hasHeadroom()`, which sits in a
+        // different frame and moves with inlining decisions. At ±4 KB this
+        // passed on 6.3.3 and failed on 6.2 — it was measuring the optimiser,
+        // not the guard. A megabyte either side cannot be crossed by frame
+        // layout, so what is left is the behaviour under test: a stack pointer
+        // inside [low, high) but below floor means stop.
+        let megabyte: UInt = 1 << 20
         StackGuard.cachedExtent = StackGuard.StackExtent(
-            low: stackPointer - 4096, floor: stackPointer + 4096, high: stackPointer + 8192)
+            low: stackPointer - megabyte,
+            floor: stackPointer + megabyte,
+            high: stackPointer + 2 * megabyte)
         #expect(!StackGuard.hasHeadroom())
         #expect(StackGuard.truncationCount == savedCount + 1, "a trip is counted")
     }
