@@ -2,7 +2,14 @@
 
 ### Compatibility (non-negotiable, with one known exception)
 - **Swift 6.2 compatible**: `swift-tools-version: 6.2`.  Readily make use of language features up to 6.2, such as nonisolated on protocols / classes / structs / enums, test scoping traits, the `@concurrent` attribute, `InlineArray`, `@Observable` types and the `Observations` struct, raw identifier display names for unit tests, default values in string interpolations, weak let, global-actor isolated conformances, isolated synchronous deinit, task naming, regex lookbehind, non-escapable types, `Span` where it's available, yielding accessors, etc.
-- **Cross-platform**: must build and run correctly on both macOS and Linux. CI tests both (`macos-15` + `swift:6.2` container).
+- **Cross-platform**: must build and run correctly on both macOS and Linux. CI
+  tests macOS 15 and 26 (Xcode 26), and Swift 6.2/6.3 Linux containers on
+  x86_64 plus 6.3 on arm64, with nightly-toolchain lanes as advisory.
+  **Windows is a port in progress**: the four lower modules
+  (`TUIkitCore`, `TUIkitStyling`, `TUIkitView`, `TUIkitImage`) already build
+  there and must stay that way — keep POSIX-only APIs (`termios`, `ioctl`,
+  signals, `DispatchSource` on stdin) confined to the `TUIkit` umbrella
+  module. See CONTRIBUTING.md for the blocker list.
 
 ### Architecture (non-negotiable)
 

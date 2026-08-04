@@ -1,11 +1,61 @@
 name: CI
 
+# ── The support matrix ────────────────────────────────────────────────────────
+#
+# Axes, and why each is where it is:
+#
+#   macOS   — for RELEASED Swift the toolchain comes from Xcode, so the axis is
+#             the image: `macos-15` tops out at Xcode 26.3 (Swift 6.2.x) and
+#             `macos-26` ships Xcode 26.6 (Swift 6.3.x), so pinning the Xcode
+#             MAJOR ("26") on both gives 6.2 and 6.3 coverage without hardcoding
+#             minors that GitHub rebuilds weekly. For UNRELEASED Swift the
+#             toolchain comes from swift.org instead — deliberately not from the
+#             Xcode 27 beta, whose bundled 6.4 is an older build than the
+#             current branch snapshot and so gives weaker early warning.
+#
+#   Linux   — the cheapest axis to widen, because the official `swift:` images
+#             pin the toolchain exactly. No setup action is involved or wanted.
+#
+#   Windows — NOT YET SUPPORTED BY THE PACKAGE. This lane exists to make the
+#             port's progress visible, so it is advisory (never blocks a merge)
+#             and staged: the four lower modules are already portable and are
+#             expected to stay green, while the umbrella module is expected to
+#             fail until the console layer is written. See the `windows_*` jobs.
+#
+# Swift version coverage. 6.2.4 and 6.3.3 are the shipped 6.x releases as of
+# 2026-08-04; 6.4 has no release yet, only `release/6.4.x` snapshots and the
+# Xcode 27 beta. All three are covered on all three operating systems:
+#
+#            macOS                      Linux                  Windows
+#   6.2      Xcode 26 on macos-15       swift:6.2-noble        swift:6.2-…
+#   6.3      Xcode 26 on macos-26       swift:6.3-noble        swift:6.3-…
+#   6.4      swift.org 6.4.x snapshot   nightly-6.4.x-noble    nightly-6.4.x-…
+#   main     swift.org latest snapshot  nightly-main-noble     (Linux only —
+#                                                               the Windows main
+#                                                               image is rebuilt
+#                                                               too rarely)
+#
+# When 6.4 ships as a release, promote it: add `swift:6.4-noble` beside 6.3,
+# switch the Windows matrix entry from `nightly-6.4.x` to `6.4`, and move the
+# macOS 6.4 lane onto whichever Xcode ships it.
+#
+# TODO(macOS 27): there is no macOS 27 runner image yet — macOS 27 is still a
+# developer preview. (The `xcode-27` image is NOT one: it is Xcode 27 beta
+# running on *macOS 26.5*, so it buys a Swift version, not an OS version — and
+# an older 6.4 than the lane above.) GitHub moved to Xcode-versioned macOS
+# images on 2026-07-16, so watch actions/runner-images for a macOS 27 image,
+# however it ends up labelled, and add it as a required lane mirroring the
+# macos-15/macos-26 entries once it is GA.
+
 on:
   push:
     branches: [main]
     tags: ["*"]
   pull_request:
     branches: [main]
+  # The nightly lanes only earn their keep if they run without a push.
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -15,64 +65,370 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-jobs:
-  # ── Lint, Build & Test on macOS and Linux ──────────────────────
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "macOS Sequoia"
-            runner: macos-15
-            container: ""
-            install-swiftlint: brew install swiftlint
-          - name: "macOS Tahoe"
-            runner: macos-26
-            container: ""
-            install-swiftlint: brew install swiftlint
-          - name: "Linux"
-            runner: ubuntu-latest
-            container: swift:6.2
-            install-swiftlint: |
-              apt-get update && apt-get install -y curl unzip
-              curl -fsSL "https://github.com/realm/SwiftLint/releases/download/0.63.2/swiftlint_linux_$(arch | sed 's/x86_64/amd64/;s/aarch64/arm64/').zip" -o swiftlint.zip
-              unzip -o swiftlint.zip -d /usr/local/bin
-              chmod +x /usr/local/bin/swiftlint
-              rm swiftlint.zip
+env:
+  # Kept in step with the version developers run locally; bumping it is a
+  # deliberate change, because a new SwiftLint release can add violations.
+  SWIFTLINT_VERSION: "0.63.2"
 
+jobs:
+  # ── Lint ───────────────────────────────────────────────────────────────────
+  # One platform is enough: SwiftLint's output is platform-independent. Runs
+  # first and gates the rest, so a style slip fails in ~1 minute instead of
+  # after seventeen builds.
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    container: swift:6.3-noble
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Select Xcode 26 (Swift 6.2+)
-        if: runner.os == 'macOS'
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '26'
+      # Container jobs run as root over a workspace owned by the runner user,
+      # which trips git's dubious-ownership guard and, through it, SwiftPM.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
 
       - name: Install SwiftLint
-        run: ${{ matrix.install-swiftlint }}
+        run: |
+          apt-get update && apt-get install -y curl unzip
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          curl -fsSL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_${arch}.zip" -o swiftlint.zip
+          unzip -o swiftlint.zip -d /usr/local/bin
+          chmod +x /usr/local/bin/swiftlint
+          rm swiftlint.zip
 
-      - name: Lint
-        run: swiftlint
+      - name: SwiftLint
+        run: swiftlint --strict
 
       - name: Validate test module boundaries
         run: ./Tools/validate-test-boundaries.sh
 
+  # ── macOS ──────────────────────────────────────────────────────────────────
+  macos:
+    name: ${{ matrix.name }}
+    needs: lint
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # `snapshot` is the swift.org toolchain to install; empty means use
+          # the Xcode-provided one. "6.4" resolves to the newest snapshot on
+          # swift.org's `swift-6_4_x-branch`; "latest" to the newest snapshot
+          # on any branch, which in practice is trunk (`development`) because
+          # it publishes most often.
+          - name: "macOS 15 · Xcode 26"
+            runner: macos-15
+            xcode: "26"
+            snapshot: ""
+            smoke: quick
+            experimental: false
+          - name: "macOS 26 · Xcode 26"
+            runner: macos-26
+            xcode: "26"
+            snapshot: ""
+            smoke: full
+            experimental: false
+          # Swift 6.4 from swift.org, NOT from the Xcode 27 beta: the beta
+          # bundles an older 6.4 build, so testing against it would report on a
+          # compiler that has already moved on. A recent branch snapshot is
+          # what gives early warning of upcoming-compiler breakage, which is
+          # the entire point of having a 6.4 lane before 6.4 ships.
+          - name: "macOS 26 · Swift 6.4 snapshot"
+            runner: macos-26
+            xcode: ""
+            snapshot: "6.4"
+            smoke: quick
+            experimental: true
+          - name: "macOS 26 · Swift main snapshot"
+            runner: macos-26
+            xcode: ""
+            snapshot: "latest"
+            smoke: quick
+            experimental: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode ${{ matrix.xcode }}
+        if: matrix.xcode != ''
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ matrix.xcode }}
+
+      # `check-latest` is not optional here despite the action warning that it
+      # "may break this action": without it the action installs the snapshot
+      # list it was released with (v1.14.0 is from April 2026), so a lane meant
+      # to track a nightly would quietly pin to a months-old toolchain and
+      # report green. Breaking loudly is the correct failure mode here.
+      - name: Install Swift ${{ matrix.snapshot }} snapshot
+        if: matrix.snapshot != ''
+        uses: SwiftyLab/setup-swift@v1.14.0
+        with:
+          swift-version: ${{ matrix.snapshot }}
+          development: true
+          check-latest: true
+
+      # The snapshot toolchain is not the default `swift`; it has to be
+      # selected per invocation. Every later step goes through $SWIFT so the
+      # build/test/smoke steps stay identical across all four cells.
+      #
+      # TUIKIT_CONFIG_DIR keeps the apps off the runner's real preferences
+      # (AppStorage honours it on every platform). It is set here rather than
+      # in a job-level `env:` because the `runner` context only exists inside
+      # steps — hence the $RUNNER_TEMP variable.
+      - name: Resolve toolchain and isolate preferences
+        run: |
+          if [ -n "${{ matrix.snapshot }}" ]; then
+            echo "SWIFT=xcrun --toolchain ${TOOLCHAINS} swift" >> "$GITHUB_ENV"
+          else
+            echo "SWIFT=swift" >> "$GITHUB_ENV"
+          fi
+          echo "TUIKIT_CONFIG_DIR=$RUNNER_TEMP/tuikit-config" >> "$GITHUB_ENV"
+
+      - name: Toolchain version
+        run: $SWIFT --version
+
       - name: Build
-        env:
-          DISABLE_SWIFTLINT: "1"
-        run: swift build
+        run: $SWIFT build --build-tests
 
       - name: Test
-        env:
-          DISABLE_SWIFTLINT: "1"
+        run: $SWIFT test
+
+      - name: Smoke — headless render of every scenario
+        run: $SWIFT run Stress --selfcheck
+
+      - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
+        run: ./Tools/Smoke/ci-pty-smoke.sh ${{ matrix.smoke }}
+
+  # ── Linux ──────────────────────────────────────────────────────────────────
+  linux:
+    name: ${{ matrix.name }}
+    needs: lint
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Linux · Swift 6.2 · x86_64"
+            runner: ubuntu-24.04
+            image: "swift:6.2-noble"
+            smoke: quick
+            experimental: false
+          - name: "Linux · Swift 6.3 · x86_64"
+            runner: ubuntu-24.04
+            image: "swift:6.3-noble"
+            smoke: full
+            experimental: false
+          - name: "Linux · Swift 6.3 · arm64"
+            runner: ubuntu-24.04-arm
+            image: "swift:6.3-noble"
+            smoke: quick
+            experimental: false
+          # Released-branch nightlies spell the version WITHOUT `.x` for 6.2/6.3
+          # but WITH it for 6.4 (`nightly-6.4.x`). That inconsistency is real and
+          # upstream; do not "tidy" these tags.
+          - name: "Linux · Swift 6.4 nightly"
+            runner: ubuntu-24.04
+            image: "swiftlang/swift:nightly-6.4.x-noble"
+            smoke: quick
+            experimental: true
+          - name: "Linux · Swift main nightly"
+            runner: ubuntu-24.04
+            image: "swiftlang/swift:nightly-main-noble"
+            smoke: quick
+            experimental: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Container jobs run as root over a workspace owned by the runner user,
+      # which trips git's dubious-ownership guard and, through it, SwiftPM.
+      # TUIKIT_CONFIG_DIR keeps the apps off the runner's real preferences.
+      - name: Trust the workspace and isolate preferences
+        run: |
+          git config --global --add safe.directory '*'
+          echo "TUIKIT_CONFIG_DIR=$RUNNER_TEMP/tuikit-config" >> "$GITHUB_ENV"
+
+      - name: Toolchain version
+        run: swift --version
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
         run: swift test
 
-  # ── DocC Documentation ───────────────────────────────────────
+      - name: Smoke — headless render of every scenario
+        run: swift run Stress --selfcheck
+
+      - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
+        run: |
+          apt-get update && apt-get install -y python3-venv
+          ./Tools/Smoke/ci-pty-smoke.sh ${{ matrix.smoke }}
+
+  # ── Windows (advisory: the port is in progress) ─────────────────────────────
+  #
+  # Uses the official `swift:<version>-windowsservercore-ltsc2022` images, which
+  # bundle the Visual Studio and Windows SDK prerequisites — the same approach
+  # the Swift project's own reusable workflow takes, and the reason no
+  # toolchain action appears here. Two Windows-specific constraints shape it:
+  #
+  #   * GitHub Actions `container:` is Linux-only, so the image has to be driven
+  #     through an explicit `docker run`, and the Docker service is not started
+  #     on Windows runners by default.
+  #   * A `windowsservercore-ltsc2022` container needs a matching host kernel,
+  #     which pins this lane to `windows-2022`. Server 2025 and the Windows 11
+  #     client are covered by the native lane below.
+  #
+  # Steps are deliberately separate so the job reads as a porting scoreboard:
+  # the four lower modules already compile without POSIX and must stay green,
+  # while the umbrella module is expected to fail until the console layer lands.
+  windows_container:
+    name: "Windows Server 2022 · Swift ${{ matrix.swift }}"
+    needs: lint
+    runs-on: windows-2022
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # `nightly-6.4.x` rather than `nightly-main`: both Windows images
+        # exist, but the main one is rebuilt far less often (it was four weeks
+        # stale when this lane was written), so it would test an old snapshot
+        # while reporting as a nightly. Linux covers `nightly-main` daily.
+        swift: ["6.2", "6.3", "nightly-6.4.x"]
+    steps:
+      # The runner defaults to core.autocrlf=true. SwiftLint on Windows requires
+      # LF, and CRLF churn in Swift sources helps nobody — check out verbatim.
+      - name: Check out with LF endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Start Docker
+        run: |
+          Start-Service docker
+          $deadline = (Get-Date).AddMinutes(3)
+          while ((Get-Date) -lt $deadline) {
+            docker info *> $null
+            if ($LASTEXITCODE -eq 0) { Write-Host "Docker ready"; exit 0 }
+            Start-Sleep -Seconds 5
+          }
+          Write-Error "Docker did not become ready"
+          exit 1
+
+      - name: Pull toolchain image
+        id: image
+        run: |
+          $tag = "${{ matrix.swift }}"
+          if ($tag.StartsWith("nightly")) {
+            $image = "swiftlang/swift:$tag-windowsservercore-ltsc2022"
+          } else {
+            $image = "swift:$tag-windowsservercore-ltsc2022"
+          }
+          docker pull $image
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "image=$image" >> $env:GITHUB_OUTPUT
+
+      - name: Toolchain version
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "--version"
+
+      # ── Expected to pass: the portable modules ──
+      # Of 345 Swift files, only 8 touch POSIX-only APIs and 7 of those are in
+      # the umbrella module. These four are the part of the package that should
+      # already build anywhere — a regression here is a real Windows regression.
+      - name: "Build TUIkitCore"
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitCore"
+
+      - name: "Build TUIkitStyling"
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitStyling"
+
+      - name: "Build TUIkitView"
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitView"
+
+      - name: "Build TUIkitImage"
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitImage"
+
+      # ── Expected to fail until the console layer is ported ──
+      # `continue-on-error` per step, so one red stage does not hide the ones
+      # after it: the whole point is to watch all four go green over time.
+      - name: "Build TUIkit (umbrella)"
+        continue-on-error: true
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkit"
+
+      - name: "Build everything"
+        continue-on-error: true
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --build-tests"
+
+      - name: "Test"
+        continue-on-error: true
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "test"
+
+      - name: "Smoke — headless render of every scenario"
+        continue-on-error: true
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "run Stress --selfcheck"
+
+  # Server 2025 and the Windows 11 client cannot host an ltsc2022 container, so
+  # these install the toolchain natively. This is the second place a toolchain
+  # action is genuinely needed — it also installs the Visual Studio components
+  # and runs VsDevCmd, which is the fiddly part.
+  windows_native:
+    name: "${{ matrix.name }} · Swift 6.3"
+    needs: lint
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Windows Server 2025"
+            runner: windows-2025
+          - name: "Windows 11 · arm64"
+            runner: windows-11-arm
+    steps:
+      - name: Check out with LF endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Swift
+        uses: SwiftyLab/setup-swift@v1.14.0
+        with:
+          swift-version: "6.3"
+
+      - name: Toolchain version
+        run: swift --version
+
+      - name: "Build TUIkitCore"
+        run: swift build --target TUIkitCore
+      - name: "Build TUIkitStyling"
+        run: swift build --target TUIkitStyling
+      - name: "Build TUIkitView"
+        run: swift build --target TUIkitView
+      - name: "Build TUIkitImage"
+        run: swift build --target TUIkitImage
+
+      - name: "Build everything"
+        continue-on-error: true
+        run: swift build --build-tests
+      - name: "Test"
+        continue-on-error: true
+        run: swift test
+      - name: "Smoke — headless render of every scenario"
+        continue-on-error: true
+        run: swift run Stress --selfcheck
+
+  # ── DocC Documentation ─────────────────────────────────────────────────────
   # Building the docs is NOT optional-extra: it is the only check that the
   # reference still covers the whole package. The build asserts that pages
   # exist for types declared in the sibling modules, so the day someone
@@ -81,11 +437,11 @@ jobs:
   # quietly losing half their content. See Tools/BuildDocs/README.md.
   docs:
     name: Build DocC
-    needs: build
+    needs: lint
     runs-on: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode 26 (Swift 6.2+)
         uses: maxim-lobanov/setup-xcode@v1
@@ -93,55 +449,48 @@ jobs:
           xcode-version: '26'
 
       - name: Build DocC documentation
-        env:
-          DISABLE_SWIFTLINT: "1"
         run: ./Tools/BuildDocs/build-docs.sh --output docc-output --static-hosting
 
-  # ── Publishing (→ docs.tuikit.dev) ───────────────────────────
-  # Left disabled deliberately: turning this on publishes to a public site.
-  # The artefact it wants is `docc-output/TUIkit.doccarchive`, produced by the
-  # `docs` job above.
-  # deploy-docs:
-  #   needs: docs
+  # ── Gate ───────────────────────────────────────────────────────────────────
+  # The single job to mark "required" in branch protection. Matrix job names
+  # move whenever the matrix changes, so requiring them directly would mean
+  # editing branch protection on every matrix edit; and a job that is *skipped*
+  # reports as success to branch protection, which this makes impossible to
+  # miss. Windows is deliberately not asserted on — it is a progress report
+  # until the port lands, at which point it moves into the required list.
+  gate:
+    name: CI
+    if: always()
+    needs: [lint, macos, linux, windows_container, windows_native, docs]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check required lanes
+        run: |
+          # "skipped" counts as a failure here on purpose: a required lane that
+          # never ran has proved nothing, but branch protection would read the
+          # skip as success if it were watching that job directly.
+          required="lint:${{ needs.lint.result }}
+          macos:${{ needs.macos.result }}
+          linux:${{ needs.linux.result }}
+          docs:${{ needs.docs.result }}"
 
-  #     - name: Add routing support for GitHub Pages
-  #       run: |
-  #         cp Sources/TUIkit/TUIkit.docc/theme-overrides.css docc-output/theme-overrides.css
+          echo "Advisory lanes (never block):"
+          echo "  windows_container: ${{ needs.windows_container.result }}"
+          echo "  windows_native   : ${{ needs.windows_native.result }}"
+          echo
+          echo "Required lanes:"
 
-  #         python3 - <<'PY'
-  #         from pathlib import Path
+          failed=""
+          for entry in $required; do
+            lane="${entry%%:*}"
+            result="${entry#*:}"
+            echo "  $lane: $result"
+            [ "$result" = "success" ] || failed="$failed $lane"
+          done
 
-  #         link = '<link rel="stylesheet" href="/theme-overrides.css">'
-  #         for path in Path("docc-output").rglob("*.html"):
-  #             content = path.read_text(encoding="utf-8")
-  #             if link in content or "</head>" not in content:
-  #                 continue
-  #             path.write_text(content.replace("</head>", f"  {link}\n</head>"), encoding="utf-8")
-  #         PY
-
-  #         # 404.html = copy of SPA index so all deep-link paths route through DocC
-  #         cp docc-output/index.html docc-output/404.html
-  #         # Root redirect: docs.tuikit.dev/ -> docs.tuikit.dev/documentation/tuikit/
-  #         cat > docc-output/index.html << 'REDIRECT'
-  #         <!DOCTYPE html>
-  #         <html lang="en">
-  #         <head>
-  #           <meta charset="utf-8">
-  #           <meta http-equiv="refresh" content="0; url=/documentation/tuikit/">
-  #           <link rel="canonical" href="/documentation/tuikit/">
-  #           <title>Redirecting to TUIkit Documentation</title>
-  #         </head>
-  #         <body>
-  #           <p>Redirecting to <a href="/documentation/tuikit/">TUIkit Documentation</a>...</p>
-  #         </body>
-  #         </html>
-  #         REDIRECT
-
-  #     - name: Deploy to tuikit-docs
-  #       uses: peaceiris/actions-gh-pages@v4
-  #       with:
-  #         deploy_key: ${{ secrets.DOCS_DEPLOY_KEY }}
-  #         external_repository: phranck/tuikit-docs
-  #         publish_branch: gh-pages
-  #         publish_dir: docc-output
-  #         cname: docs.tuikit.dev
+          if [ -n "$failed" ]; then
+            echo "::error::Required lane(s) did not succeed:$failed"
+            exit 1
+          fi
+          echo
+          echo "All required lanes green."

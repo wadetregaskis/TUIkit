@@ -7,8 +7,97 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 | Requirement | Details |
 |-------------|---------|
 | **Swift 6.2** | `swift-tools-version: 6.2`. Language features up to 6.2 are fair game; nothing newer. |
-| **Cross-platform** | Must build and run on both macOS and Linux. CI tests both (`macos-15` + `swift:6.2` container). |
+| **Cross-platform** | Must build and run on macOS and Linux. Windows is a work in progress — see below. |
 | **CI must pass** | All tests and linting must pass before merge. |
+
+### What CI covers
+
+Every lane runs `swift build`, `swift test`, and both smoke tests
+(`Stress --selfcheck` everywhere; the PTY walk on macOS and Linux).
+
+Swift 6.2, 6.3, 6.4 and trunk are each covered on every operating system:
+
+| Swift | macOS | Linux | Windows |
+|-------|-------|-------|---------|
+| 6.2 | Xcode 26 on `macos-15` | `swift:6.2-noble` | `swift:6.2-…` |
+| 6.3 | Xcode 26 on `macos-26` | `swift:6.3-noble` | `swift:6.3-…` |
+| 6.4 | swift.org `6.4.x` snapshot | `nightly-6.4.x-noble` | `nightly-6.4.x-…` |
+| main | swift.org latest snapshot | `nightly-main-noble` | — |
+
+Released Swift comes from Xcode on macOS; unreleased Swift comes from
+swift.org. Deliberately **not** from the Xcode 27 beta, even though it bundles
+6.4 — the beta's 6.4 is an older build than the current branch snapshot, so it
+gives weaker early warning of upcoming-compiler breakage, which is the whole
+reason to run a 6.4 lane before 6.4 ships.
+
+Linux additionally runs Swift 6.3 on arm64, and lint runs on Linux only — it
+gates everything else, so a style slip fails in a minute rather than after
+seventeen builds.
+
+Everything except the 6.2/6.3 macOS and Linux lanes is **advisory**
+(`continue-on-error`): visible, but unable to block a merge. Nightly toolchains
+break for reasons that have nothing to do with this package, and Windows does
+not build yet.
+
+There is no macOS 27 runner image yet — macOS 27 is still a developer preview.
+When one appears it should be added as a required lane alongside `macos-15` and
+`macos-26`; see the `TODO(macOS 27)` at the top of the workflow.
+
+#### The `CI` gate job
+
+`CI` is a job that runs after everything else and fails if any non-advisory
+lane did not succeed. **It is the only check that should be marked as a
+required status check in the repository's branch-protection settings**
+(Settings → Branches → branch protection rule for `main` → "Require status
+checks to pass before merging"). A required check is one GitHub refuses to
+merge a PR without.
+
+Requiring it rather than the individual jobs matters for two reasons:
+
+- Matrix job names change whenever the matrix changes, and branch protection
+  matches checks *by name*. Requiring them directly means editing repository
+  settings every time a Swift version is added.
+- A **skipped** job reports as *success* to branch protection. If `macos` were
+  required directly and it got skipped — because `lint` failed, say — the PR
+  would look mergeable having built nothing. The gate treats `skipped` as a
+  failure, so that cannot happen.
+
+### Windows
+
+Windows is **not supported yet** — the package does not build there. The CI
+lane exists to make the port's progress visible, and is staged accordingly:
+
+- `TUIkitCore`, `TUIkitStyling`, `TUIkitView` and `TUIkitImage` are expected to
+  **pass**. Of 345 source files only 8 touch POSIX-only APIs, and 7 of those
+  are in the umbrella module. Breaking one of these four is a real regression,
+  so keep them free of `termios`/`ioctl`/signal dependencies.
+- Building `TUIkit`, testing, and smoking are expected to **fail** until the
+  console layer is ported. Each is its own CI step so all four can be watched
+  going green independently.
+
+The known blockers, in rough order of difficulty:
+
+1. **stdin wake-up.** `StdinArrivalStream` uses
+   `DispatchSource.makeReadSource(fileDescriptor: STDIN_FILENO,…)`.
+   swift-corelibs-libdispatch's Windows backend explicitly refuses console
+   handles (`FILE_TYPE_CHAR` → `WIN_PORT_ERROR()`), so the whole mechanism has
+   to be rebuilt around a thread blocking on `ReadConsoleInput`.
+2. **Resize notification.** Windows has neither `SIGWINCH` nor a
+   `TIOCGWINSZ` equivalent. Size changes arrive as `WINDOW_BUFFER_SIZE_EVENT`
+   records from `ReadConsoleInput`, which is the same call as (1) — so they
+   want designing together. Do not plan around the in-band resize escape
+   (`CSI ? 2048 h`); it is an unassigned backlog item on Windows Terminal.
+3. **Raw mode and VT output.** `GetConsoleMode`/`SetConsoleMode` replace
+   `termios`, and VT output must be opted into with
+   `ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN`.
+   `GetConsoleScreenBufferInfo` replaces `ioctl(TIOCGWINSZ)`.
+4. **The PTY smoke harness.** `Tools/Smoke/tui_walk.py` uses `pty`/`termios`,
+   so it is POSIX-only; a Windows equivalent needs ConPTY.
+
+Two things that are *not* blockers, despite looking like them: `@AppStorage`
+already falls back to JSON-file storage off Apple platforms, so the open
+Windows `UserDefaults` bug does not affect it; and SwiftLint gained Windows
+support in 0.64.0.
 
 ## Build, Test & Lint
 
@@ -42,7 +131,8 @@ Tools/BuildDocs/build-docs.sh            # add --analyze for every diagnostic
 
 1. Branch from `main`
 2. Fill in the PR template completely
-3. CI must be green (macOS + Linux)
+3. The `CI` gate check must be green (it covers macOS + Linux; the Windows and
+   nightly-toolchain lanes are advisory and do not block)
 4. No new SwiftLint warnings
 5. Follow the architecture and API rules below
 
