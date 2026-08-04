@@ -94,6 +94,52 @@ struct MousePage: View {
     var poofStyle: PoofStyle { PoofStyle(rawValue: poofStyleRaw) ?? .clouds }
 
     var body: some View {
+        // The poof layer and the "void" drop target wrap the WHOLE page, not
+        // just the drag-and-drop section.
+        //
+        // They used to wrap only that section, which made discarding a fruit
+        // depend on where in the page you happened to release it: inside the
+        // section's bounds it poofed, one row below them the drop was refused
+        // and the fruit flew home. Nothing draws those bounds, so the same
+        // gesture looked like it did two different things at random. The rule
+        // is now the one you would state out loud — a fruit dragged out of the
+        // basket is discarded unless it lands on the shelf.
+        //
+        // `DropInfo`'s coordinates are DESTINATION-LOCAL, so the poof overlay
+        // has to be the same view as the drop target or the puff would appear
+        // somewhere other than where the fruit was let go.
+        ZStack(alignment: .topLeading) {
+            pageContent
+            ForEach(poofs) { poof in
+                poofView(poof)
+            }
+        }
+        .dropDestination(for: BasketFruit.self) { items, info in
+            // Anywhere that isn't the shelf (move) or the basket (no-op, it
+            // never left) discards the fruit — puffing from the CENTRE of the
+            // drag image, where the fruit visually is, not from the cursor.
+            for item in items {
+                removeFromBasket(item)
+                spawnPoof(
+                    x: info.previewX + info.previewWidth / 2,
+                    y: info.previewY + info.previewHeight / 2)
+            }
+            return true
+        }
+        .task(id: poofGeneration) {
+            await runPoofTicker()
+        }
+        .scrollableDemoPage()
+        .appHeader {
+            DemoAppHeader(
+                L("menu.item.mouse"),
+                subtitle:
+                    L("page.mouse.subtitle")
+            )
+        }
+    }
+
+    @ViewBuilder private var pageContent: some View {
         VStack(alignment: .leading, spacing: 1) {
 
             DemoSection(L("page.mouse.tapCounter")) {
@@ -214,46 +260,25 @@ struct MousePage: View {
             // the whole section is the "anywhere else" destination, and the
             // poof plays as a ZStack layer at the drop point.
             DemoSection(L("page.mouse.dragDrop")) {
-                ZStack(alignment: .topLeading) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(L("page.mouse.dragDropHint"))
-                            .foregroundStyle(.palette.foregroundSecondary)
-                        Text(L("page.mouse.dragOutHint"))
-                            .foregroundStyle(.palette.foregroundSecondary)
-                        // Three drag demos, one per layer, and none of them
-                        // spare: this section is the API, the auto-scroll
-                        // section below is what a SCROLLABLE does during a
-                        // drag, and the Lists page is what ROWS do. The note
-                        // says so, so the overlap doesn't read as duplication.
-                        Text(L("page.mouse.dragDropRowsNote"))
-                            .foregroundStyle(.palette.foregroundTertiary)
-                            .dim()
-                        HStack(alignment: .top, spacing: 4) {
-                            shelfZone
-                            basketZone
-                            poofStylePicker
-                        }
-                    }
-                    ForEach(poofs) { poof in
-                        poofView(poof)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.mouse.dragDropHint"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(L("page.mouse.dragOutHint"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // Three drag demos, one per layer, and none of them
+                    // spare: this section is the API, the auto-scroll
+                    // section below is what a SCROLLABLE does during a
+                    // drag, and the Lists page is what ROWS do. The note
+                    // says so, so the overlap doesn't read as duplication.
+                    Text(L("page.mouse.dragDropRowsNote"))
+                        .foregroundStyle(.palette.foregroundTertiary)
+                        .dim()
+                    HStack(alignment: .top, spacing: 4) {
+                        shelfZone
+                        basketZone
+                        poofStylePicker
                     }
                 }
-                .dropDestination(for: BasketFruit.self) { items, info in
-                    // The void: anywhere in the section that isn't the shelf
-                    // or the basket discards the fruit with a poof — puffing
-                    // from the CENTRE of the drag image, where the fruit
-                    // visually is, not from the cursor.
-                    for item in items {
-                        removeFromBasket(item)
-                        spawnPoof(
-                            x: info.previewX + info.previewWidth / 2,
-                            y: info.previewY + info.previewHeight / 2)
-                    }
-                    return true
-                }
-            }
-            .task(id: poofGeneration) {
-                await runPoofTicker()
             }
 
             DragScrollDemoSection()
@@ -341,14 +366,6 @@ struct MousePage: View {
             }
 
             Spacer()
-        }
-        .scrollableDemoPage()
-        .appHeader {
-            DemoAppHeader(
-                L("menu.item.mouse"),
-                subtitle:
-                    L("page.mouse.subtitle")
-            )
         }
     }
 
