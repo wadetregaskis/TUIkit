@@ -34,6 +34,11 @@ struct TabViewPage: View {
     @State private var borderedSelection = 0
     @State private var notify = true
     @State private var volume = 0.6
+    // The bordered demo's own switch. It reads as a sibling of `notify` above
+    // but belongs to a different `TabView`, and the two demos are independent —
+    // one binding behind both made flipping "Notifications" in the compact demo
+    // silently flip "Online" in the bordered one.
+    @State private var online = true
 
     // Live settings for the "Adjustable" demo below.
     @State private var adjustableSelection = 0
@@ -103,7 +108,7 @@ struct TabViewPage: View {
                         }
                     }
                     Tab(L("page.tabView.status"), value: 2) {
-                        Toggle(L("page.tabView.online"), isOn: $notify)
+                        Toggle(L("page.tabView.online"), isOn: $online)
                     }
                     Tab(L("page.tabView.help"), value: 3) {
                         Text(L("page.tabView.helpSwitchTabs"))
