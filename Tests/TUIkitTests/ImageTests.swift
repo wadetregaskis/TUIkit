@@ -264,8 +264,10 @@ struct ASCIIConverterTests {
 
     @Test("Fine-block conversion in mono mode uses block glyphs only")
     func halfBlocksMonoUsesBlockGlyphs() {
-        // Top half dark, bottom half bright → expect ▀ (Upper Half Block: dark
-        // ink on top, light below) for every cell.
+        // Top half black, bottom half white. Mono inks the BRIGHT pixels (see
+        // `ASCIIConverter.isMonoInk`), matching every text charset's ramp — a
+        // black pixel paints nothing on a dark terminal, a white one paints
+        // solid. So the top cell row is empty and the bottom is full.
         var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: 16)
         for index in 8..<16 { pixels[index] = RGBA(r: 255, g: 255, b: 255) }
         let image = RGBAImage(width: 4, height: 4, pixels: pixels)
@@ -275,14 +277,40 @@ struct ASCIIConverterTests {
         let lines = converter.convert(image, width: 4, height: 2)
 
         #expect(lines.count == 2)
-        // Row 0 of cells covers source rows 0–1 (dark top, dark bottom) → ▀? no,
-        // both rows are dark → █. Row 1 covers rows 2–3 (light top, light bottom)
-        // → space. So row 0 should be all ▀ when scaled... actually after
-        // bilinear scaling of (4×4 → 4×4 same size), the boundary mid-image,
-        // so cells in row 0 see rows 0–1 (both dark) → █, row 1 sees 2–3 (both
-        // light) → space.
-        #expect(lines[0].allSatisfy { $0 == "\u{2588}" }, "Top cell row: both halves dark → █")
-        #expect(lines[1].allSatisfy { $0 == " " }, "Bottom cell row: both halves light → space")
+        // 4×4 → 4 cells wide × 2 cells tall is 1:1, so cell row 0 sees source
+        // rows 0–1 (both black) and cell row 1 sees rows 2–3 (both white).
+        #expect(lines[0].allSatisfy { $0 == " " }, "Top cell row: both halves black → space")
+        #expect(lines[1].allSatisfy { $0 == "\u{2588}" }, "Bottom cell row: both halves white → █")
+    }
+
+    @Test("Mono does not turn a dark image into a solid slab of ink")
+    func monoKeepsADarkImageMostlyBlank() {
+        // The shipped demo image is 87% below mid-luminance. Under the old
+        // polarity (dark = ink) that rendered as a near-solid rectangle of █
+        // with the subject invisible inside it — "mono draws nothing".
+        //
+        // A bright disc on a dark field stands in for it: the ink must be the
+        // disc, and the field must stay blank.
+        let side = 32
+        var pixels = [RGBA](repeating: RGBA(r: 10, g: 10, b: 10), count: side * side)
+        for y in 0..<side {
+            for x in 0..<side where (x - 16) * (x - 16) + (y - 16) * (y - 16) < 36 {
+                pixels[y * side + x] = RGBA(r: 250, g: 250, b: 250)
+            }
+        }
+        let image = RGBAImage(width: side, height: side, pixels: pixels)
+
+        for charset in [ASCIICharacterSet.blocks(.fine), .blocks(.solid), .ascii] {
+            let converter = ASCIIConverter(
+                characterSet: charset, colorMode: .mono, dithering: .none)
+            let lines = converter.convert(image, width: side, height: side / 2)
+            let cells = lines.joined()
+            let blank = cells.filter { $0 == " " }.count
+            #expect(
+                blank > cells.count / 2,
+                "\(charset): the dark field must stay blank, not become ink (\(blank)/\(cells.count))")
+            #expect(cells.contains { $0 != " " }, "\(charset): the lit disc must be drawn")
+        }
     }
 
     @Test("Braille conversion produces output")

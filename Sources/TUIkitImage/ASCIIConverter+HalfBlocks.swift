@@ -91,17 +91,12 @@ extension ASCIIConverter {
     }
 
     /// Monochrome variant: threshold both pixels at mid-luminance and pick
-    /// the block glyph that best represents which halves are "dark".
+    /// the block glyph that best represents which halves are lit.
     private func convertHalfBlocksMono(
         _ image: RGBAImage,
         width: Int,
         height: Int
     ) -> [String] {
-        // A pixel is rendered as "ink" if its luminance is below this
-        // threshold — i.e. images of dark text on a light background look
-        // sensible on a typical light-on-dark terminal.
-        let inkThreshold: Double = 128
-
         var lines = [String]()
         lines.reserveCapacity(height)
 
@@ -109,9 +104,9 @@ extension ASCIIConverter {
             var line = ""
             line.reserveCapacity(width)
             for cellX in 0..<width {
-                let topDark = image.pixel(at: cellX, 2 * cellY).luminance < inkThreshold
-                let bottomDark = image.pixel(at: cellX, 2 * cellY + 1).luminance < inkThreshold
-                switch (topDark, bottomDark) {
+                let topLit = ASCIIConverter.isMonoInk(image.pixel(at: cellX, 2 * cellY))
+                let bottomLit = ASCIIConverter.isMonoInk(image.pixel(at: cellX, 2 * cellY + 1))
+                switch (topLit, bottomLit) {
                 case (false, false):
                     line.append(" ")
                 case (true, false):
@@ -126,4 +121,31 @@ extension ASCIIConverter {
         }
         return lines
     }
+}
+
+extension ASCIIConverter {
+    /// Whether `pixel` is drawn as ink in monochrome mode.
+    ///
+    /// **Bright pixels are the ink.** Monochrome has one ink colour and one
+    /// background, and the framework's convention throughout — see
+    /// ``ASCIICharacterSet/customRamp(_:)``, whose ramp runs darkest pixel →
+    /// brightest and starts with a space "so dark regions stay blank on a dark
+    /// terminal" — is that a black pixel paints nothing and a white one paints
+    /// the densest glyph available. Every text charset already renders that
+    /// way in mono, because they all map luminance through that ramp.
+    ///
+    /// The block modes used to threshold the other way round, on the reasoning
+    /// that a scan of dark text on white paper should come out looking like the
+    /// page. It does — and everything else comes out a photographic negative.
+    /// A dark photograph, which is most photographs, inverted to almost all
+    /// ink: the shipped demo image is 87% below mid-luminance, so `.blocks`
+    /// mono rendered it as a near-solid slab of `█` with the subject barely
+    /// legible inside it, and `.solid` mono as a featureless filled rectangle.
+    /// Both read as "mono draws nothing".
+    static func isMonoInk(_ pixel: RGBA) -> Bool {
+        pixel.luminance >= monoInkThreshold
+    }
+
+    /// Mid-luminance: the split between background and ink for ``isMonoInk(_:)``.
+    static let monoInkThreshold: Double = 128
 }

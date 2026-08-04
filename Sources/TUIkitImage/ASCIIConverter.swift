@@ -505,9 +505,10 @@ extension ASCIIConverter {
                 let pixel = image.pixel(at: x, y)
 
                 // No background colour to fill with — approximate with a solid
-                // block for dark pixels and a space for light ones.
+                // block where the image is lit and a space where it is not.
+                // See ``isMonoInk(_:)`` for why bright is the ink.
                 if mode == .mono {
-                    line.append(pixel.luminance < 128 ? "█" : " ")
+                    line.append(Self.isMonoInk(pixel) ? "█" : " ")
                     continue
                 }
 
