@@ -11,9 +11,17 @@ TUIkit's render pipeline is `@MainActor`-isolated, which blocks the
 `ordo-one/benchmark` suite from measuring whole-view rendering (it traps
 on a main-thread `DispatchSemaphore`; see
 `Documentation/Benchmark coverage and deferred MainActor benchmarks.md`).
-Instruments has no such limitation — a normal executable's main thread
-*is* the main actor — so the Time Profiler can measure the real render
-path end to end. This directory makes that repeatable.
+Instruments has no such limitation — it samples whatever thread is running,
+and never needs to block the main actor to take a measurement — so the Time
+Profiler can measure the real render path end to end. This directory makes
+that repeatable.
+
+> Do not read that as "the main thread *is* the main actor", which this
+> README used to claim. It is false on Linux: from the first suspension
+> point onward the main actor is drained by a cooperative pool thread, not
+> the process main thread (measured; see the "Thread correctness" note in
+> `Sources/TUIkitCore/Concurrency/StackGuard.swift`). Profile by sampling
+> the process, not by assuming which thread the render is on.
 
 ## Two profiling modes
 

@@ -99,12 +99,20 @@ final class StdinArrivalNotifier {
             queue: .main
         )
         src.setEventHandler { [weak self] in
-            // The handler executes on the main thread because
-            // the source's queue is `.main`. From the main
-            // thread we're already running on MainActor's
-            // executor, so `assumeIsolated` is a static-only
-            // bridge — no thread hop, no runtime check beyond
-            // a debug assertion that we're on the right thread.
+            // The source's queue is `.main`, and the main queue
+            // is the main actor's executor — so this handler is
+            // already running in the main actor's context and
+            // `assumeIsolated` is a static-only bridge, with no
+            // thread hop.
+            //
+            // Deliberately says nothing about *threads*: which
+            // OS thread drains the main actor is not fixed. On
+            // Linux it is a cooperative pool thread, not the
+            // process main thread, from the first suspension
+            // point onward (measured — see the "Thread
+            // correctness" note in TUIkitCore's StackGuard).
+            // The executor is what serialises this against the
+            // run loop; the thread is incidental.
             MainActor.assumeIsolated {
                 self?.wake()
             }

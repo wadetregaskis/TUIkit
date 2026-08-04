@@ -235,8 +235,12 @@ final class SignalManager {
 
         let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
         source.setEventHandler { [weak self] in
-            // Runs on the main thread (queue: .main), so we are already on the
-            // MainActor executor — `assumeIsolated` is a static-only bridge.
+            // Queue is `.main`, and the main queue is the main actor's
+            // executor, so this is already the main actor's context —
+            // `assumeIsolated` is a static-only bridge. Note the reason is the
+            // executor, not a thread: on Linux the main actor is drained by a
+            // cooperative pool thread, not the process main thread (measured;
+            // see StackGuard's "Thread correctness" note).
             MainActor.assumeIsolated {
                 guard let self else { return }
                 switch kind {

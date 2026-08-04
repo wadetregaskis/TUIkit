@@ -168,9 +168,15 @@ final class Terminal: TerminalProtocol {
 
     /// Destructor ensures raw mode is disabled.
     ///
-    /// Note: `deinit` cannot be actor-isolated, so we use `MainActor.assumeIsolated`
-    /// which is safe because Terminal instances are only created and destroyed
-    /// on the main thread (in AppRunner).
+    /// Note: `deinit` cannot be actor-isolated, so we use `MainActor.assumeIsolated`,
+    /// which is safe because `Terminal` instances are created and released under
+    /// main-actor isolation (in `AppRunner`) — the last reference goes away there,
+    /// so this runs in the main actor's context.
+    ///
+    /// The isolation is the guarantee, not a thread: which OS thread drains the
+    /// main actor is not fixed, and on Linux it is a cooperative pool thread
+    /// rather than the process main thread (measured; see the "Thread
+    /// correctness" note in TUIkitCore's `StackGuard`).
     deinit {
         if isRawMode {
             MainActor.assumeIsolated {
